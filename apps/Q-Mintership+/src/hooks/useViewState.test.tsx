@@ -7,6 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useEffect } from 'react';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router-dom';
 import { ViewScope } from '../components/common/ViewScope';
 import { useSafeBack, useTrackInAppHistory } from './useSafeBack';
@@ -22,8 +23,12 @@ function Shell() {
   return <Outlet />;
 }
 
-function Toggle({ id, label }: { id: string; label: string }) {
+function Toggle({ id, label, openNow = false }: { id: string; label: string; openNow?: boolean }) {
   const [open, setOpen] = useViewState(id, false);
+  // Opened as the page arrives (a name link opens its history so): kept like a press.
+  useEffect(() => {
+    if (openNow) setOpen(true);
+  }, [openNow, setOpen]);
   return (
     <button type="button" aria-pressed={open} onClick={() => setOpen((value) => !value)}>
       {label}
@@ -38,6 +43,7 @@ function ListPage() {
       <ViewScope name="dialog">
         <Toggle id="row:1" label="Row 1 in the dialog" />
       </ViewScope>
+      <Toggle id="arrived" label="Opened on arrival" openNow />
       <Link to="/item">Open the item</Link>
     </>
   );
@@ -124,8 +130,18 @@ describe('useViewState', () => {
     expect(pressed('Row 1')).toBe('false');
   });
 
+  it('keeps a view opened as the page arrives, for Back', async () => {
+    const { user } = setup();
+    expect(pressed('Opened on arrival')).toBe('true');
+    expect(currentVisit()?.views.get('arrived')).toBe(true);
+    await user.click(screen.getByRole('link', { name: 'Open the item' }));
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(pressed('Opened on arrival')).toBe('true');
+  });
+
   it('keeps only what differs from where a view starts', async () => {
     const { user } = setup();
+    currentVisit()?.views.delete('arrived');
     expect(currentVisit()?.views.size).toBe(0);
     await user.click(screen.getByRole('button', { name: 'Row 1' }));
     expect([...(currentVisit()?.views.keys() ?? [])]).toEqual(['row:1']);

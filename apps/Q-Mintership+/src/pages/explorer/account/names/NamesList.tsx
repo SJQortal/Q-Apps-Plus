@@ -46,6 +46,7 @@ import { ViewToggle } from '../ViewToggle';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
 import { useViewState } from '../../../../hooks/useViewState';
 import { nameMatchOf } from '../../../../state/explorer';
+import { openNameOf } from '../../../../routes/paths';
 
 /** Names shown at first, and added by each "Show more". */
 export const NAMES_PAGE = 20;
@@ -329,7 +330,7 @@ function NameRow({
       history={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
           <NameHistoryList name={name} txs={txs} address={address} capped={capped} />
-          <NameLifeToggle name={name} initialOpen={arrived} />
+          <NameLifeToggle name={name} openNow={arrived} />
         </Box>
       }
     />
@@ -359,9 +360,11 @@ export function NamesList({
   const [sort, setSort] = useViewState<NameSort>('names:sort', 'primary');
   const [view, setView] = useNamesView();
   const byName = history.data ? historyByName(history.data.rows) : null;
-  // Opened from a link to one of its names (explorerNamePath): that name, once, on a new
-  // visit (Back brings the page back as it was left instead).
-  const opened = nameMatchOf(useLocation().state)?.matched ?? null;
+  // Opened from a link to one of its names (NAME_LINK_STATE's `openName`): that name, once,
+  // on a new visit (Back brings the page back as it was left instead). A search that found
+  // the account by a name leaves a name match too, which the tabs carry along: not that.
+  const state = useLocation().state;
+  const opened = openNameOf(state) ? (nameMatchOf(state)?.matched ?? openNameOf(state)) : null;
   const [arrivalDone, setArrivalDone] = useViewState('names:arrived', false);
   const arriving = !arrivalDone && opened !== null && Boolean(names.data?.names.includes(opened));
   const doneArriving = useCallback(() => setArrivalDone(true), [setArrivalDone]);

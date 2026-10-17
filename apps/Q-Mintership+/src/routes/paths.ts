@@ -100,6 +100,22 @@ export function explorerNamePath(name: string): string {
   return explorerAccountPath(name, 'names');
 }
 
+/**
+ * The router state a link to a name carries (with the page's own: `base`):
+ * the Names tab lands on that name only when asked so, not for any visit
+ * that found the account by a name (a search does too).
+ */
+export function nameLinkState(name: string, base?: unknown): Record<string, unknown> {
+  return { ...(base && typeof base === 'object' ? base : {}), openName: name };
+}
+
+/** The name a link asked the Names tab to land on (nameLinkState), if any. */
+export function openNameOf(state: unknown): string | null {
+  const value =
+    state && typeof state === 'object' ? (state as { openName?: unknown }).openName : null;
+  return typeof value === 'string' && value ? value : null;
+}
+
 /** `/explorer/tx/<signature>`: one transaction. */
 export function explorerTxPath(signature: string): string {
   return `${PATHS.explorer}/tx/${encodeURIComponent(signature)}`;

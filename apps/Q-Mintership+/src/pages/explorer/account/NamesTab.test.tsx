@@ -15,7 +15,7 @@ import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup'
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
 import { answerCore, COLLECTOR, COLLECTOR_NAMES, type World } from '../../../../e2e/world.mjs';
 import { queryLoadCounts } from '../../../data/query';
-import { explorerAccountPath } from '../../../routes/paths';
+import { explorerAccountPath, nameLinkState } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
 import { formatDate } from '../../../utils/format';
 import { visibleName } from '../../../rules/explorer/nameNotes';
@@ -38,13 +38,14 @@ function worldAnswer(world: World, url: URL): Response {
   return new Response(JSON.stringify(answer.body), { status: answer.status });
 }
 
-async function open(address: string, setup?: (world: World) => void) {
+async function open(address: string, setup?: (world: World) => void, state?: unknown) {
   const result = await renderPage(<AccountPage />, {
     persona: 'learner',
     path: explorerAccountPath(address, 'names'),
     route: ROUTE,
     strict: true,
     setup,
+    state,
   });
   const panel = await screen.findByRole('tabpanel', { name: 'Names' }, T);
   return { ...result, panel, user: userEvent.setup() };
@@ -320,8 +321,9 @@ describe('Names: each name’s history, beside it', () => {
   });
 
   it('opened from a link to one of its names: its owner’s tab, that name’s whole history open', async () => {
-    // explorerNamePath: the name in the URL, which the page swaps for its owner's address.
-    const { panel } = await open('Spare Room');
+    // explorerNamePath: the name in the URL, which the page swaps for its owner's address,
+    // and the link's own state (nameLinkState) asking to land on it.
+    const { panel } = await open('Spare Room', undefined, nameLinkState('Spare Room'));
     const toggle = await within(panel).findByRole(
       'button',
       { name: 'Its whole history of “Spare Room”' },
@@ -332,6 +334,18 @@ describe('Names: each name’s history, beside it', () => {
       await within(panel).findByRole('list', { name: 'Every change to “Spare Room”' }, T)
     ).toBeInTheDocument();
     expect(toggle.closest('li')).toHaveFocus();
+  });
+
+  it('a search that found the account by a name doesn’t land on it: only a link to the name does', async () => {
+    // A search leaves the name it matched in the page's state, and the tabs carry it along.
+    const { panel } = await open('Spare Room');
+    const toggle = await within(panel).findByRole(
+      'button',
+      { name: 'Its whole history of “Spare Room”' },
+      T
+    );
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(panel).queryByRole('list', { name: 'Every change to “Spare Room”' })).toBeNull();
   });
 
   it('says once, over the names, when their history comes from only the newest 100, and reads the rest on request', async () => {

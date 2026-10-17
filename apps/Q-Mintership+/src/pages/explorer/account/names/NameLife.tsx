@@ -144,13 +144,16 @@ function LifeBody({ name }: { name: string }) {
 
 export function NameLifeToggle({
   name,
-  initialOpen = false,
+  openNow = false,
 }: {
   name: string;
-  /** Open from the start (the name was opened from a link to it). */
-  initialOpen?: boolean;
+  /** Open it (the name was opened from a link to it): kept for Back like a press. */
+  openNow?: boolean;
 }) {
-  const [open, setOpen] = useViewState(`life:${name}`, initialOpen);
+  const [open, setOpen] = useViewState(`life:${name}`, false);
+  useEffect(() => {
+    if (openNow) setOpen(true);
+  }, [openNow, setOpen]);
   const id = useId();
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>

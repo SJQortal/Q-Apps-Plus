@@ -29,6 +29,8 @@ export interface RenderPageOptions {
   setup?: (world: InstalledWorld['world']) => void;
   /** Fail the test on any GET the mock world can't answer (installWorld's strict mode). */
   strict?: boolean;
+  /** Router state the page is opened with (a link's: an Explorer step, a name to land on). */
+  state?: unknown;
 }
 
 export async function renderPage(
@@ -50,7 +52,17 @@ export async function renderPage(
   const path = options.path ?? '/';
   const result = render(
     <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter
+        initialEntries={[
+          options.state === undefined
+            ? path
+            : {
+                pathname: path.split('?')[0],
+                search: path.includes('?') ? `?${path.split('?')[1]}` : '',
+                state: options.state,
+              },
+        ]}
+      >
         <Routes>
           <Route path={options.route ?? path.split('?')[0]} element={ui} />
           <Route path="*" element={<div data-testid="navigated-away" />} />

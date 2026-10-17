@@ -22,7 +22,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react';
-import { currentVisit, visitFor } from './pageVisits';
+import { currentVisit, isGoingBack, visitFor } from './pageVisits';
 import { ViewScopeContext } from './viewScope';
 
 interface Held<T> {
@@ -52,7 +52,8 @@ export function useViewState<T>(
     setHeld(current);
   }
   useEffect(() => {
-    if (current.key === null) return;
+    // Leaving by Back: the visit on top is the one returned to, not this page's.
+    if (current.key === null || isGoingBack()) return;
     const views = currentVisit()?.views;
     if (!views) return;
     if (Object.is(current.value, current.start)) views.delete(current.key);

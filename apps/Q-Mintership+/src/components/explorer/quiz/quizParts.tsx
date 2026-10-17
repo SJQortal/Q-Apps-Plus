@@ -14,7 +14,7 @@ import { withHue } from '../../../pages/decisions/sectionAccents';
 import { QUIZ_LEVELS, type QuizLevel, type QuizPart } from '../../../rules/explorer/quiz/types';
 import { formatCount } from '../../../utils/format';
 import { readableOn } from '../../../utils/readable';
-import { explorerAccountPath, explorerNamePath } from '../../../routes/paths';
+import { explorerAccountPath, explorerNamePath, nameLinkState } from '../../../routes/paths';
 
 const LEVEL_HUE: Record<QuizLevel, number> = { easy: 150, medium: 210, tricky: 285, expert: 330 };
 
@@ -24,10 +24,18 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 const QUIZ_LINK_STATE = { via: 'explorer' };
 
 /** An account or a name in a question, opening it when `to` is given. */
-function Opens({ to, children }: { to: string | null; children: ReactNode }) {
+function Opens({
+  to,
+  state = QUIZ_LINK_STATE,
+  children,
+}: {
+  to: string | null;
+  state?: unknown;
+  children: ReactNode;
+}) {
   if (!to) return <>{children}</>;
   return (
-    <Link component={RouterLink} to={to} state={QUIZ_LINK_STATE} color="inherit" underline="hover">
+    <Link component={RouterLink} to={to} state={state} color="inherit" underline="hover">
       {children}
     </Link>
   );
@@ -72,7 +80,11 @@ export function QuestionText({
             );
           case 'name':
             return (
-              <Opens key={i} to={links ? explorerNamePath(part.name) : null}>
+              <Opens
+                key={i}
+                to={links ? explorerNamePath(part.name) : null}
+                state={nameLinkState(part.name, QUIZ_LINK_STATE)}
+              >
                 <Box component="strong">
                   “
                   <bdi dir="auto">

@@ -57,6 +57,7 @@ function couldBeName(text: string): boolean {
   return text.length >= 3 && text.length <= 40 && !isAddress(text) && !/^#?\d+$/.test(text);
 }
 import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
+import { useViewState } from '../../hooks/useViewState';
 
 export default function TransactionsPage() {
   const [params, setParams] = useSearchParams();
@@ -110,12 +111,13 @@ export default function TransactionsPage() {
     share: type === 'REWARD_SHARE' || type === 'minting' ? share : 'any',
   };
 
-  // The tip on arrival (no poll): the latest blocks are counted back from it.
+  // The tip on arrival (no poll): the latest blocks are counted back from it. Kept for
+  // Back (useViewState), so the same blocks and the older pages shown come back.
   const tip = useQuery('chain:tip', (force) => getTip({ force }));
-  const [pinned, setPinned] = useState<number | null>(null);
+  const [pinned, setPinned] = useViewState<number | null>('global:pinned', null);
   useEffect(() => {
     if (pinned === null && tip.data) setPinned(tip.data.height);
-  }, [pinned, tip.data]);
+  }, [pinned, tip.data, setPinned]);
   const [refreshing, setRefreshing] = useState(false);
   const refresh = async () => {
     setRefreshing(true);

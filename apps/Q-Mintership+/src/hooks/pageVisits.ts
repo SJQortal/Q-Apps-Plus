@@ -44,6 +44,8 @@ let returned: PageVisit | null = null;
 let restoring = false;
 /** The path the app is being drawn for (notePathDrawn), ahead of the stack. */
 let drawing = '';
+/** How the app came to be drawn for that path: a REPLACE stays the visit it replaces. */
+let drawingType: 'POP' | 'PUSH' | 'REPLACE' = 'POP';
 
 function pathOf(path: string): string {
   return path.split('?')[0];
@@ -99,9 +101,10 @@ export function noteNavigation(
  * not at all in a hidden frame). Not when Back has already put the visit
  * returned to on top: it keeps the place it was left at.
  */
-export function notePathDrawn(path: string): void {
+export function notePathDrawn(path: string, type: 'POP' | 'PUSH' | 'REPLACE' = 'PUSH'): void {
   if (path !== drawing && !goingBack && typeof window !== 'undefined') noteScroll(window.scrollY);
   drawing = path;
+  drawingType = type;
 }
 
 /**
@@ -130,6 +133,9 @@ export function takeReturned(): PageVisit | null {
 export function visitFor(path: string = drawing): PageVisit | null {
   const top = stack[stack.length - 1];
   if (!top) return null;
+  // A REPLACE (a tab, a filter, a name swapped for its owner's address) is the visit it
+  // replaces, even when its new path is the one below's.
+  if (path === drawing && drawingType === 'REPLACE') return top;
   if (top.path === path || top.page === pageKeyOf(pathOf(path))) return top;
   const below = stack[stack.length - 2];
   if (below && below.path === path) return below;
@@ -168,6 +174,15 @@ export function noteScroll(y: number): void {
   if (restoring) return;
   const top = stack[stack.length - 1];
   if (top) top.scrollY = y;
+}
+
+/**
+ * Back is under way: the stack already stands on the visit returned to,
+ * while the page being left is still on screen (what it changes now isn't
+ * that visit's: useViewState).
+ */
+export function isGoingBack(): boolean {
+  return goingBack;
 }
 
 /** Whether a scroll back is under way. */
@@ -246,6 +261,7 @@ export function resetPageVisits(): void {
   returned = null;
   restoring = false;
   drawing = '';
+  drawingType = 'POP';
 }
 
 /** Tests: the paths on the stack, oldest first. */

@@ -136,7 +136,7 @@ export async function saveQdnFilesAsZip(
   } = {}
 ): Promise<SaveResult> {
   const maxBytes = options.maxBytes ?? ZIP_ALL_MAX_BYTES;
-  const { buildZip } = await import('../../../utils/zip');
+  const { zipParts } = await import('../../../utils/zip');
   // One failure stops the other lanes too.
   const stop = new AbortController();
   const stopAll = () => stop.abort();
@@ -145,6 +145,8 @@ export async function saveQdnFilesAsZip(
   const parts: Uint8Array[] = new Array(files.length);
   let read = 0;
   let total = 0;
+  // What the node says is coming, checked before a file is read whole.
+  let announced = 0;
   let next = 0;
   const lane = async () => {
     while (next < files.length) {
@@ -153,6 +155,11 @@ export async function saveQdnFilesAsZip(
       const response = await fetch(fileUrl(ref, files[index]), { signal: stop.signal });
       if (!response.ok)
         throw new Error(`your node answered ${response.status} for ${files[index]}`);
+      const length = Number(response.headers.get('Content-Length'));
+      if (Number.isFinite(length) && length > 0) {
+        announced += length;
+        if (announced > maxBytes) throw new TooBigToPackError(maxBytes);
+      }
       const bytes = new Uint8Array(await response.arrayBuffer());
       // Another lane failed meanwhile: no word of progress after it.
       if (stop.signal.aborted) throw new DOMException('Stopped', 'AbortError');
@@ -171,8 +178,10 @@ export async function saveQdnFilesAsZip(
   } finally {
     options.signal?.removeEventListener('abort', stopAll);
   }
-  const zip = buildZip(files.map((name, i) => ({ name, data: parts[i] })));
-  const blob = new Blob([zip], { type: 'application/zip' });
+  // The Blob is made of the pieces themselves: the files once in it, never a third copy.
+  const pieces = zipParts(files.map((name, i) => ({ name, data: parts[i] })));
+  const blob = new Blob(pieces as BlobPart[], { type: 'application/zip' });
+  parts.length = 0;
   if (!hasQortalRequest()) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');

@@ -15,7 +15,8 @@
  * `quiet` looks the same, but its accounts, names and transactions are
  * links a press or a tap opens, left out of the Tab order: for a sentence
  * over an expandable row's button (TxListRow), whose opened part has the
- * same links for the keyboard.
+ * same links for the keyboard. With `tabbable` they stay in the Tab order
+ * (a line with no other way to them: a connection's sentence).
  */
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -26,7 +27,7 @@ import { GroupAvatar } from '../common/GroupAvatar';
 import { getGroupLabel } from '../../data/explorer/account';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useQuery } from '../../hooks/useQuery';
-import { explorerNamePath, explorerTxPath } from '../../routes/paths';
+import { explorerNamePath, explorerTxPath, nameLinkState } from '../../routes/paths';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { usePersonLinks } from '../common/personLinks';
 import { groupWords, type TxPart } from '../../rules/explorer/txWords';
@@ -69,14 +70,24 @@ function PlainPerson({ address }: { address: string }) {
 /** What a name's link does, after the name in its accessible name. */
 export const NAME_LINK_VERB = 'explore this name';
 
-/** A link that looks like the words around it, out of the Tab order (`quiet`). */
-function QuietLink({ to, state, children }: { to: string; state?: unknown; children: ReactNode }) {
+/** A link that looks like the words around it, out of the Tab order unless `tabbable` (`quiet`). */
+function QuietLink({
+  to,
+  state,
+  tabbable = false,
+  children,
+}: {
+  to: string;
+  state?: unknown;
+  tabbable?: boolean;
+  children: ReactNode;
+}) {
   return (
     <Link
       component={RouterLink}
       to={to}
       state={state}
-      tabIndex={-1}
+      tabIndex={tabbable ? undefined : -1}
       color="inherit"
       underline="hover"
       // Over a row's button, whose content lets presses through to it.
@@ -110,7 +121,7 @@ export function NameLink({
     <Link
       component={RouterLink}
       to={explorerNamePath(name)}
-      state={links.state}
+      state={nameLinkState(name, links.state)}
       onClick={onClick}
       color="inherit"
       underline="hover"
@@ -121,26 +132,30 @@ export function NameLink({
   );
 }
 
-type Mode = 'links' | 'quiet' | 'plain';
+type Mode = 'links' | 'quiet' | 'quietTabbable' | 'plain';
 
-function QuietPart({ part }: { part: TxPart }) {
+function QuietPart({ part, tabbable }: { part: TxPart; tabbable: boolean }) {
   const links = usePersonLinks();
   switch (part.kind) {
     case 'account':
       return (
-        <QuietLink to={links.to(part.address)} state={links.state}>
+        <QuietLink to={links.to(part.address)} state={links.state} tabbable={tabbable}>
           <PlainPerson address={part.address} />
         </QuietLink>
       );
     case 'name':
       return (
-        <QuietLink to={explorerNamePath(part.name)} state={links.state}>
+        <QuietLink
+          to={explorerNamePath(part.name)}
+          state={nameLinkState(part.name, links.state)}
+          tabbable={tabbable}
+        >
           <NameWithAvatar name={part.name} quoted />
         </QuietLink>
       );
     case 'tx':
       return (
-        <QuietLink to={explorerTxPath(part.signature)}>
+        <QuietLink to={explorerTxPath(part.signature)} tabbable={tabbable}>
           transaction {part.signature.slice(0, 8)}…
         </QuietLink>
       );
@@ -150,8 +165,11 @@ function QuietPart({ part }: { part: TxPart }) {
 }
 
 function Part({ part, mode }: { part: TxPart; mode: Mode }) {
-  if (mode === 'quiet' && (part.kind === 'account' || part.kind === 'name' || part.kind === 'tx'))
-    return <QuietPart part={part} />;
+  if (
+    (mode === 'quiet' || mode === 'quietTabbable') &&
+    (part.kind === 'account' || part.kind === 'name' || part.kind === 'tx')
+  )
+    return <QuietPart part={part} tabbable={mode === 'quietTabbable'} />;
   const plain = mode !== 'links';
   switch (part.kind) {
     case 'text':
@@ -201,12 +219,15 @@ export function TxSentence({
   parts,
   plain = false,
   quiet = false,
+  tabbable = false,
 }: {
   parts: TxPart[];
   plain?: boolean;
   quiet?: boolean;
+  /** With `quiet`: its links stay in the Tab order. */
+  tabbable?: boolean;
 }) {
-  const mode: Mode = plain ? 'plain' : quiet ? 'quiet' : 'links';
+  const mode: Mode = plain ? 'plain' : quiet ? (tabbable ? 'quietTabbable' : 'quiet') : 'links';
   return (
     <span style={{ overflowWrap: 'anywhere' }}>
       {parts.map((part, i) => (

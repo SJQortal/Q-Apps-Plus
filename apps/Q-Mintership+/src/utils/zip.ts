@@ -70,8 +70,13 @@ function u32(view: DataView, offset: number, value: number): void {
   view.setUint32(offset, value >>> 0, true);
 }
 
-/** Builds the archive bytes. Throws if the total would not fit the classic format. */
-export function buildZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
+/**
+ * The archive in its pieces, in order (each file's header and its bytes,
+ * the central directory, the end record): a Blob can be made of them with
+ * no copy of the whole in between. Throws if the total would not fit the
+ * classic format.
+ */
+export function zipParts(entries: ZipEntry[]): Uint8Array[] {
   const encoder = new TextEncoder();
   const names = uniqueZipNames(entries.map((e) => e.name)).map((n) => encoder.encode(n));
   const total = entries.reduce((sum, e) => sum + e.data.length, 0);
@@ -137,9 +142,15 @@ export function buildZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
   u32(ev, 16, offset);
   u16(ev, 20, 0);
 
-  const out = new Uint8Array(new ArrayBuffer(offset + centralSize + 22));
+  return [...locals, ...centrals, end];
+}
+
+/** Builds the archive bytes. Throws if the total would not fit the classic format. */
+export function buildZip(entries: ZipEntry[]): Uint8Array<ArrayBuffer> {
+  const parts = zipParts(entries);
+  const out = new Uint8Array(new ArrayBuffer(parts.reduce((sum, part) => sum + part.length, 0)));
   let pos = 0;
-  for (const part of [...locals, ...centrals, end]) {
+  for (const part of parts) {
     out.set(part, pos);
     pos += part.length;
   }

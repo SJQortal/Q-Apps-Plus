@@ -7,6 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   currentVisit,
+  isGoingBack,
   isRestoring,
   noteNavigation,
   notePathDrawn,
@@ -99,6 +100,29 @@ describe('page visits', () => {
       '/explorer/transactions?find=avery&kind=payments'
     );
     expect(visitBelow('/explorer')).toBeNull();
+  });
+
+  it('keeps the visit a REPLACE replaces, even when its new path is the one below’s', () => {
+    // A name link to the page's own account: PUSH the name, then REPLACE it with the address.
+    noteNavigation(A, 'POP', null);
+    currentVisit()?.views.set('names:arrived', true);
+    noteNavigation('/explorer/account/Carol', 'PUSH', null);
+    notePathDrawn(A, 'REPLACE');
+    expect(visitFor()).toBe(currentVisit());
+    expect(visitFor()?.views.has('names:arrived')).toBe(false);
+    // The browser's Back to that path is the visit below.
+    notePathDrawn(A, 'POP');
+    expect(visitFor()?.views.get('names:arrived')).toBe(true);
+  });
+
+  it('says while Back is under way, until the visit returned to is on screen', () => {
+    noteNavigation(A, 'POP', null);
+    noteNavigation(TX, 'PUSH', null);
+    expect(isGoingBack()).toBe(false);
+    popVisit();
+    expect(isGoingBack()).toBe(true);
+    noteNavigation(A, 'PUSH', null);
+    expect(isGoingBack()).toBe(false);
   });
 
   it('keeps the latest visits only', () => {

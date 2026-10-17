@@ -26,7 +26,7 @@ export function useTrackInAppHistory(): void {
   const type = useNavigationType();
   const path = location.pathname + location.search;
   // Before the pages under the shell are drawn: their views find their visit.
-  notePathDrawn(path);
+  notePathDrawn(path, type);
   // Before any page's own effects: what they keep goes to the visit on screen.
   useLayoutEffect(() => {
     noteNavigation(path, type, location.state);
