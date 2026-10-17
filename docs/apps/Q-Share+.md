@@ -4,7 +4,7 @@ Share files and documents on QDN, with categories, comments and lists.
 
 **Published:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
 
-**Version on the branch:** `1.0.1`, not published yet: notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, and the description placeholder fix, and a dark Hub's mode kept across a refresh on a deep page (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
+**Version on the branch:** `1.0.1`, not published yet: notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
 
 ## Baseline at import
 
@@ -58,9 +58,12 @@ Read in full on 2026-09-29 (12.2k lines). Line numbers are from the branch after
 | localStorage | `qshareplus-ui-theme` (new) | R/W | JSON string theme id | hub-theme |
 | localStorage | `qshareplus-notifications-<address>`, `qshareplus-hub-alerts-<address>` (new in 1.0.1) | R/W | the notification list (≤100), read state, what was already seen, the last check; whether Hub alerts are on and which rules Hub has | utils/notifications |
 | Hub notification rules (new in 1.0.1, kept by Hub, not on QDN) | `qshare-c-<share key>`, `qshare-r-<last 6 of a comment>` | W (NOTIFICATION_ADD / REMOVE / MARK_SEEN) | BLOG_COMMENT filters: identifier `qcomment_v1_qshare_<key>_` as a prefix; identifier containing `_reply_<last 6>_` | utils/notifications/hubAlerts.ts |
-| DOCUMENT (new in Q-Share+) | `qshare_collection_<slug≤30>_<uid6>` | R/W | JSON `{ version: 1, title, description, items: [{ name, identifier }], created, updated }`, `tag1: "qshare_collection_"`, `filename: "collection.json"`. Since 1.0.1 the QDN metadata `description` is the collection's description (≤150) followed by up to four recipient markers `~qsn-<last 12 characters of the owner's address>~` for the owners of its newest shares (newly added first, never the publisher); the JSON body never carries them, and the app strips them wherever it shows a description. The original app never reads collections. | utils/collections.ts, utils/recipientMarker.ts |
+| DOCUMENT (new in Q-Share+) | `qshare_collection_<slug≤30>_<uid6>` | R/W | JSON `{ version: 1, title, description, items: [{ name, identifier }], created, updated }`, `tag1: "qshare_collection_"`, `filename: "collection.json"`. Since 1.0.1 the QDN metadata `description` is the collection's description (≤150) followed by up to four recipient markers `~qsn-<last 12 characters of the owner's address>~` for the owners of its newest shares (newly added first, never the publisher); the JSON body never carries them, and the app strips them wherever it shows a description. Since 1.0.1 the JSON may also hold `cover: { service: "THUMBNAIL", name, identifier }` and `folders: [{ id (6 chars, unique in the collection), title (≤50), description (≤150), cover?, items: [{ name, identifier }], folders: [...] }]`, at most 5 deep and 200 folders in all; both are left out when unused, so a collection without them is stored exactly as in 1.0.0, and fields the app doesn't know are written back unchanged. Shares inside folders count for markers and notifications. The original app never reads collections. | utils/collections.ts, utils/collectionFolders.ts, utils/recipientMarker.ts |
+| THUMBNAIL (new in 1.0.1) | `qshare_cover_<uid8>` (a new identifier per image) | W (R via `/arbitrary/THUMBNAIL/<name>/<id>`) | a square cover image, WebP or JPEG, ≤600 px and ≤450 KB, under the collection's name; `filename: "cover.webp"` (or `.jpg`), `title` = the collection's title, `tag1: "qshare_cover_"`; published in the same PUBLISH_MULTIPLE request as the collection that names it. Never searched. | utils/collections.ts, utils/coverImage.ts |
 
 Searches filter on the metadata description with `description=cat:N;sub:N` (category filter) and on `query=` (title/identifier substring). All of this stays as is. New data is additive only.
+
+Shares of more than 10 files (1.0.1) are the same FILE resources and the same share JSON with a longer `files` list (at most 300); they are published in several PUBLISH_MULTIPLE requests, the DOCUMENT in the last one. The original app lists every file of such a share.
 
 ### Qortal call inventory
 
@@ -78,7 +81,11 @@ Searches filter on the metadata description with `description=cat:N;sub:N` (cate
 | GET_LIST_ITEMS followedNames | FollowButton:49 | every share page | uncached |
 | GET_QDN_RESOURCE_STATUS | DownloadWrapper:97 | `setInterval` 5 s per download | never cleared on unmount; `res.localChunkCount` throws if `res` is undefined |
 | GET_QDN_RESOURCE_PROPERTIES | FileElement:203 | `setInterval` 7.5 s after DOWNLOADED | never cleared |
-| PUBLISH_MULTIPLE_QDN_RESOURCES | MultiplePublishAll | Publish / Update | via `qortalRequestWithTimeout` |
+| PUBLISH_MULTIPLE_QDN_RESOURCES | MultiplePublishAll | Publish / Update | via `qortalRequestWithTimeout`; since 1.0.1 one request per batch of 20 files (the details with the last) |
+| `/transactions/unconfirmed?creator=<publicKey>&limit=100` (fetch, 1.0.1) | utils/publishBatches.ts | before each batch of a share in batches, and before any batch over 11 resources; then every 10 s (30 s hidden) until there is room | publishes of up to 10 files never call it |
+| `/transactions/unitfee?txType=ARBITRARY` (fetch, 1.0.1) | utils/publishBatches.ts | once per session, when a Share or Update form first holds a file | for the fee line |
+| SESSION_PERMISSIONS (1.0.1) | MultiplePublishAll | Start publishing with "Approve every batch at once" on | opt-in; Hub asks once |
+| GET_QDN_RESOURCE_STATUS / PROPERTIES for playlist tracks (1.0.1) | components/player via useFileOnNode | the current track, then the next one while the current one plays | the downloads list's machine: polls every 5 s until READY, paused while hidden |
 | PUBLISH_QDN_RESOURCE | CommentEditor | comment | |
 | ADD_LIST_ITEMS / DELETE_LIST_ITEM | FileList, FollowButton, BlockedNamesModal | click | `DELETE_LIST_ITEM` in FollowButton passes `items` instead of `item` |
 | SAVE_FILE | FileElement:126 | click on a READY file | |
@@ -314,6 +321,60 @@ Simon asked for notifications when someone comments on a user's files or adds on
 - **Size:** the list (4 kB) and the Hub alert code (3 kB) load on demand; the first load grows by 14 kB (820 → 834 kB before compression).
 - Tests: the engine (comment matching, per-kind first looks, the indexed-up-to window, carrying on after the page limit, slack and dedupe, hidden names, marker paging, collection versions, read state during a check, failures), the schedule (backoff, hidden pause including a zero-size frame, on demand, Hub sync after publishes and comments), the bell and list (including the failure state), the comment resolver, the Hub rules (shape, caps, path-only links, resend only on change, permission flows including a late Allow, failed removal), Settings, and the comment scroll (once per visit). 548 tests, lint clean. Screenshot check of the open list at five sizes in four themes: no console errors, no sideways overflow, no unlabeled buttons, no axe violations. Checked against the live node: `after` works in milliseconds, a real comment from today resolved to its share (Simon James on igorcoin's `qshare_file_files_v7bm7y_metadata`), and the marker search is accepted.
 
+### Simon's requests for 1.0.1: 300 files, folders and covers, playlists (2026-10-17)
+
+Round 5 of `1.0.1`, local session on branch `q-share-plus/1.0.1`. Simon asked for (1) more than 10 files per publish, "maybe without a cap, or maybe 300 cap", (2) subfolders in collections and covers for collections and subcollections, and (3) shares of many audio files playing as a playlist. Version stays `1.0.1` (not published yet); each change is in the 1.0.1 changelog entry.
+
+**Research first (read-only):** Qortal Core (`Transaction.isValidUnconfirmed`, `Settings.maxUnconfirmedPerAccount = 25`) refuses a 26th unconfirmed non-CHAT transaction from the same account with `TOO_MANY_UNCONFIRMED`, and peers with the default do the same. Every resource of a share is one ARBITRARY transaction (0.01 QORT each on the live node: `/transactions/unitfee?txType=ARBITRARY` → 1000000). Hub's `publishMultipleQDNResources` has no cap on resources but no wait either (one second between resources), so a 300-file batch would fail after about 25. Hub has `SESSION_PERMISSIONS` for `PUBLISH_MULTIPLE_QDN_RESOURCES` (in released Hub since August). Core's `GET /transactions/unconfirmed?creator=` lists an account's pending transactions. THUMBNAIL takes up to 500 KB.
+
+**1. Up to 300 files** (cap chosen over "no cap": Hub lists every resource in its confirmation, the share page has to show them, and 300 is 15 batches and 3.01 QORT):
+
+- `utils/publishBatches.ts`: batches of 20 files, the share details in the last; `waitForRoom` polls the account's unconfirmed count (10 s, 30 s while hidden) until the batch fits under 25; the unit fee once per session.
+- The publish dialog: a start screen for shares in batches (files, publishes, batches, size, fee; "Approve every batch at once" asks Hub's session permission, off by default), a queued state for rows not sent yet, "Waiting for the network" between batches with Pause, batches go on past files Hub couldn't publish, a decline after earlier batches landed pauses instead of closing, Continue sends what is left. Publishes of up to 10 files behave exactly as before (no room check, no start screen).
+- A stopped publish keeps the files that reached QDN in the draft as "already on QDN" (Share and Update), so publishing again sends only the rest: nothing is paid twice.
+- The Share and Update forms say "26 publishes in 2 batches, 0.26 QORT in fees"; the drop zone no longer refuses a whole drop of one file too many; file identifiers are drawn again on a clash; Sort by name (numbers in order) for playlists.
+- Share pages list files 50 at a time; Fetch all keeps six downloads going instead of starting 300 pollers (each polls every 5 s).
+
+**2. Folders and covers** (stored in the collection's own JSON, data contract above, so one fetch serves every folder page and every change is one publish of one DOCUMENT; old collections are stored exactly as before and fields the app doesn't know are kept):
+
+- Folder tiles with covers on the collection page, a page per folder (`/collection/<name>/<id>/folder/<folderId>`) with a breadcrumb, New folder (five deep, 200 in all), Edit, Delete (its shares and subfolders leave the collection; the shares stay on QDN), Move a share (one republish), and folder rows in Add to collection.
+- Covers: a picker in the collection and folder dialogs; the image is cut to a centred square ≤600 px on the device (WebP, JPEG fallback, ≤450 KB) and published as THUMBNAIL `qshare_cover_<uid8>` in the same Hub request as the collection. Shown on collection cards, page headers and folder tiles, lazily, with an icon fallback.
+- Every republish carries folders and covers through; shares in folders count for item totals, recipient markers and the notification check. Counts say shares and folders.
+
+**3. Playlists:** a share with two or more playable audio files gets a Playlist card (Play all, Shuffle, Pause/Resume) and Play on each track; playback runs in a player bar at the foot of the app (above the phone's bottom bar; 52 px on a phone held sideways) that keeps playing from page to page: previous, play/pause, next, shuffle, repeat all/one, seek, the track list (a popover on desktop, a Now playing sheet on phones), Media Session metadata and actions. One `<audio>` element outside React, unlocked during the first tap for GO's WebView. Each track is fetched onto the node through the downloads machine before it plays and the next one while it plays; a track the network doesn't have or the browser can't play is skipped after 2.5 s, and one whose fetch hasn't moved for a minute is skipped with a note (found in Hub, below). An inline player starting pauses the playlist and the other way round. Shares with one audio file keep the inline player. The bar's code loads with the first playlist, not with the app.
+
+| | Before (`198e67e4`) | After |
+|---|---|---|
+| Files per share | 10 | 300 (batches of 20) |
+| Calls before a publish of ≤10 files | 0 | 0 |
+| Calls per batch of a big share | n/a | 1 PUBLISH_MULTIPLE + 1–n `/transactions/unconfirmed` (one per 10 s of waiting) |
+| Fetch all on a 120-file share | 120 downloads at once (24 status calls/s) | 6 at a time (1.2/s) |
+| Collection page / folder page | 1 FETCH | 1 FETCH for the collection and every folder |
+| Playing a 16-track album (Hub, measured) | n/a | per track: 1 status check, polling only while it isn't on the node; 0 calls in 20 s of playback once the next track was fetched |
+| First load (JS + CSS) | 869 kB (gzip 285 kB) | 905 kB (gzip 300 kB); the player bar (34 kB) loads with the first playlist |
+| Typing in the Share form with 300 files (jsdom) | n/a | 6.1 ms per keystroke (80.6 before the review fix) |
+| Tests | 548 | 625 |
+
+**Screenshot check** (`scripts/screens.mjs Q-Share+`, new fixtures: a collection with three folders, a subfolder and covers; an album of five tracks served as silent WAVs, playing; a share of 120 files; the Share dialog holding 25 files; new screens collection, folder, folder-new, share-many, playlist, player-sheet, publish-many): in Hub 3.0 at all five sizes, 33 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations, no tap target under 44 px on the phone sizes. Fixed from the first run: the track list and the Move list put buttons straight in a `<ul>` (axe `list`), the share link in the Now playing sheet was under 44 px, the player bar was 64 px over the compact landscape bar (now 52), the folder breadcrumb repeated the heading, and the harness didn't answer the fee and unconfirmed endpoints. Then the full matrix, 16 screens in all four themes at all five sizes in Hub's dark mode (304 captures, `playwright-core` with Playwright's Chromium): 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. Tap targets under 40 px on phones: none in the new screens; in Q-Share Classic only, existing buttons on Settings (Hide, Manage, Load stats, What's new) and the comment Reply/Edit buttons are 36–37 px tall (Follow-ups). After the review fixes, the nine screens that changed (collection, folder, folder-new, share-many, playlist, player-sheet, publish-many, share, publish) in Hub 3.0 and Q-Share Classic at all five sizes, in Hub's dark and light modes (172 captures): 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations.
+
+**Hub Dev Mode check** (test Hub `Qortal-Hub --remote-debugging-port=9222`, signed in as Tester Hub after Simon unlocked it, Vite dev server on 5173 through the node's proxy, local Core 6.1.9; nothing published, no QORT spent):
+
+- *Real data:* Simon's own albums are already 15–20 tracks each (e.g. "The Very Best Of Louis Armstrong (2003) — CD1", 16 tracks, 2–6 MB); the Playlist card read "Playlist · 16 tracks". Play all: track 1 wasn't on the node, the bar said "Fetching from peers… 67%", then "Waiting for peers… 83%" and "Stalled, retrying… 83%" and stayed there. Next moved to track 2, which arrived (58% → 83% → ready) and played (0:13 of 5:55, Media Session "playing" with the title). Track 3 was fetched ahead; seeking to the end of track 2 started track 3 at once. 20 s of playback made no Qortal calls at all. Moving to Home kept it playing with the bar at the foot. **Found and fixed:** a track stuck waiting for peers held the playlist for good; it is now skipped after a minute without progress, with a note (Previous goes back to it).
+- *Phones:* 390×844, 360×740 and 844×390 with touch: the bar sits on the bottom bar (64 px; 52 px in landscape), the floating Share button above it, the three bar buttons 44 px, no sideways overflow; the Now playing sheet opened by a touch tap with all 16 tracks, the current one marked.
+- *Collections:* Simon's "My Grand Music Collection" (empty, 1.0.0 shape) and "Q-Apps" (one share) open as before with the cover placeholder; Tester Hub doesn't own them, so no owner buttons. WebP encoding works in Hub's Chromium (`canvas.toBlob(…, "image/webp")` → `image/webp`).
+- *Publishing 25 files, stopped before anything was sent:* 25 files attached over CDP (`DOM.setFileInputFiles`); the form said "26 publishes in 2 batches, 0.26 QORT in fees" from the live node; Publish showed "Publish in 2 batches" with the explanation and the switch; Cancel. The request log shows no PUBLISH or SESSION_PERMISSIONS request.
+- *After the review fixes* the test Hub had been closed (18:12, "Shutdown reason=before-quit"), so the player fix, the stuck-track skip and the batch fixes are checked by tests and the screenshot harness only; Play all on Louis Armstrong CD1 again should skip track 1 after a minute and play track 2.
+- *Not checked, waiting for Simon* (each publishes or could): a real batch publish (Follow-up 15), "Approve every batch at once" (Hub's session permission; once granted, publishing starts without a confirmation), making a folder and a cover on an owned collection, and Hub's own light/dark switch (Hub's menu is native and CDP can't reach it; both modes are covered by the screenshot harness).
+
+**Review of the whole diff** (an agent read `198e67e4..HEAD` by dimension and checked each finding by following the code, three of them with throwaway tests; 10 confirmed, all fixed, one commit each):
+
+- *Player:* `useFileOnNode` kept its last answer when handed another file, so after one track had played the next counted as ready and was loaded before the node had it (a 404 after 15 s, then a wrong skip). The answer now belongs to its file.
+- *Publishing in batches:* Continue was offered while Hub was still at a batch the app had stopped waiting for (it now waits for Hub's answer); the share details went out even when earlier files had failed (they now wait until every file is on QDN); a node that couldn't count unconfirmed transactions let the next batch go at once (it now waits a block), and a batch where nothing landed no longer leads to the next; Stop waiting re-checked rows Hub had already named as failed, so closing reported an uncertain publish for nothing.
+- *Fetch all:* files waiting on peers freed their slot while their pollers went on (now they count), and clearing finished downloads could leave the button stuck.
+- *Covers:* a save where Hub published the collection but not the new image said "not saved", and saving again paid twice; it now counts as saved with a note.
+- *Speed:* with 300 files, each keystroke in the Share form re-rendered every row (80.6 → 6.1 ms per keystroke in jsdom), and the publish dialog's clock re-rendered 301 rows a second; rows are memoized and the clock is its own component. Listing a collection's shares was quadratic and ran on every share row; it is linear now, kept per collection, and the "saved anywhere" check stops at the first match.
+- Checked and fine: the stored JSON stays compatible (unknown fields kept, folders and cover left out when unused), file identifiers never repeat, the draft keeps landed files, Pause, close and unmount stop cleanly, superseded and detached answers never lead to paying twice, and no unsafe HTML in the new screens.
+
 ## Follow-ups
 
 Questions for Simon (after pass 2):
@@ -337,7 +398,22 @@ Questions from the Hub Dev Mode check:
 13. **Saves on desktop Hub:** a save by `location` shows Hub's prompt and then a native Save As dialog. Files under 100 MB keep the one-step blob save (straight to Downloads); GO always saves by location. Move the threshold, or always ask where to save?
 14. **Network statistics:** the network holds 9,406 shares (30 September), past the 3,000 cap, so the figure reads "3000+". Counting all of them is about 95 paged searches. Raise the cap, or show a different figure (e.g. shares this month)?
 
+Questions from Simon's 1.0.1 requests (2026-10-17):
+
+15. **A real batch publish:** publish a share of 21–25 small files from Tester Hub (2 batches, about 0.26 QORT) to see the wait between batches and Hub's two confirmations, and one with "Approve every batch at once" (one session-permission dialog, then no confirmations until the tab closes). Nothing here has published yet.
+16. **300 files:** the cap is 300 (15 batches). Raise it, lower it, or keep it?
+17. **Approve every batch at once** is off by default and shown only for shares in batches. Once granted, Hub skips its confirmation for every PUBLISH_MULTIPLE from Q-Share+ in that tab, Update share included. Keep it, or leave every batch to Hub's confirmation?
+18. **Folders and covers on QDN:** make a folder and give it a cover on one of your collections (two publishes, 0.02 QORT), then open the collection in Q-Share+ 1.0.0 if you still have it: 1.0.0 shows only the shares at the top level and would drop folders and covers if it republished the collection, which matters only for a tab still running 1.0.0 after 1.0.1 is published.
+19. **Covers are cut to a square.** Keep, or allow other shapes?
+20. **Stuck tracks** are skipped after a minute with no progress. Shorter, longer, or never (wait, and let Next skip)?
+21. **One audio file** keeps the inline player. Use the player bar for single files too, so they keep playing while browsing?
+
 Next pass ideas:
+
+- Play a whole collection or folder as one playlist (the shares' audio files in order).
+- Reorder files in the Share form and shares in a folder by dragging; a filter field on share pages with many files.
+- Move the MultiplePublish dialog into its own lazy chunk (with Switch it is on the first load for the Share button), about 8 kB gzip.
+- Q-Share Classic: the small buttons on Settings (Hide, Manage, Load stats, What's new) and the comment Reply/Edit buttons are 36–37 px tall on phones; 44 px like the other themes.
 
 - A GO session on a phone for what Hub on the desktop can't show: the on-screen keyboard under Publish, pull-to-refresh by finger, the file picker, `SHOW_PDF_READER` and saves by location with GO's download card, safe-area insets, landscape.
 - Names containing `/`, `#`, `?`, `%` or `\` (one real share today, by "Vallot-/8/"): their JSON is now fetched encoded, but downloads still go through q-apps.js's `GET_QDN_RESOURCE_STATUS`/`PROPERTIES`, which build the URL with the raw name. Direct GETs to `/arbitrary/resource/status|properties/…` with the name encoded would fix them.
