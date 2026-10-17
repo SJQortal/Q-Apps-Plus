@@ -938,6 +938,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     - "to the left of Read 1000 older I would like a gear icon … adjust the default auto fetch … examples … 100, 500, 2000 … hide Milestones": a gear beside Read older opens Activity's settings (also in Settings → Explorer): how many transactions Activity reads at first and on each Read older (100, 500, 1,000 the default, 2,000, or another number from 100 to 20,000, read in hundreds), and which of its twelve kinds of milestones it shows. On this device.
     - Checks: 60 captures (the account as a Minter Admin and as someone in none of its groups, Activity's settings, Connections, a sponsor's accounts, Settings), all clean, after fixing the Settings row's button name (axe: its words weren't in its name) and the mock's answer for an AT's primary name. Tests 2,333 passed (one long Hub-steps test timed out under the full run's load and passes alone).
 
+91. **Public or private, on every group** (Simon, 2026-10-17: "on the groups I would also like to see which one is public and which one is private with small icons"). Beside each group's name on the Overview's cards and rows: a globe for an open group ("Public: an open group, anyone can join"), a padlock for a closed one ("Private: a closed group, its admins decide who joins"), said on hover and to screen readers, from Core's own flag (no read). Checks: 20 captures, all clean.
+
 ## Follow-ups
 
 ### Readiness
