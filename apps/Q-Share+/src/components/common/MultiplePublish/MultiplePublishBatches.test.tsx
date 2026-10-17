@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { configure, fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from "../../../test/setup";
 import { store } from "../../../state/store";
@@ -7,6 +7,9 @@ import { addUser } from "../../../state/features/authSlice";
 import { resetPublishUnitFee, roomTiming } from "../../../utils/publishBatches";
 import type { MultiplePublishRequest, PublishResource } from "../../../utils/publishPayload";
 import { MultiplePublish, resetHubApproval } from "./MultiplePublishAll";
+
+// Each dialog renders dozens of rows; give the waits room on a busy machine.
+configure({ asyncUtilTimeout: 5_000 });
 
 const DOC_ID = "qshare_file_album_dddddd_metadata";
 

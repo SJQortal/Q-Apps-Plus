@@ -68,6 +68,41 @@ export function addDraftFiles(current: DraftFile[], incoming: File[]): AddFilesR
   return { files, duplicates, overLimit };
 }
 
+/**
+ * Where each new file of `files` goes on QDN, by draft key: `references` is
+ * the share's `fileReferences`, one per draft file in the same order.
+ */
+export function newFileRefs(files: DraftFile[], references: FileRef[]): Record<string, FileRef> {
+  const out: Record<string, FileRef> = {};
+  files.forEach((f, i) => {
+    if (!f.existing && references[i]) out[f.key] = references[i];
+  });
+  return out;
+}
+
+/**
+ * The files that reached QDN in a publish that stopped before the share
+ * details did, turned into references, so the next publish lists them
+ * without sending (and paying for) them again.
+ */
+export function withPublishedFiles(files: DraftFile[], refs: Record<string, FileRef>): DraftFile[] {
+  return files.map((f) => (!f.existing && refs[f.key] ? draftFromRef(refs[f.key]) : f));
+}
+
+/** The keys and references of `refs` whose identifiers are among `published`. */
+export function landedRefs(refs: Record<string, FileRef>, published: string[]): Record<string, FileRef> {
+  const ids = new Set(published);
+  return Object.fromEntries(Object.entries(refs).filter(([, ref]) => ids.has(ref.identifier)));
+}
+
+/** The note after a stopped publish that left some files on QDN. */
+export function keptFilesText(landed: number, total: number): string {
+  if (landed === total) {
+    return `${landed === 1 ? "The file is on QDN and stays" : `All ${landed} files are on QDN and stay`} in the draft: publishing again sends only the share details.`;
+  }
+  return `${landed} of ${total} files ${landed === 1 ? "is on QDN and stays" : "are on QDN and stay"} in the draft: publishing again sends only the rest.`;
+}
+
 export function totalDraftSize(files: DraftFile[]): number {
   return files.reduce((sum, f) => sum + (f.size || 0), 0);
 }

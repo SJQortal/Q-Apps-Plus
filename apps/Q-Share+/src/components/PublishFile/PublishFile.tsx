@@ -7,7 +7,12 @@ import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { markSharesChanged } from "../../state/features/fileSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import type { RootState } from "../../state/store";
-import { buildSharePublish, toMultiplePublish, type MultiplePublishRequest } from "../../utils/publishPayload";
+import {
+  buildSharePublish,
+  toMultiplePublish,
+  type FileRef,
+  type MultiplePublishRequest,
+} from "../../utils/publishPayload";
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
 import type { CategoryListRef } from "../common/CategoryList/CategoryList";
 import { ResponsiveDialog } from "../common/mobile/ResponsiveDialog";
@@ -17,7 +22,7 @@ import {
   PublishAgainDialog,
   type PublishStopped,
 } from "../common/MultiplePublish/MultiplePublishAll";
-import { publishErrorMessage, toPublishInputs } from "./shareDraft";
+import { keptFilesText, landedRefs, newFileRefs, publishErrorMessage, toPublishInputs } from "./shareDraft";
 import { ShareForm } from "./ShareForm";
 import { useShareDraft } from "./useShareDraft";
 
@@ -45,6 +50,8 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
   // dialog is closed and handed back as initialCategories on reopen.
   const [savedCategories, setSavedCategories] = useState<string[] | undefined>(undefined);
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
+  // Where each new draft file goes on QDN in the publish under way, by draft key.
+  const [fileRefs, setFileRefs] = useState<Record<string, FileRef>>({});
   // The last publish was left unconfirmed and Hub may still finish it, so
   // the next Publish asks first: it would make a second share.
   const [mayStillPublish, setMayStillPublish] = useState(false);
@@ -86,7 +93,7 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
     }
 
     try {
-      const { resources } = await buildSharePublish({
+      const { resources, fileReferences } = await buildSharePublish({
         name: username,
         title: draft.title,
         descriptionHtml: draft.description,
@@ -95,6 +102,7 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
         files: toPublishInputs(draft.files),
       });
       setMayStillPublish(false);
+      setFileRefs(newFileRefs(draft.files, fileReferences));
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish share"), alertType: "error" }));
@@ -125,15 +133,17 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
       return;
     }
     setPublishes(null);
-    if (stopped?.uncertain) {
-      setMayStillPublish(true);
-      dispatch(
-        setNotification({
-          msg: "Your share may still be publishing in Hub. Check My shares before you publish it again.",
-          alertType: "info",
-        })
-      );
-    }
+    // Files that landed stay in the draft as references: the next publish
+    // lists them without sending them (and paying for them) again.
+    const landed = landedRefs(fileRefs, published);
+    const landedCount = Object.keys(landed).length;
+    if (landedCount > 0) draft.keepPublished(landed);
+    const notes = [
+      landedCount > 0 ? keptFilesText(landedCount, Object.keys(fileRefs).length) : "",
+      stopped?.uncertain ? "Your share may still be publishing in Hub. Check My shares before you publish it again." : "",
+    ].filter(Boolean);
+    if (stopped?.uncertain) setMayStillPublish(true);
+    if (notes.length > 0) dispatch(setNotification({ msg: notes.join(" "), alertType: "info" }));
     if (message) dispatch(setNotification({ msg: message, alertType: "error" }));
   };
 

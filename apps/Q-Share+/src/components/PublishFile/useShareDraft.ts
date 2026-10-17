@@ -2,7 +2,8 @@ import { useCallback, useMemo, useReducer } from "react";
 import type { FileRejection } from "react-dropzone";
 import { titleFormatter } from "../../constants/Misc";
 import { isQuillHtmlEmpty } from "../../utils/quillHtml";
-import { addDraftFiles, describeAddResult, describeRejections, type DraftFile } from "./shareDraft";
+import type { FileRef } from "../../utils/publishPayload";
+import { addDraftFiles, describeAddResult, describeRejections, withPublishedFiles, type DraftFile } from "./shareDraft";
 
 export interface ShareDraftValues {
   files?: DraftFile[];
@@ -22,6 +23,7 @@ interface DraftState {
 type DraftAction =
   | { type: "add-files"; accepted: File[]; rejectionWarnings: string[] }
   | { type: "remove-file"; key: string }
+  | { type: "files-published"; refs: Record<string, FileRef> }
   | { type: "set-title"; title: string }
   | { type: "set-description"; html: string }
   | { type: "clear-warnings" }
@@ -57,6 +59,8 @@ function reducer(state: DraftState, action: DraftAction): DraftState {
     }
     case "remove-file":
       return { ...state, files: state.files.filter((f) => f.key !== action.key) };
+    case "files-published":
+      return { ...state, files: withPublishedFiles(state.files, action.refs) };
     case "set-title":
       return { ...state, title: action.title.replace(titleFormatter, "") };
     case "set-description":
@@ -85,6 +89,8 @@ export interface ShareDraft {
   /** Adds accepted files and explains rejected ones; returns true when one was too large. */
   addFiles: (accepted: File[], rejected?: FileRejection[]) => boolean;
   removeFile: (key: string) => void;
+  /** Files (by draft key) that reached QDN in a publish that stopped: they become references. */
+  keepPublished: (refs: Record<string, FileRef>) => void;
   setTitle: (title: string) => void;
   setDescription: (html: string) => void;
   clearWarnings: () => void;
@@ -108,6 +114,10 @@ export function useShareDraft(initial?: ShareDraftValues): ShareDraft {
     return rejection.tooLarge;
   }, []);
   const removeFile = useCallback((key: string) => dispatch({ type: "remove-file", key }), []);
+  const keepPublished = useCallback(
+    (refs: Record<string, FileRef>) => dispatch({ type: "files-published", refs }),
+    []
+  );
   const setTitle = useCallback((title: string) => dispatch({ type: "set-title", title }), []);
   const setDescription = useCallback((html: string) => dispatch({ type: "set-description", html }), []);
   const clearWarnings = useCallback(() => dispatch({ type: "clear-warnings" }), []);
@@ -121,7 +131,7 @@ export function useShareDraft(initial?: ShareDraftValues): ShareDraft {
   );
 
   return useMemo(
-    () => ({ ...state, addFiles, removeFile, setTitle, setDescription, clearWarnings, reset, validate }),
-    [state, addFiles, removeFile, setTitle, setDescription, clearWarnings, reset, validate]
+    () => ({ ...state, addFiles, removeFile, keepPublished, setTitle, setDescription, clearWarnings, reset, validate }),
+    [state, addFiles, removeFile, keepPublished, setTitle, setDescription, clearWarnings, reset, validate]
   );
 }
