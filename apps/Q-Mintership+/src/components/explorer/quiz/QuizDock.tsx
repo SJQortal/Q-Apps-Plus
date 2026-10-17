@@ -10,7 +10,7 @@
  * offers the page that shows it. The answer comes with how it is found, a
  * fact, and a link. Then the next question, at any level or one picked.
  * Folds to one line; × closes it (the score and the questions asked stay).
- * History opens every question asked so far, with how it went
+ * Quiz history opens every question asked so far, with how it went
  * (QuizHistory). Loaded only while the quiz is on (AppShell).
  */
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -205,7 +205,7 @@ export default function QuizDock() {
       onClick={() => setHistoryOpen(true)}
       sx={{ minHeight: 44 }}
     >
-      History
+      Quiz history
     </Button>
   ) : null;
   const { question, status, folded } = quiz;

@@ -244,8 +244,8 @@ describe('the Explorer Quiz bar', () => {
   it('keeps a history of the questions asked: right, skipped, shown, and clears it', async () => {
     const { user } = await open();
     const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
-    // Nothing asked yet: no History.
-    expect(within(bar).queryByRole('button', { name: 'History' })).toBeNull();
+    // Nothing asked yet: no Quiz history.
+    expect(within(bar).queryByRole('button', { name: 'Quiz history' })).toBeNull();
     await user.type(within(bar).getByRole('textbox', { name: 'Your answer' }), 'Lou Left');
     await user.click(within(bar).getByRole('button', { name: 'Check' }));
     await within(bar).findByText('Right!', {}, T);
@@ -263,7 +263,7 @@ describe('the Explorer Quiz bar', () => {
       [CHOICE.key, 'skipped'],
     ]);
 
-    await user.click(await within(bar).findByRole('button', { name: 'History' }, T));
+    await user.click(await within(bar).findByRole('button', { name: 'Quiz history' }, T));
     const dialog = await screen.findByRole('dialog', { name: 'Your quiz history' }, T);
     const list = within(dialog).getByRole('list', { name: 'Questions asked, newest first' });
     const items = within(list).getAllByRole('listitem');

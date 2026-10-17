@@ -1011,7 +1011,10 @@ export default {
       path: '/explorer?as=admin',
       after: async (page) => {
         await withQuiz('right')(page);
-        await page.getByRole('button', { name: 'History' }).click();
+        await page
+          .getByRole('region', { name: 'Explorer Quiz' })
+          .getByRole('button', { name: 'Quiz history' })
+          .click();
         await page.getByRole('dialog', { name: 'Your quiz history' }).waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
