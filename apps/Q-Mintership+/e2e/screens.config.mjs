@@ -1037,6 +1037,21 @@ export default {
       path: `/explorer/account/${ADDR.admin}?as=admin`,
       after: explorerSettle,
     },
+    // Its avatar, bigger: the top bar's avatar pressed (the card's opens the same).
+    {
+      key: 'explorer-avatar',
+      path: `/explorer/account/${ADDR.admin}?as=learner`,
+      overlay: true,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page
+          .getByRole('button', { name: /’s avatar bigger$/ })
+          .first()
+          .click({ timeout: 8000 });
+        await page.getByRole('dialog').waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     {
       key: 'explorer-connections',
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
