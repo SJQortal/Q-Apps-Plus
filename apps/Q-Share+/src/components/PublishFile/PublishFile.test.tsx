@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, waitForElementToBeRemoved } from "@testing-library/react";
 import { renderWithProviders } from "../../test/renderWithProviders";
-import { mockQortalAction, qortalCallsFor } from "../../test/setup";
+import { mockFetch, mockQortalAction, qortalCallsFor } from "../../test/setup";
+import { resetPublishUnitFee } from "../../utils/publishBatches";
 import { store } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
 import { OPEN_PUBLISH_EVENT } from "../../constants/events";
@@ -174,5 +175,27 @@ describe("PublishFile", { timeout: 15_000 }, () => {
     renderWithProviders(<PublishFile />);
     const trigger = screen.getByRole("button", { name: "Share files" });
     expect(trigger).not.toHaveTextContent("Share");
+  });
+
+  it("takes up to 300 files and says what publishing them takes", async () => {
+    signIn();
+    resetPublishUnitFee();
+    mockFetch("/transactions/unitfee", "1000000");
+    renderWithProviders(<PublishFile />);
+    await openDialog();
+    expect(screen.getByText("Up to 300 files, 2 GB each")).toBeInTheDocument();
+
+    const tracks = Array.from({ length: 25 }, (_, i) => new File(["x"], `track${i + 1}.mp3`, { type: "audio/mpeg" }));
+    fireEvent.change(screen.getByTestId("share-file-input"), { target: { files: tracks } });
+    expect(await screen.findByText("track25.mp3")).toBeInTheDocument();
+    expect(screen.getByText(/25 files · /)).toBeInTheDocument();
+    expect(await screen.findByText("26 publishes in 2 batches, 0.26 QORT in fees")).toBeInTheDocument();
+
+    // More than 300 in one drop: the first ones are kept and the rest named.
+    const more = Array.from({ length: 280 }, (_, i) => new File(["y"], `more${i}.mp3`, { type: "audio/mpeg" }));
+    fireEvent.change(screen.getByTestId("share-file-input"), { target: { files: more } });
+    expect(await screen.findByText("A share holds up to 300 files, so 5 were not added.")).toBeInTheDocument();
+    expect(screen.getByText("301 publishes in 15 batches, 3.01 QORT in fees")).toBeInTheDocument();
+    resetPublishUnitFee();
   });
 });

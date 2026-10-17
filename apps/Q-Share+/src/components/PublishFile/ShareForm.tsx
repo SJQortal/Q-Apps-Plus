@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   Alert,
   Box,
@@ -21,6 +21,7 @@ import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { fileKind, fileKindIconElement, fileKindLabel } from "../../utils/fileKind";
 import { formatBytes } from "../../utils/formatBytes";
 import { TITLE_MAX_LENGTH } from "../../utils/publishPayload";
+import { batchCount, formatQort, publishUnitFee } from "../../utils/publishBatches";
 import { CategoryList, type CategoryListRef } from "../common/CategoryList/CategoryList";
 import { TextEditor } from "../common/TextEditor/TextEditor";
 import { MAX_FILES, MAX_FILE_SIZE_LABEL, totalDraftSize } from "./shareDraft";
@@ -44,7 +45,8 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
   const problemsRef = useRef<HTMLDivElement>(null);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    maxFiles: MAX_FILES,
+    // No limit here: react-dropzone would refuse a whole drop of one file too
+    // many. The draft keeps the first MAX_FILES and says how many it left out.
     maxSize,
     multiple: true,
     // The File System Access API picker does not open inside the GO Android
@@ -68,6 +70,22 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
 
   const fileCount = draft.files.length;
   const titleMissing = draft.attempted && !draft.title.trim();
+  // Each new file is one publish, plus one for the share details.
+  const newCount = draft.files.filter((f) => !f.existing).length;
+  const publishCount = newCount + 1;
+  const batches = batchCount(newCount);
+  const hasFiles = fileCount > 0;
+  const [unitFee, setUnitFee] = useState<number | null>(null);
+  useEffect(() => {
+    if (!hasFiles) return;
+    let active = true;
+    void publishUnitFee().then((fee) => {
+      if (active) setUnitFee(fee);
+    });
+    return () => {
+      active = false;
+    };
+  }, [hasFiles]);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -154,9 +172,17 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
               );
             })}
           </List>
-          <Typography variant="body2" sx={{ px: 2, py: 1, color: "text.secondary" }}>
-            {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalDraftSize(draft.files))}
-          </Typography>
+          <Box sx={{ px: 2, py: 1, color: "text.secondary" }}>
+            <Typography variant="body2">
+              {fileCount} {fileCount === 1 ? "file" : "files"} · {formatBytes(totalDraftSize(draft.files))}
+            </Typography>
+            <Typography variant="body2" data-testid="share-publish-cost">
+              {publishCount} {publishCount === 1 ? "publish" : "publishes"}
+              {newCount === 0 ? " (the share details)" : ""}
+              {batches > 1 ? ` in ${batches} batches` : ""}
+              {unitFee ? `, ${formatQort(unitFee * publishCount)} in fees` : ""}
+            </Typography>
+          </Box>
         </Box>
       )}
 

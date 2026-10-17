@@ -1,13 +1,15 @@
 /**
  * Pure helpers for the files a Share or Update dialog holds before they are
- * published. No React in here, so the rules (10 files, duplicates skipped,
+ * published. No React in here, so the rules (300 files, duplicates skipped,
  * 2 GB each) are unit-tested on their own.
  */
 import type { FileRejection } from "react-dropzone";
 import { fileMaxSize } from "../../constants/Misc";
+import { MAX_SHARE_FILES } from "../../utils/publishBatches";
 import type { FileRef, ShareFileInput } from "../../utils/publishPayload";
 
-export const MAX_FILES = 10;
+/** The original app takes 10; more go to Hub in batches (utils/publishBatches.ts). */
+export const MAX_FILES = MAX_SHARE_FILES;
 export const MAX_FILE_SIZE_LABEL = `${fileMaxSize} GB`;
 
 export interface DraftFile {
@@ -40,11 +42,11 @@ export interface AddFilesResult {
   files: DraftFile[];
   /** Names that were already in the list (same name and size) and were skipped. */
   duplicates: string[];
-  /** How many files did not fit under the 10-file limit. */
+  /** How many files did not fit under the MAX_FILES limit. */
   overLimit: number;
 }
 
-/** Appends new files, skipping duplicates (same name and size) and anything past 10. */
+/** Appends new files, skipping duplicates (same name and size) and anything past MAX_FILES. */
 export function addDraftFiles(current: DraftFile[], incoming: File[]): AddFilesResult {
   const files = [...current];
   const duplicates: string[] = [];

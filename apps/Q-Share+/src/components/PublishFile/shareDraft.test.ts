@@ -28,12 +28,13 @@ describe("addDraftFiles", () => {
     expect(describeAddResult(second)).toEqual(["a.txt is already in the list."]);
   });
 
-  it("stops at 10 files and counts the rest", () => {
-    const eight = addDraftFiles([], Array.from({ length: 8 }, (_, i) => file(`f${i}.txt`)));
-    const result = addDraftFiles(eight.files, [file("x.txt"), file("y.txt"), file("z.txt"), file("w.txt")]);
-    expect(result.files.length).toBe(10);
+  it("stops at 300 files and counts the rest", () => {
+    const many = addDraftFiles([], Array.from({ length: 298 }, (_, i) => file(`f${i}.txt`)));
+    expect(many.files.length).toBe(298);
+    const result = addDraftFiles(many.files, [file("x.txt"), file("y.txt"), file("z.txt"), file("w.txt")]);
+    expect(result.files.length).toBe(300);
     expect(result.overLimit).toBe(2);
-    expect(describeAddResult(result)).toEqual(["A share holds up to 10 files, so 2 were not added."]);
+    expect(describeAddResult(result)).toEqual(["A share holds up to 300 files, so 2 were not added."]);
   });
 
   it("sums sizes and maps to publish inputs, passing QDN references through", () => {
@@ -47,14 +48,14 @@ describe("addDraftFiles", () => {
 });
 
 describe("describeRejections", () => {
-  it("explains files over 2 GB and drops of more than 10 files", () => {
+  it("explains files over 2 GB and drops of too many files", () => {
     const big = file("big.iso");
     const result = describeRejections([
       { file: big, errors: [{ code: "file-too-large", message: "" }] },
       { file: file("x"), errors: [{ code: "too-many-files", message: "" }] },
     ]);
     expect(result.tooLarge).toBe(true);
-    expect(result.warnings).toEqual(["big.iso is over 2 GB and was not added.", "Choose up to 10 files at a time."]);
+    expect(result.warnings).toEqual(["big.iso is over 2 GB and was not added.", "Choose up to 300 files at a time."]);
   });
 });
 

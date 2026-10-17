@@ -148,6 +148,18 @@ export async function buildSharePublish({
 
   const resources: PublishResource[] = [];
   const fileReferences: FileRef[] = [];
+  // A share holds up to 300 files: no two may get the same identifier.
+  const used = new Set(files.flatMap((input) => ("existing" in input ? [input.existing.identifier] : [])));
+  const fileIdentifier = () => {
+    for (let tries = 0; tries < 20; tries++) {
+      const identifier = `${QSHARE_FILE_BASE}${slug}_${uid()}`;
+      if (!used.has(identifier)) {
+        used.add(identifier);
+        return identifier;
+      }
+    }
+    throw new Error("Could not make a unique identifier for every file");
+  };
 
   for (const input of files) {
     if ("existing" in input) {
@@ -155,7 +167,7 @@ export async function buildSharePublish({
       continue;
     }
     const { file } = input;
-    const identifier = `${QSHARE_FILE_BASE}${slug}_${uid()}`;
+    const identifier = fileIdentifier();
     resources.push({
       action: "PUBLISH_QDN_RESOURCE",
       name,
