@@ -30,6 +30,7 @@ import {
   UNCHECKED_BATCH_MAX,
   formatQort,
   publishUnitFee,
+  roomTiming,
   splitPublishBatches,
   waitForRoom,
 } from "../../../utils/publishBatches";
@@ -546,7 +547,14 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
           );
           if (!superseded) mark(unsuccessful, "failed");
           if (allDone()) finish();
-          return superseded || detached ? "stop" : "next";
+          if (superseded || detached) return "stop";
+          // Nothing of the batch landed (the account's limit, a node out of
+          // space): the next batches would fare the same, so stop here.
+          if (ids.every((id) => unsuccessful.includes(id))) {
+            setPhase("settled");
+            return "stop";
+          }
+          return "next";
         }
         if (superseded) return "stop";
         if (!isHubTimeout(error)) {
@@ -618,6 +626,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
             onWaiting: (count) => {
               if (current()) setUnconfirmed(count);
             },
+            unknownWaitMs: i > 0 ? roomTiming.unknownMs : 0,
           });
           if (roomWait.current === controller) roomWait.current = null;
           if (controller.signal.aborted || !current()) return;

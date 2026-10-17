@@ -83,6 +83,17 @@ describe("waitForRoom", () => {
     expect(fetchCallsMatching("/transactions/unconfirmed").length).toBe(3);
   });
 
+  it("gives the last batch a block when the node can't say, if asked to", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    mockFetch("/transactions/unconfirmed", { error: 1 });
+    let done = false;
+    void waitForRoom("k", 20, { unknownWaitMs: 65_000 }).then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(64_000);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(done).toBe(true);
+  });
+
   it("stops waiting when aborted", async () => {
     roomTiming.visibleMs = 60_000;
     mockFetch("/transactions/unconfirmed", Array.from({ length: 25 }, () => ({ type: "ARBITRARY" })));

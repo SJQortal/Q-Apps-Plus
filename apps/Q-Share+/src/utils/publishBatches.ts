@@ -20,8 +20,12 @@ export const UNCHECKED_BATCH_MAX = 11;
 /** Most files one share holds: 15 batches, 301 publishes, 3.01 QORT at today's fee. */
 export const MAX_SHARE_FILES = 300;
 
-/** How often the room check asks the node, in ms. Tests shorten it. */
-export const roomTiming = { visibleMs: 10_000, hiddenMs: 30_000 };
+/**
+ * How often the room check asks the node, and how long a batch after the
+ * first waits when the node can't say (about one block), in ms. Tests
+ * shorten them.
+ */
+export const roomTiming = { visibleMs: 10_000, hiddenMs: 30_000, unknownMs: 65_000 };
 
 /**
  * The resources in batches of `filesPerBatch`, in order, with the share
@@ -73,21 +77,27 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Resolves once `needed` more transactions fit under the account's limit, or
- * at once when the node can't tell. `onWaiting` gets the count each time the
- * node says to wait. The publish is under way, so the check carries on while
- * the tab is hidden, at a slower pace. Stops early when `signal` aborts.
+ * Resolves once `needed` more transactions fit under the account's limit.
+ * When the node can't tell, it resolves at once, or after `unknownWaitMs`
+ * (a batch after the first: give the last one a block). `onWaiting` gets the
+ * count each time the node says to wait. The publish is under way, so the
+ * check carries on while the tab is hidden, at a slower pace. Stops early
+ * when `signal` aborts.
  */
 export async function waitForRoom(
   publicKey: string,
   needed: number,
-  options: { signal?: AbortSignal; onWaiting?: (unconfirmed: number) => void } = {}
+  options: { signal?: AbortSignal; onWaiting?: (unconfirmed: number) => void; unknownWaitMs?: number } = {}
 ): Promise<void> {
-  const { signal, onWaiting } = options;
+  const { signal, onWaiting, unknownWaitMs = 0 } = options;
   const limit = MAX_UNCONFIRMED_PER_ACCOUNT - Math.min(needed, MAX_UNCONFIRMED_PER_ACCOUNT);
   while (!signal?.aborted) {
     const count = await unconfirmedCount(publicKey);
-    if (count === null || count <= limit || signal?.aborted) return;
+    if (count === null) {
+      if (unknownWaitMs > 0) await sleep(unknownWaitMs, signal);
+      return;
+    }
+    if (count <= limit || signal?.aborted) return;
     onWaiting?.(count);
     const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
     await sleep(hidden ? roomTiming.hiddenMs : roomTiming.visibleMs, signal);

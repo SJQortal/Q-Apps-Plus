@@ -282,4 +282,20 @@ describe("MultiplePublish in batches", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(sentSizes()).toEqual([20, 20, 6]);
   });
+
+  it("stops after a batch where nothing landed, and keeps the rest queued", async () => {
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params) => {
+      throw {
+        error: { unsuccessfulPublishes: (params.resources as any[]).map((r) => ({ identifier: r.identifier, reason: "Too many unconfirmed" })) },
+        message: "x",
+      };
+    });
+    mockFetch("/transactions/unconfirmed", []);
+    renderWithProviders(<MultiplePublish isOpen publishes={share(45)} onSubmit={vi.fn()} onError={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Start publishing" }));
+    expect(await screen.findByText("0 of 46 published")).toBeInTheDocument();
+    expect(sentSizes()).toEqual([20]);
+    expect(screen.getAllByText("Failed", { selector: "p" })).toHaveLength(20);
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+  });
 });
