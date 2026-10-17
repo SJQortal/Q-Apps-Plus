@@ -12,6 +12,7 @@
  * - Words: ignoring case, spaces and punctuation, any accepted form
  *   ("Name registration", "REGISTER_NAME").
  * - A signature: its first characters (at least the number asked), or all.
+ * - A multiple choice: the option picked (one go), or one typed by its words.
  */
 import type { QuizAnswer, QuizQuestion } from './types';
 
@@ -113,7 +114,14 @@ export async function checkAnswer(
       if (typed.length > 40) return false;
       return (await ownerOf(typed)) === answer.address;
     }
+    case 'choice':
+      return textMatches(typed, [answer.options[answer.correct]?.label ?? '']);
   }
+}
+
+/** Whether option `index` is the right one of a multiple-choice answer. */
+export function checkChoice(answer: QuizAnswer, index: number): boolean {
+  return answer.kind === 'choice' && index === answer.correct;
 }
 
 /** The answer in words: "Ravenstone", "5.6789 QORT", "3kxVE6Nq…". */
@@ -133,5 +141,7 @@ export function answerWords(question: Pick<QuizQuestion, 'answer'>): string {
       return answer.value;
     case 'account':
       return answer.name ? `${answer.name} (${answer.address})` : answer.address;
+    case 'choice':
+      return answer.options[answer.correct]?.label ?? '';
   }
 }

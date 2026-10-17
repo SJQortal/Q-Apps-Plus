@@ -1,13 +1,15 @@
 /**
- * The Explorer Quiz's bar on the mock world: a wrong answer, a hint, a
- * right answer by a name (looked up through Core), the answer with where to
- * find it, the score; the next question at a level picked; folding and
- * closing; kept on the device. Read-only.
+ * The Explorer Quiz's bar on the mock world: its heading, a wrong answer,
+ * a hint and a closer one, a right answer by a name (looked up through
+ * Core), the answer with where to find it and a fact, the score; a
+ * multiple choice (one go); a live answer read again; the next question at
+ * a level picked; folding and closing; kept on the device. Read-only. The
+ * playful lines are picked by Math.random, held at 0 here (the first line).
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { ADDR, TIP } from '../../../../e2e/world.mjs';
+import { ADDR, PEOPLE, TIP } from '../../../../e2e/world.mjs';
 import { renderPage } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
 import { getQuiz, QUIZ_KEY, resetQuiz, setQuiz, EMPTY_QUIZ } from '../../../state/explorerQuiz';
@@ -30,21 +32,53 @@ const QUESTION: QuizQuestion = {
   answer: { kind: 'account', address: ADDR.left, name: null },
   placeholder: 'A name or an address',
   hint: 'Sponsors are in Connections, under Reward shares.',
+  hint2: 'Its sponsor made it a reward share in block 1,371,641.',
   how: 'Connections → Reward shares: “Sponsored by …”.',
+  fact: 'That reward share started in block 1,371,641.',
+  kicker: 'Minting archaeology',
   link: `/explorer/account/${ADDR.learner}/connections`,
   linkLabel: 'Open its Connections',
 };
 
-afterEach(() => resetQuiz());
+const CHOICE: QuizQuestion = {
+  ...QUESTION,
+  key: 'test:higher',
+  template: 'higherLower',
+  level: 'easy',
+  kicker: 'Higher or lower',
+  parts: [
+    {
+      kind: 'text',
+      text: 'Leo Learner is level 2. Is Lou Left’s level higher, lower, or the same?',
+    },
+  ],
+  answer: {
+    kind: 'choice',
+    options: ['Higher', 'Lower', 'The same'].map((label) => ({
+      parts: [{ kind: 'text', text: label }],
+      label,
+    })),
+    correct: 0,
+  },
+  placeholder: '',
+};
 
-async function open() {
+beforeEach(() => {
+  vi.spyOn(Math, 'random').mockReturnValue(0);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+  resetQuiz();
+});
+
+async function open(question: QuizQuestion = QUESTION) {
   resetQuiz();
   setQuiz(() => ({
     ...EMPTY_QUIZ,
     on: true,
-    question: QUESTION,
+    question,
     score: { asked: 1, right: 0, streak: 0, best: 0 },
-    asked: [QUESTION.key],
+    asked: [question.key],
   }));
   const user = userEvent.setup();
   const result = await renderPage(<QuizDock />, { persona: 'learner', path: '/explorer' });
@@ -56,6 +90,7 @@ describe('the Explorer Quiz bar', () => {
     const { user, container } = await open();
     const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
     expect(within(bar).getByText('Medium', { selector: 'span' })).toBeVisible();
+    expect(within(bar).getByText('Minting archaeology')).toBeVisible();
     expect(bar).toHaveTextContent('Who sponsored Leo Learner?');
     const field = within(bar).getByRole('textbox', { name: 'Your answer' });
     expect(field).toHaveAttribute('placeholder', 'A name or an address');
@@ -69,6 +104,17 @@ describe('the Explorer Quiz bar', () => {
 
     await user.click(within(bar).getByRole('button', { name: 'Hint' }));
     expect(within(bar).getByText(QUESTION.hint)).toBeVisible();
+    // A closer one, with the page that shows it.
+    await user.click(within(bar).getByRole('button', { name: 'Closer hint' }));
+    expect(within(bar).getByText(QUESTION.hint2 as string)).toBeVisible();
+    expect(within(bar).getByRole('link', { name: 'Show me where' })).toHaveAttribute(
+      'href',
+      QUESTION.link
+    );
+    expect(within(bar).getByRole('button', { name: 'Closer hint' })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
 
     // A name: Core says who owns it.
     await user.clear(field);
@@ -76,6 +122,7 @@ describe('the Explorer Quiz bar', () => {
     await user.click(within(bar).getByRole('button', { name: 'Check' }));
     expect(await within(bar).findByText('Right!', {}, T)).toBeVisible();
     expect(bar).toHaveTextContent(ADDR.left);
+    expect(within(bar).getByText(QUESTION.fact as string)).toBeVisible();
     expect(within(bar).getByRole('link', { name: 'Open its Connections' })).toHaveAttribute(
       'href',
       QUESTION.link
@@ -109,8 +156,9 @@ describe('the Explorer Quiz bar', () => {
     const { user } = await open();
     const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
     await user.click(within(bar).getByRole('button', { name: 'Show the answer' }));
-    expect(within(bar).getByText('The answer')).toBeVisible();
-    expect(getQuiz().status).toBe('shown');
+    expect(await within(bar).findByText('Here it is.', {}, T)).toBeVisible();
+    await waitFor(() => expect(getQuiz().status).toBe('shown'));
+    expect(getQuiz().lastOutcome).toBe('shown');
 
     const fold = within(bar).getByRole('button', { name: 'Fold the quiz' });
     expect(fold).toHaveAttribute('aria-expanded', 'true');
@@ -126,5 +174,70 @@ describe('the Explorer Quiz bar', () => {
     expect(getQuiz().on).toBe(false);
     // The score and what was asked stay.
     expect(getQuiz().asked).toEqual([QUESTION.key]);
+  });
+
+  it('gives a multiple choice one go: a wrong pick shows the right one', async () => {
+    const { user, container } = await open(CHOICE);
+    const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
+    expect(within(bar).getByText('Higher or lower')).toBeVisible();
+    expect(within(bar).queryByRole('textbox')).toBeNull();
+    const options = within(bar).getByRole('group', { name: 'Pick one (one go)' });
+    await user.click(within(options).getByRole('button', { name: 'Lower' }));
+    expect(within(bar).getByText('Not this time.')).toBeVisible();
+    expect(within(options).getByRole('button', { name: 'Higher, the answer' })).toBeVisible();
+    expect(within(options).getByRole('button', { name: 'Lower, your pick' })).toHaveAttribute(
+      'aria-disabled',
+      'true'
+    );
+    expect(getQuiz()).toMatchObject({ status: 'shown', picked: 1, score: { streak: 0 } });
+    // One go: another press changes nothing.
+    await user.click(within(options).getByRole('button', { name: /Higher/ }));
+    expect(getQuiz().status).toBe('shown');
+    await expectNoAxeViolations(container);
+  });
+
+  it('takes the right pick, and says a streak', async () => {
+    resetQuiz();
+    setQuiz(() => ({
+      ...EMPTY_QUIZ,
+      on: true,
+      question: CHOICE,
+      score: { asked: 3, right: 2, streak: 2, best: 2 },
+      asked: [CHOICE.key],
+    }));
+    const user = userEvent.setup();
+    await renderPage(<QuizDock />, { persona: 'learner', path: '/explorer' });
+    const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
+    await user.click(within(bar).getByRole('button', { name: 'Higher' }));
+    expect(within(bar).getByText('Right!')).toBeVisible();
+    expect(within(bar).getByText('Three in a row!')).toBeVisible();
+    expect(getQuiz().score).toMatchObject({ right: 3, streak: 3, best: 3 });
+  });
+
+  it('reads a live answer again when what was typed doesn’t match the old one', async () => {
+    const level: QuizQuestion = {
+      ...QUESTION,
+      key: 'test:level',
+      template: 'level',
+      level: 'easy',
+      parts: [{ kind: 'text', text: 'What minting level is Leo Learner at?' }],
+      // Asked long ago, when it was another level.
+      answer: { kind: 'number', value: '99' },
+      placeholder: 'A number',
+      live: true,
+      args: { address: ADDR.learner },
+    };
+    const { user } = await open(level);
+    const bar = screen.getByRole('region', { name: 'Explorer Quiz' });
+    await user.type(
+      within(bar).getByRole('textbox', { name: 'Your answer' }),
+      String(PEOPLE.learner.level)
+    );
+    await user.click(within(bar).getByRole('button', { name: 'Check' }));
+    expect(await within(bar).findByText('Right!', {}, T)).toBeVisible();
+    expect(getQuiz().question?.answer).toEqual({
+      kind: 'number',
+      value: String(PEOPLE.learner.level),
+    });
   });
 });

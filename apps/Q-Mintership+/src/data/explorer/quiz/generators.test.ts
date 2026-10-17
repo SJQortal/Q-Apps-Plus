@@ -8,7 +8,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ADDR, PEOPLE, TIP } from '../../../../e2e/world.mjs';
 import { fetchCalls, mockFetchRoute } from '../../../test/setup';
 import { installWorld } from '../../../test/world';
-import { makeQuestion, QUIZ_TEMPLATES, type QuizTemplate } from './generators';
+import { getAccount } from '../../accounts';
+import { makeQuestion, QUIZ_TEMPLATES, recheckAnswer, type QuizTemplate } from './generators';
 
 const template = (id: string) => QUIZ_TEMPLATES.find((t) => t.id === id) as QuizTemplate;
 /** The same "random" number every time. */
@@ -35,7 +36,11 @@ const words = (
 
 describe('the Explorer Quiz’s questions', () => {
   it('asks a member’s level, with the answer the Explorer shows', async () => {
-    const q = await makeQuestion({ templates: [template('level')], rng: fixed(0.01) });
+    const q = await makeQuestion({
+      templates: [template('level')],
+      level: 'easy',
+      rng: fixed(0.01),
+    });
     expect(q).not.toBeNull();
     expect(q?.level).toBe('easy');
     expect(q?.tip).toBe(TIP);
@@ -48,10 +53,18 @@ describe('the Explorer Quiz’s questions', () => {
   });
 
   it('asks where an account was first seen, and its primary name by its address', async () => {
-    const seen = await makeQuestion({ templates: [template('firstSeenBlock')], rng: fixed(0.3) });
+    const seen = await makeQuestion({
+      templates: [template('firstSeenBlock')],
+      level: 'easy',
+      rng: fixed(0.3),
+    });
     expect(seen?.answer.kind).toBe('number');
     expect(words(seen?.parts ?? [])).toMatch(/first seen on the chain\?$/);
-    const named = await makeQuestion({ templates: [template('primaryName')], rng: fixed(0.3) });
+    const named = await makeQuestion({
+      templates: [template('primaryName')],
+      level: 'easy',
+      rng: fixed(0.3),
+    });
     const asked = named?.parts.find((p) => p.kind === 'account');
     expect(asked && 'name' in asked ? asked.name : 'x').toBeNull();
     expect(named?.answer.kind).toBe('text');
@@ -77,7 +90,11 @@ describe('the Explorer Quiz’s questions', () => {
           ]
         : []
     );
-    const q = await makeQuestion({ templates: [template('namePrice')], rng: fixed(0.5) });
+    const q = await makeQuestion({
+      templates: [template('namePrice')],
+      level: 'medium',
+      rng: fixed(0.1),
+    });
     expect(words(q?.parts ?? [])).toBe(
       'In block 2000123, Leo Learner bought the name Maple. How much QORT did it pay?'
     );
@@ -97,6 +114,7 @@ describe('the Explorer Quiz’s questions', () => {
     const fake = (id: string, level: QuizTemplate['level'], ok = true): QuizTemplate => ({
       id,
       level,
+      theme: 'blocks',
       make: async () => {
         made.push(id);
         return ok
@@ -114,7 +132,10 @@ describe('the Explorer Quiz’s questions', () => {
       },
     });
     const templates = [fake('e', 'easy'), fake('t', 'tricky'), fake('broken', 'medium', false)];
-    expect((await makeQuestion({ templates, level: 'tricky' }))?.template).toBe('t');
+    const tricky = await makeQuestion({ templates, level: 'tricky' });
+    expect(tricky?.template).toBe('t');
+    // Its theme's heading, unless it brought its own.
+    expect(tricky?.kicker).toBe('Block party');
     expect((await makeQuestion({ templates, level: 'easy' }))?.level).toBe('easy');
     made.length = 0;
     expect(await makeQuestion({ templates, level: 'medium', attempts: 3 })).toBeNull();
@@ -122,10 +143,120 @@ describe('the Explorer Quiz’s questions', () => {
     const throwing: QuizTemplate = {
       id: 'x',
       level: 'easy',
+      theme: 'blocks',
       make: async () => {
         throw new Error('node busy');
       },
     };
     expect(await makeQuestion({ templates: [throwing], attempts: 2 })).toBeNull();
+  });
+
+  it('asks head to head with options, one of them right', async () => {
+    const q = await makeQuestion({
+      templates: [template('higherLower')],
+      level: 'easy',
+      rng: fixed(0.2),
+    });
+    expect(q?.kicker).toBe('Higher or lower');
+    expect(q?.answer.kind).toBe('choice');
+    if (q?.answer.kind !== 'choice') return;
+    expect(q.answer.options.map((o) => o.label)).toEqual(['Higher', 'Lower', 'The same']);
+    const [la, lb] = await Promise.all(
+      (q.subjects ?? []).map(async (address) => (await getAccount(address)).level)
+    );
+    expect(q.answer.correct).toBe(lb > la ? 0 : lb < la ? 1 : 2);
+  });
+
+  it('asks chain history from the very first of a kind, with the stretch it is in', async () => {
+    mockFetchRoute('/transactions/search', (url: URL) =>
+      url.searchParams.get('txType') === 'CREATE_POLL' && !url.searchParams.has('startBlock')
+        ? [
+            {
+              type: 'CREATE_POLL',
+              signature: 'poll-1',
+              timestamp: 1_660_718_476_318,
+              txGroupId: 0,
+              blockHeight: 955_267,
+              creatorAddress: ADDR.learner,
+              pollName: 'Puppy Ears Vote',
+              pollOptions: [{ optionName: 'Yes, very' }, { optionName: 'Quite so' }],
+            },
+          ]
+        : []
+    );
+    mockFetchRoute('/polls/', {
+      pollName: 'Puppy Ears Vote',
+      description: 'Are puppy ears soft?',
+      owner: ADDR.learner,
+      published: 1,
+      pollOptions: [{ optionName: 'Yes, very' }, { optionName: 'Quite so' }],
+    });
+    const asked = new Set<string>();
+    // The poll's two questions are the only ones not asked yet.
+    for (const t of ['REGISTER_NAME', 'PAYMENT', 'CREATE_GROUP', 'ARBITRARY', 'VOTE_ON_POLL'])
+      for (const part of ['name', 'who', 'amount', 'to', 'poll']) asked.add(`first:${t}:${part}`);
+    for (const key of [
+      'first:BUY_NAME:name',
+      'first:SELL_NAME:name',
+      'first:UPDATE_NAME:name',
+      'first:TRANSFER_PRIVS:who',
+      'first:DEPLOY_AT:name',
+      'first:GROUP_KICK:group',
+      'first:GROUP_BAN:group',
+      'first:CREATE_POLL:options',
+    ])
+      asked.add(key);
+    const q = await makeQuestion({
+      templates: [template('firstEver')],
+      level: 'medium',
+      seen: (key) => asked.has(key),
+    });
+    expect(q?.key).toBe('first:CREATE_POLL:name');
+    expect(words(q?.parts ?? [])).toBe(
+      'The very first poll on Qortal came in the 10,000 blocks from block 950,000. What was the poll called?'
+    );
+    expect(q?.answer).toEqual({
+      kind: 'text',
+      accepted: ['Puppy Ears Vote'],
+      shown: 'Puppy Ears Vote',
+    });
+    expect(q?.fact).toMatch(
+      /It asked: “Are puppy ears soft\?” Its options: “Yes, very”, “Quite so”\./
+    );
+    expect(q?.link).toBe('/explorer/transactions?type=CREATE_POLL&blocks=from-950000&order=oldest');
+    // Every first asked: nothing left to ask.
+    asked.add('first:CREATE_POLL:name');
+    expect(
+      await makeQuestion({
+        templates: [template('firstEver')],
+        level: 'medium',
+        seen: (key) => asked.has(key),
+        attempts: 2,
+      })
+    ).toBeNull();
+  });
+
+  it('reads a live answer again: a level asked about long ago', async () => {
+    const q = await makeQuestion({
+      templates: [template('level')],
+      level: 'easy',
+      rng: fixed(0.01),
+    });
+    expect(q?.live).toBe(true);
+    const stale = { ...q!, answer: { kind: 'number', value: '99' } as const };
+    expect(await recheckAnswer(stale)).toEqual(q?.answer);
+    expect(await recheckAnswer({ ...stale, live: false })).toBeNull();
+  });
+
+  it('skips accounts asked about lately', async () => {
+    const lately = new Set<string>(Object.values(ADDR));
+    const q = await makeQuestion({
+      templates: [template('level')],
+      level: 'easy',
+      fresh: (subject) => !lately.has(subject),
+      rng: fixed(0.5),
+    });
+    // Every member was in a question lately: it still asks, but about one of them.
+    expect(q).not.toBeNull();
   });
 });

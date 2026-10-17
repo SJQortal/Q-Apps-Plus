@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   answerWords,
   checkAnswer,
+  checkChoice,
   cleanAnswer,
   numberMatches,
   parseNumber,
@@ -73,5 +74,21 @@ describe('checking an Explorer Quiz answer', () => {
       answerWords({ answer: { kind: 'account', address: RAVENSTONE, name: 'Ravenstone' } })
     ).toBe(`Ravenstone (${RAVENSTONE})`);
     expect(cleanAnswer('  "kitty"  ')).toBe('kitty');
+  });
+
+  it('takes a multiple choice by the option picked, or by its words typed', async () => {
+    const answer = {
+      kind: 'choice',
+      options: ['Higher', 'Lower', 'The same'].map((label) => ({
+        parts: [{ kind: 'text', text: label } as const],
+        label,
+      })),
+      correct: 1,
+    } as const;
+    expect(checkChoice(answer, 1)).toBe(true);
+    expect(checkChoice(answer, 0)).toBe(false);
+    expect(await checkAnswer(answer, 'lower', async () => null)).toBe(true);
+    expect(await checkAnswer(answer, 'higher', async () => null)).toBe(false);
+    expect(answerWords({ answer })).toBe('Lower');
   });
 });

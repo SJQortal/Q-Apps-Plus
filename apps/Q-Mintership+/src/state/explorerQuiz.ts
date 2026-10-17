@@ -3,20 +3,25 @@
  * (`<prefix>explorer-quiz`) so the open question stays at the bottom of the
  * screen while its answer is looked for across Explorer pages, and after a
  * reload: whether the quiz is on and folded, the question and how it
- * stands, the level picked, the score, and the questions already asked
- * (their keys only, the newest 300), so none comes twice.
+ * stands, the level picked, the score, the questions already asked
+ * (their keys only, the newest 300), so none comes twice, and what came up
+ * lately (the kinds of question and their subjects), so the next one is
+ * different.
  *
  * Every storage access is guarded: without storage the quiz still works,
  * for the session.
  */
 import { atom, getDefaultStore, useAtomValue } from 'jotai';
 import { STORAGE_PREFIX } from '../constants/plus';
-import type { QuizLevel, QuizQuestion } from '../rules/explorer/quiz/types';
+import { RECENT_SUBJECTS, RECENT_TEMPLATES } from '../rules/explorer/quiz/pick';
+import { isQuizLevel, type QuizLevel, type QuizQuestion } from '../rules/explorer/quiz/types';
 
 export const QUIZ_KEY = `${STORAGE_PREFIX}explorer-quiz`;
 export const ASKED_MAX = 300;
 
 export type QuizStatus = 'asking' | 'right' | 'shown';
+
+export type QuizOutcome = 'right' | 'shown' | 'skipped';
 
 export interface QuizScore {
   /** Questions asked. */
@@ -37,11 +42,18 @@ export interface QuizState {
   status: QuizStatus;
   /** Wrong answers to this question. */
   misses: number;
-  hinted: boolean;
+  /** Hints shown: 0, 1 (where to look), 2 (closer, with the page). */
+  hints: number;
+  /** The option picked, for a multiple-choice question. */
+  picked: number | null;
   /** The level asked for; null for any. */
   level: QuizLevel | null;
   score: QuizScore;
   asked: string[];
+  /** The kinds of question asked lately (oldest first) and what they were about. */
+  recent: { templates: string[]; subjects: string[] };
+  /** How the last question went. */
+  lastOutcome: QuizOutcome | null;
 }
 
 export const EMPTY_QUIZ: QuizState = {
@@ -51,13 +63,19 @@ export const EMPTY_QUIZ: QuizState = {
   question: null,
   status: 'asking',
   misses: 0,
-  hinted: false,
+  hints: 0,
+  picked: null,
   level: null,
   score: { asked: 0, right: 0, streak: 0, best: 0 },
   asked: [],
+  recent: { templates: [], subjects: [] },
+  lastOutcome: null,
 };
 
-const LEVELS: ReadonlySet<unknown> = new Set(['easy', 'medium', 'tricky']);
+const strings = (value: unknown, max: number): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string').slice(-max)
+    : [];
 
 function isQuestion(value: unknown): value is QuizQuestion {
   const q = value as Partial<QuizQuestion> | null;
@@ -77,7 +95,7 @@ const count = (value: unknown) =>
 /** What this device kept, checked field by field (anything odd reads as the default). */
 export function parseQuiz(raw: string | null): QuizState {
   try {
-    const saved = raw ? (JSON.parse(raw) as Partial<QuizState>) : null;
+    const saved = raw ? (JSON.parse(raw) as Partial<QuizState> & { hinted?: unknown }) : null;
     if (!saved || saved.v !== 1) return EMPTY_QUIZ;
     const score = (saved.score ?? {}) as Partial<QuizScore>;
     const question = isQuestion(saved.question) ? saved.question : null;
@@ -91,17 +109,30 @@ export function parseQuiz(raw: string | null): QuizState {
           ? saved.status
           : 'asking',
       misses: count(saved.misses),
-      hinted: saved.hinted === true,
-      level: LEVELS.has(saved.level) ? (saved.level as QuizLevel) : null,
+      // Kept before hints had steps: `hinted`.
+      hints: Math.min(2, count(saved.hints) || (saved.hinted === true ? 1 : 0)),
+      picked:
+        question?.answer.kind === 'choice' && typeof saved.picked === 'number'
+          ? saved.picked
+          : null,
+      level: isQuizLevel(saved.level) ? saved.level : null,
       score: {
         asked: count(score.asked),
         right: count(score.right),
         streak: count(score.streak),
         best: count(score.best),
       },
-      asked: Array.isArray(saved.asked)
-        ? saved.asked.filter((key): key is string => typeof key === 'string').slice(-ASKED_MAX)
-        : [],
+      asked: strings(saved.asked, ASKED_MAX),
+      recent: {
+        templates: strings(saved.recent?.templates, RECENT_TEMPLATES),
+        subjects: strings(saved.recent?.subjects, RECENT_SUBJECTS),
+      },
+      lastOutcome:
+        saved.lastOutcome === 'right' ||
+        saved.lastOutcome === 'shown' ||
+        saved.lastOutcome === 'skipped'
+          ? saved.lastOutcome
+          : null,
     };
   } catch {
     return EMPTY_QUIZ;

@@ -121,6 +121,8 @@ const quizState = (status) => ({
     key: 'screens:sponsor',
     template: 'sponsor',
     level: 'medium',
+    theme: 'minting',
+    kicker: 'Minting archaeology',
     tip: TIP,
     parts: [
       { kind: 'text', text: 'Who sponsored ' },
@@ -130,13 +132,15 @@ const quizState = (status) => ({
     answer: { kind: 'account', address: SPONSOR.address, name: SPONSOR.name },
     placeholder: 'A name or an address',
     hint: 'Sponsors are in Connections, under Reward shares.',
+    hint2: 'Its sponsor’s reward share started in block 1,371,641.',
+    fact: 'That reward share started in block 1,371,641.',
     how: 'Connections → Reward shares: “Sponsored by …”. When several accounts sponsored it, the one Core counts is marked “the sponsor Core counts”.',
     link: `/explorer/account/${ADDR.learner}/connections`,
     linkLabel: 'Open its Connections',
   },
   status,
   misses: 1,
-  hinted: status === 'asking',
+  hints: status === 'asking' ? 1 : 0,
   level: null,
   score: {
     asked: 4,
@@ -146,10 +150,50 @@ const quizState = (status) => ({
   },
   asked: ['screens:sponsor'],
 });
+/** A multiple-choice question, answered with a wrong pick: the right one green, the pick red. */
+const quizChoice = () => ({
+  ...quizState('shown'),
+  question: {
+    v: 1,
+    key: 'screens:veteran',
+    template: 'earliestSeen',
+    level: 'tricky',
+    theme: 'time',
+    kicker: 'Who came first?',
+    tip: TIP,
+    parts: [
+      { kind: 'text', text: 'Who’s the veteran? Which of these four was first seen earliest?' },
+    ],
+    answer: {
+      kind: 'choice',
+      options: [
+        ['learner', 'Leo Learner'],
+        ['left', 'Lou Left'],
+        ['kicked', 'Kit Kicked'],
+        ['admin', 'Avery Admin'],
+      ].map(([who, name]) => ({
+        parts: [{ kind: 'account', address: ADDR[who], name }],
+        label: name,
+      })),
+      correct: 3,
+    },
+    placeholder: '',
+    hint: 'Overview → At a glance → First seen, for each of them.',
+    how: 'Each account’s Overview → At a glance → First seen gives the block; the lowest wins.',
+    fact: 'Leo Learner: block 1,364,165 · Lou Left: block 1,360,000 · Kit Kicked: block 1,371,000 · Avery Admin: block 1,200,000',
+    link: `/explorer/account/${ADDR.admin}`,
+    linkLabel: 'Open the veteran',
+  },
+  picked: 1,
+  status: 'shown',
+});
 const withQuiz = (status) => async (page) => {
   await page.addInitScript(
     ([key, value]) => window.localStorage.setItem(key, value),
-    ['qmintershipplus-explorer-quiz', JSON.stringify(quizState(status))]
+    [
+      'qmintershipplus-explorer-quiz',
+      JSON.stringify(status === 'choice' ? quizChoice() : quizState(status)),
+    ]
   );
   await page.reload({ waitUntil: 'load' });
   await explorerSettle(page);
@@ -897,6 +941,12 @@ export default {
       key: 'explorer-quiz-answered',
       path: `/explorer/account/${ADDR.learner}/connections?as=admin`,
       after: withQuiz('right'),
+    },
+    // A multiple choice, one go, missed: the right option green, the pick red.
+    {
+      key: 'explorer-quiz-choice',
+      path: '/explorer/transactions?as=admin',
+      after: withQuiz('choice'),
     },
     {
       key: 'explorer-transactions',

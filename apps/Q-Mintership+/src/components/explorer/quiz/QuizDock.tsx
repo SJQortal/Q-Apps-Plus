@@ -4,9 +4,11 @@
  * page, so the answer can be looked for anywhere in the Explorer. Above
  * the phone's bottom bar; its height kept clear for focus (BOTTOM_BAR_VAR).
  *
- * It says how the answer went ("Right!", "Not quite"), offers a hint (where
- * to look), shows the answer with how it is found and a link to the page
- * that shows it, and makes the next question, at any level or one picked.
+ * Each question has a heading for its theme ("Follow the money") and its
+ * level. A typed answer can be tried again and again; a multiple-choice
+ * one has one go. A hint says where to look, a closer hint narrows it and
+ * offers the page that shows it. The answer comes with how it is found, a
+ * fact, and a link. Then the next question, at any level or one picked.
  * Folds to one line; × closes it (the score and the questions asked stay).
  * Loaded only while the quiz is on (AppShell).
  */
@@ -22,22 +24,38 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
+import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import CloseOutlinedIcon from '@mui/icons-material/CloseOutlined';
 import ExpandLessOutlinedIcon from '@mui/icons-material/ExpandLessOutlined';
 import ExpandMoreOutlinedIcon from '@mui/icons-material/ExpandMoreOutlined';
 import LightbulbOutlinedIcon from '@mui/icons-material/LightbulbOutlined';
 import QuizOutlinedIcon from '@mui/icons-material/QuizOutlined';
-import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
+import RadioButtonUncheckedOutlinedIcon from '@mui/icons-material/RadioButtonUncheckedOutlined';
 import { MarkedName } from '../../common/MarkedName';
 import { BOTTOM_NAV_HEIGHT } from '../../layout/BottomNav';
 import { useBottomNavShown } from '../../layout/useBottomNav';
 import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../../hooks/useOverlayPadding';
-import { answerWords } from '../../../rules/explorer/quiz/check';
-import { QUIZ_LEVELS, type QuizLevel, type QuizPart } from '../../../rules/explorer/quiz/types';
-import { useQuiz, useQuizBusy, useQuizFailed } from '../../../state/explorerQuiz';
-import { formatCount } from '../../../utils/format';
 import { withHue } from '../../../pages/decisions/sectionAccents';
+import { answerWords } from '../../../rules/explorer/quiz/check';
+import {
+  QUIZ_LEVELS,
+  type QuizLevel,
+  type QuizPart,
+  type QuizQuestion,
+} from '../../../rules/explorer/quiz/types';
+import {
+  MISSED_CHOICE_LINES,
+  RIGHT_LINES,
+  say,
+  SHOWN_LINES,
+  streakLine,
+  THINKING_LINES,
+  WRONG_LINES,
+} from '../../../rules/explorer/quiz/words';
+import { useQuiz, useQuizBusy, useQuizFailed, type QuizState } from '../../../state/explorerQuiz';
+import { formatCount } from '../../../utils/format';
 import { readableOn } from '../../../utils/readable';
 import {
   askNext,
@@ -47,9 +65,10 @@ import {
   setQuizLevel,
   showHint,
   submitAnswer,
+  submitChoice,
 } from './quizActions';
 
-const LEVEL_HUE: Record<QuizLevel, number> = { easy: 150, medium: 210, tricky: 285 };
+const LEVEL_HUE: Record<QuizLevel, number> = { easy: 150, medium: 210, tricky: 285, expert: 330 };
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
@@ -144,21 +163,137 @@ function scoreWords(score: { asked: number; right: number; streak: number }): st
   return score.streak >= 2 ? `${base} · ${formatCount(score.streak)} in a row` : base;
 }
 
+/** While a question is made: a line that changes now and then (read out once, plainly). */
+function Thinking() {
+  const [line, setLine] = useState(() => say(Math.random, THINKING_LINES));
+  useEffect(() => {
+    const timer = setInterval(() => setLine(say(Math.random, THINKING_LINES)), 1600);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 1 }}>
+      <CircularProgress size={20} aria-hidden />
+      <Typography aria-hidden>{line}</Typography>
+      <span role="status" className="qmp-visually-hidden">
+        Thinking of a question
+      </span>
+    </Box>
+  );
+}
+
+/** A multiple-choice question's options: one go, then the right one green and a wrong pick red. */
+function Options({
+  question,
+  state,
+  onPick,
+}: {
+  question: QuizQuestion;
+  state: QuizState;
+  onPick: (index: number) => void;
+}) {
+  if (question.answer.kind !== 'choice') return null;
+  const { options, correct } = question.answer;
+  const done = state.status !== 'asking';
+  return (
+    <Box
+      role="group"
+      aria-label="Pick one (one go)"
+      sx={{
+        display: 'grid',
+        gap: 1,
+        gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' },
+      }}
+    >
+      {options.map((option, i) => {
+        const isRight = done && i === correct;
+        const wrongPick = done && state.picked === i && i !== correct;
+        return (
+          <Button
+            key={i}
+            variant="outlined"
+            onClick={() => (done ? undefined : onPick(i))}
+            aria-disabled={done || undefined}
+            startIcon={
+              isRight ? (
+                <CheckCircleOutlinedIcon className="qmp-pop" />
+              ) : wrongPick ? (
+                <CancelOutlinedIcon />
+              ) : (
+                <RadioButtonUncheckedOutlinedIcon />
+              )
+            }
+            sx={(theme) => ({
+              justifyContent: 'flex-start',
+              textAlign: 'left',
+              textTransform: 'none',
+              minHeight: 44,
+              fontSize: 15,
+              color: 'text.primary',
+              overflowWrap: 'anywhere',
+              borderColor: isRight
+                ? theme.palette.success.main
+                : wrongPick
+                  ? theme.palette.error.main
+                  : theme.palette.divider,
+              bgcolor: isRight
+                ? alpha(theme.palette.success.main, 0.12)
+                : wrongPick
+                  ? alpha(theme.palette.error.main, 0.1)
+                  : undefined,
+              '& .MuiButton-startIcon': {
+                color: isRight ? 'success.main' : wrongPick ? 'error.main' : 'text.secondary',
+              },
+            })}
+          >
+            <span>
+              <QuestionText parts={option.parts} />
+              {isRight ? <span className="qmp-visually-hidden">, the answer</span> : null}
+              {wrongPick ? <span className="qmp-visually-hidden">, your pick</span> : null}
+            </span>
+          </Button>
+        );
+      })}
+    </Box>
+  );
+}
+
+function HintBox({ children }: { children: React.ReactNode }) {
+  return (
+    <Box
+      sx={(theme) => ({
+        display: 'flex',
+        gap: 1,
+        alignItems: 'flex-start',
+        p: 1,
+        borderRadius: 1,
+        bgcolor: alpha(theme.palette.warning.main, 0.1),
+      })}
+    >
+      <LightbulbOutlinedIcon fontSize="small" sx={{ color: 'warning.main', mt: '2px' }} />
+      <Box sx={{ minWidth: 0 }}>{children}</Box>
+    </Box>
+  );
+}
+
 export default function QuizDock() {
   const quiz = useQuiz();
   const busy = useQuizBusy();
+  const failed = useQuizFailed();
   const navShown = useBottomNavShown();
   const [node, setNode] = useState<HTMLElement | null>(null);
   usePublishOverlay(node, BOTTOM_BAR_VAR, { gap: navShown ? 8 : 16 });
 
   const [input, setInput] = useState('');
   const [checking, setChecking] = useState(false);
+  /** What was said to the last typed answer that missed. */
   const [said, setSaid] = useState('');
-  const failed = useQuizFailed();
+  /** The words over the answer once it is answered or shown. */
+  const [cheer, setCheer] = useState('');
   const fieldRef = useRef<HTMLInputElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
   const { question, status, folded } = quiz;
   const key = question?.key ?? null;
+  const choice = question?.answer.kind === 'choice';
 
   // A new question: an empty field, nothing said yet.
   const [shownKey, setShownKey] = useState(key);
@@ -166,6 +301,7 @@ export default function QuizDock() {
     setShownKey(key);
     setInput('');
     setSaid('');
+    setCheer('');
   }
   // A question just made (by Next, or by the Explorer's button): into its field.
   const wasBusy = useRef(busy);
@@ -189,13 +325,26 @@ export default function QuizDock() {
     setSaid('');
     try {
       const right = await submitAnswer(input);
-      setSaid(right ? 'Right!' : 'Not quite. Look again, or take a hint.');
+      if (right) setCheer(say(Math.random, RIGHT_LINES));
+      else setSaid(say(Math.random, WRONG_LINES));
     } finally {
       setChecking(false);
     }
   };
 
+  const pick = (index: number) => {
+    const right = submitChoice(index);
+    setCheer(say(Math.random, right ? RIGHT_LINES : MISSED_CHOICE_LINES));
+  };
+
+  const reveal = () => {
+    setCheer(say(Math.random, SHOWN_LINES));
+    void revealAnswer();
+  };
+
   const bodyId = 'explorer-quiz-body';
+  const streak = status === 'right' ? streakLine(quiz.score.streak, quiz.score.best) : null;
+  const closer = question?.hint2 ?? 'Here is the page that shows it.';
 
   return (
     <Box
@@ -222,7 +371,7 @@ export default function QuizDock() {
         borderColor: alpha(theme.palette.primary.main, 0.55),
         bgcolor: 'background.paper',
         boxShadow: theme.shadows[8],
-        maxHeight: folded ? undefined : 'min(60vh, 520px)',
+        maxHeight: folded ? undefined : 'min(62vh, 560px)',
         overflowY: folded ? undefined : 'auto',
       })}
     >
@@ -295,10 +444,7 @@ export default function QuizDock() {
       ) : (
         <Box id={bodyId} sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minWidth: 0 }}>
           {busy ? (
-            <Box role="status" sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 1 }}>
-              <CircularProgress size={20} aria-hidden />
-              <Typography>Thinking of a question…</Typography>
-            </Box>
+            <Thinking />
           ) : failed || !question ? (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
               <Typography role="status" sx={{ flex: '1 1 240px' }}>
@@ -312,13 +458,30 @@ export default function QuizDock() {
             </Box>
           ) : (
             <>
-              <Typography
-                sx={{ fontSize: { xs: 16, sm: 17 }, lineHeight: 1.5, overflowWrap: 'anywhere' }}
-              >
-                <QuestionText parts={question.parts} />
-              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                {question.kicker ? (
+                  <Typography
+                    sx={(theme) => ({
+                      fontSize: 12,
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: readableOn(theme, theme.palette.primary.main, 0),
+                    })}
+                  >
+                    {question.kicker}
+                  </Typography>
+                ) : null}
+                <Typography
+                  sx={{ fontSize: { xs: 16, sm: 17 }, lineHeight: 1.5, overflowWrap: 'anywhere' }}
+                >
+                  <QuestionText parts={question.parts} />
+                </Typography>
+              </Box>
 
-              {status === 'asking' ? (
+              {choice ? <Options question={question} state={quiz} onPick={pick} /> : null}
+
+              {!choice && status === 'asking' ? (
                 <Box
                   component="form"
                   onSubmit={(event) => void check(event)}
@@ -367,23 +530,24 @@ export default function QuizDock() {
                 {status === 'asking' ? said : ''}
               </Typography>
 
-              {quiz.hinted && status === 'asking' ? (
-                <Box
-                  sx={(theme) => ({
-                    display: 'flex',
-                    gap: 1,
-                    alignItems: 'flex-start',
-                    p: 1,
-                    borderRadius: 1,
-                    bgcolor: alpha(theme.palette.warning.main, 0.1),
-                  })}
-                >
-                  <LightbulbOutlinedIcon
-                    fontSize="small"
-                    sx={{ color: 'warning.main', mt: '2px' }}
-                  />
+              {quiz.hints >= 1 && status === 'asking' ? (
+                <HintBox>
                   <Typography variant="body2">{question.hint}</Typography>
-                </Box>
+                </HintBox>
+              ) : null}
+              {quiz.hints >= 2 && status === 'asking' ? (
+                <HintBox>
+                  <Typography variant="body2">{closer}</Typography>
+                  <Button
+                    component={RouterLink}
+                    to={question.link}
+                    size="small"
+                    endIcon={<ChevronRightOutlinedIcon />}
+                    sx={{ minHeight: 44, px: 1, ml: -1 }}
+                  >
+                    Show me where
+                  </Button>
+                </HintBox>
               ) : null}
 
               {status !== 'asking' ? (
@@ -411,11 +575,24 @@ export default function QuizDock() {
                         sx={{ color: 'success.main' }}
                       />
                     ) : null}
-                    {status === 'right' ? 'Right!' : 'The answer'}
+                    {cheer || (status === 'right' ? 'Right!' : 'The answer')}
                   </Typography>
-                  <Typography sx={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
-                    {answerWords(question)}
-                  </Typography>
+                  {streak ? (
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {streak}
+                    </Typography>
+                  ) : null}
+                  {/* The options already show a multiple-choice answer. */}
+                  {choice ? null : (
+                    <Typography sx={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}>
+                      {answerWords(question)}
+                    </Typography>
+                  )}
+                  {question.fact ? (
+                    <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+                      {question.fact}
+                    </Typography>
+                  ) : null}
                   <Typography variant="body2" color="text.secondary">
                     {question.how}
                   </Typography>
@@ -438,12 +615,12 @@ export default function QuizDock() {
                     <Button
                       startIcon={<LightbulbOutlinedIcon />}
                       onClick={showHint}
-                      aria-disabled={quiz.hinted || undefined}
+                      aria-disabled={quiz.hints >= 2 || undefined}
                       sx={{ minHeight: 44 }}
                     >
-                      Hint
+                      {quiz.hints === 0 ? 'Hint' : 'Closer hint'}
                     </Button>
-                    <Button onClick={revealAnswer} sx={{ minHeight: 44 }}>
+                    <Button onClick={reveal} sx={{ minHeight: 44 }}>
                       Show the answer
                     </Button>
                   </>
