@@ -8,7 +8,7 @@ import { renderWithProviders } from "../../test/renderWithProviders";
 import { mockFetch, mockQortalAction, qortalCallsFor } from "../../test/setup";
 import { store } from "../../state/store";
 import { addToHashMap } from "../../state/features/fileSlice";
-import { updateDownloads } from "../../state/features/globalSlice";
+import { clearFinishedDownloads, removeDownload, updateDownloads } from "../../state/features/globalSlice";
 import { resetQdnSearchCache } from "../../utils/qdnSearch";
 
 // A share of 120 rows renders slowly on a busy machine.
@@ -90,5 +90,50 @@ describe("a share with many files", { timeout: 20_000 }, () => {
     });
     await waitFor(() => expect(started().length).toBe(FETCH_ALL_AT_ONCE + 3));
     expect(new Set(started()).size).toBe(started().length);
+
+    // One waiting for peers that lack chunks keeps its place: its poller goes on.
+    act(() => {
+      store.dispatch(
+        updateDownloads({ name: NAME, service: "FILE", identifier: files[3].identifier, status: { status: "MISSING_DATA", percentLoaded: 40 } })
+      );
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(started().length).toBe(FETCH_ALL_AT_ONCE + 3);
+    act(() => {
+      for (const f of files) store.dispatch(removeDownload(f.identifier));
+    });
+  });
+
+  it("comes back to Fetch all files when finished downloads are cleared", async () => {
+    const few = files.slice(0, 8).map((f) => ({ ...f, identifier: f.identifier + "_few" }));
+    store.dispatch(
+      addToHashMap({ id: ID + "2", user: NAME, title: "Small album", version: 1, commentsId: "c", category: "3", files: few, created: 1 })
+    );
+    renderWithProviders(
+      <DownloadWrapper>
+        <Routes>
+          <Route path="/share/:name/:id" element={<FileContent />} />
+        </Routes>
+      </DownloadWrapper>,
+      { initialEntries: [`/share/${NAME}/${ID}2`] }
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Fetch all files" }));
+    act(() => {
+      for (const f of few.slice(0, 6)) {
+        store.dispatch(updateDownloads({ name: NAME, service: "FILE", identifier: f.identifier, status: { status: "READY" } }));
+      }
+    });
+    await waitFor(() => expect(started().filter((id) => id.endsWith("_few"))).toHaveLength(8));
+    act(() => {
+      for (const f of few.slice(6)) {
+        store.dispatch(updateDownloads({ name: NAME, service: "FILE", identifier: f.identifier, status: { status: "READY" } }));
+      }
+    });
+    expect(screen.getByRole("button", { name: "All files ready" })).toBeDisabled();
+    // The downloads list's Clear finished: those files are no longer fetched, and the button says so.
+    act(() => {
+      store.dispatch(clearFinishedDownloads());
+    });
+    expect(screen.getByRole("button", { name: "Fetch all files" })).toBeEnabled();
   });
 });
