@@ -95,6 +95,22 @@ export function formatDateTime(timestamp: number): string {
 }
 
 /** "block 2,757,500". */
+const TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
+
+/**
+ * From one time to another, as briefly as reads clearly: "16 Oct 2026,
+ * 21:36–21:55" within a day, "2 Oct 2026 – 7 Oct 2026" across days.
+ */
+export function formatTimeSpan(from: number, to: number): string {
+  const [low, high] = from <= to ? [from, to] : [to, from];
+  if (formatDate(low) === formatDate(high)) {
+    const a = TIME.format(new Date(low));
+    const b = TIME.format(new Date(high));
+    return a === b ? `${formatDate(low)}, ${a}` : `${formatDate(low)}, ${a}–${b}`;
+  }
+  return `${formatDate(low)} – ${formatDate(high)}`;
+}
+
 export function formatBlock(height: number): string {
   return `block ${formatCount(height)}`;
 }

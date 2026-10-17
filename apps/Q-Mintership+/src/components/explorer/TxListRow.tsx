@@ -17,8 +17,13 @@
  * A message never shows its content, an encrypted QDN resource never its
  * identifier (rules/explorer/txWords.ts and rawTx.ts leave both out), and
  * the fields only a transaction's raw response carries show only there.
+ *
+ * Consecutive alike transactions (rules/explorer/alikeRuns.ts: rows that
+ * would say the very same thing) are one row, "×6", that opens to each of
+ * them as a row of its own (TxRows). A list's top rows carry `data-tx-top`, for
+ * the focus to land on the first new one after "Show older".
  */
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
@@ -31,7 +36,7 @@ import { usePersonLinks } from '../common/personLinks';
 import type { TxRow } from '../../data/types';
 import { useInView } from '../../hooks/useInView';
 import { explorerTxPath } from '../../routes/paths';
-import { formatCount, formatDateTime, formatRelative } from '../../utils/format';
+import { formatCount, formatDateTime, formatRelative, formatTimeSpan } from '../../utils/format';
 import { RawResponse } from './RawJson';
 import { TxFields, TxPeople } from './TxFields';
 import { TxIcon } from './TxIcon';
@@ -39,6 +44,7 @@ import { DirectionMark } from './DirectionMark';
 import { directionRules } from './directionTone';
 import { TX_FAMILIES, txFamilyAccent } from './txFamilyAccent';
 import { familyOf } from '../../rules/explorer/txFamilies';
+import { alikeRuns } from '../../rules/explorer/alikeRuns';
 import { TxSentence } from './TxSentence';
 import { useTxWords } from './useTxWords';
 
@@ -111,6 +117,17 @@ const WhenLine = styled('span')(({ theme }) => ({
   color: theme.palette.text.secondary,
 }));
 const Row = styled('div')({ minWidth: 0 });
+// How many alike transactions a row stands for: "×6".
+const Count = styled('span')(({ theme }) => ({
+  ...theme.typography.body2,
+  fontWeight: 700,
+  padding: theme.spacing(0.25, 0.75),
+  borderRadius: 999,
+  color: theme.palette.text.primary,
+  backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.2 : 0.12),
+  whiteSpace: 'nowrap',
+  alignSelf: 'center',
+}));
 
 /**
  * When it happened: "12 Oct 2026, 14:33 · block 2,757,497", or that it
@@ -139,9 +156,11 @@ export interface TxListRowProps {
    * are told from it ("Sent", "Received"). None on Transactions on Qortal.
    */
   viewpoint?: string | null;
+  /** A row of the list itself (true), not one inside a run of alike ones. */
+  top?: boolean;
 }
 
-export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
+export function TxListRow({ tx, viewpoint = null, top = true }: TxListRowProps) {
   const [open, setOpen] = useState(false);
   const words = useTxWords(tx, viewpoint);
   const links = usePersonLinks();
@@ -157,6 +176,7 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
       <RowButton
         type="button"
         data-tx-row=""
+        data-tx-top={top ? '' : undefined}
         data-direction={flow ?? undefined}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
@@ -218,7 +238,131 @@ export function TxListRow({ tx, viewpoint = null }: TxListRowProps) {
   );
 }
 
-/** A list of transactions, newest first, in a card, one TxListRow each. */
+/** Where a run of alike transactions is: one block, or from one to another, with the dates. */
+function runSpan(rows: readonly TxRow[]) {
+  const heights = rows.map((row) => row.blockHeight ?? 0);
+  const times = rows.map((row) => row.timestamp);
+  const low = Math.min(...heights);
+  const high = Math.max(...heights);
+  return {
+    oneBlock: low === high,
+    low,
+    high,
+    dates: formatTimeSpan(Math.min(...times), Math.max(...times)),
+  };
+}
+
+/** Alike transactions as one row: the sentence once, "×6", opening to each of them. */
+function TxRunRow({ rows, viewpoint }: { rows: TxRow[]; viewpoint: string | null }) {
+  const [open, setOpen] = useState(false);
+  const tx = rows[0];
+  const span = runSpan(rows);
+  const words = useTxWords(tx, viewpoint);
+  const panelId = useId();
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const near = useInView(node, '200px');
+  const flow = words.direction === 'in' || words.direction === 'out' ? words.direction : null;
+  return (
+    <Row ref={setNode}>
+      <RowButton
+        type="button"
+        data-tx-row=""
+        data-tx-top=""
+        data-direction={flow ?? undefined}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+      >
+        <Slot data-family={familyOf(tx.type)}>
+          <TxIcon type={tx.type} />
+          {flow ? <DirectionMark flow={flow} badge /> : null}
+        </Slot>
+        <Lines>
+          <SentenceLine>
+            {near ? <TxSentence parts={words.parts} plain /> : words.plain}
+          </SentenceLine>
+          <WhenLine>
+            <span style={NOWRAP}>{formatCount(rows.length)} times</span> ·{' '}
+            {span.oneBlock ? (
+              <When tx={tx} />
+            ) : (
+              <>
+                <span style={NOWRAP}>{span.dates}</span> ·{' '}
+                <span style={NOWRAP}>
+                  blocks {formatCount(span.low)}–{formatCount(span.high)}
+                </span>
+              </>
+            )}
+          </WhenLine>
+        </Lines>
+        <Count aria-hidden>×{formatCount(rows.length)}</Count>
+        <Slot>
+          <ExpandMoreOutlinedIcon aria-hidden data-chevron="" />
+        </Slot>
+      </RowButton>
+      <SmoothReveal open={open}>
+        <Box
+          id={panelId}
+          sx={{
+            pb: 1,
+            pl: { xs: 1.25, sm: 6 },
+            pr: { xs: 0.5, sm: 1 },
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
+            minWidth: 0,
+          }}
+        >
+          <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
+            {span.oneBlock
+              ? `The same ${words.title.toLowerCase()}, ${formatCount(rows.length)} times in block ${formatCount(span.low)}.`
+              : `The same ${words.title.toLowerCase()}, ${formatCount(rows.length)} times between blocks ${formatCount(span.low)} and ${formatCount(span.high)}.`}{' '}
+            Each is a transaction of its own:
+          </Typography>
+          <Box
+            component="ul"
+            aria-label={`${formatCount(rows.length)} transactions like this`}
+            sx={{
+              listStyle: 'none',
+              m: 0,
+              p: 0,
+              pl: 1,
+              borderLeft: 2,
+              borderColor: 'divider',
+              '& > li + li': { borderTop: 1, borderColor: 'divider' },
+            }}
+          >
+            {rows.map((row) => (
+              <li key={row.signature}>
+                <TxListRow tx={row} viewpoint={viewpoint} top={false} />
+              </li>
+            ))}
+          </Box>
+        </Box>
+      </SmoothReveal>
+    </Row>
+  );
+}
+
+/** Rows as list items: one each, or one for a run of alike transactions. */
+export function TxRows({ rows, viewpoint = null }: { rows: TxRow[]; viewpoint?: string | null }) {
+  const runs = useMemo(() => alikeRuns(rows, viewpoint), [rows, viewpoint]);
+  return (
+    <>
+      {runs.map((run) => (
+        <li key={run[0].signature}>
+          {run.length > 1 ? (
+            <TxRunRow rows={run} viewpoint={viewpoint} />
+          ) : (
+            <TxListRow tx={run[0]} viewpoint={viewpoint} />
+          )}
+        </li>
+      ))}
+    </>
+  );
+}
+
+/** A list of transactions, newest first, in a card: a row each, alike ones as one. */
 export function TxList({
   rows,
   viewpoint = null,
@@ -240,11 +384,7 @@ export function TxList({
           '& > li + li': { borderTop: 1, borderColor: 'divider' },
         }}
       >
-        {rows.map((tx) => (
-          <li key={tx.signature}>
-            <TxListRow tx={tx} viewpoint={viewpoint} />
-          </li>
-        ))}
+        <TxRows rows={rows} viewpoint={viewpoint} />
       </Box>
     </Card>
   );

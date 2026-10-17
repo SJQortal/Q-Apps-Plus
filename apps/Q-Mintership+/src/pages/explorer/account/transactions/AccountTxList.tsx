@@ -126,7 +126,7 @@ export function AccountTxList({ address, filters }: { address: string; filters: 
 
   useLayoutEffect(() => {
     if (focusRow.current === null || more) return;
-    const buttons = listRef.current?.querySelectorAll<HTMLElement>('[data-tx-row]');
+    const buttons = listRef.current?.querySelectorAll<HTMLElement>('[data-tx-top]');
     (buttons?.[focusRow.current] ?? coverageRef.current)?.focus();
     focusRow.current = null;
   });
@@ -154,7 +154,9 @@ export function AccountTxList({ address, filters }: { address: string; filters: 
     }
     const added = Math.max(0, Math.min(SHOW_STEP, held - shown));
     // The button goes when this shows the last of the list: focus moves on.
-    if (done && held <= shown + SHOW_STEP) focusRow.current = shown;
+    if (done && held <= shown + SHOW_STEP)
+      // The first new row: after the list's rows as they are now (alike ones count once).
+      focusRow.current = listRef.current?.querySelectorAll('[data-tx-top]').length ?? shown;
     if (added > 0) setShown(shown + SHOW_STEP);
     // Emptied first, so the same words are said again for a second press.
     setSaid('');

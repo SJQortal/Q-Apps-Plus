@@ -16,7 +16,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { Card, Section } from '../../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../../components/common/states';
-import { TxList, TxListRow } from '../../../components/explorer/TxListRow';
+import { TxList, TxRows } from '../../../components/explorer/TxListRow';
 import {
   getGlobalTx,
   getGlobalWaiting,
@@ -62,16 +62,8 @@ export function GlobalWaiting({ type }: { type: GlobalType }) {
   );
 }
 
-function Rows({ rows }: { rows: readonly TxRow[] }) {
-  return (
-    <>
-      {rows.map((tx) => (
-        <li key={tx.signature}>
-          <TxListRow tx={tx} />
-        </li>
-      ))}
-    </>
-  );
+function Rows({ rows }: { rows: TxRow[] }) {
+  return <TxRows rows={rows} />;
 }
 
 export function GlobalResults({
@@ -120,7 +112,7 @@ export function GlobalResults({
 
   useLayoutEffect(() => {
     if (focusRow.current === null || more) return;
-    const buttons = listRef.current?.querySelectorAll<HTMLElement>('[data-tx-row]');
+    const buttons = listRef.current?.querySelectorAll<HTMLElement>('[data-tx-top]');
     (buttons?.[focusRow.current] ?? coverageRef.current)?.focus();
     focusRow.current = null;
   });
@@ -147,7 +139,9 @@ export function GlobalResults({
       setOlderError(error);
     } finally {
       if (pages.length) {
-        if (pages[pages.length - 1].done) focusRow.current = shown;
+        // The first new row: after the list's rows as they are now (alike ones count once).
+        if (pages[pages.length - 1].done)
+          focusRow.current = listRef.current?.querySelectorAll('[data-tx-top]').length ?? shown;
         setOlder((previous) => [...previous, ...pages]);
         setSaid('');
         requestAnimationFrame(() =>

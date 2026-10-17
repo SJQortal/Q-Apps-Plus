@@ -3,7 +3,8 @@
  * linking into the Explorer and "Open transaction"; what is never shown (a
  * message's content, an encrypted resource's identifier, fields only the
  * raw data has); the raw API response, opened in the row, coloured by kind
- * and copied as JSON; a minting-level move's recipient. Strict mock world.
+ * and copied as JSON; a minting-level move's recipient; alike transactions
+ * one after another as one row that opens to each. Strict mock world.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
@@ -162,5 +163,30 @@ describe('TxListRow', () => {
     expect(
       await screen.findByRole('button', { name: /Waiting to be confirmed/ }, T)
     ).toBeInTheDocument();
+  });
+
+  it('shows alike transactions in a row as one line, ×3, that opens to each', async () => {
+    const base = row(sigs.kitLou[0]);
+    const alike = [0, 1, 2].map((i) => ({
+      ...base,
+      signature: `${base.signature.slice(0, -1)}${i}`,
+      timestamp: base.timestamp - i * 60_000,
+      blockHeight: (base.blockHeight ?? 0) - i,
+    }));
+    const { user, container } = await show(alike, ADDR.kicked);
+    const list = screen.getByRole('list', { name: 'Transactions' });
+    expect(list.querySelectorAll(':scope > li')).toHaveLength(1);
+    const run = await within(list).findByRole('button', { name: /Sent 10 QORT to Lou Left/ }, T);
+    expect(run).toHaveTextContent('3 times');
+    expect(run).toHaveTextContent(/blocks 1,364,498–1,364,500/);
+    await user.click(run);
+    const each = screen.getByRole('list', { name: '3 transactions like this' });
+    expect(within(each).getAllByRole('button', { name: /Sent 10 QORT to Lou Left/ })).toHaveLength(
+      3
+    );
+    expect(
+      screen.getByText(/The same payment, 3 times between blocks 1,364,498 and 1,364,500/)
+    ).toBeVisible();
+    await expectNoAxeViolations(container);
   });
 });

@@ -1,6 +1,7 @@
 /**
- * Overview's "Latest transactions": the newest 5 of the account's
- * transactions, from the same read as the Transactions tab's first view
+ * Overview's "Latest transactions": the newest 5 lines of the account's
+ * transactions (a run of alike ones is one line, all of it in it), from
+ * the same read as the Transactions tab's first view
  * (`xtx:<address>:all`), so opening the tab next costs nothing. Read once
  * the section nears the screen. "All transactions" switches to the tab in
  * place (like the tabs themselves) and puts focus on it. An account with
@@ -14,6 +15,7 @@ import { Section } from '../../../components/common/Section';
 import { ErrorState, ListSkeleton } from '../../../components/common/states';
 import { TxList } from '../../../components/explorer/TxListRow';
 import { accountTxKey, getAccountTx } from '../../../data/explorer/accountTx';
+import { firstRuns } from '../../../rules/explorer/alikeRuns';
 import { useInView } from '../../../hooks/useInView';
 import { useQuery } from '../../../hooks/useQuery';
 import { explorerAccountPath } from '../../../routes/paths';
@@ -21,7 +23,7 @@ import { tabIdOf } from './tabIds';
 import { STILL_CHECKING } from './transactions/txTabWords';
 import { useSlow } from './transactions/useSlow';
 
-/** How many the Overview shows. */
+/** How many lines the Overview shows. */
 const LATEST = 5;
 
 export interface LatestTransactionsProps {
@@ -36,7 +38,8 @@ export function LatestTransactions({ address }: LatestTransactionsProps) {
     getAccountTx(address, [], { force })
   );
   const slow = useSlow(near && list.isLoading);
-  const rows = list.data?.rows.slice(0, LATEST) ?? [];
+  // Five lines, whole: a run of alike transactions counts once, with all of it.
+  const rows = list.data ? firstRuns(list.data.rows, LATEST, address) : [];
 
   let body;
   if (!list.data && list.isError) {
