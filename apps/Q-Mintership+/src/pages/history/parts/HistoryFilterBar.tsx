@@ -56,7 +56,7 @@ export function HistoryFilterBar({
       return;
     }
     setEditing(false);
-    onPeriod({ kind: 'days', days: Number(key) as PeriodDays });
+    onPeriod(key === 'all' ? { kind: 'all' } : { kind: 'days', days: Number(key) as PeriodDays });
   };
 
   const apply = (event: FormEvent) => {

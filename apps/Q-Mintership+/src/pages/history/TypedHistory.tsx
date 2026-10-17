@@ -50,6 +50,7 @@ export function TypedHistory({
   known,
   nowMs,
   longer,
+  earliest,
   onLonger,
 }: {
   anchor: HistoryAnchor;
@@ -65,6 +66,8 @@ export function TypedHistory({
   nowMs: number;
   /** "Show the last 60 days": the next longer period, offered when this one is empty (none after a year). */
   longer: string | null;
+  /** MINTER's creation: a period that starts there (Scan all History) has nothing earlier. */
+  earliest?: number;
   onLonger: () => void;
 }) {
   const label = historyFilterLabel(filter);
@@ -144,7 +147,11 @@ export function TypedHistory({
     return (
       <EmptyState
         title={`Nothing under “${label}” ${scope}.`}
-        description={longer ? undefined : 'Pick an earlier date in When to search further back.'}
+        description={
+          longer || startMs <= (earliest ?? 0)
+            ? undefined
+            : 'Pick an earlier date in When to search further back.'
+        }
         actionLabel={longer ?? undefined}
         onAction={longer ? onLonger : undefined}
       />

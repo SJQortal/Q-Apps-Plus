@@ -135,24 +135,30 @@ export function historyFilterChoices(
 export const PERIOD_DAYS = [30, 60, 120, 365] as const;
 export type PeriodDays = (typeof PERIOD_DAYS)[number];
 
-export type HistoryPeriod = { kind: 'days'; days: PeriodDays } | { kind: 'from'; date: string };
+/**
+ * The last N days, from a date, or all of it (Simon, 2026-10-17: "for the When sorting in
+ * History I want option Scan all History"): every 30-day window back to MINTER's creation.
+ */
+export type HistoryPeriod =
+  { kind: 'days'; days: PeriodDays } | { kind: 'from'; date: string } | { kind: 'all' };
 
 export const DEFAULT_PERIOD: HistoryPeriod = { kind: 'days', days: 30 };
 
-/** `?period=` and `?from=` as a period; anything else is the last 30 days. */
+/** `?period=` (`all` too) and `?from=` as a period; anything else is the last 30 days. */
 export function parseHistoryPeriod(period: string | null, from: string | null): HistoryPeriod {
   if (from && fromDateInput(from) !== null) return { kind: 'from', date: from };
+  if (period === 'all') return { kind: 'all' };
   const days = Number(period);
   if (PERIOD_DAYS.includes(days as PeriodDays)) return { kind: 'days', days: days as PeriodDays };
   return DEFAULT_PERIOD;
 }
 
-/** The value a period select holds: '30', '60', '120', '365' or 'from'. */
+/** The value a period select holds: '30', '60', '120', '365', 'from' or 'all'. */
 export function periodKey(period: HistoryPeriod): string {
   return period.kind === 'days' ? String(period.days) : period.kind;
 }
 
-/** The next longer period after the last 30, 60 or 120 days (none after a year or a date). */
+/** The next longer period after the last 30, 60 or 120 days (none after a year, a date or all). */
 export function longerPeriod(period: HistoryPeriod): { kind: 'days'; days: PeriodDays } | null {
   if (period.kind !== 'days') return null;
   const next = PERIOD_DAYS[PERIOD_DAYS.indexOf(period.days) + 1];
@@ -165,17 +171,33 @@ export const PERIOD_CHOICES: ReadonlyArray<{ key: string; label: string }> = [
   { key: '120', label: 'Last 120 days' },
   { key: '365', label: 'Last year' },
   { key: 'from', label: 'From a date…' },
+  { key: 'all', label: 'Scan all History' },
 ];
 
-/** When the period starts (ms). */
-export function periodStartMs(period: HistoryPeriod, nowMs: number): number {
+/**
+ * When the period starts (ms). All of it starts at MINTER's creation (`earliestMs`), at most
+ * as far back as History reads; until that is known, at the newest window's start (no window
+ * is read twice: each is kept by its index).
+ */
+export function periodStartMs(period: HistoryPeriod, nowMs: number, earliestMs?: number): number {
   if (period.kind === 'from') return fromDateInput(period.date) ?? nowMs - 30 * DAY_MS;
+  if (period.kind === 'all')
+    return earliestMs === undefined
+      ? nowMs - HISTORY_WINDOW_DAYS * DAY_MS
+      : Math.max(earliestMs, nowMs - HISTORY_MAX_WINDOWS * HISTORY_WINDOW_DAYS * DAY_MS);
   return nowMs - period.days * DAY_MS;
 }
 
-/** "in the last 60 days", "in the last year", "since 3 Jan 2026". */
-export function periodWords(period: HistoryPeriod, startMs: number): string {
+/**
+ * "in the last 60 days", "in the last year", "since 3 Jan 2026", "since MINTER began" (all of
+ * it, or the date it reaches when that is after MINTER's creation, `earliestMs`).
+ */
+export function periodWords(period: HistoryPeriod, startMs: number, earliestMs?: number): string {
   if (period.kind === 'from') return `since ${formatDate(startMs)}`;
+  if (period.kind === 'all')
+    return earliestMs !== undefined && startMs > earliestMs
+      ? `since ${formatDate(startMs)}`
+      : 'since MINTER began';
   return period.days === 365 ? 'in the last year' : `in the last ${period.days} days`;
 }
 

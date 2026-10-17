@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildTimeline } from '../../data/timeline';
 import type { TxRow } from '../../data/types';
+import { formatDate } from '../../utils/format';
 import { fromDateInput } from '../activity/range';
 import {
   historyFilterChoices,
@@ -11,6 +12,7 @@ import {
   PERIOD_CHOICES,
   parseHistoryFilter,
   parseHistoryPeriod,
+  periodKey,
   periodStartMs,
   periodWords,
   searchTypesFor,
@@ -160,14 +162,32 @@ describe('History: the period', () => {
     expect(parseHistoryPeriod('60', '3 Jan')).toEqual({ kind: 'days', days: 60 });
   });
 
-  it('offers no "Any time": the last 30 days come first', () => {
+  it('offers the last 30 days first, and Scan all History last', () => {
     expect(PERIOD_CHOICES.map((p) => p.label)).toEqual([
       'Last 30 days',
       'Last 60 days',
       'Last 120 days',
       'Last year',
       'From a date…',
+      'Scan all History',
     ]);
+  });
+
+  it('scans all of it from MINTER’s creation, as far back as History reads', () => {
+    const all = parseHistoryPeriod('all', null);
+    expect(all).toEqual({ kind: 'all' });
+    expect(periodKey(all)).toBe('all');
+    expect(longerPeriod(all)).toBeNull();
+    const created = NOW - 400 * DAY;
+    expect(periodStartMs(all, NOW, created)).toBe(created);
+    expect(periodWords(all, created, created)).toBe('since MINTER began');
+    expect(windowsFor(periodStartMs(all, NOW, created), NOW)).toBe(14);
+    // Until MINTER's creation is known: the newest window only.
+    expect(periodStartMs(all, NOW)).toBe(NOW - 30 * DAY);
+    // Older than History reads: its start, by date.
+    const reach = periodStartMs(all, NOW, NOW - 5000 * DAY);
+    expect(reach).toBe(NOW - 36 * 30 * DAY);
+    expect(periodWords(all, reach, NOW - 5000 * DAY)).toBe(`since ${formatDate(reach)}`);
   });
 
   it('says where it starts, in words, and what the next longer period is', () => {

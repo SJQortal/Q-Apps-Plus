@@ -1,7 +1,8 @@
 /**
  * History → On chain: MINTER's decided changes and joins, newest first, over
- * a period: the last 30 days (the default), 60 or 120 days, a year, or from
- * a date. The type and the period are in the URL (historyFilters.ts); a
+ * a period: the last 30 days (the default), 60 or 120 days, a year, from a
+ * date, or all of it (Scan all History: every window back to MINTER's
+ * start). The type and the period are in the URL (historyFilters.ts); a
  * button at the end shows the next longer period.
  *
  * All types, and joins, join requests and leaves, are read in 30-day windows
@@ -105,13 +106,17 @@ export function ChainHistory() {
   const setPeriod = (p: HistoryPeriod) =>
     setQuery({
       period:
-        p.kind === 'days' && periodKey(p) !== periodKey(DEFAULT_PERIOD) ? String(p.days) : null,
+        p.kind === 'all'
+          ? 'all'
+          : p.kind === 'days' && periodKey(p) !== periodKey(DEFAULT_PERIOD)
+            ? String(p.days)
+            : null,
       from: p.kind === 'from' ? p.date : null,
     });
 
   const created = group.data?.created;
-  const startMs = periodStartMs(period, anchor?.timestamp ?? Date.now());
-  const scope = periodWords(period, startMs);
+  const startMs = periodStartMs(period, anchor?.timestamp ?? Date.now(), created);
+  const scope = periodWords(period, startMs, created);
   const search = searchTypesFor(filter);
   const longer = longerPeriod(period);
   const showLonger = () => {
@@ -194,6 +199,7 @@ export function ChainHistory() {
         known={events}
         nowMs={nowMs}
         longer={longer ? longerPeriodLabel(longer) : null}
+        earliest={created}
         onLonger={showLonger}
       />
     );
@@ -229,7 +235,11 @@ export function ChainHistory() {
         ) : (
           <EmptyState
             title={`Nothing under “${label}” ${scope}.`}
-            description={longer ? undefined : 'Pick an earlier date in When to look further back.'}
+            description={
+              longer || period.kind === 'all'
+                ? undefined
+                : 'Pick an earlier date in When to look further back.'
+            }
           />
         )}
         {loadingOlder ? <ListSkeleton count={2} label="Loading older MINTER events" /> : null}

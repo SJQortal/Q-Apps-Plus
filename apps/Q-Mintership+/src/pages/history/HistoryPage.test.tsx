@@ -202,7 +202,7 @@ describe('History page: filters', () => {
     expect(screen.getByRole('button', { name: 'Show the last 120 days' })).toBeInTheDocument();
   });
 
-  it('offers no Any time; after a year, the dates in When go further back', async () => {
+  it('offers no Any time; after a year, the dates in When go further back, or all of it', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=ban&period=365' });
     const when = await screen.findByLabelText('When');
     expect([...(when as HTMLSelectElement).options].map((o) => o.textContent)).toEqual([
@@ -211,11 +211,38 @@ describe('History page: filters', () => {
       'Last 120 days',
       'Last year',
       'From a date…',
+      'Scan all History',
     ]);
     const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
     expect(await within(list).findByText(PEOPLE.banned.name as string)).toBeInTheDocument();
     // After a year, the end offers no longer period: When has the dates.
     expect(screen.queryByRole('button', { name: /^Show the last/ })).toBeNull();
+  });
+
+  it('scans all of History back to MINTER’s start, in bounded windows', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    const filters = await screen.findByRole('group', { name: 'Show one type of event' });
+    await userEvent.click(within(filters).getByRole('button', { name: 'Bans' }));
+    expect(
+      await screen.findByText('Nothing under “Bans” in the last 30 days.')
+    ).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('When'), 'Scan all History');
+    expect(screen.getByLabelText('When')).toHaveValue('all');
+    const list = await screen.findByRole('group', { name: 'MINTER events: Bans, newest first' });
+    // Bram's ban, about 61 days ago, is in; nothing offers a longer period after all of it.
+    expect(await within(list).findByText(PEOPLE.banned.name as string)).toBeInTheDocument();
+    expect(await screen.findByText(/^\d+ events? since MINTER began\.$/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Show the last/ })).toBeNull();
+    // Every type over all of it, too: 30-day windows back to MINTER's start.
+    await userEvent.click(within(filters).getByRole('button', { name: 'All' }));
+    expect(
+      await screen.findByText(/^\d+ events since MINTER began\.$/, {}, { timeout: 6000 })
+    ).toBeInTheDocument();
+    for (const path of fetchCallsFor('/transactions/search')) {
+      const params = new URL(path, 'http://x').searchParams;
+      expect(Number(params.get('limit'))).toBeGreaterThan(0);
+      if (!params.get('address')) expect(Number(params.get('blockLimit'))).toBeGreaterThan(0);
+    }
   });
 
   it('shows what happened from a date', async () => {
