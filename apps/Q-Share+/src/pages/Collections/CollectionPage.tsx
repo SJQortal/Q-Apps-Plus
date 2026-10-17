@@ -379,7 +379,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
           />
           <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
             {found ? (
-              <Breadcrumbs aria-label="Where this folder is" sx={{ mb: 0.5, fontSize: 14, "& .MuiBreadcrumbs-ol": { flexWrap: "wrap" } }}>
+              <Breadcrumbs aria-label="Where this folder is" separator="›" sx={{ mb: 0.5, fontSize: 14, "& .MuiBreadcrumbs-ol": { flexWrap: "wrap" } }}>
                 {[{ id: null as string | null, title: collection.title || "Untitled collection" }, ...found.path.slice(0, -1).map((f) => ({ id: f.id as string | null, title: f.title || "Untitled folder" }))].map(
                   (crumb) => (
                     <Link
@@ -395,9 +395,6 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
                     </Link>
                   )
                 )}
-                <Typography component="span" sx={{ fontSize: 14, color: "text.primary" }}>
-                  {placeTitle}
-                </Typography>
               </Breadcrumbs>
             ) : null}
             <Typography component="h1" variant="h5" sx={{ fontWeight: 700, wordBreak: "break-word" }}>

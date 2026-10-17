@@ -1,4 +1,4 @@
-import { List, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
+import { List, ListItem, ListItemButton, ListItemIcon, ListItemText, Typography } from "@mui/material";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { ResponsiveDialog } from "../../components/common/mobile/ResponsiveDialog";
@@ -38,21 +38,22 @@ export function MoveDialog({ open, onClose, collection, shareTitle, from, busy, 
           const here = option.id === from;
           const label = option.id === null ? option.title || "Untitled collection" : option.title || "Untitled folder";
           return (
-            <ListItemButton
-              key={option.id ?? "root"}
-              disabled={here || busy}
-              onClick={() => onMove(option.id)}
-              sx={{ minHeight: 48, pl: 1 + Math.min(option.depth, 4) * 2, borderRadius: 1 }}
-            >
-              <ListItemIcon sx={{ minWidth: 36 }}>
-                {option.id === null ? <CollectionsBookmarkOutlinedIcon /> : <FolderOutlinedIcon />}
-              </ListItemIcon>
-              <ListItemText
-                primary={label}
-                secondary={here ? "It's here now" : option.id === null ? "The collection itself" : undefined}
-                slotProps={{ primary: { noWrap: true } }}
-              />
-            </ListItemButton>
+            <ListItem key={option.id ?? "root"} disablePadding>
+              <ListItemButton
+                disabled={here || busy}
+                onClick={() => onMove(option.id)}
+                sx={{ minHeight: 48, pl: 1 + Math.min(option.depth, 4) * 2, borderRadius: 1 }}
+              >
+                <ListItemIcon sx={{ minWidth: 36 }}>
+                  {option.id === null ? <CollectionsBookmarkOutlinedIcon /> : <FolderOutlinedIcon />}
+                </ListItemIcon>
+                <ListItemText
+                  primary={label}
+                  secondary={here ? "It's here now" : option.id === null ? "The collection itself" : undefined}
+                  slotProps={{ primary: { noWrap: true } }}
+                />
+              </ListItemButton>
+            </ListItem>
           );
         })}
       </List>

@@ -8,6 +8,7 @@ import {
   IconButton,
   LinearProgress,
   List,
+  ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
@@ -49,7 +50,7 @@ import { previewUrl } from "../common/FilePreview";
 import { BottomSheet } from "../common/mobile/BottomSheet";
 import { BOTTOM_NAV_HEIGHT, COMPACT_BOTTOM_NAV_HEIGHT } from "../layout/BottomNav/BottomNav";
 import { isUnlockClip, playerAudio } from "./audioElement";
-import { PHONE_PLAYER_BAR_HEIGHT, PLAYER_BAR_HEIGHT } from "./playerLayout";
+import { COMPACT_PLAYER_BAR_HEIGHT, PHONE_PLAYER_BAR_HEIGHT, PLAYER_BAR_HEIGHT } from "./playerLayout";
 
 /** A track the node can't provide, or the browser can't play, is skipped after this long. */
 export const SKIP_AFTER_MS = 2500;
@@ -75,16 +76,16 @@ export function formatTime(seconds: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
 }
 
-const Bar = styled("section", { shouldForwardProp: (prop) => prop !== "bottom" && prop !== "phone" })<{
+const Bar = styled("section", { shouldForwardProp: (prop) => prop !== "bottom" && prop !== "height" })<{
   bottom: string;
-  phone: boolean;
-}>(({ theme, bottom, phone }) => ({
+  height: number;
+}>(({ theme, bottom, height }) => ({
   position: "fixed",
   left: 0,
   right: 0,
   bottom,
   zIndex: theme.zIndex.appBar,
-  height: phone ? PHONE_PLAYER_BAR_HEIGHT : PLAYER_BAR_HEIGHT,
+  height,
   paddingLeft: "env(safe-area-inset-left, 0px)",
   paddingRight: "env(safe-area-inset-right, 0px)",
   backgroundColor: headerFill(theme, "chromeStrong"),
@@ -389,7 +390,7 @@ function SeekBar({ list }: { list: Playlist }) {
   }
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 38, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 40, fontSize: 13, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
         {formatTime(time.current)}
       </Typography>
       <Slider
@@ -403,7 +404,7 @@ function SeekBar({ list }: { list: Playlist }) {
         getAriaValueText={(value) => `${formatTime(value)} of ${formatTime(time.duration)}`}
         sx={{ flex: 1 }}
       />
-      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 38, fontVariantNumeric: "tabular-nums" }}>
+      <Typography variant="body2" color="text.secondary" sx={{ minWidth: 40, fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
         {formatTime(time.duration)}
       </Typography>
     </Box>
@@ -417,27 +418,28 @@ function TrackList({ list, onPicked }: { list: Playlist; onPicked?: () => void }
       {player.tracks.map((item, index) => {
         const current = track?.identifier === item.identifier;
         return (
-          <ListItemButton
-            key={item.identifier}
-            selected={current}
-            aria-current={current ? "true" : undefined}
-            onClick={() => {
-              list.pick(index);
-              onPicked?.();
-            }}
-            sx={{ minHeight: 44, borderRadius: 1 }}
-          >
-            <ListItemIcon sx={{ minWidth: 36, color: current ? "primary.main" : "text.secondary" }}>
-              {current ? (
-                <GraphicEqRoundedIcon fontSize="small" />
-              ) : (
-                <Typography component="span" variant="body2" sx={{ width: 20, textAlign: "right" }}>
-                  {index + 1}
-                </Typography>
-              )}
-            </ListItemIcon>
-            <ListItemText primary={trackTitle(item)} slotProps={{ primary: { noWrap: true, title: item.filename } }} />
-          </ListItemButton>
+          <ListItem key={item.identifier} disablePadding>
+            <ListItemButton
+              selected={current}
+              aria-current={current ? "true" : undefined}
+              onClick={() => {
+                list.pick(index);
+                onPicked?.();
+              }}
+              sx={{ minHeight: 44, borderRadius: 1 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36, color: current ? "primary.main" : "text.secondary" }}>
+                {current ? (
+                  <GraphicEqRoundedIcon fontSize="small" />
+                ) : (
+                  <Typography component="span" variant="body2" sx={{ width: 20, textAlign: "right" }}>
+                    {index + 1}
+                  </Typography>
+                )}
+              </ListItemIcon>
+              <ListItemText primary={trackTitle(item)} slotProps={{ primary: { noWrap: true, title: item.filename } }} />
+            </ListItemButton>
+          </ListItem>
         );
       })}
     </List>
@@ -446,6 +448,7 @@ function TrackList({ list, onPicked }: { list: Playlist; onPicked?: () => void }
 
 function Titles({ list, onOpenShare }: { list: Playlist; onOpenShare: () => void }) {
   const { track, player } = list;
+  const phone = usePhoneLayout();
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
       <Box
@@ -463,7 +466,7 @@ function Titles({ list, onOpenShare }: { list: Playlist; onOpenShare: () => void
           size="small"
           color="inherit"
           onClick={onOpenShare}
-          sx={{ p: 0, minWidth: 0, minHeight: 0, maxWidth: "100%", justifyContent: "flex-start", color: "text.secondary", fontWeight: 400, textTransform: "none" }}
+          sx={{ p: 0, minWidth: 0, minHeight: phone ? 44 : 0, maxWidth: "100%", justifyContent: "flex-start", color: "text.secondary", fontWeight: 400, textTransform: "none" }}
         >
           <Typography component="span" noWrap variant="body2" sx={{ display: "block" }}>
             {player.share?.title || "Share"} · {player.position + 1}/{player.tracks.length}
@@ -506,7 +509,7 @@ export function AudioPlayer() {
   if (phone) {
     return (
       <>
-        <Bar bottom={bottom} phone aria-label="Player">
+        <Bar bottom={bottom} height={landscape ? COMPACT_PLAYER_BAR_HEIGHT : PHONE_PLAYER_BAR_HEIGHT} aria-label="Player">
           <LinearProgress
             variant={list.loading ? "indeterminate" : "determinate"}
             value={percent}
@@ -565,7 +568,7 @@ export function AudioPlayer() {
   }
 
   return (
-    <Bar bottom={bottom} phone={false} aria-label="Player">
+    <Bar bottom={bottom} height={PLAYER_BAR_HEIGHT} aria-label="Player">
       <Inner>
         <Titles list={list} onOpenShare={openShare} />
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
