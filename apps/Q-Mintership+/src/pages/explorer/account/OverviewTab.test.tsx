@@ -104,7 +104,11 @@ describe('Overview: a Minter Admin minting now', () => {
     await waitFor(() => expect(fact('QDN Transactions').value).not.toBe('Loading'), T);
     const list = peekQuery<AccountTxList>(accountTxKey(ADDR.admin, []));
     const qdn = (list?.rows ?? []).filter((tx) => tx.type === 'ARBITRARY').length;
-    expect(fact('QDN Transactions').value).toBe(`${qdn}${list?.done ? '' : '+'}`);
+    const more = list?.done ? '' : '+';
+    expect(fact('QDN Transactions').value).toBe(`${list?.rows.length}${more}`);
+    expect(fact('QDN Transactions').detail).toMatch(
+      new RegExp(`^${qdn}\\${more || '?'}? of them on QDN\\.`)
+    );
     // At a glance counts them; the Groups section lists them.
     expect(within(facts).queryByRole('list', { name: 'Its groups' })).toBeNull();
     const groupsSection = await region('Groups (3)');

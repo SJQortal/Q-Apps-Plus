@@ -82,15 +82,12 @@ describe('facts', () => {
     expect(groupsWords(45)).toBe('In 45 groups');
   });
 
-  it('counts QDN transactions exactly once the whole list is read, and a floor until then', () => {
-    expect(qdnTxWords(172, 205, true)).toEqual({
-      value: '172',
-      detail: 'Of 205 transactions in all.',
-    });
-    expect(qdnTxWords(0, 1, true)).toEqual({ value: '0', detail: 'Of 1 transaction in all.' });
+  it('counts every transaction, with the QDN ones below, exactly once all is read', () => {
+    expect(qdnTxWords(172, 205, true)).toEqual({ value: '205', detail: '172 of them on QDN.' });
+    expect(qdnTxWords(0, 1, true)).toEqual({ value: '1', detail: '0 of them on QDN.' });
     expect(qdnTxWords(860, 1000, false)).toEqual({
-      value: '860+',
-      detail: 'Counted in its newest 1,000 transactions; Activity below reads further back.',
+      value: '1,000+',
+      detail: '860+ of them on QDN. Activity below reads further back.',
     });
   });
 });

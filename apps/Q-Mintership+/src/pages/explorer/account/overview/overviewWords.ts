@@ -125,23 +125,20 @@ export function groupsWords(count: number): string {
 
 /** "5,200 members". */
 /**
- * The QDN Transactions fact: how many QDN data transactions are among the
- * `read` transactions of its list, exact once `done` (the whole history is
- * in), else a floor ("860+"), with what it was counted in.
+ * The QDN Transactions fact (Simon, 2026-10-17: "every transactions should
+ * be the main number, and QDN should be the smaller number below"): the
+ * `read` transactions of its list and the QDN data ones among them, exact
+ * once `done` (the whole history is in), else floors ("1,000+").
  */
 export function qdnTxWords(
   qdn: number,
   read: number,
   done: boolean
 ): { value: string; detail: string } {
-  if (done)
-    return {
-      value: formatCount(qdn),
-      detail: `Of ${formatCount(read)} ${read === 1 ? 'transaction' : 'transactions'} in all.`,
-    };
+  if (done) return { value: formatCount(read), detail: `${formatCount(qdn)} of them on QDN.` };
   return {
-    value: `${formatCount(qdn)}+`,
-    detail: `Counted in its newest ${formatCount(read)} transactions; Activity below reads further back.`,
+    value: `${formatCount(read)}+`,
+    detail: `${formatCount(qdn)}+ of them on QDN. Activity below reads further back.`,
   };
 }
 

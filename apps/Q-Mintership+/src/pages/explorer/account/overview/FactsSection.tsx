@@ -205,10 +205,10 @@ function GroupsFact({ address }: { address: string }) {
 }
 
 /**
- * How many QDN transactions it made (Simon, 2026-10-17: "QDN Transactions
- * which will show the total nr of Tx the user made"): the QDN data rows
- * (what it published on QDN, as Activity's QDN data counts them) in its
- * own transaction list, the list Latest transactions and Activity read
+ * How many transactions it made, and how many of them on QDN (Simon,
+ * 2026-10-17: "QDN Transactions which will show the total nr of Tx the
+ * user made", every transaction the main number, QDN below): counted in
+ * its own transaction list (QDN data as Activity's chip counts it), the list Latest transactions and Activity read
  * anyway (`xtx:<address>:all`; its first page is read here when nothing
  * has yet). Exact once that list reaches its first transaction; until then
  * a floor, "860+", counted in what was read. Nothing more is read for it
