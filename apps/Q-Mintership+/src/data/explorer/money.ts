@@ -17,6 +17,7 @@ import type { TxRow } from '../types';
 import { getJson, query } from '../core';
 import { fetchQuery, peekQuery, setQueryData } from '../query';
 import { heavy, heavyQuery } from './heavy';
+import { KNOWN_EXCHANGES, exchangeFlow, type ExchangeFlow } from '../../rules/explorer/exchanges';
 
 export type PayDirection = 'sent' | 'recv';
 
@@ -66,6 +67,59 @@ export function getPaymentCaps(address: string): Promise<PaymentCaps> {
       }
     },
     { ttlMs: Number.POSITIVE_INFINITY }
+  );
+}
+
+/** Payments read per exchange and way at most (pages of PAY_PAGE). */
+const EXCHANGE_PAGES = 10;
+
+/**
+ * What an account paid each known exchange, and got from it
+ * (`xexch:<a>`): `/transactions/payments/between` with the sender and the
+ * recipient both given, a few ms each, so it is exact however busy the
+ * account is (up to 1,000 payments a way, then `more`). Null on a node
+ * without that endpoint: the Connections lists' payments say it then.
+ */
+export function getExchangePayments(address: string): Promise<ExchangeFlow[] | null> {
+  return fetchQuery(
+    `xexch:${address}`,
+    async () => {
+      const caps = await getPaymentCaps(address);
+      if (!caps.paymentsBetween) return null;
+      const read = async (from: string, to: string) => {
+        const rows: TxRow[] = [];
+        for (let page = 0; page < EXCHANGE_PAGES; page++) {
+          const chunk = await getJson<TxRow[]>(
+            `/transactions/payments/between?${query({
+              senderAddress: from,
+              recipientAddress: to,
+              confirmationStatus: 'CONFIRMED',
+              limit: PAY_PAGE,
+              offset: page * PAY_PAGE,
+              reverse: true,
+            })}`
+          );
+          const list = Array.isArray(chunk) ? chunk : [];
+          rows.push(...list);
+          if (list.length < PAY_PAGE) return { rows, more: false };
+        }
+        return { rows, more: true };
+      };
+      const flows = await Promise.all(
+        Object.keys(KNOWN_EXCHANGES)
+          .filter((exchange) => exchange !== address)
+          .flatMap((exchange) => [
+            read(address, exchange).then((got) =>
+              exchangeFlow(exchange, 'sent', got.rows, got.more)
+            ),
+            read(exchange, address).then((got) =>
+              exchangeFlow(exchange, 'received', got.rows, got.more)
+            ),
+          ])
+      );
+      return flows.filter((flow): flow is ExchangeFlow => flow !== null);
+    },
+    { ttlMs: 10 * 60_000 }
   );
 }
 

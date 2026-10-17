@@ -14,6 +14,7 @@
  * - In Q-Mintership: nominations, supports and votes between it and others
  *   (MintershipLinks);
  * - "Also checked, nothing found: …", and Core's own report on request.
+ * Above them, QORT sent to exchanges or got from them (ExchangeNotice).
  * When the links read stopped at its ceiling (its newest 500 rows), the
  * tab says so, and what those rows didn't show isn't claimed as none.
  * A section shows only when it has something. "Copy findings" copies the
@@ -27,7 +28,7 @@
  * line under it says how many rows match; lists with none step aside.
  *
  * Reads (all cached per account, none polled; Refresh marks them stale):
- * xlinks, xpay sent and received, xassets, xonline, xfirst, the sponsor's
+ * xlinks, xpay sent and received, xexch, xassets, xonline, xfirst, the sponsor's
  * xlinks (heavy, dropped with this page), payer bands for the accounts on
  * screen, and MINTER's member and admin lists once Payments nears the
  * screen.
@@ -105,6 +106,7 @@ import {
   type Found,
 } from './connections/searchEntries';
 import { ConnectionsCircle } from './connections/ConnectionsCircle';
+import { ExchangeNotice } from './connections/ExchangeNotice';
 import { useConnectionsView, type ConnectionsView } from './connections/useConnectionsView';
 import { ViewScope } from '../../../components/common/ViewScope';
 import { useViewState } from '../../../hooks/useViewState';
@@ -551,6 +553,9 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
             }`
           : ''}
       </Typography>
+
+      {/* QORT sent to exchanges, or got from them (Simon, 2026-10-17). */}
+      {!searching ? <ExchangeNotice address={address} recorded={recorded} /> : null}
 
       {view === 'circle' && showRecorded ? (
         <Section title="Connections circle" id="connections-circle">

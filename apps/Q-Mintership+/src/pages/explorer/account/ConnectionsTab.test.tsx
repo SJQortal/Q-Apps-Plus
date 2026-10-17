@@ -25,7 +25,10 @@ import {
   OLD_MINTER,
   SPONSEES,
   SPONSOR,
+  NOW,
+  TIP,
   answerCore,
+  fakeKey,
   type World,
 } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
@@ -686,6 +689,73 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     expect(lines).toHaveTextContent('Accounts it ever made a reward share to: 5');
     expect(lines).toHaveTextContent('Core counts names, not accounts');
     expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);
+  });
+});
+
+describe('Connections: exchanges', () => {
+  const TRADEOGRE = 'QcZPChiGmwLu3Lrp2mfLSjZ3yHKmtrogRe';
+  /** A payment in the mock world, found by sender and recipient as on a node. */
+  function payment(world: World, from: string, to: string, h: number, amount: string) {
+    const signature = fakeKey(`exch:${from}:${to}:${h}`, 64);
+    const row = {
+      type: 'PAYMENT',
+      timestamp: NOW - (TIP - h) * 60_000,
+      reference: fakeKey(`exch-ref:${h}`, 64),
+      fee: '0.01000000',
+      signature,
+      txGroupId: 0,
+      blockHeight: h,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: from,
+      recipient: to,
+      amount,
+    };
+    world.explorer.rows.push(row);
+    world.explorer.bySig.set(signature, row);
+    world.explorer.parties.set(signature, [from, to]);
+  }
+
+  it('says what it sent to an exchange and got back, read by sender and recipient', async () => {
+    const { user } = await open(ADDR.left, (world) => {
+      payment(world, ADDR.left, TRADEOGRE, 2_700_000, '100.00000000');
+      payment(world, ADDR.left, TRADEOGRE, 2_710_000, '25.50000000');
+      payment(world, TRADEOGRE, ADDR.left, 2_720_000, '3.00000000');
+    });
+    const notice = await screen.findByRole('region', { name: 'Sent QORT to an exchange' }, T);
+    expect(notice).toHaveTextContent(
+      /Sent 125.5 QORT to TradeOgre, an exchange, in 2 payments \(.+\)\./
+    );
+    expect(notice).toHaveTextContent(
+      /Received 3 QORT from TradeOgre, an exchange, in 1 payment \(.+\)\./
+    );
+    // Exactly, by sender and recipient: the fast read, not a search.
+    const between = fetchCallsFor('/transactions/payments/between').map(
+      (url) => new URL(url, 'http://x').searchParams
+    );
+    expect(
+      between.some(
+        (p) => p.get('senderAddress') === ADDR.left && p.get('recipientAddress') === TRADEOGRE
+      )
+    ).toBe(true);
+    await user.click(
+      within(notice).getByRole('button', { name: /^Show the payments: Sent 125.5 QORT/ })
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Sent to TradeOgre' }, T);
+    expect(
+      within(dialog)
+        .getByRole('list', { name: 'Sent to TradeOgre: the payments' })
+        .querySelectorAll('[data-tx-row]')
+    ).toHaveLength(2);
+  });
+
+  it('says nothing when it never paid one', async () => {
+    await open(ADDR.left);
+    await region('Recorded between them');
+    await waitFor(
+      () => expect(fetchCallsFor('/transactions/payments/between').length).toBeGreaterThan(0),
+      T
+    );
+    expect(screen.queryByRole('region', { name: /exchange/ })).toBeNull();
   });
 });
 
