@@ -18,6 +18,7 @@
  */
 import { QSHARE_COLLECTION_BASE, QSHARE_COMMENT_BASE } from "../../constants/Identifiers";
 import { fetchCollection } from "../collections";
+import { allCollectionItems } from "../collectionFolders";
 import { searchQdn, searchQdnAll, type QdnResourceSummary } from "../qdnSearch";
 import { recipientMarker } from "../recipientMarker";
 import { loadActivity, parseCommentIdentifier, shareCommentKey, type Activity } from "./activity";
@@ -166,7 +167,8 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
           continue; // the node couldn't serve it: try again next time
         }
         versions[key] = version;
-        for (const item of collection?.items ?? []) {
+        // Shares inside the collection's folders count too.
+        for (const item of collection ? allCollectionItems(collection) : []) {
           if (!mine.has(lower(item.name))) continue;
           const id = `k:${key}/${item.name}/${item.identifier}`;
           if (seen.has(id)) continue;

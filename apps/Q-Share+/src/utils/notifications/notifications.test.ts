@@ -182,6 +182,42 @@ describe("notification checks", () => {
     expect(qortalCallsFor("FETCH_QDN_RESOURCE")).toHaveLength(1);
   });
 
+  it("finds your share inside a folder of someone's collection", async () => {
+    const coll = {
+      name: "bob",
+      service: "DOCUMENT",
+      identifier: "qshare_collection_music_bbbbbb",
+      created: NOW - 5 * DAY,
+      updated: NOW + 10,
+      metadata: { title: "Music", description: recipientMarker(ADDRESS) },
+    };
+    bodies["bob/qshare_collection_music_bbbbbb"] = {
+      version: 1,
+      title: "Music",
+      description: "",
+      items: [],
+      folders: [
+        {
+          id: "live01",
+          title: "Live",
+          description: "",
+          items: [],
+          folders: [{ id: "tokyo1", title: "Tokyo", description: "", items: [{ name: "alice", identifier: SHARE.identifier }], folders: [] }],
+        },
+      ],
+      created: 1,
+      updated: 2,
+    };
+    await check(NOW);
+    collections = [coll];
+    expect(await check(NOW + 60_000)).toBe(1);
+    expect(items()[0]).toMatchObject({
+      kind: "collection",
+      share: { name: "alice", identifier: SHARE.identifier },
+      collection: { name: "bob", identifier: coll.identifier, title: "Music" },
+    });
+  });
+
   it("reads comments oldest first and moves only as far as the node has indexed", async () => {
     // The node is two hours behind (syncing): the window stops there.
     lastBlock = NOW - 2 * 60 * 60_000;

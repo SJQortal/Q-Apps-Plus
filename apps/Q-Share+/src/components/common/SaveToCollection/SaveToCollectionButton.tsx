@@ -23,8 +23,8 @@ import { CollectionDialog } from "../../../pages/Collections/CollectionDialog";
 import { upsertCollection } from "../../../state/features/collectionsSlice";
 import { setNotification } from "../../../state/features/notificationsSlice";
 import {
-  buildCollectionBody,
   collectionKey,
+  editCollectionBody,
   fetchCollection,
   hasItem,
   publishCollection,
@@ -105,19 +105,14 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
     }
     const adding = !hasItem(current, item);
     const next = toggleItem(current, item);
-    const body = buildCollectionBody({
-      title: next.title,
-      description: next.description,
-      items: next.items,
-      created: next.created,
-    });
+    const body = editCollectionBody(next);
     dispatch(upsertCollection({ ...next, ...body }));
     try {
       const published = await publishCollection({
         name: row.name,
         identifier: row.identifier,
         body,
-        previousItems: current.items,
+        previous: current,
       });
       dispatch(upsertCollection(published));
       dispatch(

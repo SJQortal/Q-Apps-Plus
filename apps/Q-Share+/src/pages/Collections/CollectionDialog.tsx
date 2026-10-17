@@ -10,6 +10,7 @@ import {
   COLLECTION_TITLE_MAX,
   buildCollectionBody,
   buildCollectionIdentifier,
+  editCollectionBody,
   newCollectionUid,
   publishCollection,
   type Collection,
@@ -67,13 +68,10 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
     setError(null);
     try {
       const identifier = collection?.identifier ?? buildCollectionIdentifier(trimmedTitle, newCollectionUid());
-      const body = buildCollectionBody({
-        title: trimmedTitle,
-        description,
-        items: collection?.items ?? initialItems ?? [],
-        created: collection?.created,
-      });
-      const saved = await publishCollection({ name, identifier, body, previousItems: collection?.items ?? [] });
+      const body = collection
+        ? editCollectionBody(collection, { title: trimmedTitle, description })
+        : buildCollectionBody({ title: trimmedTitle, description, items: initialItems ?? [] });
+      const saved = await publishCollection({ name, identifier, body, previous: collection ?? null, previousItems: [] });
       dispatch(upsertCollection(saved));
       if (name === myName) {
         dispatch(

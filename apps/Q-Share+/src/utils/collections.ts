@@ -5,10 +5,18 @@
  * Q-Share never searches this prefix, so it ignores them. Edits republish the
  * same identifier and the latest publish wins; QDN has no delete, so
  * "deleting" a collection republishes it with no items.
+ *
+ * Since 1.0.1 a body may also have `folders` (a tree of folders, each with
+ * its own items and subfolders, utils/collectionFolders.ts) and a `cover`
+ * (a THUMBNAIL `qshare_cover_<uid>` under the publisher's name), and folders
+ * may have covers too. Both are left out when unused, so a collection
+ * without them is stored exactly as before. Fields this version doesn't
+ * know are kept through edits.
  */
 import { QSHARE_COLLECTION_BASE } from "../constants/Identifiers";
 import { MAX_MARKERS, ownerAddress, stripRecipientMarkers, withRecipientMarkers } from "./recipientMarker";
 import { objectToBase64 } from "./toBase64";
+import { allCollectionItems } from "./collectionFolders";
 import { fetchQdnResource, needsEncodedFetch } from "./fetchVideos";
 import {
   QDN_PAGE,
@@ -25,6 +33,17 @@ export const COLLECTION_TITLE_MAX = 50;
 export const COLLECTION_DESCRIPTION_MAX = 150;
 export const COLLECTION_SLUG_MAX = 30;
 export const COLLECTION_UID_LENGTH = 6;
+/** Covers are THUMBNAILs (Core takes up to 500 KB) with their own prefix, never searched by the app. */
+export const COVER_SERVICE = "THUMBNAIL";
+export const COVER_BASE = "qshare_cover_";
+export const COVER_UID_LENGTH = 8;
+export const FOLDER_TITLE_MAX = 50;
+export const FOLDER_DESCRIPTION_MAX = 150;
+export const FOLDER_ID_LENGTH = 6;
+/** Folders inside folders, at most this deep (a collection's own folders are depth 1). */
+export const MAX_FOLDER_DEPTH = 5;
+/** Folders in one collection, all depths together. */
+export const MAX_FOLDERS = 200;
 /** Qortal identifiers are limited to 64 characters. */
 export const QDN_IDENTIFIER_MAX = 64;
 
@@ -32,6 +51,24 @@ export const QDN_IDENTIFIER_MAX = 64;
 export interface CollectionItem {
   name: string;
   identifier: string;
+}
+
+/** An image published for a collection or folder: a THUMBNAIL under the collection's name. */
+export interface CollectionCover {
+  service: "THUMBNAIL";
+  name: string;
+  identifier: string;
+}
+
+/** A folder inside a collection: its own shares and subfolders. */
+export interface CollectionFolder {
+  /** Unique within the collection; never reused for another folder. */
+  id: string;
+  title: string;
+  description: string;
+  cover?: CollectionCover;
+  items: CollectionItem[];
+  folders: CollectionFolder[];
 }
 
 /** The JSON body stored on QDN. */
@@ -44,6 +81,10 @@ export interface CollectionBody {
   created: number;
   /** ms */
   updated: number;
+  cover?: CollectionCover;
+  folders?: CollectionFolder[];
+  /** Fields of the stored JSON this version doesn't know, written back unchanged. */
+  extra?: Record<string, unknown>;
 }
 
 /** A search row: what the list shows before the body is fetched. */
@@ -145,9 +186,12 @@ export function buildCollectionBody(input: {
   items?: CollectionItem[];
   created?: number;
   now?: number;
+  cover?: CollectionCover | null;
+  folders?: CollectionFolder[];
+  extra?: Record<string, unknown>;
 }): CollectionBody {
   const now = input.now ?? Date.now();
-  return {
+  const body: CollectionBody = {
     version: COLLECTION_VERSION,
     title: String(input.title ?? "")
       .trim()
@@ -158,6 +202,42 @@ export function buildCollectionBody(input: {
     items: dedupeItems(input.items ?? []),
     created: typeof input.created === "number" && input.created > 0 ? input.created : now,
     updated: now,
+  };
+  if (input.cover) body.cover = input.cover;
+  if (input.folders && input.folders.length > 0) body.folders = input.folders;
+  if (input.extra && Object.keys(input.extra).length > 0) body.extra = input.extra;
+  return body;
+}
+
+/**
+ * The next version of a collection: the same body with `changes`, its
+ * folders, cover and unknown fields carried over, `updated` set to now.
+ */
+export function editCollectionBody(
+  current: CollectionBody,
+  changes: Partial<Pick<CollectionBody, "title" | "description" | "items" | "folders">> & { cover?: CollectionCover | null } = {},
+  now?: number
+): CollectionBody {
+  return buildCollectionBody({
+    title: changes.title ?? current.title,
+    description: changes.description ?? current.description,
+    items: changes.items ?? current.items,
+    created: current.created,
+    now,
+    cover: changes.cover === undefined ? current.cover : changes.cover,
+    folders: changes.folders ?? current.folders,
+    extra: current.extra,
+  });
+}
+
+/** The JSON stored on QDN: unknown fields first, then the known ones; empty folders and no cover are left out. */
+export function storedCollectionJson(body: CollectionBody): Record<string, unknown> {
+  const { extra, cover, folders, ...known } = body;
+  return {
+    ...(extra ?? {}),
+    ...known,
+    ...(cover ? { cover } : {}),
+    ...(folders && folders.length > 0 ? { folders } : {}),
   };
 }
 
@@ -175,7 +255,7 @@ export async function buildCollectionPublish(input: {
     name,
     service: COLLECTION_SERVICE,
     identifier,
-    data64: await objectToBase64(body),
+    data64: await objectToBase64(storedCollectionJson(body)),
     title: body.title.slice(0, COLLECTION_TITLE_MAX),
     description: withRecipientMarkers(body.description.slice(0, COLLECTION_DESCRIPTION_MAX), recipients),
     tag1: QSHARE_COLLECTION_BASE,
@@ -198,6 +278,47 @@ function isItem(value: unknown): value is CollectionItem {
   );
 }
 
+/** A cover read from QDN, or undefined for anything else. */
+export function parseCover(raw: unknown): CollectionCover | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const cover = raw as Record<string, unknown>;
+  if (cover.service !== COVER_SERVICE) return undefined;
+  if (typeof cover.name !== "string" || !cover.name) return undefined;
+  if (typeof cover.identifier !== "string" || !cover.identifier || cover.identifier.length > QDN_IDENTIFIER_MAX) {
+    return undefined;
+  }
+  return { service: COVER_SERVICE, name: cover.name, identifier: cover.identifier };
+}
+
+/**
+ * Folders read from QDN. Anything that isn't a folder is dropped, as are
+ * repeated ids, folders deeper than MAX_FOLDER_DEPTH and any past MAX_FOLDERS.
+ */
+export function parseFolders(raw: unknown, depth = 1, seen = new Set<string>()): CollectionFolder[] {
+  if (!Array.isArray(raw) || depth > MAX_FOLDER_DEPTH) return [];
+  const out: CollectionFolder[] = [];
+  for (const value of raw) {
+    if (seen.size >= MAX_FOLDERS) break;
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const folder = value as Record<string, unknown>;
+    if (typeof folder.id !== "string" || !folder.id || seen.has(folder.id)) continue;
+    if (typeof folder.title !== "string") continue;
+    seen.add(folder.id);
+    const cover = parseCover(folder.cover);
+    out.push({
+      id: folder.id,
+      title: folder.title.slice(0, FOLDER_TITLE_MAX),
+      description: typeof folder.description === "string" ? folder.description.slice(0, FOLDER_DESCRIPTION_MAX) : "",
+      ...(cover ? { cover } : {}),
+      items: dedupeItems(Array.isArray(folder.items) ? folder.items.filter(isItem) : []),
+      folders: parseFolders(folder.folders, depth + 1, seen),
+    });
+  }
+  return out;
+}
+
+const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders"]);
+
 /**
  * Validate a body read from QDN (an object, or its JSON text). Returns null
  * for anything that is not a collection; items with a missing name or
@@ -219,7 +340,7 @@ export function parseCollection(raw: unknown): CollectionBody | null {
   if (version === null || version < 1) return null;
   const created = toTimestamp(obj.created);
   const updated = toTimestamp(obj.updated);
-  return {
+  const body: CollectionBody = {
     version,
     title: obj.title.slice(0, COLLECTION_TITLE_MAX),
     description: typeof obj.description === "string" ? obj.description.slice(0, COLLECTION_DESCRIPTION_MAX) : "",
@@ -227,6 +348,13 @@ export function parseCollection(raw: unknown): CollectionBody | null {
     created: created ?? updated ?? 0,
     updated: updated ?? created ?? 0,
   };
+  const cover = parseCover(obj.cover);
+  if (cover) body.cover = cover;
+  const folders = parseFolders(obj.folders);
+  if (folders.length > 0) body.folders = folders;
+  const extra = Object.fromEntries(Object.entries(obj).filter(([key]) => !KNOWN_FIELDS.has(key)));
+  if (Object.keys(extra).length > 0) body.extra = extra;
+  return body;
 }
 
 export function summaryToCollection(row: QdnResourceSummary): CollectionSummary {
@@ -324,10 +452,58 @@ export function invalidateCollectionCaches(): void {
   invalidateQdnSearches((url) => url.includes(`identifier=${QSHARE_COLLECTION_BASE}`));
 }
 
+/** A new cover's identifier: `qshare_cover_<8 random characters>` (a new one per image, so no copy is stale). */
+export function newCoverIdentifier(): string {
+  const bytes = new Uint8Array(COVER_UID_LENGTH);
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+  }
+  return COVER_BASE + Array.from(bytes, (b) => UID_ALPHABET[b % UID_ALPHABET.length]).join("");
+}
+
+export interface CoverPublishPayload {
+  action: "PUBLISH_QDN_RESOURCE";
+  name: string;
+  service: typeof COVER_SERVICE;
+  identifier: string;
+  file: File;
+  filename: string;
+  title: string;
+  tag1: string;
+}
+
+/** A new cover image to publish with the collection. */
+export interface NewCover {
+  identifier: string;
+  file: File;
+}
+
+export function buildCoverPublish(input: { name: string; cover: NewCover; title: string }): CoverPublishPayload {
+  return {
+    action: "PUBLISH_QDN_RESOURCE",
+    name: input.name,
+    service: COVER_SERVICE,
+    identifier: input.cover.identifier,
+    file: input.cover.file,
+    filename: input.cover.file.name,
+    title: input.title.slice(0, COLLECTION_TITLE_MAX),
+    tag1: COVER_BASE,
+  };
+}
+
+/** Where the node serves a cover. */
+export function coverUrl(cover: Pick<CollectionCover, "name" | "identifier">): string {
+  return `/arbitrary/${COVER_SERVICE}/${encodeURIComponent(cover.name)}/${encodeURIComponent(cover.identifier)}`;
+}
+
 /**
  * Publish (create or update) a collection. Hub shows one confirmation and
- * the usual small QDN fee applies. Caches are invalidated and the published
- * body is kept as the current copy, so the app does not re-read it.
+ * the usual small QDN fee applies; a new cover image goes in the same
+ * request (PUBLISH_MULTIPLE_QDN_RESOURCES), before the collection, which
+ * names it. Caches are invalidated and the published body is kept as the
+ * current copy, so the app does not re-read it.
  */
 export async function publishCollection(input: {
   name: string;
@@ -335,11 +511,24 @@ export async function publishCollection(input: {
   body: CollectionBody;
   /** The items before this change; without it, the copy the app last read (or none: a new collection). */
   previousItems?: CollectionItem[];
+  /** The body before this change, for its items in every folder; preferred over `previousItems`. */
+  previous?: CollectionBody | null;
+  /** Images the body's new covers point at, published first. */
+  covers?: NewCover[];
 }): Promise<Collection> {
-  const previous = input.previousItems ?? getCachedCollection(input.name, input.identifier)?.items ?? [];
-  const recipients = await markedShareOwners(input.name, previous, input.body.items);
+  const before = input.previous ?? getCachedCollection(input.name, input.identifier);
+  const previous = input.previous ? allCollectionItems(input.previous) : (input.previousItems ?? (before ? allCollectionItems(before) : []));
+  const recipients = await markedShareOwners(input.name, previous, allCollectionItems(input.body));
   const payload = await buildCollectionPublish({ ...input, recipients });
-  await qortalRequest(payload);
+  const covers = input.covers ?? [];
+  if (covers.length > 0) {
+    await qortalRequest({
+      action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
+      resources: [...covers.map((cover) => buildCoverPublish({ name: input.name, cover, title: input.body.title })), payload],
+    });
+  } else {
+    await qortalRequest(payload);
+  }
   invalidateCollectionCaches();
   return remember({ ...input.body, name: input.name, identifier: input.identifier, fetchedAt: Date.now() });
 }
@@ -373,9 +562,10 @@ export async function markedShareOwners(
   return addresses;
 }
 
-/** In-app route for a collection page. */
-export function collectionPath(name: string, identifier: string): string {
-  return `/collection/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
+/** In-app route for a collection page, or one of its folders. */
+export function collectionPath(name: string, identifier: string, folderId?: string | null): string {
+  const base = `/collection/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
+  return folderId ? `${base}/folder/${encodeURIComponent(folderId)}` : base;
 }
 
 /** For tests. */

@@ -14,6 +14,7 @@ import type { RootState } from "../../state/store";
 import { collectionKey, collectionPath, type CollectionSummary } from "../../utils/collections";
 import { avatarUrl, profilePath } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
+import { allCollectionItems } from "../../utils/collectionFolders";
 import { CollectionDialog } from "./CollectionDialog";
 import { useCollectionList } from "./useCollectionList";
 import {
@@ -37,6 +38,7 @@ export function CollectionCard({ row }: { row: CollectionSummary }) {
   const navigate = useNavigate();
   const collection = useSelector((state: RootState) => state.collections.byKey[collectionKey(row.name, row.identifier)]);
   const title = row.title || collection?.title || "Untitled collection";
+  const shares = collection ? allCollectionItems(collection).length : 0;
   return (
     <CardItem>
       <CardButton onClick={() => navigate(collectionPath(row.name, row.identifier))} aria-label={`Open ${title}`}>
@@ -44,7 +46,7 @@ export function CollectionCard({ row }: { row: CollectionSummary }) {
         {row.description ? <CardDescription>{row.description}</CardDescription> : null}
         <CardMeta>
           {collection ? (
-            <span>{collection.items.length === 0 ? "Empty" : countLabel(collection.items.length)}</span>
+            <span>{shares === 0 ? "Empty" : countLabel(shares)}</span>
           ) : (
             <Skeleton variant="text" width={52} sx={{ display: "inline-block" }} />
           )}
@@ -83,7 +85,7 @@ export function CollectionsPage() {
     tab === "all"
       ? rows.filter((row) => {
           const known = byKey[collectionKey(row.name, row.identifier)];
-          return !known || known.items.length > 0;
+          return !known || allCollectionItems(known).length > 0;
         })
       : rows;
 

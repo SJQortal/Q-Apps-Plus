@@ -20,8 +20,8 @@ import { heldShare, shareKey, type Video } from "../../state/features/fileSlice"
 import type { RootState } from "../../state/store";
 import {
   COLLECTION_SERVICE,
-  buildCollectionBody,
   collectionKey,
+  editCollectionBody,
   fetchCollection,
   publishCollection,
   toggleItem,
@@ -32,6 +32,7 @@ import { isHubDecline } from "../../utils/hubErrors";
 import { resourceStatus } from "../../utils/qdnResource";
 import { isNameHidden, useAppSettings } from "../../utils/settings";
 import { formatDate } from "../../utils/time";
+import { allCollectionItems } from "../../utils/collectionFolders";
 import { CollectionDialog } from "./CollectionDialog";
 import { CardList, InfoCard, ItemRow, ItemRows, Page, PhoneHeader, PublisherLink } from "./Collections-styles";
 
@@ -209,13 +210,8 @@ function CollectionView({ name, id }: { name: string; id: string }) {
       const saved = await publishCollection({
         name: next.name,
         identifier: next.identifier,
-        previousItems: collection?.items ?? [],
-        body: buildCollectionBody({
-          title: next.title,
-          description: next.description,
-          items: next.items,
-          created: next.created,
-        }),
+        previous: collection ?? null,
+        body: editCollectionBody(next),
       });
       dispatch(upsertCollection(saved));
       dispatch(setNotification({ msg: successMessage, alertType: "success" }));
@@ -237,7 +233,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
 
   const confirmDelete = async () => {
     if (!collection) return;
-    if (await republish({ ...collection, items: [] }, "Collection deleted")) {
+    if (await republish({ ...collection, items: [], folders: [] }, "Collection deleted")) {
       setDeleteOpen(false);
       navigate("/collections");
     }
@@ -320,7 +316,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
                 <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(name)} alt="" slotProps={{ img: { loading: "lazy" } }} />
                 <span>{name}</span>
               </PublisherLink>
-              <span>· {countLabel(collection.items.length)}</span>
+              <span>· {countLabel(allCollectionItems(collection).length)}</span>
               {collection.updated ? <span>· updated {formatDate(collection.updated)}</span> : null}
             </Box>
           </Box>
