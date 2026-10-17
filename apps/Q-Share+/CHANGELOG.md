@@ -14,7 +14,15 @@ Changes since the published 1.0.0:
 - File types found in real shares: subtitles (.srt, .vtt) and checksum files (.md5, .sha*) preview as text, audiobooks (.m4b) and WebM audio (.weba) play, and comic books (.cbz, .cbr) are listed as documents.
 - Editor: the description placeholder no longer sits on top of the first word while a phone keyboard (or a desktop IME) is still composing it.
 - Theme: in a dark Hub, a refresh on any page but the first showed the light colours (in-app navigation drops `?theme=`, and Core then injects `_qdnTheme = "light"`). The theme kit now remembers Hub's mode, and `index.html`'s boot snippet reads it in the same order.
-- 548 tests; lint clean.
+- **Up to 300 files in a share** (the original takes 10). Qortal Core accepts at most 25 unconfirmed transactions per account and each file is one, so a share of more than 20 files goes to Hub in batches of 20, the share details with the last batch, each batch sent once the network has confirmed enough of the one before (`/transactions/unconfirmed?creator=`). The dialog says first what it takes (publishes, batches, fees from `/transactions/unitfee`), can ask Hub to approve every batch at once for the session (`SESSION_PERMISSIONS`), shows the wait between batches with Pause, goes on past files Hub couldn't publish, and Continue sends the rest. The Share and Update forms say how many publishes and how much in fees a share takes. Publishes of up to 10 files work exactly as before.
+- **Nothing is paid twice after a stop:** when a publish stops before the share details land, the files that did reach QDN stay in the draft as "already on QDN", and publishing again sends only the rest.
+- **Share pages with many files** list them 50 at a time, and Fetch all files keeps six downloads going at once instead of starting them all.
+- **Folders in collections:** folders, and folders inside folders (five deep), each with its own page, shares and cover; New folder, Edit, Delete, and Move a share between the collection and its folders. Add to collection lists every collection with its folders, so a share can go straight into one. Stored in the collection's own JSON (`folders`), so one fetch serves every folder and every change is one publish.
+- **Covers for collections and folders:** choose an image, change or remove it. It is cut to a 600 px square on the device and published as a THUMBNAIL `qshare_cover_<uid>` in the same Hub request as the collection. Covers show on collection cards, collection and folder pages, and folder tiles.
+- **Playlists:** a share with two or more audio files gets a Playlist card (Play all, Shuffle) and Play on each track, and plays in a player bar at the foot of the app that keeps going while you browse: previous, play/pause, next, shuffle, repeat, a seek bar, the track list, and lock-screen and media keys. Each track is fetched onto the node before it plays and the next one while the current one plays; a track that can't be had is skipped.
+- **Sort by name** in the Share and Update forms, numbers in order, so a numbered album plays in order.
+- Collection counts say shares and folders.
+- 616 tests; lint clean.
 
 ## 1.0.0 (2026-09-30)
 

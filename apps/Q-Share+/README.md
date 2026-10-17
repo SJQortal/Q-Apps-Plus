@@ -5,7 +5,9 @@ This is the **+** version of [Qortal's Q-Share](https://github.com/Qortal/q-shar
 What it adds:
 
 - a phone layout for GO and narrow screens: bottom bar, floating Share button, bottom sheets, full-screen forms with Publish above the keyboard, pull-to-refresh;
-- collections (`qshare_collection_` documents, additive), previews for PDF, text, image, audio and video, a drag-and-drop publish flow with progress and retry;
+- collections (`qshare_collection_` documents, additive) with folders and covers, previews for PDF, text, image, audio and video, a drag-and-drop publish flow with progress and retry;
+- shares of up to 300 files, published in batches of 20 that Qortal Core accepts (it takes at most 25 unconfirmed transactions per account);
+- a playlist player for shares with several audio files, which keeps playing while you browse;
 - the Hub 3.0 look with four themes (Hub 3.0, Q-Share Classic, Black, White) and a Settings page;
 - the current stack: React 19.3, MUI 9.4, Vite 8, with a vitest harness and an ESLint 9 config;
 - a Quill 2 description editor that keeps the stored format readable in the original app;
@@ -51,7 +53,7 @@ git merge FETCH_HEAD
 
 As of 2026-10-01 Q-Share's `main` has not moved since `9c1ca81`, so the merge is a fast-forward. Each commit is one change with a message that explains it; the full audit, the data contract and the test records are in [docs/apps/Q-Share+.md](https://github.com/SJQortal/Q-Apps-Plus/blob/613ff3ba58270c31b827003145045ed803a44ba1/docs/apps/Q-Share%2B.md).
 
-**Data:** shares, files and comments use the same services, identifiers and JSON shapes as Q-Share, and descriptions are stored in the Quill 1 markup Q-Share writes, so nothing needs migrating. Two kinds of data are new, and Q-Share ignores both: collections (DOCUMENT `qshare_collection_…`, whose QDN description also carries `~qsn-…~` markers naming the owners of its newest shares, for their notifications) and the optional Settings sync snapshot (DOCUMENT `qshareplus_settings`). Notifications themselves only read: comments are matched by the keys Q-Share already puts in their identifiers, and Hub alert rules live in Hub.
+**Data:** shares, files and comments use the same services, identifiers and JSON shapes as Q-Share, and descriptions are stored in the Quill 1 markup Q-Share writes, so nothing needs migrating. Three kinds of data are new, and Q-Share ignores them all: collections (DOCUMENT `qshare_collection_…`, whose QDN description also carries `~qsn-…~` markers naming the owners of its newest shares, for their notifications, and whose JSON may hold `folders` and a `cover`), collection and folder covers (THUMBNAIL `qshare_cover_…`), and the optional Settings sync snapshot (DOCUMENT `qshareplus_settings`). A share with more than 10 files is the same share JSON as any other, just with a longer `files` list; Q-Share lists them all. Notifications themselves only read: comments are matched by the keys Q-Share already puts in their identifiers, and Hub alert rules live in Hub.
 
 **What is specific to the + build**, to change if it ships as Q-Share:
 

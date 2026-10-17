@@ -15,9 +15,14 @@ export interface Release {
 export const CHANGELOG: Release[] = [
   {
     version: "1.0.1",
-    date: "2026-10-01",
-    title: "Notifications",
+    date: "2026-10-17",
+    title: "Notifications, 300 files, folders and playlists",
     notes: [
+      "Share up to 300 files at once. Big shares go out in batches of 20 that the network accepts, and you can let Hub approve every batch at once.",
+      "If publishing stops halfway, the files already on QDN stay in your draft, so publishing again sends only the rest.",
+      "Collections can have folders (and folders inside folders) and covers. Move a share between folders, or add it straight to one.",
+      "Shares with several audio files play as a playlist, in a player that keeps going while you browse.",
+      "Sort by name in the Share form puts numbered tracks in order.",
       "A bell at the top tells you when someone comments on your shares, replies to your comments or adds your share to a collection.",
       "Turn on Hub alerts in Settings → Notifications, and Qortal Hub tells you about new comments even while Q-Share+ is closed.",
       "Audio and video files say Play audio and Play video, and Close player once the player is open.",
