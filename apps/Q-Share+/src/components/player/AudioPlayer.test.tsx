@@ -4,7 +4,7 @@ import { renderWithProviders } from "../../test/renderWithProviders";
 import { mockQortalAction, qortalCallsFor } from "../../test/setup";
 import { store } from "../../state/store";
 import { closePlayer, playQueue } from "../../state/features/playerSlice";
-import { removeDownload } from "../../state/features/globalSlice";
+import { removeDownload, updateDownloads } from "../../state/features/globalSlice";
 import { AudioPlayer, SKIP_AFTER_MS, STUCK_SKIP_MS, formatTime, trackTitle } from "./AudioPlayer";
 import { playerAudio, resetPlayerAudio, unlockAudio } from "./audioElement";
 import DownloadWrapper from "../../wrappers/DownloadWrapper";
@@ -100,6 +100,29 @@ describe("AudioPlayer", () => {
     expect(pause).toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Play" }));
     expect(store.getState().player.playing).toBe(true);
+  });
+
+  it("after a track played, waits for the next one the node is still fetching instead of loading it", async () => {
+    // Track one is on the node; two and three are not.
+    mockNode([tracks[0].identifier]);
+    renderWithProviders(
+      <DownloadWrapper>
+        <AudioPlayer />
+      </DownloadWrapper>
+    );
+    act(() => {
+      store.dispatch(playQueue({ tracks, share, start: 0 }));
+    });
+    await waitFor(() => expect(src()).toBe("/arbitrary/FILE/dj%20b/qshare_file_album_one"));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByText(/Fetching from peers/)).toBeInTheDocument();
+    expect(src()).toBe("/arbitrary/FILE/dj%20b/qshare_file_album_one");
+    // Once the node has it, it loads and plays.
+    mockNode([tracks[0].identifier, tracks[1].identifier]);
+    act(() => {
+      store.dispatch(updateDownloads({ name: "dj b", service: "FILE", identifier: tracks[1].identifier, status: { status: "READY" } }));
+    });
+    await waitFor(() => expect(src()).toBe("/arbitrary/FILE/dj%20b/qshare_file_album_two"));
   });
 
   it("waits for a track the node is still fetching, saying so", async () => {

@@ -25,6 +25,7 @@ export type FileOnNodeState = "idle" | "checking" | "fetching" | "ready" | "fail
 type Checked = { state: FileOnNodeState; status?: string };
 
 const ON_NODE: Checked = { state: "ready", status: "READY" };
+const IDLE: Checked = { state: "idle" };
 
 /**
  * Gets a file onto the node before the app reads it. A GET of
@@ -43,7 +44,11 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
   const { downloadVideo, retryDownload } = useContext(MyContext);
   const store = useStore<RootState>();
   const download = useSelector((state: RootState) => state.global?.downloads?.[file.identifier]);
-  const [checked, setChecked] = useState<Checked>({ state: "idle" });
+  // What the last check found, for the file it was about: a hook that is
+  // handed another file (the playlist's player, from track to track) starts
+  // over instead of taking the last file's answer for this one.
+  const [stored, setStored] = useState<Checked & { id: string }>({ ...IDLE, id: file.identifier });
+  const checked: Checked = stored.id === file.identifier ? stored : IDLE;
   // ensure() is waiting on a download and may restart it once (the effect below).
   const pickUp = useRef(false);
 
@@ -53,7 +58,7 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
 
   // A READY entry means the file is on the node. Remember it, so clearing the
   // entry from the downloads list doesn't take away a player that is showing.
-  if (phase === "ready" && checked.status !== "READY") setChecked(ON_NODE);
+  if (phase === "ready" && checked.status !== "READY") setStored({ ...ON_NODE, id: file.identifier });
 
   /**
    * Resolves true when the file can be read now; otherwise follow `state`.
@@ -61,6 +66,8 @@ export function useFileOnNode(file: NodeFileRef, jsonId?: string) {
    */
   const ensure = useCallback(async (): Promise<boolean> => {
     const service = file.service || "FILE";
+    const id = file.identifier;
+    const setChecked = (next: Checked) => setStored({ ...next, id });
     const entry = store.getState().global?.downloads?.[file.identifier];
     const entryPhase = downloadPhase(entry?.status?.status, Boolean(entry));
     pickUp.current = false;
