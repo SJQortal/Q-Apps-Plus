@@ -950,6 +950,16 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
     The side names near the top at 700 px with 10 on a side still run under the next avatar, as before (Next-pass ideas). Checks: the circle captures in two themes (with extra both-ways payments added to the mock for the check only), all clean; tests 2,341 passed.
 
+95. **Block numbers with commas** (Simon, 2026-10-17: "make sure the blocks can also be searched with the , in between numbers"). The account's Between blocks… fields and the global From block field now take a block number as the app shows it: 1,519,621, or 1 519 621, 1.519.621, 1'519'621, "block 1,519,621" or "#1519621". The separators must group by thousands, so "1.5" isn't read as block 15. What reaches the URL is the plain number. The fields' `pattern` attribute (digits only) is gone; the keyboard stays numeric. Checks: tests 2,344 passed.
+
+96. **Node online** (Simon, 2026-10-17: "in minter profiles you can also show the % of the node online"; then "add it also in the Overview under blocks minted" and "the small i icon and shows more info on hover"). The Minter Profile's facts and the Overview's Blocks minted box show how much of the time the account's node was online, e.g. 95%. An ⓘ beside it explains it on hover, focus or tap (a new `InfoTip`).
+    - **How it is worked out.** By Qortal's own count, from Core's source (Block.increaseAccountLevels). An account's blocks minted grows for each reward it is online for, as the minter or the recipient of a reward share: one a block until block 1,508,000, then 1,000 at each reward round (every 1,000th block, for the accounts online in one of the 25 blocks before it). So blocks minted, over the rewards it could have had since its first reward share, is its share online (rules/explorer/onlineShare.ts). Since block 1,945,900 only minting under a MINTER member's reward share counts; the ⓘ says so.
+    - **Reads.** Two searches of one row each, about 0.03 s on Simon's node, kept 10 minutes: the oldest reward share, and the newest minting-level move. The tip is the app's cached `chain:tip`.
+    - **When it can't be worked out.** A moved minting level (TRANSFER_PRIVS) carries the old account's count with it, so the value is "Can't tell". With no reward share it says "Not minting"; before its first reward round, "Not yet".
+    - **Real data.** Checked on Simon's node: Magic Ink at 95% (2,053,093 of 2,153,415 since block 609,585), and an account at 400,000 blocks minted after 418 rounds at 96%.
+
+    Checks: the Overview and Minter Profile captures in two themes, all clean; tests 2,352 passed.
+
 ## Follow-ups
 
 ### Readiness
