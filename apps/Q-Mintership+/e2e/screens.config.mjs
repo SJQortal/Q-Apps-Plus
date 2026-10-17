@@ -627,7 +627,8 @@ export default {
         await page.reload({ waitUntil: 'load' });
         await settle(page);
         await page
-          .getByRole('button', { name: /^History, \d+ new$/ })
+          // Chrome puts a space before the hidden ", 3 new" (the label is a block of its own).
+          .getByRole('button', { name: /^History\s*,\s*\d+ new$/ })
           .first()
           .waitFor({ timeout: 8000 });
         await page.waitForTimeout(1500);
