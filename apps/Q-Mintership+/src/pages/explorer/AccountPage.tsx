@@ -11,9 +11,9 @@
  * then the tabs. Opening an account adds it to the trail and, when Settings
  * allow, to Recent explorations. Read-only: nothing here writes.
  */
-import { lazy, Suspense, useEffect, type ComponentType } from 'react';
+import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, useMediaQuery } from '@mui/material';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
@@ -41,6 +41,7 @@ import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
 import { useTopInViewOnSwitch } from '../../hooks/useScrollTopOnNewPage';
 import { explorerAccountPath, explorerTabOf, PATHS, type ExplorerTab } from '../../routes/paths';
+import { useSwipeTabs } from '../../hooks/useSwipeTabs';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { cameFromExplorer, nameMatchOf, openInTrail, recordRecent } from '../../state/explorer';
 import { shortAddress } from '../../utils/format';
@@ -92,12 +93,38 @@ function Quoted({ name }: { name: string }) {
 
 /**
  * The selected tab's panel, labelled by its tab. What its views keep
- * (useViewState: rows opened, Show more) is the tab's own.
+ * (useViewState: rows opened, Show more) is the tab's own. On a touch
+ * screen a swipe to the left opens the next tab, to the right the previous
+ * one (useSwipeTabs), swapping the URL in place as the tabs do.
  */
-function TabPanel({ tab, address }: { tab: ExplorerTab; address: string }) {
+function TabPanel({
+  tab,
+  address,
+  tabs,
+}: {
+  tab: ExplorerTab;
+  address: string;
+  tabs: readonly ExplorerTab[];
+}) {
   const Panel = TAB_PANELS[tab];
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const touch = useMediaQuery('(pointer: coarse)');
+  const index = tabs.indexOf(tab);
+  useSwipeTabs(node, {
+    enabled: touch && tabs.length > 1 && index >= 0,
+    canGo: (step) => index + step >= 0 && index + step < tabs.length,
+    go: (step) =>
+      navigate(explorerAccountPath(address, tabs[index + step]), {
+        replace: true,
+        // Keeps what the page was opened with, as the tabs do (AccountTabs).
+        state: location.state,
+      }),
+  });
   return (
     <Box
+      ref={setNode}
       role="tabpanel"
       id={panelIdOf(tab)}
       aria-labelledby={tabIdOf(tab)}
@@ -321,7 +348,7 @@ export default function AccountPage() {
           <>
             {tabsInHeader ? null : tabBar}
             {/* One per account: a tab's own state (what was asked, what was found) starts fresh. */}
-            <TabPanel key={opened} tab={tab} address={opened} />
+            <TabPanel key={opened} tab={tab} address={opened} tabs={tabs} />
           </>
         ) : null}
       </PageBody>

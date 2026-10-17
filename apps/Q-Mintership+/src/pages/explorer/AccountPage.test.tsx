@@ -201,6 +201,52 @@ describe('an account in the Explorer', () => {
     expect(within(tabs).getByRole('tab', { name: 'Overview' })).toHaveFocus();
   });
 
+  it('swipes to the next tab and back on a touch screen, in place', async () => {
+    const coarse = vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) =>
+        ({
+          matches: query === '(pointer: coarse)',
+          media: query,
+          onchange: null,
+          addListener() {},
+          removeListener() {},
+          addEventListener() {},
+          removeEventListener() {},
+          dispatchEvent: () => false,
+        }) as MediaQueryList
+    );
+    try {
+      await open(explorerAccountPath(ADDR.nominator));
+      const panel = await screen.findByRole('tabpanel', { name: 'Overview' }, T);
+      const swipe = (dx: number) => {
+        for (const [type, x] of [
+          ['touchstart', 500],
+          ['touchmove', 500 + dx / 2],
+          ['touchend', 500 + dx],
+        ] as const) {
+          const event = new Event(type, { bubbles: true });
+          const points = [{ clientX: x, clientY: 300 }];
+          Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : points });
+          Object.defineProperty(event, 'changedTouches', { value: points });
+          panel.dispatchEvent(event);
+        }
+      };
+      swipe(-150);
+      await waitFor(
+        () => expect(at()).toBe(`/explorer/account/${ADDR.nominator}/connections|null|REPLACE`),
+        T
+      );
+      expect(screen.getByRole('tab', { name: 'Connections' })).toHaveAttribute(
+        'aria-selected',
+        'true'
+      );
+      swipe(150);
+      await waitFor(() => expect(at()).toBe(`/explorer/account/${ADDR.nominator}|null|REPLACE`), T);
+    } finally {
+      coarse.mockRestore();
+    }
+  });
+
   it('starts a tab afresh for each account: Back to one keeps nothing asked on another', async () => {
     const { user, posts } = await open(
       explorerAccountPath(ADDR.nominator, 'connections'),

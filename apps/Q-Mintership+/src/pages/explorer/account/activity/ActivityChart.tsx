@@ -262,6 +262,8 @@ export function ActivityChart({
           <Box
             role="group"
             tabIndex={0}
+            // Pressed and moved over to read its bars: not a swipe to the next tab.
+            data-no-swipe=""
             aria-label={`${label}'s activity over time. Use the arrow keys to move between periods, Enter to list one.`}
             onKeyDown={onKeyDown}
             onBlur={() => setFocusIndex(null)}

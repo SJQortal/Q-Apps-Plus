@@ -59,6 +59,7 @@ export const CHANGELOG: Release[] = [
           'Each name on an account’s Names tab opens to its whole history: every change since it was registered (sales, listings, renames, its data), by every account that had it, read back through its owners.',
           'Every name on screen opens the name: in a transaction’s line and its details, histories, Compare, the Quiz and Open File. It lands on its owner’s Names tab, on that name, with its whole history open. Accounts in a transaction’s line open too.',
           'Back returns to a page as you left it: scrolled to the same place, with the same rows and lists open, whether by the app’s Back, Hub’s, or a crumb of your trail.',
+          'On a phone or tablet, swipe left or right on an account to go through its tabs.',
           'Explorer’s Names shows each name as a card (or a list, if you prefer), sortable, with its history right beside it. What an account published on QDN is in Transactions.',
           'On a phone, Explorer is in the bottom bar, and Settings is the gear at the top of Home.',
         ],
