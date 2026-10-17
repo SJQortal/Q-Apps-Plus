@@ -21,8 +21,12 @@ import { useViewState } from '../../../../hooks/useViewState';
 /** Entries shown before "Show all". */
 export const HISTORY_SHOWN = 4;
 
-function HistoryRow({ tx, address }: { tx: TxRow; address: string }) {
-  const words = describeTx(tx, { viewpoint: address });
+/**
+ * One name transaction as a sentence, with its date and block: told from
+ * `viewpoint` ("Sold the name …"), or naming who did it (null).
+ */
+export function HistoryRow({ tx, viewpoint }: { tx: TxRow; viewpoint: string | null }) {
+  const words = describeTx(tx, { viewpoint });
   return (
     <Box
       component="li"
@@ -92,7 +96,7 @@ export function NameHistoryList({
         sx={{ listStyle: 'none', m: 0, p: 0, minWidth: 0 }}
       >
         {shown.map((tx) => (
-          <HistoryRow key={tx.signature} tx={tx} address={address} />
+          <HistoryRow key={tx.signature} tx={tx} viewpoint={address} />
         ))}
       </Box>
       {txs.length > shown.length ? (

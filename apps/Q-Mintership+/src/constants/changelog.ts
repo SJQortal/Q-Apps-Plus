@@ -56,6 +56,8 @@ export const CHANGELOG: Release[] = [
           'Each transaction in a list opens to its raw API response, coloured so keys, text and numbers stand apart, with Copy.',
           'Search an account’s Connections and Transactions in the Explorer with the small field at the top of each tab: a name (also one an account holds besides the one it shows), an address, an amount, a type, a block or a date, typed in part. Similar words count too, a letter or two off, listed after the exact matches. The search stays in the link.',
           'Open File shows what a QDN publish holds, right in the Explorer: pictures to zoom, videos and sounds, PDFs page by page (with a dark page view), JSON laid out in colour, tables, text, a ZIP’s list of files, and each file of a website or app. Save File keeps it on your device through Hub’s save prompt; a website or app of many files is saved whole, packed into one .zip. Encrypted resources are never opened.',
+          'Each name on an account’s Names tab opens to its whole history: every change since it was registered (sales, listings, renames, its data), by every account that had it, read back through its owners.',
+          'Back returns to a page as you left it: scrolled to the same place, with the same rows and lists open, whether by the app’s Back, Hub’s, or a crumb of your trail.',
           'Explorer’s Names shows each name as a card (or a list, if you prefer), sortable, with its history right beside it. What an account published on QDN is in Transactions.',
           'On a phone, Explorer is in the bottom bar, and Settings is the gear at the top of Home.',
         ],

@@ -5,7 +5,8 @@
  * avatar, reads its own record once it nears the screen (registered,
  * updated, for sale), notes on how the name is written, and its own
  * history beside it: under the name in a card, to its right in the list
- * (under it on phones). Below, the names it had (sold, or renamed), each
+ * (under it on phones), with "Its whole history" under that: every change
+ * since it was registered, by every account that had it (NameLife.tsx). Below, the names it had (sold, or renamed), each
  * with who has it now and its history, laid out the same way. Core's list
  * stops at 500 here, and says so.
  */
@@ -23,6 +24,7 @@ import type { NameHistory } from '../../../../data/explorer/nameHistory';
 import type { TxRow } from '../../../../data/types';
 import { historyByName, pastNames } from './byName';
 import { NameHistoryList } from './NameHistoryList';
+import { NameLifeToggle } from './NameLife';
 import { isNameSort, NAME_SORTS, sortNames, type NameSort } from './sortNames';
 import { useNamesView, type NamesView } from './useNamesView';
 import { nameNotes } from '../../../../rules/explorer/nameNotes';
@@ -311,7 +313,12 @@ function NameRow({
           ))}
         </>
       }
-      history={<NameHistoryList name={name} txs={txs} address={address} capped={capped} />}
+      history={
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+          <NameHistoryList name={name} txs={txs} address={address} capped={capped} />
+          <NameLifeToggle name={name} />
+        </Box>
+      }
     />
   );
 }

@@ -289,6 +289,36 @@ describe('Names: each name’s history, beside it', () => {
     expect(screen.queryByRole('region', { name: /^Names it had/ })).toBeNull();
   });
 
+  it('opens a name’s whole history: every change since it was registered, by each account that had it', async () => {
+    const { user, container, posts } = await open(ADDR.nominator);
+    const names = await region(/^Names \(\d+\)$/);
+    const list = await within(names).findByRole('list', { name: 'Its names' }, T);
+    const row = items(list).find(
+      (li) => li.querySelector('bdi')?.textContent === 'Spare Room'
+    ) as HTMLElement;
+    const before = fetchCallsFor('/transactions/search').length;
+    const toggle = within(row).getByRole('button', { name: 'Its whole history of “Spare Room”' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const life = await within(row).findByRole('list', { name: 'Every change to “Spare Room”' }, T);
+    const steps = within(life)
+      .getAllByRole('listitem')
+      .map((li) => readText(li));
+    expect(steps[0]).toMatch(
+      /^Nora Nominator bought the name “Spare Room” from Leo Learner for 5 QORT/
+    );
+    expect(steps[1]).toMatch(/^Leo Learner listed the name “Spare Room” for sale at 5 QORT/);
+    expect(steps[2]).toMatch(/^Leo Learner registered the name “Spare Room”/);
+    expect(within(row).getByText(/ · 2 changes since · 2 owners$/)).toBeInTheDocument();
+    // Back through the seller: one more read, Leo's name transactions.
+    const reads = fetchCallsFor('/transactions/search').slice(before);
+    expect(reads).toHaveLength(1);
+    expect(reads[0]).toContain(`address=${ADDR.learner}`);
+    await expectNoAxeViolations(container);
+    noWrites(posts);
+  });
+
   it('says once, over the names, when their history comes from only the newest 100, and reads the rest on request', async () => {
     const hundred = Array.from({ length: 100 }, (_, i) => ({
       type: 'REGISTER_NAME',
