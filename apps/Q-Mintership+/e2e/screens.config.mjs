@@ -596,6 +596,41 @@ export default {
     { key: 'history-filter', path: '/history?as=learner&type=ban&period=120', after: settle },
     // All types over a period: the last 120 days, read as four 30-day windows.
     { key: 'history-period', path: '/history?as=learner&period=120', after: settle },
+    // Scan all History: every 30-day window back to MINTER's start.
+    {
+      key: 'history-all',
+      path: '/history?as=learner&period=all',
+      after: async (page) => {
+        await settle(page);
+        await page.getByText(/ events since MINTER began\.$/).waitFor({ timeout: 15000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // A Minter Admin who last had History open at TIP − 6,000: what was decided since is
+    // marked New, with how many.
+    {
+      key: 'history-news',
+      path: '/history?as=admin',
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => {
+            try {
+              localStorage.setItem(key, value);
+            } catch {
+              // No storage: nothing is new, and the wait below says so.
+            }
+          },
+          [
+            `qmintershipplus-history-seen-${ADDR.admin}`,
+            JSON.stringify({ v: 1, height: TIP - 6_000 }),
+          ]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page.getByText(/new since you last looked, marked New\.$/).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // An old card from the original app (e2e/world-legacy.mjs), with its poll and comments.
     {
       key: 'legacy-card',
