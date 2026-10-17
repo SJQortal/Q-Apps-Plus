@@ -29,7 +29,14 @@ import {
   type ReplacedVersions,
   versionOnQdn,
 } from "../common/MultiplePublish/MultiplePublishAll";
-import { draftFromRef, publishErrorMessage, toPublishInputs } from "../PublishFile/shareDraft";
+import {
+  draftFromRef,
+  keptFilesText,
+  landedRefs,
+  newFileRefs,
+  publishErrorMessage,
+  toPublishInputs,
+} from "../PublishFile/shareDraft";
 import { ShareForm } from "../PublishFile/ShareForm";
 import { useShareDraft } from "../PublishFile/useShareDraft";
 
@@ -73,6 +80,8 @@ function EditShareDialog({ share }: EditShareDialogProps) {
   const editCategories = useMemo(() => getCategoriesFromObject(share), [share]);
   const categoryListRef = useRef<CategoryListRef>(null);
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
+  // Where each new draft file goes on QDN in the update under way, by draft key.
+  const [fileRefs, setFileRefs] = useState<Record<string, FileRef>>({});
   const [pendingUpdate, setPendingUpdate] = useState<Record<string, unknown> | null>(null);
   // An update reuses the details identifier, so after a timeout QDN must
   // show a version newer than the one being replaced before it counts. That
@@ -119,7 +128,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     preparing.current = true;
     setIsPreparing(true);
     try {
-      const { resources, fileObject } = await buildSharePublish({
+      const { resources, fileObject, fileReferences } = await buildSharePublish({
         name: username,
         title: draft.title,
         descriptionHtml: draft.description,
@@ -137,6 +146,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
       setReplaces({ [share.id]: before });
       setPendingUpdate({ ...share, ...fileObject });
       unconfirmedUpdates.delete(share.id);
+      setFileRefs(newFileRefs(draft.files, fileReferences));
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish update"), alertType: "error" }));
@@ -193,6 +203,14 @@ function EditShareDialog({ share }: EditShareDialogProps) {
       return;
     }
     setPublishes(null);
+    // New files that landed stay in the draft as references: the next
+    // Publish update lists them without sending them again.
+    const landed = landedRefs(fileRefs, published);
+    const landedCount = Object.keys(landed).length;
+    if (landedCount > 0) {
+      draft.keepPublished(landed);
+      dispatch(setNotification({ msg: keptFilesText(landedCount, Object.keys(fileRefs).length), alertType: "info" }));
+    }
     if (stopped?.uncertain) {
       unconfirmedUpdates.add(share.id);
       // The stored copy is the version this update may yet replace. Ask the

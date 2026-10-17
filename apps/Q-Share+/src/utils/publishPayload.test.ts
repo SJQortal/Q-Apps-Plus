@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSharePublish,
   shareSlug,
+  shareThumbnail,
   toMultiplePublish,
   type DocumentPublishResource,
   type FilePublishResource,
@@ -203,5 +204,80 @@ describe("buildSharePublish (update)", () => {
     expect(result.resources.length).toBe(1);
     expect(result.resources[0].service).toBe("DOCUMENT");
     expect(result.fileReferences).toEqual([existing]);
+  });
+
+  it("never gives two files, or a file already in the share, the same identifier", async () => {
+    // A generator that repeats itself: every repeat is drawn again.
+    const ids = ["id0001", "id0001", "old001", "id0002", "id0003"];
+    const result = await buildSharePublish({
+      ...base,
+      title: "Renamed share",
+      files: [{ existing: { ...existing, identifier: "qshare_file_renamed-share_old001" } }, { file: pdf }, { file: png }],
+      edit,
+      uid: () => ids.shift() ?? "zzzzzz",
+    });
+    expect(result.resources.filter((r) => r.service === "FILE").map((r) => r.identifier)).toEqual([
+      "qshare_file_renamed-share_id0001",
+      "qshare_file_renamed-share_id0002",
+    ]);
+    await expect(
+      buildSharePublish({ ...base, files: [{ file: pdf }, { file: png }], uid: () => "same00" })
+    ).rejects.toThrow(/unique identifier/);
+  });
+
+  it("builds 300 files with distinct identifiers, in order, the details last", async () => {
+    const files = Array.from({ length: 300 }, (_, i) => ({ file: new File(["x"], `t${i}.mp3`, { type: "audio/mpeg" }) }));
+    const result = await buildSharePublish({ ...base, files });
+    const fileIds = result.resources.filter((r) => r.service === "FILE").map((r) => r.identifier);
+    expect(fileIds.length).toBe(300);
+    expect(new Set(fileIds).size).toBe(300);
+    expect(result.resources.at(-1)?.service).toBe("DOCUMENT");
+    expect(result.fileObject.files.map((f) => f.filename)).toEqual(files.map((f) => f.file.name));
+  });
+});
+
+describe("share thumbnails (1.0.1)", () => {
+  const thumb = new File([new Uint8Array([9, 9])], "thumbnail.webp", { type: "image/webp" });
+
+  it("publishes a new thumbnail before the details, which name it", async () => {
+    const result = await buildSharePublish({ ...base, files: [{ file: png }], thumbnail: { file: thumb }, uid: fixedUid() });
+    expect(result.resources.map((r) => r.service)).toEqual(["FILE", "THUMBNAIL", "DOCUMENT"]);
+    const [, thumbnail] = result.resources;
+    expect(thumbnail).toMatchObject({
+      action: "PUBLISH_QDN_RESOURCE",
+      name: "alice",
+      service: "THUMBNAIL",
+      identifier: "qshare_thumb_my-first-share_id0003",
+      file: thumb,
+      filename: "thumbnail.webp",
+      title: "My First Share",
+      tag1: "qshare_thumb_",
+    });
+    expect(thumbnail.identifier.length).toBeLessThanOrEqual(64);
+    const stored = decode((result.resources[2] as any).data64);
+    expect(stored.thumbnail).toEqual({ service: "THUMBNAIL", name: "alice", identifier: thumbnail.identifier });
+    expect(shareThumbnail(stored)).toEqual(stored.thumbnail);
+  });
+
+  it("keeps the thumbnail a share has on an update, and leaves the field out without one", async () => {
+    const existing = { service: "THUMBNAIL" as const, name: "alice", identifier: "qshare_thumb_old_abc123" };
+    const kept = await buildSharePublish({ ...base, files: [{ file: pdf }], thumbnail: { existing }, uid: fixedUid() });
+    expect(kept.resources.map((r) => r.service)).toEqual(["FILE", "DOCUMENT"]);
+    expect(decode((kept.resources[1] as any).data64).thumbnail).toEqual(existing);
+
+    const none = await buildSharePublish({ ...base, files: [{ file: pdf }], thumbnail: null, uid: fixedUid() });
+    expect(Object.keys(decode((none.resources[1] as any).data64))).not.toContain("thumbnail");
+  });
+
+  it("reads only well-formed thumbnails", () => {
+    expect(shareThumbnail({ thumbnail: { service: "THUMBNAIL", name: "a", identifier: "b" } })).toEqual({
+      service: "THUMBNAIL",
+      name: "a",
+      identifier: "b",
+    });
+    expect(shareThumbnail({ thumbnail: { service: "FILE", name: "a", identifier: "b" } })).toBeNull();
+    expect(shareThumbnail({ thumbnail: { service: "THUMBNAIL", name: "", identifier: "b" } })).toBeNull();
+    expect(shareThumbnail({})).toBeNull();
+    expect(shareThumbnail(null)).toBeNull();
   });
 });

@@ -1,9 +1,11 @@
-import React, { useEffect, useCallback, useMemo } from "react";
+import React, { Suspense, lazy, useEffect, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import { addUser } from "../state/features/authSlice";
 import NavBar from "../components/layout/Navbar/Navbar";
 import { BottomNav, BottomNavSpacer } from "../components/layout/BottomNav/BottomNav";
+// The player bar loads with the first playlist, not with the app.
+const AudioPlayer = lazy(() => import("../components/player/AudioPlayer").then((m) => ({ default: m.AudioPlayer })));
 import PageLoader from "../components/common/PageLoader";
 import { ErrorBoundary } from "../components/common/ErrorBoundary";
 import { RootState } from "../state/store";
@@ -14,6 +16,7 @@ import ConsentModal from "../components/common/ConsentModal";
 import { useIframe } from "../hooks/useIframe.tsx";
 import { useTrackInAppHistory } from "../hooks/useSafeBack";
 import { useUserAccount } from "../hooks/useUserAccount";
+import { useHubAlertsSync, useNotificationChecks } from "../hooks/useNotificationChecks";
 
 interface Props {
   children: React.ReactNode;
@@ -23,15 +26,18 @@ interface Props {
 export { queue };
 
 /**
- * The app shell: account lookup, the header, the phone bottom bar, the Edit
- * dialog and the one-time consent dialog, with an error boundary around the
- * page content.
+ * The app shell: account lookup, the header, the phone bottom bar, the
+ * playlist player (it keeps playing from page to page), the Edit dialog and
+ * the one-time consent dialog, with an error boundary around the page content.
  */
 const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
+  useNotificationChecks();
+  useHubAlertsSync();
   useTrackInAppHistory();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
+  const playlistQueued = useSelector((state: RootState) => state.player.tracks.length > 0);
   const username = useMemo(() => {
     if (!user?.name) return "";
 
@@ -101,6 +107,11 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       </main>
 
       <BottomNavSpacer />
+      {playlistQueued ? (
+        <Suspense fallback={null}>
+          <AudioPlayer />
+        </Suspense>
+      ) : null}
       <BottomNav />
     </>
   );

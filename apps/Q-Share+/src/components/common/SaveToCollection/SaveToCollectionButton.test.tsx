@@ -47,6 +47,43 @@ describe('SaveToCollectionButton', () => {
     expect(screen.queryByRole('button', { name: 'Add to collection' })).not.toBeInTheDocument();
   });
 
+  it('lists each collection with its folders, and saves into a folder keeping the rest', async () => {
+    signIn('alice');
+    mockFetch('/names/', { error: 401 });
+    mockFetch('/arbitrary/resources/search', [
+      { name: 'alice', service: 'DOCUMENT', identifier: COLLECTION_ID, updated: 10, metadata: { title: 'My docs', description: '' } },
+    ]);
+    const other = { name: 'carol', identifier: 'qshare_file_other_q1w2e3_metadata' };
+    mockQortalAction('FETCH_QDN_RESOURCE', {
+      version: 1,
+      title: 'My docs',
+      description: '',
+      items: [other],
+      created: 5,
+      updated: 5,
+      folders: [
+        { id: 'work01', title: 'Work', description: '', items: [], folders: [{ id: 'tax001', title: 'Taxes', description: '', items: [], folders: [] }] },
+      ],
+    });
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    renderWithProviders(<SaveToCollectionButton share={share} />);
+    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Add to collection' }));
+
+    const rows = await screen.findAllByRole('menuitemcheckbox');
+    expect(rows.map((row) => row.getAttribute('aria-label'))).toEqual(['My docs', 'Work, in My docs', 'Taxes, in My docs']);
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Taxes, in My docs' }));
+
+    await waitFor(() => expect(qortalCallsFor('PUBLISH_QDN_RESOURCE').length).toBe(1));
+    const body = JSON.parse(atob(String(qortalCallsFor('PUBLISH_QDN_RESOURCE')[0].data64)));
+    expect(body.items).toEqual([other]);
+    expect(body.folders[0].items).toEqual([]);
+    expect(body.folders[0].folders[0].items).toEqual([{ name: 'bob', identifier: share.identifier }]);
+    await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe('Added to Taxes'));
+    // Saved somewhere in the collection: the button says so.
+    expect(screen.getByRole('button', { name: 'Add to collection' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('saves the share into a collection with one PUBLISH_QDN_RESOURCE of the same identifier', async () => {
     signIn('alice');
     mockFetch('/arbitrary/resources/search', [

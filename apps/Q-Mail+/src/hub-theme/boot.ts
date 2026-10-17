@@ -13,20 +13,73 @@ import {
 } from './tokens';
 
 /**
- * Hub and GO inject `window._qdnTheme` and also pass `?theme=light|dark`.
- * Outside Hub (plain `npm run dev`) this falls back to dark.
+ * Where Hub's light/dark mode is remembered, for reloads that lose it. One
+ * key for every Q-App on the node's origin: Hub's mode is the same for all.
+ */
+export const HOST_MODE_KEY = 'qplus-hub-mode';
+
+/** The mode Hub posted during this page's life (THEME_CHANGED): newer than the URL's. */
+let toldThisPage: ColorMode | null = null;
+
+function isMode(value: unknown): value is ColorMode {
+  return value === 'light' || value === 'dark';
+}
+
+/** Remember Hub's mode for the next load (storage can be unavailable: then it's for this page). */
+export function rememberHostMode(mode: ColorMode): void {
+  try {
+    window.localStorage.setItem(HOST_MODE_KEY, mode);
+  } catch {
+    // private windows: the mode still applies to this page
+  }
+}
+
+function rememberedHostMode(): ColorMode | null {
+  try {
+    const value = window.localStorage.getItem(HOST_MODE_KEY);
+    return isMode(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Hub switched light/dark while the app is open: that wins until the next load, and is remembered. */
+export function noteHostMode(mode: ColorMode): void {
+  toldThisPage = mode;
+  rememberHostMode(mode);
+}
+
+/**
+ * Hub's light/dark mode. Hub and GO open an app with `?theme=light|dark`,
+ * which Core also injects as `window._qdnTheme`. In-app navigation changes
+ * the path and drops that query, so a reload afterwards has no `theme`, and
+ * Core then injects its own default, "light", whatever Hub's mode. So, in
+ * order: what Hub posted during this page's life, the URL's `theme` (which
+ * is remembered), the remembered mode, the injected value, and outside Hub
+ * (plain `npm run dev`) dark.
  */
 export function readHostMode(): ColorMode {
   if (typeof window === 'undefined') return 'dark';
-  const injected = (window as Window & { _qdnTheme?: string })._qdnTheme;
-  if (injected === 'light' || injected === 'dark') return injected;
+  if (toldThisPage) return toldThisPage;
+  let fromUrl: string | null = null;
   try {
-    const fromUrl = new URLSearchParams(window.location.search).get('theme');
-    if (fromUrl === 'light' || fromUrl === 'dark') return fromUrl;
+    fromUrl = new URLSearchParams(window.location.search).get('theme');
   } catch {
     // ignore malformed search strings
   }
-  return 'dark';
+  if (isMode(fromUrl)) {
+    rememberHostMode(fromUrl);
+    return fromUrl;
+  }
+  const remembered = rememberedHostMode();
+  if (remembered) return remembered;
+  const injected = (window as Window & { _qdnTheme?: string })._qdnTheme;
+  return isMode(injected) ? injected : 'dark';
+}
+
+/** Tests: forget what Hub posted during this page's life. */
+export function resetHostModeForTests(): void {
+  toldThisPage = null;
 }
 
 /**

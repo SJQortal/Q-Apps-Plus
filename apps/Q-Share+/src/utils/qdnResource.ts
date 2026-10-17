@@ -7,7 +7,7 @@ export interface ResourceRef {
 }
 
 /** Answers the way q-apps.js does: parsed JSON, and a Core `{ error }` body or an HTTP error rejects. */
-async function getJson(path: string): Promise<any> {
+export async function getJson(path: string): Promise<any> {
   const response = await fetch(path, { method: "GET" });
   const text = await response.text();
   let body: unknown = text;

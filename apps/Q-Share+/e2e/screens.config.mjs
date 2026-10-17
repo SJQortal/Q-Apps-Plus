@@ -4,8 +4,10 @@
  *   scripts/screens.mjs Q-Share+ [--only home,share] [--themes hub30] [--mode light]
  *
  * Fixtures: 24 shares from three publishers (one with a "+" in its name), a
- * four-file share (image, text, PDF, audio), a comment thread with a reply and
- * two collections. Publishing is always declined, so nothing can be sent.
+ * four-file share (image, text, PDF, audio), a comment thread with a reply,
+ * two collections (one with folders and covers), an album of five tracks
+ * that plays as a playlist (silent WAVs) and a share of 120 files.
+ * Publishing is always declined, so nothing can be sent.
  */
 const NAME = 'Tester';
 const ID = (n) => `qshare_file_share-number-${n}_id00${n}_metadata`;
@@ -38,6 +40,48 @@ const body = (i) => ({
     { filename: 'song.mp3', identifier: `qshare_file_a_${i}`, name: rows[i - 1].name, service: 'FILE', mimetype: 'audio/mpeg', size: 5_100_000 },
   ],
 });
+// The album that plays as a playlist, and a share with 120 files.
+const ALBUM = 'qshare_file_live-in-tokyo_pl0001_metadata';
+const MANY = 'qshare_file_field-recordings_mn0001_metadata';
+const extraRows = [
+  { name: 'Alice Wonder', service: 'DOCUMENT', identifier: ALBUM, created: now - 600_000, updated: now - 600_000, size: 900, metadata: { title: 'Live in Tokyo', description: '**cat:3**Five tracks' } },
+  { name: NAME, service: 'DOCUMENT', identifier: MANY, created: now - 900_000, updated: now - 900_000, size: 900, metadata: { title: 'Field recordings', description: '**cat:3**A lot of files' } },
+];
+const track = (n, title) => ({ filename: `${String(n).padStart(2, '0')} ${title}.mp3`, identifier: `qshare_file_pl_t${n}`, name: 'Alice Wonder', service: 'FILE', mimetype: 'audio/mpeg', size: 4_200_000 + n * 1000 });
+const extraBodies = {
+  [ALBUM]: {
+    title: 'Live in Tokyo', version: 1, fullDescription: 'Five tracks.', htmlDescription: '<p>Five tracks, recorded live.</p>', commentsId: 'qshare_file__cm_pl0001', category: '3',
+    files: [track(1, 'Opening'), track(2, 'A song with a rather long title that wraps'), track(3, 'Interlude'), track(4, 'Encore'), track(5, 'Goodnight'),
+      { filename: 'booklet.pdf', identifier: 'qshare_file_pl_d1', name: 'Alice Wonder', service: 'FILE', mimetype: 'application/pdf', size: 900_000 }],
+  },
+  [MANY]: {
+    title: 'Field recordings', version: 1, fullDescription: 'Many files.', htmlDescription: '<p>Many files.</p>', commentsId: 'qshare_file__cm_mn0001', category: '3',
+    files: Array.from({ length: 120 }, (_, i) => ({ filename: `recording-${String(i + 1).padStart(3, '0')}.zip`, identifier: `qshare_file_mn_${i}`, name: NAME, service: 'FILE', mimetype: 'application/zip', size: 120_000 })),
+  },
+};
+const collectionBody = {
+  version: 1, title: 'Holiday pack', description: 'Photos and notes', created: now, updated: now,
+  cover: { service: 'THUMBNAIL', name: NAME, identifier: 'qshare_cover_holiday1' },
+  items: [{ name: NAME, identifier: ID(1) }, { name: 'Alice Wonder', identifier: ID(2) }],
+  folders: [
+    { id: 'live01', title: 'Live recordings', description: 'Concerts', cover: { service: 'THUMBNAIL', name: NAME, identifier: 'qshare_cover_live0001' },
+      items: [{ name: 'Alice Wonder', identifier: ALBUM }], folders: [{ id: 'tokyo1', title: 'Tokyo', description: '', items: [{ name: 'Alice Wonder', identifier: ALBUM }], folders: [] }] },
+    { id: 'docs01', title: 'Documents with a long folder name that wraps', description: '', items: [{ name: 'bob+builder', identifier: ID(3) }], folders: [] },
+    { id: 'empty1', title: 'Empty', description: '', items: [], folders: [] },
+  ],
+};
+/** A silent mono 8-bit WAV of `seconds`, so the playlist really plays. */
+function silentWav(seconds) {
+  const rate = 4000;
+  const data = rate * seconds;
+  const b = Buffer.alloc(44 + data, 128);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + data, 4); b.write('WAVE', 8); b.write('fmt ', 12);
+  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate, 28);
+  b.writeUInt16LE(1, 32); b.writeUInt16LE(8, 34); b.write('data', 36); b.writeUInt32LE(data, 40);
+  return b;
+}
+const WAV = silentWav(200);
+
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAQklEQVR42u3OMQEAAAgDINc/9Mzg14MGLUmHCgUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFbzwB2GwADvYAAAAASUVORK5CYII=',
@@ -77,14 +121,15 @@ export default {
 
   // Runs in the page: defines window.__qplusAnswer(request).
   qortal: () => `
-    const bodies = ${JSON.stringify(Object.fromEntries(rows.map((r, i) => [r.identifier, body(i + 1)])))};
+    const bodies = ${JSON.stringify({ ...Object.fromEntries(rows.map((r, i) => [r.identifier, body(i + 1)])), ...extraBodies })};
+    const collection = ${JSON.stringify(collectionBody)};
     window.__qplusAnswer = async (p) => {
       switch (p.action) {
         case 'GET_USER_ACCOUNT': return { address: 'QTesterAddress', publicKey: 'pk' };
         case 'GET_ACCOUNT_NAMES': return [{ name: '${NAME}', owner: 'QTesterAddress' }, { name: 'Second Name', owner: 'QTesterAddress' }];
         case 'GET_PRIMARY_NAME': return '${NAME}';
         case 'GET_QDN_RESOURCE_URL': return '/arbitrary/' + p.service + '/' + p.name + '/' + p.identifier;
-        case 'FETCH_QDN_RESOURCE': return bodies[p.identifier] || (p.identifier && p.identifier.startsWith('qshare_collection_') ? { version: 1, title: 'Holiday pack', description: 'Photos and notes', items: [{ name: '${NAME}', identifier: '${ID(1)}' }, { name: 'Alice Wonder', identifier: '${ID(2)}' }], created: ${now}, updated: ${now} } : null);
+        case 'FETCH_QDN_RESOURCE': return bodies[p.identifier] || (p.identifier && p.identifier.startsWith('qshare_collection_') ? collection : null);
         case 'GET_LIST_ITEMS': return p.list_name === 'followedNames' ? ['Alice Wonder'] : ['spammer'];
         case 'LIST_QDN_RESOURCES': return [{ size: 1000 }];
         case 'SHOW_PDF_READER': return true;
@@ -102,6 +147,9 @@ export default {
     const p = url.pathname;
     const sp = url.searchParams;
     if (p.endsWith('/arbitrary/resources')) return json(route, [{ size: 1000 }]).then(() => true); // the Follow tooltip's size list
+    if (p.endsWith('/transactions/unitfee')) return json(route, '1000000').then(() => true); // publish fees: 0.01 QORT
+    if (p.endsWith('/transactions/unconfirmed')) return json(route, []).then(() => true); // room for a batch
+    if (p.endsWith('/blocks/last')) return json(route, { height: 2744531, timestamp: Date.now() }).then(() => true); // notification checks: the node's indexed-up-to time
     if (p.endsWith('/resources/search')) {
       let list = rows;
       const ident = sp.get('identifier') || '';
@@ -117,7 +165,7 @@ export default {
           ? [1, 2].map((n) => ({ name: n === 1 ? 'Alice Wonder' : NAME, service: 'BLOG_COMMENT', identifier: `qcomment_v1_qshare_${'id001_metadata'.slice(-12)}_base_c${n}0000`, created: now - n * 3600_000 }))
           : [{ name: 'bob+builder', service: 'BLOG_COMMENT', identifier: `qcomment_v1_qshare_${'id001_metadata'.slice(-12)}_reply_c10000_r1`, created: now - 1800_000 }];
       } else if (ident.startsWith('qshare_file_') && ident.endsWith('_metadata')) {
-        list = rows.filter((r) => r.identifier === ident);
+        list = [...rows, ...extraRows].filter((r) => r.identifier === ident);
       }
       if (name) list = list.filter((r) => r.name === name);
       if (sp.get('followedonly') === 'true') list = list.filter((r) => r.name === 'Alice Wonder');
@@ -132,6 +180,7 @@ export default {
     if (p.includes('/BLOG_COMMENT/')) return send('text/plain', 'A comment with enough words to wrap on a phone screen, and a qortal://APP/Q-Tube link.');
     if (p.includes('/FILE/')) {
       if (p.includes('_p_')) return send('image/png', PNG);
+      if (p.includes('_pl_t') || p.includes('_a_')) return send('audio/wav', WAV);
       if (p.includes('_t_')) return send('text/plain', 'Line one of the notes.\nLine two.\n');
       // PDFs open in Hub's reader, which checks for a PDF header.
       if (p.includes('_d_')) return send('application/pdf', '%PDF-1.4\n%mock\n');
@@ -148,8 +197,17 @@ export default {
     { key: 'profile', path: `/channel/${encodeURIComponent('Alice Wonder')}`, after: async (page) => page.waitForSelector('li, [role=status]', { timeout: 8000 }).catch(() => {}) },
     { key: 'settings', path: '/settings' },
     { key: 'collections', path: '/collections', optional: true },
-    { key: 'collection', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd`, optional: true },
+    { key: 'collection', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd`, optional: true, after: async (page) => page.waitForSelector('text=Live recordings', { timeout: 8000 }).catch(() => {}) },
+    { key: 'folder', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd/folder/live01`, after: async (page) => page.waitForSelector('text=Live in Tokyo', { timeout: 8000 }).catch(() => {}) },
+    { key: 'folder-new', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd/folder/live01`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'New folder' }).first().click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'share-many', path: `/share/${NAME}/${MANY}`, after: async (page) => page.waitForSelector('text=recording-050.zip', { timeout: 8000 }).catch(() => {}) },
+    // Play all starts the player bar; the shot is taken with it playing.
+    { key: 'playlist', path: `/share/${encodeURIComponent('Alice Wonder')}/${ALBUM}`, after: async (page) => { await page.getByRole('button', { name: 'Play all' }).first().click({ timeout: 4000 }); await page.getByRole('region', { name: 'Player' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(800); } },
+    { key: 'player-sheet', path: `/share/${encodeURIComponent('Alice Wonder')}/${ALBUM}`, mobileOnly: true, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Play all' }).first().click({ timeout: 4000 }); await page.getByRole('button', { name: /Open the player/ }).click({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    { key: 'publish-many', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /share files/i }).first().click({ timeout: 2500 }); await page.setInputFiles('[data-testid=share-file-input]', Array.from({ length: 25 }, (_, i) => ({ name: `track-${i + 1}.mp3`, mimeType: 'audio/mpeg', buffer: Buffer.from('x') }))); await page.waitForTimeout(600); } },
     { key: 'publish', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /share files/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'account-menu', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /account menu/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
+    // Opening the bell runs the first check: a comment by bob+builder on share 1, and Alice Wonder's Tools collection holding it.
+    { key: 'notifications', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Notifications/ }).first().click({ timeout: 2500 }); await page.getByText(/added .* to Tools/).first().waitFor({ timeout: 5000 }).catch(() => {}); await page.waitForTimeout(400); } },
   ],
 };
