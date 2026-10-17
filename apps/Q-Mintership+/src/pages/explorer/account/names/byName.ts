@@ -42,3 +42,14 @@ export function pastNames(
     .sort(([, a], [, b]) => (b[0]?.timestamp ?? 0) - (a[0]?.timestamp ?? 0))
     .map(([name]) => name);
 }
+
+/**
+ * Nothing to show under "Its whole history" (Simon, 2026-10-17: "if there is
+ * no changes to the names history, do not show Name history expandable
+ * button"): its own transactions about the name, read in full, are just its
+ * registration. Any rename, sale or update since would be among them (only
+ * the owner changes a name), so no read is needed to know it.
+ */
+export function unchangedSince(txs: readonly TxRow[] | undefined, capped: boolean): boolean {
+  return !capped && txs?.length === 1 && txs[0].type === 'REGISTER_NAME';
+}

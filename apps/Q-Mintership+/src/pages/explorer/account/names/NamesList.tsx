@@ -23,7 +23,7 @@ import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
 import { PersonInline } from '../../../../components/common/Person';
 import type { NameHistory } from '../../../../data/explorer/nameHistory';
 import type { TxRow } from '../../../../data/types';
-import { historyByName, pastNames } from './byName';
+import { historyByName, pastNames, unchangedSince } from './byName';
 import { NameHistoryList } from './NameHistoryList';
 import { NameLifeToggle } from './NameLife';
 import { isNameSort, NAME_SORTS, sortNames, type NameSort } from './sortNames';
@@ -330,7 +330,9 @@ function NameRow({
       history={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
           <NameHistoryList name={name} txs={txs} address={address} capped={capped} />
-          <NameLifeToggle name={name} openNow={arrived} />
+          {unchangedSince(txs, capped) ? null : (
+            <NameLifeToggle name={name} openNow={arrived} />
+          )}
         </Box>
       }
     />
