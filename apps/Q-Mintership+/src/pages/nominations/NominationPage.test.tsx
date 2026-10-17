@@ -100,6 +100,10 @@ describe('A nomination’s own page', () => {
     await open(ADDR.expired, 'learner');
     const latest = await screen.findByRole('region', { name: 'Latest nomination' }, T);
     expect(within(latest).getByText('Expired')).toBeInTheDocument();
+    // When it ended, on the card.
+    expect(within(latest).getByText(/^Expired \d+ days ago\.$/)).toBeInTheDocument();
+    // Below level 5: nothing to propose.
+    expect(within(latest).queryByRole('link', { name: /again$/ })).toBeNull();
     const rounds = await screen.findByRole('region', { name: 'Rounds' }, T);
     expect(
       await within(rounds).findByText(
@@ -108,6 +112,21 @@ describe('A nomination’s own page', () => {
         T
       )
     ).toBeInTheDocument();
+  });
+
+  it('offers Propose nomination again where a round ran out, to those who can nominate', async () => {
+    for (const who of [ADDR.expired, ADDR.lapsed]) {
+      const { unmount } = await open(who, 'nominator');
+      const latest = await screen.findByRole('region', { name: 'Latest nomination' }, T);
+      expect(
+        within(latest).getByRole('link', { name: 'Propose nomination again' })
+      ).toHaveAttribute('href', `/nominate?who=${who}`);
+      unmount();
+    }
+    // Not while one is open.
+    await open(ADDR.nominatedSigning, 'nominator');
+    const current = await screen.findByRole('region', { name: 'Nomination' }, T);
+    expect(within(current).queryByRole('link', { name: 'Propose nomination again' })).toBeNull();
   });
 
   it('offers an eligible viewer their support while it waits for a first approval', async () => {

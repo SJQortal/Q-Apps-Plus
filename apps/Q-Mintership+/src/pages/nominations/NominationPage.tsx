@@ -50,6 +50,7 @@ import {
   personPath,
 } from '../../routes/paths';
 import { isOpenState } from '../../rules/nomination';
+import { canNominateAgain, endedAt } from './filters';
 import { OUTCOME_LABEL, outcomeSentence, type DecisionOutcome } from '../../rules/outcome';
 import { nominationRounds, type NominationRound } from '../../rules/rounds';
 import type { MyStatus } from '../../rules/status';
@@ -182,6 +183,12 @@ function NominationView({ address }: { address: string }) {
             nomination={current}
             now={chain.data}
             hideNominee
+            // A decided one says when it ended ("Expired 3 days ago").
+            endedAt={
+              !isOpenState(current.state) && group.data
+                ? endedAt(current, chain.data, group.data)
+                : null
+            }
             copyLink={false}
             comments="open"
             forNominee={viewer.status?.address === current.nominee}
@@ -306,6 +313,17 @@ function CurrentActions({
           sx={{ minHeight: 44 }}
         >
           Add your support
+        </Button>
+      ) : null}
+      {/* A round that ran out without a decision can simply be made again. */}
+      {viewer?.canNominate && canNominateAgain(n) ? (
+        <Button
+          component={RouterLink}
+          to={nominatePath(n.nominee)}
+          variant="outlined"
+          sx={{ minHeight: 44 }}
+        >
+          {PROPOSE_NOMINATION} again
         </Button>
       ) : null}
     </>
