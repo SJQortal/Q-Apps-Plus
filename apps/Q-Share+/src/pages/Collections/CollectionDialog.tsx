@@ -17,6 +17,7 @@ import {
   type CollectionItem,
 } from "../../utils/collections";
 import { isHubDecline } from "../../utils/hubErrors";
+import { CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
 
 export interface CollectionDialogProps {
   open: boolean;
@@ -28,7 +29,7 @@ export interface CollectionDialogProps {
   onSaved?: (collection: Collection) => void;
 }
 
-/** Create or edit a collection. One PUBLISH_QDN_RESOURCE, confirmed in Hub. */
+/** Create or edit a collection: one Hub confirmation, with a new cover image in the same request. */
 export function CollectionDialog({ open, onClose, collection, initialItems, onSaved }: CollectionDialogProps) {
   const dispatch = useDispatch();
   const myName = useSelector((state: RootState) => state.auth.user?.name);
@@ -38,6 +39,7 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coverChoice, setCoverChoice] = useState<CoverChoice>(KEEP_COVER);
 
   // Seed the fields each time the dialog opens (state adjusted during render, no effect).
   const [seededOpen, setSeededOpen] = useState(false);
@@ -49,6 +51,7 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
       setTouched(false);
       setBusy(false);
       setError(null);
+      setCoverChoice(KEEP_COVER);
     }
   }
 
@@ -68,10 +71,11 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
     setError(null);
     try {
       const identifier = collection?.identifier ?? buildCollectionIdentifier(trimmedTitle, newCollectionUid());
+      const { cover, covers } = coverChange(coverChoice, name);
       const body = collection
-        ? editCollectionBody(collection, { title: trimmedTitle, description })
-        : buildCollectionBody({ title: trimmedTitle, description, items: initialItems ?? [] });
-      const saved = await publishCollection({ name, identifier, body, previous: collection ?? null, previousItems: [] });
+        ? editCollectionBody(collection, { title: trimmedTitle, description, cover })
+        : buildCollectionBody({ title: trimmedTitle, description, items: initialItems ?? [], cover });
+      const saved = await publishCollection({ name, identifier, body, previous: collection ?? null, previousItems: [], covers });
       dispatch(upsertCollection(saved));
       if (name === myName) {
         dispatch(
@@ -145,6 +149,7 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
           helperText={`${description.length}/${COLLECTION_DESCRIPTION_MAX}`}
           slotProps={{ htmlInput: { maxLength: COLLECTION_DESCRIPTION_MAX } }}
         />
+        <CoverPicker current={collection?.cover} choice={coverChoice} onChange={setCoverChoice} kind="collection" disabled={busy} />
         {startCount > 0 && (
           <Typography variant="body2">
             Starts with {startCount} {startCount === 1 ? "share" : "shares"}.

@@ -14,6 +14,7 @@ import {
 } from "../../utils/collections";
 import { addFolder, editFolder, newFolderId } from "../../utils/collectionFolders";
 import { isHubDecline } from "../../utils/hubErrors";
+import { CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
 
 export interface FolderDialogProps {
   open: boolean;
@@ -28,8 +29,8 @@ export interface FolderDialogProps {
 
 /**
  * Make or edit a folder inside a collection. The folder lives in the
- * collection's JSON, so saving republishes the collection: one
- * PUBLISH_QDN_RESOURCE, confirmed in Hub.
+ * collection's JSON, so saving republishes the collection: one Hub
+ * confirmation, with a new cover image in the same request.
  */
 export function FolderDialog({ open, onClose, collection, folder, parentId = null, onSaved }: FolderDialogProps) {
   const dispatch = useDispatch();
@@ -39,6 +40,7 @@ export function FolderDialog({ open, onClose, collection, folder, parentId = nul
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coverChoice, setCoverChoice] = useState<CoverChoice>(KEEP_COVER);
 
   // Seed the fields each time the dialog opens (state adjusted during render, no effect).
   const [seededOpen, setSeededOpen] = useState(false);
@@ -50,6 +52,7 @@ export function FolderDialog({ open, onClose, collection, folder, parentId = nul
       setTouched(false);
       setBusy(false);
       setError(null);
+      setCoverChoice(KEEP_COVER);
     }
   }
 
@@ -63,14 +66,23 @@ export function FolderDialog({ open, onClose, collection, folder, parentId = nul
     setError(null);
     try {
       const id = folder?.id ?? newFolderId(collection);
+      const { cover, covers } = coverChange(coverChoice, collection.name);
       const changed = folder
-        ? editFolder(collection, folder.id, { title: trimmedTitle, description: description.trim() })
-        : addFolder(collection, parentId, { id, title: trimmedTitle, description: description.trim(), items: [], folders: [] });
+        ? editFolder(collection, folder.id, { title: trimmedTitle, description: description.trim(), cover })
+        : addFolder(collection, parentId, {
+            id,
+            title: trimmedTitle,
+            description: description.trim(),
+            ...(cover ? { cover } : {}),
+            items: [],
+            folders: [],
+          });
       const saved = await publishCollection({
         name: collection.name,
         identifier: collection.identifier,
         body: editCollectionBody(changed),
         previous: collection,
+        covers,
       });
       dispatch(upsertCollection(saved));
       dispatch(setNotification({ msg: isEdit ? "Folder saved" : "Folder created", alertType: "success" }));
@@ -136,6 +148,7 @@ export function FolderDialog({ open, onClose, collection, folder, parentId = nul
           helperText={`${description.length}/${FOLDER_DESCRIPTION_MAX}`}
           slotProps={{ htmlInput: { maxLength: FOLDER_DESCRIPTION_MAX } }}
         />
+        <CoverPicker current={folder?.cover} choice={coverChoice} onChange={setCoverChoice} kind="folder" disabled={busy} />
         <Typography variant="body2" color="text.secondary">
           The folder is part of “{collection.title}”: saving republishes the collection, so Hub asks to confirm and the
           usual small QDN fee applies.
