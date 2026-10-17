@@ -57,6 +57,7 @@ import { ACCOUNT_TABS, AT_TABS, panelIdOf, tabIdOf } from './account/tabIds';
 import { AT_ACCOUNT, INVALID_ADDRESS, UNUSED_ADDRESS } from './explorerWords';
 import { MarkedName } from '../../components/common/MarkedName';
 import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
+import { AvatarZoom } from '../../components/explorer/AvatarZoom';
 
 // Each tab's code loads when it is first opened.
 const TAB_PANELS: Record<ExplorerTab, ComponentType<{ address: string }>> = {
@@ -205,6 +206,7 @@ export default function AccountPage() {
   let title = 'Account';
   /** The name the title is, as published (crossed out when MarkedName says so). */
   let titleName: string | null = null;
+  let leading: React.ReactNode = null;
   let subtitle: string | undefined;
   let body: React.ReactNode;
   let showTabs = false;
@@ -291,6 +293,8 @@ export default function AccountPage() {
     const label = name ? visibleName(name) : shortAddress(account.address);
     title = label;
     titleName = name;
+    // Its avatar beside the title too, opening bigger (Simon, 2026-10-17).
+    leading = <AvatarZoom name={name} size={36} phoneSize={32} />;
     if (primary.data === null && names.data)
       subtitle = names.data.names.length ? 'No primary name' : 'No registered name';
     showTabs = true;
@@ -333,6 +337,7 @@ export default function AccountPage() {
         heading={titleName ? <MarkedName name={titleName}>{title}</MarkedName> : undefined}
         subtitle={subtitle}
         back={PATHS.explorer}
+        leading={leading}
         actions={
           <>
             <ExplorerHeaderSearch />

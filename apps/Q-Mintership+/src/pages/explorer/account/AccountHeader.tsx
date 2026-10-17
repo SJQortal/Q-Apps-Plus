@@ -1,15 +1,17 @@
 /**
  * The top of an account page, on every tab (its name is the page title):
- * the avatar, its level, the whole address with copy, at most three chips
- * (where it stands in MINTER, minting now, a minting penalty), and a note
- * when it was opened by a name that isn't its primary one. On phones the
- * title is cut short beside the header's buttons, so the whole name is
- * under the avatar too, wrapping. The chips are in colour (StatusChip): the
- * colour says what kind of fact it is, never good or bad.
+ * the avatar with its name beside it (Simon, 2026-10-17: "next to the
+ * avatar I would like to see their name also"; the whole name, wrapping,
+ * where the title is cut short), its level, the whole address with copy,
+ * at most three chips (where it stands in MINTER, minting now, a minting
+ * penalty), and a note when it was opened by a name that isn't its primary
+ * one. The avatar opens bigger when pressed (AvatarZoom). The chips are in
+ * colour (StatusChip): the colour says what kind of fact it is, never good
+ * or bad.
  */
 import { Box, Typography } from '@mui/material';
 import { AddressText } from '../../../components/common/Person';
-import { NameAvatar } from '../../../components/common/NameAvatar';
+import { AvatarZoom } from '../../../components/explorer/AvatarZoom';
 import type { NamesOf } from '../../../data/explorer/account';
 import type { AccountInfo } from '../../../data/types';
 import { visibleName } from '../../../rules/explorer/nameNotes';
@@ -61,8 +63,22 @@ export function AccountHeader({
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-        <NameAvatar name={primary ?? null} size={48} />
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minWidth: 0 }}>
+        <AvatarZoom name={primary ?? null} size={56} phoneSize={48} />
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 0 }}>
+          {primary ? (
+            <Typography
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: 18, sm: 20 },
+                lineHeight: 1.25,
+                overflowWrap: 'anywhere',
+              }}
+            >
+              <bdi dir="auto">
+                <MarkedName name={primary}>{visibleName(primary)}</MarkedName>
+              </bdi>
+            </Typography>
+          ) : null}
           <Box
             component="ul"
             aria-label="About this account"
@@ -96,15 +112,6 @@ export function AccountHeader({
           </Box>
         </Box>
       </Box>
-      {primary ? (
-        <Typography
-          sx={{ display: { xs: 'block', sm: 'none' }, fontWeight: 700, overflowWrap: 'anywhere' }}
-        >
-          <bdi dir="auto">
-            <MarkedName name={primary}>{visibleName(primary)}</MarkedName>
-          </bdi>
-        </Typography>
-      ) : null}
       {/* The whole address on a line of its own, so a phone has room for it. */}
       <AddressText address={address} full />
       {note ? (

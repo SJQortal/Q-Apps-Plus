@@ -480,12 +480,12 @@ describe('the trail', () => {
 });
 
 describe('on a phone', () => {
-  it('shows the whole name under the avatar, the title being cut short', async () => {
+  it('shows the whole name beside the avatar, the title being cut short', async () => {
     screenWidth(360);
     const { posts } = await open(explorerAccountPath(ADDR.nominator), undefined, 'learner', true);
     await screen.findByRole('heading', { level: 1, name: 'Nora Nominator' }, T);
     await screen.findByRole('list', { name: 'About this account' }, T);
-    // Once in the title (one h1), once as plain text under the avatar.
+    // Once in the title (one h1), once as plain text beside the avatar.
     const [title, line] = screen.getAllByText('Nora Nominator');
     expect(title.closest('h1')).not.toBeNull();
     expect(line.tagName).toBe('BDI');

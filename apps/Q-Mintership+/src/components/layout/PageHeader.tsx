@@ -58,11 +58,21 @@ export interface PageHeaderProps {
   actions?: ReactNode;
   /** Show Back; the value is where Back goes when the app was opened on this page. */
   back?: string;
+  /** Before the title: what the page is about, such as an account's avatar. */
+  leading?: ReactNode;
   /** Anything under the title row (tabs, filters). */
   children?: ReactNode;
 }
 
-export function PageHeader({ title, heading, subtitle, actions, back, children }: PageHeaderProps) {
+export function PageHeader({
+  title,
+  heading,
+  subtitle,
+  actions,
+  back,
+  leading,
+  children,
+}: PageHeaderProps) {
   const page = pageKeyOf(useLocation().pathname);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
@@ -93,6 +103,9 @@ export function PageHeader({ title, heading, subtitle, actions, back, children }
         <IconButton aria-label="Back" onClick={goBack} edge="start" sx={{ width: 44, height: 44 }}>
           <ArrowBackIcon />
         </IconButton>
+      ) : null}
+      {leading ? (
+        <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{leading}</div>
       ) : null}
       <div style={{ minWidth: 0, flex: 1 }}>
         <Typography
