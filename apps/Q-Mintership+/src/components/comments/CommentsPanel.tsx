@@ -517,10 +517,9 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
           publish={publish}
           returnFocus={returnFocus}
           onSent={() => {
-            if (dialog.mode === 'post') {
-              setDraft('');
-              setDraftAudience('public');
-            } else setInline(null);
+            // The choice of who reads it stays: a follow-up never goes public by surprise.
+            if (dialog.mode === 'post') setDraft('');
+            else setInline(null);
           }}
         />
       ) : null}

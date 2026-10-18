@@ -138,6 +138,11 @@ describe('a Minter Admin', () => {
     expect(
       within(li).getByText('Publishing… the other Minter Admins see it once QDN has it.')
     ).toBeVisible();
+    // The next one goes to the Minter Admins too, unless they choose otherwise.
+    expect(await within(panel).findByRole('textbox', { name: 'Write a comment' }, T)).toHaveValue(
+      ''
+    );
+    expect(within(group).getByRole('radio', { name: 'Minter Admins only' })).toBeChecked();
   });
 
   it('a reply to one for the Minter Admins is one too', async () => {
