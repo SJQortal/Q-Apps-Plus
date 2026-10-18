@@ -218,7 +218,9 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
 
   let previewUrl: string | null = null;
   let label: string;
-  if (choice.kind === "existing") {
+  if (busy) {
+    label = "Making a thumbnail…";
+  } else if (choice.kind === "existing") {
     previewUrl = thumbUrl(choice.ref);
     label = "The share's thumbnail.";
   } else if (choice.kind === "file") {

@@ -138,6 +138,16 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
       target: { files: [new File([new Uint8Array(7)], "cover.jpg", { type: "image/jpeg" })] },
     });
     expect(await screen.findByText("Your image.")).toBeInTheDocument();
+    // While a picked image is made into one, the picker says so (read out as a status).
+    let finish!: (file: File) => void;
+    vi.mocked(makeImageThumbnail).mockImplementationOnce(() => new Promise<File>((resolve) => (finish = resolve)));
+    fireEvent.change(screen.getByTestId("thumbnail-input"), {
+      target: { files: [new File([new Uint8Array(3)], "slow.jpg", { type: "image/jpeg" })] },
+    });
+    const picker = within(screen.getByRole("group", { name: "Thumbnail" }));
+    expect(await picker.findByRole("status")).toHaveTextContent("Making a thumbnail…");
+    finish(new File(["thumb of cover.jpg 7"], "thumbnail.webp", { type: "image/webp" }));
+    expect(await picker.findByRole("status")).toHaveTextContent("Your image.");
     // A photo too big to decode on a phone says so, and the choice stays.
     vi.mocked(makeImageThumbnail).mockRejectedValueOnce(new ImageTooBigError());
     fireEvent.change(screen.getByTestId("thumbnail-input"), {

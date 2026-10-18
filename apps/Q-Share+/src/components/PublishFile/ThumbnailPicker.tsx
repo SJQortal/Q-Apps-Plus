@@ -33,14 +33,16 @@ export function ThumbnailPicker({ thumb }: { thumb: ShareThumbnailState }) {
           justifyContent: "center",
         }}
       >
-        {preview.src ? (
+        {thumb.busy ? (
+          <CircularProgress size={20} />
+        ) : preview.src ? (
           <img
             src={preview.src}
             alt=""
             onError={preview.onError}
             style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
           />
-        ) : thumb.busy || (thumb.choice.kind === "auto" && /^Making/.test(thumb.label)) ? (
+        ) : thumb.choice.kind === "auto" && /^Making/.test(thumb.label) ? (
           <CircularProgress size={20} />
         ) : (
           <ImageOutlinedIcon />
@@ -50,7 +52,8 @@ export function ThumbnailPicker({ thumb }: { thumb: ShareThumbnailState }) {
         <Typography component="p" sx={{ fontWeight: 600 }}>
           Thumbnail
         </Typography>
-        <Typography variant="body2" color="text.secondary" role={thumb.problem ? "alert" : undefined}>
+        {/* Read out as it changes: "Making one from…", then what it was made from. */}
+        <Typography variant="body2" color="text.secondary" role={thumb.problem ? "alert" : "status"}>
           {thumb.problem ?? thumb.label}
         </Typography>
         <input
