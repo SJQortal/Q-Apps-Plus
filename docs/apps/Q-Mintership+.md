@@ -1033,6 +1033,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 108. **All Decisions counts the polls** (Simon, 2026-10-18: "but I want all decisions to include the Ask MAs"). All Decisions already lists the Minter Admin polls. Its count now includes the open ones too, for Minter Admins: the decisions collecting approvals, the nominations waiting for a Minter Admin, and the open polls. Tests 2,382 passed.
 
+109. **The tabs in their colours** (Simon, 2026-10-18: "and I want then to be colored as well to the correct color"). Each kind's tab has a dot in its section's colour, the same as on All Decisions and in the By type chips: Removals and Bans red, Declines orange, New and Remove MAs indigo, Lift ban teal, Cancel invite and Clean invites amber, Ask MAs violet, and Nominations the waiting nominations' blue. The selected tab's underline takes its colour too. The words keep the theme's text colour, so they read in every theme. All three main tabs still fit a 360 px phone; Decisions captures are clean.
+
 ## Follow-ups
 
 ### Readiness
