@@ -819,7 +819,7 @@ describe('Home: an admin with no open decisions', () => {
 
 describe('Home: Q-Minter for everyone outside MINTER', () => {
   it('offers the Q-Minter Guide first to someone not in MINTER, in a new Hub tab', async () => {
-    await renderPage(<HomePage />, { persona: 'newcomer' });
+    await renderPage(<HomePage />, { persona: 'signedOut' });
     const guide = await screen.findByRole(
       'region',
       { name: 'How minting works' },
@@ -847,5 +847,14 @@ describe('Home: Q-Minter for everyone outside MINTER', () => {
     await renderPage(<HomePage />, { persona: 'learner' });
     await headline("You're minting, Leo Learner");
     expect(screen.queryByRole('region', { name: 'How minting works' })).toBeNull();
+  });
+
+  it('is in a newcomer’s hero only, once', async () => {
+    await renderPage(<HomePage />, { persona: 'newcomer' });
+    await headline("You're not in the MINTER group yet");
+    const hero = screen.getByRole('region', { name: "You're not in the MINTER group yet" });
+    expect(within(hero).getByRole('button', { name: 'Read the Q-Minter Guide' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'How minting works' })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /Q-Minter Guide/ })).toHaveLength(1);
   });
 });

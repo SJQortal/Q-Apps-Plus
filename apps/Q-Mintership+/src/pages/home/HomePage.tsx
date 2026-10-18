@@ -152,7 +152,6 @@ function StatusView({
       return (
         <>
           <FormerHero status={status} needed={needed.needed} />
-          <MintingGuide />
           <HowItWorks needed={needed.needed} />
         </>
       );
@@ -162,7 +161,6 @@ function StatusView({
   return (
     <>
       <NewcomerHero status={status} needed={needed.needed} />
-      <MintingGuide />
       <HowItWorks needed={needed.needed} />
     </>
   );

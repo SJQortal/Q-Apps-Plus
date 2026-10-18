@@ -2,7 +2,9 @@
  * For everyone on Home who isn't in MINTER: the Q-Minter Guide, the website
  * that explains minting on Qortal for minters and nominators, to read first
  * (Simon, 2026-10-16; 2026-10-18: "refer them to read the Q-Minter Guide").
- * The link is also written out, for someone who opened the app outside Hub.
+ * A newcomer's and a former member's hero already leads with it, so this
+ * card is for the rest: signed out, nominated or approved. The link is also
+ * written out, for someone who opened the app outside Hub.
  */
 import { Box, Typography } from '@mui/material';
 import { Card, Section } from '../../components/common/Section';
