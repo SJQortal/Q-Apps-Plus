@@ -9,7 +9,8 @@
  * only:
  *
  * 1. Who: the kind's list to pick from (PickLists.tsx; Requested to join
- *    MINTER Group for a decline), then the person picked, with their level,
+ *    MINTER Group for a decline), or for MINTER's members a dropdown while
+ *    typing (MemberSearch.tsx), then the person picked, with their level,
  *    blocks minted and place in MINTER and the same check the write runs
  *    before Hub opens (proposeKinds.ts → checkSubject); Change goes back.
  * 2. Why (a removal, a ban, a decline): the reason everyone sees; How long
@@ -89,7 +90,8 @@ import {
 } from '../proposeKinds';
 import { isRecentInvite } from '../staleRules';
 import type { PickedAccount } from './AccountList';
-import { AdminPicks, BanPicks, InvitePicks, MemberPicks } from './PickLists';
+import { MemberSearch } from './MemberSearch';
+import { AdminPicks, BanPicks, InvitePicks } from './PickLists';
 import { PickedSummary, ProposeHubStep, ProposedCard, WhatHappensNext } from './ProposeParts';
 import { useProposeContext } from './proposeContext';
 import { PICK_FIRST, PROPOSE_SUBTITLE, SUBMIT_LABEL } from './proposePageWords';
@@ -383,7 +385,8 @@ function ProposeForm({
     case 'kick':
     case 'ban':
     case 'addAdmin':
-      list = <MemberPicks kind={kind} me={me} admins={admins} waiting={waiting} onPick={pick} />;
+      // MINTER has 600+ members: a dropdown while typing, not a list (Simon, 2026-10-18).
+      list = <MemberSearch kind={kind} me={me} admins={admins} waiting={waiting} onPick={pick} />;
       break;
     case 'removeAdmin':
       list = <AdminPicks signers={ctx?.signers ?? []} me={me} waiting={waiting} onPick={pick} />;

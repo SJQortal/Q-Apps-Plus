@@ -308,6 +308,14 @@ const proposePage = (listName) => async (page) => {
   await page.waitForTimeout(400);
 };
 
+/** A + Propose page for MINTER's members: its dropdown open on what was typed. */
+const memberDropdown = (typed, label) => async (page) => {
+  await settle(page);
+  await page.getByRole('combobox', { name: label }).fill(typed, { timeout: 8000 });
+  await page.getByRole('listbox').getByRole('option').first().waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
+};
+
 /**
  * Home with an earlier visit on this device (e2e/world.mjs → lastVisitSnapshots):
  * the snapshot is put in place before the app loads again, so "Since your
@@ -461,12 +469,12 @@ export default {
         await page.waitForTimeout(400);
       },
     },
-    // The members (Remove a member, Ban an account, Make a Minter Admin), then one picked with
-    // its reason; a ban's length.
+    // MINTER's members (Remove a member, Ban an account, Make a Minter Admin): a dropdown while
+    // typing, not a list (Simon, 2026-10-18); then one picked with its reason; a ban's length.
     {
       key: 'propose-remove-member',
       path: '/propose/remove-member?as=admin',
-      after: proposePage('MINTER members'),
+      after: memberDropdown('Admin', 'Member’s name or address'),
     },
     {
       key: 'propose-remove-member-picked',
@@ -478,7 +486,11 @@ export default {
         await page.waitForTimeout(300);
       },
     },
-    { key: 'propose-ban', path: '/propose/ban?as=admin', after: proposePage('MINTER members') },
+    {
+      key: 'propose-ban',
+      path: '/propose/ban?as=admin',
+      after: memberDropdown('Zo', 'Name or Qortal address'),
+    },
     {
       key: 'propose-ban-picked',
       path: `/propose/ban?who=${ADDR.learner}&as=admin`,
@@ -496,7 +508,7 @@ export default {
     {
       key: 'propose-make-admin',
       path: '/propose/make-minter-admin?as=admin',
-      after: proposePage('MINTER members'),
+      after: memberDropdown('Member', 'Member’s name or address'),
     },
     // The Minter Admins, with the one whose removal waits crossed out; yourself points to Step down.
     {

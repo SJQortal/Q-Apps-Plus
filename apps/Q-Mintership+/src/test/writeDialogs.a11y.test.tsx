@@ -156,17 +156,18 @@ describe('The + Propose pages by keyboard', () => {
   }
 
   it('every kind’s page: every control named, nothing for axe', async () => {
-    for (const [kind, listName] of [
-      ['kick', 'MINTER members'],
-      ['decline', 'Requested to join MINTER Group'],
-      ['ban', 'MINTER members'],
-      ['addAdmin', 'MINTER members'],
-      ['removeAdmin', 'Minter Admins'],
-      ['cancelBan', 'Bans in force'],
-      ['cancelInvite', 'Approved invites'],
+    // MINTER's members are picked with a dropdown while typing; the rest from a list.
+    for (const [kind, role, name] of [
+      ['kick', 'combobox', 'Member’s name or address'],
+      ['decline', 'list', 'Requested to join MINTER Group'],
+      ['ban', 'combobox', 'Name or Qortal address'],
+      ['addAdmin', 'combobox', 'Member’s name or address'],
+      ['removeAdmin', 'list', 'Minter Admins'],
+      ['cancelBan', 'list', 'Bans in force'],
+      ['cancelInvite', 'list', 'Approved invites'],
     ] as const) {
       const { container, unmount } = await page(kind);
-      await screen.findByRole('list', { name: listName }, T);
+      await screen.findByRole(role, { name }, T);
       await expectNamedControls(container);
       unmount();
     }

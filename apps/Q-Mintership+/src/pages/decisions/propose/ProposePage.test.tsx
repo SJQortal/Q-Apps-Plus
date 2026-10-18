@@ -94,6 +94,8 @@ const rowOf = async (ul: HTMLElement, name: string) =>
   (await within(ul).findByRole('link', { name: `${name}: open their page` }, T)).closest(
     'li'
   ) as HTMLElement;
+/** The members' dropdown (Remove a member, Make a Minter Admin). */
+const memberBox = () => screen.getByRole('combobox', { name: 'Member’s name or address' });
 const submitButton = (kind: ProposePageKind, name?: string) =>
   screen.getByRole('button', {
     name: name ? SUBMIT_LABEL[kind].named(name) : SUBMIT_LABEL[kind].short,
@@ -157,54 +159,44 @@ describe('The + Propose pages', () => {
 });
 
 describe('Remove a member', () => {
-  it('lists everyone in MINTER but you, A–Z, Minter Admins marked, a waiting removal crossed out', async () => {
+  it('suggests MINTER members as you type: Minter Admins marked, a waiting removal crossed out', async () => {
     const u = user();
-    const { world } = await openPropose('kick');
+    await openPropose('kick');
     expect(screen.getByText('Pick the member, say why.')).toBeVisible();
-    const members = await list('MINTER members');
-    await waitFor(() => expect(rowNames(members)).toHaveLength(20));
-    expect(rowNames(members).slice(0, 2)).toEqual(['Admin A', 'Admin B']);
-    expect(rowNames(members)).not.toContain('Avery Admin');
-    expect(screen.getByText(/^20 of \d+ shown$/)).toBeVisible();
-    const adminA = await rowOf(members, 'Admin A');
-    expect(within(adminA).getByText(/^Minter Admin · in MINTER since /)).toBeVisible();
-    expect(
-      within(adminA).getByRole('button', { name: 'Remove Admin A from MINTER' })
-    ).toHaveTextContent('Remove');
-    // Kai Target's removal already waits: no Remove, a link to it instead.
-    const kick = world.pending.find(
-      (t: { type: string; member?: string }) =>
-        t.type === 'GROUP_KICK' && t.member === ADDR.kickTarget
-    );
-    const kai = await rowOf(members, 'Kai Target');
-    expect(within(kai).queryByRole('button')).toBeNull();
-    expect(
-      within(kai).getByRole('link', {
-        name: 'A removal is waiting for approvals: open the decision about Kai Target',
-      })
-    ).toHaveAttribute('href', `/decisions/${kick.signature}`);
-    // Searched by name.
-    await u.type(
-      screen.getByRole('searchbox', { name: 'Search MINTER members, by name or address' }),
-      'leo'
-    );
-    await waitFor(() => expect(rowNames(members)).toEqual(['Leo Learner']), T);
+    // No list of MINTER's 600+ members: a dropdown while typing (Simon, 2026-10-18).
+    expect(screen.queryByRole('list', { name: 'MINTER members' })).toBeNull();
+    const box = memberBox();
+    await u.type(box, 'admin');
+    const listbox = await screen.findByRole('listbox', {}, T);
+    const names = within(listbox)
+      .getAllByRole('option')
+      .map((o) => o.textContent);
+    expect(names).toHaveLength(8);
+    // Each with its avatar (its initial until the picture loads), name and what they are.
+    expect(names[0]).toMatch(/Admin AMinter Admin · in MINTER since /);
+    // You aren't offered, though your name holds it too.
+    expect(names.some((n) => n?.includes('Avery Admin'))).toBe(false);
+    // Kai Target's removal already waits: crossed out, and not to be picked.
+    await u.clear(box);
+    await u.type(box, 'kai');
+    const kai = await screen.findByRole('option', { name: /Kai Target/ }, T);
+    expect(kai).toHaveAttribute('aria-disabled', 'true');
+    expect(kai).toHaveTextContent('A removal is waiting for approvals');
+    // A member found by name.
+    await u.clear(box);
+    await u.type(box, 'leo');
+    expect(await screen.findByRole('option', { name: /Leo Learner/ }, T)).toBeVisible();
   });
 
   it('picks someone: their card and the check, then the reason, and the button says what is missing', async () => {
     const u = user();
     await openPropose('kick');
-    const members = await list('MINTER members');
-    await u.type(
-      screen.getByRole('searchbox', { name: 'Search MINTER members, by name or address' }),
-      'leo'
-    );
-    await waitFor(() => expect(rowNames(members)).toEqual(['Leo Learner']), T);
-    await u.click(screen.getByRole('button', { name: 'Remove Leo Learner from MINTER' }));
-    // The card takes the list's place, and focus.
+    await u.type(memberBox(), 'leo');
+    await u.click(await screen.findByRole('option', { name: /Leo Learner/ }, T));
+    // The card takes the dropdown's place, and focus.
     expect(await screen.findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
     expect(screen.getByText('Level 2 · 90,500 blocks minted · In MINTER')).toBeVisible();
-    expect(screen.queryByRole('list', { name: 'MINTER members' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Member’s name or address' })).toBeNull();
     await waitFor(() =>
       expect(document.activeElement).toContainElement(screen.getByText('Leo Learner'))
     );
@@ -221,12 +213,9 @@ describe('Remove a member', () => {
       )
     ).toBeVisible();
     expect(screen.queryByRole('dialog')).toBeNull();
-    // Change: back to the list, focus on its search.
+    // Change: back to the dropdown, focus in it.
     await u.click(screen.getByRole('button', { name: 'Change: pick someone else' }));
-    expect(await list('MINTER members')).toBeVisible();
-    expect(
-      screen.getByRole('searchbox', { name: 'Search MINTER members, by name or address' })
-    ).toHaveFocus();
+    await waitFor(() => expect(memberBox()).toHaveFocus(), T);
     expect(at()).toBe(proposePath('kick'));
   });
 
@@ -246,12 +235,8 @@ describe('Remove a member', () => {
       shownInStep2 = step2.textContent ?? '';
       return { type: 'GROUP_APPROVAL', signature: 'OWN' };
     });
-    const members = await list('MINTER members');
-    await u.click(
-      within(await rowOf(members, 'Admin B')).getByRole('button', {
-        name: 'Remove Admin B from MINTER',
-      })
-    );
+    await u.type(memberBox(), 'Admin B');
+    await u.click(await screen.findByRole('option', { name: /Admin B/ }, T));
     expect(await screen.findByText(/This is a Minter Admin/, {}, T)).toBeVisible();
     expect(screen.getByText('Propose removing their admin role first.')).toBeVisible();
 
@@ -392,26 +377,44 @@ describe('Ban an account', () => {
     expect(qortalCallsFor('BAN_FROM_GROUP')).toHaveLength(0);
   });
 
-  it('lists the members, and looks up anyone outside MINTER too', async () => {
+  it('suggests MINTER’s members first, then anyone else with that name; an address is picked at once', async () => {
     const u = user();
-    await openPropose('ban');
-    expect(await list('MINTER members')).toBeVisible();
-    const outside = screen.getByRole('region', { name: 'Someone outside MINTER' });
-    await u.type(within(outside).getByRole('combobox'), `${ADDR.newcomer}{Enter}`);
+    const page = await openPropose('ban');
+    const box = screen.getByRole('combobox', { name: 'Name or Qortal address' });
+    await u.type(box, 'Zo');
+    const listbox = await screen.findByRole('listbox', {}, T);
+    const zoe = await within(listbox).findByRole('option', { name: /Zoë Newcomer/ }, T);
+    expect(zoe).toHaveTextContent('Not in MINTER');
+    await u.click(zoe);
     expect(await screen.findByText(/· Not in MINTER$/, {}, T)).toBeVisible();
-    expect(at()).toBe(proposePath('ban', ADDR.newcomer));
+    expect(at()).toBe(proposePath('ban', ADDR.newcomerName));
+    page.unmount();
+    // A pasted address, member or not.
+    await openPropose('ban');
+    await u.click(screen.getByRole('combobox', { name: 'Name or Qortal address' }));
+    await u.paste(ADDR.newcomer);
+    await waitFor(() => expect(at()).toBe(proposePath('ban', ADDR.newcomer)), T);
   });
 });
 
 describe('Make a Minter Admin', () => {
-  it('lists the members who aren’t Minter Admins', async () => {
+  it('suggests the members who aren’t Minter Admins', async () => {
+    const u = user();
     await openPropose('addAdmin');
-    const members = await list('MINTER members');
-    await waitFor(() => expect(rowNames(members).length).toBeGreaterThan(0));
-    expect(rowNames(members).some((name) => /^Admin [A-Z]$/.test(name))).toBe(false);
-    expect(
-      screen.getByRole('button', { name: `Make admin: ${rowNames(members)[0]}` })
-    ).toHaveTextContent('Make admin');
+    const box = memberBox();
+    await u.type(box, 'Admin');
+    await waitFor(
+      () => expect(box).toHaveAccessibleDescription(/^No MINTER member’s name goes with that\./),
+      T
+    );
+    await u.clear(box);
+    await u.type(box, 'Member');
+    const listbox = await screen.findByRole('listbox', {}, T);
+    const names = within(listbox)
+      .getAllByRole('option')
+      .map((o) => o.textContent ?? '');
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.every((n) => n.includes('Member') && !n.includes('Minter Admin'))).toBe(true);
   });
 });
 

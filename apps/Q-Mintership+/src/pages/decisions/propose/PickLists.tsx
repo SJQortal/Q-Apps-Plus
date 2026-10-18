@@ -6,10 +6,10 @@
  * avatars, and also already crossed out then Minter Admins whose removal is
  * ongoing"):
  *
- * - MINTER's members (Remove a member, Ban an account, Make a Minter Admin;
- *   the shared member list, which carries names and join dates), sortable;
- *   Ban can look up anyone outside MINTER too (LookUpAnyone).
  * - The Minter Admins who can sign (Remove a Minter Admin).
+ *
+ * MINTER's 600+ members aren't listed: Remove a member, Ban an account and
+ * Make a Minter Admin pick them with a dropdown while typing (MemberSearch.tsx).
  * - The bans in force (Lift a ban).
  * - The stored approved invites (Cancel an approved invite): the unused ones
  *   with who invited and when it was approved, then those of people already
@@ -21,11 +21,10 @@
  * pick fills the page's form, and its button opens Hub (the bulk
  * cancellation excepted, which explains itself first, as before).
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { useAtomValue } from 'jotai';
 import { Alert, Box, Button, Link, Typography } from '@mui/material';
-import { useMembers } from '../../../hooks/useData';
 import { useDisplayName } from '../../../hooks/useDisplayName';
 import { useQuery } from '../../../hooks/useQuery';
 import { getBans } from '../../../data/group';
@@ -48,7 +47,6 @@ import {
 } from '../../../utils/format';
 import { pendingWritesAtom } from '../../../writes/optimistic';
 import type { Signer } from '../../../writes/runner';
-import { CandidatePicker } from '../../nominations/CandidatePicker';
 import { BulkDialog } from '../BulkDialog';
 import { signingWindowText } from '../decisionUi';
 import type { ProposalFacts } from '../ProposeSignDialog';
@@ -60,16 +58,7 @@ import {
   unmatchedCancels,
 } from '../staleRules';
 import { AccountList, type AccountRow, type PickedAccount } from './AccountList';
-import {
-  MEMBER_SORTS,
-  bansInForce,
-  invitesInOrder,
-  justProposed,
-  memberCandidates,
-  parseMemberSort,
-  sortMembers,
-  type MemberSort,
-} from './pickRows';
+import { bansInForce, invitesInOrder, justProposed, sortMembers } from './pickRows';
 import type { WaitingKind, WaitingProposals } from './proposeContext';
 
 type Pick = (person: PickedAccount) => void;
@@ -78,119 +67,6 @@ type Pick = (person: PickedAccount) => void;
 function useJustProposed(kind: WaitingKind) {
   const writes = useAtomValue(pendingWritesAtom);
   return useCallback((address: string) => justProposed(writes, kind, address), [writes, kind]);
-}
-
-const MEMBER_WORDS = {
-  kick: {
-    intro: 'Everyone in MINTER but you. Pick who to propose removing.',
-    pick: { label: 'Remove', name: (label: string) => `Remove ${label} from MINTER` },
-    waiting: 'A removal is waiting for approvals',
-  },
-  ban: {
-    intro: 'Everyone in MINTER but you. Someone outside MINTER can be looked up below the list.',
-    pick: { label: 'Ban', name: (label: string) => `Ban ${label}` },
-    waiting: 'A ban is waiting for approvals',
-  },
-  addAdmin: {
-    intro: 'MINTER members who aren’t Minter Admins. Pick who to propose as one.',
-    // The visible words are in the accessible name too (axe: label-content-name-mismatch).
-    pick: { label: 'Make admin', name: (label: string) => `Make admin: ${label}` },
-    waiting: 'Already proposed: waiting for approvals',
-  },
-} as const;
-
-/** MINTER's members, for Remove a member, Ban an account and Make a Minter Admin. */
-export function MemberPicks({
-  kind,
-  me,
-  admins,
-  waiting,
-  onPick,
-}: {
-  kind: 'kick' | 'ban' | 'addAdmin';
-  me: string;
-  /** The Minter Admins: marked here (and left out of Make a Minter Admin). */
-  admins: ReadonlySet<string>;
-  waiting: WaitingProposals;
-  onPick: Pick;
-}) {
-  const members = useMembers();
-  const [sort, setSort] = useState<MemberSort>('name');
-  const proposed = useJustProposed(kind);
-  const waitingFor = waiting.get(kind);
-  const words = MEMBER_WORDS[kind];
-  const list = members.data;
-  const rows = useMemo<AccountRow[] | undefined>(() => {
-    if (!list) return undefined;
-    return sortMembers(memberCandidates(kind, list.members, admins, me), sort).map((m) => ({
-      address: m.member,
-      name: m.primaryName ?? null,
-      details: memberDetails(m, admins.has(m.member)),
-      waiting: waitingFor?.get(m.member) ?? null,
-      proposed: proposed(m.member),
-    }));
-  }, [list, kind, admins, me, sort, waitingFor, proposed]);
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-      <AccountList
-        id={`propose-${kind}-members`}
-        title="MINTER members"
-        intro={words.intro}
-        rows={rows}
-        error={members.isError ? members.error : undefined}
-        onRetry={() => void members.refetch()}
-        searchLabel="Search MINTER members, by name or address"
-        sort={{
-          value: sort,
-          options: MEMBER_SORTS,
-          onChange: (key) => setSort(parseMemberSort(key)),
-        }}
-        empty={{
-          title: 'No one to list',
-          description: 'There is no one else in MINTER right now.',
-        }}
-        pick={words.pick}
-        waitingText={words.waiting}
-        onPick={onPick}
-      />
-      {list?.truncated ? (
-        <Typography variant="body2" color="text.secondary" role="note">
-          The member list was too long to read in full, so someone may be missing here: search by
-          their name or address instead.
-        </Typography>
-      ) : null}
-      {kind === 'ban' ? <LookUpAnyone onPick={onPick} /> : null}
-    </Box>
-  );
-}
-
-function memberDetails(m: GroupMemberRow, admin: boolean): string | null {
-  const since = m.joined ? `in MINTER since ${formatDate(m.joined)}` : null;
-  if (admin) return since ? `Minter Admin · ${since}` : 'Minter Admin';
-  return since ? `In MINTER since ${formatDate(m.joined as number)}` : null;
-}
-
-/** Ban an account: anyone, not only members, found by name (with suggestions) or address. */
-function LookUpAnyone({ onPick }: { onPick: Pick }) {
-  return (
-    <Box
-      component="section"
-      aria-labelledby="propose-ban-anyone-title"
-      sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}
-    >
-      <Typography
-        id="propose-ban-anyone-title"
-        component="h3"
-        sx={{ fontWeight: 700, fontSize: 16 }}
-      >
-        Someone outside MINTER
-      </Typography>
-      <Typography variant="body2" color="text.secondary">
-        A ban can be for any account: type a registered name, or paste a Qortal address.
-      </Typography>
-      <CandidatePicker onPick={(p) => onPick({ address: p.address, name: p.name })} />
-    </Box>
-  );
 }
 
 /** The Minter Admins who can sign, for Remove a Minter Admin; you can only step down yourself. */
