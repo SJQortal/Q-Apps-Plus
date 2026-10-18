@@ -110,6 +110,13 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const phone = usePhoneLayout();
+  // The "Copy of … by …" links: 44 px tall on phones, to be tapped.
+  const creditLinkSx = {
+    font: "inherit",
+    fontWeight: 600,
+    verticalAlign: phone ? "middle" : "baseline",
+    ...(phone ? { minHeight: 44, display: "inline-flex", alignItems: "center", textAlign: "left" as const } : {}),
+  };
   const user = useSelector((state: RootState) => state.auth.user);
   const hashMapFiles = useSelector((state: RootState) => state.file.hashMapFiles);
   const reusedIdFiles = useSelector((state: RootState) => state.file.reusedIdFiles);
@@ -450,7 +457,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
                   underline="hover"
                   color="inherit"
                   onClick={() => collection.copiedFrom && navigate(collectionPath(collection.copiedFrom.name, collection.copiedFrom.identifier))}
-                  sx={{ font: "inherit", verticalAlign: "baseline", fontWeight: 600 }}
+                  sx={creditLinkSx}
                 >
                   “{collection.copiedFrom.title || "a collection"}”
                 </Link>{" "}
@@ -461,7 +468,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
                   underline="hover"
                   color="inherit"
                   onClick={() => collection.copiedFrom && navigate(profilePath(collection.copiedFrom.name))}
-                  sx={{ font: "inherit", verticalAlign: "baseline", fontWeight: 600 }}
+                  sx={creditLinkSx}
                 >
                   {collection.copiedFrom.name}
                 </Link>
