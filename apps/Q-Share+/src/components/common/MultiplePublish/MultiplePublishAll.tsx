@@ -31,6 +31,7 @@ import {
   formatQort,
   publishUnitFee,
   roomTiming,
+  isShareDetails,
   splitPublishBatches,
   waitForRoom,
 } from "../../../utils/publishBatches";
@@ -680,7 +681,7 @@ export const MultiplePublish = ({ publishes, isOpen, replaces, onSubmit, onError
           const filesLeft = publishes.resources.some(
             (r) => r.service === "FILE" && !here.has(r.identifier) && rowsRef.current[r.identifier] !== "done"
           );
-          if (filesLeft) part = part.filter((r) => r.service !== "DOCUMENT");
+          if (filesLeft) part = part.filter((r) => !isShareDetails(r));
           if (part.length === 0) continue;
         }
         setBatch({ index: i, count: parts.length, size: part.length });

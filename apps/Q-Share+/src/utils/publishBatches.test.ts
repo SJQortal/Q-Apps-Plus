@@ -7,6 +7,7 @@ import {
   resetPublishUnitFee,
   roomTiming,
   splitPublishBatches,
+  UNCHECKED_BATCH_MAX,
   unconfirmedCount,
   waitForRoom,
 } from "./publishBatches";
@@ -31,6 +32,17 @@ describe("splitPublishBatches", () => {
     expect(splitPublishBatches([details, ...files(20)]).map((b) => b.length)).toEqual([21]);
     expect(splitPublishBatches([details])).toEqual([[details]]);
     expect(splitPublishBatches(files(40)).map((b) => b.length)).toEqual([20, 20]);
+  });
+
+  it("sends a thumbnail with the details, so it never adds a batch", () => {
+    const thumb = { service: "THUMBNAIL", identifier: "thumb" };
+    const batches = splitPublishBatches([...files(20), thumb, details]);
+    expect(batches.map((b) => b.map((r) => r.identifier).slice(-2))).toEqual([["thumb", "doc"]]);
+    expect(batches[0]).toHaveLength(22);
+    expect(splitPublishBatches([...files(21), thumb, details]).map((b) => b.length)).toEqual([20, 3]);
+    expect(batchCount(20)).toBe(1);
+    // 10 files, a thumbnail and the details go as before 1.0.1: without a room check.
+    expect(splitPublishBatches([...files(10), thumb, details])[0].length).toBeLessThanOrEqual(UNCHECKED_BATCH_MAX);
   });
 
   it("counts batches for the form", () => {

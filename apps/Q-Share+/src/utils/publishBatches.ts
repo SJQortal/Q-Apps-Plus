@@ -10,13 +10,14 @@
 import { getJson } from "./qdnResource";
 
 export const MAX_UNCONFIRMED_PER_ACCOUNT = 25;
-/** Files per batch; the share details ride with the last one, so up to 21 resources. */
+/** Files per batch; the share details and thumbnail ride with the last one, so up to 22 resources. */
 export const FILES_PER_BATCH = 20;
 /**
- * The biggest publish before batches (10 files and the details). Batches up
- * to this size are sent without asking the node first, as they always were.
+ * The biggest publish before batches (10 files and the details, and since
+ * 1.0.1 a thumbnail). Batches up to this size are sent without asking the
+ * node first, as they always were.
  */
-export const UNCHECKED_BATCH_MAX = 11;
+export const UNCHECKED_BATCH_MAX = 12;
 /** Most files one share holds: 15 batches, 301 publishes, 3.01 QORT at today's fee. */
 export const MAX_SHARE_FILES = 300;
 
@@ -27,14 +28,18 @@ export const MAX_SHARE_FILES = 300;
  */
 export const roomTiming = { visibleMs: 10_000, hiddenMs: 30_000, unknownMs: 65_000 };
 
+/** The share's details: its JSON (DOCUMENT) and the thumbnail it names. */
+export const isShareDetails = (r: { service: string }) => r.service === "DOCUMENT" || r.service === "THUMBNAIL";
+
 /**
- * The resources in batches of `filesPerBatch`, in order, with the share
- * details (DOCUMENT) in the last batch: the share appears on QDN only once
- * its files are there.
+ * The resources in batches of `filesPerBatch` files, in order, with the
+ * share details (thumbnail, then DOCUMENT) in the last batch: the share
+ * appears on QDN only once its files are there, and a thumbnail never makes
+ * a batch of its own.
  */
 export function splitPublishBatches<T extends { service: string }>(resources: T[], filesPerBatch = FILES_PER_BATCH): T[][] {
-  const files = resources.filter((r) => r.service !== "DOCUMENT");
-  const details = resources.filter((r) => r.service === "DOCUMENT");
+  const files = resources.filter((r) => !isShareDetails(r));
+  const details = resources.filter(isShareDetails);
   const batches: T[][] = [];
   for (let i = 0; i < files.length; i += filesPerBatch) batches.push(files.slice(i, i + filesPerBatch));
   if (details.length > 0) {

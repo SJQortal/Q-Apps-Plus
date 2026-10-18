@@ -13,7 +13,7 @@ configure({ asyncUtilTimeout: 5_000 });
 
 const DOC_ID = "qshare_file_album_dddddd_metadata";
 
-function share(fileCount: number): MultiplePublishRequest {
+function share(fileCount: number, { thumbnail = false } = {}): MultiplePublishRequest {
   const files: PublishResource[] = Array.from({ length: fileCount }, (_, i) => ({
     action: "PUBLISH_QDN_RESOURCE",
     name: "alice",
@@ -29,6 +29,21 @@ function share(fileCount: number): MultiplePublishRequest {
     action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
     resources: [
       ...files,
+      ...(thumbnail
+        ? [
+            {
+              action: "PUBLISH_QDN_RESOURCE",
+              name: "alice",
+              service: "THUMBNAIL",
+              file: new File(["t"], "thumbnail.webp", { type: "image/webp" }),
+              title: "Album",
+              description: "**cat:2**",
+              identifier: "qshare_thumb_album_th0001",
+              filename: "thumbnail.webp",
+              tag1: "qshare_thumb_",
+            } as PublishResource,
+          ]
+        : []),
       {
         action: "PUBLISH_QDN_RESOURCE",
         name: "alice",
@@ -254,6 +269,25 @@ describe("MultiplePublish in batches", () => {
     renderWithProviders(<MultiplePublish isOpen publishes={share(10)} onSubmit={small} onError={vi.fn()} />);
     await waitFor(() => expect(small).toHaveBeenCalledTimes(1));
     expect(fetchCallsMatching("/transactions/unconfirmed").length).toBe(1);
+  });
+
+  it("sends a thumbnail with the details: 20 files stay one batch, 10 files go without a room check", async () => {
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", true);
+    mockFetch("/transactions/unconfirmed", []);
+    const onSubmit = vi.fn();
+    const { unmount } = renderWithProviders(
+      <MultiplePublish isOpen publishes={share(20, { thumbnail: true })} onSubmit={onSubmit} onError={vi.fn()} />
+    );
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(sentSizes()).toEqual([22]);
+    expect(screen.queryByText(/batches/)).not.toBeInTheDocument();
+    unmount();
+
+    const small = vi.fn();
+    const checks = fetchCallsMatching("/transactions/unconfirmed").length;
+    renderWithProviders(<MultiplePublish isOpen publishes={share(10, { thumbnail: true })} onSubmit={small} onError={vi.fn()} />);
+    await waitFor(() => expect(small).toHaveBeenCalledTimes(1));
+    expect(fetchCallsMatching("/transactions/unconfirmed").length).toBe(checks);
   });
 
   it("offers no Continue while Hub is still at a batch the app stopped waiting for", async () => {
