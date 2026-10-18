@@ -1022,6 +1022,15 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 106. **"All Decisions"** (Simon, 2026-10-18: "in decisions where the top bar is to switch Decisions | Nominations | Ready to Mint, I want decisions to be called "All Decisions""). The first tab now reads All Decisions. To keep all three tabs on a 360 px phone without scrolling, the tabs there are 13 px with a little less padding (desktop is unchanged). Decisions captures are clean.
 
+107. **A tab for each kind of decision** (Simon, 2026-10-18: "in this top bar in Decisions, I would also like there to show the other active ones too, so the: Nominations, Removals, Declines, Bans, New MA's, Remove MA's , Lift Ban, Cancel invite, Clean invites, Ask MA's").
+    - **The tabs.** After All Decisions · Nominations · Ready to mint, a tab for each kind that has something open, with its count: Removals, Declines, Bans, New MAs, Remove MAs, Lift ban, Cancel invite, Clean invites and Ask MAs (the last two for Minter Admins). A kind with nothing open has no tab, unless it is the one on screen.
+    - **What each shows.** Each tab is All Decisions narrowed to that kind, at `?show=<kind>`, so a link opens it. The seven decision kinds show only their cards (Approve several and Too late to approve included). Clean invites shows only the stale-invites section, and Ask MAs only the Minter Admin polls. On an empty kind it says "No bans collecting approvals now".
+    - **Counts.** From reads the page already shares: the queue, the stale invites list, and the polls. Nothing new is read.
+    - **The bar.** It scrolls: arrows on desktop, a finger on phones. Swipes still move between the first three, and switching tabs ends Approve several.
+    - **Labels.** Written "New MAs", "Remove MAs" and "Ask MAs", without the apostrophe.
+
+    Tests 2,381 passed; Decisions captures (30) are clean.
+
 ## Follow-ups
 
 ### Readiness
