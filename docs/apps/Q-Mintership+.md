@@ -1127,6 +1127,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     - Nothing new is read: the same payments, sorted another way (`rules/explorer/circle.ts`: `CircleOrder`, `nodeWeight`, `qortSize`, `badgeText`).
     - **Checks for items 122–123:** new tests on the rules (each order, sizes by QORT, the number on an avatar) and on the page (the toggle, kept on this device, the lists' names, Kit Kicked's number from 6 to 126, the caption, axe, the list starting on Most QORT); the Connections, circle and Explorer access tests, 65, pass. The screenshot check of the three circle screens, the new one ordered by QORT included, 5 sizes × 4 themes (60 captures), is clean. The full suite on the final code: 2,423 pass; 2 failed only under the machine's load (a timeout, and a search typed as "lu" for "lou"), and both pass alone, as every file that failed in the two runs before it did (timeouts, different ones each run). Not checked in a test Hub: Simon tests it himself (2026-10-18).
 
+124. **The ⓘ beside the label** (Simon, 2026-10-18: "I want these i (information) icons to show to the right of QORT Minted text so the QORT can fit next to the amount not under it"). On the Minter Profile (QORT minted, Node online) and the Overview's At a glance (QORT minted, purchased / sold, received / sent), the ⓘ sits just after the label (`components/explorer/FactLabel.tsx`), so the value keeps its line. Node online under the Overview's Blocks minted keeps its ⓘ after the value, in its sentence. The Minter Profile and Overview tests check where the ⓘ is (61 pass); the screenshot check of the Overview and Minter Profile screens (60 captures) is clean.
+
 ## Follow-ups
 
 ### Readiness
