@@ -66,7 +66,7 @@ describe("covers", { timeout: 20_000 }, () => {
   it("shows the collection's cover, and publishes a new one with the collection in one request", async () => {
     const { container } = renderPage();
     expect(await screen.findByRole("heading", { level: 1, name: "Music" })).toBeInTheDocument();
-    expect(container.querySelector(`img[src="/arbitrary/THUMBNAIL/alice/${oldCover.identifier}"]`)).not.toBeNull();
+    expect(container.querySelector(`img[src="/arbitrary/THUMBNAIL/alice/${oldCover.identifier}?async=true"]`)).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const dialog = within(await screen.findByRole("dialog", { name: "Edit collection" }));

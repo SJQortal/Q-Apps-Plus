@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useQdnImage } from "../../hooks/useQdnImage";
 import { Box, type SxProps, type Theme } from "@mui/material";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
@@ -20,9 +20,7 @@ interface CollectionCoverProps {
  * the node can't serve it. Decorative: the title beside it names it.
  */
 export function CollectionCover({ cover, src, kind = "collection", size, sx }: CollectionCoverProps) {
-  const url = src ?? (cover ? coverUrl(cover) : null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const show = url && failed !== url;
+  const image = useQdnImage(src ?? (cover ? coverUrl(cover) : null));
   const Icon = kind === "folder" ? FolderOutlinedIcon : CollectionsBookmarkOutlinedIcon;
   return (
     <Box
@@ -45,13 +43,13 @@ export function CollectionCover({ cover, src, kind = "collection", size, sx }: C
         ...(Array.isArray(sx) ? sx : [sx]),
       ]}
     >
-      {show ? (
+      {image.src ? (
         <img
-          src={url}
+          src={image.src}
           alt=""
           loading="lazy"
           decoding="async"
-          onError={() => setFailed(url)}
+          onError={image.onError}
           style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
         />
       ) : (

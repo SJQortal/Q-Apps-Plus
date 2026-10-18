@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useInView } from "react-intersection-observer";
+import { useQdnImage } from "../../hooks/useQdnImage";
 import { CardPicture, RowIcon } from "../../pages/Home/FileList-styles";
 import { fileKind } from "../../utils/fileKind";
 import { shareThumbnail, type ShareThumbnail } from "../../utils/publishPayload";
@@ -78,7 +79,6 @@ export function ShareCardArt({ share, fallback }: { share: any; fallback: ReactN
   const imageId = image?.identifier ?? null;
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px" });
   const [confirmed, setConfirmed] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
 
   useEffect(() => {
     if (!inView || !image) return;
@@ -94,13 +94,12 @@ export function ShareCardArt({ share, fallback }: { share: any; fallback: ReactN
   }, [inView, imageId]);
 
   const url = thumb ? thumbnailUrl(thumb) : image && confirmed === image.identifier ? fileUrl(image) : null;
+  const { src, onError } = useQdnImage(url);
   return (
     <>
       {fallback}
       <span ref={ref} aria-hidden style={{ position: "absolute", inset: 0 }}>
-        {url && failed !== url && (
-          <CardPicture src={url} alt="" loading="lazy" decoding="async" onError={() => setFailed(url)} />
-        )}
+        {src && <CardPicture src={src} alt="" loading="lazy" decoding="async" onError={onError} />}
       </span>
     </>
   );
@@ -109,8 +108,7 @@ export function ShareCardArt({ share, fallback }: { share: any; fallback: ReactN
 /** A row's square: the share's thumbnail, else the category icon `fallback`. */
 export function ShareRowArt({ share, fallback }: { share: any; fallback: ReactNode }) {
   const thumb = shareThumbnail(share);
-  const url = thumb ? thumbnailUrl(thumb) : null;
-  const [failed, setFailed] = useState<string | null>(null);
-  if (!url || failed === url) return <>{fallback}</>;
-  return <RowIcon src={url} alt="" loading="lazy" decoding="async" onError={() => setFailed(url)} />;
+  const { src, onError } = useQdnImage(thumb ? thumbnailUrl(thumb) : null);
+  if (!src) return <>{fallback}</>;
+  return <RowIcon src={src} alt="" loading="lazy" decoding="async" onError={onError} />;
 }

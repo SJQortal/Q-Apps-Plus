@@ -25,10 +25,10 @@ describe("share art", () => {
   it("shows the share's thumbnail on cards and rows, over the icon", () => {
     const share = { files: [], thumbnail: { service: "THUMBNAIL", name: "dj b", identifier: "qshare_thumb_x_abc123" } };
     const card = render(<ShareCardArt share={share} fallback={icon} />);
-    expect(img(card.container)).toBe("/arbitrary/THUMBNAIL/dj%20b/qshare_thumb_x_abc123");
+    expect(img(card.container)).toBe("/arbitrary/THUMBNAIL/dj%20b/qshare_thumb_x_abc123?async=true");
     expect(card.container.querySelector("[data-testid=icon]")).not.toBeNull();
     const row = render(<ShareRowArt share={share} fallback={icon} />);
-    expect(img(row.container)).toBe("/arbitrary/THUMBNAIL/dj%20b/qshare_thumb_x_abc123");
+    expect(img(row.container)).toBe("/arbitrary/THUMBNAIL/dj%20b/qshare_thumb_x_abc123?async=true");
     expect(fetchCallsMatching("/arbitrary/resource/status").length).toBe(0);
   });
 
@@ -38,7 +38,7 @@ describe("share art", () => {
     );
     const ready = render(<ShareCardArt share={{ files: [photo("img_on_node")] }} fallback={icon} />);
     mockAllIsIntersecting(true);
-    await waitFor(() => expect(img(ready.container)).toBe("/arbitrary/FILE/dj%20b/img_on_node"));
+    await waitFor(() => expect(img(ready.container)).toBe("/arbitrary/FILE/dj%20b/img_on_node?async=true"));
     expect(fetchCallsMatching("/arbitrary/resource/status/FILE/dj%20b/img_on_node")).toHaveLength(1);
 
     const missing = render(<ShareCardArt share={{ files: [photo("img_elsewhere")] }} fallback={icon} />);

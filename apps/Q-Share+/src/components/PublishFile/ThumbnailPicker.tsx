@@ -3,6 +3,7 @@ import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import { useQdnImage } from "../../hooks/useQdnImage";
 import type { ShareThumbnailState } from "./useShareThumbnail";
 
 /**
@@ -14,6 +15,7 @@ export function ThumbnailPicker({ thumb }: { thumb: ShareThumbnailState }) {
   const input = useRef<HTMLInputElement>(null);
   // Something to remove: one on QDN, or a new one that would go out.
   const has = thumb.choice.kind === "existing" || thumb.publishesNew;
+  const preview = useQdnImage(thumb.previewUrl);
   return (
     <Box sx={{ display: "flex", gap: 2, alignItems: "center" }} aria-label="Thumbnail" role="group">
       <Box
@@ -31,8 +33,13 @@ export function ThumbnailPicker({ thumb }: { thumb: ShareThumbnailState }) {
           justifyContent: "center",
         }}
       >
-        {thumb.previewUrl ? (
-          <img src={thumb.previewUrl} alt="" style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
+        {preview.src ? (
+          <img
+            src={preview.src}
+            alt=""
+            onError={preview.onError}
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
+          />
         ) : thumb.busy || (thumb.choice.kind === "auto" && /^Making/.test(thumb.label)) ? (
           <CircularProgress size={20} />
         ) : (
