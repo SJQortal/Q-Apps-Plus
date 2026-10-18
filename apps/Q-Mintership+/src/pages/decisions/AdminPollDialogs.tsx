@@ -12,7 +12,7 @@ import type { AdminPollView } from '../../rules/adminPolls';
 import { formatDateTime, formatRelative, plural } from '../../utils/format';
 import type { PollAuthor, PollWrite } from '../../writes/adminPolls';
 import type { WriteStage } from '../../writes/runner';
-import { ADVISORY, CHANGE_WARN_MS, VOTE_LABEL, encryptedCheck, encryptedTo } from './adminPollUi';
+import { ADVISORY, CHANGE_WARN_MS, encryptedCheck, encryptedTo, voteLabel } from './adminPollUi';
 import { MarkedName } from '../../components/common/MarkedName';
 
 type Publish = (onStage: (stage: WriteStage) => void) => Promise<PollWrite>;
@@ -62,7 +62,7 @@ export function VotePollDialog({
   publish: Publish;
   returnFocus?: ReturnFocus;
 }) {
-  const label = VOTE_LABEL[vote];
+  const label = voteLabel(view.poll, vote);
   const now = Date.now();
   return (
     <HubStepDialog

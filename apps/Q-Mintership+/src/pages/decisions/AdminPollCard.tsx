@@ -1,7 +1,8 @@
 /**
  * One Minter Admin poll: the question and its details, who asked (and who
  * shared it, when the viewer reads a share's copy), when it ends, who voted
- * Yes, No and Neutral in three columns (as a decision's answers), the
+ * each of its answers in columns (as a decision's answers: Yes, No and
+ * Neutral unless the asker gave their own, each green, red or neutral), the
  * viewer's own vote with the
  * buttons to vote or change it (each one Hub step), "Share with N Minter
  * Admins added since", Copy link and the encrypted comments. Advisory only:
@@ -24,7 +25,12 @@ import { ListSkeleton } from '../../components/common/states';
 import { ExpandChevron } from '../../components/common/ExpandChevron';
 import { SmoothReveal } from '../../components/common/SmoothReveal';
 import { DoneChip } from '../../components/decision/DecisionParts';
-import { POLL_VOTES, type PollVote } from '../../data/adminPollRecords';
+import {
+  pollAnswers,
+  type AnswerTone,
+  type PollAnswer,
+  type PollVote,
+} from '../../data/adminPollRecords';
 import { adminPollPath } from '../../routes/paths';
 import type { PendingShare, PendingVote } from '../../state/adminPolls';
 import { usePendingPollWrites } from '../../state/adminPolls';
@@ -35,7 +41,6 @@ import {
   ADVISORY,
   CLOSING_TEXT,
   MY_LATE_TEXT,
-  VOTE_LABEL,
   adminPollCardId,
   endBlockText,
   endText,
@@ -197,6 +202,7 @@ export function AdminPollCard({
         ) : view.open && !view.publishing ? (
           <VoteButtons
             question={poll.question}
+            answers={pollAnswers(poll)}
             current={mine.vote}
             sending={mine.sending}
             onVote={(vote) => onVote(view, vote)}
@@ -250,27 +256,31 @@ export function AdminPollCard({
   );
 }
 
-const VOTE_TONE: Record<PollVote, ColumnTone> = { yes: 'success', no: 'error', neutral: 'neutral' };
-const VOTE_ICON: Record<PollVote, ReactNode> = {
-  yes: <CheckCircleOutlineOutlinedIcon aria-hidden />,
-  no: <CancelOutlinedIcon aria-hidden />,
+const TONE_COLUMN: Record<AnswerTone, ColumnTone> = {
+  green: 'success',
+  red: 'error',
+  neutral: 'neutral',
+};
+const TONE_ICON: Record<AnswerTone, ReactNode> = {
+  green: <CheckCircleOutlineOutlinedIcon aria-hidden />,
+  red: <CancelOutlinedIcon aria-hidden />,
   neutral: <RemoveCircleOutlineOutlinedIcon aria-hidden />,
 };
 
-/** Yes, No and Neutral side by side, each with its count and who voted it (as on decisions). */
+/** Its answers side by side, each with its count and who voted it (as on decisions). */
 function VoteColumns({ view }: { view: ShownPoll }) {
   return (
     <PeopleColumns
-      columns={POLL_VOTES.map((v) => ({
-        key: v,
-        title: VOTE_LABEL[v],
-        listLabel: (n: number) => `Voted ${VOTE_LABEL[v]}: ${plural(n, 'Minter Admin')}`,
-        icon: VOTE_ICON[v],
-        tone: VOTE_TONE[v],
+      columns={pollAnswers(view.poll).map((a) => ({
+        key: a.id,
+        title: a.label,
+        listLabel: (n: number) => `Voted ${a.label}: ${plural(n, 'Minter Admin')}`,
+        icon: TONE_ICON[a.tone],
+        tone: TONE_COLUMN[a.tone],
         people: view.votes
-          .filter((x) => x.vote === v)
+          .filter((x) => x.vote === a.id)
           .map((x) => ({ address: x.address, name: x.name })),
-        count: view.counts[v],
+        count: view.counts[a.id] ?? 0,
         emptyText: view.open ? 'No one yet' : 'No one',
       }))}
     />
@@ -279,11 +289,13 @@ function VoteColumns({ view }: { view: ShownPoll }) {
 
 function VoteButtons({
   question,
+  answers,
   current,
   sending,
   onVote,
 }: {
   question: string;
+  answers: readonly PollAnswer[];
   current: PollVote | null;
   sending: boolean;
   onVote: (vote: PollVote) => void;
@@ -294,7 +306,7 @@ function VoteButtons({
         Voting…
       </Button>
     );
-  const options = POLL_VOTES.filter((v) => v !== current);
+  const options = answers.filter((a) => a.id !== current);
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, ml: 'auto' }}>
       {current ? (
@@ -302,15 +314,15 @@ function VoteButtons({
           Change your vote:
         </Typography>
       ) : null}
-      {options.map((v) => (
+      {options.map((a) => (
         <Button
-          key={v}
+          key={a.id}
           variant="outlined"
-          onClick={() => onVote(v)}
-          aria-label={`${current ? 'Change your vote to' : 'Vote'} ${VOTE_LABEL[v]}: ${question}`}
+          onClick={() => onVote(a.id)}
+          aria-label={`${current ? 'Change your vote to' : 'Vote'} ${a.label}: ${question}`}
           sx={{ minHeight: 44, minWidth: 88 }}
         >
-          {VOTE_LABEL[v]}
+          {a.label}
         </Button>
       ))}
     </Box>

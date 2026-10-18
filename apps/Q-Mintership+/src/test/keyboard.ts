@@ -33,7 +33,8 @@ export async function expectFocusTrapped(
   reach: string[] = []
 ): Promise<void> {
   const reached = new Set<string>();
-  for (let i = 0; i < 8; i++) {
+  // Enough Tabs to go round the longer forms too (a poll's answers).
+  for (let i = 0; i < 24; i++) {
     await u.tab();
     const active = document.activeElement as HTMLElement;
     expect(dialog).toContainElement(active);

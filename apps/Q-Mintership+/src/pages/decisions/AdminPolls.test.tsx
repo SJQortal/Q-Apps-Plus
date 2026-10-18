@@ -181,6 +181,62 @@ describe('Decisions → Minter Admin polls', () => {
     ).toBeVisible();
   });
 
+  it('a poll with its own answers: its columns, its colours, and a vote for an added answer', async () => {
+    const u = user();
+    const id = 'answers7';
+    const question = 'When should we review the stale invites next?';
+    await openDecisions(
+      'admin',
+      withAdminPolls('admin', (world) => {
+        const signers = world.admins.filter((a: string) => a !== NULL_OWNER);
+        const created = Date.now() - 86_400_000;
+        const endsAt = created + 7 * 86_400_000;
+        world.adminPollRecords.push({
+          name: 'Admin B',
+          identifier: `qmp-adminpoll-${id}`,
+          created: created + 20_000,
+          readers: signers,
+          body: {
+            v: 1,
+            id,
+            question,
+            durationDays: 7,
+            createdAt: created,
+            endsAt,
+            endHeight: 2_770_000,
+            readers: signers,
+            answers: [
+              { id: 'yes', label: 'This week', tone: 'green' },
+              { id: 'no', label: 'Not at all', tone: 'red' },
+              { id: 'opt4', label: 'Next month', tone: 'neutral' },
+            ],
+          },
+        });
+        world.adminPollRecords.push({
+          name: 'Admin C',
+          identifier: `qmp-adminvote-${id}`,
+          created: created + 3_600_000,
+          readers: signers,
+          body: { v: 1, pollId: id, vote: 'opt4' },
+        });
+      })
+    );
+    const card = await pollCard(question);
+    // Its own answers, in its order, with their counts: no Neutral.
+    expect(
+      within(card)
+        .getAllByRole('heading', { level: 4 })
+        .map((h) => (h.textContent ?? '').replace(/\s+/g, ' ').trim())
+    ).toEqual(['This week0', 'Not at all0', 'Next month1']);
+    expect(voters(card, 'Next month')).toEqual(['Admin C']);
+    sent();
+    await u.click(within(card).getByRole('button', { name: `Vote Next month: ${question}` }));
+    const dialog = await screen.findByRole('dialog', { name: 'Vote Next month' }, T);
+    await u.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
+    await waitFor(() => expect(publishes()).toHaveLength(1), T);
+    expect(fromData64(String(publishes()[0].data64))).toEqual({ v: 1, pollId: id, vote: 'opt4' });
+  });
+
   it('reads: four searches of 100 for the whole section, bodies decrypted in Hub', async () => {
     await openDecisions();
     await pollCard(OPEN_Q);

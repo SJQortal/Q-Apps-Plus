@@ -41,8 +41,15 @@ import {
   type PollCommentMode,
 } from './AdminPollDialogs';
 import type { ShownPoll } from './adminPollUi';
+import { pollAnswers, type AnswerTone } from '../../data/adminPollRecords';
 import type { AnswerBadges } from '../../components/comments/answerBadges';
 
+/** A poll answer's badge colour: green, red or grey. */
+const BADGE_OF_TONE: Record<AnswerTone, 'yes' | 'no' | 'neutral'> = {
+  green: 'yes',
+  red: 'no',
+  neutral: 'neutral',
+};
 const REFRESH_MS = 60_000;
 
 /** Comments here the viewer can't read, which no share carries: why the count above is higher. */
@@ -237,7 +244,17 @@ export default function AdminPollComments({
     setInline({ mode: 'reply', comment: c, thread, text: '', error: null });
   // Each Minter Admin's vote, for the badge next to their comments.
   const answers: AnswerBadges = new Map(
-    view.votes.map((v) => [v.address, { kind: v.vote }] as const)
+    view.votes.flatMap((v) => {
+      const answer = pollAnswers(view.poll).find((a) => a.id === v.vote);
+      return answer
+        ? [
+            [
+              v.address,
+              { kind: BADGE_OF_TONE[answer.tone], label: `Voted ${answer.label}` },
+            ] as const,
+          ]
+        : [];
+    })
   );
   const handlers = {
     answers,

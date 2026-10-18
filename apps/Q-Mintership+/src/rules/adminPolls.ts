@@ -19,7 +19,8 @@
  *   version (the same time) made by the time the share was published. A
  *   copy with no row is dropped, unless a search stopped early: then it is
  *   kept, marked as only in a share.
- * - **Votes:** Yes, No or Neutral. Per voter name, the latest version counts
+ * - **Votes:** one of the poll's answers (Yes, No and Neutral unless it
+ *   gives its own; a vote for an answer it doesn't have is no vote). Per voter name, the latest version counts
  *   only if it was published by the poll's end (the QDN row's updated time,
  *   else created, so "too late" holds whether or not the viewer can read
  *   it); per admin, the latest that counts. A latest version on time that
@@ -31,7 +32,8 @@
  */
 import {
   DAY_MS,
-  POLL_VOTES,
+  pollAnswers,
+  type PollAnswer,
   parsePollAt,
   parsePollComment,
   parsePollRecordIdentifier,
@@ -477,10 +479,13 @@ export function countVotes(
   return { counted: counted.sort(order), late: late.sort(order), unread: unread.sort(order) };
 }
 
-/** Yes / No / Neutral counts. */
-export function tallyVotes(votes: readonly Pick<CountedVote, 'vote'>[]): Record<PollVote, number> {
-  const counts = Object.fromEntries(POLL_VOTES.map((v) => [v, 0])) as Record<PollVote, number>;
-  for (const v of votes) counts[v.vote] += 1;
+/** Each answer's count (Yes, No and Neutral unless `answers` says otherwise). */
+export function tallyVotes(
+  votes: readonly Pick<CountedVote, 'vote'>[],
+  answers: readonly Pick<PollAnswer, 'id'>[] = pollAnswers({})
+): Record<PollVote, number> {
+  const counts: Record<PollVote, number> = Object.fromEntries(answers.map((a) => [a.id, 0]));
+  for (const v of votes) if (v.vote in counts) counts[v.vote] += 1;
   return counts;
 }
 
@@ -564,7 +569,10 @@ export function assemblePoll(src: PollSources, ctx: PollContext): AdminPollView 
   const resolved = resolvePoll(src, ctx, shares);
   if (!resolved) return null;
   const { poll } = resolved;
-  const { counted, late, unread } = countVotes(voteEntries(src, ctx, shares), poll.endsAt);
+  // A vote for an answer this poll doesn't have is no vote.
+  const ids = new Set(pollAnswers(poll).map((a) => a.id));
+  const entries = voteEntries(src, ctx, shares).filter((e) => e.vote === null || ids.has(e.vote));
+  const { counted, late, unread } = countVotes(entries, poll.endsAt);
   const myVote = counted.find((v) => v.address === ctx.viewer) ?? null;
   const readers = pollReaders(poll, shares);
   const commentRows = pollCommentRows(src.pollId, src.comments, ctx);
@@ -584,7 +592,7 @@ export function assemblePoll(src: PollSources, ctx: PollContext): AdminPollView 
     votes: counted,
     late,
     unread,
-    counts: tallyVotes(counted),
+    counts: tallyVotes(counted, pollAnswers(poll)),
     myVote,
     myLate: myVote ? null : (late.filter((v) => v.address === ctx.viewer).pop() ?? null),
     readers,

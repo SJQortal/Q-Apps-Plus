@@ -12,9 +12,18 @@
  * owner left out) plus the writer's own:
  *
  *   Poll     qmp-adminpoll-<id>
- *            { v: 1, id, question, details?, durationDays, createdAt, endsAt, endHeight, readers }
+ *            { v: 1, id, question, details?, durationDays, createdAt, endsAt, endHeight, readers,
+ *              answers? }
  *   Vote     qmp-adminvote-<pollId>, one per admin (republished to change it)
- *            { v: 1, pollId, vote: 'yes' | 'no' | 'neutral' }
+ *            { v: 1, pollId, vote: <answer id> }
+ *
+ * `answers` (added 2026-10-18, Simon: "the default is Yes, No, Netural. and
+ * then MAs can rename it, change color … and add more answers"): 2 to 6
+ * `{ id, label, tone }`, `tone` green, red or neutral. A poll without it has
+ * Yes, No and Neutral (ids `yes`, `no`, `neutral`, as every earlier vote);
+ * it is written only when the answers differ from those. The three keep
+ * their ids when renamed; added ones are `opt4` to `opt6`. A vote is an
+ * answer's id; one for an answer its poll doesn't have doesn't count.
  *   Comment  qmp-admincomment-<pollId>-<cid>
  *            { v: 1, pollId, text, replyTo?, edited?, deleted? }
  *   Share    qmp-adminshare-<pollId>, one per sharing admin
@@ -58,8 +67,52 @@ export const NAME_MAX = 40;
 export const IDENTIFIER_MAX = 64;
 export const DAY_MS = 86_400_000;
 
-export type PollVote = 'yes' | 'no' | 'neutral';
+/** A vote: the id of one of its poll's answers. */
+export type PollVote = string;
 export const POLL_VOTES: readonly PollVote[] = ['yes', 'no', 'neutral'];
+
+/** How an answer is coloured: green, red or neutral (grey). */
+export type AnswerTone = 'green' | 'red' | 'neutral';
+export const ANSWER_TONES: readonly AnswerTone[] = ['green', 'red', 'neutral'];
+
+export interface PollAnswer {
+  id: string;
+  label: string;
+  tone: AnswerTone;
+}
+
+export const ANSWERS_MIN = 2;
+export const ANSWERS_MAX = 6;
+export const ANSWER_LABEL_MAX = 40;
+/** The ids answers can have: the three defaults', then added ones. */
+export const ANSWER_IDS: readonly string[] = ['yes', 'no', 'neutral', 'opt4', 'opt5', 'opt6'];
+/** Added answers' ids, in the order they are given out. */
+export const ADDED_ANSWER_IDS: readonly string[] = ['opt4', 'opt5', 'opt6'];
+
+/** Yes, No and Neutral: every poll's answers unless it says otherwise. */
+export const DEFAULT_ANSWERS: readonly PollAnswer[] = [
+  { id: 'yes', label: 'Yes', tone: 'green' },
+  { id: 'no', label: 'No', tone: 'red' },
+  { id: 'neutral', label: 'Neutral', tone: 'neutral' },
+];
+
+/** A poll's answers: its own, or Yes, No and Neutral. */
+export function pollAnswers(poll: Pick<PollRecord, 'answers'>): readonly PollAnswer[] {
+  return poll.answers ?? DEFAULT_ANSWERS;
+}
+
+/** The answers are Yes, No and Neutral as they come (so a poll needn't carry them). */
+export function isDefaultAnswers(answers: readonly PollAnswer[]): boolean {
+  return (
+    answers.length === DEFAULT_ANSWERS.length &&
+    answers.every(
+      (a, i) =>
+        a.id === DEFAULT_ANSWERS[i].id &&
+        a.label === DEFAULT_ANSWERS[i].label &&
+        a.tone === DEFAULT_ANSWERS[i].tone
+    )
+  );
+}
 
 export interface PollRecord {
   v: 1;
@@ -75,6 +128,8 @@ export interface PollRecord {
   endHeight: number;
   /** The addresses it was encrypted to. */
   readers: string[];
+  /** Its answers, when not Yes, No and Neutral (pollAnswers). */
+  answers?: PollAnswer[];
 }
 
 export interface VoteRecord {
@@ -238,6 +293,32 @@ export interface PollInput {
   question: string;
   details?: string | null;
   durationDays: number;
+  /** Its answers (Yes, No and Neutral when left out). */
+  answers?: readonly PollAnswer[] | null;
+}
+
+/** An answer's words as they are shown and published: one line, plain, single spaces. */
+export function normaliseAnswerLabel(value: string): string {
+  return normaliseQuestion(value);
+}
+
+/** Problems with a poll's answers, in plain words (empty when they are fine). */
+export function answersProblems(answers: readonly PollAnswer[]): string[] {
+  const problems: string[] = [];
+  if (answers.length < ANSWERS_MIN) problems.push(`Give at least ${ANSWERS_MIN} answers.`);
+  if (answers.length > ANSWERS_MAX) problems.push(`Give at most ${ANSWERS_MAX} answers.`);
+  const labels = answers.map((a) => normaliseAnswerLabel(a.label));
+  if (labels.some((l) => !l)) problems.push('Give every answer some words.');
+  if (labels.some((l) => l.length > ANSWER_LABEL_MAX))
+    problems.push(`Keep each answer under ${ANSWER_LABEL_MAX} characters.`);
+  const lower = labels.filter(Boolean).map((l) => l.toLowerCase());
+  if (new Set(lower).size !== lower.length) problems.push('Give each answer different words.');
+  const ids = answers.map((a) => a.id);
+  if (new Set(ids).size !== ids.length || ids.some((id) => !ANSWER_IDS.includes(id)))
+    problems.push('These answers can’t be told apart. Start again.');
+  if (answers.some((a) => !ANSWER_TONES.includes(a.tone)))
+    problems.push('Pick green, red or neutral for each answer.');
+  return problems;
 }
 
 export function isDuration(value: unknown): value is number {
@@ -261,6 +342,7 @@ export function pollInputProblems(input: PollInput): string[] {
     problems.push(`Keep the details under ${DETAILS_MAX.toLocaleString('en-US')} characters.`);
   if (!isDuration(input.durationDays))
     problems.push(`Pick a duration of ${DURATION_MIN_DAYS} to ${DURATION_MAX_DAYS} days.`);
+  if (input.answers) problems.push(...answersProblems(input.answers));
   return problems;
 }
 
@@ -340,6 +422,12 @@ export function parsePoll(body: unknown, pollId?: string): PollRecord | null {
   if (body.endsAt - body.createdAt > (body.durationDays + 1) * DAY_MS) return null;
   const readers = parseReaders(body.readers);
   if (!readers) return null;
+  let answers: PollAnswer[] | undefined;
+  if (body.answers !== undefined) {
+    const parsed = parseAnswers(body.answers);
+    if (!parsed) return null;
+    answers = isDefaultAnswers(parsed) ? undefined : parsed;
+  }
   const record: PollRecord = {
     v: 1,
     id: body.id,
@@ -351,7 +439,24 @@ export function parsePoll(body: unknown, pollId?: string): PollRecord | null {
     readers,
   };
   if (details) record.details = details;
+  if (answers) record.answers = answers;
   return record;
+}
+
+/** A poll's answers as read: 2–6, valid and different. Null otherwise. */
+export function parseAnswers(value: unknown): PollAnswer[] | null {
+  if (!Array.isArray(value)) return null;
+  const answers: PollAnswer[] = [];
+  for (const raw of value) {
+    if (!isObject(raw) || typeof raw.id !== 'string' || typeof raw.label !== 'string') return null;
+    if (typeof raw.tone !== 'string' || !ANSWER_TONES.includes(raw.tone as AnswerTone)) return null;
+    answers.push({
+      id: raw.id,
+      label: normaliseAnswerLabel(raw.label),
+      tone: raw.tone as AnswerTone,
+    });
+  }
+  return answersProblems(answers).length ? null : answers;
 }
 
 /** Validate a poll body against the identifier it was read under. */
@@ -360,8 +465,9 @@ export function parsePollAt(body: unknown, identifier: string): PollRecord | nul
   return pollId ? parsePoll(body, pollId) : null;
 }
 
+/** A vote's shape: one of the ids answers can have (whether its poll has it is the poll's to say). */
 export function isPollVote(value: unknown): value is PollVote {
-  return value === 'yes' || value === 'no' || value === 'neutral';
+  return typeof value === 'string' && ANSWER_IDS.includes(value);
 }
 
 /** Validate a vote body against its identifier. */
@@ -502,6 +608,13 @@ export function buildPoll(input: PollBuildInput): PollRecord {
   };
   const details = normaliseDetails(input.details ?? '');
   if (details) record.details = details;
+  // Written only when they differ from Yes, No and Neutral.
+  const answers = (input.answers ?? DEFAULT_ANSWERS).map((a) => ({
+    id: a.id,
+    label: normaliseAnswerLabel(a.label),
+    tone: a.tone,
+  }));
+  if (!isDefaultAnswers(answers)) record.answers = answers;
   // The same checks a reader makes, so nothing goes out that readers would drop.
   if (!parsePoll(record, input.id)) throw new Error('This poll isn’t complete. Try again.');
   return record;
@@ -509,7 +622,7 @@ export function buildPoll(input: PollBuildInput): PollRecord {
 
 export function buildVote(pollId: string, vote: PollVote): VoteRecord {
   requirePollId(pollId);
-  if (!isPollVote(vote)) throw new Error('A vote is Yes, No or Neutral.');
+  if (!isPollVote(vote)) throw new Error('A vote is one of the poll’s answers.');
   return { v: 1, pollId, vote };
 }
 

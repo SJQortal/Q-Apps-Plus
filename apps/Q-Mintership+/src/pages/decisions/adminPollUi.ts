@@ -3,7 +3,13 @@
  * vote reads like while it is on its way, when a poll ends, and the polls
  * this device just published, listed before QDN has them.
  */
-import { DAY_MS, type PollRecord, type PollVote } from '../../data/adminPollRecords';
+import {
+  DAY_MS,
+  pollAnswers,
+  type PollAnswer,
+  type PollRecord,
+  type PollVote,
+} from '../../data/adminPollRecords';
 import {
   VOTE_CUTOFF_MS,
   isPollOpen,
@@ -14,7 +20,10 @@ import {
 import type { PendingPoll, PendingShare, PendingVote } from '../../state/adminPolls';
 import { formatCount, formatDateTime, formatRelative, plural } from '../../utils/format';
 
-export const VOTE_LABEL: Record<PollVote, string> = { yes: 'Yes', no: 'No', neutral: 'Neutral' };
+/** An answer's words on a poll ("Yes", or its own: "Approve"); the id when the poll hasn't it. */
+export function voteLabel(poll: Pick<PollRecord, 'answers'>, vote: PollVote): string {
+  return pollAnswers(poll).find((a) => a.id === vote)?.label ?? vote;
+}
 
 /** Said on every poll and in every step that publishes one. */
 export const ADVISORY = 'Advisory: nothing changes on chain from the result.';
@@ -55,11 +64,12 @@ export function endBlockText(poll: Pick<PollRecord, 'endHeight'>): string {
   return `about block ${formatCount(poll.endHeight)}`;
 }
 
-/** "Yes 3 · No 2 · Neutral 1". */
-export function countsText(counts: Record<PollVote, number>): string {
-  return (['yes', 'no', 'neutral'] as const)
-    .map((v) => `${VOTE_LABEL[v]} ${formatCount(counts[v])}`)
-    .join(' · ');
+/** "Yes 3 · No 2 · Neutral 1", in the poll's own answers' words. */
+export function countsText(
+  counts: Record<PollVote, number>,
+  answers: readonly PollAnswer[] = pollAnswers({})
+): string {
+  return answers.map((a) => `${a.label} ${formatCount(counts[a.id] ?? 0)}`).join(' · ');
 }
 
 /** "14 of 19 Minter Admins haven't voted", or null when everyone has. */
@@ -149,15 +159,16 @@ export interface MyVoteView {
 
 /** The viewer's own vote as the card shows it. */
 export function myVoteView(
-  view: Pick<AdminPollView, 'myVote' | 'myLate' | 'open'>,
+  view: Pick<AdminPollView, 'myVote' | 'myLate' | 'open' | 'poll'>,
   pending: PendingVote | null | undefined
 ): MyVoteView {
   const counted = view.myVote;
+  const label = (vote: PollVote) => voteLabel(view.poll, vote);
   if (pending && !voteSettled(view, pending)) {
     if (pending.status === 'sending')
       return {
         vote: counted?.vote ?? null,
-        label: counted ? `You voted ${VOTE_LABEL[counted.vote]} ✓` : null,
+        label: counted ? `You voted ${label(counted.vote)} ✓` : null,
         settled: true,
         sending: true,
         failed: false,
@@ -165,14 +176,14 @@ export function myVoteView(
     if (pending.status === 'confirming')
       return {
         vote: pending.vote,
-        label: `You voted ${VOTE_LABEL[pending.vote]} ✓ (confirming…)`,
+        label: `You voted ${label(pending.vote)} ✓ (confirming…)`,
         settled: false,
         sending: false,
         failed: false,
       };
     return {
       vote: counted?.vote ?? null,
-      label: counted ? `You voted ${VOTE_LABEL[counted.vote]} ✓` : null,
+      label: counted ? `You voted ${label(counted.vote)} ✓` : null,
       settled: true,
       sending: false,
       failed: true,
@@ -181,9 +192,7 @@ export function myVoteView(
   if (!counted) return { vote: null, label: null, settled: true, sending: false, failed: false };
   return {
     vote: counted.vote,
-    label: view.open
-      ? `You voted ${VOTE_LABEL[counted.vote]} ✓`
-      : `You voted ${VOTE_LABEL[counted.vote]}`,
+    label: view.open ? `You voted ${label(counted.vote)} ✓` : `You voted ${label(counted.vote)}`,
     settled: true,
     sending: false,
     failed: false,
@@ -226,7 +235,7 @@ export function withPublishing(
       votes: [],
       late: [],
       unread: [],
-      counts: tallyVotes([]),
+      counts: tallyVotes([], pollAnswers(p.poll)),
       myVote: null,
       myLate: null,
       readers: p.poll.readers,

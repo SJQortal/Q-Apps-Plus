@@ -43,7 +43,7 @@ describe('Propose → Ask the Minter Admins', () => {
     await u.click(screen.getByRole('button', { name: 'Propose' }));
     const item = await screen.findByRole('menuitem', { name: /Ask the Minter Admins/ });
     expect(item).toHaveTextContent(
-      'An advisory poll: Yes, No or Neutral, encrypted to the Minter Admins.'
+      'An advisory poll: Yes, No and Neutral, or answers of your own, encrypted to the Minter Admins.'
     );
   });
 
@@ -107,8 +107,69 @@ describe('Propose → Ask the Minter Admins', () => {
       durationDays: 3,
       endHeight: 2_761_056,
     });
+    // Yes, No and Neutral as they come: no answers written.
+    expect(fromData64(String(call.data64))).not.toHaveProperty('answers');
     await u.click(within(hub).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Propose' })).toHaveFocus(), T);
+  });
+
+  it('answers of its own: renamed, coloured, one added, one removed', async () => {
+    const u = user();
+    await openDecisions();
+    mockQortalRequest('PUBLISH_QDN_RESOURCE', (request: Record<string, unknown>) => ({
+      type: 'ARBITRARY',
+      signature: 'S1',
+      identifier: request.identifier,
+    }));
+    const form = await openAsk(u);
+    await u.type(
+      within(form).getByRole('textbox', { name: 'Question' }),
+      'When should we review the stale invites next?'
+    );
+    const answers = within(form).getByRole('list', { name: 'Answers' });
+    expect(
+      within(answers)
+        .getAllByRole('textbox')
+        .map((box) => (box as HTMLInputElement).value)
+    ).toEqual(['Yes', 'No', 'Neutral']);
+    const first = within(form).getByRole('textbox', { name: 'Answer 1' });
+    await u.clear(first);
+    await u.type(first, 'This week');
+    await u.selectOptions(within(form).getByRole('combobox', { name: 'Answer 3’s colour' }), 'red');
+    await u.click(within(form).getByRole('button', { name: 'Add an answer' }));
+    await u.type(within(form).getByRole('textbox', { name: 'Answer 4' }), 'Next month');
+    await u.selectOptions(
+      within(form).getByRole('combobox', { name: 'Answer 4’s colour' }),
+      'green'
+    );
+    await u.click(within(form).getByRole('button', { name: 'Remove answer 2, No' }));
+    // Two the same: Review says so.
+    const third = within(form).getByRole('textbox', { name: 'Answer 3' });
+    await u.clear(third);
+    await u.type(third, 'this WEEK');
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    expect(within(form).getByRole('alert')).toHaveTextContent('Give each answer different words.');
+    await u.clear(third);
+    await u.type(third, 'Next month');
+    await u.clear(within(form).getByRole('textbox', { name: 'Answer 2' }));
+    await u.type(within(form).getByRole('textbox', { name: 'Answer 2' }), 'Not at all');
+    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    const hub = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
+    expect(
+      within(within(hub).getByRole('list', { name: 'Its answers' }))
+        .getAllByRole('listitem')
+        .map((li) => li.textContent)
+    ).toEqual(['This week', 'Not at all', 'Next month']);
+    await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
+    expect(await within(hub).findByText('Poll published', {}, T)).toBeVisible();
+    expect(fromData64(String(publishes()[0].data64))).toMatchObject({
+      question: 'When should we review the stale invites next?',
+      answers: [
+        { id: 'yes', label: 'This week', tone: 'green' },
+        { id: 'neutral', label: 'Not at all', tone: 'red' },
+        { id: 'opt4', label: 'Next month', tone: 'green' },
+      ],
+    });
   });
 
   it('Back to the form keeps what was written; a decline sends nothing', async () => {

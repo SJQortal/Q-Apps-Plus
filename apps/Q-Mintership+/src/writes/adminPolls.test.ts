@@ -264,7 +264,12 @@ describe('voteAdminPoll', () => {
     });
     expect((await voteAdminPoll(me, ADMIN_POLL_IDS.open, 'maybe' as never)).outcome).toEqual({
       status: 'blocked',
-      reason: 'A vote is Yes, No or Neutral.',
+      reason: 'A vote is one of the poll’s answers.',
+    });
+    // A well-formed answer this poll doesn't have (it has Yes, No and Neutral): checked before Hub.
+    expect((await voteAdminPoll(me, ADMIN_POLL_IDS.open, 'opt4')).outcome).toEqual({
+      status: 'blocked',
+      reason: 'That isn’t one of this poll’s answers.',
     });
     expect(publishes()).toHaveLength(0);
     expect(pendingPollWrites().votes).toEqual({});

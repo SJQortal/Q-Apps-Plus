@@ -362,6 +362,30 @@ describe('counting votes', () => {
     expect(counted).toEqual([v('Bea', 'no', T0 + 1)]);
   });
 
+  it('counts a poll’s own answers, and no vote for an answer it doesn’t have', () => {
+    const answers = [
+      { id: 'yes', label: 'Approve', tone: 'green' as const },
+      { id: 'opt4', label: 'Later', tone: 'neutral' as const },
+    ];
+    const view = assemblePoll(
+      sources({
+        polls: [pollRead('Bea', ok(poll({ answers })))],
+        votes: [
+          voteRead('Avery', 'yes', T0 + 10_000),
+          voteRead('Cal', 'opt4', T0 + 11_000),
+          // No (not one of its answers): no vote.
+          voteRead('Dee', 'no', T0 + 12_000),
+        ],
+      }),
+      ctx()
+    )!;
+    expect(view.counts).toEqual({ yes: 1, opt4: 1 });
+    expect(view.votes.map((v) => [v.name, v.vote])).toEqual([
+      ['Avery', 'yes'],
+      ['Cal', 'opt4'],
+    ]);
+  });
+
   it('counts Yes, No and Neutral', () => {
     expect(tallyVotes([])).toEqual({ yes: 0, no: 0, neutral: 0 });
     expect(

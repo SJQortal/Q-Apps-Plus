@@ -82,7 +82,7 @@ const BADGE_TONE: Record<AnswerBadgeKind, ChipProps['color']> = {
 
 /** Next to a Minter Admin's name: what they chose on what the thread is about. */
 function AnswerBadgeChip({ badge }: { badge: AnswerBadge }) {
-  const label = `${ANSWER_BADGE_LABEL[badge.kind]}${badge.confirming ? ' (confirming…)' : ''}`;
+  const label = `${badge.label ?? ANSWER_BADGE_LABEL[badge.kind]}${badge.confirming ? ' (confirming…)' : ''}`;
   return (
     <ToneChip
       size="small"

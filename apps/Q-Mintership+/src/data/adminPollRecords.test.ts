@@ -34,6 +34,8 @@ import {
   randomPollId,
   shareIdentifier,
   voteIdentifier,
+  DEFAULT_ANSWERS,
+  pollAnswers,
   type PollRecord,
 } from './adminPollRecords';
 import { toData64 } from './records';
@@ -269,7 +271,7 @@ describe('votes', () => {
     expect(parseVote({ v: 1, pollId: ID, vote: 'yes' }, pollIdentifier(ID))).toBeNull();
     expect(parseVote({ v: 2, pollId: ID, vote: 'yes' }, voteIdentifier(ID))).toBeNull();
     expect(parseVote(['yes'], voteIdentifier(ID))).toBeNull();
-    expect(() => buildVote(ID, 'maybe' as never)).toThrow('A vote is Yes, No or Neutral.');
+    expect(() => buildVote(ID, 'maybe' as never)).toThrow('A vote is one of the poll’s answers.');
     expect(() => buildVote('bad', 'yes')).toThrow('Not a poll.');
   });
 });
@@ -507,5 +509,64 @@ describe('fromData64', () => {
     expect(fromData64(toData64(value))).toEqual(value);
     expect(() => fromData64('not base64!')).toThrow();
     expect(() => fromData64(btoa('\xff\xfe'))).toThrow();
+  });
+});
+
+describe('a poll’s own answers (Simon, 2026-10-18)', () => {
+  const custom = [
+    { id: 'yes', label: 'Approve', tone: 'green' as const },
+    { id: 'no', label: 'Reject', tone: 'red' as const },
+    { id: 'neutral', label: 'Abstain', tone: 'neutral' as const },
+    { id: 'opt4', label: 'Wait a month', tone: 'neutral' as const },
+  ];
+  const base = {
+    id: ID,
+    question: 'Should only level 5+ minters become Minter Admins?',
+    durationDays: 7,
+    createdAt: T0,
+    endsAt: T0 + 7 * DAY_MS,
+    endHeight: 2_765_800,
+    readers: [A, B],
+  };
+
+  it('writes answers only when they differ from Yes, No and Neutral', () => {
+    expect(buildPoll(base).answers).toBeUndefined();
+    expect(buildPoll({ ...base, answers: DEFAULT_ANSWERS }).answers).toBeUndefined();
+    expect(pollAnswers(buildPoll(base))).toEqual(DEFAULT_ANSWERS);
+    const built = buildPoll({
+      ...base,
+      answers: [{ ...custom[0], label: '  Approve  ' }, ...custom.slice(1)],
+    });
+    expect(built.answers).toEqual(custom);
+    expect(parsePoll(JSON.parse(JSON.stringify(built)), ID)).toEqual(built);
+  });
+
+  it('reads a poll without answers as Yes, No and Neutral (every earlier poll)', () => {
+    expect(pollAnswers(parsePoll(poll(), ID)!)).toEqual(DEFAULT_ANSWERS);
+  });
+
+  it('turns down answers that can’t be told apart, or too few, too many, or odd colours', () => {
+    const bad = (answers: unknown) => parsePoll({ ...poll(), answers }, ID);
+    expect(bad([custom[0]])).toBeNull();
+    expect(
+      bad([
+        ...custom,
+        { id: 'opt5', label: 'E', tone: 'red' },
+        { id: 'opt6', label: 'F', tone: 'red' },
+        { id: 'opt4', label: 'G', tone: 'red' },
+      ])
+    ).toBeNull();
+    expect(bad([custom[0], { ...custom[1], label: 'approve' }])).toBeNull();
+    expect(bad([custom[0], { ...custom[1], id: 'yes' }])).toBeNull();
+    expect(bad([custom[0], { ...custom[1], tone: 'blue' }])).toBeNull();
+    expect(bad([custom[0], { ...custom[1], id: 'opt9' }])).toBeNull();
+    expect(bad([custom[0], { ...custom[1], label: '   ' }])).toBeNull();
+    expect(() => buildPoll({ ...base, answers: [custom[0]] })).toThrow(/at least 2 answers/);
+  });
+
+  it('takes a vote for an added answer, as its id', () => {
+    expect(buildVote(ID, 'opt4')).toEqual({ v: 1, pollId: ID, vote: 'opt4' });
+    expect(parseVote({ v: 1, pollId: ID, vote: 'opt4' }, voteIdentifier(ID))?.vote).toBe('opt4');
+    expect(parseVote({ v: 1, pollId: ID, vote: 'opt9' }, voteIdentifier(ID))).toBeNull();
   });
 });

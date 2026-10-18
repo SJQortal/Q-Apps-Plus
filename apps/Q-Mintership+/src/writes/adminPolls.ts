@@ -23,6 +23,8 @@ import {
   buildShare,
   buildVote,
   isPollVote,
+  pollAnswers,
+  type PollAnswer,
   parsePollRecordIdentifier,
   pollCommentIdentifier,
   pollEnd,
@@ -238,6 +240,8 @@ export interface AskInput {
   question: string;
   details?: string | null;
   durationDays: number;
+  /** Its answers (Yes, No and Neutral when left out). */
+  answers?: readonly PollAnswer[] | null;
 }
 
 /**
@@ -278,8 +282,9 @@ export async function publishAdminPoll(
 }
 
 /**
- * Vote Yes, No or Neutral (republishing the same identifier changes it:
- * only the latest vote counts, if it is published by the poll's end).
+ * Vote one of the poll's answers (Yes, No or Neutral unless it gives its
+ * own; republishing the same identifier changes it: only the latest vote
+ * counts, if it is published by the poll's end).
  */
 export async function voteAdminPoll(
   author: PollAuthor,
@@ -288,7 +293,7 @@ export async function voteAdminPoll(
   onStage?: (stage: WriteStage) => void
 ): Promise<PollWrite> {
   if (!isPollVote(vote))
-    return { outcome: blocked('A vote is Yes, No or Neutral.'), identifier: '' };
+    return { outcome: blocked('A vote is one of the poll’s answers.'), identifier: '' };
   let identifier: string;
   try {
     identifier = voteIdentifier(pollId);
@@ -304,6 +309,8 @@ export async function voteAdminPoll(
     guard: async () => {
       const view = await findPoll(author, pollId);
       if (!view) return NOT_READABLE;
+      if (!pollAnswers(view.poll).some((a) => a.id === vote))
+        return 'That isn’t one of this poll’s answers.';
       after = ownVoteAt(view, author.address);
       const tip = await getChainNow({ force: true });
       return guardVoteInTime(view.poll, tip.timestamp);

@@ -987,6 +987,38 @@ export default {
     // Minter Admin polls (e2e/world.mjs addAdminPolls), encrypted to the Minter Admins: the
     // section on Decisions (one poll read from a share, one closed), and one poll's own page
     // with its comments open.
+    // Ask the Minter Admins with answers of its own (Simon, 2026-10-18): one renamed,
+    // one recoloured, one added.
+    {
+      key: 'decisions-ask-answers',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: withPolls(async (page) => {
+        await settle(page);
+        // On phones Propose is the floating button: the one on screen.
+        await page
+          .locator('button:visible', { hasText: 'Propose' })
+          .or(page.locator('button[aria-label="Propose"]:visible'))
+          .first()
+          .click({ timeout: 8000 });
+        // A menu, or a sheet of buttons on phones.
+        await page
+          .getByRole('menuitem', { name: /Ask the Minter Admins/ })
+          .or(page.getByRole('button', { name: /Ask the Minter Admins/ }))
+          .first()
+          .click({ timeout: 8000 });
+        const dialog = page.getByRole('dialog', { name: 'Ask the Minter Admins' });
+        await dialog.getByRole('textbox', { name: 'Question' }).fill(
+          'When should we review the stale invites next?'
+        );
+        await dialog.getByRole('textbox', { name: 'Answer 1' }).fill('This week');
+        await dialog.getByRole('combobox', { name: 'Answer 3’s colour' }).selectOption('red');
+        await dialog.getByRole('button', { name: 'Add an answer' }).click();
+        await dialog.getByRole('textbox', { name: 'Answer 4' }).fill('Next month');
+        await dialog.getByRole('list', { name: 'Answers' }).scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+      }),
+    },
     {
       key: 'decisions-polls',
       path: '/decisions?as=admin',

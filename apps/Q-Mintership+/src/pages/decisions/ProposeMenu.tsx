@@ -75,7 +75,8 @@ const ITEMS: Item[] = [
   {
     key: 'poll',
     label: 'Ask the Minter Admins',
-    description: 'An advisory poll: Yes, No or Neutral, encrypted to the Minter Admins.',
+    description:
+      'An advisory poll: Yes, No and Neutral, or answers of your own, encrypted to the Minter Admins.',
     icon: <HowToVoteOutlinedIcon />,
   },
 ];

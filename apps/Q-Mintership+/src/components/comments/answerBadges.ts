@@ -13,6 +13,8 @@ export type AnswerBadgeKind = 'approved' | 'rejected' | 'considering' | 'yes' | 
 
 export interface AnswerBadge {
   kind: AnswerBadgeKind;
+  /** Its own words, when not the kind's (a poll's answer: "Voted Approve"). */
+  label?: string;
   /** On its way into a block. */
   confirming?: boolean;
 }
