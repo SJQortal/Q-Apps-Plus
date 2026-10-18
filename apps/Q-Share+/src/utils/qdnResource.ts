@@ -22,19 +22,24 @@ export async function getJson(path: string): Promise<any> {
 }
 
 /** A resource's status straight from the node (no Hub hop): for quiet checks such as card art. */
-export function resourceStatusDirect(ref: ResourceRef): Promise<any> {
+export async function resourceStatusDirect(ref: ResourceRef): Promise<any> {
   return getJson(resourcePath("status", ref));
 }
 
-const resourcePath = (kind: "status" | "properties", ref: ResourceRef) =>
-  `/arbitrary/resource/${kind}/${ref.service}/${encodeURIComponent(ref.name)}/${encodeURIComponent(ref.identifier)}`;
+/** Core's service names: capitals and underscores. Anything else (it can come from someone's JSON) is refused. */
+const SERVICE = /^[A-Z][A-Z0-9_]{0,31}$/;
+
+function resourcePath(kind: "status" | "properties", ref: ResourceRef): string {
+  if (!SERVICE.test(ref.service)) throw new Error(`Not a QDN service: ${ref.service}`);
+  return `/arbitrary/resource/${kind}/${ref.service}/${encodeURIComponent(ref.name)}/${encodeURIComponent(ref.identifier)}`;
+}
 
 /**
  * GET_QDN_RESOURCE_STATUS. q-apps.js puts the name into the URL unencoded, so
  * for a name such as "Vallot-/8/" Core answers an error page; those names go
  * to the node directly with the name encoded (same answer shape).
  */
-export function resourceStatus(ref: ResourceRef, options: { build?: boolean } = {}): Promise<any> {
+export async function resourceStatus(ref: ResourceRef, options: { build?: boolean } = {}): Promise<any> {
   if (needsEncodedFetch(ref.name)) {
     return getJson(resourcePath("status", ref) + (options.build != null ? `?build=${options.build}` : ""));
   }
@@ -46,7 +51,7 @@ export function resourceStatus(ref: ResourceRef, options: { build?: boolean } = 
 }
 
 /** GET_QDN_RESOURCE_PROPERTIES ({ filename, mimeType, size }), with the same encoding rule. */
-export function resourceProperties(ref: ResourceRef): Promise<any> {
+export async function resourceProperties(ref: ResourceRef): Promise<any> {
   if (needsEncodedFetch(ref.name)) return getJson(resourcePath("properties", ref));
   return qortalRequest({ action: "GET_QDN_RESOURCE_PROPERTIES", ...ref });
 }

@@ -54,6 +54,9 @@ describe("share art", () => {
   it("leaves big images and image previews switched off alone", () => {
     expect(cardImage([photo("big", 3 * 1024 * 1024)])).toBeNull();
     expect(cardImage([{ ...photo("pdf"), filename: "a.pdf", mimetype: "application/pdf" }])).toBeNull();
+    // Only FILEs: the status check and the picture both use FILE, whatever someone's JSON says.
+    expect(cardImage([{ ...photo("odd"), service: "../../admin/stop?" }])).toBeNull();
+    expect(cardImage([{ ...photo("old"), service: undefined }])?.identifier).toBe("old");
     writeSettings({ autoPreviewImages: false });
     const card = render(<ShareCardArt share={{ files: [photo("img_on_node")] }} fallback={icon} />);
     mockAllIsIntersecting(true);

@@ -33,6 +33,8 @@ export function cardImage(files: unknown): (ShareFileLike & { name: string; iden
       f &&
       typeof f.name === "string" &&
       typeof f.identifier === "string" &&
+      // The picture is read as a FILE; a share JSON naming another service is left alone.
+      (f.service === undefined || f.service === "FILE") &&
       fileKind(f.mimetype, f.filename) === "image" &&
       (f.size ?? 0) > 0 &&
       (f.size ?? 0) <= CARD_IMAGE_MAX_BYTES
@@ -48,11 +50,11 @@ const onNode = new Map<string, { ready: Promise<boolean>; at: number }>();
  * Cards never fetch an image from peers: a file that isn't local would hold
  * a node thread for about 15 s and then 404.
  */
-export function isOnNode(file: { name: string; identifier: string; service?: string }): Promise<boolean> {
+export function isOnNode(file: { name: string; identifier: string }): Promise<boolean> {
   const key = `${file.name}/${file.identifier}`;
   const known = onNode.get(key);
   if (known && Date.now() - known.at < NOT_ON_NODE_MS) return known.ready;
-  const ready = resourceStatusDirect({ service: file.service || "FILE", name: file.name, identifier: file.identifier }).then(
+  const ready = resourceStatusDirect({ service: "FILE", name: file.name, identifier: file.identifier }).then(
     (status) => status?.status === "READY",
     () => false
   );
