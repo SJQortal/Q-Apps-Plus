@@ -11,10 +11,13 @@
  */
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Tab, Tabs } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
+import { sectionAccent } from './sectionAccents';
 import { formatCount } from '../../utils/format';
 import {
   DECISIONS_PANEL_ID,
   DECISIONS_VIEWS,
+  TAB_ACCENT,
   decisionsKindPath,
   decisionsTabId,
   decisionsViewPath,
@@ -42,9 +45,19 @@ export function DecisionsTabs({
     ...DECISIONS_VIEWS.map((v) => ({ ...v, to: decisionsViewPath(v.key), count: counts[v.key] })),
     ...kinds.map((k) => ({ ...k, to: decisionsKindPath(k.key) })),
   ];
+  const theme = useTheme();
+  // Each tab's colour, its section's (none for All Decisions and Ready to mint).
+  const accentOf = (key: DecisionsView | DecisionsKind) => {
+    const accent = TAB_ACCENT[key];
+    return accent ? sectionAccent(theme, accent) : null;
+  };
+  const selectedAccent = view ? accentOf(view) : null;
   return (
     <Tabs
       value={view ?? false}
+      slotProps={{
+        indicator: selectedAccent ? { sx: { bgcolor: selectedAccent } } : undefined,
+      }}
       variant="scrollable"
       scrollButtons="auto"
       aria-label="Decisions, nominations, the people ready to mint, and each kind of decision"
@@ -68,6 +81,23 @@ export function DecisionsTabs({
             // One line: a tab stacks its children (an icon above its words).
             label={
               <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+                {accentOf(key) ? (
+                  <Box
+                    component="span"
+                    aria-hidden
+                    sx={{
+                      display: 'inline-block',
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      bgcolor: accentOf(key),
+                      mr: 0.75,
+                      verticalAlign: 'middle',
+                      position: 'relative',
+                      top: -1,
+                    }}
+                  />
+                ) : null}
                 {label}
                 {count !== undefined ? (
                   <>

@@ -9,6 +9,7 @@
 import { appParam } from '../../routes/hubLocation';
 import { decisionsViewPath, type DecisionsView } from '../../routes/paths';
 import { parseFilter } from '../nominations/filters';
+import type { SectionAccent } from './sectionAccents';
 
 export { decisionsViewPath, type DecisionsView };
 
@@ -53,6 +54,24 @@ export const DECISIONS_KINDS: ReadonlyArray<{ key: DecisionsKind; label: string 
   { key: 'cleanInvites', label: 'Clean invites' },
   { key: 'askAdmins', label: 'Ask MAs' },
 ];
+
+/**
+ * Each kind's colour: its section's on All Decisions (sectionAccents.ts;
+ * Simon, 2026-10-18: "I want then to be colored as well to the correct
+ * color"), and Nominations the waiting nominations' blue.
+ */
+export const TAB_ACCENT: Partial<Record<DecisionsView | DecisionsKind, SectionAccent>> = {
+  nominations: 'waiting',
+  removals: 'removal',
+  declines: 'decline',
+  bans: 'removal',
+  newAdmins: 'admins',
+  removeAdmins: 'admins',
+  liftBans: 'liftBan',
+  cancelInvites: 'cancelInvite',
+  cleanInvites: 'cancelInvite',
+  askAdmins: 'polls',
+};
 
 /** `?show=` as one of those kinds, or null. */
 export function parseDecisionsKind(value: string | null): DecisionsKind | null {
