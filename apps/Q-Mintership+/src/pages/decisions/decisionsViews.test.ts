@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  TAB_ACCENT,
   decisionsViewPath,
   defaultDecisionsView,
   nominationsRedirect,
   parseDecisionsView,
+  shownDecisionsViews,
 } from './decisionsViews';
 
 describe('Decisions’ tabs in the address', () => {
@@ -18,7 +20,26 @@ describe('Decisions’ tabs in the address', () => {
 
   it('opens a Minter Admin on Decisions and everyone else on Nominations', () => {
     expect(defaultDecisionsView(true)).toBe('decisions');
-    expect(defaultDecisionsView(false)).toBe('nominations');
+    expect(defaultDecisionsView(false, 3)).toBe('nominations');
+    // None open: Nominations has no tab, so All Decisions (Simon, 2026-10-18).
+    expect(defaultDecisionsView(false, 0)).toBe('decisions');
+    // Not read yet: wait; couldn't be read: Nominations, with its error and Retry.
+    expect(defaultDecisionsView(false)).toBeNull();
+    expect(defaultDecisionsView(false, null)).toBe('nominations');
+  });
+
+  it('gives Nominations a tab only while it lists someone, or is on screen, in green', () => {
+    const keys = (counts: { decisions?: number; nominations?: number }, view: string | null) =>
+      shownDecisionsViews(counts, view as 'decisions' | null).map((v) => v.key);
+    expect(keys({ decisions: 2, nominations: 0 }, 'decisions')).toEqual(['decisions']);
+    expect(keys({ decisions: 2 }, 'decisions')).toEqual(['decisions']);
+    expect(keys({ decisions: 0, nominations: 1 }, 'decisions')).toEqual([
+      'decisions',
+      'nominations',
+    ]);
+    expect(keys({ nominations: 0 }, 'nominations')).toEqual(['decisions', 'nominations']);
+    // Green, as Add to MINTER (not the waiting blue).
+    expect(TAB_ACCENT.nominations).toBe('invite');
   });
 
   it('builds each tab’s address, with a nomination state on Nominations only', () => {

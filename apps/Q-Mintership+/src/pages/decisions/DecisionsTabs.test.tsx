@@ -97,6 +97,36 @@ describe('Decisions: its tabs', () => {
     expect(screen.queryByText(/Members can nominate from level 5/)).toBeNull();
   });
 
+  it('has no Nominations tab while none are open, unless it is on screen', async () => {
+    // Simon, 2026-10-18: "If there is 0 nominations do not show this tab".
+    const empty = {
+      setup: (world: { records: unknown[]; pending: unknown[] }) => {
+        world.records.length = 0;
+        world.pending.length = 0;
+      },
+    };
+    const learner = await renderPage(
+      <>
+        <DecisionsPage />
+        <Probe />
+      </>,
+      { persona: 'learner', path: '/decisions', route: '/decisions', ...empty }
+    );
+    // Nothing to list there, so they open on All Decisions.
+    await waitFor(() => expect(tab(/^All Decisions/)).toHaveAttribute('aria-selected', 'true'), T);
+    expect(screen.queryByRole('tab', { name: /^Nominations/ })).toBeNull();
+    learner.unmount();
+    // A link to it still opens it, with its tab, saying none are open.
+    await renderPage(<DecisionsPage />, {
+      persona: 'learner',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
+      ...empty,
+    });
+    expect(await screen.findByText('No open nominations right now', {}, T)).toBeVisible();
+    expect(tab(/^Nominations/)).toHaveAttribute('aria-selected', 'true');
+  });
+
   it('keeps the nominee’s own nomination on top, whatever the tab', async () => {
     await open('nominatedWaiting', '/decisions?show=decisions');
     const mine = await screen.findByRole('region', { name: 'Your nomination' }, T);

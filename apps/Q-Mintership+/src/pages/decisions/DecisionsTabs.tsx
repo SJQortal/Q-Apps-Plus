@@ -1,6 +1,7 @@
 /**
  * Decisions' tabs: All Decisions · Nominations (decisionsViews.ts), each with
- * how many it lists; then a tab for each kind of decision that has
+ * how many it lists, Nominations only while it lists someone (or is on
+ * screen); then a tab for each kind of decision that has
  * something open (Removals, Declines, Bans, New MAs, …, Clean invites, Ask
  * MAs: All Decisions narrowed to it). Each tab is a link that swaps the URL
  * in place (`replace`), as the Explorer's account tabs do: Back leaves
@@ -27,16 +28,19 @@ import {
 
 export function DecisionsTabs({
   view,
+  views = DECISIONS_VIEWS,
   counts,
   kinds = [],
 }: {
   /** The tab on screen (a view, or a kind); null while the account's own default isn't known yet. */
   view: DecisionsView | DecisionsKind | null;
+  /** The views with a tab (shownDecisionsViews): every one unless said. */
+  views?: ReadonlyArray<{ key: DecisionsView; label: string }>;
   counts: Partial<Record<DecisionsView, number>>;
   /** The kinds with something open (and the one on screen), with their counts. */
   kinds?: ReadonlyArray<{ key: DecisionsKind; label: string; count: number | undefined }>;
 }) {
-  const viewTab = (v: (typeof DECISIONS_VIEWS)[number]) => ({
+  const viewTab = (v: { key: DecisionsView; label: string }) => ({
     ...v,
     to: decisionsViewPath(v.key),
     count: counts[v.key],
@@ -46,10 +50,7 @@ export function DecisionsTabs({
     label: string;
     to: string;
     count?: number;
-  }> = [
-    ...DECISIONS_VIEWS.map(viewTab),
-    ...kinds.map((k) => ({ ...k, to: decisionsKindPath(k.key) })),
-  ];
+  }> = [...views.map(viewTab), ...kinds.map((k) => ({ ...k, to: decisionsKindPath(k.key) }))];
   const theme = useTheme();
   // Each tab's colour, its section's (none for All Decisions).
   const accentOf = (key: DecisionsView | DecisionsKind) => {

@@ -59,10 +59,11 @@ export const DECISIONS_KINDS: ReadonlyArray<{ key: DecisionsKind; label: string 
 /**
  * Each kind's colour: its section's on All Decisions (sectionAccents.ts;
  * Simon, 2026-10-18: "I want then to be colored as well to the correct
- * color"), and Nominations the waiting nominations' blue.
+ * color"), and Nominations green, as Add to MINTER is (Simon, 2026-10-18:
+ * "it should be green color like the nominations (not blue)").
  */
 export const TAB_ACCENT: Partial<Record<DecisionsView | DecisionsKind, SectionAccent>> = {
-  nominations: 'waiting',
+  nominations: 'invite',
   removals: 'removal',
   declines: 'decline',
   bans: 'removal',
@@ -109,9 +110,34 @@ export function decisionsKindPath(kind: DecisionsKind): string {
   return `${decisionsViewPath('decisions').split('?')[0]}?show=${kind}`;
 }
 
-/** The view Decisions opens on without `?show=`: the queue for a Minter Admin, else Nominations. */
-export function defaultDecisionsView(isAdmin: boolean): DecisionsView {
-  return isAdmin ? 'decisions' : 'nominations';
+/**
+ * The view Decisions opens on without `?show=`: the queue for a Minter Admin;
+ * for anyone else Nominations while some are open, else All Decisions, as
+ * an empty Nominations has no tab (Simon, 2026-10-18). `openNominations`:
+ * how many are open (undefined while they load, null when they couldn't be
+ * read: Nominations then, with its error and Retry); null back means wait.
+ */
+export function defaultDecisionsView(
+  isAdmin: boolean,
+  openNominations?: number | null
+): DecisionsView | null {
+  if (isAdmin) return 'decisions';
+  if (openNominations === undefined) return null;
+  return openNominations === null || openNominations > 0 ? 'nominations' : 'decisions';
+}
+
+/**
+ * The views that have a tab: All Decisions always, any other only while it
+ * lists something (Simon, 2026-10-18: "If there is 0 nominations do not show
+ * this tab"), or while it is on screen.
+ */
+export function shownDecisionsViews(
+  counts: Partial<Record<DecisionsView, number>>,
+  view: DecisionsView | DecisionsKind | null
+): ReadonlyArray<{ key: DecisionsView; label: string }> {
+  return DECISIONS_VIEWS.filter(
+    (v) => v.key === 'decisions' || v.key === view || (counts[v.key] ?? 0) > 0
+  );
 }
 
 /**

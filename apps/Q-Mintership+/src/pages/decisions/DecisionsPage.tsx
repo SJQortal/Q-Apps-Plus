@@ -136,11 +136,11 @@ import { DecisionsTabs } from './DecisionsTabs';
 import {
   DECISIONS_PANEL_ID,
   DECISIONS_KINDS,
-  DECISIONS_VIEWS,
   decisionsKindOf,
   decisionsTabId,
   decisionsViewPath,
   defaultDecisionsView,
+  shownDecisionsViews,
   isDecisionKind,
   parseDecisionsKind,
   parseDecisionsView,
@@ -207,11 +207,23 @@ function DecisionsQueue() {
   const [params] = useSearchParams();
   // A kind's tab: All Decisions narrowed to it (Simon, 2026-10-18).
   const kind: DecisionsKind | null = parseDecisionsKind(appParam(params, 'show'));
+  // The open nominations, the viewer's own left out (Nominations' count).
+  const viewer = session.status === 'ready' ? session.address : '';
+  const openNominations = nominationsQ.data
+    ? nominationsQ.data.open.filter((n) => n.nominee !== viewer).length
+    : undefined;
   // The tab: `?show=`, else the account's own (Nominations when its status can't be read).
   const view: DecisionsView | null = kind
     ? 'decisions'
     : (parseDecisionsView(appParam(params, 'show')) ??
-      (status ? defaultDecisionsView(status.isAdmin) : statusFailed ? 'nominations' : null));
+      (status
+        ? defaultDecisionsView(
+            status.isAdmin,
+            nominationsQ.isError && !nominationsQ.data ? null : openNominations
+          )
+        : statusFailed
+          ? 'nominations'
+          : null));
   const tabKey: DecisionsView | DecisionsKind | null = kind ?? view;
   // What a kind's tab keeps of All Decisions: its decisions, or only its section.
   const decisionTab = isDecisionKind(kind);
@@ -592,10 +604,10 @@ function DecisionsQueue() {
         waiting.length +
         (isAdmin ? (adminPolls.views ?? []).filter((v) => v.open).length : 0)
       : undefined,
-    nominations: nominationsQ.data
-      ? nominationsQ.data.open.filter((n) => n.nominee !== me).length
-      : undefined,
+    nominations: openNominations,
   };
+  // The tabs of the two views: Nominations only while it lists someone, or is on screen.
+  const views = shownDecisionsViews(counts, tabKey);
   // Each kind's count: what is open of it. A tab shows while it has some (or is on screen).
   const kindCount = (key: DecisionsKind): number | undefined =>
     key === 'cleanInvites'
@@ -654,8 +666,8 @@ function DecisionsQueue() {
           <OwnNomination facts={own} data={nominationsQ.data} signer={signer} />
         ) : null}
 
-        <DecisionsTabs view={tabKey} counts={counts} kinds={kindTabs} />
-        <ViewPanel view={view} tab={tabKey}>
+        <DecisionsTabs view={tabKey} views={views} counts={counts} kinds={kindTabs} />
+        <ViewPanel view={view} tab={tabKey} views={views}>
           {view === null ? (
             <ListSkeleton count={3} ring label="Loading" />
           ) : view !== 'decisions' ? (
@@ -1132,21 +1144,24 @@ function DecisionsQueue() {
 function ViewPanel({
   view,
   tab,
+  views,
   children,
 }: {
   view: DecisionsView | null;
   /** The tab on screen: the view, or a kind of All Decisions. */
   tab: DecisionsView | DecisionsKind | null;
+  /** The views with a tab: a swipe goes only to those. */
+  views: ReadonlyArray<{ key: DecisionsView }>;
   children: ReactNode;
 }) {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const navigate = useNavigate();
   const touch = useMediaQuery('(pointer: coarse)');
-  const index = view ? DECISIONS_VIEWS.findIndex((v) => v.key === view) : -1;
+  const index = view ? views.findIndex((v) => v.key === view) : -1;
   useSwipeTabs(node, {
-    enabled: touch && index >= 0,
-    canGo: (step) => index + step >= 0 && index + step < DECISIONS_VIEWS.length,
-    go: (step) => navigate(decisionsViewPath(DECISIONS_VIEWS[index + step].key), { replace: true }),
+    enabled: touch && index >= 0 && views.length > 1,
+    canGo: (step) => index + step >= 0 && index + step < views.length,
+    go: (step) => navigate(decisionsViewPath(views[index + step].key), { replace: true }),
   });
   useTopInViewOnSwitch(PATHS.decisions, tab ?? '', DECISIONS_PANEL_ID);
   return (
