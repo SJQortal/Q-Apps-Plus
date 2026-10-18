@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ShareThumbnail, ThumbnailInput } from "../../utils/publishPayload";
 import { fileKind } from "../../utils/fileKind";
+import { ImageTooBigError } from "../../utils/coverImage";
 import { makeImageThumbnail, makeThumbnail, thumbnailSource } from "../../utils/thumbnailImage";
 import type { DraftFile } from "./shareDraft";
 
@@ -135,8 +136,12 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
         const source = await blob();
         const file = kind === "image" ? await makeImageThumbnail(source) : await makeThumbnail(source, kind);
         set({ kind: "file", file, url: keep(file), from });
-      } catch {
-        setProblem("Couldn't make a thumbnail from that. Try a JPEG, PNG or WebP image.");
+      } catch (error) {
+        setProblem(
+          error instanceof ImageTooBigError
+            ? "That image is too big to make a thumbnail from on this device. Try a smaller one."
+            : "Couldn't make a thumbnail from that. Try a JPEG, PNG or WebP image."
+        );
       } finally {
         setBusy(false);
       }

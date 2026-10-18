@@ -13,7 +13,8 @@ import { resetOwnerAddresses } from "../../utils/recipientMarker";
 import { CollectionPage } from "./CollectionPage";
 
 // jsdom has no canvas: the cover is "made" from the picked file as it is.
-vi.mock("../../utils/coverImage", () => ({
+vi.mock("../../utils/coverImage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../utils/coverImage")>()),
   makeCoverFile: vi.fn(async (file: File) => {
     if (file.name.endsWith(".txt")) throw new Error("not an image");
     return new File([file], "cover.webp", { type: "image/webp" });

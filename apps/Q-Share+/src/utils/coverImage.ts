@@ -28,9 +28,56 @@ export interface DecodedImage {
   close: () => void;
 }
 
-export async function decodeImage(file: Blob): Promise<DecodedImage> {
+/**
+ * Images up to this many pixels are read on the device (a 50 MP photo). A
+ * 200 MP photo would take about 800 MB to decode whole, enough to end a
+ * phone's WebView.
+ */
+export const MAX_SOURCE_PIXELS = 50_000_000;
+
+export class ImageTooBigError extends Error {
+  constructor() {
+    super("The image is too big to read on this device");
+    this.name = "ImageTooBigError";
+  }
+}
+
+/** The image's width and height, known from its header once loaded, before it is decoded. */
+export function imageSize(file: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    const done = () => URL.revokeObjectURL(url);
+    image.onload = () => {
+      done();
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      done();
+      reject(new Error("The image can't be read"));
+    };
+    image.src = url;
+  });
+}
+
+/**
+ * The image decoded at the size `fit` picks for its width and height, where
+ * the browser can scale while decoding (so a big photo is never held whole),
+ * else at full size. Rejects with ImageTooBigError past MAX_SOURCE_PIXELS.
+ */
+export async function decodeImage(
+  file: Blob,
+  fit?: (width: number, height: number) => { width: number; height: number }
+): Promise<DecodedImage> {
+  const size = await imageSize(file);
+  if (size.width * size.height > MAX_SOURCE_PIXELS) throw new ImageTooBigError();
   if (typeof createImageBitmap === "function") {
-    const bitmap = await createImageBitmap(file);
+    const target = fit?.(size.width, size.height);
+    const bitmap = target
+      ? await createImageBitmap(file, { resizeWidth: target.width, resizeHeight: target.height, resizeQuality: "high" }).catch(
+          () => createImageBitmap(file)
+        )
+      : await createImageBitmap(file);
     return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
   }
   const url = URL.createObjectURL(file);
@@ -79,7 +126,11 @@ export function drawnCanvas(width: number, height: number, draw: (context: Canva
 
 /** The cover file for `file`; rejects when the image can't be read or made small enough. */
 export async function makeCoverFile(file: Blob): Promise<File> {
-  const image = await decodeImage(file);
+  // Decoded with its shorter side at the cover size; the square is cut below.
+  const image = await decodeImage(file, (width, height) => {
+    const scale = Math.min(1, COVER_SIZE / Math.min(width, height));
+    return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+  });
   try {
     if (!image.width || !image.height) throw new Error("The image is empty");
     const { sx, sy, side, out } = squareCrop(image.width, image.height);

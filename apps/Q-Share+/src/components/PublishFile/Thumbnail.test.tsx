@@ -7,7 +7,8 @@ import { addUser } from "../../state/features/authSlice";
 import { setEditFile } from "../../state/features/fileSlice";
 import { resetPublishUnitFee } from "../../utils/publishBatches";
 import { EditFile } from "../EditFile/EditFile";
-import { makeThumbnail } from "../../utils/thumbnailImage";
+import { ImageTooBigError } from "../../utils/coverImage";
+import { makeImageThumbnail, makeThumbnail } from "../../utils/thumbnailImage";
 import { PublishFile } from "./PublishFile";
 
 // jsdom has no canvas: a "thumbnail" names what it was made from.
@@ -137,6 +138,12 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
       target: { files: [new File([new Uint8Array(7)], "cover.jpg", { type: "image/jpeg" })] },
     });
     expect(await screen.findByText("Your image.")).toBeInTheDocument();
+    // A photo too big to decode on a phone says so, and the choice stays.
+    vi.mocked(makeImageThumbnail).mockRejectedValueOnce(new ImageTooBigError());
+    fireEvent.change(screen.getByTestId("thumbnail-input"), {
+      target: { files: [new File([new Uint8Array(9)], "huge.jpg", { type: "image/jpeg" })] },
+    });
+    expect(await screen.findByText(/too big to make a thumbnail from on this device/)).toBeInTheDocument();
     await fillAndPublish();
     const thumb = sent().find((r: any) => r.service === "THUMBNAIL");
     expect(await thumb.file.text()).toBe("thumb of cover.jpg 7");

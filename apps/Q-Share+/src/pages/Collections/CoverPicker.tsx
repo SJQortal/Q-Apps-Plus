@@ -3,7 +3,7 @@ import { Box, Button, CircularProgress, Typography } from "@mui/material";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import { COVER_SERVICE, newCoverIdentifier, type CollectionCover as Cover, type NewCover } from "../../utils/collections";
-import { makeCoverFile } from "../../utils/coverImage";
+import { ImageTooBigError, makeCoverFile } from "../../utils/coverImage";
 import { CollectionCover } from "./CollectionCover";
 
 /** What a dialog does with the cover on save. */
@@ -57,8 +57,12 @@ export function CoverPicker({ current, choice, onChange, kind, disabled }: Cover
     try {
       const cover = await makeCoverFile(file);
       onChange({ kind: "new", file: cover, url: URL.createObjectURL(cover) });
-    } catch {
-      setProblem("Couldn't use that image. Try a JPEG, PNG or WebP.");
+    } catch (error) {
+      setProblem(
+        error instanceof ImageTooBigError
+          ? "That image is too big to use on this device. Try a smaller one."
+          : "Couldn't use that image. Try a JPEG, PNG or WebP."
+      );
     } finally {
       setWorking(false);
       if (input.current) input.current.value = "";

@@ -22,7 +22,7 @@ export function fitWithin(width: number, height: number, max = THUMBNAIL_MAX): {
 
 /** A thumbnail of an image file; rejects when it can't be read. */
 export async function makeImageThumbnail(file: Blob): Promise<File> {
-  const image = await decodeImage(file);
+  const image = await decodeImage(file, (width, height) => fitWithin(width, height));
   try {
     if (!image.width || !image.height) throw new Error("The image is empty");
     const size = fitWithin(image.width, image.height);
