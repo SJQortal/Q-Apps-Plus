@@ -1,16 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ADMIN_POLL_IDS, NULL_OWNER, answerDecrypt, fakeAddress } from '../../../e2e/world.mjs';
 import { fromData64 } from '../../data/adminPollRecords';
 import { resetPendingPollWrites } from '../../state/adminPolls';
 import { resetOptimisticComments } from '../../state/comments';
-import { serveAdminPolls, withAdminPolls } from '../../test/adminPolls';
+import { withAdminPolls } from '../../test/adminPolls';
 import { expectNoAxeViolations } from '../../test/axe';
 import { checkDialogByKeyboard } from '../../test/keyboard';
 import { renderPage, type RenderPageOptions } from '../../test/render';
 import { fetchCallsFor, mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { PATHS } from '../../routes/paths';
 import DecisionsPage from './DecisionsPage';
+import AskPage, { ASK_TITLE } from './propose/AskPage';
 
 beforeEach(() => {
   resetPendingPollWrites();
@@ -301,55 +303,16 @@ describe('Decisions → Minter Admin polls', () => {
     expect(qortalCallsFor('DECRYPT_DATA')).toHaveLength(0);
   });
 
-  it('nothing to show: says so, with Ask the Minter Admins', async () => {
+  it('nothing to show: says so, with Ask the Minter Admins, which opens its page', async () => {
     const u = user();
     await openDecisions('admin', () => undefined);
     const section = await polls();
     expect(
       await within(section).findByText('No Minter Admin polls in the last 31 days', {}, T)
     ).toBeVisible();
+    // Simon, 2026-10-18: every + Propose choice a page, Ask the Minter Admins too.
     await u.click(within(section).getByRole('button', { name: 'Ask the Minter Admins' }));
-    expect(await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T)).toBeVisible();
-  });
-
-  it('Ask from the empty section: focus comes back to its button, not to Propose', async () => {
-    const u = user();
-    await openDecisions('admin', () => undefined);
-    const section = await polls();
-    const ask = await within(section).findByRole('button', { name: 'Ask the Minter Admins' }, T);
-    // A click that doesn't focus the button, as in Safari: the dialog can't tell who opened it.
-    fireEvent.click(ask);
-    const form = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
-    await u.type(
-      within(form).getByRole('textbox', { name: 'Question' }),
-      'Should we keep a shared minting checklist?'
-    );
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
-    const hub = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
-    await u.keyboard('{Escape}');
-    await waitFor(() => expect(hub).not.toBeInTheDocument(), T);
-    await waitFor(() => expect(ask).toHaveFocus(), T);
-  });
-
-  it('a poll asked from the empty section: focus goes to the section that now lists it', async () => {
-    const u = user();
-    // No polls, but the admins' keys are there to encrypt to.
-    await openDecisions('admin', (world) => serveAdminPolls(world, 'admin'));
-    sent();
-    const section = await polls();
-    await u.click(await within(section).findByRole('button', { name: 'Ask the Minter Admins' }, T));
-    const form = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
-    await u.type(
-      within(form).getByRole('textbox', { name: 'Question' }),
-      'Should we keep a shared minting checklist?'
-    );
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
-    const hub = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
-    await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
-    await u.click(await within(hub).findByRole('button', { name: 'Done' }, T));
-    await waitFor(() => expect(hub).not.toBeInTheDocument(), T);
-    await waitFor(() => expect(section).toHaveFocus(), T);
-    expect(screen.getByRole('button', { name: 'Propose' })).not.toHaveFocus();
+    expect(await screen.findByTestId('navigated-away', {}, T)).toBeInTheDocument();
   });
 
   it('Hub not decrypting (its wallet locked): says so with Retry, never "no polls"', async () => {
@@ -534,23 +497,27 @@ describe('sharing with Minter Admins added since', () => {
 describe('a poll just asked', () => {
   it('is listed at once, as publishing, without votes until QDN lists it', async () => {
     const u = user();
-    await openDecisions();
+    // Asked on its page (Simon, 2026-10-18: + Propose's choices are pages).
+    const ask = await renderPage(<AskPage />, {
+      persona: 'admin',
+      path: PATHS.ask,
+      route: PATHS.ask,
+      setup: withAdminPolls('admin'),
+    });
     sent();
-    await u.click(screen.getByRole('button', { name: 'Propose' }));
-    await u.click(await screen.findByRole('menuitem', { name: /Ask the Minter Admins/ }));
-    const form = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
     await u.type(
-      within(form).getByRole('textbox', { name: 'Question' }),
+      await screen.findByRole('textbox', { name: 'Question' }, T),
       'Should we keep a shared minting checklist?'
     );
-    await u.selectOptions(
-      within(form).getByRole('combobox', { name: 'Voting stays open for' }),
-      '3'
-    );
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
-    const hub = await screen.findByRole('dialog', { name: 'Ask the Minter Admins' }, T);
+    await u.selectOptions(screen.getByRole('combobox', { name: 'Voting stays open for' }), '3');
+    await u.click(screen.getByRole('button', { name: ASK_TITLE }));
+    const hub = await screen.findByRole('dialog', { name: ASK_TITLE }, T);
     await u.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));
     await u.click(await within(hub).findByRole('button', { name: 'Done' }, T));
+    await screen.findByRole('heading', { level: 2, name: 'Poll published' }, T);
+    ask.unmount();
+    // Then Decisions, on the same device.
+    await openDecisions();
     const card = await pollCard('Should we keep a shared minting checklist?');
     expect(within(card).getByText('Publishing…')).toBeVisible();
     expect(within(card).getByText(/^Asked by/)).toHaveTextContent(/Avery Admin/);

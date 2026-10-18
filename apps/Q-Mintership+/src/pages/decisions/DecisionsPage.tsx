@@ -159,7 +159,6 @@ import { useAcknowledge } from './useAcknowledge';
 
 // Minter Admins only: nobody else downloads the polls' code or reads them.
 const AdminPollsSection = lazy(() => import('./AdminPollsSection'));
-const AskAdminsDialog = lazy(() => import('./AskAdminsDialog'));
 
 const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'open',
@@ -237,9 +236,6 @@ function DecisionsQueue() {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
-  const [asking, setAsking] = useState(false);
-  // What opened Ask: null for Propose's menu, else the polls section's own button.
-  const askFrom = useRef<HTMLElement | null>(null);
   const proposeButton = useRef<HTMLButtonElement | null>(null);
   const hideAnsweredSwitch = useRef<HTMLInputElement | null>(null);
   // The decision Sign, Reject or Withdraw was opened on, for where focus goes
@@ -511,25 +507,18 @@ function DecisionsQueue() {
       navigate(PATHS.nominate);
       return;
     }
-    if (choice === 'poll') {
-      askFrom.current = null;
-      setAsking(true);
-      return;
-    }
     // Every other choice is a page of its own (Simon, 2026-10-18), as Propose nomination is.
-    navigate(proposePath(choice));
+    navigate(choice === 'poll' ? PATHS.ask : proposePath(choice));
   };
 
   const fetching = decisionsQ.fetching || nominationsQ.fetching;
 
   // The page's main action: Propose (Propose nomination first) for a Minter Admin, Propose
   // nomination for a level 5+ member; on a phone the floating button, out of the way of the
-  // keyboard, a short frame and Approve several's bar (not while it opened a proposal: focus
-  // comes back to it).
+  // keyboard, a short frame and Approve several's bar. Each choice opens a page of its own.
   const proposeNomination = () => navigate(PATHS.nominate);
   const fab = phone && !landscape && (adminRole || canNominate);
-  const proposing = asking;
-  const fabShown = fab && !selecting && (proposing || (!shortFrame && !keyboardOpen));
+  const fabShown = fab && !selecting && !shortFrame && !keyboardOpen;
   const headerAction = fab ? null : adminRole ? (
     <ProposeMenu onChoose={chooseProposal} buttonRef={proposeButton} nominate={canNominate} />
   ) : canNominate ? (
@@ -828,10 +817,7 @@ function DecisionsQueue() {
                 <Suspense fallback={<CardSkeleton lines={2} />}>
                   <AdminPollsSection
                     author={pollAuthor}
-                    onAsk={(from) => {
-                      askFrom.current = from;
-                      setAsking(true);
-                    }}
+                    onAsk={() => navigate(PATHS.ask)}
                     hideVoted={hideAnswered}
                     onShowVoted={() => {
                       // The note's button goes: focus to the switch it turned off, when shown.
@@ -953,25 +939,6 @@ function DecisionsQueue() {
           onClose={() => setFirstTarget(null)}
           returnFocus={() => sectionOf('waiting') ?? sectionOf('collecting')}
         />
-      ) : null}
-      {asking && pollAuthor && data ? (
-        <Suspense fallback={null}>
-          <AskAdminsDialog
-            open
-            onClose={() => setAsking(false)}
-            author={pollAuthor}
-            admins={data.admins.signers.length}
-            // Back where it was opened: Propose, or the polls section's button (the
-            // section itself once a new poll has replaced its empty state, while
-            // this page is still here).
-            returnFocus={() => {
-              const from = askFrom.current;
-              if (!from || from.isConnected) return from ?? proposeButton.current;
-              const here = proposeButton.current?.isConnected;
-              return (here ? sectionOf('admin-polls') : null) ?? proposeButton.current;
-            }}
-          />
-        </Suspense>
       ) : null}
       <BulkDialog
         open={bulkList !== null}

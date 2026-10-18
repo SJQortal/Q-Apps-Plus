@@ -42,8 +42,8 @@ export default function AdminPollsSection({
 }: {
   /** The signed-in Minter Admin. */
   author: PollAuthor;
-  /** Opens Ask the Minter Admins (as Propose does), from this button: focus comes back to it. */
-  onAsk: (from: HTMLElement) => void;
+  /** Opens Ask the Minter Admins, its page (as Propose does). */
+  onAsk: () => void;
   /** Hide already voted on: leave out the polls the viewer voted on (in time or late). */
   hideVoted?: boolean;
   /** Turn hiding off (the note's Show them). */
@@ -114,7 +114,7 @@ export default function AdminPollsSection({
           title="No Minter Admin polls in the last 31 days"
           description="Ask the Minter Admins a question: they vote Yes, No or Neutral."
           actionLabel="Ask the Minter Admins"
-          onAction={(event) => onAsk(event.currentTarget)}
+          onAction={() => onAsk()}
         />
       ) : (
         <>

@@ -7,6 +7,7 @@ export const PATHS = {
   nominate: '/nominate',
   // Each other + Propose choice is a page too (Simon, 2026-10-18): /propose/<kind>.
   propose: '/propose',
+  ask: '/propose/ask-minter-admins',
   decisions: '/decisions',
   history: '/history',
   // Minter Admin activity lives in the Explorer (Simon, 2026-10-17); `/activity` redirects here.
