@@ -13,7 +13,8 @@ import { parseFilter } from '../nominations/filters';
 export { decisionsViewPath, type DecisionsView };
 
 export const DECISIONS_VIEWS: ReadonlyArray<{ key: DecisionsView; label: string }> = [
-  { key: 'decisions', label: 'Decisions' },
+  // Simon, 2026-10-18: "I want decisions to be called “All Decisions”".
+  { key: 'decisions', label: 'All Decisions' },
   { key: 'nominations', label: 'Nominations' },
   { key: 'ready', label: 'Ready to mint' },
 ];

@@ -67,8 +67,9 @@ export function DecisionsTabs({
             sx={{
               minHeight: 44,
               minWidth: 0,
-              px: { xs: 0.75, sm: 2 },
-              fontSize: { xs: 14, sm: 15 },
+              // All three on a 360 px phone, with "All Decisions" (Simon, 2026-10-18).
+              px: { xs: 0.5, sm: 2 },
+              fontSize: { xs: 13, sm: 15 },
               fontWeight: 600,
               textTransform: 'none',
             }}

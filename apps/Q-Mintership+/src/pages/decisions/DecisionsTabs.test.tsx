@@ -63,8 +63,8 @@ describe('Decisions: its tabs', () => {
   it('opens a Minter Admin on Decisions, and everyone else on Nominations', async () => {
     const admin = await open('admin');
     expect(await screen.findByRole('region', { name: /^Collecting approvals/ }, T)).toBeVisible();
-    expect(tab(/^Decisions/)).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tabpanel')).toHaveAccessibleName(/^Decisions/);
+    expect(tab(/^All Decisions/)).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAccessibleName(/^All Decisions/);
     admin.unmount();
 
     for (const persona of ['nominator', 'learner', 'signedOut']) {
@@ -82,7 +82,10 @@ describe('Decisions: its tabs', () => {
     await screen.findByRole('list', { name: 'Open nominations' }, T);
     // Six open nominations; the decisions collecting approvals and the one waiting for a first.
     await waitFor(() => expect(tab(/^Nominations/)).toHaveAccessibleName('Nominations 6'), T);
-    await waitFor(() => expect(tab(/^Decisions/)).toHaveAccessibleName(/^Decisions \d+$/), T);
+    await waitFor(
+      () => expect(tab(/^All Decisions/)).toHaveAccessibleName(/^All Decisions \d+$/),
+      T
+    );
     await waitFor(
       () => expect(tab(/^Ready to mint/)).toHaveAccessibleName(/^Ready to mint \d+$/),
       T
@@ -95,7 +98,7 @@ describe('Decisions: its tabs', () => {
     ).toBeVisible();
     expect(screen.getByRole('region', { name: /^Ready to mint/ })).toBeVisible();
 
-    await u.click(tab(/^Decisions/));
+    await u.click(tab(/^All Decisions/));
     await waitFor(() => expect(at()).toBe('/decisions?show=decisions|REPLACE'), T);
     expect(await screen.findByRole('region', { name: /^Collecting approvals/ }, T)).toBeVisible();
     // Read-only for them, said once, without the note about nominating.
@@ -107,7 +110,7 @@ describe('Decisions: its tabs', () => {
     await open('nominatedWaiting', '/decisions?show=decisions');
     const mine = await screen.findByRole('region', { name: 'Your nomination' }, T);
     expect(within(mine).getByRole('button', { name: 'Accept nomination' })).toBeVisible();
-    expect(tab(/^Decisions/)).toHaveAttribute('aria-selected', 'true');
+    expect(tab(/^All Decisions/)).toHaveAttribute('aria-selected', 'true');
     // Above the tabs.
     expect(
       mine.compareDocumentPosition(screen.getByRole('tablist')) & Node.DOCUMENT_POSITION_FOLLOWING
