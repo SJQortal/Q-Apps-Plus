@@ -992,6 +992,18 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
     Tests 2,364 passed; the profile captures are clean.
 
+101. **Connections: the circle first, the list for a search** (Simon, 2026-10-17: "when in connections and user starts typing in search, please switch to the list, also make the Circle default"). Connections opens as the circle unless List was picked on this device. Typing a search switches to the list for this visit, without saving it, and clearing the search brings the circle back. A view picked by hand while searching is kept. Tests 2,367 passed.
+
+102. **The QORT summaries move to the Overview; QORT minted on the Minter Profile** (Simon, 2026-10-17: "move the QORT minted / QORT purchased / sold / QORT received / sent to the Overview (to the At a glance) (and for users that never minted QORT just show in the QORT minted, that user never minted QORT)", then "in minter profile In blocks minted, I would also like to see / QORT Minted (and small fetch icon next to it if it needs fetching)").
+    - **At a glance.** It has nine boxes now: the three QORT facts follow Transactions. On phones the two in / out pairs take a full row each.
+    - **Never minted.** An account with no blocks minted shows "Never minted" in QORT minted, and its balance and orders aren't read for it.
+    - **Purchased / sold** no longer waits for the history: it is two reads of completed trades.
+    - **Read the rest.** The notice sits under the boxes. Activity reads the same list, and reads of it in flight are shared, so the two never read a page twice.
+    - **The Minter Profile.** "Blocks minted / QORT minted", e.g. "1,737,799 / 19,334 QORT", with the same ⓘ. When the history needs reading, a small fetch icon stands in for the amount; it shows a spinner while reading.
+    - **Contrast.** The green and red now read at 4.5:1 on the Explorer's tinted field blocks too (`readableOnTint`). Axe had flagged red on them in Hub 3.0 dark.
+
+    Tests 2,369 passed; Overview, Minter Profile and Connections captures (50) are clean.
+
 ## Follow-ups
 
 ### Readiness
