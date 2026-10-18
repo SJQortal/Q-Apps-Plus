@@ -1035,6 +1035,10 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 109. **The tabs in their colours** (Simon, 2026-10-18: "and I want then to be colored as well to the correct color"). Each kind's tab has a dot in its section's colour, the same as on All Decisions and in the By type chips: Removals and Bans red, Declines orange, New and Remove MAs indigo, Lift ban teal, Cancel invite and Clean invites amber, Ask MAs violet, and Nominations the waiting nominations' blue. The selected tab's underline takes its colour too. The words keep the theme's text colour, so they read in every theme. All three main tabs still fit a 360 px phone; Decisions captures are clean.
 
+110. **Ready to mint last** (Simon, 2026-10-18: "you can move ready to mint to the back, as the last one"). Decisions' tabs are now All Decisions, Nominations, the kinds with something open, then Ready to mint. A swipe on a touch screen still moves between All Decisions, Nominations and Ready to mint. Tests 2,382 passed; Decisions captures clean.
+
+111. **A green tick by your own name** (Simon, 2026-10-18: "when user already approved or voted please show a green tick next to his name"). In every column of who answered (a decision's Approved and Rejected, a nomination's, a Minter Admin poll's answers, and the community's Yes and No), the signed-in person's own entry has a green tick beside their name. Screen readers hear "(you answered)". It goes through PersonChip's new `mark`, outside the name's link. Tests 2,383 passed; Decisions, polls and community-voters captures (30) are clean.
+
 ## Follow-ups
 
 ### Readiness
