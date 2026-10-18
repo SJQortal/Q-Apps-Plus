@@ -37,6 +37,12 @@ export interface ShareThumbnailState {
    * as the form says.
    */
   resolve: () => Promise<ThumbnailInput | null>;
+  /**
+   * After a publish that stopped before the thumbnail landed: the automatic
+   * one that went out becomes the choice, so it stays the same picture once
+   * its source file is on QDN (and out of the files it is made from).
+   */
+  keepSent: () => void;
 }
 
 const thumbUrl = (ref: ShareThumbnail) =>
@@ -65,8 +71,9 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
   // Every preview URL made here, freed when replaced or on unmount.
   const urls = useRef(new Set<string>());
   const autoUrl = useRef<string | undefined>(undefined);
-  // The automatic thumbnail being made.
+  // The automatic thumbnail being made, and the last one resolve() handed out.
   const pending = useRef<{ key: string; promise: Promise<File> } | null>(null);
+  const sent = useRef<{ file: File; from: string } | null>(null);
   const keep = useCallback((file: File) => {
     const url = URL.createObjectURL(file);
     urls.current.add(url);
@@ -151,20 +158,29 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
   const autoFailed = choice.kind === "auto" && sourceKey !== null && failedKey === sourceKey;
 
   const resolve = useCallback(async (): Promise<ThumbnailInput | null> => {
+    sent.current = null;
     if (choice.kind === "existing") return { existing: choice.ref };
     if (choice.kind === "file") return { file: choice.file };
     if (choice.kind === "none" || !source?.file.file || autoFailed) return null;
+    const from = source.file.name;
     try {
       const file =
         autoReady?.file ??
         (await (pending.current?.key === source.file.key
           ? pending.current.promise
           : makeThumbnail(source.file.file, source.kind)));
+      sent.current = { file, from };
       return { file };
     } catch {
       return null;
     }
   }, [choice, source, autoReady, autoFailed]);
+
+  const keepSent = useCallback(() => {
+    if (choice.kind !== "auto" || !sent.current) return;
+    const { file, from } = sent.current;
+    set({ kind: "file", file, url: keep(file), from });
+  }, [choice, keep, set]);
 
   // Offer a share image (or video) the choice doesn't already come from.
   const candidates = files.filter((f) => {
@@ -204,5 +220,6 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
     remove,
     set,
     resolve,
+    keepSent,
   };
 }

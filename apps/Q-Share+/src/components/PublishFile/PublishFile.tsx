@@ -157,9 +157,11 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
     // lists them without sending them (and paying for them) again.
     const landed = landedRefs(fileRefs, published);
     const landedCount = Object.keys(landed).length;
-    if (landedCount > 0) draft.keepPublished(landed);
-    // So does a thumbnail that landed.
+    // So does a thumbnail that landed; one that didn't stays the picture it
+    // was, though its image is now a file on QDN rather than a new one.
     if (newThumbnail && published.includes(newThumbnail.identifier)) thumbnail.set({ kind: "existing", ref: newThumbnail });
+    else thumbnail.keepSent();
+    if (landedCount > 0) draft.keepPublished(landed);
     const notes = [
       landedCount > 0 ? keptFilesText(landedCount, Object.keys(fileRefs).length) : "",
       stopped?.uncertain ? "Your share may still be publishing in Hub. Check My shares before you publish it again." : "",

@@ -177,6 +177,33 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
     expect(details().thumbnail.identifier).toMatch(/^qshare_thumb_holiday_/);
   });
 
+  it("keeps the same thumbnail when only its image landed, and sends just the rest", async () => {
+    let call = 0;
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
+      call += 1;
+      if (call > 1) return true;
+      const failed = params.resources.filter((r: any) => r.service !== "FILE").map((r: any) => ({ identifier: r.identifier }));
+      throw { error: { unsuccessfulPublishes: failed }, message: "x" };
+    });
+    renderWithProviders(<PublishFile />);
+    fireEvent.click(screen.getByRole("button", { name: "Share files" }));
+    await screen.findByRole("dialog", { name: "Share files" });
+    fireEvent.change(screen.getByTestId("share-file-input"), { target: { files: [photo()] } });
+    expect(await screen.findByText("Made from photo.png.")).toBeInTheDocument();
+    await fillAndPublish();
+    const first = sent();
+    fireEvent.click(await screen.findByText("1 of 3 published").then(() => screen.getAllByRole("button", { name: "Close" }).at(-1)!));
+    // photo.png is on QDN now, so it is no longer a new file to make one from: the picture stays.
+    expect(await screen.findByText("Made from photo.png.")).toBeInTheDocument();
+    expect(await screen.findByText(/2 publishes/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(2));
+    expect(sent().map((r: any) => r.service)).toEqual(["THUMBNAIL", "DOCUMENT"]);
+    expect(await sent()[0].file.text()).toBe(await first[1].file.text());
+    expect(details().files[0].identifier).toBe(first[0].identifier);
+  });
+
   it("keeps a thumbnail that landed when the share details didn't, and doesn't send it again", async () => {
     let call = 0;
     mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
