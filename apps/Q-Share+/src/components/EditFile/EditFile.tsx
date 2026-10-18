@@ -13,9 +13,11 @@ import type { RootState } from "../../state/store";
 import { fetchAndEvaluateVideos } from "../../utils/fetchVideos";
 import {
   buildSharePublish,
+  shareThumbnail,
   toMultiplePublish,
   type FileRef,
   type MultiplePublishRequest,
+  type ShareThumbnail,
 } from "../../utils/publishPayload";
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
 import { queue } from "../../utils/queue";
@@ -39,6 +41,7 @@ import {
 } from "../PublishFile/shareDraft";
 import { ShareForm } from "../PublishFile/ShareForm";
 import { useShareDraft } from "../PublishFile/useShareDraft";
+import { useShareThumbnail } from "../PublishFile/useShareThumbnail";
 
 /**
  * Shares whose last update was left unconfirmed: Hub may still finish it, so
@@ -78,6 +81,12 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     description: share.htmlDescription || (share.fullDescription ? `<p>${share.fullDescription}</p>` : ""),
   });
   const editCategories = useMemo(() => getCategoriesFromObject(share), [share]);
+  const existingThumbnail = shareThumbnail(share);
+  const thumbnail = useShareThumbnail(
+    draft.files,
+    existingThumbnail ? { kind: "existing", ref: existingThumbnail } : { kind: "none" }
+  );
+  const [newThumbnail, setNewThumbnail] = useState<ShareThumbnail | null>(null);
   const categoryListRef = useRef<CategoryListRef>(null);
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
   // Where each new draft file goes on QDN in the update under way, by draft key.
@@ -128,6 +137,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     preparing.current = true;
     setIsPreparing(true);
     try {
+      const thumb = await thumbnail.resolve();
       const { resources, fileObject, fileReferences } = await buildSharePublish({
         name: username,
         title: draft.title,
@@ -135,6 +145,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
         categoryFetchString: categories.getCategoriesFetchString(),
         categoriesObject: categories.categoriesToObject(),
         files: toPublishInputs(draft.files),
+        thumbnail: thumb,
         edit: { identifier: share.id, version: share.version, commentsId: share.commentsId },
       });
       let before: number | undefined;
@@ -144,7 +155,9 @@ function EditShareDialog({ share }: EditShareDialogProps) {
         // Unknown: then only Hub's answer or its status message confirms the details.
       }
       setReplaces({ [share.id]: before });
-      setPendingUpdate({ ...share, ...fileObject });
+      // A removed thumbnail leaves the field out of the JSON: clear the stored copy's too.
+      setPendingUpdate({ ...share, ...fileObject, thumbnail: fileObject.thumbnail });
+      setNewThumbnail(thumb && "file" in thumb ? (fileObject.thumbnail ?? null) : null);
       unconfirmedUpdates.delete(share.id);
       setFileRefs(newFileRefs(draft.files, fileReferences));
       setPublishes(toMultiplePublish(resources));
@@ -207,6 +220,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     // Publish update lists them without sending them again.
     const landed = landedRefs(fileRefs, published);
     const landedCount = Object.keys(landed).length;
+    if (newThumbnail && published.includes(newThumbnail.identifier)) thumbnail.set({ kind: "existing", ref: newThumbnail });
     if (landedCount > 0) {
       draft.keepPublished(landed);
       dispatch(setNotification({ msg: keptFilesText(landedCount, Object.keys(fileRefs).length), alertType: "info" }));
@@ -258,7 +272,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
           </>
         }
       >
-        <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={editCategories} />
+        <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={editCategories} thumbnail={thumbnail} />
       </ResponsiveDialog>
 
       <PublishAgainDialog

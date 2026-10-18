@@ -28,6 +28,8 @@ import { CategoryList, type CategoryListRef } from "../common/CategoryList/Categ
 import { TextEditor } from "../common/TextEditor/TextEditor";
 import { MAX_FILES, MAX_FILE_SIZE_LABEL, totalDraftSize, type DraftFile } from "./shareDraft";
 import type { ShareDraft } from "./useShareDraft";
+import { ThumbnailPicker } from "./ThumbnailPicker";
+import type { ShareThumbnailState } from "./useShareThumbnail";
 
 /**
  * One file of the draft. Memoized: with 300 files, typing in the title or
@@ -70,6 +72,7 @@ interface ShareFormProps {
   categoryListRef: RefObject<CategoryListRef | null>;
   /** Category ids to start with (editing, or a draft that was closed and reopened). */
   initialCategories?: string[];
+  thumbnail: ShareThumbnailState;
 }
 
 /**
@@ -77,7 +80,7 @@ interface ShareFormProps {
  * category and description. State lives in `useShareDraft` in the parent, so
  * closing the dialog keeps what was typed.
  */
-export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFormProps) {
+export function ShareForm({ draft, categoryListRef, initialCategories, thumbnail }: ShareFormProps) {
   const phone = usePhoneLayout();
   const dispatch = useDispatch();
   const problemsRef = useRef<HTMLDivElement>(null);
@@ -108,9 +111,9 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
 
   const fileCount = draft.files.length;
   const titleMissing = draft.attempted && !draft.title.trim();
-  // Each new file is one publish, plus one for the share details.
+  // Each new file is one publish, plus one for the share details and one for a new thumbnail.
   const newCount = draft.files.filter((f) => !f.existing).length;
-  const publishCount = newCount + 1;
+  const publishCount = newCount + 1 + (thumbnail.publishesNew ? 1 : 0);
   const batches = batchCount(newCount);
   const hasFiles = fileCount > 0;
   const [unitFee, setUnitFee] = useState<number | null>(null);
@@ -188,7 +191,7 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
               </Typography>
               <Typography variant="body2" data-testid="share-publish-cost">
                 {publishCount} {publishCount === 1 ? "publish" : "publishes"}
-                {newCount === 0 ? " (the share details)" : ""}
+                {newCount === 0 ? (thumbnail.publishesNew ? " (the share details and the thumbnail)" : " (the share details)") : ""}
                 {batches > 1 ? ` in ${batches} batches` : ""}
                 {unitFee ? `, ${formatQort(unitFee * publishCount)} in fees` : ""}
               </Typography>
@@ -208,6 +211,8 @@ export function ShareForm({ draft, categoryListRef, initialCategories }: ShareFo
           </Box>
         </Box>
       )}
+
+      {fileCount > 0 && <ThumbnailPicker thumb={thumbnail} />}
 
       <TextField
         name="title"

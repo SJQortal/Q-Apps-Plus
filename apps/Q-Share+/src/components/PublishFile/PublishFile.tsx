@@ -12,6 +12,7 @@ import {
   toMultiplePublish,
   type FileRef,
   type MultiplePublishRequest,
+  type ShareThumbnail,
 } from "../../utils/publishPayload";
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
 import type { CategoryListRef } from "../common/CategoryList/CategoryList";
@@ -25,6 +26,7 @@ import {
 import { keptFilesText, landedRefs, newFileRefs, publishErrorMessage, toPublishInputs } from "./shareDraft";
 import { ShareForm } from "./ShareForm";
 import { useShareDraft } from "./useShareDraft";
+import { useShareThumbnail } from "./useShareThumbnail";
 
 /**
  * The "Share files" trigger and its dialog. The draft (files, title,
@@ -45,6 +47,8 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
 
   const [isOpen, setIsOpen] = useState(false);
   const draft = useShareDraft();
+  // A new share's thumbnail is made from its first image or video unless the user picks or removes it.
+  const thumbnail = useShareThumbnail(draft.files, { kind: "auto" });
   const categoryListRef = useRef<CategoryListRef>(null);
   // CategoryList keeps its own selection, so it is stashed here while the
   // dialog is closed and handed back as initialCategories on reopen.
@@ -52,6 +56,8 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
   // Where each new draft file goes on QDN in the publish under way, by draft key.
   const [fileRefs, setFileRefs] = useState<Record<string, FileRef>>({});
+  // The new thumbnail that publish sends, if any.
+  const [newThumbnail, setNewThumbnail] = useState<ShareThumbnail | null>(null);
   // The last publish was left unconfirmed and Hub may still finish it, so
   // the next Publish asks first: it would make a second share.
   const [mayStillPublish, setMayStillPublish] = useState(false);
@@ -93,16 +99,19 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
     }
 
     try {
-      const { resources, fileReferences } = await buildSharePublish({
+      const thumb = await thumbnail.resolve();
+      const { resources, fileReferences, fileObject } = await buildSharePublish({
         name: username,
         title: draft.title,
         descriptionHtml: draft.description,
         categoryFetchString: categories.getCategoriesFetchString(),
         categoriesObject: categories.categoriesToObject(),
         files: toPublishInputs(draft.files),
+        thumbnail: thumb,
       });
       setMayStillPublish(false);
       setFileRefs(newFileRefs(draft.files, fileReferences));
+      setNewThumbnail(thumb && "file" in thumb ? (fileObject.thumbnail ?? null) : null);
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish share"), alertType: "error" }));
@@ -116,6 +125,7 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
     setMayStillPublish(false);
     setIsOpen(false);
     draft.reset();
+    thumbnail.set({ kind: "auto" });
     setSavedCategories(undefined);
     categoryListRef.current?.clearCategories();
     dispatch(setNotification({ msg, alertType }));
@@ -138,6 +148,8 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
     const landed = landedRefs(fileRefs, published);
     const landedCount = Object.keys(landed).length;
     if (landedCount > 0) draft.keepPublished(landed);
+    // So does a thumbnail that landed.
+    if (newThumbnail && published.includes(newThumbnail.identifier)) thumbnail.set({ kind: "existing", ref: newThumbnail });
     const notes = [
       landedCount > 0 ? keptFilesText(landedCount, Object.keys(fileRefs).length) : "",
       stopped?.uncertain ? "Your share may still be publishing in Hub. Check My shares before you publish it again." : "",
@@ -191,7 +203,12 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
           </>
         }
       >
-        <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={savedCategories} />
+        <ShareForm
+          draft={draft}
+          categoryListRef={categoryListRef}
+          initialCategories={savedCategories}
+          thumbnail={thumbnail}
+        />
       </ResponsiveDialog>
 
       <PublishAgainDialog
