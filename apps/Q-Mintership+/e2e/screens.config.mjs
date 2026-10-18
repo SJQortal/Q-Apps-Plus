@@ -477,9 +477,15 @@ export default {
         await page
           .getByRole('searchbox', { name: 'Search who asked to join MINTER, by name or address' })
           .fill('fern', { timeout: 4000 });
+        // A row is read once it nears the screen: on a landscape phone the list starts below it.
         await page
-          .getByRole('link', { name: `${FORMER_READY.removed.name}: open their page` })
-          .waitFor({ timeout: 8000 });
+          .getByRole('list', { name: 'Requested to join MINTER Group' })
+          .evaluate((list) => list.scrollIntoView({ block: 'center' }));
+        const row = page.getByRole('link', {
+          name: `${FORMER_READY.removed.name}: open their page`,
+        });
+        await row.waitFor({ timeout: 8000 });
+        await row.evaluate((link) => link.closest('li')?.scrollIntoView({ block: 'center' }));
         await page.waitForTimeout(400);
       },
     },
@@ -1077,6 +1083,45 @@ export default {
         await page.waitForTimeout(300);
       }),
     },
+    // A note for the Minter Admins under a kick's public reason (Simon, 2026-10-18).
+    {
+      key: 'decisions-admin-note',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: withPolls(async (page) => {
+        await settle(page);
+        // The note is read once its card nears the screen: bring the card there first.
+        const card = page.getByRole('article', { name: /^Remove from MINTER, Kai Target/ }).first();
+        await card.waitFor({ timeout: 8000 });
+        await card.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+        await card.getByText('For the Minter Admins only').waitFor({ timeout: 8000 });
+        await card.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+        await page.waitForTimeout(400);
+      }),
+    },
+    // Comments for the Minter Admins only, in bob+builder's thread, and the choice of who can
+    // read a new one.
+    {
+      key: 'decisions-admin-comments',
+      path: '/decisions?as=admin',
+      overlay: true,
+      after: withPolls(async (page) => {
+        await settle(page);
+        await page
+          .getByRole('button', { name: /^Comments \(\d+\): Add to MINTER, bob\+builder/ })
+          .first()
+          .click({ timeout: 8000 });
+        const group = page.getByRole('radiogroup', { name: 'Who can read it' }).first();
+        await group.waitFor({ timeout: 8000 });
+        await page
+          .getByText('Minter Admins only', { exact: true })
+          .first()
+          .waitFor({ timeout: 8000 });
+        await group.getByRole('radio', { name: /Minter Admins only/ }).check();
+        await group.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(400);
+      }),
+    },
     {
       key: 'poll-page',
       // The check answers every URL with "/polls/" in it as Core's polls API, so the page
@@ -1483,10 +1528,12 @@ function withDecline(then) {
 }
 
 // ---- Minter Admin polls: the two screens above -----------------------------------
-import { ADMIN_POLL_IDS, addAdminPolls, answerAdminPolls } from './world.mjs';
+import { ADMIN_POLL_IDS, addAdminNotes, addAdminPolls, answerAdminPolls } from './world.mjs';
 
-// Polls in the default world; only the two screens above serve them (DOCUMENT_PRIVATE).
+// Polls in the default world, and the notes and comments for the Minter Admins; only the
+// screens that use withPolls serve them (DOCUMENT_PRIVATE).
 addAdminPolls(world);
+addAdminNotes(world);
 
 /**
  * DECRYPT_DATA in the page, as the persona's Hub would (the mock world's
