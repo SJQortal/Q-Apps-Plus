@@ -35,6 +35,7 @@ import { PersonChip } from '../../components/common/Person';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import { CardSkeleton, ErrorState } from '../../components/common/states';
 import { formatQort } from '../../data/accounts';
+import { normaliseNoteText } from '../../data/adminNoteRecords';
 import { getBans, isBanActive } from '../../data/group';
 import { loadStaleInviteDetails, loadStaleInvites, staleDetailsKey } from '../../data/staleInvites';
 import type { GroupMemberRow } from '../../data/types';
@@ -155,6 +156,8 @@ export function ProposeDialog({
   }, [person]);
   const invites = useUnusedInvites(open && kind === 'cancelInvite');
   const fee = useFee('GROUP_KICK');
+  // A note for the Minter Admins goes as one more Hub step (adminNoteFollowUp).
+  const withNote = Boolean(signer && session.name && normaliseNoteText(note));
 
   // A new kind or preset person starts a fresh form (React's adjust-while-rendering pattern).
   const presetKey = `${kind ?? ''}:${preset?.address ?? ''}`;
@@ -267,8 +270,10 @@ export function ProposeDialog({
           <Typography variant="body2" color="text.secondary">
             Once {ctx.needed} Minter Admins approve it, like any decision, their join request goes.
             They can send a new join request later. It costs{' '}
-            {formatQort((fee.data?.qort ?? 0.01) * 2)}: your proposal and your own approval of it,
-            two Hub steps.
+            {formatQort((fee.data?.qort ?? 0.01) * (withNote ? 3 : 2))}:{' '}
+            {withNote
+              ? 'your proposal, your own approval of it and your note, three Hub steps.'
+              : 'your proposal and your own approval of it, two Hub steps.'}
           </Typography>
         ) : null}
         {kind === 'addAdmin' || kind === 'removeAdmin' ? (

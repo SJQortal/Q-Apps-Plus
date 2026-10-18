@@ -718,6 +718,20 @@ describe('Requested to join MINTER Group: declining', () => {
       await within(dialog).findByText('Nothing stops this proposal.', {}, { timeout: 4000 })
     ).toBeVisible();
     expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
+    // A note for the Minter Admins is one more Hub step, and the cost says so.
+    const noteBox = within(dialog).getByRole('textbox', {
+      name: 'Note for the Minter Admins (optional)',
+    });
+    await user.type(noteBox, 'Asked twice in Q-Chat.');
+    expect(
+      within(dialog).getByText(
+        'Once 8 Minter Admins approve it, like any decision, their join request goes. They can send a new join request later. It costs 0.03 QORT: your proposal, your own approval of it and your note, three Hub steps.'
+      )
+    ).toBeVisible();
+    await user.clear(noteBox);
+    expect(
+      within(dialog).getByText(/It costs 0\.02 QORT: your proposal and your own/)
+    ).toBeVisible();
     // A reason is required.
     await user.click(within(dialog).getByRole('button', { name: 'Review' }));
     expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
