@@ -107,7 +107,12 @@ function cappedLinks(world: World, who: string) {
   });
 }
 
-beforeEach(() => resetExplorerState());
+const VIEW_KEY = 'qmintershipplus-connections-view';
+beforeEach(() => {
+  resetExplorerState();
+  // The circle is the default; most tests here read the list.
+  window.localStorage.setItem(VIEW_KEY, 'list');
+});
 afterEach(() => vi.useRealTimers());
 
 describe('Connections: payments and first QORT', () => {
@@ -689,6 +694,68 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     expect(lines).toHaveTextContent('Accounts it ever made a reward share to: 5');
     expect(lines).toHaveTextContent('Core counts names, not accounts');
     expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);
+  });
+});
+
+describe('Connections: the circle first, the list for a search', () => {
+  it('opens as a circle, and typing a search shows the list until it is cleared', async () => {
+    window.localStorage.removeItem(VIEW_KEY);
+    const { user } = await open(ADDR.left);
+    expect(await screen.findByRole('button', { name: 'Circle' }, T)).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await region('Connections circle');
+    const field = await screen.findByRole(
+      'searchbox',
+      { name: /^Search this account’s connections/ },
+      T
+    );
+    await user.type(field, 'k');
+    await waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        ),
+      T
+    );
+    expect(screen.queryByRole('region', { name: 'Connections circle' })).toBeNull();
+    // For this visit only: the circle stays the one kept.
+    expect(window.localStorage.getItem(VIEW_KEY)).toBeNull();
+    await user.clear(field);
+    await waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: 'Circle' })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        ),
+      T
+    );
+  });
+
+  it('keeps a view picked by hand while searching', async () => {
+    window.localStorage.removeItem(VIEW_KEY);
+    const { user } = await open(ADDR.left);
+    const field = await screen.findByRole(
+      'searchbox',
+      { name: /^Search this account’s connections/ },
+      T
+    );
+    await user.type(field, 'k');
+    await waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        ),
+      T
+    );
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    await user.clear(field);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
 

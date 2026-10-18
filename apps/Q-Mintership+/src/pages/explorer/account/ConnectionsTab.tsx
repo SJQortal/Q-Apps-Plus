@@ -3,8 +3,9 @@
  * sentence with numbers, a date and a block, opening to the transactions
  * behind it; never a verdict.
  *
- * What was recorded between them as a list or as a circle (List and Circle,
- * kept on this device: ConnectionsCircle), the facts first, then the fixed
+ * What was recorded between them as a circle (the default) or a list (Circle
+ * and List, kept on this device: ConnectionsCircle; typing a search shows
+ * the list), the facts first, then the fixed
  * neutral line and Copy findings:
  * - Recorded between them: minting level moved, reward shares (its
  *   sponsor, minting with another account now, the accounts it sponsored),
@@ -275,7 +276,21 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   // ---- the search (Simon, 2026-10-17) -----------------------------------------------------
   const [params, setParams] = useSearchParams();
   const searchText = appParam(params, 'q') ?? '';
-  const setSearch = (next: string) =>
+  // Typing in the search shows the list (Simon, 2026-10-17: "when … user
+  // starts typing in search, please switch to the list"), for this visit;
+  // clearing it brings the circle back if the search had put it away.
+  const [circleForSearch, setCircleForSearch] = useState(false);
+  const setSearch = (next: string) => {
+    if (next.trim() && view === 'circle') {
+      setView('list', false);
+      setCircleForSearch(true);
+    } else if (!next.trim() && circleForSearch) {
+      setView('circle', false);
+      setCircleForSearch(false);
+    }
+    setSearchParam(next);
+  };
+  const setSearchParam = (next: string) =>
     setParams(
       (prev) => {
         const out = new URLSearchParams(prev);
@@ -525,7 +540,10 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
           size="small"
           value={view}
           onChange={(_, value: ConnectionsView | null) => {
-            if (value) setView(value);
+            if (!value) return;
+            setView(value);
+            // Picked by hand: clearing the search leaves it.
+            setCircleForSearch(false);
           }}
           aria-label="Show what was recorded between them as"
         >
