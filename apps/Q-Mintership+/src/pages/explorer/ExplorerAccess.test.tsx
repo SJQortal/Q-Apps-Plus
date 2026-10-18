@@ -86,7 +86,9 @@ describe('an account, for a viewer who doesn’t see the detailed parts', () => 
     expect(within(glance).getByText('Blocks minted')).toBeInTheDocument();
     expect(glance).not.toHaveTextContent(/QORT minted|purchased|received \/ sent/);
     // Nothing about them anywhere on the page, nor that anything is left out.
-    expect(document.body).not.toHaveTextContent(/Connections|connections|hidden for/);
+    expect(document.body).not.toHaveTextContent(
+      /Connections|connections|Activity below|hidden for/
+    );
     await new Promise((r) => setTimeout(r, 300));
     for (const read of [
       '/transactions/payments/between',

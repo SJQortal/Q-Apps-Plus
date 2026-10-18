@@ -128,17 +128,20 @@ export function groupsWords(count: number): string {
  * The Transactions fact (Simon, 2026-10-17: "every transactions should
  * be the main number, and QDN should be the smaller number below"): the
  * `read` transactions of its list and the QDN data ones among them, exact
- * once `done` (the whole history is in), else floors ("1,000+").
+ * once `done` (the whole history is in), else floors ("1,000+"). A floor
+ * points to Activity, which reads further back, only for a viewer who has
+ * it (`withActivity`).
  */
 export function qdnTxWords(
   qdn: number,
   read: number,
-  done: boolean
+  done: boolean,
+  withActivity = true
 ): { value: string; detail: string } {
   if (done) return { value: formatCount(read), detail: `${formatCount(qdn)} of them on QDN.` };
   return {
     value: `${formatCount(read)}+`,
-    detail: `${formatCount(qdn)}+ of them on QDN. Activity below reads further back.`,
+    detail: `${formatCount(qdn)}+ of them on QDN.${withActivity ? ' Activity below reads further back.' : ''}`,
   };
 }
 

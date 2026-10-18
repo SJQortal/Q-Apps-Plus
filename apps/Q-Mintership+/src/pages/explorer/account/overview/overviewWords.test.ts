@@ -89,6 +89,11 @@ describe('facts', () => {
       value: '1,000+',
       detail: '860+ of them on QDN. Activity below reads further back.',
     });
+    // Without the activity chart on the page, nothing points to it.
+    expect(qdnTxWords(860, 1000, false, false)).toEqual({
+      value: '1,000+',
+      detail: '860+ of them on QDN.',
+    });
   });
 });
 

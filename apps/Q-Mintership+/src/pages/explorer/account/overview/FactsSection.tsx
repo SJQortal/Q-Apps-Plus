@@ -240,9 +240,10 @@ function GroupsFact({ address }: { address: string }) {
  * has yet). Exact once that list reaches its first transaction; until then
  * a floor, "860+", counted in what was read. Nothing more is read for it
  * (Simon: "keep it light … show like over 1000 tx"): Activity's own Read
- * further back makes it exact.
+ * further back makes it exact, and the floor points there for a viewer who
+ * has Activity (`full`).
  */
-function QdnFact({ address }: { address: string }) {
+function QdnFact({ address, full }: { address: string; full: boolean }) {
   const list = useQuery(accountTxKey(address, []), (force) => getAccountTx(address, [], { force }));
   // Simon, 2026-10-17: it "should just say "Transactions"".
   const label = 'Transactions';
@@ -251,7 +252,7 @@ function QdnFact({ address }: { address: string }) {
   if (!list.data) return <Fact label={label} value={<Loading />} />;
   const { rows, done } = list.data;
   const qdn = rows.filter((tx) => familyOf(tx.type) === 'qdn').length;
-  const { value, detail } = qdnTxWords(qdn, rows.length, done);
+  const { value, detail } = qdnTxWords(qdn, rows.length, done, full);
   return <Fact label={label} value={value} detail={detail} />;
 }
 
@@ -290,7 +291,7 @@ export function FactsSection({ address, account, firstSeen, full }: FactsProps) 
           <BalanceFact address={address} />
           <FirstSeenFact query={firstSeen} />
           <GroupsFact address={address} />
-          <QdnFact address={address} />
+          <QdnFact address={address} full={full} />
           {full ? (
             <>
               <Fact label="QORT minted" value={qort.minted} />
