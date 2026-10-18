@@ -5,8 +5,8 @@
  * group the signed-in account isn't in. An open group is joined at once; a
  * closed one gets a join request its admins decide on: the same JOIN_GROUP,
  * explained before Hub opens (HubStepDialog), checked against the chain
- * first (writes/guards.ts → guardJoinGroup). MINTER keeps its own way in
- * (Show you're ready to mint, on Home), so it has none.
+ * first (writes/guards.ts → guardJoinGroup). MINTER is joined by
+ * nomination, so it has none.
  *
  * It lives outside the Explorer's folders: the Explorer's own files stay
  * read-only (eslint.config.js).

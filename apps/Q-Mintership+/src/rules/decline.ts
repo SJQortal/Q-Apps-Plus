@@ -1,7 +1,8 @@
 /**
  * Declining a join request: a MINTER kick of someone who asked to join and
  * isn't a member. Once the Minter Admins sign it, Core deletes their join
- * request (they leave Ready to mint) and they can send a new one later. It
+ * request (they leave Requested to join MINTER Group) and they can send a
+ * new one later. It
  * is the same GROUP_KICK as a removal, so which one it is comes from the
  * person's join request: the join requests list while it waits, their
  * MINTER history once decided. Pure; the loaders feed it.

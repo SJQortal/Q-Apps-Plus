@@ -1,35 +1,52 @@
+/**
+ * Requested to join MINTER Group (Simon, 2026-10-18: the Ready to mint list,
+ * renamed and moved into + Propose → Decline a join request): who asked to
+ * join, for Minter Admins to decline from. The list's order, its reads (only
+ * the rows on screen), former members, its search, and declining from a row.
+ */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DECLINED, addDecline, fakeAddress, type World } from '../../../e2e/world.mjs';
 import { formatDate, shortAddress } from '../../utils/format';
-import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
+import { invalidate } from '../../data/query';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../test/world';
-import DecisionsPage from '../decisions/DecisionsPage';
+import DecisionsPage from './DecisionsPage';
 
 afterEach(() => vi.useRealTimers());
+vi.setConfig({ testTimeout: 30_000 });
 
-const open = (persona: string, setup?: (world: World) => void, sort?: string) =>
-  renderPage(<DecisionsPage />, {
-    persona,
-    path: `/decisions?show=ready${sort ? `&sort=${sort}` : ''}`,
+const T = { timeout: 4000 };
+
+/** Decisions as a Minter Admin, then Propose → Decline a join request (in `sort`'s order). */
+async function open(setup?: (world: World) => void, sort?: string) {
+  const rendered = await renderPage(<DecisionsPage />, {
+    persona: 'admin',
+    path: '/decisions?show=decisions',
     route: '/decisions',
     setup,
   });
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Propose' }, T));
+  await user.click(await screen.findByRole('menuitem', { name: /^Decline a join request/ }, T));
+  const dialog = await screen.findByRole('dialog', { name: 'Decline a join request' }, T);
+  if (sort) await user.selectOptions(await within(dialog).findByLabelText('Sort', {}, T), sort);
+  return { ...rendered, dialog };
+}
 
 const joinRequest = (joiner: string) => ({ groupId: 694, joiner });
 
-const readyList = () => screen.findByRole('list', { name: 'Ready to mint' }, { timeout: 4000 });
+const readyList = () => screen.findByRole('list', { name: 'Requested to join MINTER Group' }, T);
 
 /** A row, found by the name (or short address) its person link shows. */
 async function row(label: string): Promise<HTMLElement> {
   const link = await within(await readyList()).findByRole(
     'link',
     { name: `${label}: open their page` },
-    { timeout: 4000 }
+    T
   );
   return link.closest('li') as HTMLElement;
 }
@@ -40,20 +57,19 @@ function rowLabels(list: HTMLElement): string[] {
     .map((a) => a.getAttribute('aria-label')?.replace(/: open their page$/, '') ?? '');
 }
 
-describe('Ready to mint', () => {
-  it('lists who asked to join, in the node’s order, to everyone, without members or banned', async () => {
-    await open(
-      'signedOut',
-      (world) => {
-        world.joinRequests.push(
-          joinRequest(ADDR.kicked),
-          joinRequest(ADDR.learner),
-          joinRequest(ADDR.banned),
-          joinRequest(fakeAddress('old-ban'))
-        );
-      },
-      'node'
-    );
+/** The list reads again when the nominations do (every minute, or Refresh behind the dialog). */
+const nominationsRefresh = () => act(() => invalidate('nominations:'));
+
+describe('Requested to join MINTER Group', () => {
+  it('lists who asked to join, in the node’s order, without members or banned', async () => {
+    await open((world) => {
+      world.joinRequests.push(
+        joinRequest(ADDR.kicked),
+        joinRequest(ADDR.learner),
+        joinRequest(ADDR.banned),
+        joinRequest(fakeAddress('old-ban'))
+      );
+    }, 'node');
     const kit = await row('Kit Kicked');
     expect(
       await within(kit).findByText(/^Level 3 · 210,000 blocks minted/, {}, { timeout: 4000 })
@@ -83,46 +99,41 @@ describe('Ready to mint', () => {
       )
     ).toBeInTheDocument();
     expect(within(await row('bob+builder')).queryByText(/Former member/)).toBeNull();
-    expect(screen.getByText(/They need a nomination from a level 5\+ minter/)).toBeInTheDocument();
+    expect(screen.getByText(/People who asked to join MINTER and aren.t members\./)).toBeVisible();
     expect(screen.getByLabelText('Sort')).toHaveValue('node');
     expect(screen.getByText('8 of 8 shown')).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /^Ready to mint\s*8/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    );
-    // The search box searches this list; the nominations' lists step aside; nobody
-    // signed out can nominate.
     expect(
-      screen.getByRole('searchbox', { name: 'Search the people ready to mint by name or address' })
+      screen.getByRole('searchbox', { name: 'Search who asked to join MINTER, by name or address' })
     ).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Open nominations' })).toBeNull();
+    // Decline where no nomination is open; nothing to nominate or support from here.
     expect(
       await within(await row('Uma Urgent')).findByText('Nominated', {}, { timeout: 4000 })
     ).toBeInTheDocument();
-    expect(within(list).queryAllByRole('button')).toHaveLength(0);
+    expect(within(list).getAllByRole('button')).toHaveLength(5);
+    expect(
+      within(list)
+        .getAllByRole('button')
+        .every((b) => /^Decline .*’s join request$/.test(b.getAttribute('aria-label') ?? ''))
+    ).toBe(true);
   });
 
   it('shows 20 at a time and reads accounts and names only for the rows shown', async () => {
     const user = userEvent.setup();
     const many = Array.from({ length: 45 }, (_, i) => fakeAddress(`many-jr-${i}`));
-    await open(
-      'nominator',
-      (world) => {
-        world.joinRequests.push(...many.map(joinRequest));
-      },
-      'node'
-    );
+    await open((world) => {
+      world.joinRequests.push(...many.map(joinRequest));
+    }, 'node');
     const list = await readyList();
     // 6 from the mock world, then 14 of these.
     await waitFor(() => expect(within(list).getAllByRole('listitem')).toHaveLength(20));
     expect(screen.getByText('20 of 51 shown')).toBeInTheDocument();
-    // Account, name and MINTER history: three reads per row shown, none for the others.
+    // Account and name: two reads per row shown, none for the others. (Every row's MINTER
+    // history is read once for the list's first order, newest request first: see below.)
     const reads = (address: string) =>
       fetchCallsFor(`/addresses/${address}`).length +
-      fetchCallsFor(`/names/primary/${address}`).length +
-      fetchCallsFor(`/transactions/search?address=${address}`).length;
-    await waitFor(() => expect(reads(many[13])).toBe(3));
-    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(3));
+      fetchCallsFor(`/names/primary/${address}`).length;
+    await waitFor(() => expect(reads(many[13])).toBe(2));
+    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(2));
     expect(many.slice(14).map(reads)).toEqual(new Array(31).fill(0));
 
     await user.click(screen.getByRole('button', { name: 'Show 20 more' }));
@@ -131,11 +142,11 @@ describe('Ready to mint', () => {
     expect(document.activeElement).toHaveAccessibleName(
       `${shortAddress(many[14])}: open their page`
     );
-    await waitFor(() => expect(reads(many[33])).toBe(3));
-    expect(many.slice(14, 34).map(reads)).toEqual(new Array(20).fill(3));
+    await waitFor(() => expect(reads(many[33])).toBe(2));
+    expect(many.slice(14, 34).map(reads)).toEqual(new Array(20).fill(2));
     expect(many.slice(34).map(reads)).toEqual(new Array(11).fill(0));
     // Rows already read aren't read again.
-    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(3));
+    expect(many.slice(0, 14).map(reads)).toEqual(new Array(14).fill(2));
 
     await user.click(screen.getByRole('button', { name: 'Show 11 more' }));
     expect(within(list).getAllByRole('listitem')).toHaveLength(51);
@@ -188,7 +199,7 @@ describe('Ready to mint', () => {
 
   it('sorts by when they asked, newest first by default, with the date on each row', async () => {
     const user = userEvent.setup();
-    await open('nominator', sortWorld);
+    await open(sortWorld);
     expect(await screen.findByLabelText('Sort')).toHaveValue('newest');
     // Unknown dates go last.
     await waitFor(async () =>
@@ -220,17 +231,9 @@ describe('Ready to mint', () => {
     );
   });
 
-  it('opens on the order a link names', async () => {
-    await open('nominator', sortWorld, 'oldest');
-    expect(await screen.findByLabelText('Sort')).toHaveValue('oldest');
-    await waitFor(async () =>
-      expect(await orderOf()).toEqual(['Ann Early', 'Meg Middle', 'Zed Recent', 'Nil Unknown'])
-    );
-  });
-
   it('sorting by date reads each history once; accounts and names only for the rows shown', async () => {
     const many = Array.from({ length: 45 }, (_, i) => fakeAddress(`sorted-jr-${i}`));
-    await open('nominator', (world) => {
+    await open((world) => {
       world.joinRequests.push(...many.map(joinRequest));
     });
     const list = await readyList();
@@ -251,7 +254,7 @@ describe('Ready to mint', () => {
 
   it('marks former members, kicked, banned or left, and nobody who was never a member', async () => {
     let banEnded = 0;
-    await open('nominator', (world) => {
+    await open((world) => {
       world.joinRequests.push(joinRequest(ADDR.left), joinRequest(ADDR.kicked));
       // Bram's 3-day ban ended: a former member again, and the row says it was a ban.
       const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
@@ -284,7 +287,7 @@ describe('Ready to mint', () => {
   });
 
   it('never marks a declined join request as a removal from MINTER', async () => {
-    await open('nominator', (world) => {
+    await open((world) => {
       const { declined } = addDecline(world);
       const kick = world.decided.find(
         (tx: { signature: string }) => tx.signature === declined.kick
@@ -332,7 +335,7 @@ describe('Ready to mint', () => {
 
   it('says when a former member’s ban was lifted', async () => {
     let liftedAt = 0;
-    await open('nominator', (world) => {
+    await open((world) => {
       const ban = world.decided.find((tx: { type: string }) => tx.type === 'GROUP_BAN');
       world.bans = world.bans.filter((b: { offender: string }) => b.offender !== ADDR.banned);
       const lift = {
@@ -359,10 +362,9 @@ describe('Ready to mint', () => {
     ).toBeInTheDocument();
   });
 
-  it('reads a row again on Refresh when its level could not be read', async () => {
-    const user = userEvent.setup();
+  it('reads a row again when the list refreshes, when its level could not be read', async () => {
     let down = true;
-    await open('nominator', (world) => {
+    await open((world) => {
       world.joinRequests.push(joinRequest(ADDR.kicked));
       mockFetchRoute(`/addresses/${ADDR.kicked}`, () =>
         down
@@ -381,7 +383,7 @@ describe('Ready to mint', () => {
     // Two minutes later the node answers again.
     down = false;
     vi.setSystemTime(Date.now() + 2 * 60_000);
-    await user.click(screen.getByRole('button', { name: 'Refresh' }));
+    await nominationsRefresh();
     expect(
       await within(await row('Kit Kicked')).findByText(
         'Level 3 · 210,000 blocks minted',
@@ -395,7 +397,6 @@ describe('Ready to mint', () => {
   });
 
   it('reads a failed row again once per list refresh, not each time another row comes near', async () => {
-    const user = userEvent.setup();
     // Rows come near only when the test says so, one at a time, as when scrolling.
     const watchers = new Map<Element, IntersectionObserverCallback>();
     class OneAtATime {
@@ -419,7 +420,7 @@ describe('Ready to mint', () => {
       );
     const later = Array.from({ length: 8 }, (_, i) => fakeAddress(`near-jr-${i}`));
     try {
-      await open('nominator', (world) => {
+      await open((world) => {
         world.joinRequests.push(joinRequest(ADDR.kicked), ...later.map(joinRequest));
         mockFetchRoute(`/addresses/${ADDR.kicked}`, () => new Response('', { status: 500 }));
       });
@@ -441,7 +442,7 @@ describe('Ready to mint', () => {
 
       // A refresh of the list reads it again, once.
       vi.setSystemTime(Date.now() + 2 * 60_000);
-      await user.click(screen.getByRole('button', { name: 'Refresh' }));
+      await nominationsRefresh();
       await waitFor(() => expect(reads()).toBe(before + 1));
       await comeNear(await row(shortAddress(later[0])));
       expect(reads()).toBe(before + 1);
@@ -450,127 +451,53 @@ describe('Ready to mint', () => {
     }
   });
 
-  it('offers Propose nomination to a level 5+ member, and says where they already nominated', async () => {
-    const user = userEvent.setup();
-    // jr-1 owns a name (not a primary one: one light read finds it); jr-2 and jr-3 own none,
-    // so they can't be nominated.
-    await open('nominator', (world) => {
-      world.names.set('Jay Ready', fakeAddress('jr-1'));
-    });
-    const jr1 = await row(shortAddress(fakeAddress('jr-1')));
-    expect(
-      await within(await row('bob+builder')).findByText('You nominated them', {}, { timeout: 4000 })
-    ).toBeInTheDocument();
-    expect(within(await row('Uma Urgent')).getByText('You nominated them')).toBeInTheDocument();
-    const mia = await row('Mia Met');
-    expect(within(mia).getByText('Nominated')).toBeInTheDocument();
-    // Enough Minter Admins have signed already: support would change nothing.
-    expect(within(mia).queryByRole('button')).toBeNull();
-    expect(
-      within(await readyList()).getAllByRole('button', {
-        name: new RegExp(`^${PROPOSE_NOMINATION} for `),
-      })
-    ).toHaveLength(1);
-    for (const who of ['jr-2', 'jr-3'])
-      expect(
-        await within(await row(shortAddress(fakeAddress(who)))).findByText(
-          'No registered name',
-          {},
-          { timeout: 4000 }
-        )
-      ).toBeInTheDocument();
-
-    await user.click(
-      within(jr1).getByRole('button', {
-        name: proposeNominationFor(shortAddress(fakeAddress('jr-1'))),
-      })
-    );
-    expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
-  });
-
-  it('lets a Minter Admin add their support where a nomination is still collecting', async () => {
-    const user = userEvent.setup();
-    await open('admin');
-    const uma = await row('Uma Urgent');
-    expect(await within(uma).findByText('Nominated', {}, { timeout: 4000 })).toBeInTheDocument();
-    expect(within(await row('Mia Met')).queryByRole('button')).toBeNull();
-    await user.click(within(uma).getByRole('button', { name: 'Add your support for Uma Urgent' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Add your support' });
-    expect(within(dialog).getByText('Uma Urgent')).toBeInTheDocument();
-  });
-
-  it('offers nothing to a member below level 5', async () => {
-    await open('learner');
-    await row(shortAddress(fakeAddress('jr-3')));
-    expect(
-      await within(await row('Uma Urgent')).findByText('Nominated', {}, { timeout: 4000 })
-    ).toBeInTheDocument();
-    const list = await readyList();
-    expect(within(list).queryAllByRole('button')).toHaveLength(0);
-  });
-
-  it('shows the signed-in person their own row without an action', async () => {
-    await open('newcomerName', (world) => {
-      world.joinRequests.push(joinRequest(ADDR.newcomerName));
-    });
-    const mine = await row('Zoë Newcomer');
-    expect(within(mine).getByText('That’s you')).toBeInTheDocument();
-    expect(within(mine).queryByRole('button')).toBeNull();
-  });
-
   it('says so when no one has asked to join', async () => {
-    await open('nominator', (world) => {
+    await open((world) => {
       world.joinRequests.length = 0;
     });
     expect(
       await screen.findByText('No one has asked to join right now', {}, { timeout: 4000 })
     ).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /^Ready to mint\s*0/ })).toBeInTheDocument();
   });
 
   it('shows an error with Retry, and loads on Retry', async () => {
     const user = userEvent.setup();
     let down = true;
-    await open('nominator', () =>
+    const { dialog } = await open(() =>
       mockFetchRoute('/groups/joinrequests/694', () =>
         down ? new Response('', { status: 500 }) : [joinRequest(fakeAddress('jr-1'))]
       )
     );
     expect(
-      await screen.findByText('Couldn’t load the people ready to mint.', {}, { timeout: 4000 })
+      await screen.findByText('Couldn’t load who asked to join MINTER.', {}, { timeout: 4000 })
     ).toBeInTheDocument();
     down = false;
-    const section = screen.getByRole('region', { name: 'Ready to mint' });
-    await user.click(within(section).getByRole('button', { name: 'Retry' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Retry' }));
     expect(await row(shortAddress(fakeAddress('jr-1')))).toBeInTheDocument();
   });
 
-  it('switches between the open nominations and Ready to mint', async () => {
-    const user = userEvent.setup();
-    await open('nominator');
-    await readyList();
-    await user.click(
-      await screen.findByRole('tab', { name: /^Nominations\s*\d/ }, { timeout: 4000 })
-    );
-    expect(
-      await screen.findByRole('list', { name: 'Open nominations' }, { timeout: 4000 })
-    ).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Ready to mint' })).toBeNull();
-    expect(screen.getByRole('searchbox')).toBeInTheDocument();
-    await user.click(screen.getByRole('tab', { name: /^Ready to mint\s*6/ }));
-    expect(await readyList()).toBeInTheDocument();
+  it('is for Minter Admins: nobody else has it, nor a tab of its own', async () => {
+    await renderPage(<DecisionsPage />, {
+      persona: 'nominator',
+      path: '/decisions',
+      route: '/decisions',
+    });
+    expect(await screen.findByRole('list', { name: 'Open nominations' }, T)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Propose' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: /Ready to mint|Requested to join/ })).toBeNull();
+    expect(screen.queryByRole('list', { name: 'Requested to join MINTER Group' })).toBeNull();
   });
 });
 
-describe('Ready to mint: search', () => {
+describe('Requested to join MINTER Group: search', () => {
   const searchBox = () =>
-    screen.getByRole('searchbox', { name: 'Search the people ready to mint by name or address' });
+    screen.getByRole('searchbox', { name: 'Search who asked to join MINTER, by name or address' });
   // Name searches and lookups (not a row's own primary name, or whether it has any name).
   const nameLookups = () => fetchCallsFor(/^\/names\/(?!primary\/|address\/)/);
 
   it('finds a typed address directly, without looking up any name', async () => {
     const user = userEvent.setup();
-    await open('nominator', (world) => {
+    await open((world) => {
       world.joinRequests.push(joinRequest(ADDR.kicked));
     });
     await row('Kit Kicked');
@@ -584,7 +511,7 @@ describe('Ready to mint: search', () => {
 
   it('says so when a typed address isn’t on the list, and clears the search', async () => {
     const user = userEvent.setup();
-    await open('nominator');
+    await open();
     await readyList();
     await user.click(searchBox());
     await user.paste(ADDR.learner);
@@ -607,7 +534,7 @@ describe('Ready to mint: search', () => {
 
   it('matches part of an address, as the short address on a row shows it', async () => {
     const user = userEvent.setup();
-    await open('nominator', () => {
+    await open(() => {
       mockFetchRoute('/names/search', () => []);
     });
     const jr2 = fakeAddress('jr-2');
@@ -620,7 +547,7 @@ describe('Ready to mint: search', () => {
     const user = userEvent.setup();
     const many = Array.from({ length: 45 }, (_, i) => fakeAddress(`many-jr-${i}`));
     const searched: Array<string | null> = [];
-    await open('nominator', (world) => {
+    await open((world) => {
       // Lou is row 52: far below the first page, never read before the search.
       world.joinRequests.push(...many.map(joinRequest), joinRequest(ADDR.left));
       mockFetchRoute('/names/search', (url: URL) => {
@@ -655,7 +582,7 @@ describe('Ready to mint: search', () => {
 
   it('looks up the exact name when the name search page is full without it', async () => {
     const user = userEvent.setup();
-    await open('nominator', (world) => {
+    await open((world) => {
       world.joinRequests.push(joinRequest(ADDR.left));
       mockFetchRoute('/names/search', () =>
         Array.from({ length: 10 }, (_, i) => ({
@@ -672,7 +599,7 @@ describe('Ready to mint: search', () => {
 
   it('still matches names already shown when the name search fails', async () => {
     const user = userEvent.setup();
-    await open('nominator', (world) => {
+    await open((world) => {
       world.joinRequests.push(joinRequest(ADDR.kicked));
       mockFetchRoute('/names/search', () => new Response('', { status: 500 }));
     });
@@ -690,7 +617,7 @@ describe('Ready to mint: search', () => {
 
   it('says what to try when nothing matches', async () => {
     const user = userEvent.setup();
-    await open('nominator', () => {
+    await open(() => {
       mockFetchRoute('/names/search', () => []);
     });
     await readyList();
@@ -710,35 +637,30 @@ describe('Ready to mint: search', () => {
   });
 });
 
-describe('Ready to mint: declining a join request', () => {
+describe('Requested to join MINTER Group: declining', () => {
   const declineButtons = async () =>
-    within(await readyList()).queryAllByRole('button', { name: /^Propose to decline / });
+    within(await readyList()).queryAllByRole('button', { name: /^Decline .*’s join request$/ });
 
-  it('offers Decline to Minter Admins only, where no nomination is open', async () => {
-    await open('admin');
+  it('offers Decline where no nomination is open', async () => {
+    await open();
     const jr1 = await row(shortAddress(fakeAddress('jr-1')));
     expect(
       await within(jr1).findByRole(
         'button',
-        { name: `Propose to decline ${shortAddress(fakeAddress('jr-1'))}’s join request` },
+        { name: `Decline ${shortAddress(fakeAddress('jr-1'))}’s join request` },
         { timeout: 4000 }
       )
     ).toHaveTextContent('Decline');
     // jr-1, jr-2 and jr-3: the others have a nomination open.
     expect(await declineButtons()).toHaveLength(3);
-    expect(within(await row('Uma Urgent')).queryByRole('button', { name: /declining/ })).toBeNull();
+    const uma = await row('Uma Urgent');
+    expect(within(uma).queryByRole('button')).toBeNull();
+    expect(within(uma).getByText('Nominated')).toBeVisible();
   });
 
-  it('offers it to nobody else', async () => {
-    await open('nominator');
-    await row(shortAddress(fakeAddress('jr-1')));
-    await within(await row('Uma Urgent')).findByText('You nominated them', {}, { timeout: 4000 });
-    expect(await declineButtons()).toHaveLength(0);
-  });
-
-  it('says so where a decline is waiting, with a link to it, to everyone', async () => {
+  it('says so where a decline is waiting, with a link to it', async () => {
     let signature = '';
-    await open('nominator', (world) => {
+    await open((world) => {
       signature = addDecline(world).waiting.signature;
     });
     const jr2 = await row(shortAddress(fakeAddress('jr-2')));
@@ -751,12 +673,13 @@ describe('Ready to mint: declining a join request', () => {
     );
     expect(link).toHaveTextContent('A decline is waiting for Minter Admins’ approvals');
     expect(link).toHaveAttribute('href', `/decisions/${signature}`);
+    expect(within(jr2).queryByRole('button')).toBeNull();
   });
 
-  it('a Minter Admin proposes it and signs it, in two Hub steps, from the row', async () => {
+  it('a Minter Admin picks a row, gives a reason, and proposes and approves it in two Hub steps', async () => {
     const user = userEvent.setup();
     const jr1 = fakeAddress('jr-1');
-    const { world, address, publicKey } = await open('admin', (w) => void addDecline(w));
+    const { world, address, publicKey, dialog } = await open((w) => void addDecline(w));
     const signature = base58Encode(new Uint8Array(64).fill(9));
     mockQortalRequest('KICK_FROM_GROUP', (req: Record<string, unknown>) => {
       const tx = {
@@ -776,39 +699,33 @@ describe('Ready to mint: declining a join request', () => {
       return tx;
     });
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
-    // jr-2's decline waits already: no Decline there.
-    const jr2 = await row(shortAddress(fakeAddress('jr-2')));
-    await within(jr2).findByRole('link', { name: /^A decline is waiting/ }, { timeout: 4000 });
-    expect(within(jr2).queryByRole('button', { name: /declining/ })).toBeNull();
 
     const label = shortAddress(jr1);
-    const mine = await row(label);
     await user.click(
-      await within(mine).findByRole(
+      await within(await row(label)).findByRole(
         'button',
-        { name: `Propose to decline ${label}’s join request` },
+        { name: `Decline ${label}’s join request` },
         { timeout: 4000 }
       )
     );
-    const form = await screen.findByRole(
-      'dialog',
-      { name: 'Decline a join request' },
-      { timeout: 4000 }
-    );
     expect(
-      within(form).getByText(
-        'Once 8 Minter Admins approve it, like any decision, their join request goes and they leave Ready to mint for everyone. They can send a new join request later. It costs 0.02 QORT: your proposal and your own approval of it, two Hub steps.'
+      within(dialog).getByText(
+        'Once 8 Minter Admins approve it, like any decision, their join request goes. They can send a new join request later. It costs 0.02 QORT: your proposal and your own approval of it, two Hub steps.'
       )
     ).toBeVisible();
-    // The person is picked already, and checked.
+    // The person is picked, and checked; the list has made way for the reason.
     expect(
-      await within(form).findByText('Nothing stops this proposal.', {}, { timeout: 4000 })
+      await within(dialog).findByText('Nothing stops this proposal.', {}, { timeout: 4000 })
     ).toBeVisible();
+    expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
     // A reason is required.
-    await user.click(within(form).getByRole('button', { name: 'Review' }));
-    expect(within(form).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
-    await user.type(within(form).getByRole('textbox', { name: 'Reason' }), 'No node, asked twice');
-    await user.click(within(form).getByRole('button', { name: 'Review' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Review' }));
+    expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
+    await user.type(
+      within(dialog).getByRole('textbox', { name: 'Reason' }),
+      'No node, asked twice'
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Review' }));
 
     const hub = await screen.findByRole(
       'dialog',
@@ -839,10 +756,12 @@ describe('Ready to mint: declining a join request', () => {
 
     await user.click(within(hub).getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    // Focus is back on the row, which says the decline is on its way.
+    // Back on Propose; the list, opened again, says the decline is on its way.
+    expect(screen.getByRole('button', { name: 'Propose' })).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Propose' }));
+    await user.click(await screen.findByRole('menuitem', { name: /^Decline a join request/ }, T));
     expect(
-      within(await row(label)).getByRole('link', { name: `${label}: open their page` })
-    ).toHaveFocus();
-    expect(within(await row(label)).getByText('Decline sent ✓ (confirming…)')).toBeInTheDocument();
+      await within(await row(label)).findByText('Decline sent ✓ (confirming…)', {}, T)
+    ).toBeInTheDocument();
   }, 30_000);
 });

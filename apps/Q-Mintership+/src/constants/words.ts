@@ -18,9 +18,8 @@ export function proposeNominationFor(who: string): string {
 }
 
 /**
- * An open join request to MINTER, however it was sent: by accepting a
- * nomination, or with "Show you're ready to mint". The same words wherever
- * the person sees their own.
+ * The nominee's own open join request to MINTER (sent by accepting their
+ * nomination, or before): the same words wherever they see their own.
  */
 export const READY_DONE = "You're ready ✓";
 
@@ -28,4 +27,10 @@ export const READY_DONE = "You're ready ✓";
 export const READY_DONE_NEXT = "when the admins approve, you're in at once.";
 
 /** Someone else's open join request, on their nomination card. */
-export const READY_LABEL = 'Ready to mint';
+export const READY_LABEL = 'Requested to join';
+
+/**
+ * Who asked to join MINTER, the list Minter Admins decline join requests
+ * from (Simon, 2026-10-18: "rename it to Requested to join MINTER Group").
+ */
+export const JOIN_REQUESTS_TITLE = 'Requested to join MINTER Group';

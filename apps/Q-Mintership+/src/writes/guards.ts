@@ -377,8 +377,8 @@ export async function guardRemoveAdmin(signer: Signer, admin: string): Promise<s
 }
 
 /**
- * Before the JOIN_GROUP (Accept nomination / Join now / Show you're ready to
- * mint). Core lists a join request only once it is in a block, so the
+ * Before the JOIN_GROUP (Accept nomination / Join now). Core lists a join
+ * request only once it is in a block, so the
  * account's own unconfirmed ones are checked too: one sent a moment ago
  * (or before a reload) is never sent twice.
  */
@@ -392,7 +392,7 @@ export async function guardJoin(signer: Signer): Promise<string | null> {
   if (membership.isMember) return "You're already in MINTER.";
   if (activeBanFor(bans, signer.address))
     return 'Your account is banned from MINTER, so it can’t join until the ban is lifted.';
-  // The same words however the request was sent (Accept nomination, or Show you're ready to mint).
+  // The same words however the request was sent (Accept nomination, or earlier).
   if (joinRequest) return "Your join request is already in: you're ready. Nothing more to send.";
   if (unconfirmed.some((tx) => tx.type === 'JOIN_GROUP' && Number(tx.groupId) === MINTER_GROUP_ID))
     return 'Your join request is already on its way into a block. Check again in a minute or two.';
@@ -409,7 +409,7 @@ export async function guardJoinGroup(
   group: { groupId: number; isOpen?: boolean }
 ): Promise<string | null> {
   if (group.groupId === MINTER_GROUP_ID)
-    return 'MINTER has its own way in: Show you’re ready to mint, on Home.';
+    return 'MINTER is joined by nomination: a minter at level 5 or above nominates you, and the Minter Admins approve.';
   const [groups, bans, requests, unconfirmed] = await Promise.all([
     getGroupsOf(signer.address, { force: true }),
     getJson<BanRow[]>(`/groups/bans/${group.groupId}`),

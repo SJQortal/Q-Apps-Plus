@@ -6,7 +6,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { addComments, addCommunityVotes } from '../../e2e/world.mjs';
+import { addComments, addCommunityVotes, addReady } from '../../e2e/world.mjs';
 import { CommentsSection } from '../components/comments/CommentsSection';
 import { commentTarget } from '../data/commentThread';
 import DecisionsPage from '../pages/decisions/DecisionsPage';
@@ -214,6 +214,36 @@ describe('Write dialogs by keyboard: Propose', () => {
     expect(within(form).queryByRole('alert')).toBeNull();
   });
 
+  it('Decline a join request: the list of who asked, then on to the reason, by keyboard', async () => {
+    const u = user();
+    await decisions((world) => addReady(world));
+    const propose = await choose(u, /^Decline a join request/);
+    const dialog = await screen.findByRole('dialog', { name: 'Decline a join request' }, T);
+    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
+    const list = await within(dialog).findByRole(
+      'list',
+      { name: 'Requested to join MINTER Group' },
+      T
+    );
+    await expectFocusTrapped(u, dialog, ['Cancel']);
+    const decline = await within(list).findByRole(
+      'button',
+      { name: 'Decline Rae Ready’s join request' },
+      T
+    );
+    decline.focus();
+    await u.keyboard('{Enter}');
+    // The person is picked: focus goes on to the reason, with Change to pick someone else.
+    await waitFor(() =>
+      expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus()
+    );
+    expect(
+      within(dialog).getByRole('button', { name: 'Change: pick someone else who asked to join' })
+    ).toBeVisible();
+    await expectNamedControls(dialog);
+    await closeWithEscape(u, () => propose);
+  });
+
   it('picking yourself to remove says where Step down is, in the same live region', async () => {
     const u = user();
     const { address } = await decisions();
@@ -347,16 +377,6 @@ describe('Write dialogs by keyboard: Home', () => {
       u,
       await screen.findByRole('button', { name: 'Join now' }, T),
       'Join MINTER'
-    );
-  });
-
-  it('Show you’re ready to mint', async () => {
-    const u = user();
-    await renderPage(<HomePage />, { persona: 'newcomerName' });
-    await checkDialogByKeyboard(
-      u,
-      (await screen.findAllByRole('button', { name: /^Show you.re ready to mint$/ }, T))[0],
-      /^Show you.re ready to mint$/
     );
   });
 });

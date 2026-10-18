@@ -37,13 +37,13 @@ describe('the Explorer is read-only', () => {
         "import { HubStepDialog } from '../../components/common/HubStepDialog';",
         "import { ConsideringDialog } from '../../components/decision/ConsideringDialog';",
         "import { LazyCommunityVoteDialog } from '../../components/community/LazyCommunityVoteDialog';",
-        "import { ReadyToMintDialog } from '../../components/ready/ReadyToMintDialog';",
+        "import { AdminNoteDialog } from '../../components/decision/AdminNoteDialog';",
         "import { CommentDialogs } from '../../components/comments/CommentDialogs';",
-        "import { LazyDeclineDialog } from '../nominations/LazyDeclineDialog';",
+        "import { publishAdminNote } from '../../writes/adminNotes';",
         'export const used = [runSteps, proposeFlow, hubAction, guard, publishComment, SignDialog,',
         '  PollWriteDialogs, NomineeAction, SupportDialog, LazyJoinDialog, HubStepDialog,',
-        '  ConsideringDialog, LazyCommunityVoteDialog, ReadyToMintDialog, CommentDialogs,',
-        '  LazyDeclineDialog];',
+        '  ConsideringDialog, LazyCommunityVoteDialog, AdminNoteDialog, CommentDialogs,',
+        '  publishAdminNote];',
       ].join('\n')
     );
     expect(messages).toHaveLength(16);

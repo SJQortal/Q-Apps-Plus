@@ -45,7 +45,7 @@ export function decisionPath(signature?: string): string {
 }
 
 /** Decisions' tabs (pages/decisions/decisionsViews.ts). */
-export type DecisionsView = 'decisions' | 'nominations' | 'ready';
+export type DecisionsView = 'decisions' | 'nominations';
 
 /**
  * `/decisions?show=<view>`: one of Decisions' tabs, and on Nominations a

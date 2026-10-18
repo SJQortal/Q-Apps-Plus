@@ -11,8 +11,9 @@
  * would do to the target of every waiting decision. Picking yourself under
  * Remove a Minter Admin points to Step down as Minter Admin on your own
  * page instead: that is the one place to step down. Decline a join request
- * is a kick of someone on Ready to mint, worded as declining (it opens from
- * a Ready to mint row too, with the person picked).
+ * is a kick of someone who asked to join, worded as declining: its person is
+ * picked from "Requested to join MINTER Group" (JoinRequestPicker.tsx), the
+ * list of who asked, with Change to pick someone else.
  *
  * Any proposal can carry a note for the Minter Admins (Simon, 2026-10-18):
  * an extra description encrypted to them only, published as one more Hub
@@ -63,6 +64,7 @@ import {
   type SubjectCheck,
 } from './proposeKinds';
 import { ProposeSignDialog, type ProposalFacts } from './ProposeSignDialog';
+import { JoinRequestPicker } from './JoinRequestPicker';
 import { isRecentInvite } from './staleRules';
 import type { ShiftScenario } from '../../rules/targetShift';
 import type { LabelOf } from './targetShiftUi';
@@ -144,6 +146,13 @@ export function ProposeDialog({
   const banLabelId = useId();
   const reasonRef = useRef<HTMLInputElement | null>(null);
   const daysRef = useRef<HTMLInputElement | null>(null);
+  // A decline's person was just picked from the list: focus goes on to the reason.
+  const pickedNow = useRef(false);
+  useEffect(() => {
+    if (!pickedNow.current || !person) return;
+    pickedNow.current = false;
+    reasonRef.current?.focus();
+  }, [person]);
   const invites = useUnusedInvites(open && kind === 'cancelInvite');
   const fee = useFee('GROUP_KICK');
 
@@ -192,6 +201,8 @@ export function ProposeDialog({
 
   if (!kind || !signer) return null;
   const info = PROPOSE_KINDS[kind];
+  // Decline a join request starts with the list of who asked: the rest once someone is picked.
+  const picking = kind === 'decline' && !person;
   const needsReason = kind === 'kick' || kind === 'ban' || kind === 'decline';
   const reasonError = needsReason ? reasonProblem(reason) : null;
   const ban = kind === 'ban' && banMode === 'days' ? parseBanDays(days) : { seconds: 0 };
@@ -240,6 +251,8 @@ export function ProposeDialog({
         onClose={close}
         returnFocus={returnFocus}
         title={info.label}
+        maxWidth={picking ? 'md' : 'sm'}
+        tall={picking}
         actions={
           <>
             <Button onClick={close}>Cancel</Button>
@@ -250,12 +263,12 @@ export function ProposeDialog({
         }
       >
         <Typography color="text.secondary">{info.description}</Typography>
-        {kind === 'decline' ? (
+        {kind === 'decline' && !picking ? (
           <Typography variant="body2" color="text.secondary">
-            Once {ctx.needed} Minter Admins approve it, like any decision, their join request goes
-            and they leave Ready to mint for everyone. They can send a new join request later. It
-            costs {formatQort((fee.data?.qort ?? 0.01) * 2)}: your proposal and your own approval of
-            it, two Hub steps.
+            Once {ctx.needed} Minter Admins approve it, like any decision, their join request goes.
+            They can send a new join request later. It costs{' '}
+            {formatQort((fee.data?.qort ?? 0.01) * 2)}: your proposal and your own approval of it,
+            two Hub steps.
           </Typography>
         ) : null}
         {kind === 'addAdmin' || kind === 'removeAdmin' ? (
@@ -282,6 +295,16 @@ export function ProposeDialog({
             value={person?.address ?? ''}
             onPick={(p) => setPerson(p)}
           />
+        ) : kind === 'decline' ? (
+          picking ? (
+            <JoinRequestPicker
+              me={signer.address}
+              onPick={(p) => {
+                pickedNow.current = true;
+                setPerson(p);
+              }}
+            />
+          ) : null
         ) : (
           <Box
             component="form"
@@ -299,12 +322,7 @@ export function ProposeDialog({
                 setInputError(null);
               }}
               error={Boolean(inputError)}
-              helperText={
-                inputError ??
-                (kind === 'decline'
-                  ? 'Someone on Ready to mint: a registered name, or a Q… address.'
-                  : 'A registered name, or a Q… address.')
-              }
+              helperText={inputError ?? 'A registered name, or a Q… address.'}
               fullWidth
               autoComplete="off"
               slotProps={{ htmlInput: { autoCapitalize: 'none', spellCheck: false } }}
@@ -332,7 +350,25 @@ export function ProposeDialog({
               borderRadius: 1,
             }}
           >
-            <PersonChip address={person.address} name={person.name ?? undefined} size={40} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <PersonChip address={person.address} name={person.name ?? undefined} size={40} />
+              </Box>
+              {kind === 'decline' ? (
+                <Button
+                  onClick={() => {
+                    setPerson(null);
+                    setCheck(null);
+                    // Leaving the reason for the list isn't a missing reason.
+                    setTouched(false);
+                  }}
+                  aria-label="Change: pick someone else who asked to join"
+                  sx={{ minHeight: 44, flexShrink: 0 }}
+                >
+                  Change
+                </Button>
+              ) : null}
+            </Box>
             {/* One live region for the check, kept while it runs and when it answers. */}
             <Box role="status">
               {stepDown ? (
@@ -399,7 +435,7 @@ export function ProposeDialog({
           </Box>
         ) : null}
 
-        {needsReason ? (
+        {needsReason && !picking ? (
           <TextField
             label="Reason"
             required
@@ -419,7 +455,7 @@ export function ProposeDialog({
           />
         ) : null}
 
-        {stepDown ? null : (
+        {stepDown || picking ? null : (
           <AdminNoteField
             value={note}
             onChange={setNote}
@@ -753,7 +789,7 @@ function ProposeHubStep({
       title={`${kind === 'decline' ? DECLINE_TITLE : KIND_LABEL[kind]}: ${who.label}`}
       lead={
         kind === 'decline'
-          ? 'This proposes declining their join request: once it passes, they leave Ready to mint for everyone, and they can send a new one later.'
+          ? 'This proposes declining their join request: once it passes, their request is gone, and they can send a new one later.'
           : undefined
       }
       impact={ctx.projectImpact?.(kind, person.address) ?? null}

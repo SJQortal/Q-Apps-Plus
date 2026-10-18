@@ -1,26 +1,28 @@
 /**
- * Ready to mint (`/nominations?show=ready`): the people who asked to join
- * MINTER, for everyone to see, so nominators can find them. Level 5+ members
- * and Minter Admins get Propose nomination on each row, or Add your support where an
- * open nomination already exists. Minter Admins can also Decline a join
- * request (readyDeclines.ts); a row whose decline waits says so. Twenty rows
- * at a time, sorted by the Sort picker (`?sort=`; the newest request first
- * by default; data/readyToMint.ts → loadReadyOrder reads only what that
- * order needs); each row's level, blocks minted, name, when they asked to
- * join and whether they were a member before ("Former member: left MINTER
- * on …", "… ban lifted on …") are read only once it is shown.
- * The page's search box filters it: a typed address directly, a typed name
- * through its owners (one small name search, cached), never by reading
- * every row's name.
+ * "Requested to join MINTER Group" (Simon, 2026-10-18: the Ready to mint
+ * list, renamed and moved into + Propose → Decline a join request): the
+ * people who asked to join MINTER and aren't members, as Decline a join
+ * request's person picker, for Minter Admins. Nominators don't pick
+ * candidates from it: they choose community members themselves.
+ *
+ * Each row says who they are (level, blocks minted, when they asked, and
+ * whether they were a member before: "Former member: left MINTER on …") and
+ * offers Decline, or says why not: a nomination of them is open, or a decline
+ * already waits (with a link to it). Twenty rows at a time, in the order the
+ * Sort picker gives (the newest request first by default; data/readyToMint.ts
+ * → loadReadyOrder reads only what that order needs); each row's details are
+ * read only once it is shown. The search box filters it: a typed address
+ * directly, a typed name through its owners (one small name search, cached),
+ * never by reading every row's name.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
-import { Box, Button, Link, Skeleton, TextField, Typography } from '@mui/material';
+import { Link as RouterLink } from 'react-router-dom';
+import { Box, Button, InputAdornment, Link, Skeleton, TextField, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { PersonChip } from '../../components/common/Person';
-import { Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/states';
-import { effectiveBlocksMinted, hasRegisteredName, isAddress } from '../../data/accounts';
+import { effectiveBlocksMinted, isAddress } from '../../data/accounts';
 import type { Nomination } from '../../data/nominations';
 import { getQueryState, peekQuery } from '../../data/query';
 import {
@@ -32,29 +34,22 @@ import {
   loadReadyDetails,
   loadReadyOrder,
   matchReady,
-  parseReadySort,
   readyOrderKey,
   type ReadySort,
-  type ReadyToMint,
 } from '../../data/readyToMint';
 import type { AccountInfo } from '../../data/types';
+import { useNominations } from '../../hooks/useData';
 import { useInView } from '../../hooks/useInView';
-import { useMyStatus } from '../../hooks/useData';
-import { useQuery, type UseQueryResult } from '../../hooks/useQuery';
-import { appParam } from '../../routes/hubLocation';
-import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
-import { decisionPath, nominatePath } from '../../routes/paths';
+import { useQuery } from '../../hooks/useQuery';
+import { decisionPath } from '../../routes/paths';
 import type { FormerMember } from '../../rules/status';
 import { formerMemberLine } from '../person/personWords';
 import { displayName, formatCount, formatDate } from '../../utils/format';
 import { readable } from '../../utils/readable';
 import { usePendingWrite, writeKeys } from '../../writes/optimistic';
-import type { Signer } from '../../writes/runner';
-import { useSession } from '../../state/session';
-import { isStillOpenForSupport, myPart } from './filters';
-import { LazyDeclineDialog } from './LazyDeclineDialog';
-import { DECLINE_WAITING, useReadyDeclines } from './readyDeclines';
-import { useReadySearch, useStoredValue } from './useReadyToMint';
+import { JOIN_REQUESTS_TITLE } from '../../constants/words';
+import { useJoinRequestSearch, useJoinRequests, useStoredValue } from './useJoinRequests';
+import { DECLINE_WAITING, useWaitingDeclines } from './waitingDeclines';
 
 /** A name already read for a row on screen (searching never reads one). */
 const knownName = (address: string) => peekQuery<string | null>(`name:${address}`);
@@ -65,68 +60,42 @@ const readFailed = (address: string) =>
     (key) => getQueryState(key).error !== undefined
   );
 
-export interface ReadyToMintSectionProps {
-  ready: UseQueryResult<ReadyToMint>;
-  /** Open nominations by nominee; null until they load (no actions until then). */
-  open: Map<string, Nomination> | null;
-  me: string;
-  canNominate: boolean;
-  /** Can publish a support record (eligible, with a name). */
-  canSupport: boolean;
-  onSupport: (n: Nomination) => void;
-  /** The page's search box, as typed: a name or an address. */
-  search: string;
-  onClearSearch: () => void;
+export interface PickedPerson {
+  address: string;
+  name: string | null;
 }
 
-export function ReadyToMintSection({
-  ready,
-  open,
+export function JoinRequestPicker({
   me,
-  canNominate,
-  canSupport,
-  onSupport,
-  search,
-  onClearSearch,
-}: ReadyToMintSectionProps) {
+  onPick,
+}: {
+  /** The signed-in Minter Admin. */
+  me: string;
+  /** Decline was pressed on a row. */
+  onPick: (person: PickedPerson) => void;
+}) {
+  const nominations = useNominations();
+  const ready = useJoinRequests(nominations.data?.loadedAt);
+  // Each person's open nomination; if they can't be read, Decline still shows (its guard checks).
+  const open = useMemo(
+    () =>
+      nominations.data
+        ? new Map(nominations.data.open.map((n) => [n.nominee, n]))
+        : nominations.isError
+          ? new Map<string, Nomination>()
+          : null,
+    [nominations.data, nominations.isError]
+  );
+  const declines = useWaitingDeclines();
+  const [search, setSearch] = useState('');
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [sort, setSort] = useState<ReadySort>(DEFAULT_READY_SORT);
   const [shown, setShown] = useState(READY_PAGE);
   const listRef = useRef<HTMLUListElement | null>(null);
-  // Minter Admins can decline a join request (a stable signer: the dialog checks per account).
-  const session = useSession();
-  const { status } = useMyStatus();
-  const signedIn = session.status === 'ready';
-  const signer: Signer | null = useMemo(
-    () => (signedIn ? { address: session.address, publicKey: session.publicKey } : null),
-    [signedIn, session.address, session.publicKey]
-  );
-  const isAdmin = Boolean(me && status?.isAdmin && signer);
-  const declines = useReadyDeclines();
-  const [declining, setDeclining] = useState<{ address: string; name: string | null } | null>(null);
-  const declineFrom = useRef<HTMLElement | null>(null);
-  const onDecline = useCallback(
-    (person: { address: string; name: string | null }, from: HTMLElement) => {
-      declineFrom.current = from.closest('li');
-      setDeclining(person);
-    },
-    []
-  );
   const focusRow = useRef<number | null>(null);
-  const find = useReadySearch(search);
+  const find = useJoinRequestSearch(search);
   const query = find.query;
   const all = ready.data?.people;
-  // The order, from the URL: the reads it needs, then the search filters it.
-  const [params, setParams] = useSearchParams();
-  const sort = parseReadySort(appParam(params, 'sort'));
-  const setSort = (key: ReadySort) =>
-    setParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        if (key === DEFAULT_READY_SORT) next.delete('sort');
-        else next.set('sort', key);
-        return next;
-      },
-      { replace: true }
-    );
   const order = useQuery(all && sort !== 'node' ? readyOrderKey(all, sort) : null, () =>
     loadReadyOrder(all as string[], sort)
   );
@@ -158,7 +127,7 @@ export function ReadyToMintSection({
   const visibleKey = visible.filter((address) => near.has(address)).join(',');
 
   // Only the rows on screen are read, six reads at a time; leaving stops new reads.
-  // Each refresh of the list (every minute, or Refresh) reads again the rows whose
+  // Each refresh of the list (when the nominations refresh) reads again the rows whose
   // read failed or is older than 10 minutes; the rest are cached and cost nothing.
   // A row whose read failed waits for that refresh: another row coming near doesn't
   // read it again.
@@ -185,6 +154,12 @@ export function ReadyToMintSection({
     focusRow.current = null;
   }, [shown]);
 
+  const clearSearch = () => {
+    setSearch('');
+    // The button goes with the empty state: keep focus on the search box.
+    searchRef.current?.focus();
+  };
+
   // No match is said here too: the empty state below mounts already filled,
   // which screen readers don't reliably read out.
   const found =
@@ -200,7 +175,7 @@ export function ReadyToMintSection({
   if (!people && ready.isError) {
     body = (
       <ErrorState
-        title="Couldn’t load the people ready to mint."
+        title="Couldn’t load who asked to join MINTER."
         error={ready.error}
         onRetry={() => void ready.refetch()}
       />
@@ -213,12 +188,12 @@ export function ReadyToMintSection({
       />
     );
   } else if (!people) {
-    body = <ListSkeleton count={3} label="Loading the people ready to mint" />;
+    body = <ListSkeleton count={3} label="Loading who asked to join MINTER" />;
   } else if (all?.length === 0) {
     body = (
       <EmptyState
         title="No one has asked to join right now"
-        description="When someone sends MINTER a join request, they show up here, ready for a nomination."
+        description="A join request shows up here until a nomination makes them a member, or the Minter Admins decline it."
       />
     );
   } else if (people.length === 0 && find.looking) {
@@ -235,7 +210,7 @@ export function ReadyToMintSection({
               : 'Try their full registered name, or their address.'
         }
         actionLabel="Clear the search"
-        onAction={onClearSearch}
+        onAction={clearSearch}
       />
     );
   } else {
@@ -245,7 +220,7 @@ export function ReadyToMintSection({
         <Box
           component="ul"
           ref={listRef}
-          aria-label="Ready to mint"
+          aria-label={JOIN_REQUESTS_TITLE}
           sx={{
             listStyle: 'none',
             m: 0,
@@ -257,17 +232,14 @@ export function ReadyToMintSection({
           }}
         >
           {visible.map((address) => (
-            <ReadyRow
+            <JoinRequestRow
               key={address}
               address={address}
               nomination={open ? (open.get(address) ?? null) : undefined}
               me={me}
-              canNominate={canNominate}
-              canSupport={canSupport}
-              onSupport={onSupport}
               onNear={onNear}
               declineWaiting={declines.waiting.get(address) ?? null}
-              onDecline={isAdmin && declines.ctx ? onDecline : null}
+              onPick={onPick}
             />
           ))}
         </Box>
@@ -275,12 +247,9 @@ export function ReadyToMintSection({
           sx={{
             display: 'flex',
             alignItems: 'center',
-            // On phones it starts at the left, clear of the floating Propose nomination button
-            // when a short (searched) list leaves it in that button's band.
-            justifyContent: { xs: 'flex-start', sm: 'center' },
+            justifyContent: 'center',
             flexWrap: 'wrap',
             gap: 1.5,
-            px: { xs: 0.5, sm: 0 },
           }}
         >
           <Typography variant="body2" color="text.secondary">
@@ -300,7 +269,7 @@ export function ReadyToMintSection({
           ) : null}
         </Box>
         {sort !== 'node' && order.isError && !order.data ? (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, px: 0.5 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
             <Typography variant="body2" color="text.secondary" role="note">
               Couldn’t read everyone’s details to sort just now, so this is your node’s order.
             </Typography>
@@ -310,7 +279,7 @@ export function ReadyToMintSection({
           </Box>
         ) : null}
         {ready.data?.truncated ? (
-          <Typography variant="body2" color="text.secondary" role="note" sx={{ px: 0.5 }}>
+          <Typography variant="body2" color="text.secondary" role="note">
             The member list was too long to read in full, so someone here may already be a member.
           </Typography>
         ) : null}
@@ -319,11 +288,42 @@ export function ReadyToMintSection({
   }
 
   return (
-    <Section title="Ready to mint" id="ready">
-      <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-        People who asked to join MINTER. They need a nomination from a level 5+ minter or a Minter
-        Admin.
+    <Box
+      component="section"
+      aria-labelledby="join-requests-title"
+      sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}
+    >
+      <Typography id="join-requests-title" component="h3" sx={{ fontWeight: 700, fontSize: 16 }}>
+        {JOIN_REQUESTS_TITLE}
       </Typography>
+      <Typography variant="body2" color="text.secondary">
+        People who asked to join MINTER and aren’t members. Pick whose request to decline.
+      </Typography>
+      <TextField
+        type="search"
+        inputRef={searchRef}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search by name or address"
+        size="small"
+        fullWidth
+        slotProps={{
+          htmlInput: {
+            'aria-label': 'Search who asked to join MINTER, by name or address',
+            enterKeyHint: 'search',
+            autoCapitalize: 'none',
+            spellCheck: false,
+          },
+          input: {
+            sx: { minHeight: 44 },
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchOutlinedIcon aria-hidden />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
       {all?.length ? (
         <TextField
           select
@@ -352,27 +352,11 @@ export function ReadyToMintSection({
         color="text.secondary"
         role="status"
         className={found && people?.length ? undefined : 'qmp-visually-hidden'}
-        sx={{ px: 0.5 }}
       >
         {found}
       </Typography>
       {body}
-      {signer && declines.ctx ? (
-        <LazyDeclineDialog
-          open={declining !== null}
-          signer={signer}
-          ctx={declines.ctx}
-          preset={declining}
-          onClose={() => setDeclining(null)}
-          // Back to the row it came from (its Decline may be gone by then), or the list.
-          returnFocus={() =>
-            declineFrom.current?.isConnected
-              ? declineFrom.current.querySelector<HTMLElement>('a, button')
-              : listRef.current
-          }
-        />
-      ) : null}
-    </Section>
+    </Box>
   );
 }
 
@@ -381,33 +365,25 @@ function blocksMintedText(blocks: number): string {
   return `${formatCount(blocks)} ${blocks === 1 ? 'block' : 'blocks'} minted`;
 }
 
-/** One person: avatar, name or short address (to their page), level and blocks minted, the action. */
-function ReadyRow({
+/** One person: avatar, name or short address (to their profile), level and blocks minted, Decline. */
+function JoinRequestRow({
   address,
   nomination,
   me,
-  canNominate,
-  canSupport,
-  onSupport,
   onNear,
   declineWaiting,
-  onDecline,
+  onPick,
 }: {
   address: string;
+  /** Their open nomination, null for none, undefined while the nominations load. */
+  nomination: Nomination | null | undefined;
+  me: string;
   /** Called once the row comes near the screen, so its account and name are read. */
   onNear: (address: string) => void;
   /** The waiting decline of their join request (its signature), if any. */
   declineWaiting: string | null;
-  /** Minter Admins: open Decline a join request for this person (null for everyone else). */
-  onDecline: ((person: { address: string; name: string | null }, from: HTMLElement) => void) | null;
-  /** Their open nomination, null for none, undefined while the nominations load. */
-  nomination: Nomination | null | undefined;
-  me: string;
-  canNominate: boolean;
-  canSupport: boolean;
-  onSupport: (n: Nomination) => void;
+  onPick: (person: PickedPerson) => void;
 }) {
-  const navigate = useNavigate();
   const [row, setRow] = useState<HTMLLIElement | null>(null);
   const near = useInView(row);
   useEffect(() => {
@@ -417,19 +393,9 @@ function ReadyRow({
   const name = useStoredValue<string | null>(`name:${address}`);
   const former = useStoredValue<FormerMember | null>(formerKey(address)).data ?? null;
   const asked = useStoredValue<number | null>(askedKey(address)).data ?? null;
-  const supportPending = usePendingWrite(nomination ? writeKeys.support(address) : null);
-  const nominatePending = usePendingWrite(writeKeys.nominate(address));
-  const declinePending = usePendingWrite(onDecline ? writeKeys.propose('kick', address) : null);
+  const declinePending = usePendingWrite(writeKeys.propose('kick', address));
   // Never undefined: PersonChip would look the name up itself, outside the six-at-a-time reads.
   const shownName = name.data ?? null;
-  // Only an account with a registered name can be nominated: without a primary name, one
-  // light read says whether it has any (only for such rows, once they are near).
-  const named = useQuery(
-    canNominate && nomination === null && near && name.data === null ? `hasname:${address}` : null,
-    (force) => hasRegisteredName(address, { force })
-  );
-  const hasName =
-    typeof name.data === 'string' ? true : name.data === null ? named.data : undefined;
   const label = displayName(shownName, address);
 
   const level = account.data ? (
@@ -450,58 +416,10 @@ function ReadyRow({
     level
   );
 
-  // `mine`: something the signed-in member did (green, with a tick); otherwise a plain fact.
-  let done: { label: string; live: boolean; mine: boolean } | null = null;
+  // Declining: one on its way, one waiting, a nomination open, or Decline.
   let action: ReactNode = null;
-  if (address === me) {
-    done = { label: 'That’s you', live: false, mine: false };
-  } else if (nomination) {
-    const part = myPart(nomination, me, supportPending);
-    if (part) done = { label: part.label, live: part.inFlight, mine: true };
-    else {
-      done = {
-        label: nomination.state === 'approved' ? 'Approved' : 'Nominated',
-        live: false,
-        mine: false,
-      };
-      if (canSupport && isStillOpenForSupport(nomination)) {
-        action = (
-          <Button
-            variant="outlined"
-            onClick={() => onSupport(nomination)}
-            aria-label={`Add your support for ${label}`}
-            sx={{ minHeight: 44 }}
-          >
-            Add your support
-          </Button>
-        );
-      }
-    }
-  } else if (nominatePending && nominatePending.status !== 'failed') {
-    done = {
-      label: nominatePending.status === 'sending' ? 'Sending…' : 'Nomination sent ✓ (confirming…)',
-      live: true,
-      mine: true,
-    };
-  } else if (nomination === null && canNominate && hasName === false) {
-    done = { label: 'No registered name', live: false, mine: false };
-  } else if (nomination === null && canNominate && hasName) {
-    action = (
-      <Button
-        variant="outlined"
-        onClick={() => navigate(nominatePath(address))}
-        aria-label={proposeNominationFor(label)}
-        sx={{ minHeight: 44 }}
-      >
-        {PROPOSE_NOMINATION}
-      </Button>
-    );
-  }
-
-  // Declining their join request: one waiting, one on its way, or Decline for Minter Admins.
-  let decline: ReactNode = null;
   if (declinePending && declinePending.status !== 'failed') {
-    decline = (
+    action = (
       <Typography
         variant="body2"
         role="status"
@@ -512,7 +430,7 @@ function ReadyRow({
       </Typography>
     );
   } else if (declineWaiting) {
-    decline = (
+    action = (
       <Link
         component={RouterLink}
         to={decisionPath(declineWaiting)}
@@ -523,11 +441,18 @@ function ReadyRow({
         {DECLINE_WAITING}
       </Link>
     );
-  } else if (onDecline && nomination === null && address !== me) {
-    decline = (
+  } else if (nomination) {
+    action = (
+      <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+        {nomination.state === 'approved' ? 'Approved' : 'Nominated'}
+      </Typography>
+    );
+  } else if (address !== me) {
+    action = (
       <Button
-        onClick={(e) => onDecline({ address, name: shownName }, e.currentTarget)}
-        aria-label={`Propose to decline ${label}’s join request`}
+        variant="outlined"
+        onClick={() => onPick({ address, name: shownName })}
+        aria-label={`Decline ${label}’s join request`}
         sx={{ minHeight: 44 }}
       >
         Decline
@@ -554,39 +479,7 @@ function ReadyRow({
       <Box sx={{ flex: '1 1 220px', minWidth: 0 }}>
         <PersonChip address={address} name={shownName} size={40} secondary={secondary} />
       </Box>
-      {done || action || decline ? (
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            justifyContent: 'flex-end',
-            gap: 1,
-            ml: 'auto',
-          }}
-        >
-          {done ? (
-            <Typography
-              variant="body2"
-              role={done.live ? 'status' : undefined}
-              sx={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 0.5,
-                color: done.mine ? readable('success') : 'text.secondary',
-                fontWeight: done.mine ? 400 : 600,
-              }}
-            >
-              {done.mine ? (
-                <CheckCircleOutlineOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
-              ) : null}
-              {done.label}
-            </Typography>
-          ) : null}
-          {action}
-          {decline}
-        </Box>
-      ) : null}
+      {action ? <Box sx={{ ml: 'auto' }}>{action}</Box> : null}
     </Box>
   );
 }

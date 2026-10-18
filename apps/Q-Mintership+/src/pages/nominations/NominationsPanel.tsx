@@ -1,15 +1,10 @@
 /**
- * Decisions → Nominations and Ready to mint (pages/decisions/decisionsViews.ts).
- *
- * Nominations: everyone who is up for MINTER right now, newest first, with
- * filters by state (`?state=`) and a search by name or address. Level 5+
- * members and Minter Admins add their support to open nominations; Minter
- * Admins open the ones collecting approvals in Decisions. How a nomination
- * ended is in History (Invites), and on the nomination's own page.
- *
- * Ready to mint (ReadyToMint.tsx) lists the people who asked to join, to
- * nominate from; the same search box searches it there, by address or by a
- * name looked up on the node.
+ * Decisions → Nominations (pages/decisions/decisionsViews.ts): everyone who
+ * is up for MINTER right now, newest first, with filters by state
+ * (`?state=`) and a search by name or address. Level 5+ members and Minter
+ * Admins add their support to open nominations; Minter Admins open the ones
+ * collecting approvals in Decisions. How a nomination ended is in History
+ * (Invites), and on the nomination's own page.
  */
 import { useMemo, useRef, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom';
@@ -28,7 +23,6 @@ import { SupportDialog } from '../../components/nomination/SupportDialog';
 import { PROPOSE_NOMINATION } from '../../constants/words';
 import type { Nomination, NominationsData } from '../../data/nominations';
 import { peekQuery } from '../../data/query';
-import type { ReadyToMint } from '../../data/readyToMint';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import type { UseQueryResult } from '../../hooks/useQuery';
 import { appParam } from '../../routes/hubLocation';
@@ -50,14 +44,11 @@ import {
   type NominationFilter,
 } from './filters';
 import { NominateNote } from './OwnNomination';
-import { ReadyToMintSection } from './ReadyToMint';
 
 const nameOf = (address: string) => peekQuery<string | null>(`name:${address}`);
 
 export function NominationsPanel({
-  view,
   nominations,
-  ready,
   me,
   isAdmin,
   canNominate,
@@ -66,9 +57,7 @@ export function NominationsPanel({
   session,
   status,
 }: {
-  view: 'nominations' | 'ready';
   nominations: UseQueryResult<NominationsData>;
-  ready: UseQueryResult<ReadyToMint>;
   me: string;
   isAdmin: boolean;
   canNominate: boolean;
@@ -93,14 +82,6 @@ export function NominationsPanel({
 
   const others = useMemo(() => (data ? data.open.filter((n) => n.nominee !== me) : []), [data, me]);
   const counts = useMemo(() => countByFilter(others), [others]);
-  // Ready to mint shows each person's open nomination; if they can't be read, Propose
-  // nomination still shows (the form checks again).
-  const nominationsFailed = !data && nominations.isError;
-  const openByNominee = useMemo(
-    () =>
-      data ? new Map(data.open.map((n) => [n.nominee, n])) : nominationsFailed ? new Map() : null,
-    [data, nominationsFailed]
-  );
   const shown = others.filter((n) => matchesFilter(n, filter) && matchesSearch(n, search, nameOf));
 
   const setFilter = (key: NominationFilter) =>
@@ -123,7 +104,6 @@ export function NominationsPanel({
       <NominateNote session={session} status={status} hidden={ownShown} />
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        {/* One search for both views: Ready to mint matches addresses and looks up names. */}
         <TextField
           type="search"
           inputRef={searchRef}
@@ -134,10 +114,7 @@ export function NominationsPanel({
           fullWidth
           slotProps={{
             htmlInput: {
-              'aria-label':
-                view === 'ready'
-                  ? 'Search the people ready to mint by name or address'
-                  : 'Search nominations by name or address',
+              'aria-label': 'Search nominations by name or address',
               enterKeyHint: 'search',
               autoCapitalize: 'none',
               spellCheck: false,
@@ -152,131 +129,112 @@ export function NominationsPanel({
             },
           }}
         />
-        {view === 'nominations' ? (
-          <Box
-            role="group"
-            aria-label="Show nominations by state"
-            sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
-          >
-            {FILTERS.map((f) => {
-              const active = filter === f.key;
-              return (
-                <Chip
-                  key={f.key}
-                  clickable
-                  aria-pressed={active}
-                  color={active ? 'primary' : 'default'}
-                  variant={active ? 'filled' : 'outlined'}
-                  onClick={() => setFilter(f.key)}
-                  label={
-                    <>
-                      {f.label}
-                      {data ? (
-                        <>
-                          {' '}
-                          <Box component="span" sx={{ ml: 0.5, fontWeight: 700 }}>
-                            {formatCount(counts[f.key])}
-                          </Box>
-                        </>
-                      ) : null}
-                    </>
-                  }
-                  sx={{ height: { xs: 44, sm: 40 }, borderRadius: 999, px: 0.5 }}
-                />
-              );
-            })}
-          </Box>
-        ) : null}
+        <Box
+          role="group"
+          aria-label="Show nominations by state"
+          sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
+        >
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            return (
+              <Chip
+                key={f.key}
+                clickable
+                aria-pressed={active}
+                color={active ? 'primary' : 'default'}
+                variant={active ? 'filled' : 'outlined'}
+                onClick={() => setFilter(f.key)}
+                label={
+                  <>
+                    {f.label}
+                    {data ? (
+                      <>
+                        {' '}
+                        <Box component="span" sx={{ ml: 0.5, fontWeight: 700 }}>
+                          {formatCount(counts[f.key])}
+                        </Box>
+                      </>
+                    ) : null}
+                  </>
+                }
+                sx={{ height: { xs: 44, sm: 40 }, borderRadius: 999, px: 0.5 }}
+              />
+            );
+          })}
+        </Box>
       </Box>
 
-      {view === 'ready' ? (
-        <ReadyToMintSection
-          ready={ready}
-          open={openByNominee}
-          me={me}
-          canNominate={canNominate}
-          canSupport={canSupport}
-          onSupport={openSupport}
-          search={search}
-          onClearSearch={() => {
-            setSearch('');
-            // The button goes with the empty state: keep focus on the search box.
-            searchRef.current?.focus();
-          }}
-        />
-      ) : (
-        <Section title="Open nominations" id="open">
-          {!data && nominations.isError ? (
-            <ErrorState
-              title="Couldn’t load the nominations."
-              error={nominations.error}
-              onRetry={() => void nominations.refetch()}
-            />
-          ) : !data ? (
-            <ListSkeleton count={3} ring label="Loading nominations" />
-          ) : others.length === 0 ? (
-            <EmptyState
-              title="No open nominations right now"
-              description={
-                canNominate
-                  ? 'Know someone who should mint? Propose a nomination, and the Minter Admins take it from there.'
-                  : 'When a level 5+ minter or a Minter Admin proposes a nomination, it shows up here.'
-              }
-              actionLabel={canNominate ? PROPOSE_NOMINATION : undefined}
-              onAction={canNominate ? () => navigate(PATHS.nominate) : undefined}
-            />
-          ) : shown.length === 0 ? (
-            <EmptyState
-              title="No nominations match"
-              description={
-                search.trim()
-                  ? `Nothing here matches “${search.trim()}”.`
-                  : 'None in this view right now.'
-              }
-              actionLabel="Show all"
-              onAction={() => {
-                setSearch('');
-                setFilter('all');
-                searchRef.current?.focus();
-              }}
-            />
-          ) : (
-            <Box
-              component="ul"
-              aria-label="Open nominations"
-              sx={{
-                listStyle: 'none',
-                m: 0,
-                p: 0,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 1.5,
-              }}
-            >
-              {shown.map((n) => (
-                <li key={n.nominee}>
-                  <NominationCard
-                    nomination={n}
-                    now={data.decisions.now}
-                    compact
-                    comments
-                    actions={
-                      <CardActions
-                        n={n}
-                        me={me}
-                        canSupport={canSupport}
-                        isAdmin={isAdmin}
-                        onSupport={() => openSupport(n)}
-                      />
-                    }
-                  />
-                </li>
-              ))}
-            </Box>
-          )}
-          {data?.truncated ? <TruncatedNote what="the nominations" /> : null}
-        </Section>
-      )}
+      <Section title="Open nominations" id="open">
+        {!data && nominations.isError ? (
+          <ErrorState
+            title="Couldn’t load the nominations."
+            error={nominations.error}
+            onRetry={() => void nominations.refetch()}
+          />
+        ) : !data ? (
+          <ListSkeleton count={3} ring label="Loading nominations" />
+        ) : others.length === 0 ? (
+          <EmptyState
+            title="No open nominations right now"
+            description={
+              canNominate
+                ? 'Know someone who should mint? Propose a nomination, and the Minter Admins take it from there.'
+                : 'When a level 5+ minter or a Minter Admin proposes a nomination, it shows up here.'
+            }
+            actionLabel={canNominate ? PROPOSE_NOMINATION : undefined}
+            onAction={canNominate ? () => navigate(PATHS.nominate) : undefined}
+          />
+        ) : shown.length === 0 ? (
+          <EmptyState
+            title="No nominations match"
+            description={
+              search.trim()
+                ? `Nothing here matches “${search.trim()}”.`
+                : 'None in this view right now.'
+            }
+            actionLabel="Show all"
+            onAction={() => {
+              setSearch('');
+              setFilter('all');
+              searchRef.current?.focus();
+            }}
+          />
+        ) : (
+          <Box
+            component="ul"
+            aria-label="Open nominations"
+            sx={{
+              listStyle: 'none',
+              m: 0,
+              p: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+            }}
+          >
+            {shown.map((n) => (
+              <li key={n.nominee}>
+                <NominationCard
+                  nomination={n}
+                  now={data.decisions.now}
+                  compact
+                  comments
+                  actions={
+                    <CardActions
+                      n={n}
+                      me={me}
+                      canSupport={canSupport}
+                      isAdmin={isAdmin}
+                      onSupport={() => openSupport(n)}
+                    />
+                  }
+                />
+              </li>
+            ))}
+          </Box>
+        )}
+        {data?.truncated ? <TruncatedNote what="the nominations" /> : null}
+      </Section>
 
       {support ? (
         <SupportDialog

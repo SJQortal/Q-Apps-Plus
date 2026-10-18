@@ -1,8 +1,8 @@
 /**
  * Decisions: MINTER's nominations and everything waiting for the Minter
  * Admins, in one place (Simon, 2026-10-17: "merge the Nominations tab into
- * Decisions"), in three tabs (decisionsViews.ts): All Decisions, Nominations
- * (NominationsPanel.tsx) and Ready to mint; then a tab for each kind of
+ * Decisions"), in two tabs (decisionsViews.ts): All Decisions and Nominations
+ * (NominationsPanel.tsx); then a tab for each kind of
  * decision with something open (Simon, 2026-10-18: Removals, Declines, Bans,
  * New MAs, Remove MAs, Lift ban, Cancel invite, Clean invites, Ask MAs),
  * each All Decisions narrowed to that kind (`?show=<kind>`). A Minter Admin opens on
@@ -22,9 +22,10 @@
  * Minter Admins sign here, one at a time or several in a row, reject, or
  * withdraw their signature (on chain both are a rejection), say they are
  * considering a decision or a waiting nomination (a QDN record), make the first
- * signature on a nomination, propose kicks, bans, admin changes and
- * cancelled invites (each with their own signature), and clean up stale
- * invites. Doing nothing lets a decision expire. Everyone else follows
+ * signature on a nomination, propose kicks, bans, admin changes,
+ * declined join requests (picked from who asked to join: Requested to join
+ * MINTER Group) and cancelled invites (each with their own signature, and an
+ * optional note for the Minter Admins), and clean up stale invites. Doing nothing lets a decision expire. Everyone else follows
  * along, comments, and votes Yes or No (advisory, a QDN record) on
  * nominations, removals, bans and new Minter Admins, as on Nominations.
  *
@@ -102,7 +103,6 @@ import { useKeyboardOpen, useLandscapeFrame, useShortFrame } from '../../utils/h
 import { NominationsPanel } from '../nominations/NominationsPanel';
 import { OwnNomination } from '../nominations/OwnNomination';
 import { ownNominationOf } from '../nominations/ownNominationFacts';
-import { useReadyToMint } from '../nominations/useReadyToMint';
 import { decisionTitle, type Decision } from '../../rules/decision';
 import { hasImpact, isAdminChangeKind, projectShift } from '../../rules/targetShift';
 import { approvalsNeeded, describeThreshold } from '../../rules/threshold';
@@ -203,8 +203,6 @@ function DecisionsQueue() {
   const decisionsQ = useDecisions();
   const nominationsQ = useNominations();
   const membersQ = useMembers();
-  // Ready to mint follows the nominations' reads, with no GETs of its own (useReadyToMint).
-  const readyQ = useReadyToMint(nominationsQ.data?.loadedAt);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   // A kind's tab: All Decisions narrowed to it (Simon, 2026-10-18).
@@ -531,8 +529,6 @@ function DecisionsQueue() {
   const refresh = () => {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
-    // Ready to mint follows the nominations' reads; after a failure it reads again itself.
-    if (readyQ.isError) void readyQ.refetch();
     invalidate('staleinvites:');
     // Comment counts and open threads (a Minter Admin's own ones, and the notes, too).
     invalidate('comments:');
@@ -599,7 +595,6 @@ function DecisionsQueue() {
     nominations: nominationsQ.data
       ? nominationsQ.data.open.filter((n) => n.nominee !== me).length
       : undefined,
-    ready: readyQ.data?.people.length,
   };
   // Each kind's count: what is open of it. A tab shows while it has some (or is on screen).
   const kindCount = (key: DecisionsKind): number | undefined =>
@@ -620,11 +615,9 @@ function DecisionsQueue() {
   const subtitle =
     view === 'nominations'
       ? 'Who is up for MINTER right now'
-      : view === 'ready'
-        ? 'Who asked to join MINTER'
-        : data
-          ? `Each needs ${needed} approvals`
-          : 'Everything waiting for the Minter Admins';
+      : data
+        ? `Each needs ${needed} approvals`
+        : 'Everything waiting for the Minter Admins';
 
   return (
     <>
@@ -667,9 +660,7 @@ function DecisionsQueue() {
             <ListSkeleton count={3} ring label="Loading" />
           ) : view !== 'decisions' ? (
             <NominationsPanel
-              view={view}
               nominations={nominationsQ}
-              ready={readyQ}
               me={me}
               isAdmin={isAdmin}
               canNominate={canNominate}

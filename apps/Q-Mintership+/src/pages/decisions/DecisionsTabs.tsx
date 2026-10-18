@@ -2,12 +2,12 @@
  * Decisions' tabs: All Decisions · Nominations (decisionsViews.ts), each with
  * how many it lists; then a tab for each kind of decision that has
  * something open (Removals, Declines, Bans, New MAs, …, Clean invites, Ask
- * MAs: All Decisions narrowed to it); Ready to mint last. Each tab is a link that
- * swaps the URL in place (`replace`), as the Explorer's account tabs do:
- * Back leaves Decisions rather than stepping through its views, and a
- * copied link opens the same view. On a phone the row is a smaller size
- * with no scroll arrows and scrolls under a finger; the panel below swipes
- * between All Decisions, Nominations and Ready to mint.
+ * MAs: All Decisions narrowed to it). Each tab is a link that swaps the URL
+ * in place (`replace`), as the Explorer's account tabs do: Back leaves
+ * Decisions rather than stepping through its views, and a copied link opens
+ * the same view. On a phone the row is a smaller size with no scroll arrows
+ * and scrolls under a finger; the panel below swipes between All Decisions
+ * and Nominations.
  */
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Tab, Tabs } from '@mui/material';
@@ -47,13 +47,11 @@ export function DecisionsTabs({
     to: string;
     count?: number;
   }> = [
-    ...DECISIONS_VIEWS.filter((v) => v.key !== 'ready').map(viewTab),
+    ...DECISIONS_VIEWS.map(viewTab),
     ...kinds.map((k) => ({ ...k, to: decisionsKindPath(k.key) })),
-    // Ready to mint last (Simon, 2026-10-18: "move ready to mint to the back, as the last one").
-    ...DECISIONS_VIEWS.filter((v) => v.key === 'ready').map(viewTab),
   ];
   const theme = useTheme();
-  // Each tab's colour, its section's (none for All Decisions and Ready to mint).
+  // Each tab's colour, its section's (none for All Decisions).
   const accentOf = (key: DecisionsView | DecisionsKind) => {
     const accent = TAB_ACCENT[key];
     return accent ? sectionAccent(theme, accent) : null;
@@ -67,7 +65,7 @@ export function DecisionsTabs({
       }}
       variant="scrollable"
       scrollButtons="auto"
-      aria-label="Decisions, nominations, the people ready to mint, and each kind of decision"
+      aria-label="Decisions, nominations, and each kind of decision"
       sx={{
         minHeight: 44,
         borderBottom: 1,
@@ -119,7 +117,7 @@ export function DecisionsTabs({
             sx={{
               minHeight: 44,
               minWidth: 0,
-              // All three on a 360 px phone, with "All Decisions" (Simon, 2026-10-18).
+              // A 360 px phone keeps several in view, with "All Decisions" (Simon, 2026-10-18).
               px: { xs: 0.5, sm: 2 },
               fontSize: { xs: 13, sm: 15 },
               fontWeight: 600,

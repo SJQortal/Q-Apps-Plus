@@ -1,9 +1,10 @@
 /**
- * The "Ready to mint" view's reads: the list itself (worked out again from
- * the cached reads whenever the nominations refresh), a way for each row
- * to watch its own account and name in the read store without loading them,
- * since loadReadyDetails reads only the rows on screen, six at a time, and
- * the search's name lookups.
+ * The reads of "Requested to join MINTER Group" (Decisions → Propose →
+ * Decline a join request): the list itself (worked out again from the cached
+ * reads whenever the nominations refresh), a way for each row to watch its
+ * own account and name in the read store without loading them, since
+ * loadReadyDetails reads only the rows on screen, six at a time, and the
+ * search's name lookups.
  */
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { isAddress } from '../../data/accounts';
@@ -13,11 +14,11 @@ import { READY_KEY, loadReadyToMint } from '../../data/readyToMint';
 import { useQuery } from '../../hooks/useQuery';
 
 /**
- * The people ready to mint. `nominationsLoadedAt` is the nominations'
- * `loadedAt`: when they refresh (every minute, or Refresh), the list follows
- * from the same reads, with no GETs of its own.
+ * The people who asked to join MINTER. `nominationsLoadedAt` is the
+ * nominations' `loadedAt`: when they refresh (every minute, or Refresh), the
+ * list follows from the same reads, with no GETs of its own.
  */
-export function useReadyToMint(nominationsLoadedAt: number | undefined) {
+export function useJoinRequests(nominationsLoadedAt: number | undefined) {
   const ready = useQuery(READY_KEY, (force) => loadReadyToMint({ force }));
   const { refetch } = ready;
   useEffect(() => {
@@ -38,7 +39,7 @@ export const READY_SEARCH_DEBOUNCE_MS = 300;
 
 const clean = (text: string) => text.trim().replace(/^@/, '');
 
-export interface ReadySearch {
+export interface JoinRequestSearch {
   /** The text searched for: trimmed, without a leading @, once typing pauses. */
   query: string;
   /** The owners of the names that match it. */
@@ -50,10 +51,10 @@ export interface ReadySearch {
 }
 
 /**
- * Ready to mint's search box: once typing pauses, a name is resolved to its
+ * The list's search box: once typing pauses, a name is resolved to its
  * owners (one small name search, cached per query; nothing for an address).
  */
-export function useReadySearch(text: string): ReadySearch {
+export function useJoinRequestSearch(text: string): JoinRequestSearch {
   const [query, setQuery] = useState(() => clean(text));
   useEffect(() => {
     const timer = setTimeout(() => setQuery(clean(text)), READY_SEARCH_DEBOUNCE_MS);

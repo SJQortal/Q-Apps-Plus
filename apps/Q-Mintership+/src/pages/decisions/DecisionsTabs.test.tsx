@@ -86,17 +86,8 @@ describe('Decisions: its tabs', () => {
       () => expect(tab(/^All Decisions/)).toHaveAccessibleName(/^All Decisions \d+$/),
       T
     );
-    await waitFor(
-      () => expect(tab(/^Ready to mint/)).toHaveAccessibleName(/^Ready to mint \d+$/),
-      T
-    );
-
-    await u.click(tab(/^Ready to mint/));
-    await waitFor(() => expect(at()).toBe('/decisions?show=ready|REPLACE'), T);
-    expect(
-      await screen.findByRole('searchbox', { name: /Search the people ready to mint/ }, T)
-    ).toBeVisible();
-    expect(screen.getByRole('region', { name: /^Ready to mint/ })).toBeVisible();
+    // Who asked to join is Propose → Decline a join request now: no tab of its own.
+    expect(screen.queryByRole('tab', { name: /^Ready to mint/ })).toBeNull();
 
     await u.click(tab(/^All Decisions/));
     await waitFor(() => expect(at()).toBe('/decisions?show=decisions|REPLACE'), T);
@@ -189,15 +180,17 @@ describe('Decisions: swipes between tabs', () => {
       }
     };
     expect(panel).toBeInTheDocument();
-    swipe(-150);
-    await waitFor(() => expect(at()).toBe('/decisions?show=ready|REPLACE'), T);
-    expect(tab(/^Ready to mint/)).toHaveAttribute('aria-selected', 'true');
-    // Nothing after Ready to mint.
-    swipe(-150);
-    swipe(150);
-    await waitFor(() => expect(at()).toBe('/decisions?show=nominations|REPLACE'), T);
     swipe(150);
     await waitFor(() => expect(at()).toBe('/decisions?show=decisions|REPLACE'), T);
+    expect(tab(/^All Decisions/)).toHaveAttribute('aria-selected', 'true');
+    // Nothing before All Decisions.
+    swipe(150);
+    swipe(-150);
+    await waitFor(() => expect(at()).toBe('/decisions?show=nominations|REPLACE'), T);
+    // Nothing after Nominations among the views: a swipe stays.
+    swipe(-150);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(at()).toBe('/decisions?show=nominations|REPLACE');
   });
 
   it('adds a tab for each kind of decision with something open, narrowing All Decisions to it', async () => {
@@ -205,12 +198,12 @@ describe('Decisions: swipes between tabs', () => {
     await open('admin');
     await screen.findByRole('article', { name: /Add to MINTER, bob\+builder/ }, T);
     const names = screen.getAllByRole('tab').map((t) => t.textContent);
-    // All Decisions and Nominations, the kinds that have something open, then Ready to mint last.
+    // All Decisions and Nominations, then the kinds that have something open.
     expect(names.slice(0, 2).map((n) => n?.replace(/\s*\d+$/, ''))).toEqual([
       'All Decisions',
       'Nominations',
     ]);
-    expect(names[names.length - 1]).toMatch(/^Ready to mint \d+$/);
+    expect(names.some((n) => /^Ready to mint/.test(n ?? ''))).toBe(false);
     expect(names).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^New MAs \d+$/),

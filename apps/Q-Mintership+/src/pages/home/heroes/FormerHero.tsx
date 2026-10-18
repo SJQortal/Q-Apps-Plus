@@ -2,21 +2,24 @@
  * Former members (and accounts removed before they ever joined): when it
  * happened, who proposed it and why, that the level stays, and what it
  * takes to come back. After a kick or leaving: a new nomination, which
- * nominators often start themselves, and they can show they're ready to
- * mint again (MINTER's join request). During a ban: the Minter Admins
- * lifting it first. A ban that ended or was lifted says so, with its date,
- * not "removed from MINTER".
+ * nominators choose to make (nobody asks for one: Simon, 2026-10-18), with
+ * the Q-Minter Guide to read. During a ban: the Minter Admins lifting it
+ * first. A ban that ended or was lifted says so, with its date, not
+ * "removed from MINTER". A join request still open says what happens to it.
  */
 import type { ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Button } from '@mui/material';
+import MenuBookOutlinedIcon from '@mui/icons-material/MenuBookOutlined';
+import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
+import { Q_MINTER_BECOMING_LINK, Q_MINTER_GUIDE } from '../../../constants/qMinter';
 import { NOMINATOR_MIN_LEVEL } from '../../../data/constants';
 import { personPath } from '../../../routes/paths';
 import { banEnd, type MyStatus } from '../../../rules/status';
 import { formatCount, formatDate, formatDateTime, formatRelative } from '../../../utils/format';
+import { openQortalLink } from '../../../utils/links';
 import { Hero, HeroText, Num, PersonLink } from '../Hero';
-import { ReadyButton, ReadyDialog, ReadyDone, ReadyNext, ReadyUnknown, ShareButton } from './ready';
-import { useReadyToMint, type ReadyToMint } from './useReadyToMint';
+import { JoinRequestOpen } from './joinRequest';
 
 function When({ at }: { at: number }) {
   return (
@@ -41,40 +44,32 @@ function Reason({ reason }: { reason?: string }) {
   return <HeroText muted>Reason given: &ldquo;{reason.trim()}&rdquo;</HeroText>;
 }
 
-/** The way back after a kick or leaving: a new nomination, and showing they're ready. */
-function ComeBack({ ready }: { ready: ReadyToMint }) {
-  if (ready.ready) {
-    return (
-      <>
-        <ReadyDone ready={ready} />
-        <HeroText muted>
-          {ready.confirming
-            ? 'Your join request is on its way into a block. Then nominators and Minter Admins can see that you’d like to mint again.'
-            : 'Your join request is open, so nominators and Minter Admins can see that you’d like to mint again.'}{' '}
-          It can&rsquo;t be withdrawn: it stays open until you&rsquo;re approved, or Minter Admins
-          remove it.
-        </HeroText>
-      </>
-    );
-  }
+/** The way back after a kick or leaving: a new nomination, which nominators choose to make. */
+function ComeBack({ status }: { status: MyStatus }) {
   return (
     <>
       <HeroText>
         A new nomination is possible. Nominators, minters at level {NOMINATOR_MIN_LEVEL} or above,
-        look for people who&rsquo;d make good minters, and often reach out first. You can also show
-        you&rsquo;re ready to mint: then an approved nomination makes you a member at once.
+        choose community members who&rsquo;d make good minters and nominate them. The{' '}
+        {Q_MINTER_GUIDE} explains what it takes.
       </HeroText>
-      <ReadyUnknown ready={ready} />
+      <JoinRequestOpen status={status} />
     </>
   );
 }
 
-/** Show you're ready (until it's done), share the name or address, and the history. */
-function comeBackActions(ready: ReadyToMint, status: MyStatus, historyLink: ReactNode) {
+/** The Q-Minter Guide, and the history. */
+function comeBackActions(historyLink: ReactNode) {
   return (
     <>
-      {ready.ready ? null : <ReadyButton ready={ready} />}
-      <ShareButton status={status} />
+      <Button
+        variant="contained"
+        startIcon={<MenuBookOutlinedIcon />}
+        endIcon={<OpenInNewOutlinedIcon />}
+        onClick={() => void openQortalLink(Q_MINTER_BECOMING_LINK)}
+      >
+        Read the {Q_MINTER_GUIDE}
+      </Button>
       {historyLink}
     </>
   );
@@ -84,7 +79,6 @@ const NOMINATED_NEXT =
   'When someone nominates you, this page shows who did, and how the Minter Admins answer.';
 
 export function FormerHero({ status, needed }: { status: MyStatus; needed: number | null }) {
-  const ready = useReadyToMint(status);
   const name = status.name;
   const removal = status.removal;
   const historyLink = (
@@ -146,28 +140,25 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
 
   if (status.kind === 'formerLeft') {
     return (
-      <>
-        <Hero
-          eyebrow="Former member"
-          title={name ? `${name}, you left MINTER` : 'You left MINTER'}
-          actions={comeBackActions(ready, status, historyLink)}
-          next={ready.ready ? <ReadyNext needed={needed} /> : NOMINATED_NEXT}
-        >
-          <HeroText>
-            You left MINTER
-            {removal ? (
-              <>
-                {' '}
-                <When at={removal.at} />
-              </>
-            ) : null}
-            .
-          </HeroText>
-          <LevelKept status={status} />
-          <ComeBack ready={ready} />
-        </Hero>
-        <ReadyDialog ready={ready} needed={needed} />
-      </>
+      <Hero
+        eyebrow="Former member"
+        title={name ? `${name}, you left MINTER` : 'You left MINTER'}
+        actions={comeBackActions(historyLink)}
+        next={NOMINATED_NEXT}
+      >
+        <HeroText>
+          You left MINTER
+          {removal ? (
+            <>
+              {' '}
+              <When at={removal.at} />
+            </>
+          ) : null}
+          .
+        </HeroText>
+        <LevelKept status={status} />
+        <ComeBack status={status} />
+      </Hero>
     );
   }
 
@@ -183,45 +174,42 @@ export function FormerHero({ status, needed }: { status: MyStatus; needed: numbe
         : 'You were removed from MINTER'
       : "You were removed from MINTER's join list";
   return (
-    <>
-      <Hero
-        eyebrow={status.wasMember ? 'Former member' : 'Not in MINTER'}
-        title={title}
-        actions={comeBackActions(ready, status, historyLink)}
-        next={ready.ready ? <ReadyNext needed={needed} /> : NOMINATED_NEXT}
-      >
-        {removal ? (
-          <HeroText>
-            {end
-              ? 'The Minter Admins banned this account'
-              : status.wasMember
-                ? 'The Minter Admins removed you'
-                : 'The Minter Admins approved a removal for this account'}{' '}
-            <When at={removal.at} />
-            {removal.by ? (
+    <Hero
+      eyebrow={status.wasMember ? 'Former member' : 'Not in MINTER'}
+      title={title}
+      actions={comeBackActions(historyLink)}
+      next={NOMINATED_NEXT}
+    >
+      {removal ? (
+        <HeroText>
+          {end
+            ? 'The Minter Admins banned this account'
+            : status.wasMember
+              ? 'The Minter Admins removed you'
+              : 'The Minter Admins approved a removal for this account'}{' '}
+          <When at={removal.at} />
+          {removal.by ? (
+            <>
+              , proposed by <PersonLink address={removal.by} />
+            </>
+          ) : null}
+          .
+          {end ? (
+            end.at === null ? (
+              ' That ban has ended.'
+            ) : (
               <>
-                , proposed by <PersonLink address={removal.by} />
+                {' '}
+                {end.how === 'lifted' ? 'The Minter Admins lifted it' : 'The ban ended'}{' '}
+                <When at={end.at} />.
               </>
-            ) : null}
-            .
-            {end ? (
-              end.at === null ? (
-                ' That ban has ended.'
-              ) : (
-                <>
-                  {' '}
-                  {end.how === 'lifted' ? 'The Minter Admins lifted it' : 'The ban ended'}{' '}
-                  <When at={end.at} />.
-                </>
-              )
-            ) : null}
-          </HeroText>
-        ) : null}
-        <Reason reason={removal?.reason} />
-        <LevelKept status={status} />
-        <ComeBack ready={ready} />
-      </Hero>
-      <ReadyDialog ready={ready} needed={needed} />
-    </>
+            )
+          ) : null}
+        </HeroText>
+      ) : null}
+      <Reason reason={removal?.reason} />
+      <LevelKept status={status} />
+      <ComeBack status={status} />
+    </Hero>
   );
 }

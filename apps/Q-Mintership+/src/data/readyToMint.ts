@@ -1,6 +1,8 @@
 /**
- * Ready to mint: the people who asked to join MINTER (a join request), less
- * current members and anyone banned now. Nominators find candidates here.
+ * Requested to join MINTER Group (Ready to mint until 2026-10-18; now
+ * Decisions → Propose → Decline a join request, for Minter Admins): the
+ * people who asked to join MINTER (a join request), less current members and
+ * anyone banned now.
  *
  * - `/groups/joinrequests/694` is one unpaged list (92 rows today), without
  *   dates and in address order (Core: `ORDER BY joiner`).
@@ -71,7 +73,7 @@ export function pickReadyToMint(input: ReadyInput): string[] {
 const ADDRESS_PART_RE = /^[1-9A-HJ-NP-Za-km-z]{4,}$/;
 
 /**
- * Ready to mint's search, in Core's order: a typed address matches that
+ * The list's search, in Core's order: a typed address matches that
  * person only; a part of an address (4 characters or more, as the short
  * address on each row shows) matches the addresses that contain it; a name
  * matches the owners found for it (`owners`, from findNameOwners) and the

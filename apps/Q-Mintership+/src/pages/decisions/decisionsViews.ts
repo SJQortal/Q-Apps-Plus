@@ -1,13 +1,15 @@
 /**
- * Decisions' three views, in tabs (Simon, 2026-10-17: "merge the Nominations
- * tab into Decisions"): the decisions waiting for the Minter Admins, the open
- * nominations, and the people ready to mint. `?show=` keeps the view, and
- * `?state=` a nomination state on Nominations; without `show` a Minter Admin
- * opens Decisions and everyone else Nominations. The old Nominations page's
- * links (`/nominations?show=<state>`, `?show=ready`) open the same view here.
+ * Decisions' two views, in tabs (Simon, 2026-10-17: "merge the Nominations
+ * tab into Decisions"): the decisions waiting for the Minter Admins and the
+ * open nominations. `?show=` keeps the view, and `?state=` a nomination state
+ * on Nominations; without `show` a Minter Admin opens Decisions and everyone
+ * else Nominations. The old Nominations page's links (`/nominations?show=<state>`)
+ * open the same view here. The list of who asked to join (Ready to mint until
+ * 2026-10-18) is Propose → Decline a join request now: its old links
+ * (`?show=ready`) open Decisions' own default view.
  */
 import { appParam } from '../../routes/hubLocation';
-import { decisionsViewPath, type DecisionsView } from '../../routes/paths';
+import { PATHS, decisionsViewPath, type DecisionsView } from '../../routes/paths';
 import { parseFilter } from '../nominations/filters';
 import type { SectionAccent } from './sectionAccents';
 
@@ -17,7 +19,6 @@ export const DECISIONS_VIEWS: ReadonlyArray<{ key: DecisionsView; label: string 
   // Simon, 2026-10-18: "I want decisions to be called “All Decisions”".
   { key: 'decisions', label: 'All Decisions' },
   { key: 'nominations', label: 'Nominations' },
-  { key: 'ready', label: 'Ready to mint' },
 ];
 
 /** `?show=` as a view, or null for none (the account's own default). */
@@ -29,8 +30,8 @@ export function parseDecisionsView(value: string | null): DecisionsView | null {
  * All Decisions narrowed to one kind (Simon, 2026-10-18: "in this top bar in
  * Decisions, I would also like there to show the other active ones too, so
  * the: Nominations, Removals, Declines, Bans, New MA's, Remove MA's , Lift
- * Ban, Cancel invite, Clean invites, Ask MA's"): a tab each, after Ready to
- * mint, shown while something of that kind is open. `?show=<kind>`.
+ * Ban, Cancel invite, Clean invites, Ask MA's"): a tab each, after
+ * Nominations, shown while something of that kind is open. `?show=<kind>`.
  */
 export type DecisionsKind =
   | 'removals'
@@ -115,17 +116,16 @@ export function defaultDecisionsView(isAdmin: boolean): DecisionsView {
 
 /**
  * Where an old `/nominations` link goes: its view (and nomination state) in
- * Decisions, with the rest of its query (Ready to mint's `sort`).
+ * Decisions, with the rest of its query. Its old Ready to mint view
+ * (`?show=ready`) opens Decisions on the account's own default view.
  */
 export function nominationsRedirect(search: string): string {
   const params = new URLSearchParams(search);
   const show = appParam(params, 'show');
+  if (show === 'ready') return PATHS.decisions;
   params.delete('show');
   params.delete('state');
-  const view =
-    show === 'ready'
-      ? decisionsViewPath('ready')
-      : decisionsViewPath('nominations', parseFilter(show));
+  const view = decisionsViewPath('nominations', parseFilter(show));
   const rest = params.toString();
   return rest ? `${view}&${rest}` : view;
 }

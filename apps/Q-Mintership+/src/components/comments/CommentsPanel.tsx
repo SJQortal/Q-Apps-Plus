@@ -45,7 +45,7 @@ import { deleteAdminComment, editAdminComment, postAdminComment } from '../../wr
 import type { WriteStage } from '../../writes/runner';
 import { focusElement } from '../../utils/focus';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../common/states';
-import { NAMES_APP_LINK } from '../ready/readyChecks';
+import { NAMES_APP_LINK } from '../../constants/links';
 import {
   DeleteCommentDialog,
   HideCommentDialog,

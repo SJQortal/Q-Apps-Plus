@@ -112,28 +112,46 @@ describe('Decisions → Propose → Decline a join request', () => {
     await user.click(await screen.findByRole('button', { name: 'Propose' }, T));
     await user.click(await screen.findByRole('menuitem', { name: /Decline a join request/ }));
     const form = await screen.findByRole('dialog', { name: 'Decline a join request' });
+    // Who asked to join (Simon, 2026-10-18: Ready to mint, renamed and moved here).
+    const list = await within(form).findByRole(
+      'list',
+      { name: 'Requested to join MINTER Group' },
+      T
+    );
+    // A decline already waiting: said on its row, with no second Decline.
+    const waiting = (
+      await within(list).findByRole('link', { name: `${jr2}: open their page` }, T)
+    ).closest('li') as HTMLElement;
     expect(
-      within(form).getByText(
-        /^Once 8 Minter Admins approve it, like any decision, their join request goes and they leave Ready to mint for everyone\. They can send a new join request later\. It costs 0\.02 QORT: your proposal and your own approval of it, two Hub steps\.$/
-      )
+      within(waiting).getByRole('link', {
+        name: `A decline is waiting for Minter Admins’ approvals: open the decision about ${jr2}`,
+      })
     ).toBeVisible();
+    expect(within(waiting).queryByRole('button', { name: /^Decline/ })).toBeNull();
 
-    // A decline already waiting stops a second one.
-    const name = within(form).getByRole('textbox', { name: 'Name or address' });
-    await user.type(name, fakeAddress('jr-2'));
-    await user.click(within(form).getByRole('button', { name: 'Find' }));
-    expect(
-      await within(form).findByText(
-        'Declining this join request is already waiting for approvals.',
-        {},
+    await user.click(
+      await within(list).findByRole(
+        'button',
+        { name: `Decline ${shortAddress(jr1)}’s join request` },
         T
       )
+    );
+    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    expect(within(form).queryByRole('list', { name: 'Requested to join MINTER Group' })).toBeNull();
+    expect(
+      within(form).getByText(
+        /^Once 8 Minter Admins approve it, like any decision, their join request goes\. They can send a new join request later\. It costs 0\.02 QORT: your proposal and your own approval of it, two Hub steps\.$/
+      )
     ).toBeVisible();
-    expect(within(form).getByRole('button', { name: 'Review' })).toBeDisabled();
-
-    await user.clear(name);
-    await user.type(name, jr1);
-    await user.click(within(form).getByRole('button', { name: 'Find' }));
+    // Change goes back to the list, and the same row picks them again.
+    await user.click(
+      within(form).getByRole('button', { name: 'Change: pick someone else who asked to join' })
+    );
+    await user.click(
+      await within(
+        await within(form).findByRole('list', { name: 'Requested to join MINTER Group' }, T)
+      ).findByRole('button', { name: `Decline ${shortAddress(jr1)}’s join request` }, T)
+    );
     expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
     // The reason is required, and everyone sees it.
     expect(within(form).getByText(/^Shown to everyone, the account included\./)).toBeVisible();
@@ -150,7 +168,7 @@ describe('Decisions → Propose → Decline a join request', () => {
     expect(within(hub).getByText(/Fees in total: 0.02 QORT/)).toBeInTheDocument();
     expect(
       within(hub).getByText(
-        /^This proposes declining their join request: once it passes, they leave Ready to mint for everyone, and they can send a new one later\. It happens only if 8 Minter Admins approve within/
+        /^This proposes declining their join request: once it passes, their request is gone, and they can send a new one later\. It happens only if 8 Minter Admins approve within/
       )
     ).toBeVisible();
     await user.click(within(hub).getByRole('button', { name: 'Continue to Hub' }));

@@ -30,6 +30,7 @@ export const EXPLORER_BANNED_IMPORTS = [
   '**/writes/comments',
   '**/writes/considering',
   '**/writes/adminPolls',
+  '**/writes/adminNotes',
   // The dialogs that sign, publish, vote or join (and their lazy wrappers).
   '**/nomination/NomineeAction*',
   '**/nomination/SupportDialog',
@@ -38,10 +39,10 @@ export const EXPLORER_BANNED_IMPORTS = [
   '**/comments/CommentDialogs',
   '**/community/*CommunityVoteDialog',
   '**/decision/ConsideringDialog',
-  '**/ready/*ReadyToMintDialog',
+  '**/decision/AdminNoteDialog',
+  '**/decision/adminNoteStep',
   '**/decisions/*Dialog',
   '**/decisions/*Dialogs',
-  '**/nominations/LazyDeclineDialog',
 ];
 
 export default tseslint.config(

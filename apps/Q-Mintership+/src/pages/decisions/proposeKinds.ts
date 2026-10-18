@@ -45,7 +45,8 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   },
   decline: {
     label: DECLINE_TITLE,
-    description: 'Takes someone off Ready to mint. They can send a new join request later.',
+    description:
+      'Pick someone from who asked to join MINTER. They can send a new join request later.',
     action: 'KICK_FROM_GROUP',
     txType: 'GROUP_KICK',
   },

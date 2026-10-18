@@ -43,7 +43,7 @@ describe('Nominations filters', () => {
     expect(parseFilter('rejected')).toBe('all');
   });
 
-  it('leaves Ready to mint to its own tab', () => {
+  it('takes the old Ready to mint view for All', () => {
     expect(parseFilter('ready')).toBe('all');
   });
 

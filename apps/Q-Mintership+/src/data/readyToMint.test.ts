@@ -250,7 +250,7 @@ describe('loadReadyDetails', () => {
   });
 });
 
-describe('Ready to mint: the order', () => {
+describe('Requested to join MINTER Group: the order', () => {
   const A = fakeAddress('ord-a');
   const B = fakeAddress('ord-b');
   const C = fakeAddress('ord-c');

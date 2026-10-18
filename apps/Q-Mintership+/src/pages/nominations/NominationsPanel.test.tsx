@@ -48,9 +48,9 @@ describe('Decisions → Nominations', () => {
     expect(screen.getByRole('button', { name: PROPOSE_NOMINATION })).toBeInTheDocument();
     // Nora nominated these herself.
     expect(within(await card('Wren Waiting')).getByText('You nominated them')).toBeInTheDocument();
-    // A nominee whose join request is in reads as ready, in the same words everywhere.
-    expect(within(await card('bob\\+builder')).getByText('Ready to mint')).toBeInTheDocument();
-    expect(within(await card('Wren Waiting')).queryByText('Ready to mint')).toBeNull();
+    // A nominee whose join request is in says so, in the same words everywhere.
+    expect(within(await card('bob\\+builder')).getByText('Requested to join')).toBeInTheDocument();
+    expect(within(await card('Wren Waiting')).queryByText('Requested to join')).toBeNull();
     expect(within(list).queryByText(/accepted/i)).toBeNull();
   });
 

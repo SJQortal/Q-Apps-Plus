@@ -5,7 +5,7 @@
  */
 import { Box, Button, Typography } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
-import { NAMES_APP_LINK } from '../../components/ready/readyChecks';
+import { NAMES_APP_LINK } from '../../constants/links';
 import { invalidate } from '../../data/query';
 import { signIn } from '../../state/session';
 import { openQortalLink } from '../../utils/links';

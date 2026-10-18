@@ -240,7 +240,7 @@ describe('Decisions: phases and actions', () => {
     // A removal still says who proposed it.
     expect(within(kick).getByText(/^Proposed by/)).toBeVisible();
     expect(
-      within(signing).getByText('Ready to mint: approval makes them a member at once.')
+      within(signing).getByText('Requested to join: approval makes them a member at once.')
     ).toBeInTheDocument();
   });
 

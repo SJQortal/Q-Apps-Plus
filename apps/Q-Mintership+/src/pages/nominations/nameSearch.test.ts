@@ -59,7 +59,7 @@ describe('name search (src/data/nameSearch.ts)', () => {
   });
 });
 
-describe('findNameOwners (Ready to mint’s search)', () => {
+describe('findNameOwners (the join requests’ search)', () => {
   beforeEach(() => resetQueries());
 
   it('takes the owners from one small prefix page, cached per query', async () => {

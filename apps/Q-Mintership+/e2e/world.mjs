@@ -604,7 +604,7 @@ export function addOtherPending(world) {
   return rows.map((row) => row.signature);
 }
 
-/** Give the `ready` persona a join request, so they have shown they're ready to mint. */
+/** Give the `ready` persona a join request (sent before: another app, or an older version of this one). */
 export function addReady(world) {
   world.joinRequests.push({ groupId: GROUP, joiner: ADDR.ready });
 }
