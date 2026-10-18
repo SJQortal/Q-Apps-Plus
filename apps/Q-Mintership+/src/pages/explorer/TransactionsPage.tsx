@@ -189,8 +189,9 @@ export default function TransactionsPage() {
       />
       <PageBody>
         <Typography color="text.secondary">
-          Every confirmed transaction of one type in a range of blocks, newest or oldest first.
-          Messages aren't listed here: an account's Transactions tab shows its own.
+          Every confirmed transaction in a range of blocks, of every type or the one you pick,
+          newest or oldest first. Messages aren't listed here: an account's Transactions tab shows
+          its own.
         </Typography>
         <GlobalFilterBar
           type={type}
