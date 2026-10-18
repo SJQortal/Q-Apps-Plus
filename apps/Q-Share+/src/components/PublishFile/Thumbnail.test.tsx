@@ -7,6 +7,7 @@ import { addUser } from "../../state/features/authSlice";
 import { setEditFile } from "../../state/features/fileSlice";
 import { resetPublishUnitFee } from "../../utils/publishBatches";
 import { EditFile } from "../EditFile/EditFile";
+import { makeThumbnail } from "../../utils/thumbnailImage";
 import { PublishFile } from "./PublishFile";
 
 // jsdom has no canvas: a "thumbnail" names what it was made from.
@@ -34,17 +35,22 @@ const photo = () => new File([new Uint8Array(500)], "photo.png", { type: "image/
 const sent = () => (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").at(-1) as any).resources;
 const details = () => JSON.parse(atob(sent().find((r: any) => r.service === "DOCUMENT").data64));
 
-async function fillAndPublish() {
-  const before = qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length;
+async function fill() {
   fireEvent.change(screen.getByRole("textbox", { name: /title/i }), { target: { value: "Holiday" } });
   fireEvent.mouseDown(screen.getByRole("combobox", { name: /^category/i }));
   fireEvent.click(await screen.findByRole("option", { name: "Image" }));
   fireEvent.change(screen.getByLabelText("Description"), { target: { value: "<p>Pics</p>" } });
+}
+
+async function fillAndPublish() {
+  const before = qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length;
+  await fill();
   fireEvent.click(screen.getByRole("button", { name: "Publish" }));
   await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(before + 1));
 }
 
 beforeEach(() => {
+  vi.mocked(makeThumbnail).mockClear();
   store.dispatch(addUser(user));
   resetPublishUnitFee();
   mockFetch("/transactions/unitfee", "1000000");
@@ -69,6 +75,41 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
     expect(thumb).toMatchObject({ name: "alice", tag1: "qshare_thumb_", filename: "thumbnail.webp" });
     expect(await thumb.file.text()).toBe("thumb of photo.png 500");
     expect(details().thumbnail).toEqual({ service: "THUMBNAIL", name: "alice", identifier: thumb.identifier });
+  });
+
+  it("publishes once on a double tap, with the thumbnail that was being made", async () => {
+    let finish!: (file: File) => void;
+    vi.mocked(makeThumbnail).mockImplementationOnce(() => new Promise<File>((resolve) => (finish = resolve)));
+    renderWithProviders(<PublishFile />);
+    fireEvent.click(screen.getByRole("button", { name: "Share files" }));
+    await screen.findByRole("dialog", { name: "Share files" });
+    fireEvent.change(screen.getByTestId("share-file-input"), { target: { files: [photo()] } });
+    expect(await screen.findByText("Making one from photo.png…")).toBeInTheDocument();
+    await fill();
+    const before = qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length;
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled());
+    finish(new File(["slow thumb"], "thumbnail.webp", { type: "image/webp" }));
+    await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(before + 1));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(before + 1);
+    // The thumbnail being made was waited for, not made a second time.
+    expect(makeThumbnail).toHaveBeenCalledTimes(1);
+    expect(await sent().find((r: any) => r.service === "THUMBNAIL").file.text()).toBe("slow thumb");
+  });
+
+  it("leaves out a thumbnail that couldn't be made, as the form says", async () => {
+    vi.mocked(makeThumbnail).mockRejectedValueOnce(new Error("No frame in time"));
+    renderWithProviders(<PublishFile />);
+    fireEvent.click(screen.getByRole("button", { name: "Share files" }));
+    await screen.findByRole("dialog", { name: "Share files" });
+    fireEvent.change(screen.getByTestId("share-file-input"), { target: { files: [photo()] } });
+    expect(await screen.findByText("None: the category icon shows.")).toBeInTheDocument();
+    expect(await screen.findByText("2 publishes, 0.02 QORT in fees")).toBeInTheDocument();
+    await fillAndPublish();
+    expect(sent().map((r: any) => r.service)).toEqual(["FILE", "DOCUMENT"]);
+    expect(makeThumbnail).toHaveBeenCalledTimes(1);
   });
 
   it("publishes none once removed, and a chosen image instead of the automatic one", async () => {

@@ -62,6 +62,10 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
   // the next Publish asks first: it would make a second share.
   const [mayStillPublish, setMayStillPublish] = useState(false);
   const [confirmAgain, setConfirmAgain] = useState(false);
+  // Making the thumbnail can take a few seconds: a second tap meanwhile must
+  // not build a second publish (its identifiers would replace the first's).
+  const preparing = useRef(false);
+  const [isPreparing, setIsPreparing] = useState(false);
 
   useEffect(() => {
     if (!username) return;
@@ -77,6 +81,7 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
   }, []);
 
   const publish = async (confirmed = false) => {
+    if (preparing.current) return;
     const categories = categoryListRef.current;
     const selected = categories?.getSelectedCategories() ?? [];
     const problems = draft.validate(Boolean(selected[0]));
@@ -98,6 +103,8 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
       return;
     }
 
+    preparing.current = true;
+    setIsPreparing(true);
     try {
       const thumb = await thumbnail.resolve();
       const { resources, fileReferences, fileObject } = await buildSharePublish({
@@ -115,6 +122,9 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish share"), alertType: "error" }));
+    } finally {
+      preparing.current = false;
+      setIsPreparing(false);
     }
   };
 
@@ -197,7 +207,7 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
             <Button onClick={close} color="inherit">
               Cancel
             </Button>
-            <Button variant="contained" onClick={() => publish()}>
+            <Button variant="contained" onClick={() => publish()} disabled={isPreparing}>
               Publish
             </Button>
           </>

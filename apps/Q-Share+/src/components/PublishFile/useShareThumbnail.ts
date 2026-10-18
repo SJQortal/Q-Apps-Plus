@@ -31,7 +31,11 @@ export interface ShareThumbnailState {
   fromFile: (file: DraftFile) => Promise<void>;
   remove: () => void;
   set: (choice: ThumbnailChoice) => void;
-  /** The thumbnail for buildSharePublish: made now if the automatic one isn't ready. */
+  /**
+   * The thumbnail for buildSharePublish. An automatic one still being made
+   * is waited for (not made twice); one that couldn't be made is left out,
+   * as the form says.
+   */
   resolve: () => Promise<ThumbnailInput | null>;
 }
 
@@ -61,6 +65,8 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
   // Every preview URL made here, freed when replaced or on unmount.
   const urls = useRef(new Set<string>());
   const autoUrl = useRef<string | undefined>(undefined);
+  // The automatic thumbnail being made.
+  const pending = useRef<{ key: string; promise: Promise<File> } | null>(null);
   const keep = useCallback((file: File) => {
     const url = URL.createObjectURL(file);
     urls.current.add(url);
@@ -86,7 +92,9 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
     if (!sourceKey || !source?.file.file || auto?.key === sourceKey) return;
     let active = true;
     const { kind } = source;
-    makeThumbnail(source.file.file, kind).then(
+    const promise = makeThumbnail(source.file.file, kind);
+    pending.current = { key: sourceKey, promise };
+    promise.then(
       (file) => {
         if (!active) return;
         free(autoUrl.current);
@@ -145,14 +153,18 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
   const resolve = useCallback(async (): Promise<ThumbnailInput | null> => {
     if (choice.kind === "existing") return { existing: choice.ref };
     if (choice.kind === "file") return { file: choice.file };
-    if (choice.kind === "none" || !source?.file.file) return null;
-    if (autoReady) return { file: autoReady.file };
+    if (choice.kind === "none" || !source?.file.file || autoFailed) return null;
     try {
-      return { file: await makeThumbnail(source.file.file, source.kind) };
+      const file =
+        autoReady?.file ??
+        (await (pending.current?.key === source.file.key
+          ? pending.current.promise
+          : makeThumbnail(source.file.file, source.kind)));
+      return { file };
     } catch {
       return null;
     }
-  }, [choice, source, autoReady]);
+  }, [choice, source, autoReady, autoFailed]);
 
   // Offer a share image (or video) the choice doesn't already come from.
   const candidates = files.filter((f) => {
