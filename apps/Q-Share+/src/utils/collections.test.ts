@@ -9,10 +9,12 @@ import {
   buildCollectionBody,
   buildCollectionIdentifier,
   buildCollectionPublish,
+  copyCollectionBody,
   coverUrl,
   editCollectionBody,
   newCoverIdentifier,
   parseFolders,
+  parseSource,
   storedCollectionJson,
   fetchCollection,
   hasItem,
@@ -307,6 +309,67 @@ describe('folders and covers (1.0.1)', () => {
     await publishCollection({ name: 'dj', identifier: 'qshare_collection_music_ab12cd', body: next, previous });
     const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
     expect(payload.description).toBe(recipientMarker('QBobAddress1234567890123456789012'));
+  });
+});
+
+describe('collection copies (1.0.1)', () => {
+  const source: Collection = {
+    version: 1,
+    name: 'dj b',
+    identifier: 'qshare_collection_music_ab12cd',
+    title: 'Music',
+    description: 'Mixes',
+    items: [{ name: 'dj b', identifier: 'qshare_file_m_1_metadata' }],
+    folders: [{ id: 'live01', title: 'Live', description: '', items: [{ name: 'eve', identifier: 'e1' }], folders: [] }],
+    cover: { service: 'THUMBNAIL', name: 'dj b', identifier: 'qshare_cover_music001' },
+    created: 1,
+    updated: 2,
+    fetchedAt: 3,
+  };
+
+  it('copies the shares, folders and cover, names the source, and keeps it through edits', async () => {
+    const copy = copyCollectionBody(source, { title: 'My music', description: 'From DJ B', now: 10 });
+    expect(copy).toMatchObject({
+      title: 'My music',
+      description: 'From DJ B',
+      items: source.items,
+      folders: source.folders,
+      cover: source.cover,
+      copiedFrom: { name: 'dj b', identifier: 'qshare_collection_music_ab12cd', title: 'Music' },
+      created: 10,
+      updated: 10,
+    });
+    const payload = await buildCollectionPublish({ name: 'alice', identifier: 'qshare_collection_my-music_zz99yy', body: copy });
+    const stored = decode(payload.data64);
+    expect(stored.copiedFrom).toEqual(copy.copiedFrom);
+    expect(parseCollection(stored)?.copiedFrom).toEqual(copy.copiedFrom);
+    expect(editCollectionBody(parseCollection(stored)!, { title: 'Renamed' }).copiedFrom).toEqual(copy.copiedFrom);
+  });
+
+  it('reads only a real source', () => {
+    expect(parseSource({ name: 'a', identifier: 'qshare_collection_x_ab12cd', title: 'X' })).toEqual({
+      name: 'a',
+      identifier: 'qshare_collection_x_ab12cd',
+      title: 'X',
+    });
+    expect(parseSource({ name: 'a', identifier: 'qshare_file_x_metadata' })).toBeUndefined();
+    expect(parseSource({ identifier: 'qshare_collection_x_ab12cd' })).toBeUndefined();
+    expect(parseSource('nope')).toBeUndefined();
+  });
+
+  it("marks the source's owner first on every publish of a copy", async () => {
+    resetCollectionCaches();
+    resetOwnerAddresses();
+    const owners: Record<string, string> = { 'dj b': 'Q0000000000000000000DJBADDRESS01', eve: 'Q0000000000000000000EVEADDRESS02' };
+    mockFetch('/names/', (url: URL) => {
+      const owner = owners[decodeURIComponent(url.pathname.slice('/names/'.length))];
+      return owner ? { name: 'x', owner } : { error: 401 };
+    });
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    const copy = copyCollectionBody(source, { title: 'My music', description: '' });
+    await publishCollection({ name: 'alice', identifier: 'qshare_collection_my-music_zz99yy', body: copy, previous: null, previousItems: [] });
+    const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
+    expect(payload.description).toBe(`${recipientMarker(owners['dj b'])}${recipientMarker(owners.eve)}`);
   });
 });
 

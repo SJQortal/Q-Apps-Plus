@@ -9,7 +9,8 @@
  * Since 1.0.1 a body may also have `folders` (a tree of folders, each with
  * its own items and subfolders, utils/collectionFolders.ts) and a `cover`
  * (a THUMBNAIL `qshare_cover_<uid>` under the publisher's name), and folders
- * may have covers too. Both are left out when unused, so a collection
+ * may have covers too. A copy of someone else's collection names its source
+ * in `copiedFrom`, and its markers always name the source's owner. Both are left out when unused, so a collection
  * without them is stored exactly as before. Fields this version doesn't
  * know are kept through edits.
  */
@@ -72,6 +73,13 @@ export interface CollectionFolder {
   folders: CollectionFolder[];
 }
 
+/** The collection a copy was made from. */
+export interface CollectionSource {
+  name: string;
+  identifier: string;
+  title: string;
+}
+
 /** The JSON body stored on QDN. */
 export interface CollectionBody {
   version: number;
@@ -84,6 +92,8 @@ export interface CollectionBody {
   updated: number;
   cover?: CollectionCover;
   folders?: CollectionFolder[];
+  /** Set on a copy: the collection it was copied from. */
+  copiedFrom?: CollectionSource;
   /** Fields of the stored JSON this version doesn't know, written back unchanged. */
   extra?: Record<string, unknown>;
 }
@@ -189,6 +199,7 @@ export function buildCollectionBody(input: {
   now?: number;
   cover?: CollectionCover | null;
   folders?: CollectionFolder[];
+  copiedFrom?: CollectionSource;
   extra?: Record<string, unknown>;
 }): CollectionBody {
   const now = input.now ?? Date.now();
@@ -206,6 +217,7 @@ export function buildCollectionBody(input: {
   };
   if (input.cover) body.cover = input.cover;
   if (input.folders && input.folders.length > 0) body.folders = input.folders;
+  if (input.copiedFrom) body.copiedFrom = input.copiedFrom;
   if (input.extra && Object.keys(input.extra).length > 0) body.extra = input.extra;
   return body;
 }
@@ -227,18 +239,40 @@ export function editCollectionBody(
     now,
     cover: changes.cover === undefined ? current.cover : changes.cover,
     folders: changes.folders ?? current.folders,
+    copiedFrom: current.copiedFrom,
     extra: current.extra,
+  });
+}
+
+/**
+ * A copy of someone's collection, to publish under the copier's name: its
+ * shares, folders and covers (the covers stay the original's images), a
+ * title and description of the copier's choosing, and `copiedFrom`.
+ */
+export function copyCollectionBody(
+  source: Pick<Collection, "name" | "identifier" | "title" | "items" | "folders" | "cover">,
+  input: { title: string; description: string; now?: number }
+): CollectionBody {
+  return buildCollectionBody({
+    title: input.title,
+    description: input.description,
+    items: source.items,
+    folders: source.folders,
+    cover: source.cover ?? null,
+    copiedFrom: { name: source.name, identifier: source.identifier, title: source.title },
+    now: input.now,
   });
 }
 
 /** The JSON stored on QDN: unknown fields first, then the known ones; empty folders and no cover are left out. */
 export function storedCollectionJson(body: CollectionBody): Record<string, unknown> {
-  const { extra, cover, folders, ...known } = body;
+  const { extra, cover, folders, copiedFrom, ...known } = body;
   return {
     ...(extra ?? {}),
     ...known,
     ...(cover ? { cover } : {}),
     ...(folders && folders.length > 0 ? { folders } : {}),
+    ...(copiedFrom ? { copiedFrom } : {}),
   };
 }
 
@@ -318,7 +352,20 @@ export function parseFolders(raw: unknown, depth = 1, seen = new Set<string>()):
   return out;
 }
 
-const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders"]);
+const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders", "copiedFrom"]);
+
+/** A copy's source read from QDN, or undefined for anything else. */
+export function parseSource(raw: unknown): CollectionSource | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const source = raw as Record<string, unknown>;
+  if (typeof source.name !== "string" || !source.name) return undefined;
+  if (!isCollectionIdentifier(source.identifier)) return undefined;
+  return {
+    name: source.name,
+    identifier: source.identifier,
+    title: typeof source.title === "string" ? source.title.slice(0, COLLECTION_TITLE_MAX) : "",
+  };
+}
 
 /**
  * Validate a body read from QDN (an object, or its JSON text). Returns null
@@ -353,6 +400,8 @@ export function parseCollection(raw: unknown): CollectionBody | null {
   if (cover) body.cover = cover;
   const folders = parseFolders(obj.folders);
   if (folders.length > 0) body.folders = folders;
+  const copiedFrom = parseSource(obj.copiedFrom);
+  if (copiedFrom) body.copiedFrom = copiedFrom;
   const extra = Object.fromEntries(Object.entries(obj).filter(([key]) => !KNOWN_FIELDS.has(key)));
   if (Object.keys(extra).length > 0) body.extra = extra;
   return body;
@@ -521,7 +570,9 @@ export async function publishCollection(input: {
 }): Promise<Collection> {
   const before = input.previous ?? getCachedCollection(input.name, input.identifier);
   const previous = input.previous ? allCollectionItems(input.previous) : (input.previousItems ?? (before ? allCollectionItems(before) : []));
-  const recipients = await markedShareOwners(input.name, previous, allCollectionItems(input.body));
+  // A copy always names its source's owner first, so their Q-Share+ finds it.
+  const leading = input.body.copiedFrom ? [input.body.copiedFrom.name] : [];
+  const recipients = await markedShareOwners(input.name, previous, allCollectionItems(input.body), leading);
   const payload = await buildCollectionPublish({ ...input, recipients });
   const covers = input.covers ?? [];
   if (covers.length > 0) {
@@ -559,12 +610,16 @@ export async function publishCollection(input: {
 export async function markedShareOwners(
   publisher: string,
   previous: CollectionItem[],
-  next: CollectionItem[]
+  next: CollectionItem[],
+  /** Names to mark before any share owner (a copy's source). */
+  leading: string[] = []
 ): Promise<string[]> {
   const isNew = (item: CollectionItem) => !previous.some((old) => sameItem(old, item));
   const newestFirst = [...next].reverse();
   const ordered = [...newestFirst.filter(isNew), ...newestFirst.filter((item) => !isNew(item))];
-  const names = [...new Map(ordered.map((item) => [item.name.toLowerCase(), item.name])).values()];
+  const names = [
+    ...new Map([...leading, ...ordered.map((item) => item.name)].map((name) => [name.toLowerCase(), name])).values(),
+  ];
   if (!names.length) return [];
   const own = await ownerAddress(publisher);
   const addresses: string[] = [];
