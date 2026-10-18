@@ -1031,6 +1031,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
     Tests 2,381 passed; Decisions captures (30) are clean.
 
+108. **All Decisions counts the polls** (Simon, 2026-10-18: "but I want all decisions to include the Ask MAs"). All Decisions already lists the Minter Admin polls. Its count now includes the open ones too, for Minter Admins: the decisions collecting approvals, the nominations waiting for a Minter Admin, and the open polls. Tests 2,382 passed.
+
 ## Follow-ups
 
 ### Readiness
