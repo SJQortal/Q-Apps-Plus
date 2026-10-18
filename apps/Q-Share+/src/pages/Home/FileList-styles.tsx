@@ -88,6 +88,18 @@ export const RowIcon = styled("img")(({ theme }) => ({
   flexShrink: 0,
 }));
 
+/** A row's 44 px square holding a thumbnail over the icon it replaces once loaded. */
+export const RowArt = styled("span")({
+  position: "relative",
+  width: 44,
+  height: 44,
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  "& > img:last-child": { position: "absolute", inset: 0 },
+});
+
 export const VideoCardTitle = styled(Typography)(({ theme }) => ({
   fontSize: 15,
   fontWeight: 600,

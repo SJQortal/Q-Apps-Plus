@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useInView } from "react-intersection-observer";
 import { useQdnImage } from "../../hooks/useQdnImage";
-import { CardPicture, RowIcon } from "../../pages/Home/FileList-styles";
+import { CardPicture, RowArt, RowIcon } from "../../pages/Home/FileList-styles";
 import { fileKind } from "../../utils/fileKind";
 import { shareThumbnail, type ShareThumbnail } from "../../utils/publishPayload";
 import { resourceStatusDirect } from "../../utils/qdnResource";
@@ -112,10 +112,28 @@ export function ShareCardArt({ share, fallback }: { share: any; fallback: ReactN
   );
 }
 
-/** A row's square: the share's thumbnail, else the category icon `fallback`. */
+/**
+ * A row's square: the share's thumbnail, else the category icon `fallback`,
+ * which also shows until the thumbnail has loaded.
+ */
 export function ShareRowArt({ share, fallback }: { share: any; fallback: ReactNode }) {
   const thumb = shareThumbnail(share);
   const { src, onError } = useQdnImage(thumb ? thumbnailUrl(thumb) : null);
+  const [loaded, setLoaded] = useState<string | null>(null);
   if (!src) return <>{fallback}</>;
-  return <RowIcon src={src} alt="" loading="lazy" decoding="async" onError={onError} />;
+  const shown = loaded === src;
+  return (
+    <RowArt>
+      {shown ? null : fallback}
+      <RowIcon
+        src={src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(src)}
+        onError={onError}
+        style={{ opacity: shown ? 1 : 0 }}
+      />
+    </RowArt>
+  );
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { mockAllIsIntersecting } from "react-intersection-observer/test-utils";
 import { fetchCallsMatching, mockFetch } from "../../test/setup";
 import { resetSettingsCache, writeSettings } from "../../utils/settings";
@@ -29,6 +29,10 @@ describe("share art", () => {
     expect(card.container.querySelector("[data-testid=icon]")).not.toBeNull();
     const row = render(<ShareRowArt share={share} fallback={icon} />);
     expect(img(row.container)).toBe("/arbitrary/THUMBNAIL/dj%20b/qshare_thumb_x_abc123?async=true");
+    // A row keeps its icon until the thumbnail has loaded.
+    expect(row.container.querySelector("[data-testid=icon]")).not.toBeNull();
+    fireEvent.load(row.container.querySelector("img")!);
+    expect(row.container.querySelector("[data-testid=icon]")).toBeNull();
     expect(fetchCallsMatching("/arbitrary/resource/status").length).toBe(0);
   });
 
