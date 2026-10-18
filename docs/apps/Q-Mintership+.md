@@ -1004,6 +1004,14 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
     Tests 2,369 passed; Overview, Minter Profile and Connections captures (50) are clean.
 
+103. **Activity's first reward share** (Simon, 2026-10-18: "there is some kind of bug that shows this indications wrong. please double check and make sure it is showing the milestones correctly", then "also reward share was a thing of the past").
+    - **The bug.** The "First reward share (minting)" milestone was the oldest reward share among the transactions read so far, so it moved as more was read. For Stonecrow it showed 15 Jun 2026 with 1,000 read and 16 Mar 2026 with 3,000. The real one is 17 Dec 2021 (block 655,586, a sponsor's share to it).
+    - **The fix.** It now comes from the account's oldest reward share in its whole history: the one-row read Node online already makes (`xmintstart:<a>`, which now keeps its signature for the link). The milestone appears once the chart reaches back that far.
+    - **The label.** A reward share no longer means minting on its own (since block 1,945,900 only MINTER members' minting counts), so the milestone is now "First reward share". One from before that block is labelled "First reward share (sponsorship era)".
+    - **The other milestones** (names, level moves, MINTER events, nominations) are each a real event and were already right.
+
+    Tests 2,371 passed; Overview captures clean.
+
 ## Follow-ups
 
 ### Readiness
