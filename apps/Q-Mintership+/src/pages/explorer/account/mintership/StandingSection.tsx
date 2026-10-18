@@ -18,7 +18,7 @@ import { statusSentence } from '../../../person/personWords';
 import type { MinterStory } from './useMinterStory';
 import { nominationLine, roundsLine } from './mintershipWords';
 import { Fact, Note } from './parts';
-import { QortSummaries } from './QortSummaries';
+import { BlocksMintedFact } from './BlocksMinted';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
 
 export function StandingSection({
@@ -65,7 +65,11 @@ export function StandingSection({
           }}
         >
           <Fact label="Level" value={String(person.level)} />
-          <Fact label="Blocks minted" value={formatCount(person.blocksMinted)} />
+          <BlocksMintedFact
+            address={address}
+            blocksMinted={person.blocksMinted}
+            neverMinted={person.blocksMinted === 0}
+          />
           <Fact
             label="Node online"
             value={
@@ -87,8 +91,6 @@ export function StandingSection({
             <Fact label="Join request" value="Sent" />
           ) : null}
         </Box>
-        {/* QORT minted, purchased / sold, received / sent (Simon, 2026-10-17). */}
-        <QortSummaries address={address} />
         {actions}
       </>
     );

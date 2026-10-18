@@ -64,17 +64,37 @@ export function readableColor(theme: Theme, colour: string): string {
  * nearest shade that reads at 4.5:1 on that wash over every surface.
  */
 export function readableOn(theme: Theme, colour: string, wash: number): string {
+  return readableAgainst(
+    theme,
+    colour,
+    wash ? surfaces(theme).map((surface) => over(surface, colour, wash)) : surfaces(theme),
+    wash ? `${colour}@${wash}` : colour
+  );
+}
+
+/**
+ * `colour` as text on a panel tinted with the text colour (`tint`, 0–1: the
+ * Explorer's field blocks), or the nearest shade that reads at 4.5:1 there
+ * and on every plain surface.
+ */
+export function readableOnTint(theme: Theme, colour: string, tint: number): string {
+  const text = theme.palette.text.primary;
+  return readableAgainst(
+    theme,
+    colour,
+    [...surfaces(theme), ...surfaces(theme).map((surface) => over(surface, text, tint))],
+    `${colour}~${tint}`
+  );
+}
+
+function readableAgainst(theme: Theme, colour: string, backgrounds: string[], key: string): string {
   let known = cache.get(theme);
   if (!known) {
     known = new Map();
     cache.set(theme, known);
   }
-  const key = wash ? `${colour}@${wash}` : colour;
   const hit = known.get(key);
   if (hit) return hit;
-  const backgrounds = wash
-    ? surfaces(theme).map((surface) => over(surface, colour, wash))
-    : surfaces(theme);
   const shift = theme.palette.mode === 'dark' ? lighten : darken;
   let result = theme.palette.text.primary;
   for (let step = 0; step <= STEPS; step++) {

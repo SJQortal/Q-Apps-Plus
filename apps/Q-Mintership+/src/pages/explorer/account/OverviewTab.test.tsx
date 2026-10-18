@@ -8,11 +8,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation, useNavigationType } from 'react-router-dom';
-import { renderPage } from '../../../test/render';
+import { renderPage, type RenderPageOptions } from '../../../test/render';
+import { getDefaultStore } from 'jotai';
+import { addPaymentsTo, setMintedTo } from '../../../test/qortWorld';
+import { activityFirstReadAtom } from '../../../state/settings';
 import { expectNoAxeViolations } from '../../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
-import { COLLECTOR, FUNDER, SPONSEES, SPONSOR } from '../../../../e2e/world.mjs';
+import { COLLECTOR, FUNDER, SPONSEES, SPONSOR, type World } from '../../../../e2e/world.mjs';
 import { explorerAccountPath } from '../../../routes/paths';
 import { peekQuery } from '../../../data/query';
 import { accountTxKey, type AccountTxList } from '../../../data/explorer/accountTx';
@@ -449,5 +452,87 @@ describe('Overview: Activity’s settings', () => {
     await waitFor(() =>
       expect(within(activity).queryByRole('list', { name: 'Milestones' })).toBeNull()
     );
+  });
+});
+
+describe('QORT summaries', () => {
+  const mintedComesTo = (address: string, minted: bigint) => (world: World) =>
+    setMintedTo(world, address, minted);
+
+  const SLOW = { timeout: 20_000 };
+  /** The Overview of `address`, as the admin persona sees it. */
+  const visit = (address: string, setup?: RenderPageOptions['setup']) =>
+    renderPage(<AccountPage />, {
+      persona: 'admin',
+      path: explorerAccountPath(address),
+      route: ROUTE,
+      setup,
+    });
+  /** At a glance, where the QORT facts are (Simon, 2026-10-17: moved from the Minter Profile). */
+  const standing = () => screen.findByRole('region', { name: 'At a glance' }, SLOW);
+  async function summaries() {
+    const region = await standing();
+    return waitFor(() => {
+      const dl = region.querySelector('dl');
+      expect(dl).not.toBeNull();
+      return dl as HTMLElement;
+    }, SLOW);
+  }
+  const value = (dl: HTMLElement, label: string) =>
+    (within(dl).getByText(label).nextElementSibling as HTMLElement).textContent ?? '';
+
+  afterEach(() => getDefaultStore().set(activityFirstReadAtom, 1000));
+
+  it('adds up QORT minted, purchased / sold and received / sent from its whole history', async () => {
+    await visit(ADDR.admin, mintedComesTo(ADDR.admin, 1_234n));
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('1,234 QORT'), SLOW);
+    expect(value(dl, 'QORT received / sent')).toMatch(/^[\d,.]+ \/ [\d,.]+$/);
+    // Sold: its completed trades as the seller, read by its public key.
+    await waitFor(() => expect(value(dl, 'QORT purchased / sold')).toBe('0 / 0'), SLOW);
+    expect(
+      fetchCallsFor('/crosschain/trades').some((url) =>
+        new URL(url, 'http://x').searchParams.has('sellerPublicKey')
+      )
+    ).toBe(true);
+    // The ⓘ says how it was worked out.
+    expect(
+      within(dl).getByRole('button', { name: /^About QORT minted: 1,234 QORT\. Its balance now, / })
+    ).toBeInTheDocument();
+  });
+
+  it('reads past the first read only when asked, 1,000 at a time', async () => {
+    getDefaultStore().set(activityFirstReadAtom, 100);
+    const user = userEvent.setup();
+    await visit(ADDR.admin, (world) => {
+      // 150 small payments in: more than the first read of 100.
+      addPaymentsTo(world, ADDR.admin, 150);
+      mintedComesTo(ADDR.admin, 50n)(world);
+    });
+    const region = await standing();
+    const rest = await within(region).findByRole('button', { name: 'Read the rest' }, SLOW);
+    expect(region).toHaveTextContent(
+      /To show the QORT amounts, read the rest of its transactions: they add up its whole history, and [\d,]+\+ have been read so far\./
+    );
+    const dl = await summaries();
+    expect(value(dl, 'QORT minted')).toBe('…');
+    await user.click(rest);
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('50 QORT'), SLOW);
+    expect(value(dl, 'QORT received / sent')).toMatch(/^[\d,.]+ \/ [\d,.]+$/);
+    const pages = fetchCallsFor('/transactions/search')
+      .map((url) => new URL(url, 'http://x').searchParams)
+      .filter((p) => p.get('address') === ADDR.admin && !p.get('txType'));
+    expect(pages.some((p) => p.get('limit') === '1000')).toBe(true);
+  });
+
+  it('says an account that never minted never minted, with nothing to work out', async () => {
+    await visit(ADDR.nominatedSigning);
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('Never minted'), SLOW);
+    expect(
+      within(dl).getByRole('button', {
+        name: /^About QORT minted: This account has never minted QORT/,
+      })
+    ).toBeInTheDocument();
   });
 });

@@ -3,8 +3,9 @@
  * a row (three on wide screens): its level and
  * how far it is to the next, blocks minted (with how much of the time its
  * node was online, and Core's adjustment and penalty when it recorded any), its balance, when it was first seen, how
- * many groups it is in (GroupsSection lists them), and how many QDN
- * transactions it made. Each fact loads, fails and retries on its own; none
+ * many groups it is in (GroupsSection lists them), how many QDN
+ * transactions it made, and QORT minted, purchased / sold and received /
+ * sent (qortSummaries.tsx). Each fact loads, fails and retries on its own; none
  * polls.
  */
 import type { ReactNode } from 'react';
@@ -31,6 +32,7 @@ import {
 } from './overviewWords';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
+import { useQortSummaries } from './qortSummaries';
 
 const VALUE_SX = {
   m: 0,
@@ -45,12 +47,15 @@ function Fact({
   value,
   detail,
   wide = false,
+  wideOnPhone = false,
 }: {
   label: string;
   value: ReactNode;
   detail?: ReactNode;
   /** Spans the whole row (a list, or an error with Retry). */
   wide?: boolean;
+  /** Spans the whole row on phones only (a pair of amounts). */
+  wideOnPhone?: boolean;
 }) {
   return (
     <Box
@@ -60,6 +65,7 @@ function Fact({
         flexDirection: 'column',
         gap: 0.5,
         ...(wide ? { gridColumn: '1 / -1' } : {}),
+        ...(wideOnPhone && !wide ? { gridColumn: { xs: '1 / -1', md: 'auto' } } : {}),
       }}
     >
       <Typography component="dt" variant="body2" color="text.secondary">
@@ -256,6 +262,11 @@ export function FactsSection({
   account: AccountInfo;
   firstSeen: UseQueryResult<FirstSeen>;
 }) {
+  // QORT minted, purchased / sold, received / sent (Simon, 2026-10-17: moved here from the Minter Profile).
+  const qort = useQortSummaries(
+    address,
+    account.blocksMinted === 0 && !account.blocksMintedAdjustment
+  );
   return (
     <Section title="At a glance" id="overview-facts">
       <Card>
@@ -277,7 +288,11 @@ export function FactsSection({
           <FirstSeenFact query={firstSeen} />
           <GroupsFact address={address} />
           <QdnFact address={address} />
+          <Fact label="QORT minted" value={qort.minted} />
+          <Fact label="QORT purchased / sold" value={qort.trades} wideOnPhone />
+          <Fact label="QORT received / sent" value={qort.flows} wideOnPhone />
         </Box>
+        {qort.notice ? <Box sx={{ mt: 1 }}>{qort.notice}</Box> : null}
       </Card>
     </Section>
   );
