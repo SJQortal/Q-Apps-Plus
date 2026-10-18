@@ -8,6 +8,7 @@ import DeleteOutlinedIcon from "@mui/icons-material/DeleteOutlined";
 import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
+import LibraryAddOutlinedIcon from "@mui/icons-material/LibraryAddOutlined";
 import RemoveCircleOutlinedIcon from "@mui/icons-material/RemoveCircleOutlined";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
@@ -51,6 +52,8 @@ import { CollectionDialog } from "./CollectionDialog";
 import { FolderDialog } from "./FolderDialog";
 import { FolderGrid } from "./FolderGrid";
 import { MoveDialog } from "./MoveDialog";
+import { CopyCollectionDialog } from "./CopyCollectionDialog";
+import { useMyCollections } from "../../components/common/SaveToCollection/useMyCollections";
 import { CardList, InfoCard, ItemRow, ItemRows, Page, PhoneHeader, PublisherLink } from "./Collections-styles";
 
 /** "fetching": the node knows the collection but hasn't got its data yet; "unavailable": still not after the retries. */
@@ -115,6 +118,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Video | null>(null);
   const [moveTarget, setMoveTarget] = useState<Video | null>(null);
+  const [copyOpen, setCopyOpen] = useState(false);
   // The folder dialog: a new folder in this page's container, or an edit of this folder.
   const [folderDialog, setFolderDialog] = useState<"new" | "edit" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -239,6 +243,17 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
 
   const isOwner = Boolean(
     user && name && (user.name === name || (user.names ?? []).some((record) => record.name === name))
+  );
+  // A copy of this collection the signed-in name already has.
+  const { myName, byKey: knownCollections } = useMyCollections(!isOwner && Boolean(user?.name));
+  const myCopy = useMemo(
+    () =>
+      isOwner || !myName
+        ? null
+        : (Object.values(knownCollections).find(
+            (c) => c.name === myName && c.copiedFrom?.name === name && c.copiedFrom.identifier === id
+          ) ?? null),
+    [isOwner, myName, knownCollections, name, id]
   );
   const parentId = found && found.path.length > 1 ? found.path[found.path.length - 2].id : null;
   const parentPath = folderId ? collectionPath(name, id, parentId) : "/collections";
@@ -400,6 +415,32 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
             <Typography component="h1" variant="h5" sx={{ fontWeight: 700, wordBreak: "break-word" }}>
               {placeTitle}
             </Typography>
+            {collection.copiedFrom ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, wordBreak: "break-word" }}>
+                Copy of{" "}
+                <Link
+                  component="button"
+                  type="button"
+                  underline="hover"
+                  color="inherit"
+                  onClick={() => collection.copiedFrom && navigate(collectionPath(collection.copiedFrom.name, collection.copiedFrom.identifier))}
+                  sx={{ font: "inherit", verticalAlign: "baseline", fontWeight: 600 }}
+                >
+                  “{collection.copiedFrom.title || "a collection"}”
+                </Link>{" "}
+                by{" "}
+                <Link
+                  component="button"
+                  type="button"
+                  underline="hover"
+                  color="inherit"
+                  onClick={() => collection.copiedFrom && navigate(profilePath(collection.copiedFrom.name))}
+                  sx={{ font: "inherit", verticalAlign: "baseline", fontWeight: 600 }}
+                >
+                  {collection.copiedFrom.name}
+                </Link>
+              </Typography>
+            ) : null}
             {(here ? here.description : collection.description) ? (
               <Typography sx={{ mt: 0.5, color: "text.secondary", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {here ? here.description : collection.description}
@@ -440,6 +481,18 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
               <Button variant="contained" color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setDeleteOpen(true)}>
                 Delete
               </Button>
+            </Box>
+          ) : myName && !here ? (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, width: { xs: "100%", sm: "auto" }, "& .MuiButton-root": { minHeight: 44 } }}>
+              {myCopy ? (
+                <Button variant="outlined" onClick={() => navigate(collectionPath(myCopy.name, myCopy.identifier))}>
+                  Open your copy
+                </Button>
+              ) : (
+                <Button variant="contained" startIcon={<LibraryAddOutlinedIcon />} onClick={() => setCopyOpen(true)}>
+                  Copy to my collections
+                </Button>
+              )}
             </Box>
           ) : null}
         </InfoCard>
@@ -555,6 +608,18 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
           parentId={folderId}
           onSaved={(savedId) => {
             if (folderDialog === "new") navigate(collectionPath(name, id, savedId));
+          }}
+        />
+      ) : null}
+
+      {collection && copyOpen ? (
+        <CopyCollectionDialog
+          open
+          onClose={() => setCopyOpen(false)}
+          source={collection}
+          onCopied={(copy) => {
+            setCopyOpen(false);
+            navigate(collectionPath(copy.name, copy.identifier));
           }}
         />
       ) : null}

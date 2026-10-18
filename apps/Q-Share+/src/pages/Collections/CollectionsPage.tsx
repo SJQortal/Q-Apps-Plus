@@ -60,6 +60,7 @@ export function CollectionCard({ row }: { row: CollectionSummary }) {
               <Skeleton variant="text" width={52} sx={{ display: "inline-block" }} />
             )}
             {folders > 0 ? <span>· {folders} {folders === 1 ? "folder" : "folders"}</span> : null}
+            {collection?.copiedFrom ? <span>· copied from {collection.copiedFrom.name}</span> : null}
             {row.updated ? <span>· updated {formatDate(row.updated)}</span> : null}
           </CardMeta>
         </Box>
