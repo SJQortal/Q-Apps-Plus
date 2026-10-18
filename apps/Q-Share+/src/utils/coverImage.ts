@@ -20,7 +20,15 @@ export function squareCrop(width: number, height: number, max = COVER_SIZE) {
   };
 }
 
-async function decode(file: Blob): Promise<{ source: CanvasImageSource; width: number; height: number; close: () => void }> {
+/** A decoded image ready to draw; `close` frees it. */
+export interface DecodedImage {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  close: () => void;
+}
+
+export async function decodeImage(file: Blob): Promise<DecodedImage> {
   if (typeof createImageBitmap === "function") {
     const bitmap = await createImageBitmap(file);
     return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
@@ -40,29 +48,43 @@ function toBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promi
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
+/**
+ * The canvas as a WebP (JPEG where the browser can't write WebP) of at most
+ * `maxBytes`, trying lower qualities in turn; named `<base>.webp` or `.jpg`.
+ */
+export async function encodeCanvas(canvas: HTMLCanvasElement, base: string, maxBytes: number): Promise<File> {
+  for (const quality of QUALITIES) {
+    let blob = await toBlob(canvas, "image/webp", quality);
+    if (!blob || blob.type !== "image/webp") blob = await toBlob(canvas, "image/jpeg", quality);
+    if (!blob) break;
+    if (blob.size <= maxBytes) {
+      const extension = blob.type === "image/webp" ? "webp" : "jpg";
+      return new File([blob], `${base}.${extension}`, { type: blob.type });
+    }
+  }
+  throw new Error("The image is too large");
+}
+
+/** A canvas of `width` × `height` with `draw` done on it. */
+export function drawnCanvas(width: number, height: number, draw: (context: CanvasRenderingContext2D) => void): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("No canvas");
+  context.imageSmoothingQuality = "high";
+  draw(context);
+  return canvas;
+}
+
 /** The cover file for `file`; rejects when the image can't be read or made small enough. */
 export async function makeCoverFile(file: Blob): Promise<File> {
-  const image = await decode(file);
+  const image = await decodeImage(file);
   try {
     if (!image.width || !image.height) throw new Error("The image is empty");
     const { sx, sy, side, out } = squareCrop(image.width, image.height);
-    const canvas = document.createElement("canvas");
-    canvas.width = out;
-    canvas.height = out;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("No canvas");
-    context.imageSmoothingQuality = "high";
-    context.drawImage(image.source, sx, sy, side, side, 0, 0, out, out);
-    for (const quality of QUALITIES) {
-      let blob = await toBlob(canvas, "image/webp", quality);
-      if (!blob || blob.type !== "image/webp") blob = await toBlob(canvas, "image/jpeg", quality);
-      if (!blob) break;
-      if (blob.size <= COVER_MAX_BYTES) {
-        const extension = blob.type === "image/webp" ? "webp" : "jpg";
-        return new File([blob], `cover.${extension}`, { type: blob.type });
-      }
-    }
-    throw new Error("The image is too large");
+    const canvas = drawnCanvas(out, out, (context) => context.drawImage(image.source, sx, sy, side, side, 0, 0, out, out));
+    return await encodeCanvas(canvas, "cover", COVER_MAX_BYTES);
   } finally {
     image.close();
   }
