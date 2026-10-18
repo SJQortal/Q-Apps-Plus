@@ -182,7 +182,8 @@ export function AdminSection({ publicKey }: { publicKey: string }) {
             hint={
               unused.error && unused.count === null
                 ? "Couldn't load"
-                : 'Old ones can be cancelled in Decisions'
+                : // Their list is + Propose → Cancel an approved invite's (Simon, 2026-10-18).
+                  'Old ones: Propose → Cancel an approved invite'
             }
           />
         </Box>
