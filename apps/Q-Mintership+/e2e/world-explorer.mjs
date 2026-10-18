@@ -488,6 +488,14 @@ export function extendExplorer(world) {
         memberCount: 40,
       },
       { groupId: 1203, groupName: 'Book Club', owner: ADDR.left, isOpen: false, memberCount: 12 },
+      // The approval route of world.mjs's "unusual approval route" admin change (txGroupId).
+      {
+        groupId: 4242,
+        groupName: 'Side Council',
+        owner: NULL_OWNER,
+        isOpen: false,
+        memberCount: 7,
+      },
     ].map((g) => [
       g.groupId,
       {
