@@ -1020,6 +1020,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     - **Data, additive.** An optional `answers` field on the poll, written only when the answers aren't the default (Data contract). Yes, No and Neutral keep their ids when renamed, and added answers are `opt4` to `opt6`. A poll without `answers`, and every earlier vote, reads exactly as before. A vote for an answer its poll doesn't have doesn't count, and the vote write refuses one before Hub opens. An older copy of the app shows a poll with its own answers as Yes, No and Neutral, and can't count votes for added answers.
     - **Checks.** Tests 2,378 passed. A new screenshot screen (`decisions-ask-answers`) and the poll screens give 30 captures, all clean.
 
+106. **"All Decisions"** (Simon, 2026-10-18: "in decisions where the top bar is to switch Decisions | Nominations | Ready to Mint, I want decisions to be called "All Decisions""). The first tab now reads All Decisions. To keep all three tabs on a 360 px phone without scrolling, the tabs there are 13 px with a little less padding (desktop is unchanged). Decisions captures are clean.
+
 ## Follow-ups
 
 ### Readiness
