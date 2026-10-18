@@ -287,6 +287,7 @@ function AskForm({ author }: { author: PollAuthor }) {
           answers={answers}
           onChange={setAnswers}
           problem={attempted ? answersError : null}
+          legendHidden
         />
       </Section>
 

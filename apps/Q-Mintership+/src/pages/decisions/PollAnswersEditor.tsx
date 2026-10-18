@@ -20,16 +20,20 @@ import {
   type PollAnswer,
 } from '../../data/adminPollRecords';
 import { TONE_COLOUR, TONE_WORDS } from './pollAnswerTones';
+import { visuallyHidden } from '@mui/utils';
 
 export function PollAnswersEditor({
   answers,
   onChange,
   problem,
+  legendHidden = false,
 }: {
   answers: PollAnswer[];
   onChange: (answers: PollAnswer[]) => void;
   /** What is wrong with them, shown under the list once Review was pressed. */
   problem: string | null;
+  /** Its "Answers" for screen readers only: a page's section already titles it so. */
+  legendHidden?: boolean;
 }) {
   const free = ADDED_ANSWER_IDS.find((id) => !answers.some((a) => a.id === id));
   const canAdd = answers.length < ANSWERS_MAX && free !== undefined;
@@ -37,7 +41,10 @@ export function PollAnswersEditor({
     onChange(answers.map((a, j) => (j === i ? { ...a, ...patch } : a)));
   return (
     <Box component="fieldset" sx={{ m: 0, p: 0, border: 0, minWidth: 0 }}>
-      <Typography component="legend" sx={{ fontWeight: 600, mb: 0.5 }}>
+      <Typography
+        component="legend"
+        sx={legendHidden ? visuallyHidden : { fontWeight: 600, mb: 0.5 }}
+      >
         Answers
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
