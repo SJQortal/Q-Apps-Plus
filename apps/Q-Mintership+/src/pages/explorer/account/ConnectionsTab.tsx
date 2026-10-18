@@ -109,6 +109,7 @@ import {
 import { ConnectionsCircle } from './connections/ConnectionsCircle';
 import { ExchangeNotice } from './connections/ExchangeNotice';
 import { useConnectionsView, type ConnectionsView } from './connections/useConnectionsView';
+import { useCircleOrder } from './connections/useCircleOrder';
 import { ViewScope } from '../../../components/common/ViewScope';
 import { useViewState } from '../../../hooks/useViewState';
 
@@ -273,6 +274,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const recorded = useRecorded(data, levels);
 
   const [view, setView] = useConnectionsView();
+  const [circleOrder, setCircleOrder] = useCircleOrder();
   // ---- the search (Simon, 2026-10-17) -----------------------------------------------------
   const [params, setParams] = useSearchParams();
   const searchText = appParam(params, 'q') ?? '';
@@ -583,6 +585,8 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
               recorded={
                 searching ? recorded.filter((finding) => findFinding(finding) !== null) : recorded
               }
+              order={circleOrder}
+              onOrder={setCircleOrder}
               onShowList={() => setView('list')}
             />
           ) : (
@@ -659,6 +663,8 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
                   data={data}
                   marks={marks}
                   relationOf={relationOf}
+                  // The circle by QORT: the list starts with the most QORT too.
+                  initialSort={circleOrder === 'qort' ? 'total' : 'count'}
                   found={
                     searching
                       ? {

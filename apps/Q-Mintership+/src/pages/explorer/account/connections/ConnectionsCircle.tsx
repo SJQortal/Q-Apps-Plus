@@ -3,7 +3,10 @@
  * 2026-10-17): the account in the middle, the accounts it received
  * payments and transfers from on the left, those it sent them to on the
  * right (rules/explorer/circle.ts), each avatar sized by how many
- * transactions went that way and marked with their number. An account paid
+ * transactions went that way and marked with their number, the most first;
+ * or, with the toggle between the two headings, by the QORT that moved
+ * (Simon, 2026-10-18: "a little toggle at the top in between Received from -
+ * Sent to", kept on this device: useCircleOrder). An account paid
  * both ways is one avatar at the bottom, between the sides (Simon,
  * 2026-10-17: "fill the empty middle bottom part"); its ring and its line are
  * green and red in proportion to what came in and went out ("make the green
@@ -22,10 +25,18 @@
  * Pressing an avatar lists the transactions behind it, in a dialog
  * (CircleNodeDialog), which also opens that account in the Explorer. The
  * avatars are lists of buttons, each side its own, the most transactions
- * first, each named with what it opens; the lines are decoration.
+ * (or QORT) first, each named with what it opens; the lines are decoration.
  */
 import { useEffect, useState } from 'react';
-import { Box, Button, ButtonBase, Tooltip, Typography } from '@mui/material';
+import {
+  Box,
+  Button,
+  ButtonBase,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
+} from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
 import { NameAvatar } from '../../../../components/common/NameAvatar';
@@ -35,12 +46,15 @@ import { usePhoneLayout } from '../../../../hooks/usePhoneLayout';
 import {
   circleLayout,
   addAssets,
+  badgeText,
   circleQort,
   circleNodes,
+  nodeWeight,
   PHONE_LAYOUT,
   receivedShare,
   WIDE_LAYOUT,
   type CircleNode,
+  type CircleOrder,
   type PlacedNode,
   type WayPart,
 } from '../../../../rules/explorer/circle';
@@ -63,11 +77,14 @@ function useSideColours() {
 
 function Lines({
   placed,
-  maxCount,
+  order,
+  maxWeight,
   active,
 }: {
   placed: PlacedNode[];
-  maxCount: number;
+  order: CircleOrder;
+  /** The most transactions (or QORT) drawn. */
+  maxWeight: number;
   active: string | null;
 }) {
   const colours = useSideColours();
@@ -86,7 +103,7 @@ function Lines({
           transition: 'opacity 150ms ease',
         };
         const common = {
-          strokeWidth: 1 + 2.5 * Math.sqrt(node.count / maxCount),
+          strokeWidth: 1 + 2.5 * Math.sqrt(maxWeight > 0 ? nodeWeight(node, order) / maxWeight : 0),
           strokeLinecap: 'butt' as const,
           vectorEffect: 'non-scaling-stroke' as const,
         };
@@ -215,15 +232,16 @@ function qortWords(node: CircleNode): string | null {
 }
 
 /**
- * How many transactions an avatar stands for, on its corner. Drawn by CSS:
- * the button's name already says it, and as text it would run into the
- * avatar's letter ("K6") for checks that read the button's visible words.
+ * How many transactions an avatar stands for, or the QORT that moved, on its
+ * corner (badgeText). Drawn by CSS: the button's name already says it, and as
+ * text it would run into the avatar's letter ("K6") for checks that read the
+ * button's visible words.
  */
-function CountBadge({ count, side }: { count: number; side: CircleNode['side'] }) {
+function CountBadge({ text, side }: { text: string; side: CircleNode['side'] }) {
   return (
     <Box
       aria-hidden
-      data-count={count > 999 ? '999+' : String(count)}
+      data-count={text}
       sx={(theme) => ({
         position: 'absolute',
         right: -4,
@@ -257,6 +275,7 @@ function CountBadge({ count, side }: { count: number; side: CircleNode['side'] }
 
 function Node({
   node,
+  order,
   index,
   named,
   room = BOTTOM_NAME_MAX,
@@ -264,6 +283,8 @@ function Node({
   onPick,
 }: {
   node: PlacedNode;
+  /** What its number says. */
+  order: CircleOrder;
   index: number;
   /** Its name beside it, on the outer side (wider screens). */
   named: boolean;
@@ -278,6 +299,7 @@ function Node({
   const below = node.side === 'both';
   const qort = below ? null : qortWords(node);
   const lines = below ? bothLines(node) : [];
+  const badge = badgeText(node, order);
   // The name on the outer side of its avatar; under it at the bottom.
   const outer = below
     ? { top: '100%', left: '50%', translate: '-50% 0', mt: 0.5 }
@@ -357,7 +379,7 @@ function Node({
               >
                 <NameAvatar name={shown.name} size={node.size} />
               </Box>
-              {node.count > 1 ? <CountBadge count={node.count} side={node.side} /> : null}
+              {badge ? <CountBadge text={badge} side={node.side} /> : null}
             </Box>
           </ButtonBase>
         </Tooltip>
@@ -486,6 +508,42 @@ function OtherChip({ node, onPick }: { node: CircleNode; onPick: (node: CircleNo
   );
 }
 
+const ORDER_BUTTON = {
+  minHeight: 44,
+  px: 1.25,
+  textTransform: 'none',
+  fontSize: 14,
+  whiteSpace: 'nowrap',
+} as const;
+
+/** The most transactions first, or the most QORT (Simon, 2026-10-18). */
+function OrderToggle({
+  order,
+  onOrder,
+}: {
+  order: CircleOrder;
+  onOrder: (order: CircleOrder) => void;
+}) {
+  return (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={order}
+      onChange={(_, value: CircleOrder | null) => {
+        if (value) onOrder(value);
+      }}
+      aria-label="Order the accounts by"
+    >
+      <ToggleButton value="count" sx={ORDER_BUTTON}>
+        Most transactions
+      </ToggleButton>
+      <ToggleButton value="qort" sx={ORDER_BUTTON}>
+        Most QORT
+      </ToggleButton>
+    </ToggleButtonGroup>
+  );
+}
+
 function SideHeading({
   side,
   accounts,
@@ -537,11 +595,16 @@ function SideHeading({
 export function ConnectionsCircle({
   address,
   recorded,
+  order,
+  onOrder,
   onShowList,
 }: {
   address: string;
   /** What was recorded between them (useRecorded). */
   recorded: readonly Finding[];
+  /** The most transactions first, or the most QORT (useCircleOrder). */
+  order: CircleOrder;
+  onOrder: (order: CircleOrder) => void;
   /** Back to the list, where every link is. */
   onShowList: () => void;
 }) {
@@ -551,15 +614,19 @@ export function ConnectionsCircle({
   const [active, setActive] = useState<string | null>(null);
   // The avatar whose transactions are open: kept for Back (useViewState), by its key.
   const [pickedKey, setPickedKey] = useViewState<string | null>('circle:picked', null);
-  const groups = circleNodes(recorded);
+  const groups = circleNodes(recorded, order);
   const picked = pickedKey
     ? ([...groups.in, ...groups.out, ...groups.both, ...groups.other].find(
         (node) => node.key === pickedKey
       ) ?? null)
     : null;
   const setPicked = (node: CircleNode | null) => setPickedKey(node ? node.key : null);
-  const { placed, rest } = circleLayout(groups, options);
-  const maxCount = Math.max(1, ...placed.map((node) => node.count));
+  const { placed, rest } = circleLayout(groups, options, order);
+  const maxWeight = Math.max(
+    order === 'qort' ? 0 : 1,
+    ...placed.map((node) => nodeWeight(node, order))
+  );
+  const most = order === 'qort' ? 'QORT' : 'transactions';
   const left = placed.filter((node) => node.side === 'in');
   const right = placed.filter((node) => node.side === 'out');
   const bottom = placed.filter((node) => node.side === 'both');
@@ -618,13 +685,24 @@ export function ConnectionsCircle({
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 2,
+              // The order between the two headings; on a phone, under them.
+              gridTemplateColumns: { xs: '1fr 1fr', sm: '1fr auto 1fr' },
+              gridTemplateAreas: { xs: '"in out" "order order"', sm: '"in order out"' },
+              alignItems: 'center',
+              columnGap: 2,
+              rowGap: 1.5,
               px: { xs: 0.5, sm: 2 },
             }}
           >
-            <SideHeading side="in" accounts={groups.in.length} more={rest.in} />
-            <SideHeading side="out" accounts={groups.out.length} more={rest.out} />
+            <Box sx={{ gridArea: 'order', justifySelf: 'center' }}>
+              <OrderToggle order={order} onOrder={onOrder} />
+            </Box>
+            <Box sx={{ gridArea: 'in', minWidth: 0 }}>
+              <SideHeading side="in" accounts={groups.in.length} more={rest.in} />
+            </Box>
+            <Box sx={{ gridArea: 'out', minWidth: 0 }}>
+              <SideHeading side="out" accounts={groups.out.length} more={rest.out} />
+            </Box>
           </Box>
           <Box
             component="figure"
@@ -655,7 +733,7 @@ export function ConnectionsCircle({
                 containerType: 'inline-size',
               }}
             >
-              <Lines placed={placed} maxCount={maxCount} active={active} />
+              <Lines placed={placed} order={order} maxWeight={maxWeight} active={active} />
               {/* The account itself, in the middle. */}
               <Box
                 sx={{
@@ -706,13 +784,14 @@ export function ConnectionsCircle({
                   <Box
                     key={side}
                     component="ul"
-                    aria-label={`${sideWords(side)}, the most transactions first`}
+                    aria-label={`${sideWords(side)}, the most ${most} first`}
                     sx={{ m: 0, p: 0 }}
                   >
                     {list.map((node, i) => (
                       <Node
                         key={node.key}
                         node={node}
+                        order={order}
                         index={i}
                         named={!phone}
                         room={bottomRoom(node)}
@@ -747,7 +826,9 @@ export function ConnectionsCircle({
         </Box>
       ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-        The bigger the avatar and its line, the more transactions went that way.
+        {order === 'qort'
+          ? 'The bigger the avatar and its line, the more QORT went that way; the number on it is that QORT.'
+          : 'The bigger the avatar and its line, the more transactions went that way.'}
         {groups.both.length
           ? ' At the bottom, accounts paid both ways: green for what came in, red for what went out.'
           : ''}{' '}
@@ -756,7 +837,9 @@ export function ConnectionsCircle({
       {rest.in || rest.out || rest.both ? (
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
           <Button onClick={onShowList} sx={{ minHeight: 44 }}>
-            {`${plural(rest.in + rest.out + rest.both, 'more account')} with fewer transactions: see the list`}
+            {`${plural(rest.in + rest.out + rest.both, 'more account')} with ${
+              order === 'qort' ? 'less QORT' : 'fewer transactions'
+            }: see the list`}
           </Button>
         </Box>
       ) : null}

@@ -896,6 +896,50 @@ describe('Connections: as a circle', () => {
     expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('list');
   });
 
+  it('orders the circle by the most QORT on request, kept on this device (Simon, 2026-10-18)', async () => {
+    const { container, user } = await open(ADDR.left);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    const circle = await region('Connections circle');
+    // Between Received from and Sent to: the most transactions first, as before.
+    const order = await within(circle).findByRole('group', { name: 'Order the accounts by' }, T);
+    expect(within(order).getByRole('button', { name: 'Most transactions' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await within(circle).findByRole(
+      'list',
+      { name: 'Sent and received, the most transactions first' },
+      T
+    );
+    const kit = () => within(circle).getByRole('button', { name: /^Kit Kicked, 6 transactions/ });
+    // The number on Kit's avatar: its 6 transactions.
+    expect(kit().querySelector('[data-count]')).toHaveAttribute('data-count', '6');
+    expect(circle).toHaveTextContent('the more transactions went that way');
+
+    await user.click(within(order).getByRole('button', { name: 'Most QORT' }));
+    expect(within(order).getByRole('button', { name: 'Most QORT' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(window.localStorage.getItem('qmintershipplus-connections-circle-order')).toBe('qort');
+    expect(
+      within(circle).getByRole('list', { name: 'Received from, the most QORT first' })
+    ).toBeInTheDocument();
+    expect(
+      within(circle).getByRole('list', { name: 'Sent and received, the most QORT first' })
+    ).toBeInTheDocument();
+    // Now the QORT that moved both ways: 120 in, 6.3 out.
+    expect(kit().querySelector('[data-count]')).toHaveAttribute('data-count', '126');
+    expect(circle).toHaveTextContent('the more QORT went that way; the number on it is that QORT.');
+    await expectNoAxeViolations(container);
+
+    // The list's payments start with the most QORT too.
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    const recorded = await region('Recorded between them');
+    expect(within(recorded).getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Most QORT');
+  });
+
   it('puts the links that aren’t transfers in a row under the circle', async () => {
     const { user } = await open(ADDR.learner);
     await region('Recorded between them');

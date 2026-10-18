@@ -19,12 +19,18 @@
  *   side (8 on phones), the rest counted.
  * - A node's size grows with the square root of its count (its area with
  *   the count), within limits that shrink as a side fills.
+ * - Or by QORT (Simon, 2026-10-18: "switch the circles order to most QORT
+ *   transacted instead of most different QORT Transactions"): the most QORT
+ *   first and biggest, both ways added up for an account paid both ways.
  */
 import type { TxRow } from '../../data/types';
 import type { Finding } from './findings';
 import type { AssetSum } from './money';
 
 export type CircleSide = 'in' | 'out' | 'both' | 'other';
+
+/** What puts an account first and draws it biggest: its transactions, or the QORT that moved. */
+export type CircleOrder = 'count' | 'qort';
 
 /** One way's part of a node paid both ways. */
 export interface WayPart {
@@ -123,8 +129,26 @@ const SIDE_OF: Readonly<Record<Finding['kind'], CircleSide>> = {
   nameDeal: 'other',
 };
 
-/** The other accounts on each side, the most transactions first. */
-export function circleNodes(findings: readonly Finding[]): CircleGroups {
+/** What a node weighs in `order`: its transactions, or its QORT (whole QORT). */
+export function nodeWeight(node: Pick<CircleNode, 'count' | 'qort'>, order: CircleOrder): number {
+  return order === 'qort' ? Number(node.qort) / 1e8 : node.count;
+}
+
+/** The most first in `order`, then the most of the other; ties by address. */
+function byOrder(order: CircleOrder) {
+  const byQort = (a: CircleNode, b: CircleNode) =>
+    a.qort === b.qort ? 0 : a.qort > b.qort ? -1 : 1;
+  const byCount = (a: CircleNode, b: CircleNode) => b.count - a.count;
+  return (a: CircleNode, b: CircleNode) =>
+    (order === 'qort' ? byQort(a, b) || byCount(a, b) : byCount(a, b) || byQort(a, b)) ||
+    a.address.localeCompare(b.address);
+}
+
+/** The other accounts on each side, the most transactions (or QORT) first. */
+export function circleNodes(
+  findings: readonly Finding[],
+  order: CircleOrder = 'count'
+): CircleGroups {
   const nodes = new Map<string, CircleNode>();
   for (const finding of findings) {
     if (!finding.other) continue;
@@ -166,9 +190,7 @@ export function circleNodes(findings: readonly Finding[]): CircleGroups {
       },
     });
   }
-  const sorted = [...nodes.values()].sort(
-    (a, b) => b.count - a.count || a.address.localeCompare(b.address)
-  );
+  const sorted = [...nodes.values()].sort(byOrder(order));
   return {
     in: sorted.filter((node) => node.side === 'in'),
     out: sorted.filter((node) => node.side === 'out'),
@@ -213,6 +235,31 @@ export function nodeSize(count: number, maxCount: number, min: number, max: numb
   return Math.round(min + share * (max - min));
 }
 
+/** An avatar's size by QORT, from the smallest for none: its area grows with the QORT. */
+export function qortSize(qort: number, maxQort: number, min: number, max: number): number {
+  if (maxQort <= 0) return Math.round((min + max) / 2);
+  const share = Math.sqrt(Math.max(0, qort) / maxQort);
+  return Math.round(min + share * (max - min));
+}
+
+/**
+ * What the number on an avatar's corner says: its transactions (from 2), or,
+ * by QORT, the QORT that moved, short: "<1", "13", "1.5", "126", "1.2K",
+ * "35K", "1.2M". Null for no number.
+ */
+export function badgeText(
+  node: Pick<CircleNode, 'count' | 'qort'>,
+  order: CircleOrder
+): string | null {
+  if (order === 'count')
+    return node.count > 1 ? (node.count > 999 ? '999+' : String(node.count)) : null;
+  if (node.qort <= 0n) return null;
+  const qort = Number(node.qort) / 1e8;
+  return qort < 1 ? '<1' : COMPACT.format(qort);
+}
+
+const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact' });
+
 /**
  * Every node on one ring, evenly spaced and mirrored (Simon, 2026-10-17:
  * "make the circles around nicely symetrical"): the sides share one step,
@@ -223,18 +270,21 @@ export function nodeSize(count: number, maxCount: number, min: number, max: numb
  */
 export function circleLayout(
   groups: CircleGroups,
-  options: LayoutOptions = WIDE_LAYOUT
+  options: LayoutOptions = WIDE_LAYOUT,
+  /** As `groups` were ordered (circleNodes): what sizes the avatars. */
+  order: CircleOrder = 'count'
 ): CircleLayout {
   const sides = {
     in: groups.in.slice(0, options.sideMax),
     out: groups.out.slice(0, options.sideMax),
     both: (groups.both ?? []).slice(0, options.bothMax),
   };
-  const maxCount = Math.max(
-    1,
-    ...sides.in.map((n) => n.count),
-    ...sides.out.map((n) => n.count),
-    ...sides.both.map((n) => n.count)
+  const weight = (node: CircleNode) => nodeWeight(node, order);
+  const maxWeight = Math.max(
+    order === 'qort' ? 0 : 1,
+    ...sides.in.map(weight),
+    ...sides.out.map(weight),
+    ...sides.both.map(weight)
   );
   const rad = (degrees: number) => (degrees * Math.PI) / 180;
   const at = (angle: number) => ({
@@ -248,6 +298,10 @@ export function circleLayout(
   const step = nBoth ? Math.PI / (most + 2 + (k * (nBoth - 1)) / 2) : Math.PI / (most + 1);
   // As big as half the ring holds.
   const max = sideMaxSize(most + Math.ceil((k * nBoth) / 2), options);
+  const sizeOf = (node: CircleNode) =>
+    order === 'qort'
+      ? qortSize(weight(node), maxWeight, options.minSize, max)
+      : nodeSize(node.count, maxWeight, options.minSize, max);
   const place = (list: readonly CircleNode[], side: 'in' | 'out'): PlacedNode[] => {
     // The fewer side centred on the slots the fuller one fills.
     const offset = (most - list.length) / 2;
@@ -264,20 +318,20 @@ export function circleLayout(
         ...node,
         x: side === 'out' ? point.x : 100 - point.x,
         y: point.y,
-        size: nodeSize(node.count, maxCount, options.minSize, max),
+        size: sizeOf(node),
       };
     });
   };
-  // Paid both ways: centred at the bottom, the most transactions in the middle.
-  const middleOut = [...sides.both].sort((a, b) => b.count - a.count);
-  const order: CircleNode[] = [];
-  middleOut.forEach((node, i) => (i % 2 ? order.unshift(node) : order.push(node)));
+  // Paid both ways: centred at the bottom, the most transactions (or QORT) in the middle.
+  const middleOut = [...sides.both].sort((a, b) => weight(b) - weight(a));
+  const leftToRight: CircleNode[] = [];
+  middleOut.forEach((node, i) => (i % 2 ? leftToRight.unshift(node) : leftToRight.push(node)));
   const bothStep = Math.min(k * step, rad(BOTH_STEP_MAX));
-  const bottom = order.map((node, i) => ({
+  const bottom = leftToRight.map((node, i) => ({
     ...node,
     // From the left (the larger angle) to the right.
     ...at(Math.PI / 2 + bothStep * ((nBoth - 1) / 2 - i)),
-    size: nodeSize(node.count, maxCount, options.minSize, max),
+    size: sizeOf(node),
   }));
   return {
     placed: [...place(sides.in, 'in'), ...place(sides.out, 'out'), ...bottom],

@@ -53,7 +53,7 @@ function tabLines(full: boolean): Array<[string, string]> {
       ? ([
           [
             'Connections',
-            'How it is linked to other accounts, as a circle or a list: payments each way, sponsorships, minting levels and names moved between them, where its first QORT came from, QORT sent to or got from exchanges, and what they have in common. Each link opens to the transactions behind it.',
+            'How it is linked to other accounts, as a circle or a list: payments each way, sponsorships, minting levels and names moved between them, where its first QORT came from, QORT sent to or got from exchanges, and what they have in common. Each link opens to the transactions behind it; the circle puts the most transactions first, or the most QORT.',
           ],
         ] as Array<[string, string]>)
       : []),

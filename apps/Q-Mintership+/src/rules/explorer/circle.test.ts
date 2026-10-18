@@ -4,13 +4,16 @@ import type { Finding } from './findings';
 import {
   PHONE_LAYOUT,
   WIDE_LAYOUT,
+  badgeText,
   circleLayout,
   circleNodes,
   nodeSize,
   nodeTransactions,
+  qortSize,
   sideMaxSize,
   type CircleGroups,
   type CircleNode,
+  type CircleOrder,
   circleQort,
   receivedShare,
 } from './circle';
@@ -73,6 +76,31 @@ describe('circleNodes', () => {
     expect(groups.other[0].qort).toBe(0n);
   });
 
+  it('puts the most QORT first on request (Simon, 2026-10-18), else the most transactions, ties by QORT', () => {
+    const findings = [
+      { ...finding('paidTo', 'QA', tx(5)), qort: 100_000_000n },
+      { ...finding('paidTo', 'QB', tx(1, 10)), qort: 50_000_000_000n },
+      { ...finding('paidTo', 'QC', tx(2, 20)), qort: 50_000_000_000n },
+      { ...finding('paidTo', 'QD', tx(1, 30)), qort: 1_000_000_000n },
+      finding('paidTo', 'QE', tx(1, 40)),
+    ];
+    const order = (by?: CircleOrder) => circleNodes(findings, by).out.map((n) => n.address);
+    // 5 transactions, 2, then three with 1: 500 QORT, 10 and none.
+    expect(order()).toEqual(['QA', 'QC', 'QB', 'QD', 'QE']);
+    expect(order('count')).toEqual(order());
+    // 500 QORT twice (the 2 transactions first), 10, 1 and none.
+    expect(order('qort')).toEqual(['QC', 'QB', 'QD', 'QA', 'QE']);
+    // Paid both ways: both ways added up, 600 QORT against 10.
+    const twoWays = [
+      { ...finding('paidBy', 'QX', tx(1)), qort: 30_000_000_000n },
+      { ...finding('paidTo', 'QX', tx(1, 5)), qort: 30_000_000_000n },
+      { ...finding('paidBy', 'QZ', tx(2, 10)), qort: 500_000_000n },
+      { ...finding('paidTo', 'QZ', tx(2, 20)), qort: 500_000_000n },
+    ];
+    expect(circleNodes(twoWays).both.map((n) => n.address)).toEqual(['QZ', 'QX']);
+    expect(circleNodes(twoWays, 'qort').both.map((n) => n.address)).toEqual(['QX', 'QZ']);
+  });
+
   it('says what share came in: by QORT, else by transactions', () => {
     const node = (inCount: number, inQort: bigint, outCount: number, outQort: bigint) => ({
       side: 'both' as const,
@@ -109,6 +137,49 @@ describe('sizes', () => {
     expect(sideMaxSize(3, WIDE_LAYOUT)).toBe(56);
     expect(sideMaxSize(10, WIDE_LAYOUT)).toBeLessThan(44);
     expect(sideMaxSize(8, PHONE_LAYOUT)).toBeLessThan(PHONE_LAYOUT.maxSize);
+  });
+
+  it('grow with the QORT when the circle is ordered by it, the smallest for none', () => {
+    expect(qortSize(0, 500, 28, 56)).toBe(28);
+    expect(qortSize(500, 500, 28, 56)).toBe(56);
+    expect(qortSize(125, 500, 28, 56)).toBe(42);
+    expect(qortSize(0, 0, 28, 56)).toBe(42);
+    const node = (address: string, count: number, qort: bigint): CircleNode => ({
+      key: `out:${address}`,
+      address,
+      side: 'out',
+      count,
+      findings: [],
+      qort,
+      assets: [],
+    });
+    // One transaction of 500 QORT, and nine of 1 QORT in all.
+    const sent: CircleGroups = {
+      in: [],
+      out: [node('QB', 1, 50_000_000_000n), node('QA', 9, 100_000_000n)],
+      both: [],
+      other: [],
+    };
+    const [big, small] = circleLayout(sent, WIDE_LAYOUT, 'qort').placed;
+    expect(big.size).toBeGreaterThan(small.size);
+    const [few, many] = circleLayout(sent).placed;
+    expect(few.size).toBeLessThan(many.size);
+  });
+});
+
+describe('badgeText', () => {
+  it('says its transactions from 2, or, by QORT, the QORT that moved, short', () => {
+    const node = (count: number, qort: bigint) => ({ count, qort });
+    expect(badgeText(node(1, 0n), 'count')).toBeNull();
+    expect(badgeText(node(6, 12_630_000_000n), 'count')).toBe('6');
+    expect(badgeText(node(1_200, 0n), 'count')).toBe('999+');
+    expect(badgeText(node(6, 0n), 'qort')).toBeNull();
+    expect(badgeText(node(1, 50_000_000n), 'qort')).toBe('<1');
+    expect(badgeText(node(1, 150_000_000n), 'qort')).toBe('1.5');
+    expect(badgeText(node(6, 12_630_000_000n), 'qort')).toBe('126');
+    expect(badgeText(node(1, 123_400_000_000n), 'qort')).toBe('1.2K');
+    expect(badgeText(node(1, 3_500_000_000_000n), 'qort')).toBe('35K');
+    expect(badgeText(node(1, 123_456_700_000_000n), 'qort')).toBe('1.2M');
   });
 });
 
@@ -271,7 +342,9 @@ describe('circleLayout, symmetrical', () => {
     for (const s of steps) expect(s).toBeCloseTo(steps[0]);
     // Each on the ellipse, from the top down, each at its own angle.
     for (const p of right)
-      expect(((p.x - 50) / WIDE_LAYOUT.rx) ** 2 + ((p.y - 50) / WIDE_LAYOUT.ry) ** 2).toBeCloseTo(1);
+      expect(((p.x - 50) / WIDE_LAYOUT.rx) ** 2 + ((p.y - 50) / WIDE_LAYOUT.ry) ** 2).toBeCloseTo(
+        1
+      );
     const angles = right.map((p) => angle(p, WIDE_LAYOUT.rx));
     expect(angles).toEqual([...angles].sort((a, b) => a - b));
   });

@@ -63,6 +63,8 @@ export interface PaymentsPanelProps {
   marks: MinterMarks;
   /** Plain tags for a known relation: "its sponsor", "its first QORT came from them". */
   relationOf: (address: string) => string[];
+  /** The sort it starts with: Most payments, or Most QORT when the circle is ordered by QORT. */
+  initialSort?: FlowSort;
   /** The tab's search, when one is typed: the accounts it found each way. */
   found?: {
     sent: Found<Flow>;
@@ -106,6 +108,7 @@ export function PaymentsPanel({
   data,
   marks,
   relationOf,
+  initialSort = 'count',
   found = null,
 }: PaymentsPanelProps) {
   // Each choice here is kept for Back (useViewState).
@@ -114,7 +117,7 @@ export function PaymentsPanel({
   const direction: Direction =
     chosen ??
     (data.flowsSent?.length === 0 && (data.flowsReceived?.length ?? 0) > 0 ? 'received' : 'sent');
-  const [sort, setSort] = useViewState<FlowSort>('sort', 'count');
+  const [sort, setSort] = useViewState<FlowSort>('sort', initialSort);
   const [membersOnly, setMembersOnly] = useViewState('members-only', false);
   const [limit, setLimit] = useViewState('limit', PAGE_ROWS);
   const peopleFocus = useFocusNewRows();

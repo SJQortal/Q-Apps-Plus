@@ -405,6 +405,7 @@ export default {
         localStorage.removeItem('qmintershipplus-explorer-quiz');
         // The circle a circle screen picked is saved too: the screens after it start as a list.
         localStorage.removeItem('qmintershipplus-connections-view');
+        localStorage.removeItem('qmintershipplus-connections-circle-order');
       } catch (e) {}
     })();`,
   ],
@@ -1299,6 +1300,25 @@ export default {
         await explorerSettle(page);
         await page
           .getByRole('list', { name: 'Sent to, the most transactions first' })
+          .waitFor({ state: 'attached', timeout: 8000 });
+      },
+    },
+    // Ordered by QORT (Simon, 2026-10-18): the toggle between Received from and Sent to.
+    {
+      key: 'explorer-connections-circle-qort',
+      path: `/explorer/account/${ADDR.left}/connections?as=admin`,
+      after: async (page) => {
+        await page.addInitScript(
+          (pairs) => pairs.forEach(([key, value]) => window.localStorage.setItem(key, value)),
+          [
+            ['qmintershipplus-connections-view', 'circle'],
+            ['qmintershipplus-connections-circle-order', 'qort'],
+          ]
+        );
+        await page.reload({ waitUntil: 'load' });
+        await explorerSettle(page);
+        await page
+          .getByRole('list', { name: 'Received from, the most QORT first' })
           .waitFor({ state: 'attached', timeout: 8000 });
       },
     },
