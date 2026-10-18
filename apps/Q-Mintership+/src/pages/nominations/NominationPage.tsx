@@ -38,6 +38,7 @@ import {
   useNominationsFor,
 } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
+import { useFullExplorer } from '../../hooks/useFullExplorer';
 import { useQuery } from '../../hooks/useQuery';
 import { PROPOSE_NOMINATION } from '../../constants/words';
 import {
@@ -125,6 +126,8 @@ function NominationView({ address }: { address: string }) {
   const group = useGroupInfo();
   const viewer = useMyStatus();
   const who = useDisplayName(address);
+  // Compare is for viewers who see the Explorer's detailed parts (rules/explorer/access.ts).
+  const full = useFullExplorer() === true;
   const navigate = useNavigate();
   // A nominee needs a registered name: Propose nomination only for an account that has one.
   const named = useQuery(viewer.status?.canNominate ? `hasname:${address}` : null, (force) =>
@@ -240,7 +243,7 @@ function NominationView({ address }: { address: string }) {
         >
           Open Minter Profile
         </Button>
-        {nominator && nominator !== address ? (
+        {full && nominator && nominator !== address ? (
           <Button
             component={RouterLink}
             to={explorerComparePath([address, nominator])}

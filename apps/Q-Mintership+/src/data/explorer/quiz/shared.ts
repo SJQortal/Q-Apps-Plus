@@ -48,6 +48,11 @@ export interface QuizTemplate {
   theme: QuizTheme;
   /** How often it comes up against the others of its level (1 by default). */
   weight?: number;
+  /**
+   * Its answer is found in the Explorer's detailed parts (Connections), which
+   * only some viewers see (rules/explorer/access.ts): asked only of them.
+   */
+  full?: true;
   make: (ctx: QuizContext) => Promise<Made | null>;
   /** A live answer read again (from the question's `args`). */
   recheck?: (args: Record<string, string | number>) => Promise<QuizAnswer | null>;

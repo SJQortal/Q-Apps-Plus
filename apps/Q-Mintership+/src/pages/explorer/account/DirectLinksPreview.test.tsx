@@ -19,7 +19,7 @@ async function open(address: string, setup?: (world: World) => void) {
       <DirectLinksPreview address={address} />
     </PersonLinkContext>,
     {
-      persona: 'learner',
+      persona: 'nominator',
       path: explorerAccountPath(address),
       route: '/explorer/account/:who/:tab?',
       strict: true,
@@ -65,7 +65,7 @@ describe('Overview: Direct links', () => {
 
   it('All connections opens the tab and hands it the focus', async () => {
     const { posts } = await renderPage(<AccountPage />, {
-      persona: 'learner',
+      persona: 'nominator',
       path: explorerAccountPath(ADDR.left),
       route: '/explorer/account/:who/:tab?',
       strict: true,

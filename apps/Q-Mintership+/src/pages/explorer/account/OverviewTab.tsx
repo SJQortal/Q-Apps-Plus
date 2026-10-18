@@ -3,7 +3,10 @@
  * where it stands in MINTER, its names, when it was first seen and last
  * sent a transaction), the direct links recorded with other accounts, its
  * facts (level and progress, blocks minted, balance, first seen, groups),
- * MINTER, minting, its latest transactions, and notes when there are any.
+ * its activity, MINTER, minting, its latest transactions, and notes when
+ * there are any. The direct links, the activity chart and the QORT facts are
+ * for viewers who see the Explorer's detailed parts (rules/explorer/access.ts);
+ * anyone else gets the rest, as if that were all there is.
  *
  * Reads: the page's own (account, status, names, primary name, the online
  * list) from the store, plus its balance, groups, where its first QORT came
@@ -18,6 +21,7 @@ import { getFirstSeen, getNamesOf } from '../../../data/explorer/account';
 import { getLastSent, lastSentKey } from '../../../data/explorer/lastSent';
 import { loadMyStatus } from '../../../data/me';
 import { useAccount, usePrimaryName } from '../../../hooks/useData';
+import { useFullExplorer } from '../../../hooks/useFullExplorer';
 import { useQuery } from '../../../hooks/useQuery';
 import { DirectLinksPreview } from './DirectLinksPreview';
 import { LatestTransactions } from './LatestTransactions';
@@ -52,6 +56,7 @@ export default function OverviewTab({ address }: OverviewTabProps) {
     getLastSent(address, publicKey as string, { force })
   );
   const memberSince = useMemberSince(address, Boolean(status.data?.isMember));
+  const full = useFullExplorer() === true;
 
   if (account.isError && !account.data)
     return (
@@ -74,9 +79,9 @@ export default function OverviewTab({ address }: OverviewTabProps) {
         firstSeen={partOf(firstSeen)}
         lastSent={publicKey ? partOf(lastSent) : null}
       />
-      <DirectLinksPreview address={address} />
-      <FactsSection address={address} account={a} firstSeen={firstSeen} />
-      <ActivitySection address={address} firstSeen={firstSeen} />
+      {full ? <DirectLinksPreview address={address} /> : null}
+      <FactsSection address={address} account={a} firstSeen={firstSeen} full={full} />
+      {full ? <ActivitySection address={address} firstSeen={firstSeen} /> : null}
       <GroupsSection address={address} />
       <MinterSection address={address} status={status} memberSince={memberSince} />
       <MintingSection address={address} hasPublicKey={Boolean(publicKey)} />

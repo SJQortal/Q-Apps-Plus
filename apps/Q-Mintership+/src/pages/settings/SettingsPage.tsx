@@ -31,6 +31,7 @@ import { AddressText } from '../../components/common/Person';
 import { NameAvatar } from '../../components/common/NameAvatar';
 import { Section, ToneChip } from '../../components/common/Section';
 import { useMyStatus } from '../../hooks/useData';
+import { useFullExplorer } from '../../hooks/useFullExplorer';
 import { signIn, useSession } from '../../state/session';
 import { clearRecent, useRecent } from '../../state/explorer';
 import {
@@ -180,6 +181,8 @@ export default function SettingsPage() {
   const [hideAnswered, setHideAnswered] = useAtom(decisionsHideAnsweredAtom);
   const [rememberExplored, setRememberExplored] = useAtom(explorerRememberAtom);
   const activityFirstRead = clampActivityRead(useAtomValue(activityFirstReadAtom));
+  // The activity chart is for viewers who see the Explorer's detailed parts (rules/explorer/access.ts).
+  const fullExplorer = useFullExplorer() === true;
   const hiddenMarks = useAtomValue(activityHiddenMarksAtom);
   const [activityOpen, setActivityOpen] = useState(false);
   const recent = useRecent();
@@ -386,27 +389,29 @@ export default function SettingsPage() {
                 Clear
               </Button>
             </RowAfterSwitch>
-            <RowAfterSwitch>
-              <SettingText
-                title="Activity"
-                hint={`Reads an account's newest ${formatCount(activityFirstRead)} transactions at first${
-                  hiddenMarks.length
-                    ? `; ${plural(hiddenMarks.length, 'kind')} of milestone hidden`
-                    : ''
-                }.`}
-              />
-              <Button
-                variant="outlined"
-                onClick={() => setActivityOpen(true)}
-                aria-haspopup="dialog"
-                aria-label="Change Activity settings"
-                sx={{ minHeight: 44 }}
-              >
-                Change
-              </Button>
-            </RowAfterSwitch>
+            {fullExplorer ? (
+              <RowAfterSwitch>
+                <SettingText
+                  title="Activity"
+                  hint={`Reads an account's newest ${formatCount(activityFirstRead)} transactions at first${
+                    hiddenMarks.length
+                      ? `; ${plural(hiddenMarks.length, 'kind')} of milestone hidden`
+                      : ''
+                  }.`}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={() => setActivityOpen(true)}
+                  aria-haspopup="dialog"
+                  aria-label="Change Activity settings"
+                  sx={{ minHeight: 44 }}
+                >
+                  Change
+                </Button>
+              </RowAfterSwitch>
+            ) : null}
           </Card>
-          {activityOpen ? (
+          {activityOpen && fullExplorer ? (
             <ActivitySettingsDialog open onClose={() => setActivityOpen(false)} />
           ) : null}
         </Section>

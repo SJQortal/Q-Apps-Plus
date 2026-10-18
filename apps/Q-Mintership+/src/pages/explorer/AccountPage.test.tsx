@@ -83,7 +83,7 @@ function answerExplorerReads() {
   ]);
 }
 
-async function open(path: string, setup?: () => void, persona = 'learner', strict = true) {
+async function open(path: string, setup?: () => void, persona = 'nominator', strict = true) {
   const result = await renderPage(
     <>
       <AccountPage />
@@ -251,7 +251,7 @@ describe('an account in the Explorer', () => {
     const { user, posts } = await open(
       explorerAccountPath(ADDR.nominator, 'connections'),
       undefined,
-      'learner',
+      'admin',
       true
     );
     const sponsorship = (address: string) => fetchCallsFor(`/addresses/sponsorship/${address}`);
@@ -406,10 +406,11 @@ describe('the state pages', () => {
       await screen.findByText("This address hasn't been used on Qortal yet.", {}, T)
     ).toBeInTheDocument();
     expect(screen.queryByRole('tablist')).toBeNull();
+    // (The viewer's own status is read, to know what of the Explorer they see.)
     for (const read of [
       '/names/address/',
       '/addresses/online',
-      '/groups/member/',
+      '/groups/member/' + FRESH,
       '/names/primary/' + FRESH,
     ])
       expect(fetchCallsFor(read)).toEqual([]);

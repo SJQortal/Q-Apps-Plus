@@ -55,6 +55,7 @@ const namePrice: QuizTemplate = {
   id: 'namePrice',
   level: 'medium',
   theme: 'names',
+  full: true,
   async make(ctx) {
     const tx = await nameSale(ctx);
     if (!tx) return null;
@@ -93,6 +94,7 @@ const nameSeller: QuizTemplate = {
   id: 'nameSeller',
   level: 'medium',
   theme: 'names',
+  full: true,
   async make(ctx) {
     const tx = await nameSale(ctx);
     if (!tx) return null;

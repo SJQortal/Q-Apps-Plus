@@ -16,6 +16,7 @@ import { usePrimaryName } from '../../../hooks/useData';
 import { useGoBackTo } from '../../../hooks/useSafeBack';
 import { useViewState } from '../../../hooks/useViewState';
 import { explorerAccountPath, explorerComparePath, pageKeyOf } from '../../../routes/paths';
+import { useFullExplorer } from '../../../hooks/useFullExplorer';
 import { visibleName } from '../../../rules/explorer/nameNotes';
 import { useComparePicks, useTrail } from '../../../state/explorer';
 import { shortAddress } from '../../../utils/format';
@@ -90,6 +91,8 @@ const ITEM_SX = { display: 'flex', alignItems: 'center', minWidth: 0 } as const;
 export function ExplorerTrail() {
   const trail = useTrail();
   const picks = useComparePicks();
+  // Compare is for viewers who see the Explorer's detailed parts (rules/explorer/access.ts).
+  const full = useFullExplorer() === true;
   const [expanded, setExpanded] = useViewState('trail:expanded', false);
   const list = useRef<HTMLOListElement>(null);
   // Set when "n more" is pressed: focus goes to the first crumb it revealed.
@@ -100,7 +103,7 @@ export function ExplorerTrail() {
     list.current?.children[1]?.querySelector<HTMLElement>('a')?.focus();
   }, [expanded]);
   const showTrail = trail.length >= 2;
-  if (!showTrail && picks.length < 2) return null;
+  if (!showTrail && (picks.length < 2 || !full)) return null;
   const collapse = !expanded && trail.length >= COLLAPSE_FROM;
   const hidden = trail.length - 2;
   return (
@@ -172,7 +175,7 @@ export function ExplorerTrail() {
           </Box>
         </Box>
       ) : null}
-      {picks.length >= 2 ? (
+      {picks.length >= 2 && full ? (
         <Button
           component={RouterLink}
           to={explorerComparePath(picks)}

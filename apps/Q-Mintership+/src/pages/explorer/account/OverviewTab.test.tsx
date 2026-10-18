@@ -46,7 +46,7 @@ async function open(address: string, setup?: () => void) {
       <AccountPage />
       <Probe />
     </>,
-    { persona: 'learner', path: explorerAccountPath(address), route: ROUTE, strict: true, setup }
+    { persona: 'nominator', path: explorerAccountPath(address), route: ROUTE, strict: true, setup }
   );
   return { ...result, user: userEvent.setup() };
 }

@@ -1,9 +1,10 @@
 /**
  * The Explorer's landing page: one field for any account or transaction,
- * the accounts explored on this device, the accounts picked to compare,
- * quick starts from reads the app shares with its other pages (your
- * account, open nominations, Minter Admins, members who joined lately),
- * Transactions on Qortal, how to read the Explorer, and the Explorer Quiz
+ * the accounts explored on this device, the accounts picked to compare (for
+ * viewers who see Compare: rules/explorer/access.ts), quick starts from
+ * reads the app shares with its other pages (your account, open
+ * nominations, Minter Admins, members who joined lately), Transactions on
+ * Qortal, How Explorer Works, and the Explorer Quiz
  * (a question about the chain at the bottom of the screen, answered by
  * exploring: components/explorer/quiz/).
  *
@@ -32,7 +33,6 @@ import { focusPageTitle } from '../../components/layout/pageFocus';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { AvatarStack, PersonChip } from '../../components/common/Person';
 import { EXPLORER_START_LINKS, PersonLinkContext } from '../../components/common/personLinks';
-import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import { Card, Section } from '../../components/common/Section';
 import { ErrorState, ListSkeleton } from '../../components/common/states';
 import { ExplorerSearch } from '../../components/explorer/ExplorerSearch';
@@ -54,7 +54,8 @@ import {
 import { useSession } from '../../state/session';
 import { formatDate, shortAddress } from '../../utils/format';
 import { useLandscapeFrame } from '../../utils/hubFrame';
-import { EXPLORER_NEUTRAL_LINE, EXPLORER_PURPOSE } from './explorerWords';
+import { useFullExplorer } from '../../hooks/useFullExplorer';
+import { HOW_EXPLORER_WORKS, HowExplorerWorks } from './HowExplorerWorks';
 import { useViewState } from '../../hooks/useViewState';
 import InsightsOutlinedIcon from '@mui/icons-material/InsightsOutlined';
 
@@ -439,95 +440,13 @@ function TransactionsCard() {
   );
 }
 
-/** One part of the guide: a short heading and plain sentences. */
-function GuidePart({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-      <Typography component="h3" sx={{ fontWeight: 700, fontSize: 16 }}>
-        {title}
-      </Typography>
-      {children}
-    </Box>
-  );
-}
-
-const TAB_GUIDE: Array<[string, string]> = [
-  [
-    'Overview',
-    'Who the account is: its level, names, groups, minting, and its latest transactions.',
-  ],
-  [
-    'Connections',
-    'How it is linked to other accounts: payments, sponsorships, minting levels and names moved between them, and what they have in common.',
-  ],
-  ['Transactions', 'Everything it sent or took part in, newest first, in plain words.'],
-  [
-    'Minter Profile',
-    'Where it stands in MINTER and what you can do for it (nominate, support, decide), its nominations and MINTER timeline, and its records in Q-Mintership and the original app.',
-  ],
-  ['Names', 'Every name it owns, their history, and what they published on QDN.'],
-];
-
-function HowToRead({ open, onClose }: { open: boolean; onClose: () => void }) {
-  return (
-    <ResponsiveDialog
-      open={open}
-      onClose={onClose}
-      title="How to read the Explorer"
-      actions={
-        <Button onClick={onClose} sx={{ minHeight: 44 }}>
-          Close
-        </Button>
-      }
-    >
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <Typography>{EXPLORER_PURPOSE}</Typography>
-        <GuidePart title="What each part shows">
-          <Box
-            component="ul"
-            sx={{ m: 0, pl: 2.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}
-          >
-            {TAB_GUIDE.map(([tab, what]) => (
-              <li key={tab}>
-                <Typography variant="body2">
-                  <strong>{tab}</strong>: {what}
-                </Typography>
-              </li>
-            ))}
-          </Box>
-          <Typography variant="body2">
-            Compare puts 2 to 4 accounts side by side. Transactions on Qortal lists the whole
-            chain&apos;s latest transactions.
-          </Typography>
-        </GuidePart>
-        <GuidePart title="Where it comes from">
-          <Typography variant="body2">
-            Everything here is public: the Qortal chain and QDN, read from your own node.
-          </Typography>
-          <Typography variant="body2">{EXPLORER_NEUTRAL_LINE}</Typography>
-        </GuidePart>
-        <GuidePart title="Its limits">
-          <Typography variant="body2">
-            Long lists are read in pages, and each list says how far it got, so a missing row is
-            never a silent cap. Names are labelled by an account&apos;s primary name; its other
-            names are listed on its Names tab.
-          </Typography>
-        </GuidePart>
-        <GuidePart title="It only reads">
-          <Typography variant="body2">
-            The Explorer never sends a transaction or publishes anything. It needs no sign-in.
-          </Typography>
-        </GuidePart>
-      </Box>
-    </ResponsiveDialog>
-  );
-}
-
 export default function ExplorerPage() {
   const phone = usePhoneLayout();
   const landscape = useLandscapeFrame();
   const touch = useMediaQuery('(pointer: coarse)');
   const [guideOpen, setGuideOpen] = useState(false);
+  // Compare is for viewers who see the Explorer's detailed parts (rules/explorer/access.ts).
+  const full = useFullExplorer() === true;
   return (
     <PersonLinkContext value={EXPLORER_START_LINKS}>
       <PageHeader
@@ -543,7 +462,7 @@ export default function ExplorerPage() {
           <TransactionsCard />
         </Section>
         <RecentSection />
-        <CompareSection />
+        {full ? <CompareSection /> : null}
         <QuickStarts />
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
           <Button
@@ -552,7 +471,7 @@ export default function ExplorerPage() {
             onClick={() => setGuideOpen(true)}
             sx={{ minHeight: 44 }}
           >
-            How to read the Explorer
+            {HOW_EXPLORER_WORKS}
           </Button>
           <Button
             variant="outlined"
@@ -568,7 +487,7 @@ export default function ExplorerPage() {
           </Button>
         </Box>
       </PageBody>
-      <HowToRead open={guideOpen} onClose={() => setGuideOpen(false)} />
+      <HowExplorerWorks open={guideOpen} onClose={() => setGuideOpen(false)} full={full} />
     </PersonLinkContext>
   );
 }

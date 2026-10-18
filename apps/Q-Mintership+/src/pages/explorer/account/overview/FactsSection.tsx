@@ -5,8 +5,10 @@
  * node was online, and Core's adjustment and penalty when it recorded any), its balance, when it was first seen, how
  * many groups it is in (GroupsSection lists them), how many QDN
  * transactions it made, and QORT minted, purchased / sold and received /
- * sent (qortSummaries.tsx). Each fact loads, fails and retries on its own; none
- * polls.
+ * sent (qortSummaries.tsx), those three only for viewers who see the
+ * Explorer's detailed parts (`full`; rules/explorer/access.ts: nothing about
+ * them is read for anyone else). Each fact loads, fails and retries on its
+ * own; none polls.
  */
 import type { ReactNode } from 'react';
 import { Box, Skeleton, Typography } from '@mui/material';
@@ -253,19 +255,20 @@ function QdnFact({ address }: { address: string }) {
   return <Fact label={label} value={value} detail={detail} />;
 }
 
-export function FactsSection({
-  address,
-  account,
-  firstSeen,
-}: {
+interface FactsProps {
   address: string;
   account: AccountInfo;
   firstSeen: UseQueryResult<FirstSeen>;
-}) {
+  /** The viewer sees the QORT facts (rules/explorer/access.ts): nothing about them is read otherwise. */
+  full: boolean;
+}
+
+export function FactsSection({ address, account, firstSeen, full }: FactsProps) {
   // QORT minted, purchased / sold, received / sent (Simon, 2026-10-17: moved here from the Minter Profile).
   const qort = useQortSummaries(
     address,
-    account.blocksMinted === 0 && !account.blocksMintedAdjustment
+    account.blocksMinted === 0 && !account.blocksMintedAdjustment,
+    { enabled: full }
   );
   return (
     <Section title="At a glance" id="overview-facts">
@@ -288,11 +291,15 @@ export function FactsSection({
           <FirstSeenFact query={firstSeen} />
           <GroupsFact address={address} />
           <QdnFact address={address} />
-          <Fact label="QORT minted" value={qort.minted} />
-          <Fact label="QORT purchased / sold" value={qort.trades} wideOnPhone />
-          <Fact label="QORT received / sent" value={qort.flows} wideOnPhone />
+          {full ? (
+            <>
+              <Fact label="QORT minted" value={qort.minted} />
+              <Fact label="QORT purchased / sold" value={qort.trades} wideOnPhone />
+              <Fact label="QORT received / sent" value={qort.flows} wideOnPhone />
+            </>
+          ) : null}
         </Box>
-        {qort.notice ? <Box sx={{ mt: 1 }}>{qort.notice}</Box> : null}
+        {full && qort.notice ? <Box sx={{ mt: 1 }}>{qort.notice}</Box> : null}
       </Card>
     </Section>
   );

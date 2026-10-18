@@ -135,7 +135,7 @@ describe('the Explorer’s landing page', () => {
   it('shows the accounts picked to compare, with Remove and Compare now', async () => {
     addPick(ADDR.admin);
     addPick(ADDR.learner);
-    const { user } = await show();
+    const { user } = await show('nominator');
     const compare = await screen.findByRole('region', { name: 'Compare' }, T);
     const remove = await within(compare).findByRole(
       'button',
@@ -150,7 +150,7 @@ describe('the Explorer’s landing page', () => {
   it('removing a pick keeps the focus in Compare', async () => {
     addPick(ADDR.admin);
     addPick(ADDR.learner);
-    const { user } = await show();
+    const { user } = await show('nominator');
     const compare = await screen.findByRole('region', { name: 'Compare' }, T);
     await user.click(
       await within(compare).findByRole('button', { name: 'Remove Avery Admin from compare' }, T)
@@ -165,9 +165,18 @@ describe('the Explorer’s landing page', () => {
   });
 
   it('says how to pick accounts when none is picked', async () => {
-    await show();
+    await show('nominator');
     const compare = await screen.findByRole('region', { name: 'Compare' }, T);
     expect(within(compare).getByText(/press its Compare button/)).toBeInTheDocument();
+  });
+
+  it('has no Compare for a viewer who doesn’t see the detailed parts, picks or not', async () => {
+    addPick(ADDR.admin);
+    addPick(ADDR.nominator);
+    await show('learner');
+    await screen.findByRole('region', { name: 'Quick starts' }, T);
+    expect(screen.queryByRole('region', { name: 'Compare' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Compare now' })).toBeNull();
   });
 
   it('starts from your account, open nominations, Minter Admins and new members', async () => {
@@ -206,10 +215,15 @@ describe('the Explorer’s landing page', () => {
     );
   });
 
-  it('explains how to read the Explorer, where its facts come from, and that it only reads', async () => {
-    const { user } = await show();
-    await user.click(screen.getByRole('button', { name: 'How to read the Explorer' }));
-    const dialog = await screen.findByRole('dialog', { name: 'How to read the Explorer' }, T);
+  it('How Explorer Works: everything there is, and who sees the detailed parts, for one who sees them', async () => {
+    const { user } = await show('nominator');
+    await user.click(screen.getByRole('button', { name: 'How Explorer Works' }));
+    const dialog = await screen.findByRole('dialog', { name: 'How Explorer Works' }, T);
+    expect(
+      within(dialog).getByText(
+        'See what an account did on Qortal and how it is linked to other accounts.'
+      )
+    ).toBeVisible();
     expect(
       within(dialog).getByText(
         /Nothing here shows who runs an account, as there is no KYC on Qortal\./
@@ -218,17 +232,51 @@ describe('the Explorer’s landing page', () => {
     expect(within(dialog).getByText(/read from your own node/)).toBeVisible();
     expect(within(dialog).getByText(/each list says how far it got/)).toBeVisible();
     expect(
-      within(dialog).getByText(/never sends a transaction or publishes anything/)
+      within(dialog).getByText(/Looking things up costs nothing and sends nothing/)
     ).toBeVisible();
-    for (const tab of ['Overview', 'Connections', 'Transactions', 'Minter Profile', 'Names'])
-      expect(within(dialog).getByText(tab)).toBeInTheDocument();
+    for (const part of [
+      'Overview',
+      'Connections',
+      'Transactions',
+      'Minter Profile',
+      'Names',
+      'Compare',
+      'Transactions on Qortal',
+      'Open File',
+      'Minter Admin activity',
+      'Explorer Quiz',
+    ])
+      expect(within(dialog).getByText(part)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(
+        /^You see all of the Explorer\. Connections, Compare, the activity chart, QORT minted, purchased \/ sold and received \/ sent, and exchanges named as such are shown only to Minter Admins, Dev Admins and MINTER members at level 5 or above\.$/
+      )
+    ).toBeVisible();
     await expectNoAxeViolations(dialog);
   });
 
-  it('starts the Explorer Quiz beside How to read the Explorer', async () => {
+  it('How Explorer Works: only what they see, with nothing about the rest, for anyone else', async () => {
+    const { user } = await show('learner');
+    await user.click(screen.getByRole('button', { name: 'How Explorer Works' }));
+    const dialog = await screen.findByRole('dialog', { name: 'How Explorer Works' }, T);
+    expect(
+      within(dialog).getByText(
+        'See what an account did on Qortal: its names, its place in MINTER and its transactions.'
+      )
+    ).toBeVisible();
+    for (const part of ['Overview', 'Transactions', 'Minter Profile', 'Names', 'Explorer Quiz'])
+      expect(within(dialog).getByText(part)).toBeInTheDocument();
+    // Nothing about what isn't there, nor that anything is.
+    expect(dialog).not.toHaveTextContent(
+      /Connections|Compare|activity chart|QORT minted|exchange|linked|Who sees what|level 5 or above/
+    );
+    await expectNoAxeViolations(dialog);
+  });
+
+  it('starts the Explorer Quiz beside How Explorer Works', async () => {
     const { user } = await show();
     const quiz = screen.getByRole('button', { name: 'Explorer Quiz' });
-    expect(quiz.previousElementSibling).toHaveTextContent('How to read the Explorer');
+    expect(quiz.previousElementSibling).toHaveTextContent('How Explorer Works');
     expect(getQuiz().on).toBe(false);
     await user.click(quiz);
     await waitFor(() => expect(getQuiz().question?.key).toBe('test:level'), T);

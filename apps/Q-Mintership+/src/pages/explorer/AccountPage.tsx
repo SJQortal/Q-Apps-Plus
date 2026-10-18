@@ -9,10 +9,13 @@
  *
  * The header (every tab), the trail of accounts opened one from another,
  * then the tabs. Opening an account adds it to the trail and, when Settings
- * allow, to Recent explorations. Read-only: nothing here writes.
+ * allow, to Recent explorations. Connections and Compare are for viewers who
+ * see the Explorer's detailed parts (rules/explorer/access.ts): for anyone
+ * else the tab isn't there, and its link opens the Overview. Read-only:
+ * nothing here writes.
  */
 import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Box, Typography, useMediaQuery } from '@mui/material';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
@@ -36,6 +39,7 @@ import {
 } from '../../data/explorer/account';
 import { loadMyStatus } from '../../data/me';
 import { useHeavyScope } from '../../hooks/useHeavyScope';
+import { useFullExplorer } from '../../hooks/useFullExplorer';
 import { usePrimaryName } from '../../hooks/useData';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
@@ -53,7 +57,7 @@ import { CompareWith } from './account/CompareWith';
 import { ExplorerTrail } from './account/ExplorerTrail';
 import OverviewTab from './account/OverviewTab';
 import { refreshAccount } from './account/refreshAccount';
-import { ACCOUNT_TABS, AT_TABS, panelIdOf, tabIdOf } from './account/tabIds';
+import { ACCOUNT_TABS, AT_TABS, BASIC_ACCOUNT_TABS, panelIdOf, tabIdOf } from './account/tabIds';
 import { AT_ACCOUNT, INVALID_ADDRESS, UNUSED_ADDRESS } from './explorerWords';
 import { MarkedName } from '../../components/common/MarkedName';
 import { ExplorerHeaderSearch } from '../../components/explorer/ExplorerHeaderSearch';
@@ -197,9 +201,13 @@ export default function AccountPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened]);
 
+  // Connections only for those who see the Explorer's detailed parts (known once it is read).
+  const full = useFullExplorer();
   const tab: ExplorerTab = kind === 'at' ? 'transactions' : explorerTabOf(params.tab);
-  const tabs = kind === 'at' ? AT_TABS : ACCOUNT_TABS;
-  const tabBar = opened ? <AccountTabs address={opened} tab={tab} tabs={tabs} /> : null;
+  const tabs = kind === 'at' ? AT_TABS : full ? ACCOUNT_TABS : BASIC_ACCOUNT_TABS;
+  const tabBar = opened ? (
+    <AccountTabs address={opened} tab={tabs.includes(tab) ? tab : 'overview'} tabs={tabs} />
+  ) : null;
   useTopInViewOnSwitch(opened, tab, panelIdOf(tab));
 
   // ---- What the page says, by state. ----
@@ -301,8 +309,12 @@ export default function AccountPage() {
     actions = (
       <>
         <CopyLinkButton path={explorerAccountPath(account.address)} what="this account" />
-        <CompareToggle address={account.address} label={label} />
-        <CompareWith address={account.address} label={label} />
+        {full ? (
+          <>
+            <CompareToggle address={account.address} label={label} />
+            <CompareWith address={account.address} label={label} />
+          </>
+        ) : null}
         <RefreshButton
           onClick={() => refreshAccount(account.address, account.publicKey)}
           fetching={explored.fetching}
@@ -352,8 +364,19 @@ export default function AccountPage() {
         {showTabs && opened ? (
           <>
             {tabsInHeader ? null : tabBar}
-            {/* One per account: a tab's own state (what was asked, what was found) starts fresh. */}
-            <TabPanel key={opened} tab={tab} address={opened} tabs={tabs} />
+            {tabs.includes(tab) ? (
+              // One per account: a tab's own state (what was asked, what was found) starts fresh.
+              <TabPanel key={opened} tab={tab} address={opened} tabs={tabs} />
+            ) : full === false ? (
+              // A tab this viewer doesn't have (a Connections link): the Overview, in place.
+              <Navigate
+                to={explorerAccountPath(opened, 'overview')}
+                replace
+                state={location.state}
+              />
+            ) : (
+              <ListSkeleton count={3} label="Loading this tab" />
+            )}
           </>
         ) : null}
       </PageBody>

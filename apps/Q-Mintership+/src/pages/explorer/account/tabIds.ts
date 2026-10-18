@@ -20,6 +20,14 @@ export const ACCOUNT_TABS: readonly ExplorerTab[] = [
   'names',
 ];
 
+/**
+ * The tabs for a viewer who doesn't see the Explorer's detailed parts
+ * (rules/explorer/access.ts): all but Connections.
+ */
+export const BASIC_ACCOUNT_TABS: readonly ExplorerTab[] = ACCOUNT_TABS.filter(
+  (tab) => tab !== 'connections'
+);
+
 /** An AT (automated contract) has transactions only. */
 export const AT_TABS: readonly ExplorerTab[] = ['transactions'];
 

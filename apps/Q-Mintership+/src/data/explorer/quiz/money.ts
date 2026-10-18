@@ -111,6 +111,7 @@ const firstQortFrom: QuizTemplate = {
   id: 'firstQortFrom',
   level: 'medium',
   theme: 'money',
+  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `firstQort:${m.address}`;
@@ -138,6 +139,7 @@ const firstQortTwoHops: QuizTemplate = {
   id: 'firstQortTwoHops',
   level: 'expert',
   theme: 'detective',
+  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `firstQort2:${m.address}`;
@@ -208,6 +210,7 @@ const payTotal: QuizTemplate = {
   id: 'payTotal',
   level: 'tricky',
   theme: 'money',
+  full: true,
   async make(ctx) {
     const found = await randomRows(ctx, ['PAYMENT'], 10_000, 500_000);
     if (!found) return null;
@@ -296,6 +299,7 @@ const topPayee: QuizTemplate = {
   id: 'topPayee',
   level: 'tricky',
   theme: 'money',
+  full: true,
   async make(ctx) {
     const found = await randomRows(ctx, ['PAYMENT'], 10_000, 500_000);
     if (!found) return null;
@@ -417,6 +421,7 @@ const blockPayerFirstQort: QuizTemplate = {
   id: 'blockPayerFirstQort',
   level: 'expert',
   theme: 'detective',
+  full: true,
   async make(ctx) {
     const found = await paymentBlock(ctx);
     if (!found) return null;

@@ -1,7 +1,9 @@
 /**
  * Where an account stands in MINTER, in the app's own words (statusSentence,
  * from the app's status logic: nothing is worked out here), with its facts
- * (how much of the time its node was online among them: NodeOnline) and what the
+ * (how much of the time its node was online among them: NodeOnline; QORT
+ * minted only for viewers who see the Explorer's detailed parts,
+ * rules/explorer/access.ts) and what the
  * viewer can do for it (the profile's actions); then its
  * nomination in full (the open one or the latest), its rounds in brief, and
  * a link to the nomination's own page.
@@ -20,6 +22,7 @@ import { nominationLine, roundsLine } from './mintershipWords';
 import { Fact, Note } from './parts';
 import { QortMintedFact } from './QortMinted';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
+import { useFullExplorer } from '../../../../hooks/useFullExplorer';
 
 export function StandingSection({
   address,
@@ -37,6 +40,7 @@ export function StandingSection({
 }) {
   const { status, since } = story;
   const person = status.data;
+  const full = useFullExplorer() === true;
   let body;
   if (!person && status.isError) {
     body = (
@@ -66,7 +70,9 @@ export function StandingSection({
         >
           <Fact label="Level" value={String(person.level)} />
           <Fact label="Blocks minted" value={formatCount(person.blocksMinted)} />
-          <QortMintedFact address={address} neverMinted={person.blocksMinted === 0} />
+          {full ? (
+            <QortMintedFact address={address} neverMinted={person.blocksMinted === 0} />
+          ) : null}
           <Fact
             label="Node online"
             value={

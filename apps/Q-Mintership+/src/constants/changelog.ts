@@ -1,6 +1,11 @@
 export interface ReleaseSection {
   title: string;
   notes: string[];
+  /**
+   * Only for viewers who see the Explorer's detailed parts
+   * (rules/explorer/access.ts): anyone else doesn't get this section.
+   */
+  full?: true;
 }
 
 export interface Release {
@@ -45,17 +50,16 @@ export const CHANGELOG: Release[] = [
           'A nomination’s reason shows in full, in a frame of its own with its links (on a phone a long one opens with Show the whole reason), and each comment sits in its own frame.',
           'Not a Minter Admin? Vote Yes or No on an open nomination, so the admins can weigh the community’s view. Who voted shows beside Copy link on its card, and on their comments. Advisory: the Minter Admins decide on chain.',
           'Explorer: look up any account, name or transaction, with name suggestions as you type. An account shows its level, every name it owns (not only its primary one), its groups, whether it mints now, and its transactions in plain words.',
-          'Explorer’s Connections shows how an account is linked to others, each link with the transactions behind it: a minting level moved, a sponsor and the accounts it sponsored, names bought or sold, payments each way, where its first QORT came from, and nominations, supports and votes. Open any account to follow the links on; the trail shows the way back.',
           'Explorer’s Mintership tab tells an account’s MINTER story: its status and rounds, what it published in Q-Mintership+ under any of its names, a Minter Admin’s proposals and answers, and its posts in the original app.',
-          'Compare 2 to 4 accounts: what passed between them, a timeline together, what they have in common, and the facts side by side. Copy findings gives them as text to share.',
           'Transactions on Qortal: the latest transactions of any type over the last 1,000 or 10,000 blocks, or from a block.',
-          'In the Explorer every name, primary or secondary, and every group shows its own avatar, and an account’s page shows its whole address (the person page too). Adding an account to Compare says so in a small note just under the button.',
+          'In the Explorer every name, primary or secondary, and every group shows its own avatar, and an account’s page shows its whole address (the person page too).',
           'Explorer’s Transactions filters by type, by one of the account’s names (primary or secondary), by time (the last day, week, month or year, between two dates or between two blocks) and sorts newest, oldest or biggest amount first. What you pick stays in the link.',
           'Each transaction in a list opens to its raw API response, coloured so keys, text and numbers stand apart, with Copy.',
-          'Search an account’s Connections and Transactions in the Explorer with the small field at the top of each tab: a name (also one an account holds besides the one it shows), an address, an amount, a type, a block or a date, typed in part. Similar words count too, a letter or two off, listed after the exact matches. The search stays in the link.',
+          'Search an account’s Transactions in the Explorer with the small field at the top of the tab: a name (also one an account holds besides the one it shows), an address, an amount, a type, a block or a date, typed in part. Similar words count too, a letter or two off, listed after the exact matches. The search stays in the link.',
+          'How Explorer Works (once How to read the Explorer) says what each part of the Explorer shows, where it comes from, and what acts.',
           'Open File shows what a QDN publish holds, right in the Explorer: pictures to zoom, videos and sounds, PDFs page by page (with a dark page view), JSON laid out in colour, tables, text, a ZIP’s list of files, and each file of a website or app. Save File keeps it on your device through Hub’s save prompt; a website or app of many files is saved whole, packed into one .zip. Encrypted resources are never opened.',
           'Each name on an account’s Names tab opens to its whole history: every change since it was registered (sales, listings, renames, its data), by every account that had it, read back through its owners.',
-          'Every name on screen opens the name: in a transaction’s line and its details, histories, Compare, the Quiz and Open File. It lands on its owner’s Names tab, on that name, with its whole history open. Accounts in a transaction’s line open too.',
+          'Every name on screen opens the name: in a transaction’s line and its details, histories, the Quiz and Open File. It lands on its owner’s Names tab, on that name, with its whole history open. Accounts in a transaction’s line open too.',
           'Back returns to a page as you left it: scrolled to the same place, with the same rows and lists open, whether by the app’s Back, Hub’s, or a crumb of your trail.',
           'On a phone or tablet, swipe left or right on an account to go through its tabs.',
           'Explorer’s Names shows each name as a card (or a list, if you prefer), sortable, with its history right beside it. What an account published on QDN is in Transactions.',
@@ -89,8 +93,18 @@ export const CHANGELOG: Release[] = [
           'Minter Admin Activity sorts by any column: press a header, and again to reverse it. Participation bars fill and the score counts up as they load.',
           'Propose cancelling all stale invites, with your approval on each.',
           'Hide a comment for everyone; any Minter Admin can show it again.',
-          'A decision’s and a nomination’s page open the person in the Explorer, and compare the nominee with their nominator in one step.',
+          'A decision’s and a nomination’s page open the person in the Explorer.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'These parts of the Explorer are shown to Minter Admins, Dev Admins and MINTER members at level 5 or above.',
+          'Connections shows how an account is linked to others, each link with the transactions behind it: a minting level moved, a sponsor and the accounts it sponsored, names bought or sold, payments each way, where its first QORT came from, QORT sent to or got from exchanges, and nominations, supports and votes. As a circle or a list, with the same small search as Transactions. Open any account to follow the links on; the trail shows the way back.',
+          'Compare 2 to 4 accounts: what passed between them, a timeline together, what they have in common, and the facts side by side. Copy findings gives them as text to share. Adding an account to Compare says so in a small note just under the button; a decision’s and a nomination’s page compare the nominee with their nominator in one step.',
           'A sponsor’s sponsored accounts in one list (in MINTER now, minting now, level, minting penalty), and on request who made their first QORT payment and where their QORT went.',
+          'The Overview shows an account’s direct links, its activity over time (a chart with its milestones) and QORT minted, purchased / sold and received / sent, added up from its whole history; the Minter Profile shows QORT minted beside blocks minted. Exchanges’ accounts are named as such.',
         ],
       },
       {

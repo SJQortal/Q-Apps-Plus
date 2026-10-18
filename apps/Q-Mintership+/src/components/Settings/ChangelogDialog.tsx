@@ -4,6 +4,7 @@ import { alpha, styled } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
 import { APP_VERSION } from '../../constants/app';
 import { CHANGELOG, type Release } from '../../constants/changelog';
+import { useFullExplorer } from '../../hooks/useFullExplorer';
 
 const Header = styled('div')(({ theme }) => ({
   alignItems: 'center',
@@ -52,6 +53,9 @@ const Notes = styled('ul')(({ theme }) => ({
 
 function ReleaseEntry({ release, latest }: { release: Release; latest: boolean }) {
   const [open, setOpen] = useState(latest);
+  // The Explorer's detailed parts are written up only for those who see them.
+  const full = useFullExplorer() === true;
+  const sections = release.sections.filter((section) => full || !section.full);
   return (
     <ReleaseCard $latest={latest} aria-label={`Q-Mintership+ ${release.version}`}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
@@ -69,7 +73,7 @@ function ReleaseEntry({ release, latest }: { release: Release; latest: boolean }
       </Typography>
       <Typography sx={{ mt: 1 }}>{release.summary}</Typography>
       {open
-        ? release.sections.map((section) => (
+        ? sections.map((section) => (
             <Box key={section.title}>
               <SectionHeading>{section.title}</SectionHeading>
               <Notes>

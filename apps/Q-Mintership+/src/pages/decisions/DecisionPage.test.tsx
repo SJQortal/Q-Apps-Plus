@@ -162,15 +162,14 @@ describe('A decision’s own page: still waiting', () => {
     );
   });
 
+  const bobsInvite = (world: World) =>
+    world.pending.find(
+      (t: { type: string; invitee?: string }) =>
+        t.type === 'GROUP_INVITE' && t.invitee === ADDR.nominatedSigning
+    ).signature;
+
   it('opens the person’s Minter Profile, and an invite’s nominee beside their nominator', async () => {
-    await open(
-      'learner',
-      (world) =>
-        world.pending.find(
-          (t: { type: string; invitee?: string }) =>
-            t.type === 'GROUP_INVITE' && t.invitee === ADDR.nominatedSigning
-        ).signature
-    );
+    await open('nominator', bobsInvite);
     await screen.findByRole('article', { name: /^Add to MINTER, bob\+builder/ }, T);
     expect(screen.getByRole('link', { name: 'Open Minter Profile: bob+builder' })).toHaveAttribute(
       'href',
@@ -179,6 +178,13 @@ describe('A decision’s own page: still waiting', () => {
     expect(
       await screen.findByRole('link', { name: 'Compare nominee and nominator' }, T)
     ).toHaveAttribute('href', `/explorer/compare/${ADDR.nominatedSigning}/${ADDR.nominator}`);
+  });
+
+  it('has no Compare for a viewer who doesn’t see the Explorer’s detailed parts', async () => {
+    await open('learner', bobsInvite);
+    await screen.findByRole('article', { name: /^Add to MINTER, bob\+builder/ }, T);
+    expect(screen.getByRole('link', { name: 'Open Minter Profile: bob+builder' })).toBeVisible();
+    expect(screen.queryByRole('link', { name: 'Compare nominee and nominator' })).toBeNull();
   });
 
   it('shows an admin change proposed in another app like any decision', async () => {

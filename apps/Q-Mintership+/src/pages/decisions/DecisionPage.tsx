@@ -30,6 +30,7 @@ import {
   useNominationsFor,
 } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
+import { useFullExplorer } from '../../hooks/useFullExplorer';
 import { useQuery } from '../../hooks/useQuery';
 import {
   PATHS,
@@ -370,6 +371,8 @@ function MoreLinks({ tx, nominator = null }: { tx: TxRow; nominator?: string | n
   const subject = decisionSubject(tx);
   const who = useDisplayName(subject ?? '', subject ? undefined : null);
   const invite = tx.type === 'GROUP_INVITE';
+  // Compare is for viewers who see the Explorer's detailed parts (rules/explorer/access.ts).
+  const full = useFullExplorer() === true;
   return (
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
       {invite && subject ? (
@@ -388,7 +391,7 @@ function MoreLinks({ tx, nominator = null }: { tx: TxRow; nominator?: string | n
           Open Minter Profile
         </Button>
       ) : null}
-      {invite && subject && nominator && nominator !== subject ? (
+      {full && invite && subject && nominator && nominator !== subject ? (
         <Button
           component={RouterLink}
           to={explorerComparePath([subject, nominator])}

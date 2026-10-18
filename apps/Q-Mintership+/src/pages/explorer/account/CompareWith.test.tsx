@@ -33,7 +33,7 @@ describe('Compare with…', () => {
         <CompareWith address={ADDR.nominator} label="Nora Nominator" />
         <Probe />
       </>,
-      { persona: 'learner', path: explorerAccountPath(ADDR.nominator), route: '/*', strict: true }
+      { persona: 'nominator', path: explorerAccountPath(ADDR.nominator), route: '/*', strict: true }
     );
     const user = userEvent.setup();
     const button = screen.getByRole('button', {
@@ -65,7 +65,7 @@ describe('Compare with…', () => {
 
   it('is tall, so the names suggested under the field show without scrolling it', async () => {
     await renderPage(<CompareWith address={ADDR.nominator} label="Nora Nominator" />, {
-      persona: 'learner',
+      persona: 'nominator',
       path: explorerAccountPath(ADDR.nominator),
       route: '/*',
       strict: true,
@@ -84,7 +84,7 @@ describe('Compare with…', () => {
 
   it('sits in the account header, beside the Compare toggle', async () => {
     await renderPage(<AccountPage />, {
-      persona: 'learner',
+      persona: 'nominator',
       path: explorerAccountPath(ADDR.nominator),
       route: '/explorer/account/:who/:tab?',
       strict: true,

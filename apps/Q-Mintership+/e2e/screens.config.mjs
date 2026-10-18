@@ -1126,7 +1126,8 @@ export default {
     // Activity's settings: how much it reads at first, and the milestones it shows.
     {
       key: 'explorer-activity-settings',
-      path: `/explorer/account/${ADDR.admin}?as=learner`,
+      // The activity chart is for viewers who see the Explorer's detailed parts.
+      path: `/explorer/account/${ADDR.admin}?as=nominator`,
       overlay: true,
       after: async (page) => {
         await explorerSettle(page);
@@ -1134,6 +1135,36 @@ export default {
         await page.locator('#overview-activity-title').scrollIntoViewIfNeeded({ timeout: 8000 });
         await page.getByRole('button', { name: 'Activity settings' }).click({ timeout: 8000 });
         await page.getByRole('dialog', { name: 'Activity settings' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // A viewer who doesn't see the Explorer's detailed parts (Simon, 2026-10-18): no
+    // Connections, Compare, direct links, chart or QORT facts.
+    {
+      key: 'explorer-account-basic',
+      path: `/explorer/account/${ADDR.admin}?as=learner`,
+      after: explorerSettle,
+    },
+    // How Explorer Works, as one who sees everything reads it, and as anyone else does.
+    {
+      key: 'explorer-how-full',
+      path: '/explorer?as=nominator',
+      overlay: true,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'How Explorer Works' }).click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'How Explorer Works' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      key: 'explorer-how-basic',
+      path: '/explorer?as=learner',
+      overlay: true,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'How Explorer Works' }).click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'How Explorer Works' }).waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
     },

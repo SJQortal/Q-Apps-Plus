@@ -50,6 +50,7 @@ const sponsor: QuizTemplate = {
   id: 'sponsor',
   level: 'medium',
   theme: 'minting',
+  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `sponsor:${m.address}`;
@@ -81,6 +82,7 @@ const sponsorOfSponsor: QuizTemplate = {
   id: 'sponsorOfSponsor',
   level: 'expert',
   theme: 'detective',
+  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `sponsor2:${m.address}`;
@@ -113,6 +115,7 @@ const sponseesCount: QuizTemplate = {
   id: 'sponseesCount',
   level: 'tricky',
   theme: 'minting',
+  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const first = await firstSponsor(m.address);
@@ -151,6 +154,7 @@ const shareRun: QuizTemplate = {
   id: 'shareRun',
   level: 'tricky',
   theme: 'minting',
+  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const links = await linksAbout(m.address);
@@ -351,6 +355,7 @@ const levelMoveFrom: QuizTemplate = {
   id: 'levelMoveFrom',
   level: 'tricky',
   theme: 'minting',
+  full: true,
   async make(ctx) {
     const move = await levelMove(ctx);
     if (!move) return null;
@@ -379,6 +384,7 @@ const levelMoveThenSponsor: QuizTemplate = {
   id: 'levelMoveThenSponsor',
   level: 'expert',
   theme: 'detective',
+  full: true,
   async make(ctx) {
     const move = await levelMove(ctx);
     if (!move) return null;

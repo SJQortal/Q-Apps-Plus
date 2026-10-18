@@ -116,11 +116,11 @@ describe('the Mintership tab', () => {
         T
       )
     ).toBeVisible();
-    // Blocks minted, and QORT minted in a box of its own (Simon, 2026-10-18).
+    // Blocks minted; QORT minted only for viewers who see the Explorer's detailed parts.
     expect(within(status).getByText('Blocks minted').nextElementSibling).toHaveTextContent(
       /^980,000$/
     );
-    expect(within(status).getByText('QORT minted')).toBeInTheDocument();
+    expect(within(status).queryByText('QORT minted')).toBeNull();
 
     // Invited without a nomination record: its round in brief.
     const nomination = await region('Nomination');
@@ -173,6 +173,13 @@ describe('the Mintership tab', () => {
     noWrites(posts);
   });
 
+  it('shows QORT minted, in a box of its own, to a viewer who sees the detailed parts', async () => {
+    await open(ADDR.nominator, undefined, 'admin');
+    const status = await region('MINTER status');
+    await within(status).findByText('Blocks minted', {}, T);
+    // Simon, 2026-10-18: Blocks minted and QORT minted apart.
+    expect(await within(status).findByText('QORT minted', {}, T)).toBeInTheDocument();
+  });
   it('finds records under every name an account owns, and links what they are about', async () => {
     const { posts } = await open(ADDR.nominator, (world) => {
       const invite = world.pending.find(

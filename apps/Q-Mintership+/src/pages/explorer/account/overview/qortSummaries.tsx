@@ -87,10 +87,14 @@ export interface QortSummaryParts {
 export function useQortSummaries(
   address: string,
   neverMinted: boolean,
-  options: { trades?: boolean } = {}
+  /** `enabled` false reads nothing (a viewer who doesn't see these: rules/explorer/access.ts). */
+  options: { trades?: boolean; enabled?: boolean } = {}
 ): QortSummaryParts {
+  const enabled = options.enabled !== false;
   const firstRead = clampActivityRead(useAtomValue(activityFirstReadAtom));
-  const list = useQuery(accountTxKey(address, []), (force) => getAccountTx(address, [], { force }));
+  const list = useQuery(enabled ? accountTxKey(address, []) : null, (force) =>
+    getAccountTx(address, [], { force })
+  );
   const [wantAll, setWantAll] = useState(false);
   const [reading, setReading] = useState(false);
   const [failed, setFailed] = useState<unknown>(null);
@@ -101,7 +105,7 @@ export function useQortSummaries(
 
   // Reads on by itself up to Activity's first read; all of it once asked.
   useEffect(() => {
-    if (!data || done || busy.current || reading || failed) return;
+    if (!enabled || !data || done || busy.current || reading || failed) return;
     if (!wantAll && held >= firstRead) return;
     busy.current = true;
     setReading(true);
@@ -114,7 +118,7 @@ export function useQortSummaries(
         busy.current = false;
         setReading(false);
       });
-  }, [address, data, done, reading, failed, held, firstRead, wantAll]);
+  }, [enabled, address, data, done, reading, failed, held, firstRead, wantAll]);
 
   const rows = done ? data?.rows : undefined;
   const book = rows ? qortBook(rows, address) : null;
@@ -126,7 +130,7 @@ export function useQortSummaries(
     book && !neverMinted && orderIds.length ? `xordersq:${address}:${orderIds.length}` : null,
     () => getOrdersQort(address, orderIds)
   );
-  const trades = useQuery(options.trades === false ? null : `xtrades:${address}`, () =>
+  const trades = useQuery(!enabled || options.trades === false ? null : `xtrades:${address}`, () =>
     getTradesQort(address)
   );
 

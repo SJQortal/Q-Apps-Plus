@@ -8,7 +8,10 @@
  * state/explorerQuiz.ts; questions from data/explorer/quiz/.
  */
 import { getNameData } from '../../../data/explorer/account';
+import { getDefaultStore } from 'jotai';
 import { makeQuestion, recheckAnswer } from '../../../data/explorer/quiz/generators';
+import { fullExplorerNow } from '../../../state/explorerAccess';
+import { sessionAtom } from '../../../state/session';
 import { answerWords, checkAnswer, checkChoice } from '../../../rules/explorer/quiz/check';
 import { RECENT_SUBJECTS, RECENT_TEMPLATES, remember } from '../../../rules/explorer/quiz/pick';
 import type { QuizAnswer, QuizLevel } from '../../../rules/explorer/quiz/types';
@@ -66,6 +69,8 @@ export function askNext(): Promise<boolean> {
       const recentSubjects = new Set(before.recent.subjects);
       const question = await makeQuestion({
         level: before.level,
+        // Questions answered in the Explorer's detailed parts only for those who see them.
+        full: fullExplorerNow(getDefaultStore().get(sessionAtom).address),
         seen: (key) => asked.has(key),
         fresh: (subject) => !recentSubjects.has(subject),
         history: {

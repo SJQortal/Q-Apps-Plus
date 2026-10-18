@@ -56,6 +56,8 @@ export interface MakeOptions {
   attempts?: number;
   budgetMs?: number;
   templates?: readonly QuizTemplate[];
+  /** The viewer sees the Explorer's detailed parts: false leaves out the questions found there. */
+  full?: boolean;
   now?: () => number;
 }
 
@@ -76,7 +78,8 @@ function finish(template: QuizTemplate, made: Made, tip: number): QuizQuestion {
 /** A new question, or null when none could be made (the node is busy or offline). */
 export async function makeQuestion(options: MakeOptions = {}): Promise<QuizQuestion | null> {
   const rng = options.rng ?? Math.random;
-  const templates = options.templates ?? QUIZ_TEMPLATES;
+  const all = options.templates ?? QUIZ_TEMPLATES;
+  const templates = options.full === false ? all.filter((t) => !t.full) : all;
   const history = options.history ?? NO_HISTORY;
   const now = options.now ?? (() => Date.now());
   const deadline = now() + (options.budgetMs ?? 20_000);
