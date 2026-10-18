@@ -21,6 +21,11 @@ export async function getJson(path: string): Promise<any> {
   return body;
 }
 
+/** A resource's status straight from the node (no Hub hop): for quiet checks such as card art. */
+export function resourceStatusDirect(ref: ResourceRef): Promise<any> {
+  return getJson(resourcePath("status", ref));
+}
+
 const resourcePath = (kind: "status" | "properties", ref: ResourceRef) =>
   `/arbitrary/resource/${kind}/${ref.service}/${encodeURIComponent(ref.name)}/${encodeURIComponent(ref.identifier)}`;
 

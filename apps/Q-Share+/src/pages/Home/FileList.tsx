@@ -45,6 +45,7 @@ import { copyText } from "../../utils/clipboard.ts";
 import { ManualCopyDialog } from "../../components/common/CopyLinkButton.tsx";
 import { isHubDecline } from "../../utils/hubErrors.ts";
 import { useListView, type LayoutSetting } from "../../components/common/ListViewToggle.tsx";
+import { ShareCardArt, ShareRowArt } from "../../components/common/ShareArt";
 
 interface FileListProps {
   files: Video[];
@@ -322,7 +323,12 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
     return (
       <FileCard className="share-card" aria-busy={pending}>
         <CardMain className="row-main" onClick={() => navigate(sharePath(fileObj.user, fileObj.id))} aria-label={openLabel}>
-          <CardArt>{icon ? <CardIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon fontSize="large" />}</CardArt>
+          <CardArt>
+            <ShareCardArt
+              share={fileObj}
+              fallback={icon ? <CardIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon fontSize="large" />}
+            />
+          </CardArt>
           <CardBody>
             {title ? <CardTitle>{title}</CardTitle> : <Skeleton variant="text" sx={{ fontSize: 15, width: "80%" }} />}
             <CardMeta>{meta}</CardMeta>
@@ -356,7 +362,7 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
         onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
         aria-label={openLabel}
       >
-        {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
+        <ShareRowArt share={fileObj} fallback={icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />} />
         <div style={{ minWidth: 0, flex: 1 }}>
           {title ? (
             <VideoCardTitle>{title}</VideoCardTitle>
