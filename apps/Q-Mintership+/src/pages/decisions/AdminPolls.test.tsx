@@ -251,6 +251,20 @@ describe('Decisions → Minter Admin polls', () => {
     expect(within(panel).queryByRole('article', { name: /Add to MINTER/ })).toBeNull();
   });
 
+  it('counts the open polls in All Decisions too', async () => {
+    await openDecisions();
+    const ask = await screen.findByRole('tab', { name: /^Ask MAs \d+$/ }, T);
+    const open = Number(ask.textContent?.match(/(\d+)$/)?.[1]);
+    // 11 without the polls (DecisionsTabs.test.tsx): the decisions and the nominations waiting.
+    await waitFor(
+      () =>
+        expect(screen.getByRole('tab', { name: /^All Decisions/ })).toHaveTextContent(
+          `All Decisions ${11 + open}`
+        ),
+      T
+    );
+  });
+
   it('reads: four searches of 100 for the whole section, bodies decrypted in Hub', async () => {
     await openDecisions();
     await pollCard(OPEN_Q);

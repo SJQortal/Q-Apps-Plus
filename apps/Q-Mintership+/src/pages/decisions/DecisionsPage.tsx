@@ -587,7 +587,13 @@ function DecisionsQueue() {
   ) : null;
 
   const counts: Partial<Record<DecisionsView, number>> = {
-    decisions: data ? allCollecting.length + waiting.length : undefined,
+    // Everything open, the Minter Admin polls too (Simon, 2026-10-18: "I want all decisions to
+    // include the Ask MAs").
+    decisions: data
+      ? allCollecting.length +
+        waiting.length +
+        (isAdmin ? (adminPolls.views ?? []).filter((v) => v.open).length : 0)
+      : undefined,
     nominations: nominationsQ.data
       ? nominationsQ.data.open.filter((n) => n.nominee !== me).length
       : undefined,
