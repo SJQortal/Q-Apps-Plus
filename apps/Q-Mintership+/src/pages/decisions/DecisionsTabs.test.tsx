@@ -205,12 +205,12 @@ describe('Decisions: swipes between tabs', () => {
     await open('admin');
     await screen.findByRole('article', { name: /Add to MINTER, bob\+builder/ }, T);
     const names = screen.getAllByRole('tab').map((t) => t.textContent);
-    // After the three, the kinds that have something open (Simon, 2026-10-18).
-    expect(names.slice(0, 3).map((n) => n?.replace(/\s*\d+$/, ''))).toEqual([
+    // All Decisions and Nominations, the kinds that have something open, then Ready to mint last.
+    expect(names.slice(0, 2).map((n) => n?.replace(/\s*\d+$/, ''))).toEqual([
       'All Decisions',
       'Nominations',
-      'Ready to mint',
     ]);
+    expect(names[names.length - 1]).toMatch(/^Ready to mint \d+$/);
     expect(names).toEqual(
       expect.arrayContaining([
         expect.stringMatching(/^New MAs \d+$/),
