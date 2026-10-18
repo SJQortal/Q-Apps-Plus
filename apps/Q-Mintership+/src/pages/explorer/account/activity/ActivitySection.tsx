@@ -100,8 +100,9 @@ function ReadLine({ state }: { state: ActivityState }) {
   const oldest = list.length ? list[list.length - 1].timestamp : null;
   let words: string;
   if (!list.length) words = rows.done ? 'No transactions found.' : 'Reading its transactions…';
+  // Everything is read: said plainly, so no Read older is missed (Simon, 2026-10-18, on a phone).
   else if (rows.done)
-    words = `All ${plural(list.length, 'transaction')} since ${formatDate(oldest ?? from)}.`;
+    words = `All ${plural(list.length, 'transaction')}, back to its first on ${formatDate(oldest ?? from)}. Nothing older to read.`;
   else
     words = `Its newest ${plural(list.length, 'transaction')}, back to ${formatDate(oldest ?? from)}${
       firstSeenAt ? `. Its history goes back to ${formatDate(firstSeenAt)}` : ''

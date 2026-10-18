@@ -1183,6 +1183,25 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // Activity with older history not read yet: Read older on every size, phones too
+    // (Simon, 2026-10-18). Its first read set to 100, so the funder's history goes past it.
+    {
+      key: 'explorer-activity-older',
+      path: `/explorer/account/${FUNDER.address}?as=nominator`,
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => window.localStorage.setItem(key, value),
+          ['qmintershipplus-explorer-activity-first-read', '100']
+        );
+        await page.reload({ waitUntil: 'load' });
+        await explorerSettle(page);
+        await page.locator('#overview-activity-title').scrollIntoViewIfNeeded({ timeout: 8000 });
+        const older = page.getByRole('button', { name: 'Read 100 older' });
+        await older.waitFor({ timeout: 8000 });
+        await older.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(400);
+      },
+    },
     // A viewer who doesn't see the Explorer's detailed parts (Simon, 2026-10-18): no
     // Connections, Compare, direct links, chart or QORT facts.
     {

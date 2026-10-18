@@ -377,7 +377,12 @@ describe('Overview: its activity over time', () => {
     );
     // What was read, and each family with its count (a toggle to hide it).
     await waitFor(
-      () => expect(within(activity).getByText(/^All \d+ transactions? since /)).toBeInTheDocument(),
+      () =>
+        expect(
+          within(activity).getByText(
+            /^All \d+ transactions?, back to its first on .+\. Nothing older to read\.$/
+          )
+        ).toBeInTheDocument(),
       T
     );
     const legend = within(activity).getByRole('list', {
