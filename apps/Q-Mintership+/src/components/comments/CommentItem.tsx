@@ -3,7 +3,9 @@
  * "More" menu (Edit and Delete for your own; Mute on this device for
  * others'; Hide for everyone or Show again for Minter Admins). A deleted
  * comment reads "Deleted" in its place; one a Minter Admin hid, or from a
- * name you muted, is folded away with "Show anyway".
+ * name you muted, is folded away with "Show anyway". One for the Minter
+ * Admins only says so beside its writer ("Minter Admins only", with a lock),
+ * and is never hidden for everyone (only Minter Admins read it).
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { alpha, Box, Button, ButtonBase, Typography, type ChipProps } from '@mui/material';
@@ -15,6 +17,7 @@ import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import VolumeOffOutlinedIcon from '@mui/icons-material/VolumeOffOutlined';
 import VolumeUpOutlinedIcon from '@mui/icons-material/VolumeUpOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { getNameOwner } from '../../data/accounts';
 import type { CommentView } from '../../data/commentThread';
 import { useQuery } from '../../hooks/useQuery';
@@ -90,6 +93,20 @@ function AnswerBadgeChip({ badge }: { badge: AnswerBadge }) {
       color={BADGE_TONE[badge.kind]}
       icon={badge.kind === 'considering' ? <VisibilityOutlinedIcon aria-hidden /> : undefined}
       label={label}
+      sx={{ fontWeight: 600 }}
+    />
+  );
+}
+
+/** Beside the writer of a comment for the Minter Admins only. */
+function AdminsOnlyMark() {
+  return (
+    <ToneChip
+      size="small"
+      variant="outlined"
+      color="secondary"
+      icon={<LockOutlinedIcon aria-hidden />}
+      label="Minter Admins only"
       sx={{ fontWeight: 600 }}
     />
   );
@@ -234,7 +251,7 @@ export function CommentItem(props: CommentItemProps) {
               onSelect: () => props.onMute(c.name, true),
             }
       );
-      if (viewer.isAdmin && viewer.name && !c.deleted)
+      if (viewer.isAdmin && viewer.name && !c.deleted && !c.adminOnly)
         actions.push(
           c.hidden
             ? {
@@ -289,6 +306,7 @@ export function CommentItem(props: CommentItemProps) {
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1 }}>
           <PersonByName name={c.name} size={isReply ? 24 : 28} secondary={when} />
           {badge ? <AnswerBadgeChip badge={badge} /> : null}
+          {c.adminOnly ? <AdminsOnlyMark /> : null}
         </Box>
         {isReply && c.replyToName ? <ReplyQuote comment={c} /> : null}
         <Box ref={bodyRef} tabIndex={-1} sx={{ outline: 'none', minWidth: 0 }}>
@@ -314,7 +332,12 @@ export function CommentItem(props: CommentItemProps) {
           )}
         </Box>
         {c.pending ? (
-          <Muted>{props.pendingText ?? 'Publishing… everyone sees it once QDN has it.'}</Muted>
+          <Muted>
+            {props.pendingText ??
+              (c.adminOnly
+                ? 'Publishing… the other Minter Admins see it once QDN has it.'
+                : 'Publishing… everyone sees it once QDN has it.')}
+          </Muted>
         ) : readable && !editor && props.onReply ? (
           <Box>
             <Button

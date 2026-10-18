@@ -16,9 +16,13 @@
  * Becoming one can come with a short statement, posted under the member's
  * registered name as the proposal's first public comment: one more Hub step
  * (PUBLISH_QDN_RESOURCE, 0.01 QORT), only when something is written.
+ * Stepping down can come with a note for the Minter Admins, encrypted to
+ * them (AdminNoteField.tsx), the same way.
  */
 import { useState } from 'react';
-import { TextField, Typography } from '@mui/material';
+import { Box, TextField, Typography } from '@mui/material';
+import { AdminNoteField } from '../../components/decision/AdminNoteField';
+import { adminNoteFollowUp } from '../../components/decision/adminNoteStep';
 import { getPrimaryName } from '../../data/accounts';
 import { decisionCommentKey } from '../../data/commentRecords';
 import type { DecisionsData } from '../../data/decisions';
@@ -95,6 +99,7 @@ export function AdminRoleDialog({
   returnFocus,
 }: AdminRoleDialogProps) {
   const [statement, setStatement] = useState('');
+  const [adminNote, setAdminNote] = useState('');
   const shift = useShift(mode === 'stepDown' ? queue : null);
   const impact =
     shift && signer
@@ -117,8 +122,9 @@ export function AdminRoleDialog({
   const become = mode === 'become';
   const levelNote = become && level !== undefined ? becomeLevelNote(level) : null;
   const text = statement.trim();
-  const followUp =
-    become && name && text
+  const followUp = !become
+    ? adminNoteFollowUp({ ...signer, name }, adminNote)
+    : name && text
       ? {
           step: {
             action: 'PUBLISH_QDN_RESOURCE',
@@ -185,10 +191,20 @@ export function AdminRoleDialog({
             )}
           </>
         ) : (
-          <Typography>
-            You stay a MINTER member, and your level and minting don’t change. Until it is approved
-            you are still a Minter Admin and can approve and reject as usual.
-          </Typography>
+          <>
+            <Typography>
+              You stay a MINTER member, and your level and minting don’t change. Until it is
+              approved you are still a Minter Admin and can approve and reject as usual.
+            </Typography>
+            <Box sx={{ mt: 2 }}>
+              <AdminNoteField
+                value={adminNote}
+                onChange={setAdminNote}
+                name={name}
+                admins={queue?.admins.signers.length ?? 0}
+              />
+            </Box>
+          </>
         )
       }
       followUp={followUp}

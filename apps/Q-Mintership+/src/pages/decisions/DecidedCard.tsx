@@ -3,13 +3,16 @@
  * about whom, who proposed it, how it ended and when (approved, rejected,
  * expired, not applied, or applied at once before MINTER needed
  * approvals), and which Minter Admins approved and rejected it, in two
- * columns (AnswerColumns).
+ * columns (AnswerColumns). Minter Admins also see its proposer's note for
+ * the Minter Admins (AdminNote).
  */
 import { Box, Typography, type ChipProps } from '@mui/material';
 import type { ChainNow } from '../../data/chain';
 import type { DecisionLink } from '../../data/decisionLink';
 import { PersonChip, PersonInline } from '../../components/common/Person';
 import { AnswerColumns, type AnswerPerson } from '../../components/decision/AnswerColumns';
+import { AdminNote } from '../../components/decision/AdminNote';
+import { decisionNoteTarget } from '../../data/adminNotes';
 import { Card, ToneChip } from '../../components/common/Section';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import {
@@ -68,6 +71,17 @@ export function DecidedCard({
       ? adminNames.get(r.creatorAddress as string)
       : undefined,
   });
+  // The proposer's note for the Minter Admins (an invite's is its nomination's, not read here).
+  const noteTarget =
+    kind !== 'invite' && creator
+      ? decisionNoteTarget({
+          signature: tx.signature,
+          kind,
+          subject,
+          createdAt: tx.timestamp,
+          creatorAddress: creator,
+        })
+      : null;
   const approvers = link.approvals.filter((r) => r.creatorAddress).map(person);
   const rejecters = link.rejections.filter((r) => r.creatorAddress).map(person);
 
@@ -110,6 +124,8 @@ export function DecidedCard({
           ) : null}
         </Box>
       ) : null}
+
+      <AdminNote target={noteTarget} near label={subject ? `${title}: ${who.label}` : title} />
 
       {creator ? (
         <Typography component="div" variant="body2" color="text.secondary">

@@ -19,6 +19,8 @@ beforeEach(() => {
 afterEach(() => vi.useRealTimers());
 vi.setConfig({ testTimeout: 30_000 });
 
+/** A search of the polls' own records (not the notes or comments for the Minter Admins). */
+const POLL_SEARCH = /identifier=qmp-admin(poll|vote|comment|share)-/;
 const user = () => userEvent.setup();
 const T = { timeout: 6000 };
 const OPEN_Q = 'Should only level 5+ minters become Minter Admins?';
@@ -277,8 +279,9 @@ describe('Decisions → Minter Admin polls', () => {
   it('reads: four searches of 100 for the whole section, bodies decrypted in Hub', async () => {
     await openDecisions();
     await pollCard(OPEN_Q);
-    const searches = fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) =>
-      p.includes('DOCUMENT_PRIVATE')
+    // The polls' own searches (the notes and comments for the Minter Admins have theirs).
+    const searches = fetchCallsFor('/arbitrary/resources/searchsimple').filter(
+      (p) => p.includes('DOCUMENT_PRIVATE') && POLL_SEARCH.test(p)
     );
     expect(searches).toHaveLength(4);
     expect(searches.every((p) => /limit=100/.test(p) && /reverse=true/.test(p))).toBe(true);
@@ -662,8 +665,8 @@ describe('Refresh', () => {
     await openDecisions();
     await pollCard(OPEN_Q);
     const searches = () =>
-      fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) =>
-        p.includes('DOCUMENT_PRIVATE')
+      fetchCallsFor('/arbitrary/resources/searchsimple').filter(
+        (p) => p.includes('DOCUMENT_PRIVATE') && POLL_SEARCH.test(p)
       ).length;
     expect(searches()).toBe(4);
     const decrypted = qortalCallsFor('DECRYPT_DATA').length;

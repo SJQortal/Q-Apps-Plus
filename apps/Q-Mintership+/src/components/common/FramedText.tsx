@@ -1,11 +1,12 @@
 /**
  * Someone's own words set apart from a card's other lines, in a framed
  * box (an accent border on a light tint): a nomination's reason with its
- * links, a Minter Admin poll's details. Shown in full on wider screens. On
+ * links, a Minter Admin poll's details, a note for the Minter Admins (with
+ * its `heading` inside the frame). Shown in full on wider screens. On
  * phones a long text shows its first lines with a button (only when it is
  * really cut off: measured); compact cards keep three lines, no button.
  */
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { accentWash } from '../../hub-theme';
 import { useClamped } from '../../hooks/useClamped';
@@ -20,8 +21,14 @@ export function FramedText({
   links = [],
   moreLabel = 'Show more',
   compact = false,
+  heading,
+  footer,
 }: {
   text: string;
+  /** A line at the top, inside the frame (what kind of text it is). */
+  heading?: ReactNode;
+  /** A line at the bottom, inside the frame (who wrote it). */
+  footer?: ReactNode;
   /** qortal:// links shown under the text, inside the frame. */
   links?: string[];
   /** The phone button's words: "Show the whole reason", "Show more". */
@@ -51,6 +58,7 @@ export function FramedText({
         bgcolor: accentWash(theme, 0.08),
       })}
     >
+      {heading}
       <Typography
         ref={setNode}
         id={id}
@@ -81,6 +89,7 @@ export function FramedText({
         </Button>
       ) : null}
       {links.length ? <QortalLinks links={links} /> : null}
+      {footer}
     </Box>
   );
 }

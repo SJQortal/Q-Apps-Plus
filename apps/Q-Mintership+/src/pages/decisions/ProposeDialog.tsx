@@ -13,6 +13,10 @@
  * page instead: that is the one place to step down. Decline a join request
  * is a kick of someone on Ready to mint, worded as declining (it opens from
  * a Ready to mint row too, with the person picked).
+ *
+ * Any proposal can carry a note for the Minter Admins (Simon, 2026-10-18):
+ * an extra description encrypted to them only, published as one more Hub
+ * step once the proposal is in (AdminNoteField.tsx).
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -64,6 +68,10 @@ import type { ShiftScenario } from '../../rules/targetShift';
 import type { LabelOf } from './targetShiftUi';
 import { focusDialogTitle } from '../../utils/focus';
 import { markedNameNote } from '../../rules/markedName';
+import { useSession } from '../../state/session';
+import { AdminNoteField, AdminNoteReview } from '../../components/decision/AdminNoteField';
+import { adminNoteFollowUp } from '../../components/decision/adminNoteStep';
+import type { AdminWriter } from '../../writes/adminNotes';
 
 export interface ProposeContext extends ProposalFacts {
   totalAdmins: number;
@@ -130,7 +138,9 @@ export function ProposeDialog({
   const [banMode, setBanMode] = useState<'permanent' | 'days'>('permanent');
   const [days, setDays] = useState('7');
   const [touched, setTouched] = useState(false);
+  const [note, setNote] = useState('');
   const [presetFor, setPresetFor] = useState<string | null>(null);
+  const session = useSession();
   const banLabelId = useId();
   const reasonRef = useRef<HTMLInputElement | null>(null);
   const daysRef = useRef<HTMLInputElement | null>(null);
@@ -150,6 +160,7 @@ export function ProposeDialog({
     setBanMode('permanent');
     setDays('7');
     setTouched(false);
+    setNote('');
   }
 
   // Run the write's own check whenever the person changes (`signer` is stable per account).
@@ -407,6 +418,15 @@ export function ProposeDialog({
             fullWidth
           />
         ) : null}
+
+        {stepDown ? null : (
+          <AdminNoteField
+            value={note}
+            onChange={setNote}
+            name={session.name}
+            admins={ctx.signers.length}
+          />
+        )}
       </ResponsiveDialog>
 
       {person ? (
@@ -416,6 +436,8 @@ export function ProposeDialog({
           person={person}
           reason={reason.trim()}
           banSeconds={'seconds' in ban ? ban.seconds : 0}
+          note={session.name ? note : ''}
+          writer={signer ? { ...signer, name: session.name } : null}
           signer={signer}
           ctx={ctx}
           onClose={close}
@@ -696,6 +718,8 @@ function ProposeHubStep({
   person,
   reason,
   banSeconds,
+  note,
+  writer,
   signer,
   ctx,
   onClose,
@@ -707,6 +731,9 @@ function ProposeHubStep({
   person: Person;
   reason: string;
   banSeconds: number;
+  /** The note for the Minter Admins ('' for none). */
+  note: string;
+  writer: AdminWriter | null;
   signer: Signer;
   ctx: ProposeContext;
   onClose: () => void;
@@ -715,6 +742,7 @@ function ProposeHubStep({
   returnFocus?: () => HTMLElement | null;
 }) {
   const who = useDisplayName(person.address, person.name);
+  const followUp = adminNoteFollowUp(writer, note);
   return (
     <ProposeSignDialog
       open={open}
@@ -731,7 +759,7 @@ function ProposeHubStep({
       impact={ctx.projectImpact?.(kind, person.address) ?? null}
       labelOf={ctx.labelOf}
       details={
-        kind === 'ban' || reason ? (
+        kind === 'ban' || reason || followUp ? (
           <>
             {kind === 'ban' ? (
               <Typography>
@@ -744,9 +772,11 @@ function ProposeHubStep({
                 <b>Reason:</b> {reason}
               </Typography>
             ) : null}
+            {followUp ? <AdminNoteReview text={note} /> : null}
           </>
         ) : null
       }
+      followUp={followUp}
       onClose={onClose}
       onBack={onBack}
       returnFocus={returnFocus}

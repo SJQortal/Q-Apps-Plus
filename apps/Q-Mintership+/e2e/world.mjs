@@ -2009,6 +2009,94 @@ export function addAdminPolls(world) {
 }
 
 /**
+ * Notes and comments for the Minter Admins only (DOCUMENT_PRIVATE, encrypted
+ * to the Minter Admins who can sign, served with the polls: answerAdminPolls),
+ * as Avery Admin sees them:
+ *
+ * - the kick of Kai Target: its proposer Admin E's note, and a note under the
+ *   same identifier by Admin F, who didn't propose it (ignored);
+ * - bob+builder's nomination: its nominator Nora Nominator's note, under
+ *   their address (it shows on the invite too);
+ * - bob+builder's invite: a comment by Admin D ΑΩ, a reply by Admin E to
+ *   Admin C's public comment (addComments), one by Nora Nominator, who isn't a
+ *   Minter Admin (ignored), and one by Admin F that wasn't encrypted to Avery.
+ *
+ * Returns the keys and identifiers, for tests.
+ */
+export function addAdminNotes(world) {
+  const MIN = 60_000;
+  const nameOf = (address) => world.accounts.get(address)?.name;
+  const signers = world.admins.filter((a) => a !== NULL_OWNER);
+  const records = (world.adminPollRecords = world.adminPollRecords ?? []);
+  const publish = (address, identifier, created, body, readers = signers) =>
+    records.push({
+      name: nameOf(address) ?? address,
+      identifier,
+      created,
+      readers: [...new Set([...readers, address])],
+      body,
+    });
+  const admin = (i) => fakeAddress(`admin-${i}`);
+  const kick = world.pending.find((t) => t.type === 'GROUP_KICK' && t.member === ADDR.kickTarget);
+  const signing = world.pending.find(
+    (t) => t.type === 'GROUP_INVITE' && t.invitee === ADDR.nominatedSigning
+  );
+  const kickKey = kick.signature.slice(0, 40);
+  const inviteKey = signing.signature.slice(0, 40);
+  const nomineeKey = ADDR.nominatedSigning;
+  const ids = {
+    kickNote: `qmp-adminnote-${kickKey}`,
+    nominationNote: `qmp-adminnote-${nomineeKey}`,
+    concern: `qmp-macomment-${inviteKey}-mac001`,
+    checked: `qmp-macomment-${inviteKey}-mac002`,
+    notAdmin: `qmp-macomment-${inviteKey}-mac003`,
+    locked: `qmp-macomment-${inviteKey}-mac004`,
+  };
+  const texts = {
+    kickNote:
+      'Kai’s node has been offline since March. I asked them twice in Q-Chat and got no answer.',
+    nominationNote: 'They asked me not to share their Q-Chat group publicly: it is in my notes.',
+    concern: 'Their node was offline for two days last week; worth asking them before approving.',
+    checked: 'I checked their payments: nothing unusual.',
+  };
+  publish(admin(4), ids.kickNote, kick.timestamp + 5 * MIN, {
+    v: 1,
+    key: kickKey,
+    text: texts.kickNote,
+  });
+  publish(admin(5), ids.kickNote, kick.timestamp + 9 * MIN, {
+    v: 1,
+    key: kickKey,
+    text: 'Not the proposer: this note never shows.',
+  });
+  publish(ADDR.nominator, ids.nominationNote, NOW - 4 * 86_400_000 + 2 * MIN, {
+    v: 1,
+    key: nomineeKey,
+    text: texts.nominationNote,
+  });
+  publish(admin(3), ids.concern, NOW - 90 * MIN, { v: 1, key: inviteKey, text: texts.concern });
+  publish(admin(4), ids.checked, NOW - 60 * MIN, {
+    v: 1,
+    key: inviteKey,
+    text: texts.checked,
+    replyTo: `qmp-comment-${inviteKey}-bob002`,
+  });
+  publish(ADDR.nominator, ids.notAdmin, NOW - 50 * MIN, {
+    v: 1,
+    key: inviteKey,
+    text: 'Not a Minter Admin: this never shows.',
+  });
+  publish(
+    admin(5),
+    ids.locked,
+    NOW - 40 * MIN,
+    { v: 1, key: inviteKey, text: 'Not encrypted to Avery.' },
+    signers.filter((a) => a !== ADDR.admin)
+  );
+  return { kickKey, inviteKey, nomineeKey, ids, texts };
+}
+
+/**
  * Answer the reads of Minter Admin polls: DOCUMENT_PRIVATE searches, their
  * bodies (`?encoding=base64`, encrypted with mockEncrypt to each record's
  * readers) and public keys. Undefined for anything else.

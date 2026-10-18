@@ -5,11 +5,27 @@
  * and replying, editing, deleting, hiding (Minter Admins) and muting (this
  * device). Every write is explained in its Hub step first, and shows at once
  * once Hub sends it. Refreshes every minute while open and visible.
+ *
+ * A Minter Admin also reads the comments for the Minter Admins only, in the
+ * same thread (data/adminNotes.ts, decrypted with their key), and picks for
+ * each new comment who can read it: everyone, or the Minter Admins only
+ * (encrypted to them). A reply to one for the Minter Admins is one too; an
+ * edit keeps its comment's kind. Nobody else reads or sees them.
  */
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { Box, Button, TextField, Typography } from '@mui/material';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  Box,
+  Button,
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  TextField,
+  Typography,
+} from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { COMMENT_MAX, commentTextProblems, type CommentRecord } from '../../data/commentRecords';
+import { adminThreadKey, loadAdminThread, type AdminThreadData } from '../../data/adminNotes';
 import {
   COMMENTS_PAGE,
   commentThreadKey,
@@ -22,9 +38,10 @@ import { useAdmins } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
 import { settleOptimistic, useMutedNames, useOptimisticComments } from '../../state/comments';
 import { signIn, signerOf, useSession } from '../../state/session';
-import { formatCount } from '../../utils/format';
+import { formatCount, plural } from '../../utils/format';
 import { openQortalLink } from '../../utils/links';
 import { deleteComment, editComment, postComment, setCommentHidden } from '../../writes/comments';
+import { deleteAdminComment, editAdminComment, postAdminComment } from '../../writes/adminNotes';
 import type { WriteStage } from '../../writes/runner';
 import { focusElement } from '../../utils/focus';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../common/states';
@@ -41,8 +58,17 @@ import type { AnswerBadges } from './answerBadges';
 
 const REFRESH_MS = 60_000;
 
+/** Who a new comment is for: everyone, or the Minter Admins only (encrypted to them). */
+export type CommentAudience = 'public' | 'admins';
+
 type Dialog =
-  | { kind: 'publish'; mode: PublishMode; text: string; about: CommentView | null }
+  | {
+      kind: 'publish';
+      mode: PublishMode;
+      text: string;
+      about: CommentView | null;
+      audience: CommentAudience;
+    }
   | { kind: 'delete'; comment: CommentView }
   | { kind: 'hide'; comment: CommentView; hide: boolean };
 
@@ -53,6 +79,15 @@ interface Inline {
   thread: string;
   text: string;
   error: string | null;
+  /** A reply's: picked by a Minter Admin, or the Minter Admins only under one of theirs. */
+  audience: CommentAudience;
+}
+
+/** Comments for the Minter Admins here that weren't encrypted to the viewer: why the count is higher. */
+function lockedText(count: number): string {
+  return count === 1
+    ? '1 comment for the Minter Admins here wasn’t encrypted to you, so it isn’t shown.'
+    : `${formatCount(count)} comments for the Minter Admins here weren’t encrypted to you, so they aren’t shown.`;
 }
 
 export interface CommentsPanelProps {
@@ -69,12 +104,15 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   const author = signer && session.name ? { ...signer, name: session.name } : null;
   const admins = useAdmins();
   const isAdmin = Boolean(signer && admins.data?.signers.some((a) => a.member === signer.address));
+  const adminCount = admins.data?.signers.length ?? 0;
   const viewer: CommentViewer = {
     signedIn: Boolean(signer),
     address: signer?.address ?? '',
     name: signer ? session.name : null,
     isAdmin,
   };
+  // What a Minter Admin writes for the Minter Admins only goes under their name, encrypted.
+  const adminWriter = isAdmin && signer ? { ...signer, name: session.name } : null;
 
   const [limit, setLimit] = useState(COMMENTS_PAGE);
   const query = useQuery(
@@ -87,22 +125,45 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   if (query.data && query.data !== kept) setKept(query.data);
   const data = query.data ?? kept;
 
+  // A Minter Admin's: the comments for the Minter Admins, once the public ones are in
+  // (a reply among them may answer one of those).
+  const viewerAddress = signer?.address ?? '';
+  const adminQuery = useQuery(
+    isAdmin && data ? adminThreadKey(viewerAddress, target, limit) : null,
+    (force) => loadAdminThread(viewerAddress, target, data?.rows ?? [], limit, { force }),
+    { refreshMs: REFRESH_MS }
+  );
+  const [keptAdmin, setKeptAdmin] = useState<AdminThreadData | null>(null);
+  if (adminQuery.data && adminQuery.data !== keptAdmin) setKeptAdmin(adminQuery.data);
+  const adminData = isAdmin ? (adminQuery.data ?? keptAdmin) : null;
+
   const { muted, setMuted } = useMutedNames();
   const keys = useMemo(() => target.keys.map((k) => k.key), [target]);
   const optimistic = useOptimisticComments(keys);
+  // Both kinds in one thread: the public bodies win for public comments.
+  const merged = useMemo(() => {
+    if (!data) return null;
+    if (!adminData) return { rows: data.rows, bodies: data.bodies };
+    return {
+      rows: [...data.rows, ...adminData.rows],
+      bodies: new Map([...adminData.bodies, ...data.bodies]),
+    };
+  }, [data, adminData]);
   const threads = useMemo(
     () =>
-      data
+      merged && data
         ? buildThreads({
-            rows: data.rows,
-            bodies: data.bodies,
+            rows: merged.rows,
+            bodies: merged.bodies,
             hides: data.hides,
             muted,
-            optimistic: optimistic.comments,
+            optimistic: isAdmin
+              ? optimistic.comments
+              : optimistic.comments.filter((o) => !o.adminOnly),
             optimisticHides: optimistic.hides,
           })
         : null,
-    [data, muted, optimistic]
+    [merged, data, muted, optimistic, isAdmin]
   );
   // Show more: once the next comments are in, focus goes to the first of them
   // (the button may have gone with the last page).
@@ -128,14 +189,22 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   };
 
   useEffect(() => {
-    if (!data) return;
+    if (!merged || !data) return;
     const loaded = new Map<string, CommentRecord>();
-    for (const [ref, body] of data.bodies) if (body.status === 'ok') loaded.set(ref, body.record);
+    for (const [ref, body] of merged.bodies) if (body.status === 'ok') loaded.set(ref, body.record);
     settleOptimistic(loaded, data.hides);
-  }, [data]);
+  }, [merged, data]);
 
   const [draft, setDraft] = useState('');
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [draftAudience, setDraftAudience] = useState<CommentAudience>('public');
+  // Only a Minter Admin picks; everyone else writes in public.
+  const audienceOf = (picked: CommentAudience): CommentAudience =>
+    adminWriter ? picked : 'public';
+  const audienceHint = (audience: CommentAudience) =>
+    audience === 'admins'
+      ? `Encrypted to the ${plural(adminCount, 'Minter Admin')}, under your name ${session.name ?? ''}.`
+      : `Public, under your name ${session.name ?? ''}.`;
   const [inline, setInline] = useState<Inline | null>(null);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -152,7 +221,13 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
     const problems = commentTextProblems(draft);
     setDraftError(problems[0] ?? null);
     if (problems.length) return false;
-    openDialog({ kind: 'publish', mode: 'post', text: draft, about: null });
+    openDialog({
+      kind: 'publish',
+      mode: 'post',
+      text: draft,
+      about: null,
+      audience: audienceOf(draftAudience),
+    });
     return true;
   };
   const submitInline = (event: FormEvent) => {
@@ -164,7 +239,19 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
       return false;
     }
     setInline({ ...inline, error: null });
-    openDialog({ kind: 'publish', mode: inline.mode, text: inline.text, about: inline.comment });
+    openDialog({
+      kind: 'publish',
+      mode: inline.mode,
+      text: inline.text,
+      about: inline.comment,
+      // An edit keeps its comment's kind.
+      audience:
+        inline.mode === 'edit'
+          ? inline.comment.adminOnly
+            ? 'admins'
+            : 'public'
+          : audienceOf(inline.audience),
+    });
     return true;
   };
   // Cancel on a reply or an edit: back to the comment it was about (the editor goes away).
@@ -182,13 +269,30 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
       });
     if (dialog.mode === 'edit' && dialog.about) {
       const c = dialog.about;
-      return editComment(
-        signer,
-        { name: c.name, identifier: c.identifier, key: c.key, replyTo: c.replyTo },
-        dialog.text,
+      const ref = { name: c.name, identifier: c.identifier, key: c.key, replyTo: c.replyTo };
+      if (c.adminOnly) {
+        if (!adminWriter)
+          return Promise.resolve({
+            outcome: {
+              status: 'blocked' as const,
+              reason: 'Only Minter Admins can edit a comment for the Minter Admins.',
+            },
+            identifier: '',
+          });
+        return editAdminComment(adminWriter, ref, dialog.text, onStage);
+      }
+      return editComment(signer, ref, dialog.text, onStage);
+    }
+    if (dialog.audience === 'admins' && adminWriter)
+      return postAdminComment(
+        adminWriter,
+        {
+          key: target.postKey,
+          text: dialog.text,
+          replyTo: dialog.mode === 'reply' ? dialog.about?.identifier : null,
+        },
         onStage
       );
-    }
     if (!author)
       return Promise.resolve({
         outcome: {
@@ -213,10 +317,27 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   const returnFocus = () =>
     about ? document.querySelector<HTMLElement>(`[data-comment="${about.identifier}"]`) : null;
 
+  // A reply to one for the Minter Admins is one too; otherwise a Minter Admin picks.
+  const startReply = (c: CommentView, thread: string) =>
+    setInline({
+      mode: 'reply',
+      comment: c,
+      thread,
+      text: '',
+      error: null,
+      audience: c.adminOnly ? 'admins' : 'public',
+    });
   const itemHandlers = {
     answers,
     onEdit: (c: CommentView) =>
-      setInline({ mode: 'edit', comment: c, thread: '', text: c.text, error: null }),
+      setInline({
+        mode: 'edit',
+        comment: c,
+        thread: '',
+        text: c.text,
+        error: null,
+        audience: c.adminOnly ? 'admins' : 'public',
+      }),
     onDelete: (c: CommentView) => openDialog({ kind: 'delete', comment: c }),
     onHide: (c: CommentView, hide: boolean) => openDialog({ kind: 'hide', comment: c, hide }),
     onMute: (name: string, mute: boolean) => {
@@ -259,7 +380,15 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
     );
   } else {
     const now = Date.now();
-    const unread = data.rows.filter((r) => !data.bodies.has(r.ref)).length;
+    const lockedCount = adminData?.locked ?? 0;
+    const unread =
+      data.rows.filter((r) => !data.bodies.has(r.ref)).length +
+      (adminData
+        ? Math.max(
+            0,
+            adminData.rows.filter((r) => !adminData.bodies.has(r.ref)).length - lockedCount
+          )
+        : 0);
     list = (
       <>
         <Box
@@ -278,18 +407,7 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
                 viewer={viewer}
                 now={now}
                 editor={editorFor(t.comment)}
-                onReply={
-                  author
-                    ? (c) =>
-                        setInline({
-                          mode: 'reply',
-                          comment: c,
-                          thread: t.comment.ref,
-                          text: '',
-                          error: null,
-                        })
-                    : undefined
-                }
+                onReply={author ? (c) => startReply(c, t.comment.ref) : undefined}
                 {...itemHandlers}
               >
                 {t.replies.length ? (
@@ -302,18 +420,7 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
                         now={now}
                         isReply
                         editor={editorFor(r)}
-                        onReply={
-                          author
-                            ? (c) =>
-                                setInline({
-                                  mode: 'reply',
-                                  comment: c,
-                                  thread: t.comment.ref,
-                                  text: '',
-                                  error: null,
-                                })
-                            : undefined
-                        }
+                        onReply={author ? (c) => startReply(c, t.comment.ref) : undefined}
                         {...itemHandlers}
                       />
                     ))}
@@ -330,6 +437,16 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
                       onCancel={cancelInline}
                       submitLabel="Post reply"
                       autoFocus
+                      hint={audienceHint(audienceOf(replying.audience))}
+                      audience={
+                        adminWriter
+                          ? {
+                              value: replying.audience,
+                              onChange: (audience) => setInline({ ...replying, audience }),
+                              fixed: Boolean(replying.comment.adminOnly),
+                            }
+                          : undefined
+                      }
                     />
                   </ReplyComposerBox>
                 ) : null}
@@ -337,7 +454,12 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
             );
           })}
         </Box>
-        {data.truncated ? <TruncatedNote what="the comments" /> : null}
+        {data.truncated || adminData?.truncated ? <TruncatedNote what="the comments" /> : null}
+        {lockedCount ? (
+          <Typography variant="body2" color="text.secondary">
+            {lockedText(lockedCount)}
+          </Typography>
+        ) : null}
         {unread > 0 ? (
           <Box>
             <Button variant="outlined" onClick={showMore} sx={{ minHeight: 44 }}>
@@ -371,7 +493,10 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
             }}
             onSubmit={submitDraft}
             submitLabel="Post"
-            hint={`Public, under your name ${session.name ?? ''}.`}
+            hint={audienceHint(audienceOf(draftAudience))}
+            audience={
+              adminWriter ? { value: draftAudience, onChange: setDraftAudience } : undefined
+            }
           />
         }
       />
@@ -388,11 +513,14 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
           text={dialog.text}
           name={dialog.mode === 'edit' && dialog.about ? dialog.about.name : (author?.name ?? '')}
           replyingTo={dialog.mode === 'reply' ? dialog.about?.name : null}
+          adminsOnly={dialog.audience === 'admins' ? adminCount : null}
           publish={publish}
           returnFocus={returnFocus}
           onSent={() => {
-            if (dialog.mode === 'post') setDraft('');
-            else setInline(null);
+            if (dialog.mode === 'post') {
+              setDraft('');
+              setDraftAudience('public');
+            } else setInline(null);
           }}
         />
       ) : null}
@@ -401,19 +529,26 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
           open={dialogOpen}
           onClose={closeDialog}
           name={dialog.comment.name}
+          adminsOnly={dialog.comment.adminOnly ? adminCount : null}
           returnFocus={returnFocus}
-          publish={(onStage) =>
-            deleteComment(
-              signer,
-              {
-                name: dialog.comment.name,
-                identifier: dialog.comment.identifier,
-                key: dialog.comment.key,
-                replyTo: dialog.comment.replyTo,
-              },
-              onStage
-            )
-          }
+          publish={(onStage) => {
+            const ref = {
+              name: dialog.comment.name,
+              identifier: dialog.comment.identifier,
+              key: dialog.comment.key,
+              replyTo: dialog.comment.replyTo,
+            };
+            if (!dialog.comment.adminOnly) return deleteComment(signer, ref, onStage);
+            if (!adminWriter)
+              return Promise.resolve({
+                outcome: {
+                  status: 'blocked' as const,
+                  reason: 'Only Minter Admins can delete a comment for the Minter Admins.',
+                },
+                identifier: '',
+              });
+            return deleteAdminComment(adminWriter, ref, onStage);
+          }}
         />
       ) : null}
       {dialog?.kind === 'hide' && author ? (
@@ -526,6 +661,7 @@ export function Composer({
   submitLabel,
   hint,
   autoFocus,
+  audience,
 }: {
   label: string;
   value: string;
@@ -537,8 +673,18 @@ export function Composer({
   submitLabel: string;
   hint?: string;
   autoFocus?: boolean;
+  /**
+   * A Minter Admin's choice of who can read it (none for anyone else); `fixed`
+   * for a reply under a comment for the Minter Admins, which is one too.
+   */
+  audience?: {
+    value: CommentAudience;
+    onChange?: (audience: CommentAudience) => void;
+    fixed?: boolean;
+  };
 }) {
   const field = useRef<HTMLTextAreaElement | null>(null);
+  const audienceLabel = useId();
   // In an effect, not autoFocus: a menu that opened it (More → Edit) puts focus
   // back on its own button as it closes, after autoFocus has run.
   useEffect(() => {
@@ -569,6 +715,49 @@ export function Composer({
         }
         slotProps={{ htmlInput: { maxLength: COMMENT_MAX } }}
       />
+      {audience?.fixed ? (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+        >
+          <LockOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
+          For the Minter Admins only, like the comment it answers.
+        </Typography>
+      ) : audience ? (
+        <Box>
+          <Typography id={audienceLabel} variant="body2" sx={{ fontWeight: 600 }}>
+            Who can read it
+          </Typography>
+          <RadioGroup
+            row
+            aria-labelledby={audienceLabel}
+            value={audience.value}
+            onChange={(e) => audience.onChange?.(e.target.value as CommentAudience)}
+          >
+            <FormControlLabel
+              value="public"
+              control={<Radio />}
+              label="Everyone (public)"
+              sx={{ minHeight: 44, mr: 3 }}
+            />
+            <FormControlLabel
+              value="admins"
+              control={<Radio />}
+              label={
+                <Box
+                  component="span"
+                  sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                >
+                  <LockOutlinedIcon aria-hidden sx={{ fontSize: 18 }} />
+                  Minter Admins only
+                </Box>
+              }
+              sx={{ minHeight: 44 }}
+            />
+          </RadioGroup>
+        </Box>
+      ) : null}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 1 }}>
         {onCancel ? (
           <Button onClick={onCancel} sx={{ minHeight: 44 }}>

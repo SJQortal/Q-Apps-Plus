@@ -57,6 +57,7 @@ import { useAdmins, useChainNow, useGroupInfo, useMyStatus } from '../../hooks/u
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useQuery } from '../../hooks/useQuery';
+import { getAdmins } from '../../data/group';
 import { appParam } from '../../routes/hubLocation';
 import { PROPOSE_NOMINATION, proposeNominationFor } from '../../constants/words';
 import { decisionsViewPath, nominationPath, personPath } from '../../routes/paths';
@@ -68,6 +69,9 @@ import { formatCount, plural } from '../../utils/format';
 import { useLandscapeFrame } from '../../utils/hubFrame';
 import { appLink, copyText } from '../../utils/links';
 import { publishNomination } from '../../writes/flows';
+import { AdminNoteField } from '../../components/decision/AdminNoteField';
+import { adminNoteFollowUp } from '../../components/decision/adminNoteStep';
+import { followUpProblem } from '../decisions/decisionUi';
 import { CandidatePicker, type PickedCandidate } from './CandidatePicker';
 import { CANDIDATE_KEY, candidateBlock, loadCandidate, type Candidate } from './candidate';
 import { isStillOpenForSupport } from './filters';
@@ -175,6 +179,8 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   }
   const [reason, setReason] = useState('');
   const [links, setLinks] = useState<string[]>([]);
+  // A Minter Admin's note for the Minter Admins (encrypted to them), under the nominee's address.
+  const [adminNote, setAdminNote] = useState('');
   const [attempted, setAttempted] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [support, setSupport] = useState<{ open: boolean } | null>(null);
@@ -241,6 +247,11 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
   const signer = signerOf(session);
   const myName = status.name ?? signer?.name ?? '';
   const publishSigner = signer && myName ? { ...signer, name: myName } : null;
+  const noteFollowUp =
+    status.isAdmin && publishSigner
+      ? adminNoteFollowUp(publishSigner, adminNote, (nominee) => nominee)
+      : null;
+  const admins = useQuery(status.isAdmin ? 'group:admins' : null, (force) => getAdmins({ force }));
 
   const choose = (next: PickedCandidate | null) => {
     setPicked(next);
@@ -260,6 +271,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
     setPublished(null);
     setReason('');
     setLinks([]);
+    setAdminNote('');
     setAttempted(false);
     choose(null);
   };
@@ -410,6 +422,21 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
             </Box>
           </Section>
 
+          {status.isAdmin ? (
+            <Section title="For the Minter Admins (optional)" id="admin-note">
+              <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
+                Anything only the Minter Admins should read: it is encrypted to them, and shows
+                under your reason for them alone.
+              </Typography>
+              <AdminNoteField
+                value={adminNote}
+                onChange={setAdminNote}
+                name={publishSigner?.name ?? null}
+                admins={admins.data?.signers.length ?? 0}
+              />
+            </Section>
+          ) : null}
+
           <WhatHappensNext name={picked ? shownName : 'they'} named={Boolean(picked)} />
 
           <Box
@@ -496,6 +523,12 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
               public record under your name, {myName}, on QDN. Anyone can read it, and the Minter
               Admins see it with the nomination.
             </Typography>
+            {noteFollowUp ? (
+              <Typography variant="body2" color="text.secondary">
+                Your note for the Minter Admins follows as a second step, encrypted to them: only
+                they can read it.
+              </Typography>
+            ) : null}
           </Box>
         }
         steps={[
@@ -504,6 +537,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
             title: 'Publish your nomination',
             feeTxType: 'ARBITRARY',
           },
+          ...(noteFollowUp ? [noteFollowUp.step] : []),
         ]}
         run={async (report) => {
           if (!publishSigner || !picked) {
@@ -519,7 +553,19 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
             },
             (stage) => report(0, stage)
           );
-          return { outcome };
+          if (outcome.status !== 'sent' || !noteFollowUp) return { outcome };
+          // The note, once the nomination is sent; its failure never undoes the nomination.
+          const extra = await noteFollowUp.run(picked.address, (stage) => report(1, stage));
+          if (extra.status === 'sent') return { outcome };
+          return {
+            outcome,
+            message: (
+              <Typography variant="body2" sx={{ mt: 0.5 }}>
+                {noteFollowUp.step.title} didn’t go through: {followUpProblem(extra)} Your
+                nomination is in. You can still add the note from its card.
+              </Typography>
+            ),
+          };
         }}
         successTitle="Nomination published"
         successText={

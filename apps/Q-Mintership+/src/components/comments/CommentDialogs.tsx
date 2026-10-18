@@ -2,6 +2,8 @@
  * The Hub step for each comment write, explained before Hub opens (what is
  * published, under which name, and the fee): post, reply, edit, delete,
  * and a Minter Admin's hide or show-again. One PUBLISH_QDN_RESOURCE each.
+ * A comment for the Minter Admins only (`adminsOnly`: how many it is
+ * encrypted to) says so, and that Hub shows it encrypted.
  */
 import { Box, Typography } from '@mui/material';
 import type { CommentWrite } from '../../writes/comments';
@@ -9,6 +11,7 @@ import type { WriteStage } from '../../writes/runner';
 import { HubStepDialog } from '../common/HubStepDialog';
 import { MarkedName } from '../common/MarkedName';
 import { withMarkedName } from '../common/markedText';
+import { encryptedCheck, encryptedTo } from '../common/encryptedWords';
 
 type Publish = (onStage: (stage: WriteStage) => void) => Promise<CommentWrite>;
 /** Where focus goes on close when the button that opened the dialog is gone. */
@@ -45,6 +48,9 @@ function check(name: string, prefix: string): string[] {
 
 const LATER =
   'It shows here now, and for everyone once QDN has it, usually within a minute or two.';
+const LATER_ADMINS =
+  'It shows here now, and for the other Minter Admins once QDN has it, usually within a minute or two.';
+const ADMIN_PREFIX = 'qmp-macomment-';
 
 export function PublishCommentDialog({
   open,
@@ -53,6 +59,7 @@ export function PublishCommentDialog({
   text,
   name,
   replyingTo,
+  adminsOnly = null,
   publish,
   onSent,
   returnFocus,
@@ -66,15 +73,18 @@ export function PublishCommentDialog({
   name: string;
   /** Whose comment a reply answers. */
   replyingTo?: string | null;
+  /** For the Minter Admins only: how many it is encrypted to (null: public). */
+  adminsOnly?: number | null;
   publish: Publish;
   onSent: () => void;
 }) {
+  const admins = adminsOnly !== null;
   return (
     <HubStepDialog
       open={open}
       onClose={onClose}
       returnFocus={returnFocus}
-      title={TITLE[mode]}
+      title={admins ? `${TITLE[mode]} for the Minter Admins` : TITLE[mode]}
       intro={
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           {replyingTo ? (
@@ -96,9 +106,20 @@ export function PublishCommentDialog({
             {text}
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-            {mode === 'edit'
-              ? 'The new version replaces your comment for everyone, marked “edited”.'
-              : `It is published on QDN under your name, ${name}, and anyone can read it.`}{' '}
+            {admins ? (
+              <>
+                {mode === 'edit'
+                  ? 'The new version replaces your comment, marked “edited”.'
+                  : `Published under your name, ${name}.`}{' '}
+                {encryptedTo(adminsOnly ?? 0)}
+              </>
+            ) : (
+              <>
+                {mode === 'edit'
+                  ? 'The new version replaces your comment for everyone, marked “edited”.'
+                  : `It is published on QDN under your name, ${name}, and anyone can read it.`}
+              </>
+            )}{' '}
             You can edit or delete it later; each change is published the same way, with the same
             fee.
           </Typography>
@@ -107,14 +128,14 @@ export function PublishCommentDialog({
       steps={[
         {
           action: 'PUBLISH_QDN_RESOURCE',
-          title: STEP[mode],
-          check: check(name, 'qmp-comment-'),
+          title: admins ? `${STEP[mode]}, encrypted` : STEP[mode],
+          check: admins ? encryptedCheck(name, ADMIN_PREFIX) : check(name, 'qmp-comment-'),
           feeTxType: 'ARBITRARY',
         },
       ]}
       run={async (report) => ({ outcome: (await publish((stage) => report(0, stage))).outcome })}
       successTitle={DONE[mode]}
-      successText={<Typography variant="body2">{LATER}</Typography>}
+      successText={<Typography variant="body2">{admins ? LATER_ADMINS : LATER}</Typography>}
       onSuccess={onSent}
     />
   );
@@ -124,15 +145,19 @@ export function DeleteCommentDialog({
   open,
   onClose,
   name,
+  adminsOnly = null,
   publish,
   returnFocus,
 }: {
   open: boolean;
   onClose: () => void;
   name: string;
+  /** A comment for the Minter Admins only: how many the deletion is encrypted to (null: public). */
+  adminsOnly?: number | null;
   publish: Publish;
   returnFocus?: ReturnFocus;
 }) {
+  const admins = adminsOnly !== null;
   return (
     <HubStepDialog
       open={open}
@@ -141,22 +166,23 @@ export function DeleteCommentDialog({
       title="Delete your comment"
       intro={
         <Typography>
-          It shows as “Deleted” for everyone, in the same place, so replies to it still make sense.
-          Anyone may already have read or saved what it said.
+          {admins
+            ? 'It shows as “Deleted” in the same place, so replies to it still make sense. The Minter Admins may already have read it.'
+            : 'It shows as “Deleted” for everyone, in the same place, so replies to it still make sense. Anyone may already have read or saved what it said.'}
         </Typography>
       }
       steps={[
         {
           action: 'PUBLISH_QDN_RESOURCE',
-          title: 'Publish the deletion',
-          check: check(name, 'qmp-comment-'),
+          title: admins ? 'Publish the deletion, encrypted' : 'Publish the deletion',
+          check: admins ? encryptedCheck(name, ADMIN_PREFIX) : check(name, 'qmp-comment-'),
           feeTxType: 'ARBITRARY',
         },
       ]}
       run={async (report) => ({ outcome: (await publish((stage) => report(0, stage))).outcome })}
       confirmLabel="Continue to Hub"
       successTitle="Comment deleted"
-      successText={<Typography variant="body2">{LATER}</Typography>}
+      successText={<Typography variant="body2">{admins ? LATER_ADMINS : LATER}</Typography>}
     />
   );
 }

@@ -107,6 +107,16 @@ export function addAdminPolls(world: World): {
   ids: typeof ADMIN_POLL_IDS;
   comments: { reply: string; shared: string };
 };
+export function addAdminNotes(world: World): {
+  kickKey: string;
+  inviteKey: string;
+  nomineeKey: string;
+  ids: Record<
+    'kickNote' | 'nominationNote' | 'concern' | 'checked' | 'notAdmin' | 'locked',
+    string
+  >;
+  texts: Record<'kickNote' | 'nominationNote' | 'concern' | 'checked', string>;
+};
 export function answerAdminPolls(
   world: World,
   pathname: string,

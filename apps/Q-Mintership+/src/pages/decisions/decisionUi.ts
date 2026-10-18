@@ -37,6 +37,21 @@ export function secondStepProblem(outcome: WriteOutcome | null): string {
   }
 }
 
+/** Why a follow-up step (after the proposal) didn't go through, in plain words. */
+export function followUpProblem(outcome: WriteOutcome): string {
+  switch (outcome.status) {
+    case 'declined':
+      return 'you cancelled it in Hub.';
+    case 'blocked':
+      return outcome.reason;
+    case 'failed':
+    case 'unknown':
+      return outcome.message;
+    default:
+      return 'it was not sent.';
+  }
+}
+
 /** The DOM id of a decision's card, for ?d= links. */
 export function decisionCardId(signature: string): string {
   return `decision-${signature}`;

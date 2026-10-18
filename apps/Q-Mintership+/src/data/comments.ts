@@ -157,7 +157,8 @@ export function loadCommentRows(
   );
 }
 
-function readBody(row: CommentRow): Promise<CommentBody> {
+/** A public comment's body, cached per version (data/qdn.ts); never throws. */
+export function readCommentBody(row: CommentRow): Promise<CommentBody> {
   return fetchQdnJson(COMMENT_SERVICE, row.name, row.identifier, row.version).then(
     (body): CommentBody => {
       const record = parseComment(body, row.identifier);
@@ -260,7 +261,7 @@ export function loadCommentThread(
       };
       const read = (list: CommentRow[]) =>
         mapLimit(list, 6, async (row) => {
-          const result = await quick(readBody(row));
+          const result = await quick(readCommentBody(row));
           if (result.late) {
             bodies.set(row.ref, { status: 'unavailable', fetching: true });
             fillLate(row, result.late);

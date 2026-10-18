@@ -21,7 +21,7 @@ import { plural } from '../../utils/format';
 import { SIGN_NEW_TX_CHECK } from '../../writes/explain';
 import { PROPOSAL_TX_TYPE, proposeAndSign, type Proposal } from '../../writes/flows';
 import type { Signer, WriteOutcome, WriteStage } from '../../writes/runner';
-import { secondStepProblem, signingWindowText } from './decisionUi';
+import { followUpProblem, secondStepProblem, signingWindowText } from './decisionUi';
 import { PROPOSE_KINDS } from './proposeKinds';
 import { hasImpact, type ShiftScenario } from '../../rules/targetShift';
 import { TargetImpact } from './TargetImpact';
@@ -61,12 +61,14 @@ export interface ProposeSignDialogProps {
   impact?: ShiftScenario | null;
   /**
    * One more Hub step after the proposal (and the proposer's signature):
-   * e.g. a statement posted as the proposal's first comment. Its failure
-   * never undoes the proposal.
+   * e.g. a statement posted as the proposal's first comment, or a note for
+   * the Minter Admins. Its failure never undoes the proposal; `later` says
+   * what can still be done (a comment from Decisions by default).
    */
   followUp?: {
     step: HubStep;
     run: (proposalSignature: string, onStage: (stage: WriteStage) => void) => Promise<WriteOutcome>;
+    later?: string;
   } | null;
   labelOf?: LabelOf;
 }
@@ -172,10 +174,10 @@ export function ProposeSignDialog({
               Minter Admins decide.
             </Typography>
           )}
-          {/* One step states its own fee; two add up here. */}
+          {/* One step states its own fee; two or three add up here. */}
           {withSignature ? (
             <Typography sx={{ mt: 1 }}>
-              <FeeNote txType={txType} times={2} prefix="Fees in total" />
+              <FeeNote txType={txType} times={followUp ? 3 : 2} prefix="Fees in total" />
             </Typography>
           ) : null}
         </>
@@ -208,7 +210,7 @@ export function ProposeSignDialog({
             message: (
               <Typography variant="body2" sx={{ mt: 0.5 }}>
                 {followUp.step.title} didn’t go through: {followUpProblem(extra)} Your proposal is
-                in; you can still add a comment to it from Decisions.
+                in. {followUp.later ?? 'You can still add a comment to it from Decisions.'}
               </Typography>
             ),
           };
@@ -256,19 +258,4 @@ export function ProposeSignDialog({
       }
     />
   );
-}
-
-/** Why a follow-up step (after the proposal) didn't go through, in plain words. */
-function followUpProblem(outcome: WriteOutcome): string {
-  switch (outcome.status) {
-    case 'declined':
-      return 'you cancelled it in Hub.';
-    case 'blocked':
-      return outcome.reason;
-    case 'failed':
-    case 'unknown':
-      return outcome.message;
-    default:
-      return 'it was not sent.';
-  }
 }

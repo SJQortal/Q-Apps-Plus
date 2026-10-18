@@ -35,21 +35,8 @@ export function adminPollCardId(id: string): string {
   return `admin-poll-${id}`;
 }
 
-/** What to check in Hub's dialog for an encrypted publish. */
-export function encryptedCheck(name: string, prefix: string): string[] {
-  return [
-    `The name is ${name}.`,
-    'The service is DOCUMENT_PRIVATE.',
-    `The identifier starts with ${prefix}.`,
-    'It says isEncrypted: true.',
-    'The fee.',
-  ];
-}
-
-/** "Encrypted to the 19 Minter Admins: only they can read it. …" */
-export function encryptedTo(admins: number): string {
-  return `Encrypted to the ${plural(admins, 'Minter Admin')}: only they can read it. Anyone can see that a record was published under your name, not what it says.`;
-}
+/** Shared with the notes and comments for the Minter Admins (components/common/encryptedWords.ts). */
+export { encryptedCheck, encryptedTo } from '../../components/common/encryptedWords';
 
 /** "Ends in 5 days · 18 Oct 2026, 14:33", or "Ended 5 days ago · …". */
 export function endText(poll: Pick<PollRecord, 'endsAt'>, now: number): string {

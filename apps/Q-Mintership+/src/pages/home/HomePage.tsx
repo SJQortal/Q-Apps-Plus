@@ -53,6 +53,8 @@ const REFRESH_PREFIXES = [
   'approvals:',
   'qdnsearch:',
   'comments:',
+  'macomments:',
+  'adminnotes:',
   'chain:now',
   'chain:tip',
   'group:info',

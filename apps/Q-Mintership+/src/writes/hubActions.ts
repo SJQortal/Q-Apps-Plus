@@ -30,6 +30,7 @@ import {
   type ShareRecord,
   type VoteRecord,
 } from '../data/adminPollRecords';
+import type { AdminCommentRecord, AdminNoteRecord } from '../data/adminNoteRecords';
 
 export interface HubRequest {
   action: string;
@@ -128,7 +129,8 @@ export function publishCommentRequest(
 }
 
 /**
- * A Minter Admin poll record (data/adminPollRecords.ts) under `name`,
+ * A Minter Admin poll record (data/adminPollRecords.ts), or a note or a
+ * comment for the Minter Admins (data/adminNoteRecords.ts), under `name`,
  * encrypted by Hub to `publicKeys` (base58): every current Minter Admin who
  * can sign, and the writer. Hub adds the writer's own key too, refuses an
  * empty list, and shows "isEncrypted: true" in its dialog (get.ts
@@ -138,7 +140,13 @@ export function publishCommentRequest(
 export function publishEncryptedRequest(
   name: string,
   identifier: string,
-  record: PollRecord | VoteRecord | PollCommentRecord | ShareRecord,
+  record:
+    | PollRecord
+    | VoteRecord
+    | PollCommentRecord
+    | ShareRecord
+    | AdminNoteRecord
+    | AdminCommentRecord,
   publicKeys: readonly string[]
 ): HubRequest {
   const keys = [...new Set(publicKeys)];

@@ -8,7 +8,8 @@
  * admins. Screens add their own buttons through `actions`, and its public
  * comments with `comments`. The community's Yes and No sit beside Copy
  * link, and anyone who isn't a Minter Admin (or the nominee) can vote,
- * where the admins' own buttons are on a decision.
+ * where the admins' own buttons are on a decision. Minter Admins also see
+ * the nominator's note for the Minter Admins under the reason (AdminNote).
  */
 import { useState, type ReactNode } from 'react';
 import { Box, Typography } from '@mui/material';
@@ -35,6 +36,8 @@ import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
 import { CommentsSection } from '../comments/CommentsSection';
+import { AdminNote } from '../decision/AdminNote';
+import { nominationNoteTarget } from '../../data/adminNotes';
 import { tallyBadges, withCommunityBadges } from '../comments/answerBadges';
 import { CommunitySummary, CommunityVoteControls } from '../community/CommunityVotes';
 import { readable } from '../../utils/readable';
@@ -186,6 +189,15 @@ export function NominationCard({
           links={n.nomination.record.links}
           moreLabel="Show the whole reason"
           compact={compact}
+        />
+      ) : null}
+
+      {n.nomination ? (
+        <AdminNote
+          target={nominationNoteTarget(n)}
+          near={nearScreen}
+          label={`The nomination of ${nominee.label}`}
+          addable={n.state === 'waiting' || n.state === 'signing'}
         />
       ) : null}
 

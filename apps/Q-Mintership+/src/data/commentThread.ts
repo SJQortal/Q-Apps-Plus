@@ -20,6 +20,7 @@ import {
   type CommentRecord,
   type HideRecord,
 } from './commentRecords';
+import { parseAdminCommentIdentifier } from './adminNoteRecords';
 import type { QdnRow, TxRow } from './types';
 
 /** Allowance for clock differences between a transaction and a QDN row. */
@@ -147,14 +148,24 @@ export interface CommentRow {
   updatedAt: number;
   /** What the body cache is keyed by: the latest signature, or the newest time. */
   version: string | number;
+  /** A comment for the Minter Admins only, encrypted to them (data/adminNoteRecords.ts). */
+  adminOnly?: true;
 }
 
-/** The search rows that are this target's comments, each once, newest first. */
-export function commentRowsFor(target: CommentTarget, rows: readonly QdnRow[]): CommentRow[] {
+/**
+ * The search rows that are this target's comments, each once, newest first:
+ * public ones, or with `adminOnly` the Minter Admins' own (`qmp-macomment-`).
+ */
+export function commentRowsFor(
+  target: CommentTarget,
+  rows: readonly QdnRow[],
+  options: { adminOnly?: boolean } = {}
+): CommentRow[] {
   const spans = new Map(target.keys.map((span) => [span.key, span]));
   const byRef = new Map<string, CommentRow>();
+  const parse = options.adminOnly ? parseAdminCommentIdentifier : parseCommentIdentifier;
   for (const row of rows) {
-    const parsed = parseCommentIdentifier(row.identifier);
+    const parsed = parse(row.identifier);
     const span = parsed ? spans.get(parsed.key) : undefined;
     if (!parsed || !span || typeof row.name !== 'string' || !row.name) continue;
     if (span.since !== null && row.created < span.since) continue;
@@ -170,6 +181,7 @@ export function commentRowsFor(target: CommentTarget, rows: readonly QdnRow[]): 
       postedAt: row.created,
       updatedAt,
       version: row.latestSignature ?? updatedAt,
+      ...(options.adminOnly ? { adminOnly: true as const } : {}),
     });
   }
   return [...byRef.values()].sort(
@@ -245,6 +257,8 @@ export interface OptimisticComment {
   key: string;
   record: CommentRecord;
   at: number;
+  /** One for the Minter Admins only. */
+  adminOnly?: true;
 }
 
 export interface CommentView {
@@ -275,6 +289,8 @@ export interface CommentView {
   pending: boolean;
   /** Shown from this Minter Admin's copy (a poll's share): the viewer can't read it directly. */
   from?: string;
+  /** For the Minter Admins only, encrypted to them: marked as such, never hidden for everyone. */
+  adminOnly?: true;
 }
 
 export interface CommentThread {
@@ -320,7 +336,7 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
   const pending = new Map((input.optimistic ?? []).map((o) => [o.ref, o]));
   const views: CommentView[] = [];
   const view = (
-    base: Pick<CommentView, 'ref' | 'name' | 'identifier' | 'key' | 'postedAt'>,
+    base: Pick<CommentView, 'ref' | 'name' | 'identifier' | 'key' | 'postedAt' | 'adminOnly'>,
     record: CommentRecord | null,
     extra: { editedAt: number | null; pending: boolean; fetching?: boolean; from?: string }
   ): CommentView => ({
@@ -339,6 +355,7 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
     muted: input.muted.has(base.name),
     pending: extra.pending,
     ...(extra.from && !extra.pending ? { from: extra.from } : {}),
+    ...(base.adminOnly ? { adminOnly: true as const } : {}),
   });
 
   const listed = new Set<string>();

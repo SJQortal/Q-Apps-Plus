@@ -13,6 +13,8 @@
  * them to anyone who isn't a Minter Admin (nor the account it is about)
  * where the admins' buttons are. Its public comments sit behind a
  * "Comments (n)" toggle, each marked with its writer's answer or vote.
+ * Minter Admins also see its proposer's note for the Minter Admins under
+ * the reason (AdminNote), and the comments for the Minter Admins only.
  *
  * A double (rules/double.ts) says so with a chip and a note, keeps Approve
  * and Reject as plain secondary buttons, offers no Considering and stays out
@@ -32,6 +34,8 @@ import { useAccount } from '../../hooks/useData';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { PersonChip, PersonInline } from '../../components/common/Person';
 import { CommentsSection } from '../../components/comments/CommentsSection';
+import { AdminNote } from '../../components/decision/AdminNote';
+import { decisionNoteTarget } from '../../data/adminNotes';
 import { AnswerChip, SigningClock } from '../../components/decision/DecisionParts';
 import { AnswerColumns, type AnswerPerson } from '../../components/decision/AnswerColumns';
 import { tallyPeople } from '../../components/decision/answerPeople';
@@ -373,6 +377,13 @@ export function DecisionCard(props: DecisionCardProps) {
         nominationsState={nominationsState}
         onRetryNominations={onRetryNominations}
         now={now}
+      />
+
+      <AdminNote
+        target={decisionNoteTarget(d, nomination)}
+        near={nearScreen}
+        label={fullTitle}
+        addable={collecting}
       />
 
       {impact && labelOf ? (

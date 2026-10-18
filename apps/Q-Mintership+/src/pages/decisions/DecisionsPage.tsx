@@ -534,8 +534,10 @@ function DecisionsQueue() {
     // Ready to mint follows the nominations' reads; after a failure it reads again itself.
     if (readyQ.isError) void readyQ.refetch();
     invalidate('staleinvites:');
-    // Comment counts and open threads.
+    // Comment counts and open threads (a Minter Admin's own ones, and the notes, too).
     invalidate('comments:');
+    invalidate('macomments:');
+    invalidate('adminnotes:');
     // The Minter Admin polls too (read only for admins, so nothing for anyone else),
     // asking Hub again for any it didn't decrypt.
     retryPollDecrypts();
