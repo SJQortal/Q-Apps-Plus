@@ -5,6 +5,7 @@ import {
   activityBuckets,
   axisTicks,
   chainMarks,
+  firstShareMark,
   familyCounts,
   minterMarks,
   rowsIn,
@@ -60,7 +61,7 @@ describe('activityBuckets', () => {
 });
 
 describe('chainMarks', () => {
-  it('names, its first reward share and level moves, oldest first', () => {
+  it('names and level moves, oldest first; never a "first" reward share from what was read', () => {
     const marks = chainMarks(
       [
         tx('REWARD_SHARE', 50),
@@ -76,13 +77,30 @@ describe('chainMarks', () => {
     );
     expect(marks.map((m) => [m.at, m.kind, m.label])).toEqual([
       [10, 'name', 'Registered the name “Ada”'],
-      [40, 'minting', 'First reward share (minting)'],
       [60, 'name', 'Sold the name “Bob”'],
       [70, 'name', 'Bought the name “Cy”'],
       [80, 'name', 'Renamed “Ada” to “Ada L”'],
       [95, 'minting', 'Got a minting level'],
     ]);
     expect(marks.every((m) => m.signature)).toBe(true);
+  });
+
+  it('marks its first reward share from its whole history (Simon, 2026-10-18)', () => {
+    // The oldest read so far moved as more was read; this one is the first.
+    expect(firstShareMark({ timestamp: 40, height: 2_000_000, signature: 'sig40' })).toEqual([
+      {
+        key: 'minting:sig40',
+        at: 40,
+        kind: 'minting',
+        label: 'First reward share',
+        signature: 'sig40',
+      },
+    ]);
+    // Before MINTER membership counted (block 1,945,900): the sponsorship era.
+    expect(firstShareMark({ timestamp: 4, height: 655_586, signature: 's' })[0].label).toBe(
+      'First reward share (sponsorship era)'
+    );
+    expect(firstShareMark(null)).toEqual([]);
   });
 
   it('level moves in one block as one milestone, with how many', () => {

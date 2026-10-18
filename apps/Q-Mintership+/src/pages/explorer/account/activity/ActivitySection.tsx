@@ -36,11 +36,13 @@ import type { FirstSeen } from '../../../../data/explorer/account';
 import { useDisplayName } from '../../../../hooks/useDisplayName';
 import { useInView } from '../../../../hooks/useInView';
 import { usePhoneLayout } from '../../../../hooks/usePhoneLayout';
+import { getMintingStart } from '../../../../data/explorer/account';
 import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
 import { explorerAccountPath, explorerTxPath, nominationPath } from '../../../../routes/paths';
 import {
   ACTIVITY_FAMILIES,
   chainMarks,
+  firstShareMark,
   familyCounts,
   minterMarks,
   rowsIn,
@@ -369,6 +371,8 @@ function ActivityBody({
   const nominationsQ = useQuery(`nominations:for:${address}`, (force) =>
     loadNominationsFor(address, { force })
   );
+  // Its first reward share, from its whole history (one row; Node online reads it too).
+  const mintingStart = useQuery(`xmintstart:${address}`, () => getMintingStart(address));
   const events = useMemo(
     () =>
       history.data
@@ -408,6 +412,7 @@ function ActivityBody({
     const placed: PlacedMark[] = [
       ...minterMarks(events ?? [], address),
       ...chainMarks(list, address),
+      ...firstShareMark(mintingStart.data?.firstShare),
     ].map((mark) => ({
       ...mark,
       // Several names in one milestone: its Names tab lists them all.
@@ -425,7 +430,7 @@ function ActivityBody({
     return placed
       .filter((m) => m.at >= from && m.at <= to && !hiddenMarks.includes(m.kind))
       .sort((a, b) => a.at - b.at);
-  }, [events, list, nominations, address, from, to, hiddenMarks]);
+  }, [events, list, nominations, mintingStart.data, address, from, to, hiddenMarks]);
 
   const state: ActivityState = {
     rows,

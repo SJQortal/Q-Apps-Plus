@@ -7,14 +7,17 @@
  * - Periods (`activityBuckets`): `count` of them between `from` and `to`;
  *   a period wholly before the oldest transaction read is `unread` (the
  *   account's older history hasn't been read yet), never "no activity".
- * - Milestones (`chainMarks`, `minterMarks`): what the transactions read
- *   say (a name registered, bought, sold or renamed; its first reward
- *   share; a minting level moved) and its MINTER story (joined, removed,
+ * - Milestones (`chainMarks`, `minterMarks`, `firstShareMark`): what the
+ *   transactions read say (a name registered, bought, sold or renamed; a
+ *   minting level moved), its first reward share (read on its own: the
+ *   oldest of those read so far isn't the first, Simon 2026-10-18) and its
+ *   MINTER story (joined, removed,
  *   banned, left, made or no longer a Minter Admin, ban lifted, asked to
  *   join), each with its time and the transaction behind it.
  */
 import type { TimelineEvent } from '../../data/timeline';
 import type { TxRow } from '../../data/types';
+import { MEMBERS_ONLY_FROM } from './onlineShare';
 import { familyOf, type TxFamilyKey } from './txFamilies';
 
 export type ActivityFamily = Exclude<TxFamilyKey, 'all'>;
@@ -133,11 +136,11 @@ const str = (value: unknown): string | null =>
 
 /**
  * Milestones in what was read: a name registered, bought, sold or renamed,
- * its first reward share, and minting levels moved to or from it.
+ * and minting levels moved to or from it. (Its first reward share is
+ * firstShareMark's: what was read may not reach it.)
  */
 export function chainMarks(rows: readonly TxRow[], address: string): ActivityMark[] {
   const marks: ActivityMark[] = [];
-  let firstShare: TxRow | null = null;
   // Level moves the same way in one block: one milestone ("in 6 transactions").
   const moves = new Map<string, { mark: ActivityMark; count: number; base: string }>();
   for (const tx of rows) {
@@ -165,9 +168,6 @@ export function chainMarks(rows: readonly TxRow[], address: string): ActivityMar
           push('name', `Renamed “${name}” to “${renamed}”`);
         break;
       }
-      case 'REWARD_SHARE':
-        if (mine && (!firstShare || tx.timestamp < firstShare.timestamp)) firstShare = tx;
-        break;
       case 'TRANSFER_PRIVS': {
         const base = mine ? 'Moved its minting level away' : 'Got a minting level';
         const key = `${mine}:${tx.blockHeight ?? tx.signature}`;
@@ -188,15 +188,31 @@ export function chainMarks(rows: readonly TxRow[], address: string): ActivityMar
       }
     }
   }
-  if (firstShare)
-    marks.push({
-      key: `minting:${firstShare.signature}`,
-      at: firstShare.timestamp,
-      kind: 'minting',
-      label: 'First reward share (minting)',
-      signature: firstShare.signature,
-    });
   return sameDayNames(marks).sort((a, b) => a.at - b.at);
+}
+
+/**
+ * Its first reward share, as the minter or the recipient: the oldest in
+ * its whole history (data/explorer/account.ts, getMintingStart), not the
+ * oldest read so far, which moved as more was read. A reward share no
+ * longer means minting on its own (Simon, 2026-10-18: "reward share was a
+ * thing of the past"): since block 1,945,900 only MINTER members' minting
+ * counts, so one from before then says it was the sponsorship era.
+ */
+export function firstShareMark(
+  first: { timestamp: number; height?: number; signature?: string } | null | undefined
+): ActivityMark[] {
+  if (!first) return [];
+  const before = first.height !== undefined && first.height < MEMBERS_ONLY_FROM;
+  return [
+    {
+      key: `minting:${first.signature ?? first.timestamp}`,
+      at: first.timestamp,
+      kind: 'minting',
+      label: before ? 'First reward share (sponsorship era)' : 'First reward share',
+      signature: first.signature,
+    },
+  ];
 }
 
 /** Names registered on the same day as one milestone: "Registered 6 names: “A”, “B”, “C”, …". */

@@ -50,7 +50,7 @@ export type OnlineShare =
 /** Where an account started minting, from its reward shares and level moves. */
 export interface MintingStart {
   /** Its oldest reward share, as the minter or the recipient. */
-  firstShare: { height: number; timestamp: number } | null;
+  firstShare: { height: number; timestamp: number; signature?: string } | null;
   /** Its newest minting-level move, and whether it moved the level away. */
   moved: { height: number; away: boolean } | null;
 }

@@ -420,6 +420,36 @@ describe('Overview: its activity over time', () => {
   });
 });
 
+describe('Overview: its first reward share', () => {
+  it('marks the oldest in its whole history, from a one-row read, as the sponsorship era', async () => {
+    await open(SPONSOR.address);
+    const activity = await region('Activity');
+    const milestones = await within(activity).findByRole('list', { name: 'Milestones' }, T);
+    await waitFor(
+      () =>
+        expect(
+          within(milestones)
+            .getAllByText(/^First reward share/)
+            .map((el) => el.textContent)
+        ).toEqual(['First reward share (sponsorship era)']),
+      T
+    );
+    // Its first reward share: the oldest one, read on its own (Simon, 2026-10-18).
+    const searches = fetchCallsFor('/transactions/search').map(
+      (url) => new URL(url, 'http://x').searchParams
+    );
+    expect(
+      searches.some(
+        (p) =>
+          p.get('txType') === 'REWARD_SHARE' &&
+          p.get('address') === SPONSOR.address &&
+          p.get('limit') === '1' &&
+          p.get('reverse') === 'false'
+      )
+    ).toBe(true);
+  });
+});
+
 describe('Overview: Activity’s settings', () => {
   it('reads the number picked at first, and Read older reads as many more', async () => {
     const { user } = await open(FUNDER.address, () =>

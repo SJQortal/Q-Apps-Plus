@@ -271,7 +271,7 @@ export function getMintingStart(address: string): Promise<MintingStart> {
       return {
         firstShare:
           share && typeof share.blockHeight === 'number'
-            ? { height: share.blockHeight, timestamp: share.timestamp }
+            ? { height: share.blockHeight, timestamp: share.timestamp, signature: share.signature }
             : null,
         moved:
           move && typeof move.blockHeight === 'number'
