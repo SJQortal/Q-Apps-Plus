@@ -34,7 +34,7 @@ describe("share art", () => {
 
   it("shows a share's own small image on a card once the node has it, and never fetches it otherwise", async () => {
     mockFetch("/arbitrary/resource/status", (url: URL) =>
-      url.pathname.endsWith("on_node") ? { status: "READY" } : { status: "PUBLISHED" }
+      url.pathname.endsWith("on_node") ? { status: "READY" } : url.pathname.endsWith("unbuilt") ? { status: "DOWNLOADED" } : { status: "PUBLISHED" }
     );
     const ready = render(<ShareCardArt share={{ files: [photo("img_on_node")] }} fallback={icon} />);
     mockAllIsIntersecting(true);
@@ -46,6 +46,10 @@ describe("share art", () => {
     await waitFor(() => expect(fetchCallsMatching("/arbitrary/resource/status/FILE/dj%20b/img_elsewhere")).toHaveLength(1));
     expect(img(missing.container)).toBeNull();
     expect(missing.container.querySelector("[data-testid=icon]")).not.toBeNull();
+    // Every chunk on the node but not built yet counts too: the picture's GET builds it.
+    const unbuilt = render(<ShareCardArt share={{ files: [photo("img_unbuilt")] }} fallback={icon} />);
+    mockAllIsIntersecting(true);
+    await waitFor(() => expect(img(unbuilt.container)).toBe("/arbitrary/FILE/dj%20b/img_unbuilt?async=true"));
     // Rows don't use the share's own image.
     const row = render(<ShareRowArt share={{ files: [photo("img_on_node")] }} fallback={icon} />);
     expect(img(row.container)).toBeNull();

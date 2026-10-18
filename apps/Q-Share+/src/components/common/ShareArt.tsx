@@ -43,6 +43,13 @@ export function cardImage(files: unknown): (ShareFileLike & { name: string; iden
   return found ? (found as ShareFileLike & { name: string; identifier: string }) : null;
 }
 
+/**
+ * Every chunk is on the node: READY, or DOWNLOADED / BUILDING (Core leaves a
+ * local file unbuilt until something asks; the picture's GET with
+ * `async=true` asks, and its retry shows it once built).
+ */
+const LOCAL = new Set(["READY", "DOWNLOADED", "BUILDING"]);
+
 // One status check per image per while, shared by every card that shows it.
 const onNode = new Map<string, { ready: Promise<boolean>; at: number }>();
 
@@ -56,7 +63,7 @@ export function isOnNode(file: { name: string; identifier: string }): Promise<bo
   const known = onNode.get(key);
   if (known && Date.now() - known.at < NOT_ON_NODE_MS) return known.ready;
   const ready = resourceStatusDirect({ service: "FILE", name: file.name, identifier: file.identifier }).then(
-    (status) => status?.status === "READY",
+    (status) => LOCAL.has(status?.status),
     () => false
   );
   onNode.set(key, { ready, at: Date.now() });
