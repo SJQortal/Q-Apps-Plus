@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "../../test/renderWithProviders";
-import { mockFetch, mockQortalAction, qortalCallsFor } from "../../test/setup";
+import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from "../../test/setup";
 import { store } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
 import { setEditFile } from "../../state/features/fileSlice";
@@ -174,6 +174,7 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
 
     // An old share without one: "Use beach.jpg" reads the image from the node.
     store.dispatch(setEditFile({ ...share, thumbnail: undefined, id: "qshare_file_holiday_def456_metadata" }));
+    mockFetch("/arbitrary/resource/status/", { status: "READY" });
     mockFetch("/arbitrary/FILE/", "jpeg bytes");
     renderWithProviders(<EditFile />);
     fireEvent.click(await screen.findByRole("button", { name: "Use beach.jpg" }));
@@ -230,6 +231,33 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
     );
   });
 
+  it("reads a share's image for a thumbnail only once the node has it, and never a big one", async () => {
+    store.dispatch(
+      setEditFile({
+        id: "qshare_file_holiday_jkl012_metadata",
+        user: "alice",
+        title: "Holiday",
+        version: 1,
+        commentsId: "qshare_file__cm_jkl012",
+        htmlDescription: "<p>Pics</p>",
+        fullDescription: "Pics",
+        category: "5",
+        files: [
+          { filename: "panorama.tif", identifier: "qshare_file_holiday_big", name: "alice", service: "FILE", mimetype: "image/tiff", size: 90_000_000 },
+          { filename: "beach.jpg", identifier: "qshare_file_holiday_far", name: "alice", service: "FILE", mimetype: "image/jpeg", size: 9 },
+        ],
+      })
+    );
+    mockFetch("/arbitrary/resources/search", []);
+    mockFetch("/arbitrary/resource/status/", { status: "PUBLISHED" });
+    renderWithProviders(<EditFile />);
+    // The 90 MB image isn't offered.
+    fireEvent.click(await screen.findByRole("button", { name: "Use beach.jpg" }));
+    expect(screen.queryByRole("button", { name: "Use panorama.tif" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Your node doesn't have beach.jpg yet. Open the share and fetch it, or choose an image.")).toBeInTheDocument();
+    expect(fetchCallsMatching("/arbitrary/FILE/")).toEqual([]);
+  });
+
   it("says so when an update landed and its new thumbnail didn't", async () => {
     mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
       const thumb = params.resources.find((r: any) => r.service === "THUMBNAIL");
@@ -249,6 +277,7 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
       })
     );
     mockFetch("/arbitrary/resources/search", []);
+    mockFetch("/arbitrary/resource/status/", { status: "READY" });
     mockFetch("/arbitrary/FILE/", "jpeg bytes");
     renderWithProviders(<EditFile />);
     fireEvent.click(await screen.findByRole("button", { name: "Use beach.jpg" }));

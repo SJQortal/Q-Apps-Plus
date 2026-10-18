@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ShareThumbnail, ThumbnailInput } from "../../utils/publishPayload";
 import { fileKind } from "../../utils/fileKind";
 import { ImageTooBigError } from "../../utils/coverImage";
-import { makeImageThumbnail, makeThumbnail, thumbnailSource } from "../../utils/thumbnailImage";
+import { resourceStatusDirect } from "../../utils/qdnResource";
+import {
+  THUMBNAIL_SOURCE_MAX_BYTES,
+  makeImageThumbnail,
+  makeThumbnail,
+  thumbnailSource,
+} from "../../utils/thumbnailImage";
 import type { DraftFile } from "./shareDraft";
 
 /**
@@ -49,10 +55,20 @@ export interface ShareThumbnailState {
 const thumbUrl = (ref: ShareThumbnail) =>
   `/arbitrary/THUMBNAIL/${encodeURIComponent(ref.name)}/${encodeURIComponent(ref.identifier)}`;
 
-/** An image file a share already has on QDN, read from the node (it must be there). */
+/** Every chunk is on the node (READY, or DOWNLOADED / BUILDING until it is built). */
+const LOCAL = new Set(["READY", "DOWNLOADED", "BUILDING"]);
+
+class NotOnNodeError extends Error {}
+
+/**
+ * An image file a share already has on QDN, read from the node once the node
+ * has it: a GET of a file it lacks would hold for about 15 s and then fail.
+ */
 async function readFromNode(file: DraftFile): Promise<Blob> {
   const ref = file.existing;
   if (!ref) throw new Error("Not on QDN");
+  const status = await resourceStatusDirect({ service: "FILE", name: ref.name, identifier: ref.identifier }).catch(() => null);
+  if (!LOCAL.has(status?.status)) throw new NotOnNodeError();
   const response = await fetch(`/arbitrary/FILE/${encodeURIComponent(ref.name)}/${encodeURIComponent(ref.identifier)}`);
   if (!response.ok) throw new Error(`The node answered ${response.status}`);
   return response.blob();
@@ -140,7 +156,9 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
         setProblem(
           error instanceof ImageTooBigError
             ? "That image is too big to make a thumbnail from on this device. Try a smaller one."
-            : "Couldn't make a thumbnail from that. Try a JPEG, PNG or WebP image."
+            : error instanceof NotOnNodeError
+              ? `Your node doesn't have ${from} yet. Open the share and fetch it, or choose an image.`
+              : "Couldn't make a thumbnail from that. Try a JPEG, PNG or WebP image."
         );
       } finally {
         setBusy(false);
@@ -187,10 +205,11 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
     set({ kind: "file", file, url: keep(file), from });
   }, [choice, keep, set]);
 
-  // Offer a share image (or video) the choice doesn't already come from.
+  // Offer a share image (or new video) the choice doesn't already come from,
+  // small enough to read on a phone.
   const candidates = files.filter((f) => {
     const kind = fileKind(f.mimetype, f.name);
-    return kind === "image" || (kind === "video" && f.file);
+    return (kind === "image" && (f.size ?? 0) <= THUMBNAIL_SOURCE_MAX_BYTES) || (kind === "video" && f.file);
   });
   const suggestion =
     candidates.find(
