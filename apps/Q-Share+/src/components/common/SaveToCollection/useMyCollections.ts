@@ -81,6 +81,9 @@ export function useMyCollections(autoLoad = true) {
   }, [autoLoad, myName, loadingMine, mineName, mine, mineError, load]);
 
   const current = mineName === myName;
+  // Resolves once the list and every body in it have been read (from the
+  // session's cache when they already were).
+  const ensure = useCallback(() => load(), [load]);
   return {
     myName,
     mine: current ? mine : null,
@@ -88,6 +91,7 @@ export function useMyCollections(autoLoad = true) {
     error: current && mineError,
     byKey,
     reload: () => load(true),
+    ensure,
   };
 }
 

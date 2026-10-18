@@ -115,4 +115,27 @@ describe("copying a collection", { timeout: 20_000 }, () => {
     expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Copy to my collections" })).not.toBeInTheDocument();
   });
+
+  it("opens the copy you already have when Copy is tapped before your collections have loaded", async () => {
+    const MINE = "qshare_collection_old-copy_qq11rr";
+    mockFetch("/arbitrary/resources/search", (url: URL) =>
+      url.searchParams.get("name") === "alice" && url.searchParams.get("identifier")?.startsWith("qshare_collection_")
+        ? [{ name: "alice", service: "DOCUMENT", identifier: MINE, created: 1, updated: 2, metadata: { title: "Old copy" } }]
+        : []
+    );
+    mockQortalAction("FETCH_QDN_RESOURCE", (params) =>
+      params.identifier === SOURCE
+        ? source()
+        : params.identifier === MINE
+          ? { ...source(), title: "Old copy", copiedFrom: { name: "dj b", identifier: SOURCE, title: "Music" } }
+          : { title: String(params.identifier), files: [] }
+    );
+    renderPage();
+    // Tapped at once: your collections load a moment after the page.
+    fireEvent.click(await screen.findByRole("button", { name: "Copy to my collections" }));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(`/collection/alice/${MINE}`));
+    expect(store.getState().notifications.alertTypes.alertInfo).toBe("You already have a copy of this collection.");
+    expect(screen.queryByRole("dialog", { name: "Copy to my collections" })).not.toBeInTheDocument();
+    expect(qortalCallsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(0);
+  });
 });

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Box, Breadcrumbs, Button, CircularProgress, IconButton, Link, Skeleton, Tooltip, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -247,20 +247,40 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
   );
   // A copy of this collection the signed-in name already has (a deleted,
   // emptied one doesn't count, so the collection can be copied again).
-  const { myName, byKey: knownCollections } = useMyCollections(!isOwner && Boolean(user?.name));
-  const myCopy = useMemo(
-    () =>
+  const { myName, byKey: knownCollections, ensure: ensureMine } = useMyCollections(!isOwner && Boolean(user?.name));
+  const copyIn = useCallback(
+    (collections: Record<string, Collection>) =>
       isOwner || !myName
         ? null
-        : (Object.values(knownCollections).find(
+        : (Object.values(collections).find(
             (c) =>
               c.name === myName &&
               c.copiedFrom?.name === name &&
               c.copiedFrom.identifier === id &&
               !isEmptyCollection(c)
           ) ?? null),
-    [isOwner, myName, knownCollections, name, id]
+    [isOwner, myName, name, id]
   );
+  const myCopy = useMemo(() => copyIn(knownCollections), [copyIn, knownCollections]);
+  // Your collections load a moment after the page: Copy waits for them, so
+  // a copy you already have is opened rather than made a second time.
+  const reduxStore = useStore<RootState>();
+  const [checkingCopy, setCheckingCopy] = useState(false);
+  const startCopy = async () => {
+    setCheckingCopy(true);
+    try {
+      await ensureMine();
+    } finally {
+      setCheckingCopy(false);
+    }
+    const existing = copyIn(reduxStore.getState().collections.byKey);
+    if (existing) {
+      dispatch(setNotification({ msg: "You already have a copy of this collection.", alertType: "info" }));
+      navigate(collectionPath(existing.name, existing.identifier));
+    } else {
+      setCopyOpen(true);
+    }
+  };
   const parentId = found && found.path.length > 1 ? found.path[found.path.length - 2].id : null;
   const parentPath = folderId ? collectionPath(name, id, parentId) : "/collections";
   const goBack = useSafeBack(parentPath);
@@ -495,7 +515,13 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
                   Open your copy
                 </Button>
               ) : (
-                <Button variant="contained" startIcon={<LibraryAddOutlinedIcon />} onClick={() => setCopyOpen(true)}>
+                <Button
+                  variant="contained"
+                  startIcon={<LibraryAddOutlinedIcon />}
+                  onClick={() => void startCopy()}
+                  loading={checkingCopy}
+                  loadingPosition="start"
+                >
                   Copy to my collections
                 </Button>
               )}
