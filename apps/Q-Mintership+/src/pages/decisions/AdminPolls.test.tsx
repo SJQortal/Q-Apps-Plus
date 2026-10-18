@@ -237,6 +237,20 @@ describe('Decisions → Minter Admin polls', () => {
     expect(fromData64(String(publishes()[0].data64))).toEqual({ v: 1, pollId: id, vote: 'opt4' });
   });
 
+  it('Ask MAs: a tab with the open polls, showing only them', async () => {
+    const u = user();
+    await openDecisions();
+    await pollCard(OPEN_Q);
+    const ask = await screen.findByRole('tab', { name: /^Ask MAs \d+$/ }, T);
+    await u.click(ask);
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAccessibleName(/^Ask MAs/);
+    expect(
+      await within(panel).findByRole('article', { name: `Minter Admin poll: ${OPEN_Q}` }, T)
+    ).toBeVisible();
+    expect(within(panel).queryByRole('article', { name: /Add to MINTER/ })).toBeNull();
+  });
+
   it('reads: four searches of 100 for the whole section, bodies decrypted in Hub', async () => {
     await openDecisions();
     await pollCard(OPEN_Q);

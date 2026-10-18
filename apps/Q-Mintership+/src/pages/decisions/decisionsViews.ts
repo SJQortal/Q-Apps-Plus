@@ -24,6 +24,71 @@ export function parseDecisionsView(value: string | null): DecisionsView | null {
   return DECISIONS_VIEWS.some((v) => v.key === value) ? (value as DecisionsView) : null;
 }
 
+/**
+ * All Decisions narrowed to one kind (Simon, 2026-10-18: "in this top bar in
+ * Decisions, I would also like there to show the other active ones too, so
+ * the: Nominations, Removals, Declines, Bans, New MA's, Remove MA's , Lift
+ * Ban, Cancel invite, Clean invites, Ask MA's"): a tab each, after Ready to
+ * mint, shown while something of that kind is open. `?show=<kind>`.
+ */
+export type DecisionsKind =
+  | 'removals'
+  | 'declines'
+  | 'bans'
+  | 'newAdmins'
+  | 'removeAdmins'
+  | 'liftBans'
+  | 'cancelInvites'
+  | 'cleanInvites'
+  | 'askAdmins';
+
+export const DECISIONS_KINDS: ReadonlyArray<{ key: DecisionsKind; label: string }> = [
+  { key: 'removals', label: 'Removals' },
+  { key: 'declines', label: 'Declines' },
+  { key: 'bans', label: 'Bans' },
+  { key: 'newAdmins', label: 'New MAs' },
+  { key: 'removeAdmins', label: 'Remove MAs' },
+  { key: 'liftBans', label: 'Lift ban' },
+  { key: 'cancelInvites', label: 'Cancel invite' },
+  { key: 'cleanInvites', label: 'Clean invites' },
+  { key: 'askAdmins', label: 'Ask MAs' },
+];
+
+/** `?show=` as one of those kinds, or null. */
+export function parseDecisionsKind(value: string | null): DecisionsKind | null {
+  return DECISIONS_KINDS.some((k) => k.key === value) ? (value as DecisionsKind) : null;
+}
+
+/** A decision's kind tab (null for one with none: an invite, another group change). */
+export function decisionsKindOf(d: { kind: string; decline?: unknown }): DecisionsKind | null {
+  switch (d.kind) {
+    case 'kick':
+      return d.decline ? 'declines' : 'removals';
+    case 'ban':
+      return 'bans';
+    case 'addAdmin':
+      return 'newAdmins';
+    case 'removeAdmin':
+      return 'removeAdmins';
+    case 'cancelBan':
+      return 'liftBans';
+    case 'cancelInvite':
+      return 'cancelInvites';
+    default:
+      return null;
+  }
+}
+
+/** The kinds that are decisions (not the stale invites or the polls). */
+export function isDecisionKind(kind: DecisionsKind | null): boolean {
+  return kind !== null && kind !== 'cleanInvites' && kind !== 'askAdmins';
+}
+
+/** `/decisions?show=<kind>`. */
+export function decisionsKindPath(kind: DecisionsKind): string {
+  return `${decisionsViewPath('decisions').split('?')[0]}?show=${kind}`;
+}
+
 /** The view Decisions opens on without `?show=`: the queue for a Minter Admin, else Nominations. */
 export function defaultDecisionsView(isAdmin: boolean): DecisionsView {
   return isAdmin ? 'decisions' : 'nominations';
@@ -46,6 +111,6 @@ export function nominationsRedirect(search: string): string {
   return rest ? `${view}&${rest}` : view;
 }
 
-/** The tab of `view`, and the panel under the tabs (labelled by the selected tab). */
-export const decisionsTabId = (view: DecisionsView) => `decisions-tab-${view}`;
+/** The tab of `view` (or a kind), and the panel under the tabs (labelled by the selected tab). */
+export const decisionsTabId = (view: DecisionsView | DecisionsKind) => `decisions-tab-${view}`;
 export const DECISIONS_PANEL_ID = 'decisions-panel';

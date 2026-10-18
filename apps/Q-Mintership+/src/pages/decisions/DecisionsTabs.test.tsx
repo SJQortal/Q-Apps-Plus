@@ -199,4 +199,66 @@ describe('Decisions: swipes between tabs', () => {
     swipe(150);
     await waitFor(() => expect(at()).toBe('/decisions?show=decisions|REPLACE'), T);
   });
+
+  it('adds a tab for each kind of decision with something open, narrowing All Decisions to it', async () => {
+    const u = userEvent.setup();
+    await open('admin');
+    await screen.findByRole('article', { name: /Add to MINTER, bob\+builder/ }, T);
+    const names = screen.getAllByRole('tab').map((t) => t.textContent);
+    // After the three, the kinds that have something open (Simon, 2026-10-18).
+    expect(names.slice(0, 3).map((n) => n?.replace(/\s*\d+$/, ''))).toEqual([
+      'All Decisions',
+      'Nominations',
+      'Ready to mint',
+    ]);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        expect.stringMatching(/^New MAs \d+$/),
+        expect.stringMatching(/^Lift ban 1$/),
+      ])
+    );
+    // None for a kind with nothing open.
+    expect(names.some((n) => /^Declines/.test(n ?? ''))).toBe(false);
+    expect(names).toEqual(expect.arrayContaining([expect.stringMatching(/^Clean invites \d+$/)]));
+    await u.click(tab(/^Lift ban/));
+    expect(at()).toBe('/decisions?show=liftBans|REPLACE');
+    expect(tab(/^Lift ban/)).toHaveAttribute('aria-selected', 'true');
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAccessibleName(/^Lift ban/);
+    await waitFor(
+      () =>
+        expect(
+          within(panel).getAllByRole('heading', { name: /^Lift a ban/ }).length
+        ).toBeGreaterThan(0),
+      T
+    );
+    // Only that kind: no other section, no nominations waiting, no polls or stale invites.
+    expect(within(panel).queryByRole('heading', { name: /^Minter Admin changes/ })).toBeNull();
+    expect(
+      within(panel).queryByRole('heading', { name: /^Waiting for a Minter Admin/ })
+    ).toBeNull();
+    expect(within(panel).queryByRole('heading', { name: /^Clean up stale invites/ })).toBeNull();
+    for (const card of within(panel).queryAllByRole('article'))
+      expect(card).toHaveAccessibleName(/ban/i);
+    // All Decisions again: everything.
+    await u.click(tab(/^All Decisions/));
+    await waitFor(
+      () =>
+        expect(
+          within(screen.getByRole('tabpanel')).getByRole('heading', {
+            name: /^Minter Admin changes/,
+          })
+        ).toBeInTheDocument(),
+      T
+    );
+  });
+
+  it('a kind’s link opens on its tab, and says so when nothing of it is open', async () => {
+    await open('admin', '/decisions?show=declines');
+    const declines = await screen.findByRole('tab', { name: /^Declines/ }, T);
+    expect(declines).toHaveAttribute('aria-selected', 'true');
+    expect(
+      await screen.findByText('No declines collecting approvals now', {}, T)
+    ).toBeInTheDocument();
+  });
 });

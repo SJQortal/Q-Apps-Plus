@@ -1,8 +1,11 @@
 /**
  * Decisions: MINTER's nominations and everything waiting for the Minter
  * Admins, in one place (Simon, 2026-10-17: "merge the Nominations tab into
- * Decisions"), in three tabs (decisionsViews.ts): Decisions, Nominations
- * (NominationsPanel.tsx) and Ready to mint. A Minter Admin opens on
+ * Decisions"), in three tabs (decisionsViews.ts): All Decisions, Nominations
+ * (NominationsPanel.tsx) and Ready to mint; then a tab for each kind of
+ * decision with something open (Simon, 2026-10-18: Removals, Declines, Bans,
+ * New MAs, Remove MAs, Lift ban, Cancel invite, Clean invites, Ask MAs),
+ * each All Decisions narrowed to that kind (`?show=<kind>`). A Minter Admin opens on
  * Decisions, everyone else on Nominations; a swipe sideways on a touch
  * screen opens the next or the previous one. The nominee's own nomination
  * sits above the tabs, with Accept or Join now. Propose, in the header (the
@@ -132,13 +135,21 @@ import { DecisionCard, type NominationsState, type SubjectFacts } from './Decisi
 import { DecisionsTabs } from './DecisionsTabs';
 import {
   DECISIONS_PANEL_ID,
+  DECISIONS_KINDS,
   DECISIONS_VIEWS,
+  decisionsKindOf,
   decisionsTabId,
   decisionsViewPath,
   defaultDecisionsView,
+  isDecisionKind,
+  parseDecisionsKind,
   parseDecisionsView,
+  type DecisionsKind,
   type DecisionsView,
 } from './decisionsViews';
+import { useAdminPolls } from './useAdminPolls';
+import { useQuery } from '../../hooks/useQuery';
+import { loadStaleInvites } from '../../data/staleInvites';
 import { answerView, canReject, canSign, decisionCardId, isWaitingForMe } from './decisionUi';
 import { doubleLeftOutText, doublesAsideText } from './doubleUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
@@ -196,10 +207,18 @@ function DecisionsQueue() {
   const readyQ = useReadyToMint(nominationsQ.data?.loadedAt);
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  // A kind's tab: All Decisions narrowed to it (Simon, 2026-10-18).
+  const kind: DecisionsKind | null = parseDecisionsKind(appParam(params, 'show'));
   // The tab: `?show=`, else the account's own (Nominations when its status can't be read).
-  const view: DecisionsView | null =
-    parseDecisionsView(appParam(params, 'show')) ??
-    (status ? defaultDecisionsView(status.isAdmin) : statusFailed ? 'nominations' : null);
+  const view: DecisionsView | null = kind
+    ? 'decisions'
+    : (parseDecisionsView(appParam(params, 'show')) ??
+      (status ? defaultDecisionsView(status.isAdmin) : statusFailed ? 'nominations' : null));
+  const tabKey: DecisionsView | DecisionsKind | null = kind ?? view;
+  // What a kind's tab keeps of All Decisions: its decisions, or only its section.
+  const decisionTab = isDecisionKind(kind);
+  const showsDecisions = !kind || decisionTab;
+  const ofKind = (d: { kind: string; decline?: unknown }) => !kind || decisionsKindOf(d) === kind;
   const phone = usePhoneLayout();
   const landscape = useLandscapeFrame();
   const shortFrame = useShortFrame();
@@ -278,6 +297,11 @@ function DecisionsQueue() {
   );
   const myKey = signer?.publicKey ?? null;
   const me = signer?.address ?? '';
+  // For the Clean invites and Ask MAs tabs' counts: the same reads their sections make.
+  const staleList = useQuery(isAdmin ? 'staleinvites:list' : null, (force) =>
+    loadStaleInvites({ force })
+  );
+  const adminPolls = useAdminPolls(isAdmin ? me : null);
   // Propose's menu for Minter Admins (from their status until the queue says so too).
   const adminRole = isAdmin || Boolean(me && status?.isAdmin);
   const canNominate = Boolean(me && status?.canNominate);
@@ -354,8 +378,10 @@ function DecisionsQueue() {
   const viewOf = (d: Decision) => answerView(d, myKey, pendingOf(d));
 
   const decisions = data?.decisions ?? [];
-  const collecting = decisions.filter((d) => COLLECTING.has(d.phase));
-  const closed = decisions.filter((d) => !COLLECTING.has(d.phase));
+  const allCollecting = decisions.filter((d) => COLLECTING.has(d.phase));
+  // On a kind's tab, only that kind (and nothing on Clean invites or Ask MAs).
+  const collecting = allCollecting.filter(ofKind);
+  const closed = decisions.filter((d) => !COLLECTING.has(d.phase)).filter(ofKind);
   // Answered: signed or rejected (a withdrawn signature too), in a block or on its way.
   const answeredByMe = (d: Decision) => isAdmin && viewOf(d).shown !== 'none';
   const shown = isAdmin && hideAnswered ? collecting.filter((d) => !answeredByMe(d)) : collecting;
@@ -434,10 +460,11 @@ function DecisionsQueue() {
     setSelected(new Set());
   };
   // Approve several belongs to the Decisions tab: another tab ends it.
-  const [viewShown, setViewShown] = useState(view);
-  if (viewShown !== view) {
-    setViewShown(view);
-    if (view !== 'decisions' && selecting) stopSelecting();
+  // Another tab (a kind of All Decisions too) ends it.
+  const [viewShown, setViewShown] = useState(tabKey);
+  if (viewShown !== tabKey) {
+    setViewShown(tabKey);
+    if (selecting) stopSelecting();
   }
   const selectedList = signable.filter((d) => selected.has(d.signature));
 
@@ -526,7 +553,9 @@ function DecisionsQueue() {
       return;
     }
     if (choice === 'stale') {
-      if (view !== 'decisions') navigate(decisionsViewPath('decisions'), { replace: true });
+      // Where the section is: All Decisions, or its own tab.
+      if (view !== 'decisions' || (kind && kind !== 'cleanInvites'))
+        navigate(decisionsViewPath('decisions'), { replace: true });
       setStaleExpanded(true);
       setStaleFocus((n) => n + 1);
       return;
@@ -558,12 +587,28 @@ function DecisionsQueue() {
   ) : null;
 
   const counts: Partial<Record<DecisionsView, number>> = {
-    decisions: data ? collecting.length + waiting.length : undefined,
+    decisions: data ? allCollecting.length + waiting.length : undefined,
     nominations: nominationsQ.data
       ? nominationsQ.data.open.filter((n) => n.nominee !== me).length
       : undefined,
     ready: readyQ.data?.people.length,
   };
+  // Each kind's count: what is open of it. A tab shows while it has some (or is on screen).
+  const kindCount = (key: DecisionsKind): number | undefined =>
+    key === 'cleanInvites'
+      ? staleList.data?.rows.length
+      : key === 'askAdmins'
+        ? adminPolls.views
+          ? adminPolls.views.filter((v) => v.open).length
+          : undefined
+        : data
+          ? allCollecting.filter((d) => decisionsKindOf(d) === key).length
+          : undefined;
+  const kindTabs = DECISIONS_KINDS.filter(
+    (k) => (k.key !== 'cleanInvites' && k.key !== 'askAdmins') || isAdmin
+  )
+    .map((k) => ({ ...k, count: kindCount(k.key) }))
+    .filter((k) => (k.count ?? 0) > 0 || k.key === kind);
   const subtitle =
     view === 'nominations'
       ? 'Who is up for MINTER right now'
@@ -608,8 +653,8 @@ function DecisionsQueue() {
           <OwnNomination facts={own} data={nominationsQ.data} signer={signer} />
         ) : null}
 
-        <DecisionsTabs view={view} counts={counts} />
-        <ViewPanel view={view}>
+        <DecisionsTabs view={tabKey} counts={counts} kinds={kindTabs} />
+        <ViewPanel view={view} tab={tabKey}>
           {view === null ? (
             <ListSkeleton count={3} ring label="Loading" />
           ) : view !== 'decisions' ? (
@@ -635,7 +680,7 @@ function DecisionsQueue() {
             />
           ) : data ? (
             <>
-              {isAdmin ? (
+              {!showsDecisions ? null : isAdmin ? (
                 <Card sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   <Typography component="h2" sx={{ fontWeight: 700, fontSize: 18 }}>
                     {signable.length
@@ -689,14 +734,21 @@ function DecisionsQueue() {
                 </Box>
               ) : null}
 
-              {collecting.length || waiting.length || closed.length ? null : (
+              {!showsDecisions ||
+              collecting.length ||
+              (!kind && waiting.length) ||
+              closed.length ? null : (
                 <EmptyState
-                  title="Nothing collecting approvals"
+                  title={
+                    kind
+                      ? `No ${(DECISIONS_KINDS.find((k) => k.key === kind)?.label ?? '').toLowerCase()} collecting approvals now`
+                      : 'Nothing collecting approvals'
+                  }
                   description="New nominations and proposals show up here as soon as they are on chain."
                 />
               )}
 
-              {shift ? (
+              {shift && showsDecisions ? (
                 <TargetShiftSection
                   scenarios={shift.scenarios}
                   decisions={decisions}
@@ -768,7 +820,7 @@ function DecisionsQueue() {
                 />
               ) : null}
 
-              {waiting.length || nominationsQ.isLoading || nominationsQ.isError ? (
+              {!kind && (waiting.length || nominationsQ.isLoading || nominationsQ.isError) ? (
                 <Section
                   title="Waiting for a Minter Admin"
                   count={waiting.length || undefined}
@@ -818,7 +870,7 @@ function DecisionsQueue() {
                 </Section>
               ) : null}
 
-              {isAdmin && pollAuthor ? (
+              {isAdmin && pollAuthor && (!kind || kind === 'askAdmins') ? (
                 <Suspense fallback={<CardSkeleton lines={2} />}>
                   <AdminPollsSection
                     author={pollAuthor}
@@ -864,13 +916,13 @@ function DecisionsQueue() {
                 </Section>
               ) : null}
 
-              {isAdmin && data.unusual.length ? (
+              {!kind && isAdmin && data.unusual.length ? (
                 <Section title="Unusual approval route" accent={accentOf('neutral')} id="unusual">
                   <UnusualList decisions={data.unusual} now={data.now} />
                 </Section>
               ) : null}
 
-              {isAdmin && data.others.length ? (
+              {!kind && isAdmin && data.others.length ? (
                 <Section
                   title="Other transactions waiting for Minter Admins"
                   accent={accentOf('neutral')}
@@ -880,7 +932,7 @@ function DecisionsQueue() {
                 </Section>
               ) : null}
 
-              {isAdmin && signer ? (
+              {isAdmin && signer && (!kind || kind === 'cleanInvites') ? (
                 <Box
                   id={STALE_SECTION_ID}
                   sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
@@ -908,13 +960,15 @@ function DecisionsQueue() {
                 </Box>
               ) : null}
 
-              <HowSigningWorks
-                group={data.group}
-                now={data.now}
-                needed={needed}
-                totalAdmins={totalAdmins}
-                signers={data.admins.signers.length}
-              />
+              {showsDecisions ? (
+                <HowSigningWorks
+                  group={data.group}
+                  now={data.now}
+                  needed={needed}
+                  totalAdmins={totalAdmins}
+                  signers={data.admins.signers.length}
+                />
+              ) : null}
 
               {data.truncated ? <TruncatedNote what="the decisions" /> : null}
             </>
@@ -1076,7 +1130,16 @@ function DecisionsQueue() {
  * swapping the URL in place as the tabs do; a tab picked from far down the
  * page brings its top into view (useTopInViewOnSwitch).
  */
-function ViewPanel({ view, children }: { view: DecisionsView | null; children: ReactNode }) {
+function ViewPanel({
+  view,
+  tab,
+  children,
+}: {
+  view: DecisionsView | null;
+  /** The tab on screen: the view, or a kind of All Decisions. */
+  tab: DecisionsView | DecisionsKind | null;
+  children: ReactNode;
+}) {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const navigate = useNavigate();
   const touch = useMediaQuery('(pointer: coarse)');
@@ -1086,13 +1149,13 @@ function ViewPanel({ view, children }: { view: DecisionsView | null; children: R
     canGo: (step) => index + step >= 0 && index + step < DECISIONS_VIEWS.length,
     go: (step) => navigate(decisionsViewPath(DECISIONS_VIEWS[index + step].key), { replace: true }),
   });
-  useTopInViewOnSwitch(PATHS.decisions, view ?? '', DECISIONS_PANEL_ID);
+  useTopInViewOnSwitch(PATHS.decisions, tab ?? '', DECISIONS_PANEL_ID);
   return (
     <Box
       ref={setNode}
       role="tabpanel"
       id={DECISIONS_PANEL_ID}
-      aria-labelledby={view ? decisionsTabId(view) : undefined}
+      aria-labelledby={tab ? decisionsTabId(tab) : undefined}
       sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 2.5 } }}
     >
       {children}
