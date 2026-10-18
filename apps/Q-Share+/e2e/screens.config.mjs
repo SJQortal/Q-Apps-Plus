@@ -230,6 +230,6 @@ export default {
     // Opening the bell runs the first check: a comment by bob+builder on share 1, Alice Wonder's Tools collection holding it, and bob+builder's copy of Holiday pack.
     { key: 'notifications', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Notifications/ }).first().click({ timeout: 2500 }); await page.getByText(/added .* to Tools/).first().waitFor({ timeout: 5000 }).catch(() => {}); await page.waitForTimeout(400); } },
     // Last: the List choice is a setting, kept for the screens after it.
-    { key: 'collection-list', path: `/collection/${NAME}/${HOLIDAY}`, after: async (page) => { await page.getByRole('button', { name: 'List' }).first().click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'collection-list', path: `/collection/${NAME}/${HOLIDAY}`, after: async (page) => { await page.getByRole('button', { name: 'List' }).first().click({ timeout: 4000 }); await page.mouse.move(1, 1); await page.waitForTimeout(400); } },
   ],
 };
