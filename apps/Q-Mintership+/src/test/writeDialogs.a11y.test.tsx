@@ -10,10 +10,13 @@ import { addComments, addCommunityVotes, addReady } from '../../e2e/world.mjs';
 import { CommentsSection } from '../components/comments/CommentsSection';
 import { commentTarget } from '../data/commentThread';
 import DecisionsPage from '../pages/decisions/DecisionsPage';
+import ProposePage from '../pages/decisions/propose/ProposePage';
+import { SUBMIT_LABEL } from '../pages/decisions/propose/proposePageWords';
+import { PROPOSE_KINDS } from '../pages/decisions/proposeKinds';
 import HomePage from '../pages/home/HomePage';
 import NominatePage from '../pages/nominations/NominatePage';
 import AccountPage from '../pages/explorer/AccountPage';
-import { explorerAccountPath } from '../routes/paths';
+import { explorerAccountPath, proposePath, type ProposePageKind } from '../routes/paths';
 import { resetOptimisticComments } from '../state/comments';
 import {
   checkDialogByKeyboard,
@@ -134,98 +137,73 @@ describe('Write dialogs by keyboard: a decision', () => {
       'Approve several'
     );
   });
-
-  it('Propose cancelling one stale invite, and all of them', async () => {
-    const u = user();
-    await decisions();
-    await u.click(screen.getByRole('button', { name: 'Show them' }));
-    // Each row's button says whose invite, by the name the row shows.
-    const ada = await screen.findByRole(
-      'button',
-      { name: 'Propose cancelling the invite for Ada Approved' },
-      T
-    );
-    await checkDialogByKeyboard(u, ada, 'Cancel the invite for Ada Approved');
-    await checkDialogByKeyboard(
-      u,
-      await screen.findByRole('button', { name: /^Propose cancelling all \d+ older ones$/ }, T),
-      'Cancel stale invites'
-    );
-  });
 });
 
-describe('Write dialogs by keyboard: Propose', () => {
-  /** Propose → a choice, by keyboard: the menu, arrow keys and Enter. */
-  async function choose(u: ReturnType<typeof user>, label: RegExp): Promise<HTMLElement> {
-    const propose = screen.getByRole('button', { name: 'Propose' });
-    propose.focus();
-    await u.keyboard('{Enter}');
-    const menu = await screen.findByRole('menu', {}, T);
-    const items = within(menu).getAllByRole('menuitem');
-    const index = items.findIndex((item) => label.test(item.textContent ?? ''));
-    expect(index).toBeGreaterThanOrEqual(0);
-    for (let i = 0; i < index; i++) await u.keyboard('{ArrowDown}');
-    expect(items[index]).toHaveFocus();
-    await u.keyboard('{Enter}');
-    return propose;
+describe('The + Propose pages by keyboard', () => {
+  /** A + Propose page (Simon, 2026-10-18: a page each, as Propose nomination is). */
+  async function page(
+    kind: ProposePageKind,
+    options: { who?: string; setup?: RenderPageOptions['setup'] } = {}
+  ) {
+    const rendered = await renderPage(<ProposePage />, {
+      persona: 'admin',
+      path: proposePath(kind, options.who),
+      route: '/propose/:kind',
+      setup: options.setup,
+    });
+    await screen.findByRole('heading', { level: 1, name: PROPOSE_KINDS[kind].label }, T);
+    return rendered;
   }
 
-  it('every kind’s form: focus in, kept in, and back on Propose after Escape', async () => {
-    const u = user();
-    await decisions();
-    for (const [label, title] of [
-      [/^Remove a member/, 'Remove a member'],
-      [/^Ban an account/, 'Ban an account'],
-      [/^Make a Minter Admin/, 'Make a Minter Admin'],
-      [/^Remove a Minter Admin/, 'Remove a Minter Admin'],
-      [/^Lift a ban/, 'Lift a ban'],
-      [/^Cancel an approved invite/, 'Cancel an approved invite'],
+  it('every kind’s page: every control named, nothing for axe', async () => {
+    for (const [kind, listName] of [
+      ['kick', 'MINTER members'],
+      ['decline', 'Requested to join MINTER Group'],
+      ['ban', 'MINTER members'],
+      ['addAdmin', 'MINTER members'],
+      ['removeAdmin', 'Minter Admins'],
+      ['cancelBan', 'Bans in force'],
+      ['cancelInvite', 'Approved invites'],
     ] as const) {
-      const propose = await choose(u, label);
-      const dialog = await screen.findByRole('dialog', { name: title }, T);
-      await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
-      await expectNamedControls(dialog);
-      await expectFocusTrapped(u, dialog, ['Cancel']);
-      await closeWithEscape(u, () => propose);
+      const { container, unmount } = await page(kind);
+      await screen.findByRole('list', { name: listName }, T);
+      await expectNamedControls(container);
+      unmount();
     }
   });
 
-  it('reads the check on the person picked out of one live region, kept for the next pick', async () => {
+  it('picking from the list moves focus to the card, whose check is one live region', async () => {
     const u = user();
-    await decisions();
-    await choose(u, /^Remove a Minter Admin/);
-    const form = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' }, T);
-    const picker = within(form).getByRole('combobox', { name: 'Minter Admin' });
-    const admin = within(picker)
-      .getAllByRole('option')
-      .find((o) => /^Admin C/.test(o.textContent ?? '')) as HTMLOptionElement;
-    await u.selectOptions(picker, admin.value);
-    const live = within(form).getByRole('status');
-    expect(await within(live).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
-    // Picking someone else checks again in the same region, which says the new answer.
-    const other = within(picker)
-      .getAllByRole('option')
-      .find((o) => /^Admin D/.test(o.textContent ?? '')) as HTMLOptionElement;
-    await u.selectOptions(picker, other.value);
-    expect(within(form).getByRole('status')).toBe(live);
-    expect(await within(live).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
-    // Nothing inside it is a live region of its own (one region, read once).
-    expect(live.querySelector('[role="status"], [role="alert"], [aria-live]')).toBeNull();
-    expect(within(form).queryByRole('alert')).toBeNull();
-  });
-
-  it('Decline a join request: the list of who asked, then on to the reason, by keyboard', async () => {
-    const u = user();
-    await decisions((world) => addReady(world));
-    const propose = await choose(u, /^Decline a join request/);
-    const dialog = await screen.findByRole('dialog', { name: 'Decline a join request' }, T);
-    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement));
-    const list = await within(dialog).findByRole(
-      'list',
-      { name: 'Requested to join MINTER Group' },
+    await page('removeAdmin');
+    const admins = await screen.findByRole('list', { name: 'Minter Admins' }, T);
+    const remove = await within(admins).findByRole(
+      'button',
+      { name: 'Remove Admin C as Minter Admin' },
       T
     );
-    await expectFocusTrapped(u, dialog, ['Cancel']);
+    remove.focus();
+    await u.keyboard('{Enter}');
+    const live = (await screen.findByText('Nothing stops this proposal.', {}, T)).closest(
+      '[role="status"]'
+    ) as HTMLElement;
+    expect(live).toBeTruthy();
+    // The card took focus, so Tab goes on from who was picked.
+    await waitFor(() => expect(document.activeElement).toContainElement(live));
+    // Nothing inside it is a live region of its own (one region, read once).
+    expect(live.querySelector('[role="status"], [role="alert"], [aria-live]')).toBeNull();
+    // Change: back to the list, focus on its search.
+    await u.click(screen.getByRole('button', { name: 'Change: pick someone else' }));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('searchbox', { name: 'Search the Minter Admins, by name or address' })
+      ).toHaveFocus()
+    );
+  });
+
+  it('Decline a join request: the list of who asked, then the card and on to the reason, by keyboard', async () => {
+    const u = user();
+    await page('decline', { setup: (world) => addReady(world) });
+    const list = await screen.findByRole('list', { name: 'Requested to join MINTER Group' }, T);
     const decline = await within(list).findByRole(
       'button',
       { name: 'Decline Rae Ready’s join request' },
@@ -233,100 +211,60 @@ describe('Write dialogs by keyboard: Propose', () => {
     );
     decline.focus();
     await u.keyboard('{Enter}');
-    // The person is picked: focus goes on to the reason, with Change to pick someone else.
+    // The person is picked: focus is on their card, with Change; the reason comes next.
     await waitFor(() =>
-      expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus()
+      expect(document.activeElement).toContainElement(screen.getByText('Rae Ready'))
     );
-    expect(
-      within(dialog).getByRole('button', { name: 'Change: pick someone else who asked to join' })
-    ).toBeVisible();
-    await expectNamedControls(dialog);
-    await closeWithEscape(u, () => propose);
+    expect(screen.getByRole('button', { name: 'Change: pick someone else' })).toBeVisible();
+    const reason = screen.getByRole('textbox', { name: 'Reason' });
+    for (let i = 0; i < 8 && document.activeElement !== reason; i++) await u.tab();
+    expect(reason).toHaveFocus();
   });
 
-  it('picking yourself to remove says where Step down is, in the same live region', async () => {
-    const u = user();
-    const { address } = await decisions();
-    await choose(u, /^Remove a Minter Admin/);
-    const form = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' }, T);
-    await u.selectOptions(within(form).getByRole('combobox', { name: 'Minter Admin' }), address);
-    const live = within(form).getByRole('status');
-    expect(
-      within(live).getByText(
-        /To step down, use Step down as Minter Admin on your own Minter Profile\./
+  it('picking yourself to remove says where Step down is, in the card’s live region', async () => {
+    const { container } = await page('removeAdmin', { who: ADDR.admin });
+    const live = (
+      await screen.findByText(
+        /To step down, use Step down as Minter Admin on your own Minter Profile\./,
+        {},
+        T
       )
-    ).toBeVisible();
+    ).closest('[role="status"]') as HTMLElement;
     expect(within(live).getByRole('link', { name: 'Open your Minter Profile' })).toBeVisible();
     expect(live.querySelector('[role="status"], [role="alert"], [aria-live]')).toBeNull();
-    await expectNamedControls(form);
+    await expectNamedControls(container);
   });
 
-  it('“Propose removing their admin role” moves focus to the form’s new title', async () => {
+  it('the proposal’s Hub step: focus in, kept in, and back on the button after Escape', async () => {
     const u = user();
-    await decisions();
-    await choose(u, /^Remove a member/);
-    const form = await screen.findByRole('dialog', { name: 'Remove a member' }, T);
-    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Admin B');
-    await u.keyboard('{Enter}');
-    const switchTo = await within(form).findByRole(
-      'button',
-      { name: 'Propose removing their admin role' },
-      T
-    );
-    switchTo.focus();
-    await u.keyboard('{Enter}');
-    const switched = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' }, T);
-    // The button went with the old form: focus is on what the dialog is now.
-    await waitFor(() =>
-      expect(within(switched).getByRole('heading', { name: 'Remove a Minter Admin' })).toHaveFocus()
-    );
-  });
+    await page('kick', { who: ADDR.learner });
+    await screen.findByText('Nothing stops this proposal.', {}, T);
+    await u.type(screen.getByRole('textbox', { name: 'Reason' }), 'Spam in the chat.');
+    const submit = screen.getByRole('button', { name: SUBMIT_LABEL.kick.named('Leo Learner') });
+    const hub = await checkDialogByKeyboard(u, submit, /^Remove from MINTER: Leo Learner/, {
+      reach: ['Back to the form', 'Continue to Hub'],
+    });
+    expect(hub).toBeTruthy();
 
-  it('Clean up stale invites opens the section and moves focus to it', async () => {
-    const u = user();
-    await decisions();
-    await choose(u, /^Clean up stale invites/);
-    const section = screen.getByRole('region', { name: 'Clean up stale invites' });
-    await waitFor(() => expect(section).toHaveFocus());
-    expect(within(section).getByRole('button', { name: 'Hide the list' })).toHaveAttribute(
-      'aria-expanded',
-      'true'
-    );
-    // The next Tab goes on from there, into the list.
-    await u.tab();
-    expect(section).toContainElement(document.activeElement as HTMLElement);
-  });
-
-  it('the Hub step after Review, and its result, put focus back on Propose', async () => {
-    const u = user();
-    await decisions();
-    const propose = await choose(u, /^Remove a member/);
-    const form = await screen.findByRole('dialog', { name: 'Remove a member' }, T);
-    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
+    // Through Hub (the mock declines it) to the result, then Close: back on the button.
+    submit.focus();
     await u.keyboard('{Enter}');
-    await within(form).findByText('Nothing stops this proposal.', {}, T);
-    await u.type(within(form).getByRole('textbox', { name: 'Reason' }), 'Spam in the chat.');
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
-    const hub = await screen.findByRole('dialog', { name: /^Remove from MINTER: Leo Learner/ }, T);
-    await waitFor(() => expect(hub).toContainElement(document.activeElement as HTMLElement));
-    await expectNamedControls(hub);
-    await expectFocusTrapped(u, hub, ['Back to the form', 'Continue to Hub']);
-    await closeWithEscape(u, () => propose);
-
-    // Through Hub (the mock declines it) to the result, then Close.
-    await choose(u, /^Remove a member/);
-    const again = await screen.findByRole('dialog', { name: 'Remove a member' }, T);
-    await u.type(within(again).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
-    await u.keyboard('{Enter}');
-    await within(again).findByText('Nothing stops this proposal.', {}, T);
-    await u.type(within(again).getByRole('textbox', { name: 'Reason' }), 'Spam in the chat.');
-    await u.click(within(again).getByRole('button', { name: 'Review' }));
     const step = await screen.findByRole('dialog', { name: /^Remove from MINTER: / }, T);
     await u.click(within(step).getByRole('button', { name: 'Continue to Hub' }));
     await within(step).findByText('Cancelled in Hub. Nothing was sent.', {}, T);
     expect(within(step).getByRole('button', { name: 'Back to the form' })).toHaveFocus();
     await u.click(within(step).getByRole('button', { name: 'Close' }));
-    await waitFor(() => expect(propose).toHaveFocus(), T);
+    await waitFor(() => expect(submit).toHaveFocus(), T);
+  });
+
+  it('cancelling the older invites in one go', async () => {
+    const u = user();
+    await page('cancelInvite');
+    await checkDialogByKeyboard(
+      u,
+      await screen.findByRole('button', { name: /^Propose cancelling all \d+ older ones$/ }, T),
+      'Cancel stale invites'
+    );
   });
 });
 

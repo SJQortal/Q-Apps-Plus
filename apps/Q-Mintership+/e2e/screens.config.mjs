@@ -301,28 +301,11 @@ const WREN_COMMENTS = /^Comments \(\d+\): the nomination of Wren Waiting$/;
  * Propose wherever it is (the header's button, or the floating one on phones),
  * then one of its choices (a menu, or a sheet of buttons on phones).
  */
-const proposeChoice = (choice) => async (page) => {
+/** A + Propose page (Simon, 2026-10-18: a page each), settled with its list in. */
+const proposePage = (listName) => async (page) => {
   await settle(page);
-  await page
-    .locator('button:visible', { hasText: 'Propose' })
-    .or(page.locator('button[aria-label="Propose"]:visible'))
-    .first()
-    .click({ timeout: 8000 });
-  await page
-    .getByRole('menuitem', { name: new RegExp(`^${choice}`) })
-    .or(page.getByRole('button', { name: new RegExp(`^${choice}`) }))
-    .first()
-    .click({ timeout: 8000 });
-  await page.getByRole('dialog', { name: choice }).waitFor({ timeout: 8000 });
-};
-
-/** Propose (a menu, or a sheet on phones), then one of its choices. */
-const propose = (choice) => async (page) => {
-  await settle(page);
-  await page.getByRole('button', { name: 'Propose', exact: true }).click({ timeout: 4000 });
-  const choices = page.locator('[role="menu"], .MuiDrawer-paper');
-  await choices.getByText(choice, { exact: true }).click({ timeout: 4000 });
-  await page.getByRole('dialog', { name: choice }).waitFor({ timeout: 8000 });
+  await page.getByRole('list', { name: listName }).waitFor({ timeout: 8000 });
+  await page.waitForTimeout(400);
 };
 
 /**
@@ -454,33 +437,22 @@ export default {
     // A newcomer whose join request was sent before: the line on what happens to it.
     { key: 'home-ready', path: '/?as=ready', after: settle },
     { key: 'nominations', path: '/decisions?show=nominations&as=nominator', after: settle },
-    // Who asked to join (Simon, 2026-10-18: Ready to mint, renamed and moved into Propose →
-    // Decline a join request): the list, and searched by a name resolved to its owner.
+    // + Propose's choices, a page each in Propose nomination's style (Simon, 2026-10-18), each
+    // with its list to pick from: who asked to join (Decline a join request), and searched by
+    // a name resolved to its owner.
     {
-      key: 'decisions-join-requests',
-      path: '/decisions?as=admin',
-      overlay: true,
-      after: async (page) => {
-        await proposeChoice('Decline a join request')(page);
-        await page
-          .getByRole('list', { name: 'Requested to join MINTER Group' })
-          .waitFor({ timeout: 8000 });
-        await page.waitForTimeout(400);
-      },
+      key: 'propose-decline',
+      path: '/propose/decline-join-request?as=admin',
+      after: proposePage('Requested to join MINTER Group'),
     },
     {
-      key: 'decisions-join-requests-search',
-      path: '/decisions?as=admin',
-      overlay: true,
+      key: 'propose-decline-search',
+      path: '/propose/decline-join-request?as=admin',
       after: async (page) => {
-        await proposeChoice('Decline a join request')(page);
+        await proposePage('Requested to join MINTER Group')(page);
         await page
           .getByRole('searchbox', { name: 'Search who asked to join MINTER, by name or address' })
           .fill('fern', { timeout: 4000 });
-        // A row is read once it nears the screen: on a landscape phone the list starts below it.
-        await page
-          .getByRole('list', { name: 'Requested to join MINTER Group' })
-          .evaluate((list) => list.scrollIntoView({ block: 'center' }));
         const row = page.getByRole('link', {
           name: `${FORMER_READY.removed.name}: open their page`,
         });
@@ -488,6 +460,71 @@ export default {
         await row.evaluate((link) => link.closest('li')?.scrollIntoView({ block: 'center' }));
         await page.waitForTimeout(400);
       },
+    },
+    // The members (Remove a member, Ban an account, Make a Minter Admin), then one picked with
+    // its reason; a ban's length.
+    {
+      key: 'propose-remove-member',
+      path: '/propose/remove-member?as=admin',
+      after: proposePage('MINTER members'),
+    },
+    {
+      key: 'propose-remove-member-picked',
+      path: `/propose/remove-member?who=${ADDR.learner}&as=admin`,
+      after: async (page) => {
+        await settle(page);
+        await page.getByText('Nothing stops this proposal.').waitFor({ timeout: 8000 });
+        await page.getByRole('textbox', { name: 'Reason' }).fill('Not minting for 6 months');
+        await page.waitForTimeout(300);
+      },
+    },
+    { key: 'propose-ban', path: '/propose/ban?as=admin', after: proposePage('MINTER members') },
+    {
+      key: 'propose-ban-picked',
+      path: `/propose/ban?who=${ADDR.learner}&as=admin`,
+      after: async (page) => {
+        await settle(page);
+        await page.getByText('Nothing stops this proposal.').waitFor({ timeout: 8000 });
+        await page.getByRole('textbox', { name: 'Reason' }).fill('Spam in Q-Chat');
+        await page.getByRole('radio', { name: /^A number of days/ }).check({ timeout: 4000 });
+        const length = page.getByRole('textbox', { name: 'Days' });
+        await length.fill('7');
+        await length.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(300);
+      },
+    },
+    {
+      key: 'propose-make-admin',
+      path: '/propose/make-minter-admin?as=admin',
+      after: proposePage('MINTER members'),
+    },
+    // The Minter Admins, with the one whose removal waits crossed out; yourself points to Step down.
+    {
+      key: 'propose-remove-admin',
+      path: '/propose/remove-minter-admin?as=admin',
+      after: proposePage('Minter Admins'),
+    },
+    {
+      key: 'propose-remove-admin-self',
+      path: `/propose/remove-minter-admin?who=${ADDR.admin}&as=admin`,
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('link', { name: 'Open your Minter Profile' })
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
+    // The bans in force (Lift a ban), and the approved invites (Cancel an approved invite).
+    {
+      key: 'propose-lift-ban',
+      path: '/propose/lift-ban?as=admin',
+      after: proposePage('Bans in force'),
+    },
+    {
+      key: 'propose-cancel-invite',
+      path: '/propose/cancel-invite?as=admin',
+      after: proposePage('Approved invites'),
     },
     // The nominee's own card comes first, with Accept nomination.
     {
@@ -568,18 +605,15 @@ export default {
         await page.waitForTimeout(500);
       },
     },
+    // Cancelling one approved invite, up to its two Hub steps.
     {
-      key: 'decisions-cancel-invite',
-      path: '/decisions?as=admin',
+      key: 'propose-cancel-invite-hub',
+      path: `/propose/cancel-invite?who=${fakeAddress('stale-2')}&as=admin`,
       overlay: true,
       after: async (page) => {
-        await propose('Cancel an approved invite')(page);
-        const form = page.getByRole('dialog', { name: 'Cancel an approved invite' });
-        await form
-          .getByRole('combobox', { name: 'Approved invite' })
-          .selectOption(fakeAddress('stale-2'), { timeout: 8000 });
-        await form.getByText('Nothing stops this proposal.').waitFor({ timeout: 8000 });
-        await form.getByRole('button', { name: 'Review' }).click({ timeout: 4000 });
+        await settle(page);
+        await page.getByText('Nothing stops this proposal.').waitFor({ timeout: 8000 });
+        await page.getByRole('button', { name: /^Propose cancelling/ }).click({ timeout: 4000 });
         await page
           .getByRole('dialog', { name: /^Cancel an approved invite: / })
           .waitFor({ timeout: 8000 });
@@ -605,14 +639,13 @@ export default {
       overlay: true,
       after: open('Considering: Add to MINTER, bob+builder', 'Mark as considering'),
     },
-    // Propose cancelling all: two Hub steps for each stale invite (the intro).
+    // Propose cancelling all (Cancel an approved invite): two Hub steps for each older one.
     {
-      key: 'decisions-cancel-all',
-      path: '/decisions?as=admin',
+      key: 'propose-cancel-all',
+      path: '/propose/cancel-invite?as=admin',
       overlay: true,
       after: async (page) => {
-        await settle(page);
-        await page.getByRole('button', { name: 'Show them', exact: true }).click({ timeout: 4000 });
+        await proposePage('Approved invites')(page);
         await page
           .getByRole('button', { name: /^Propose cancelling all \d+ older ones$/ })
           .click({ timeout: 8000 });
@@ -885,23 +918,6 @@ export default {
         await page.getByText(/is suggested for Minter Admins/).waitFor({ timeout: 8000 });
       },
     },
-    // Picking yourself under Remove a Minter Admin points to your own Minter Profile.
-    {
-      key: 'decisions-remove-self',
-      path: '/decisions?as=admin',
-      overlay: true,
-      after: async (page) => {
-        await propose('Remove a Minter Admin')(page);
-        await page
-          .getByRole('dialog', { name: 'Remove a Minter Admin' })
-          .getByRole('combobox', { name: 'Minter Admin' })
-          .selectOption(ADDR.admin, { timeout: 8000 });
-        await page
-          .getByRole('link', { name: 'Open your Minter Profile' })
-          .waitFor({ timeout: 8000 });
-        await page.waitForTimeout(300);
-      },
-    },
     // Settings → Muted names, with three names muted on this device (one long, none of
     // them a commenter in the mock world). The list is cleared again before the
     // capture (the page keeps what it read), so later screens see no muted names.
@@ -995,15 +1011,14 @@ export default {
         await page.waitForTimeout(400);
       },
     },
-    // Declines (e2e/world.mjs addDecline): Propose → Decline a join request, with Decline on
-    // the rows without a nomination and one row whose decline is waiting; then one picked,
-    // with its reason and a note for the Minter Admins.
+    // Declines (e2e/world.mjs addDecline): Decline a join request, with Decline on the rows
+    // without a nomination and one row whose decline is waiting; then one picked, with its
+    // reason and a note for the Minter Admins.
     {
-      key: 'decisions-join-requests-decline',
-      path: '/decisions?as=admin',
-      overlay: true,
+      key: 'propose-decline-waiting',
+      path: '/propose/decline-join-request?as=admin',
       after: withDecline(async (page) => {
-        await proposeChoice('Decline a join request')(page);
+        await proposePage('Requested to join MINTER Group')(page);
         const waiting = page.getByRole('link', { name: /^A decline is waiting for Minter Admins/ });
         await waiting.waitFor({ timeout: 8000 });
         await page
@@ -1015,19 +1030,17 @@ export default {
       }),
     },
     {
-      key: 'decisions-join-requests-picked',
-      path: '/decisions?as=admin',
-      overlay: true,
+      key: 'propose-decline-picked',
+      path: '/propose/decline-join-request?as=admin',
       after: withDecline(async (page) => {
-        await proposeChoice('Decline a join request')(page);
+        await proposePage('Requested to join MINTER Group')(page);
         await page
           .getByRole('button', { name: /^Decline .*join request$/ })
           .first()
           .click({ timeout: 8000 });
-        const dialog = page.getByRole('dialog', { name: 'Decline a join request' });
-        await dialog.getByText('Nothing stops this proposal.').waitFor({ timeout: 8000 });
-        await dialog.getByRole('textbox', { name: 'Reason' }).fill('No node running');
-        await dialog
+        await page.getByText('Nothing stops this proposal.').waitFor({ timeout: 8000 });
+        await page.getByRole('textbox', { name: 'Reason' }).fill('No node running');
+        await page
           .getByRole('textbox', { name: 'Note for the Minter Admins (optional)' })
           .fill('Asked them twice in Q-Chat; no answer.');
         await page.waitForTimeout(300);

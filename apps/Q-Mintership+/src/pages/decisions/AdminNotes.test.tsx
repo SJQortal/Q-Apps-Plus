@@ -15,7 +15,10 @@ import { ADDR } from '../../test/world';
 import { base58Encode } from '../../qortal/base58';
 import { fromData64 } from '../../data/adminPollRecords';
 import { resetPendingAdminNotes } from '../../state/adminNotes';
+import { proposePath } from '../../routes/paths';
 import DecisionsPage from './DecisionsPage';
+import ProposePage from './propose/ProposePage';
+import { SUBMIT_LABEL } from './propose/proposePageWords';
 
 vi.setConfig({ testTimeout: 30_000 });
 afterEach(() => {
@@ -43,6 +46,18 @@ async function openPage(persona: string, more?: (world: World) => void) {
 }
 
 const card = (name: RegExp) => screen.getByRole('article', { name });
+
+/** + Propose → Remove a member, for Leo Learner (a page of its own). */
+async function openRemoval() {
+  const rendered = await renderPage(<ProposePage />, {
+    persona: 'admin',
+    path: proposePath('kick', ADDR.learner),
+    route: '/propose/:kind',
+    setup: (world) => serveAdminPolls(world, 'admin'),
+  });
+  await screen.findByRole('heading', { level: 1, name: 'Remove a member' }, T);
+  return rendered;
+}
 
 describe('on the cards', () => {
   it('a Minter Admin reads the proposer’s note under the reason, and only the proposer’s', async () => {
@@ -83,7 +98,7 @@ describe('on the cards', () => {
 describe('from Propose', () => {
   it('a note goes as a third Hub step once the proposal and its approval are in, encrypted', async () => {
     const u = userEvent.setup();
-    const { world, address, publicKey } = await openPage('admin');
+    const { world, address, publicKey } = await openRemoval();
     const kickSig = base58Encode(new Uint8Array(64).fill(5));
     mockQortalRequest('KICK_FROM_GROUP', (req: Record<string, unknown>) => {
       const tx = {
@@ -109,11 +124,7 @@ describe('from Propose', () => {
       identifier: r.identifier,
     }));
 
-    await u.click(screen.getByRole('button', { name: 'Propose' }));
-    await u.click(await screen.findByRole('menuitem', { name: /Remove a member/ }));
-    const form = await screen.findByRole('dialog', { name: 'Remove a member' });
-    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
-    await u.click(within(form).getByRole('button', { name: 'Find' }));
+    const form = document.body;
     expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
     await u.type(within(form).getByRole('textbox', { name: 'Reason' }), 'Not minting');
     const noteBox = within(form).getByRole('textbox', {
@@ -123,7 +134,7 @@ describe('from Propose', () => {
       within(form).getByText(/Encrypted to the 19 Minter Admins: only they can read it\./)
     ).toBeVisible();
     await u.type(noteBox, 'Offline since March; asked twice.');
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    await u.click(screen.getByRole('button', { name: SUBMIT_LABEL.kick.named('Leo Learner') }));
 
     const hub = await screen.findByRole('dialog', { name: /Remove from MINTER: Leo Learner/ }, T);
     expect(
@@ -149,15 +160,11 @@ describe('from Propose', () => {
 
   it('with no note, still two steps', async () => {
     const u = userEvent.setup();
-    await openPage('admin');
-    await u.click(screen.getByRole('button', { name: 'Propose' }));
-    await u.click(await screen.findByRole('menuitem', { name: /Remove a member/ }));
-    const form = await screen.findByRole('dialog', { name: 'Remove a member' });
-    await u.type(within(form).getByRole('textbox', { name: 'Name or address' }), 'Leo Learner');
-    await u.click(within(form).getByRole('button', { name: 'Find' }));
+    await openRemoval();
+    const form = document.body;
     await within(form).findByText('Nothing stops this proposal.', {}, T);
     await u.type(within(form).getByRole('textbox', { name: 'Reason' }), 'Not minting');
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    await u.click(screen.getByRole('button', { name: SUBMIT_LABEL.kick.named('Leo Learner') }));
     const hub = await screen.findByRole('dialog', { name: /Remove from MINTER: Leo Learner/ }, T);
     expect(within(hub).getByText('Step 2 of 2: Approve it')).toBeVisible();
     expect(within(hub).queryByText(/Add your note/)).toBeNull();

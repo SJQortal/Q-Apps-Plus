@@ -43,6 +43,8 @@ export const EXPLORER_BANNED_IMPORTS = [
   '**/decision/adminNoteStep',
   '**/decisions/*Dialog',
   '**/decisions/*Dialogs',
+  // The + Propose pages (pages/decisions/propose/), which send proposals.
+  '**/propose/*',
 ];
 
 export default tseslint.config(

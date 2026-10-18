@@ -1,6 +1,7 @@
 /**
- * What a Minter Admin can propose from the Decisions screen, with the Hub
- * action and fee type each one uses, and the check run before Hub opens.
+ * What a Minter Admin can propose from the Decisions screen (+ Propose, a
+ * page each: pages/decisions/propose/), with the Hub action and fee type
+ * each one uses, and the check run before Hub opens.
  */
 import { getNameOwner, isAddress } from '../../data/accounts';
 import { getMembership } from '../../data/group';
@@ -39,7 +40,7 @@ export interface ProposeKindInfo {
 export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   kick: {
     label: 'Remove a member',
-    description: 'Out of MINTER, or decline a join request. They keep their level.',
+    description: 'Out of MINTER. They keep their level.',
     action: 'KICK_FROM_GROUP',
     txType: 'GROUP_KICK',
   },
@@ -75,7 +76,7 @@ export const PROPOSE_KINDS: Record<ProposeKind, ProposeKindInfo> = {
   },
   cancelInvite: {
     label: 'Cancel an approved invite',
-    description: 'One approved invite you pick, with your approval added.',
+    description: 'Pick from the invites nobody used, or cancel the old ones in one go.',
     action: 'CANCEL_GROUP_INVITE',
     txType: 'CANCEL_GROUP_INVITE',
   },

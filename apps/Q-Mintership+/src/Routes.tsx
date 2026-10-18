@@ -20,6 +20,7 @@ import { nominationsRedirect } from './pages/decisions/decisionsViews';
 import HomePage from './pages/home/HomePage';
 const NominationPage = lazy(() => import('./pages/nominations/NominationPage'));
 const NominatePage = lazy(() => import('./pages/nominations/NominatePage'));
+const ProposePage = lazy(() => import('./pages/decisions/propose/ProposePage'));
 const DecisionsPage = lazy(() => import('./pages/decisions/DecisionsPage'));
 const DecisionPage = lazy(() => import('./pages/decisions/DecisionPage'));
 const AdminPollPage = lazy(() => import('./pages/decisions/AdminPollPage'));
@@ -67,6 +68,9 @@ const router = createBrowserRouter(
         // Shareable links: one nomination, one decision (also once it is decided).
         { path: 'nominations/:address', element: <NominationPage /> },
         { path: 'nominate', element: <NominatePage /> },
+        // Every other + Propose choice, a page each (Simon, 2026-10-18).
+        { path: 'propose/:kind', element: <ProposePage /> },
+        { path: 'propose', element: <Navigate to={PATHS.decisions} replace /> },
         // Old /decisions?d=<signature> links open /decisions/<signature> (DecisionsPage).
         { path: 'decisions', element: <DecisionsPage /> },
         { path: 'decisions/:signature', element: <DecisionPage /> },

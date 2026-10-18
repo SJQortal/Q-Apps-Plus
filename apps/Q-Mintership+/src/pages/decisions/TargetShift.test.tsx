@@ -5,7 +5,10 @@ import { renderPage, type RenderPageOptions } from '../../test/render';
 import { ADDR, addTargetShift, type World } from '../../../e2e/world.mjs';
 import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
+import { proposePath } from '../../routes/paths';
 import DecisionsPage from './DecisionsPage';
+import ProposePage from './propose/ProposePage';
+import { SUBMIT_LABEL } from './propose/proposePageWords';
 
 // The heaviest page tests: each flow renders the whole Decisions page several times
 // over. Alone they take 2–7 s; with the full suite on every core some pass 15 s.
@@ -265,19 +268,23 @@ describe('Decisions: signing an admin change that would tip others over', () => 
   });
 });
 
-describe('Decisions: proposing an admin change', () => {
+describe('+ Propose: an admin change', () => {
   it('says what it would do to the target before Hub opens, and needs the tick', async () => {
     const u = user();
-    await openShifted();
-    await u.click(screen.getByRole('button', { name: 'Propose' }));
-    await u.click(await screen.findByRole('menuitem', { name: /Remove a Minter Admin/ }));
-    const form = await screen.findByRole('dialog', { name: 'Remove a Minter Admin' });
-    expect(within(form).getByText(/this can move the target for all of them/)).toBeVisible();
-    const picker = within(form).getByRole('combobox', { name: 'Minter Admin' });
-    const option = within(picker).getByRole('option', { name: 'Admin B' }) as HTMLOptionElement;
-    await u.selectOptions(picker, option.value);
-    expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
-    await u.click(within(form).getByRole('button', { name: 'Review' }));
+    await renderPage(<ProposePage />, {
+      persona: 'admin',
+      path: proposePath('removeAdmin'),
+      route: '/propose/:kind',
+      setup: (world) => void addTargetShift(world),
+    });
+    const next = await screen.findByRole('region', { name: 'What happens next' }, T);
+    expect(within(next).getByText(/this can move the target for all of them/)).toBeVisible();
+    const admins = await screen.findByRole('list', { name: 'Minter Admins' }, T);
+    await u.click(
+      await within(admins).findByRole('button', { name: 'Remove Admin B as Minter Admin' }, T)
+    );
+    expect(await screen.findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
+    await u.click(screen.getByRole('button', { name: SUBMIT_LABEL.removeAdmin.named('Admin B') }));
 
     const hub = await screen.findByRole('dialog', { name: /Remove a Minter Admin: Admin B/ });
     const note = within(hub).getByRole('note');

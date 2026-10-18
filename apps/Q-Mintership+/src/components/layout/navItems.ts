@@ -25,8 +25,8 @@ export const NAV_ITEMS: NavItem[] = [
     key: 'decisions',
     label: 'Decisions',
     path: PATHS.decisions,
-    // Nominations is one of its tabs (Simon, 2026-10-17): a nomination and the form are its.
-    also: [PATHS.nominations, PATHS.nominate],
+    // Nominations is one of its tabs (Simon, 2026-10-17): a nomination and the forms are its.
+    also: [PATHS.nominations, PATHS.nominate, PATHS.propose],
     Icon: FactCheckOutlinedIcon,
   },
   { key: 'history', label: 'History', path: PATHS.history, Icon: HistoryOutlinedIcon },

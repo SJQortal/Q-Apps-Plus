@@ -4,7 +4,8 @@
  * Decisions"), in two tabs (decisionsViews.ts): All Decisions and Nominations
  * (NominationsPanel.tsx); then a tab for each kind of
  * decision with something open (Simon, 2026-10-18: Removals, Declines, Bans,
- * New MAs, Remove MAs, Lift ban, Cancel invite, Clean invites, Ask MAs),
+ * New MAs, Remove MAs, Lift ban, Cancel invite, Ask MAs; Nominations only
+ * while it lists someone),
  * each All Decisions narrowed to that kind (`?show=<kind>`). A Minter Admin opens on
  * Decisions, everyone else on Nominations; a swipe sideways on a touch
  * screen opens the next or the previous one. The nominee's own nomination
@@ -22,10 +23,11 @@
  * Minter Admins sign here, one at a time or several in a row, reject, or
  * withdraw their signature (on chain both are a rejection), say they are
  * considering a decision or a waiting nomination (a QDN record), make the first
- * signature on a nomination, propose kicks, bans, admin changes,
- * declined join requests (picked from who asked to join: Requested to join
- * MINTER Group) and cancelled invites (each with their own signature, and an
- * optional note for the Minter Admins), and clean up stale invites. Doing nothing lets a decision expire. Everyone else follows
+ * signature on a nomination, and propose kicks, bans, admin changes,
+ * declined join requests and cancelled invites from + Propose, each on a page
+ * of its own (Simon, 2026-10-18: pages/decisions/propose/, as Propose
+ * nomination is; the stale invites are Cancel an approved invite's list
+ * now). Doing nothing lets a decision expire. Everyone else follows
  * along, comments, and votes Yes or No (advisory, a QDN record) on
  * nominations, removals, bans and new Minter Admins, as on Nominations.
  *
@@ -39,18 +41,9 @@
  * the Minter Admins) and vote on them under "Minter Admin polls": encrypted
  * to the Minter Admins, and loaded only for them.
  */
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { lazy, Suspense, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { PATHS, legacyDecisionPath } from '../../routes/paths';
+import { PATHS, legacyDecisionPath, proposePath } from '../../routes/paths';
 import { appParam } from '../../routes/hubLocation';
 import {
   Alert,
@@ -119,7 +112,6 @@ import {
   type DecisionGroup,
 } from './decisionGroups';
 import { SECTION_ICON, sectionAccent, type SectionAccent } from './sectionAccents';
-import { focusElement } from '../../utils/focus';
 import { displayName, formatCount, plural } from '../../utils/format';
 import type { ChainNow } from '../../data/chain';
 import { bulkSign } from '../../writes/flows';
@@ -148,19 +140,14 @@ import {
   type DecisionsView,
 } from './decisionsViews';
 import { useAdminPolls } from './useAdminPolls';
-import { useQuery } from '../../hooks/useQuery';
-import { loadStaleInvites } from '../../data/staleInvites';
 import { answerView, canReject, canSign, decisionCardId, isWaitingForMe } from './decisionUi';
 import { doubleLeftOutText, doublesAsideText } from './doubleUi';
 import { FirstSignatureDialog } from './FirstSignatureDialog';
 import { HowSigningWorks } from './HowSigningWorks';
-import { ProposeDialog } from './ProposeDialog';
 import { ProposeMenu, type ProposeChoice } from './ProposeMenu';
-import type { ProposeKind } from './proposeKinds';
 import { RejectDialog, type RejectMode } from './RejectDialog';
 import { impactIn, riskIn, useShift } from './useShift';
 import { SignDialog } from './SignDialog';
-import { StaleInvites } from './StaleInvites';
 import { OtherPendingList } from './OtherPendingList';
 import { UnusualList } from './UnusualList';
 import { useSeenTargetChange } from './seenTarget';
@@ -181,8 +168,6 @@ const COLLECTING: ReadonlySet<Decision['phase']> = new Set([
   'rejectedMet',
   'unconfirmed',
 ]);
-
-const STALE_SECTION_ID = 'stale-invites';
 
 /** A page section by its Section id, to return focus to. */
 function sectionOf(id: string): HTMLElement | null {
@@ -249,14 +234,9 @@ function DecisionsQueue() {
     mode: RejectMode;
   } | null>(null);
   const [firstTarget, setFirstTarget] = useState<Nomination | null>(null);
-  const [propose, setPropose] = useState<{
-    kind: ProposeKind;
-    preset: { address: string; name?: string | null } | null;
-  } | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [bulkList, setBulkList] = useState<Decision[] | null>(null);
-  const [staleExpanded, setStaleExpanded] = useState(false);
   const [asking, setAsking] = useState(false);
   // What opened Ask: null for Propose's menu, else the polls section's own button.
   const askFrom = useRef<HTMLElement | null>(null);
@@ -274,21 +254,6 @@ function DecisionsQueue() {
     if (mode === 'sign') setSignTarget(decision);
     else setRejectTarget({ decision, mode });
   };
-  // Propose → Clean up stale invites: the section comes into view and takes focus (on the
-  // Decisions tab, opened first when another one is on screen), after the menu (or the
-  // phone's sheet) has put it back on Propose as it closed.
-  const [staleFocus, setStaleFocus] = useState(0);
-  const staleFocused = useRef(0);
-  useEffect(() => {
-    if (staleFocus === staleFocused.current || view !== 'decisions') return;
-    const section = sectionOf('stale');
-    if (!section) return;
-    staleFocused.current = staleFocus;
-    document
-      .getElementById(STALE_SECTION_ID)
-      ?.scrollIntoView?.({ block: 'start', behavior: reduced ? 'auto' : 'smooth' });
-    focusElement(section, { preventScroll: true });
-  }, [staleFocus, view, reduced]);
 
   const data = decisionsQ.data;
   const ready = session.status === 'ready';
@@ -307,10 +272,7 @@ function DecisionsQueue() {
   );
   const myKey = signer?.publicKey ?? null;
   const me = signer?.address ?? '';
-  // For the Clean invites and Ask MAs tabs' counts: the same reads their sections make.
-  const staleList = useQuery(isAdmin ? 'staleinvites:list' : null, (force) =>
-    loadStaleInvites({ force })
-  );
+  // For the Ask MAs tab's count: the same read its section makes.
   const adminPolls = useAdminPolls(isAdmin ? me : null);
   // Propose's menu for Minter Admins (from their status until the queue says so too).
   const adminRole = isAdmin || Boolean(me && status?.isAdmin);
@@ -389,7 +351,7 @@ function DecisionsQueue() {
 
   const decisions = data?.decisions ?? [];
   const allCollecting = decisions.filter((d) => COLLECTING.has(d.phase));
-  // On a kind's tab, only that kind (and nothing on Clean invites or Ask MAs).
+  // On a kind's tab, only that kind (and nothing on Ask MAs).
   const collecting = allCollecting.filter(ofKind);
   const closed = decisions.filter((d) => !COLLECTING.has(d.phase)).filter(ofKind);
   // Answered: signed or rejected (a withdrawn signature too), in a block or on its way.
@@ -504,13 +466,6 @@ function DecisionsQueue() {
   };
   const impactOf = (d: Decision) => impactIn(shift, d);
   const riskOf = (d: Decision) => riskIn(shift, d);
-  const projectImpact = useCallback(
-    (kind: ProposeKind, subject: string) =>
-      shift && (kind === 'addAdmin' || kind === 'removeAdmin')
-        ? projectShift(shift.state, shift.list, [{ kind, subject }])
-        : null,
-    [shift]
-  );
 
   // Sign several: the admin changes picked, and what they would do together.
   const bulkChanges = useMemo(
@@ -541,7 +496,6 @@ function DecisionsQueue() {
   const refresh = () => {
     void decisionsQ.refetch();
     void nominationsQ.refetch();
-    invalidate('staleinvites:');
     // Comment counts and open threads (a Minter Admin's own ones, and the notes, too).
     invalidate('comments:');
     invalidate('macomments:');
@@ -562,15 +516,8 @@ function DecisionsQueue() {
       setAsking(true);
       return;
     }
-    if (choice === 'stale') {
-      // Where the section is: All Decisions, or its own tab.
-      if (view !== 'decisions' || (kind && kind !== 'cleanInvites'))
-        navigate(decisionsViewPath('decisions'), { replace: true });
-      setStaleExpanded(true);
-      setStaleFocus((n) => n + 1);
-      return;
-    }
-    setPropose({ kind: choice, preset: null });
+    // Every other choice is a page of its own (Simon, 2026-10-18), as Propose nomination is.
+    navigate(proposePath(choice));
   };
 
   const fetching = decisionsQ.fetching || nominationsQ.fetching;
@@ -581,7 +528,7 @@ function DecisionsQueue() {
   // comes back to it).
   const proposeNomination = () => navigate(PATHS.nominate);
   const fab = phone && !landscape && (adminRole || canNominate);
-  const proposing = Boolean(propose) || asking;
+  const proposing = asking;
   const fabShown = fab && !selecting && (proposing || (!shortFrame && !keyboardOpen));
   const headerAction = fab ? null : adminRole ? (
     <ProposeMenu onChoose={chooseProposal} buttonRef={proposeButton} nominate={canNominate} />
@@ -610,18 +557,14 @@ function DecisionsQueue() {
   const views = shownDecisionsViews(counts, tabKey);
   // Each kind's count: what is open of it. A tab shows while it has some (or is on screen).
   const kindCount = (key: DecisionsKind): number | undefined =>
-    key === 'cleanInvites'
-      ? staleList.data?.rows.length
-      : key === 'askAdmins'
-        ? adminPolls.views
-          ? adminPolls.views.filter((v) => v.open).length
-          : undefined
-        : data
-          ? allCollecting.filter((d) => decisionsKindOf(d) === key).length
-          : undefined;
-  const kindTabs = DECISIONS_KINDS.filter(
-    (k) => (k.key !== 'cleanInvites' && k.key !== 'askAdmins') || isAdmin
-  )
+    key === 'askAdmins'
+      ? adminPolls.views
+        ? adminPolls.views.filter((v) => v.open).length
+        : undefined
+      : data
+        ? allCollecting.filter((d) => decisionsKindOf(d) === key).length
+        : undefined;
+  const kindTabs = DECISIONS_KINDS.filter((k) => k.key !== 'askAdmins' || isAdmin)
     .map((k) => ({ ...k, count: kindCount(k.key) }))
     .filter((k) => (k.count ?? 0) > 0 || k.key === kind);
   const subtitle =
@@ -943,34 +886,6 @@ function DecisionsQueue() {
                 </Section>
               ) : null}
 
-              {isAdmin && signer && (!kind || kind === 'cleanInvites') ? (
-                <Box
-                  id={STALE_SECTION_ID}
-                  sx={{ scrollMarginTop: 'calc(var(--qmp-header-offset, 0px) + 16px)' }}
-                >
-                  <Section
-                    title="Clean up stale invites"
-                    accent={accentOf('cancelInvite')}
-                    icon={<SECTION_ICON.cancelInvite />}
-                    id="stale"
-                  >
-                    <StaleInvites
-                      signer={signer}
-                      facts={{
-                        needed,
-                        maximumBlockDelay: data.group.maximumBlockDelay,
-                        msPerBlock: data.now.msPerBlock,
-                      }}
-                      decisions={decisions}
-                      now={data.now}
-                      adminNames={adminNames}
-                      expanded={staleExpanded}
-                      onExpandedChange={setStaleExpanded}
-                    />
-                  </Section>
-                </Box>
-              ) : null}
-
               {showsDecisions ? (
                 <HowSigningWorks
                   group={data.group}
@@ -1037,25 +952,6 @@ function DecisionsQueue() {
           }}
           onClose={() => setFirstTarget(null)}
           returnFocus={() => sectionOf('waiting') ?? sectionOf('collecting')}
-        />
-      ) : null}
-      {data ? (
-        <ProposeDialog
-          kind={propose?.kind ?? null}
-          preset={propose?.preset ?? null}
-          signer={signer}
-          ctx={{
-            needed,
-            totalAdmins,
-            maximumBlockDelay: data.group.maximumBlockDelay,
-            msPerBlock: data.now.msPerBlock,
-            signers: data.admins.signers,
-            projectImpact,
-            labelOf,
-          }}
-          onClose={() => setPropose(null)}
-          onSwitch={(kind, person) => setPropose({ kind, preset: person })}
-          returnFocus={() => proposeButton.current}
         />
       ) : null}
       {asking && pollAuthor && data ? (

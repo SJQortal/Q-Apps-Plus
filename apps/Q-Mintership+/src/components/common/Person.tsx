@@ -39,6 +39,8 @@ export interface PersonChipProps {
   compactOnPhone?: boolean;
   /** Right after the name, outside its link: a small mark (the viewer's own answer's tick). */
   mark?: React.ReactNode;
+  /** The name crossed out (a proposal about them already waits); the second line says why. */
+  struck?: boolean;
 }
 
 /**
@@ -56,6 +58,7 @@ export function PersonChip({
   inline = false,
   compactOnPhone = false,
   mark = null,
+  struck = false,
 }: PersonChipProps) {
   const shown = useDisplayName(address, name);
   const links = usePersonLinks();
@@ -69,6 +72,7 @@ export function PersonChip({
         display: 'block',
         lineHeight: 1.3,
         ...(compactOnPhone ? { fontSize: { xs: 14 }, lineHeight: { xs: 1.25, sm: 1.3 } } : {}),
+        ...(struck ? { textDecoration: 'line-through', color: 'text.secondary' } : {}),
       }}
     >
       <MarkedName name={shown.name}>{shown.label}</MarkedName>

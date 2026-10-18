@@ -2,7 +2,7 @@
  * Decisions' tabs: All Decisions · Nominations (decisionsViews.ts), each with
  * how many it lists, Nominations only while it lists someone (or is on
  * screen); then a tab for each kind of decision that has
- * something open (Removals, Declines, Bans, New MAs, …, Clean invites, Ask
+ * something open (Removals, Declines, Bans, New MAs, …, Cancel invite, Ask
  * MAs: All Decisions narrowed to it). Each tab is a link that swaps the URL
  * in place (`replace`), as the Explorer's account tabs do: Back leaves
  * Decisions rather than stepping through its views, and a copied link opens

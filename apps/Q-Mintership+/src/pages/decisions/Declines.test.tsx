@@ -11,8 +11,11 @@ import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import { DECLINED, addDecline, fakeAddress, type World } from '../../../e2e/world.mjs';
 import { shortAddress } from '../../utils/format';
+import { proposePath } from '../../routes/paths';
 import DecisionPage from './DecisionPage';
 import DecisionsPage from './DecisionsPage';
+import ProposePage from './propose/ProposePage';
+import { SUBMIT_LABEL } from './propose/proposePageWords';
 
 afterEach(() => vi.useRealTimers());
 
@@ -79,13 +82,13 @@ describe('Declines in Decisions', () => {
   });
 });
 
-describe('Decisions → Propose → Decline a join request', () => {
+describe('+ Propose → Decline a join request', () => {
   it('proposes it and signs it: the same kick, worded as declining, two Hub steps', async () => {
     const user = userEvent.setup();
-    const { world, address, publicKey } = await renderPage(<DecisionsPage />, {
+    const { world, address, publicKey } = await renderPage(<ProposePage />, {
       persona: 'admin',
-      path: '/decisions?show=decisions',
-      route: '/decisions',
+      path: proposePath('decline'),
+      route: '/propose/:kind',
       setup: (w) => void addDecline(w),
     });
     const jr1 = fakeAddress('jr-1');
@@ -109,9 +112,8 @@ describe('Decisions → Propose → Decline a join request', () => {
     });
     mockQortalRequest('SIGN_TRANSACTION', () => ({ type: 'GROUP_APPROVAL', signature: 'OWN' }));
 
-    await user.click(await screen.findByRole('button', { name: 'Propose' }, T));
-    await user.click(await screen.findByRole('menuitem', { name: /Decline a join request/ }));
-    const form = await screen.findByRole('dialog', { name: 'Decline a join request' });
+    await screen.findByRole('heading', { level: 1, name: 'Decline a join request' }, T);
+    const form = document.body;
     // Who asked to join (Simon, 2026-10-18: Ready to mint, renamed and moved here).
     const list = await within(form).findByRole(
       'list',
@@ -138,15 +140,11 @@ describe('Decisions → Propose → Decline a join request', () => {
     );
     expect(await within(form).findByText('Nothing stops this proposal.', {}, T)).toBeVisible();
     expect(within(form).queryByRole('list', { name: 'Requested to join MINTER Group' })).toBeNull();
-    expect(
-      within(form).getByText(
-        /^Once 8 Minter Admins approve it, like any decision, their join request goes\. They can send a new join request later\. It costs 0\.02 QORT: your proposal and your own approval of it, two Hub steps\.$/
-      )
-    ).toBeVisible();
-    // Change goes back to the list, and the same row picks them again.
-    await user.click(
-      within(form).getByRole('button', { name: 'Change: pick someone else who asked to join' })
+    expect(screen.getByRole('region', { name: 'What happens next' })).toHaveTextContent(
+      /Once it passes their join request is gone\. They can send a new join request later\./
     );
+    // Change goes back to the list, and the same row picks them again.
+    await user.click(within(form).getByRole('button', { name: 'Change: pick someone else' }));
     await user.click(
       await within(
         await within(form).findByRole('list', { name: 'Requested to join MINTER Group' }, T)
@@ -156,7 +154,9 @@ describe('Decisions → Propose → Decline a join request', () => {
     // The reason is required, and everyone sees it.
     expect(within(form).getByText(/^Shown to everyone, the account included\./)).toBeVisible();
     await user.type(within(form).getByRole('textbox', { name: 'Reason' }), 'No node running');
-    await user.click(within(form).getByRole('button', { name: 'Review' }));
+    await user.click(
+      screen.getByRole('button', { name: SUBMIT_LABEL.decline.named(shortAddress(jr1)) })
+    );
 
     const hub = await screen.findByRole(
       'dialog',

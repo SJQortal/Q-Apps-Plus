@@ -54,11 +54,12 @@ describe('the Explorer is read-only', () => {
     expect(
       await restricted(
         'src/data/explorer/probe.ts',
-        "import type { ProposeDialogProps } from '../../pages/decisions/ProposeDialog';\n" +
+        "import type { ProposeSignDialogProps } from '../../pages/decisions/ProposeSignDialog';\n" +
           "import { flows } from '../../writes/flows';\n" +
-          'export type P = ProposeDialogProps;\nexport const f = flows;\n'
+          "import { PickedSummary } from '../../pages/decisions/propose/ProposeParts';\n" +
+          'export type P = ProposeSignDialogProps;\nexport const f = [flows, PickedSummary];\n'
       )
-    ).toHaveLength(2);
+    ).toHaveLength(3);
     expect(
       await restricted(
         'src/rules/explorer/probe.ts',

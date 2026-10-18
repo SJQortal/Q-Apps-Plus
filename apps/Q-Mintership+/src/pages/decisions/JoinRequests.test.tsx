@@ -1,8 +1,9 @@
 /**
  * Requested to join MINTER Group (Simon, 2026-10-18: the Ready to mint list,
- * renamed and moved into + Propose → Decline a join request): who asked to
- * join, for Minter Admins to decline from. The list's order, its reads (only
- * the rows on screen), former members, its search, and declining from a row.
+ * renamed and moved into + Propose → Decline a join request, a page of its
+ * own): who asked to join, for Minter Admins to decline from. The list's
+ * order, its reads (only the rows on screen), former members, its search, and
+ * declining from a row.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
@@ -14,25 +15,27 @@ import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from
 import { base58Decode, base58Encode } from '../../qortal/base58';
 import { invalidate } from '../../data/query';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../test/world';
+import { proposePath } from '../../routes/paths';
 import DecisionsPage from './DecisionsPage';
+import ProposePage from './propose/ProposePage';
+import { SUBMIT_LABEL } from './propose/proposePageWords';
 
 afterEach(() => vi.useRealTimers());
 vi.setConfig({ testTimeout: 30_000 });
 
 const T = { timeout: 4000 };
 
-/** Decisions as a Minter Admin, then Propose → Decline a join request (in `sort`'s order). */
+/** + Propose → Decline a join request, as a Minter Admin (in `sort`'s order). */
 async function open(setup?: (world: World) => void, sort?: string) {
-  const rendered = await renderPage(<DecisionsPage />, {
+  const rendered = await renderPage(<ProposePage />, {
     persona: 'admin',
-    path: '/decisions?show=decisions',
-    route: '/decisions',
+    path: proposePath('decline'),
+    route: '/propose/:kind',
     setup,
   });
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: 'Propose' }, T));
-  await user.click(await screen.findByRole('menuitem', { name: /^Decline a join request/ }, T));
-  const dialog = await screen.findByRole('dialog', { name: 'Decline a join request' }, T);
+  await screen.findByRole('heading', { level: 1, name: 'Decline a join request' }, T);
+  const dialog = document.body;
   if (sort) await user.selectOptions(await within(dialog).findByLabelText('Sort', {}, T), sort);
   return { ...rendered, dialog };
 }
@@ -57,7 +60,7 @@ function rowLabels(list: HTMLElement): string[] {
     .map((a) => a.getAttribute('aria-label')?.replace(/: open their page$/, '') ?? '');
 }
 
-/** The list reads again when the nominations do (every minute, or Refresh behind the dialog). */
+/** The list reads again when the nominations do (every minute, or Refresh on Decisions). */
 const nominationsRefresh = () => act(() => invalidate('nominations:'));
 
 describe('Requested to join MINTER Group', () => {
@@ -708,38 +711,34 @@ describe('Requested to join MINTER Group: declining', () => {
         { timeout: 4000 }
       )
     );
-    expect(
-      within(dialog).getByText(
-        'Once 8 Minter Admins approve it, like any decision, their join request goes. They can send a new join request later. It costs 0.02 QORT: your proposal and your own approval of it, two Hub steps.'
-      )
-    ).toBeVisible();
     // The person is picked, and checked; the list has made way for the reason.
     expect(
       await within(dialog).findByText('Nothing stops this proposal.', {}, { timeout: 4000 })
     ).toBeVisible();
-    expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
-    // A note for the Minter Admins is one more Hub step, and the cost says so.
+    expect(screen.queryByRole('list', { name: 'Requested to join MINTER Group' })).toBeNull();
+    const next = screen.getByRole('region', { name: 'What happens next' });
+    expect(next).toHaveTextContent(
+      'Once it passes their join request is gone. They can send a new join request later.'
+    );
+    expect(within(next).getByText(/^Fees in total: 0\.02 QORT/)).toBeVisible();
+    // A note for the Minter Admins is one more Hub step, and the fees say so.
     const noteBox = within(dialog).getByRole('textbox', {
       name: 'Note for the Minter Admins (optional)',
     });
     await user.type(noteBox, 'Asked twice in Q-Chat.');
-    expect(
-      within(dialog).getByText(
-        'Once 8 Minter Admins approve it, like any decision, their join request goes. They can send a new join request later. It costs 0.03 QORT: your proposal, your own approval of it and your note, three Hub steps.'
-      )
-    ).toBeVisible();
+    expect(within(next).getByText(/Your note follows\./)).toBeVisible();
+    expect(within(next).getByText(/^Fees in total: 0\.03 QORT \(3 × 0\.01 QORT\)/)).toBeVisible();
     await user.clear(noteBox);
-    expect(
-      within(dialog).getByText(/It costs 0\.02 QORT: your proposal and your own/)
-    ).toBeVisible();
+    expect(within(next).getByText(/^Fees in total: 0\.02 QORT/)).toBeVisible();
     // A reason is required.
-    await user.click(within(dialog).getByRole('button', { name: 'Review' }));
+    const submit = screen.getByRole('button', { name: SUBMIT_LABEL.decline.named(label) });
+    await user.click(submit);
     expect(within(dialog).getByRole('textbox', { name: 'Reason' })).toHaveFocus();
     await user.type(
       within(dialog).getByRole('textbox', { name: 'Reason' }),
       'No node, asked twice'
     );
-    await user.click(within(dialog).getByRole('button', { name: 'Review' }));
+    await user.click(submit);
 
     const hub = await screen.findByRole(
       'dialog',
@@ -769,11 +768,19 @@ describe('Requested to join MINTER Group: declining', () => {
     expect(base58Encode(bytes.slice(112, 176))).toBe(signature);
 
     await user.click(within(hub).getByRole('button', { name: 'Done' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    // Back on Propose; the list, opened again, says the decline is on its way.
-    expect(screen.getByRole('button', { name: 'Propose' })).toHaveFocus();
-    await user.click(screen.getByRole('button', { name: 'Propose' }));
-    await user.click(await screen.findByRole('menuitem', { name: /^Decline a join request/ }, T));
+    // The page says it is proposed; Propose another: the list says the decline is on its way.
+    expect(
+      await screen.findByRole(
+        'heading',
+        { level: 2, name: `Proposed: Decline a join request: ${label}` },
+        T
+      )
+    ).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open Decisions' })).toHaveAttribute(
+      'href',
+      '/decisions?show=declines'
+    );
+    await user.click(screen.getByRole('button', { name: 'Propose another' }));
     expect(
       await within(await row(label)).findByText('Decline sent ✓ (confirming…)', {}, T)
     ).toBeInTheDocument();

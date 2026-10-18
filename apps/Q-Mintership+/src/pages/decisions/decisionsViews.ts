@@ -32,6 +32,8 @@ export function parseDecisionsView(value: string | null): DecisionsView | null {
  * the: Nominations, Removals, Declines, Bans, New MA's, Remove MA's , Lift
  * Ban, Cancel invite, Clean invites, Ask MA's"): a tab each, after
  * Nominations, shown while something of that kind is open. `?show=<kind>`.
+ * Clean invites went when the stale invites became Cancel an approved
+ * invite's list (Simon, 2026-10-18).
  */
 export type DecisionsKind =
   | 'removals'
@@ -41,7 +43,6 @@ export type DecisionsKind =
   | 'removeAdmins'
   | 'liftBans'
   | 'cancelInvites'
-  | 'cleanInvites'
   | 'askAdmins';
 
 export const DECISIONS_KINDS: ReadonlyArray<{ key: DecisionsKind; label: string }> = [
@@ -52,7 +53,6 @@ export const DECISIONS_KINDS: ReadonlyArray<{ key: DecisionsKind; label: string 
   { key: 'removeAdmins', label: 'Remove MAs' },
   { key: 'liftBans', label: 'Lift ban' },
   { key: 'cancelInvites', label: 'Cancel invite' },
-  { key: 'cleanInvites', label: 'Clean invites' },
   { key: 'askAdmins', label: 'Ask MAs' },
 ];
 
@@ -71,7 +71,6 @@ export const TAB_ACCENT: Partial<Record<DecisionsView | DecisionsKind, SectionAc
   removeAdmins: 'admins',
   liftBans: 'liftBan',
   cancelInvites: 'cancelInvite',
-  cleanInvites: 'cancelInvite',
   askAdmins: 'polls',
 };
 
@@ -100,9 +99,9 @@ export function decisionsKindOf(d: { kind: string; decline?: unknown }): Decisio
   }
 }
 
-/** The kinds that are decisions (not the stale invites or the polls). */
+/** The kinds that are decisions (not the polls). */
 export function isDecisionKind(kind: DecisionsKind | null): boolean {
-  return kind !== null && kind !== 'cleanInvites' && kind !== 'askAdmins';
+  return kind !== null && kind !== 'askAdmins';
 }
 
 /** `/decisions?show=<kind>`. */

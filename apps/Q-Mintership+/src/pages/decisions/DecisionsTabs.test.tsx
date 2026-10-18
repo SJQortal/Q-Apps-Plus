@@ -163,15 +163,34 @@ describe('Decisions: Propose', () => {
     expect(await screen.findByTestId('navigated-away')).toBeInTheDocument();
   });
 
-  it('cleans up stale invites from another tab: Decisions opens there, at the section', async () => {
+  it('opens each choice on a page of its own; the stale invites are Cancel an approved invite’s', async () => {
+    // Simon, 2026-10-18: every + Propose window a page, as Propose nomination is.
     const u = userEvent.setup();
-    await open('admin', '/decisions?show=nominations');
-    await screen.findByRole('list', { name: 'Open nominations' }, T);
+    // Each choice's page is proposePath (routes/propose.test.ts checks every one): one here.
+    const page = await renderPage(
+      <>
+        <DecisionsPage />
+        <Probe />
+      </>,
+      // Mounted on every path, so the page it goes to is in the address.
+      { persona: 'admin', path: '/decisions', route: '*' }
+    );
+    await screen.findByRole('region', { name: /^Collecting approvals/ }, T);
     await u.click(screen.getByRole('button', { name: 'Propose' }));
-    await u.click(await screen.findByRole('menuitem', { name: /^Clean up stale invites/ }));
-    await waitFor(() => expect(at()).toBe('/decisions?show=decisions|REPLACE'), T);
-    const section = await screen.findByRole('region', { name: /^Clean up stale invites/ }, T);
-    await waitFor(() => expect(section).toHaveFocus(), T);
+    await u.click(await screen.findByRole('menuitem', { name: /^Lift a ban/ }));
+    await waitFor(() => expect(at()).toBe('/propose/lift-ban|PUSH'), T);
+    page.unmount();
+    await open('admin');
+    await screen.findByRole('region', { name: /^Collecting approvals/ }, T);
+    await u.click(screen.getByRole('button', { name: 'Propose' }));
+    expect(
+      await screen.findByRole('menuitem', {
+        name: /^Cancel an approved invite.*Pick from the invites nobody used, or cancel the old ones in one go\./,
+      })
+    ).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: /Clean up stale invites/ })).toBeNull();
+    // Nothing of them at the bottom of Decisions any more.
+    expect(screen.queryByRole('region', { name: /^Clean up stale invites/ })).toBeNull();
   });
 
   it('is the floating button on a phone, with Propose nomination first in its sheet', async () => {
@@ -242,7 +261,8 @@ describe('Decisions: swipes between tabs', () => {
     );
     // None for a kind with nothing open.
     expect(names.some((n) => /^Declines/.test(n ?? ''))).toBe(false);
-    expect(names).toEqual(expect.arrayContaining([expect.stringMatching(/^Clean invites \d+$/)]));
+    // The stale invites are Cancel an approved invite's list now: no tab of their own.
+    expect(names.some((n) => /^Clean invites/.test(n ?? ''))).toBe(false);
     await u.click(tab(/^Lift ban/));
     expect(at()).toBe('/decisions?show=liftBans|REPLACE');
     expect(tab(/^Lift ban/)).toHaveAttribute('aria-selected', 'true');
@@ -255,12 +275,11 @@ describe('Decisions: swipes between tabs', () => {
         ).toBeGreaterThan(0),
       T
     );
-    // Only that kind: no other section, no nominations waiting, no polls or stale invites.
+    // Only that kind: no other section, no nominations waiting, no polls.
     expect(within(panel).queryByRole('heading', { name: /^Minter Admin changes/ })).toBeNull();
     expect(
       within(panel).queryByRole('heading', { name: /^Waiting for a Minter Admin/ })
     ).toBeNull();
-    expect(within(panel).queryByRole('heading', { name: /^Clean up stale invites/ })).toBeNull();
     for (const card of within(panel).queryAllByRole('article'))
       expect(card).toHaveAccessibleName(/ban/i);
     // All Decisions again: everything.

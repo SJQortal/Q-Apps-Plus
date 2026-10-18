@@ -71,6 +71,7 @@ describe('the nav items', () => {
     expect(lit('/decisions/abc')).toBe(true);
     expect(lit('/nominations/QAbc')).toBe(true);
     expect(lit('/nominate')).toBe(true);
+    expect(lit('/propose/lift-ban')).toBe(true);
     expect(lit('/history')).toBe(false);
   });
 

@@ -29,7 +29,6 @@ import AdminPanelSettingsOutlinedIcon from '@mui/icons-material/AdminPanelSettin
 import RemoveModeratorOutlinedIcon from '@mui/icons-material/RemoveModeratorOutlined';
 import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import PersonAddDisabledOutlinedIcon from '@mui/icons-material/PersonAddDisabledOutlined';
-import CleaningServicesOutlinedIcon from '@mui/icons-material/CleaningServicesOutlined';
 import HowToVoteOutlinedIcon from '@mui/icons-material/HowToVoteOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import { PageFab } from '../../components/layout/PageFab';
@@ -47,8 +46,8 @@ const ICONS: Record<ProposeKind, ReactNode> = {
   cancelInvite: <PersonAddDisabledOutlinedIcon />,
 };
 
-/** A nomination, a chain proposal, Clean up stale invites, or a Minter Admin poll. */
-export type ProposeChoice = 'nominate' | ProposeKind | 'stale' | 'poll';
+/** A nomination, a chain proposal (a page each), or a Minter Admin poll. */
+export type ProposeChoice = 'nominate' | ProposeKind | 'poll';
 
 type Item = { key: ProposeChoice; label: string; description: string; icon: ReactNode };
 
@@ -66,12 +65,6 @@ const ITEMS: Item[] = [
     description: PROPOSE_KINDS[kind].description,
     icon: ICONS[kind],
   })),
-  {
-    key: 'stale',
-    label: 'Clean up stale invites',
-    description: 'Every unused invite with when it was approved; the old ones in one go.',
-    icon: <CleaningServicesOutlinedIcon />,
-  },
   {
     key: 'poll',
     label: 'Ask the Minter Admins',

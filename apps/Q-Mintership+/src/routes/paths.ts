@@ -5,6 +5,8 @@ export const PATHS = {
   home: '/',
   nominations: '/nominations',
   nominate: '/nominate',
+  // Each other + Propose choice is a page too (Simon, 2026-10-18): /propose/<kind>.
+  propose: '/propose',
   decisions: '/decisions',
   history: '/history',
   // Minter Admin activity lives in the Explorer (Simon, 2026-10-17); `/activity` redirects here.
@@ -33,6 +35,34 @@ export function legacyCardPath(identifier: string, section = ''): string {
 /** `/nominate?who=<address>`: the nominate form, optionally for someone. */
 export function nominatePath(address?: string): string {
   return address ? `${PATHS.nominate}?who=${encodeURIComponent(address)}` : PATHS.nominate;
+}
+
+/**
+ * The page of each other + Propose choice (Simon, 2026-10-18: "Make all of
+ * these + Propose windows in the style of the + Propose Nomination"), by
+ * proposal kind: `/propose/<slug>`, `?who=<address>` to start with someone.
+ */
+export const PROPOSE_SLUGS = {
+  kick: 'remove-member',
+  decline: 'decline-join-request',
+  ban: 'ban',
+  addAdmin: 'make-minter-admin',
+  removeAdmin: 'remove-minter-admin',
+  cancelBan: 'lift-ban',
+  cancelInvite: 'cancel-invite',
+} as const;
+
+export type ProposePageKind = keyof typeof PROPOSE_SLUGS;
+
+export function proposePath(kind: ProposePageKind, address?: string): string {
+  const base = `${PATHS.propose}/${PROPOSE_SLUGS[kind]}`;
+  return address ? `${base}?who=${encodeURIComponent(address)}` : base;
+}
+
+/** The kind a `/propose/<slug>` is for, or null. */
+export function proposeKindOf(slug: string | undefined): ProposePageKind | null {
+  const found = Object.entries(PROPOSE_SLUGS).find(([, s]) => s === slug);
+  return found ? (found[0] as ProposePageKind) : null;
 }
 
 /**

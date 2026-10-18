@@ -8,7 +8,7 @@
 import { useMemo } from 'react';
 import type { DecisionsData } from '../../data/decisions';
 import { approvalsNeeded } from '../../rules/threshold';
-import type { ProposeContext } from './ProposeDialog';
+import type { ProposeContext } from './propose/proposeContext';
 import { useStoredValue } from './useJoinRequests';
 
 /** The words a row says while a decline of its join request waits. */
