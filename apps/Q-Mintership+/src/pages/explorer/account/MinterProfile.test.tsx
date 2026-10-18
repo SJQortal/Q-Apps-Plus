@@ -84,13 +84,15 @@ describe('Minter Profile', () => {
       });
   }
 
-  /** The Node online fact's value, and what its ⓘ says. */
+  /** The Node online fact's value, and what its ⓘ says: beside the label (Simon, 2026-10-18). */
   async function nodeOnline() {
     const facts = (await status()).querySelector('dl[aria-label="MINTER facts"]') as HTMLElement;
     return waitFor(() => {
-      const value = within(facts).getByText('Node online').nextElementSibling as HTMLElement;
+      const label = within(facts).getByText('Node online');
+      const value = label.nextElementSibling as HTMLElement;
       expect(value.textContent).not.toMatch(/^…/);
-      const info = within(value).getByRole('button', { name: /^About node online: / });
+      const info = within(label).getByRole('button', { name: /^About node online: / });
+      expect(within(value).queryByRole('button')).toBeNull();
       return [value.textContent ?? '', info.getAttribute('aria-label') ?? ''];
     }, T);
   }
@@ -589,9 +591,13 @@ describe('QORT minted on the Minter Profile', () => {
     expect(within(facts).getByText('Blocks minted')).toBeInTheDocument();
     await user.click(fetch);
     await waitFor(() => expect(value()).toHaveTextContent(/^77 QORT$/), SLOW);
+    // Its ⓘ beside the label, so the amount keeps its line (Simon, 2026-10-18).
     expect(
-      within(value()).getByRole('button', { name: /^About QORT minted: 77 QORT\./ })
+      within(within(facts).getByText('QORT minted')).getByRole('button', {
+        name: /^About QORT minted: 77 QORT\./,
+      })
     ).toBeInTheDocument();
+    expect(within(value()).queryByRole('button')).toBeNull();
   });
 
   it('says an account that never minted never did', async () => {

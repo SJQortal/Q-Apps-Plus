@@ -15,14 +15,21 @@ import { alsoChecked, namesLead, NO_NAME_RECORDS } from './mintershipWords';
 import { NameWithAvatar } from '../../../../components/explorer/NameWithAvatar';
 import { MarkedName } from '../../../../components/common/MarkedName';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
+import { FactLabel } from '../../../../components/explorer/FactLabel';
 
-/** One of a profile's facts: its label, and its value in bold. */
-export function Fact({ label, value }: { label: string; value: ReactNode }) {
+/** One of a profile's facts: its label (with its ⓘ, if any), and its value in bold. */
+export function Fact({
+  label,
+  value,
+  info,
+}: {
+  label: string;
+  value: ReactNode;
+  info?: string | null;
+}) {
   return (
     <Box sx={FIELD_BLOCK_SX}>
-      <Typography component="dt" variant="body2" color="text.secondary">
-        {label}
-      </Typography>
+      <FactLabel label={label} info={info} />
       <Typography
         component="dd"
         sx={{ m: 0, fontWeight: 700, fontSize: 18, fontVariantNumeric: 'tabular-nums' }}

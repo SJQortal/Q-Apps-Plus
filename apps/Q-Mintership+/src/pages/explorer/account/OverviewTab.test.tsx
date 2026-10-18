@@ -530,10 +530,12 @@ describe('QORT summaries', () => {
         new URL(url, 'http://x').searchParams.has('sellerPublicKey')
       )
     ).toBe(true);
-    // The ⓘ says how it was worked out.
+    // The ⓘ says how it was worked out, beside the label (Simon, 2026-10-18).
     expect(
-      within(dl).getByRole('button', { name: /^About QORT minted: 1,234 QORT\. Its balance now, / })
-    ).toBeInTheDocument();
+      within(dl)
+        .getByRole('button', { name: /^About QORT minted: 1,234 QORT\. Its balance now, / })
+        .closest('dt')
+    ).toHaveTextContent('QORT minted');
   });
 
   it('reads past the first read only when asked, 1,000 at a time', async () => {

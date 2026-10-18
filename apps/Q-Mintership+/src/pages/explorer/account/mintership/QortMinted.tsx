@@ -4,12 +4,12 @@
  * it needs fetching)"; 2026-10-18: "seperate Blocks minted / QORT minted"):
  * a fact of its own beside Blocks minted, worked out as on the Overview
  * (overview/qortSummaries.tsx). When its history is longer than the first
- * read, a small fetch icon reads the rest; its ⓘ says how it was worked out.
+ * read, a small fetch icon reads the rest; its ⓘ, beside the label, says how
+ * it was worked out.
  */
 import { Box, ButtonBase, CircularProgress, Tooltip } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
-import { InfoTip } from '../../../../components/common/InfoTip';
 import { useQortSummaries } from '../overview/qortSummaries';
 import { Fact } from './parts';
 
@@ -26,15 +26,7 @@ export function QortMintedFact({
 }) {
   const qort = useQortSummaries(address, neverMinted, { trades: false });
   let minted: React.ReactNode;
-  if (qort.mintedWords)
-    minted = (
-      <>
-        {qort.mintedWords}
-        {qort.mintedInfo ? (
-          <InfoTip label={`About QORT minted: ${qort.mintedInfo}`}>{qort.mintedInfo}</InfoTip>
-        ) : null}
-      </>
-    );
+  if (qort.mintedWords) minted = qort.mintedWords;
   else if (qort.readingRest)
     minted = (
       <Box component="span" role="status" sx={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -68,6 +60,7 @@ export function QortMintedFact({
   return (
     <Fact
       label="QORT minted"
+      info={qort.mintedWords ? qort.mintedInfo : null}
       value={
         <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
           {minted}

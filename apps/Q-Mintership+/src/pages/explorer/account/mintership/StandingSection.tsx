@@ -22,7 +22,22 @@ import { nominationLine, roundsLine } from './mintershipWords';
 import { Fact, Note } from './parts';
 import { QortMintedFact } from './QortMinted';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
+import { useNodeOnline } from '../../../../components/explorer/useNodeOnline';
 import { useFullExplorer } from '../../../../hooks/useFullExplorer';
+
+/** Node online, its ⓘ beside the label (the value keeps its line). */
+function NodeOnlineFact({ address, blocksMinted }: { address: string; blocksMinted: number }) {
+  const online = useNodeOnline(address, blocksMinted);
+  return (
+    <Fact
+      label="Node online"
+      info={online && 'info' in online ? online.info : null}
+      value={
+        <NodeOnlineValue address={address} blocksMinted={blocksMinted} loading="…" info={false} />
+      }
+    />
+  );
+}
 
 export function StandingSection({
   address,
@@ -73,12 +88,7 @@ export function StandingSection({
           {full ? (
             <QortMintedFact address={address} neverMinted={person.blocksMinted === 0} />
           ) : null}
-          <Fact
-            label="Node online"
-            value={
-              <NodeOnlineValue address={address} blocksMinted={person.blocksMinted} loading="…" />
-            }
-          />
+          <NodeOnlineFact address={address} blocksMinted={person.blocksMinted} />
           {next.nextLevelAt !== null && next.blocksToNextLevel !== null ? (
             <Fact
               label={`To level ${person.level + 1}`}

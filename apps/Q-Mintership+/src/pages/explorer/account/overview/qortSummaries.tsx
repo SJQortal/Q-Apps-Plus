@@ -22,7 +22,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useAtomValue } from 'jotai';
-import { InOut, Value } from './qortParts';
+import { InOut } from './qortParts';
 import { ErrorState } from '../../../../components/common/states';
 import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
 import { HeavyCancelled } from '../../../../data/explorer/heavy';
@@ -71,6 +71,8 @@ export interface QortSummaryParts {
   minted: ReactNode;
   trades: ReactNode;
   flows: ReactNode;
+  /** What each one's ⓘ says, beside its label (FactLabel); none until worked out. */
+  infos: { minted?: string; trades?: string; flows?: string };
   /** Under the facts: Read the rest, a reading line, or an error. */
   notice: ReactNode;
   /** QORT minted as plain words ("19,306 QORT", "Never minted"), null until worked out. */
@@ -226,21 +228,11 @@ export function useQortSummaries(
     needsRest,
     readingRest: wantAll && !done,
     readRest: () => setWantAll(true),
-    minted: (
-      <Value label="QORT minted" info={mintedInfo}>
-        {minted}
-      </Value>
-    ),
-    trades: (
-      <Value label="QORT purchased / sold" info={tradesInfo}>
-        {traded ? <InOut into={short(traded.bought)} out={short(traded.sold)} /> : waiting}
-      </Value>
-    ),
-    flows: (
-      <Value label="QORT received / sent" info={flowsInfo}>
-        {book ? <InOut into={short(book.received)} out={short(book.sent)} /> : waiting}
-      </Value>
-    ),
+    minted,
+    trades: traded ? <InOut into={short(traded.bought)} out={short(traded.sold)} /> : waiting,
+    flows: book ? <InOut into={short(book.received)} out={short(book.sent)} /> : waiting,
+    // Each one's ⓘ, beside its label (FactLabel).
+    infos: { minted: mintedInfo, trades: tradesInfo, flows: flowsInfo },
     notice,
   };
 }

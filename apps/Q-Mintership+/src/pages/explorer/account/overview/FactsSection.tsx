@@ -35,6 +35,7 @@ import {
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
 import { useQortSummaries } from './qortSummaries';
+import { FactLabel } from '../../../../components/explorer/FactLabel';
 
 const VALUE_SX = {
   m: 0,
@@ -47,12 +48,15 @@ const VALUE_SX = {
 function Fact({
   label,
   value,
+  info,
   detail,
   wide = false,
   wideOnPhone = false,
 }: {
   label: string;
   value: ReactNode;
+  /** Its ⓘ, beside the label (FactLabel). */
+  info?: string | null;
   detail?: ReactNode;
   /** Spans the whole row (a list, or an error with Retry). */
   wide?: boolean;
@@ -70,9 +74,7 @@ function Fact({
         ...(wideOnPhone && !wide ? { gridColumn: { xs: '1 / -1', md: 'auto' } } : {}),
       }}
     >
-      <Typography component="dt" variant="body2" color="text.secondary">
-        {label}
-      </Typography>
+      <FactLabel label={label} info={info} />
       <Typography component="dd" sx={VALUE_SX}>
         {value}
       </Typography>
@@ -294,9 +296,19 @@ export function FactsSection({ address, account, firstSeen, full }: FactsProps) 
           <QdnFact address={address} full={full} />
           {full ? (
             <>
-              <Fact label="QORT minted" value={qort.minted} />
-              <Fact label="QORT purchased / sold" value={qort.trades} wideOnPhone />
-              <Fact label="QORT received / sent" value={qort.flows} wideOnPhone />
+              <Fact label="QORT minted" value={qort.minted} info={qort.infos.minted} />
+              <Fact
+                label="QORT purchased / sold"
+                value={qort.trades}
+                info={qort.infos.trades}
+                wideOnPhone
+              />
+              <Fact
+                label="QORT received / sent"
+                value={qort.flows}
+                info={qort.infos.flows}
+                wideOnPhone
+              />
             </>
           ) : null}
         </Box>
