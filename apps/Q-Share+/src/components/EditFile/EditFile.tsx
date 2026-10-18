@@ -34,6 +34,7 @@ import {
 import {
   draftFromRef,
   keptFilesText,
+  thumbnailNotOnQdnText,
   landedRefs,
   newFileRefs,
   publishErrorMessage,
@@ -211,7 +212,12 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     if (detailsId && published.includes(detailsId)) {
       // The share's details are updated on QDN; only some new files are not.
       const missing = resources.filter((r) => r.service === "FILE" && !published.includes(r.identifier)).length;
-      if (missing > 0) onPublished(`Share updated, but ${filesNotOnQdnText(missing, "new file")}`, "info");
+      const thumbMissing = Boolean(newThumbnail && !published.includes(newThumbnail.identifier));
+      const notes = [
+        missing > 0 ? filesNotOnQdnText(missing, "new file") : "",
+        thumbMissing ? thumbnailNotOnQdnText(missing > 0, "new thumbnail") : "",
+      ].filter(Boolean);
+      if (notes.length > 0) onPublished(`Share updated, but ${notes.join(" ")}`, "info");
       else onPublished();
       return;
     }

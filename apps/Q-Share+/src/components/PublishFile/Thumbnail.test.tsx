@@ -204,6 +204,57 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
     expect(details().files[0].identifier).toBe(first[0].identifier);
   });
 
+  it("says so when the share landed and its thumbnail didn't", async () => {
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
+      const thumb = params.resources.find((r: any) => r.service === "THUMBNAIL");
+      throw { error: { unsuccessfulPublishes: [{ identifier: thumb.identifier }] }, message: "x" };
+    });
+    renderWithProviders(<PublishFile />);
+    fireEvent.click(screen.getByRole("button", { name: "Share files" }));
+    await screen.findByRole("dialog", { name: "Share files" });
+    fireEvent.change(screen.getByTestId("share-file-input"), { target: { files: [photo()] } });
+    expect(await screen.findByText("Made from photo.png.")).toBeInTheDocument();
+    await fillAndPublish();
+    fireEvent.click(await screen.findByText("2 of 3 published").then(() => screen.getAllByRole("button", { name: "Close" }).at(-1)!));
+    await waitFor(() =>
+      expect(store.getState().notifications.alertTypes.alertInfo).toBe(
+        "Share published, but its thumbnail is not on QDN. Choose it again in Edit."
+      )
+    );
+  });
+
+  it("says so when an update landed and its new thumbnail didn't", async () => {
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
+      const thumb = params.resources.find((r: any) => r.service === "THUMBNAIL");
+      throw { error: { unsuccessfulPublishes: [{ identifier: thumb.identifier }] }, message: "x" };
+    });
+    store.dispatch(
+      setEditFile({
+        id: "qshare_file_holiday_ghi789_metadata",
+        user: "alice",
+        title: "Holiday",
+        version: 1,
+        commentsId: "qshare_file__cm_ghi789",
+        htmlDescription: "<p>Pics</p>",
+        fullDescription: "Pics",
+        category: "5",
+        files: [{ filename: "beach.jpg", identifier: "qshare_file_holiday_f9", name: "alice", service: "FILE", mimetype: "image/jpeg", size: 9 }],
+      })
+    );
+    mockFetch("/arbitrary/resources/search", []);
+    mockFetch("/arbitrary/FILE/", "jpeg bytes");
+    renderWithProviders(<EditFile />);
+    fireEvent.click(await screen.findByRole("button", { name: "Use beach.jpg" }));
+    expect(await screen.findByText("Made from beach.jpg.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Publish update" }));
+    fireEvent.click(await screen.findByText("1 of 2 published").then(() => screen.getAllByRole("button", { name: "Close" }).at(-1)!));
+    await waitFor(() =>
+      expect(store.getState().notifications.alertTypes.alertInfo).toBe(
+        "Share updated, but its new thumbnail is not on QDN. Choose it again in Edit."
+      )
+    );
+  });
+
   it("keeps a thumbnail that landed when the share details didn't, and doesn't send it again", async () => {
     let call = 0;
     mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {

@@ -95,6 +95,16 @@ export function landedRefs(refs: Record<string, FileRef>, published: string[]): 
   return Object.fromEntries(Object.entries(refs).filter(([, ref]) => ids.has(ref.identifier)));
 }
 
+/**
+ * The end of "Share published, but …" when Hub published the share's
+ * details and not the thumbnail they name (after the files' note, if any).
+ */
+export function thumbnailNotOnQdnText(afterFiles: boolean, noun = "thumbnail"): string {
+  return afterFiles
+    ? `Its ${noun} is not on QDN either: choose it again in Edit.`
+    : `its ${noun} is not on QDN. Choose it again in Edit.`;
+}
+
 /** The note after a stopped publish that left some files on QDN. */
 export function keptFilesText(landed: number, total: number): string {
   if (landed === total) {

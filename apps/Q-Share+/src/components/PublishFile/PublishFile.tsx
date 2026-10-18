@@ -23,7 +23,14 @@ import {
   PublishAgainDialog,
   type PublishStopped,
 } from "../common/MultiplePublish/MultiplePublishAll";
-import { keptFilesText, landedRefs, newFileRefs, publishErrorMessage, toPublishInputs } from "./shareDraft";
+import {
+  keptFilesText,
+  landedRefs,
+  newFileRefs,
+  publishErrorMessage,
+  thumbnailNotOnQdnText,
+  toPublishInputs,
+} from "./shareDraft";
 import { ShareForm } from "./ShareForm";
 import { useShareDraft } from "./useShareDraft";
 import { useShareThumbnail } from "./useShareThumbnail";
@@ -148,7 +155,12 @@ export const PublishFile = ({ hideTrigger = false }: PublishFileProps) => {
       // The share itself is on QDN and only some files are not. Publishing
       // the draft again would make a second share, so finish here.
       const missing = resources.filter((r) => r.service === "FILE" && !published.includes(r.identifier)).length;
-      if (missing > 0) onPublished(`Share published, but ${filesNotOnQdnText(missing)}`, "info");
+      const thumbMissing = Boolean(newThumbnail && !published.includes(newThumbnail.identifier));
+      const notes = [
+        missing > 0 ? filesNotOnQdnText(missing) : "",
+        thumbMissing ? thumbnailNotOnQdnText(missing > 0) : "",
+      ].filter(Boolean);
+      if (notes.length > 0) onPublished(`Share published, but ${notes.join(" ")}`, "info");
       else onPublished();
       return;
     }
