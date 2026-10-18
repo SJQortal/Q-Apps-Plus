@@ -218,6 +218,48 @@ describe("notification checks", () => {
     });
   });
 
+  it("tells you once when someone copies your collection, without one notice per share it came with", async () => {
+    const coll = {
+      name: "bob",
+      service: "DOCUMENT",
+      identifier: "qshare_collection_docs-copy_cccccc",
+      created: NOW - DAY,
+      updated: NOW + 10,
+      metadata: { title: "My docs", description: recipientMarker(ADDRESS) },
+    };
+    const copy = {
+      version: 1,
+      title: "My docs",
+      description: "",
+      items: [{ name: "alice", identifier: SHARE.identifier }],
+      copiedFrom: { name: "alice", identifier: "qshare_collection_docs_aaaaaa", title: "Docs" },
+      created: 1,
+      updated: 2,
+    };
+    bodies["bob/qshare_collection_docs-copy_cccccc"] = copy;
+    await check(NOW);
+    collections = [coll];
+    expect(await check(NOW + 60_000)).toBe(1);
+    expect(items()).toHaveLength(1);
+    expect(items()[0]).toMatchObject({
+      kind: "copy",
+      actor: "bob",
+      read: false,
+      collection: { name: "bob", identifier: coll.identifier, title: "My docs" },
+      source: { name: "alice", identifier: "qshare_collection_docs_aaaaaa", title: "Docs" },
+    });
+
+    // A share of yours added to the copy later is news again.
+    bodies["bob/qshare_collection_docs-copy_cccccc"] = {
+      ...copy,
+      items: [{ name: "alice", identifier: SHARE.identifier }, { name: "alice", identifier: "qshare_file_more_ffffff_metadata" }],
+      updated: 3,
+    };
+    collections = [{ ...coll, updated: NOW + 70_000 }];
+    expect(await check(NOW + 120_000)).toBe(1);
+    expect(items()[0]).toMatchObject({ kind: "collection", share: { identifier: "qshare_file_more_ffffff_metadata" } });
+  });
+
   it("reads comments oldest first and moves only as far as the node has indexed", async () => {
     // The node is two hours behind (syncing): the window stops there.
     lastBlock = NOW - 2 * 60 * 60_000;

@@ -195,3 +195,23 @@ describe("where a notification leads", () => {
     expect(await findCommentShare("not a comment", ["alice"])).toBeNull();
   });
 });
+
+describe("a copy of your collection in the list", () => {
+  it("says who copied which collection, and opens the copy", async () => {
+    const { render } = await import("@testing-library/react");
+    const { NotificationText } = await import("./NotificationList");
+    const copy = {
+      id: "cp:bob/qshare_collection_my-docs_cccccc",
+      kind: "copy" as const,
+      actor: "bob",
+      time: 1,
+      read: false,
+      collection: { name: "bob", identifier: "qshare_collection_my-docs_cccccc", title: "My docs" },
+      source: { name: "alice", identifier: "qshare_collection_docs_aaaaaa", title: "Docs" },
+    };
+    const { container } = render(<NotificationText item={copy} />);
+    expect(container).toHaveTextContent("bob copied your collection Docs into their collections");
+    expect(notificationPath(copy)).toBe("/collection/bob/qshare_collection_my-docs_cccccc");
+  });
+});
+

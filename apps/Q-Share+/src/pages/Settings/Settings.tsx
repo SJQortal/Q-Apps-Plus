@@ -502,7 +502,7 @@ export const Settings = () => {
           <Box>
             <Typography sx={{ fontWeight: 700 }}>Added to a collection</Typography>
             <Typography variant="body2" color="text.secondary">
-              When someone adds one of your shares to their collection in Q-Share+.
+              When someone adds one of your shares to their collection, or copies one of your collections, in Q-Share+.
             </Typography>
           </Box>
           <Switch

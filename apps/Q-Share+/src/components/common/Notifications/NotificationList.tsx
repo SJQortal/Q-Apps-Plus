@@ -17,6 +17,15 @@ const Strong = ({ children }: { children: string }) => (
 /** The sentence for a notification; the names and titles are its strong parts. */
 export function NotificationText({ item }: { item: AppNotification }) {
   const shareTitle = item.share?.title;
+  if (item.kind === "copy") {
+    return (
+      <>
+        <Strong>{item.actor}</Strong> copied your collection{" "}
+        {item.source?.title ? <Strong>{item.source.title}</Strong> : null}
+        {" "}into their collections
+      </>
+    );
+  }
   if (item.kind === "collection") {
     return (
       <>

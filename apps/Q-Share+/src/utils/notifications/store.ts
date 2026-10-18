@@ -8,7 +8,7 @@ export const NOTIFICATIONS_STORAGE_PREFIX = "qshareplus-notifications-";
 export const MAX_ITEMS = 100;
 const MAX_SEEN = 1000;
 
-export type NotificationKind = "comment" | "reply" | "collection";
+export type NotificationKind = "comment" | "reply" | "collection" | "copy";
 
 export interface ResourceRef {
   name: string;
@@ -19,7 +19,7 @@ export interface ResourceRef {
 export interface AppNotification {
   /** Stable: the same event never becomes two notifications. */
   id: string;
-  /** comment: on your share. reply: to your comment. collection: your share added to one. */
+  /** comment: on your share. reply: to your comment. collection: your share added to one. copy: your collection copied. */
   kind: NotificationKind;
   /** Who commented or added. */
   actor: string;
@@ -29,8 +29,10 @@ export interface AppNotification {
   share?: ResourceRef;
   /** The comment (comment and reply). */
   comment?: ResourceRef;
-  /** The collection (collection). */
+  /** The collection (collection), or the copy (copy). */
   collection?: ResourceRef;
+  /** The collection of yours that was copied (copy). */
+  source?: ResourceRef;
 }
 
 export interface NotificationState {
@@ -76,7 +78,7 @@ function sanitize(raw: unknown): NotificationState {
           !!i &&
           typeof i === "object" &&
           typeof (i as AppNotification).id === "string" &&
-          ["comment", "reply", "collection"].includes((i as AppNotification).kind) &&
+          ["comment", "reply", "collection", "copy"].includes((i as AppNotification).kind) &&
           typeof (i as AppNotification).actor === "string" &&
           typeof (i as AppNotification).time === "number" &&
           (!("share" in i) || (i as AppNotification).share === undefined || isRef((i as AppNotification).share))

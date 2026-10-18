@@ -167,6 +167,27 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
           continue; // the node couldn't serve it: try again next time
         }
         versions[key] = version;
+        // A copy of one of your collections: one notification for the copy,
+        // which also files the shares it came with as read (they're its news).
+        const copied = collection?.copiedFrom;
+        if (collection && copied && mine.has(lower(copied.name))) {
+          const copyId = `cp:${key}`;
+          if (!seen.has(copyId)) {
+            seen.add(copyId);
+            found.push({
+              id: copyId,
+              kind: "copy",
+              actor: row.name,
+              time: version || now,
+              read: firstLook,
+              collection: { name: row.name, identifier: row.identifier, title: row.metadata?.title || collection.title || undefined },
+              source: { name: copied.name, identifier: copied.identifier, title: copied.title || undefined },
+            });
+            for (const item of allCollectionItems(collection)) {
+              if (mine.has(lower(item.name))) seen.add(`k:${key}/${item.name}/${item.identifier}`);
+            }
+          }
+        }
         // Shares inside the collection's folders count too.
         for (const item of collection ? allCollectionItems(collection) : []) {
           if (!mine.has(lower(item.name))) continue;
