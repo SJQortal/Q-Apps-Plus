@@ -10,15 +10,20 @@
  * An answer still on its way shows in its column, faded, with "confirming…"
  * (until then the one it replaces, if any, still counts in the other); a
  * rejection from an admin who had approved first says so; a Considering
- * note shows under its name. With `phoneLimit`, a phone shows that many
+ * note shows under its name. The signed-in person's own entry has a green
+ * tick beside their name (Simon, 2026-10-18: "when user already approved or
+ * voted please show a green tick next to his name"). With `phoneLimit`, a phone shows that many
  * people per column ("+5 more" under the rest) and one Show all for them.
  */
 import { useId, useState, type ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import { PersonChip } from '../common/Person';
+import { useSession } from '../../state/session';
+import { visuallyHidden } from '@mui/utils';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { formatCount, plural } from '../../utils/format';
 
@@ -202,6 +207,8 @@ function Column({
   limit,
 }: Omit<PeopleColumn, 'key'> & { headingLevel: 'h3' | 'h4'; limit: number | null }) {
   const headingId = useId();
+  const session = useSession();
+  const me = session.status === 'ready' ? session.address : null;
   const counted = count ?? people.filter((p) => !p.confirming).length;
   const coming = people.filter((p) => p.confirming).length;
   const shown = limit === null ? people : people.slice(0, limit);
@@ -263,6 +270,7 @@ function Column({
                   size={28}
                   compactOnPhone
                   secondary={personNote(p)}
+                  mark={p.address === me ? <YouTick /> : null}
                 />
               </Box>
             ))}
@@ -279,6 +287,21 @@ function Column({
         </Typography>
       )}
     </Box>
+  );
+}
+
+/** Beside the viewer's own name: they have answered. */
+function YouTick() {
+  return (
+    <>
+      <CheckCircleIcon
+        aria-hidden
+        sx={{ fontSize: 16, color: 'success.main', flexShrink: 0 }}
+      />
+      <Box component="span" sx={visuallyHidden}>
+        (you answered)
+      </Box>
+    </>
   );
 }
 

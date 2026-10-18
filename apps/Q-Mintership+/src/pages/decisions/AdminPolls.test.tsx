@@ -265,6 +265,15 @@ describe('Decisions → Minter Admin polls', () => {
     );
   });
 
+  it('a green tick beside the viewer’s own name in the columns, and no one else’s', async () => {
+    await openDecisions();
+    const card = await pollCard(VOTED_Q);
+    const no = within(card).getByRole('list', { name: /^Voted No: / });
+    expect(within(no).getByText('(you answered)')).toBeInTheDocument();
+    const yes = within(card).getByRole('list', { name: /^Voted Yes: / });
+    expect(within(yes).queryByText('(you answered)')).toBeNull();
+  });
+
   it('reads: four searches of 100 for the whole section, bodies decrypted in Hub', async () => {
     await openDecisions();
     await pollCard(OPEN_Q);

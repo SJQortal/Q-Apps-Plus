@@ -37,6 +37,8 @@ export interface PersonChipProps {
    * beside a name that wraps onto two lines (narrow columns: AnswerColumns).
    */
   compactOnPhone?: boolean;
+  /** Right after the name, outside its link: a small mark (the viewer's own answer's tick). */
+  mark?: React.ReactNode;
 }
 
 /**
@@ -53,6 +55,7 @@ export function PersonChip({
   strong = true,
   inline = false,
   compactOnPhone = false,
+  mark = null,
 }: PersonChipProps) {
   const shown = useDisplayName(address, name);
   const links = usePersonLinks();
@@ -86,33 +89,36 @@ export function PersonChip({
     >
       <NameAvatar name={shown.name} size={size} phoneSize={compactOnPhone ? 20 : undefined} />
       <Box sx={{ minWidth: 0 }}>
-        {link ? (
-          <Link
-            component={RouterLink}
-            to={links.to(address)}
-            state={links.state}
-            // In a sentence the underline is what marks the name as a link (its colour
-            // is the sentence's); a chip's avatar and layout already do.
-            underline={inline ? 'always' : 'hover'}
-            color="inherit"
-            aria-label={`${shown.label}: ${links.verb}`}
-            sx={
-              stretch
-                ? { '&::after': { content: '""', position: 'absolute', inset: 0 } }
-                : inline
-                  ? {
-                      textDecorationColor: 'currentColor',
-                      textUnderlineOffset: '0.15em',
-                      '&:hover': { textDecorationThickness: '2px' },
-                    }
-                  : undefined
-            }
-          >
-            {label}
-          </Link>
-        ) : (
-          label
-        )}
+        <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0 }}>
+          {link ? (
+            <Link
+              component={RouterLink}
+              to={links.to(address)}
+              state={links.state}
+              // In a sentence the underline is what marks the name as a link (its colour
+              // is the sentence's); a chip's avatar and layout already do.
+              underline={inline ? 'always' : 'hover'}
+              color="inherit"
+              aria-label={`${shown.label}: ${links.verb}`}
+              sx={
+                stretch
+                  ? { '&::after': { content: '""', position: 'absolute', inset: 0 } }
+                  : inline
+                    ? {
+                        textDecorationColor: 'currentColor',
+                        textUnderlineOffset: '0.15em',
+                        '&:hover': { textDecorationThickness: '2px' },
+                      }
+                    : undefined
+              }
+            >
+              {label}
+            </Link>
+          ) : (
+            label
+          )}
+          {mark}
+        </Box>
         {secondary ? (
           <Typography
             component="span"
