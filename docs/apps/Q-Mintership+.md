@@ -1012,6 +1012,8 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
     Tests 2,371 passed; Overview captures clean.
 
+104. **Blocks minted and QORT minted apart** (Simon, 2026-10-18: "in the minter status I would like to seperate Blocks minted / QORT minted"). MINTER status shows them as two boxes side by side. QORT minted keeps its ⓘ, its fetch icon when the history needs reading, and "Never minted" for an account that never minted. Tests 2,371 passed; profile captures clean.
+
 ## Follow-ups
 
 ### Readiness
