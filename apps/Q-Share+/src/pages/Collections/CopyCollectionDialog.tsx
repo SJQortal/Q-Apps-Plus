@@ -135,8 +135,8 @@ export function CopyCollectionDialog({ open, onClose, source, onCopied }: CopyCo
         />
         <Typography variant="body2">
           Your copy is a new collection under {myName ?? "your name"} with its {shares} {shares === 1 ? "share" : "shares"}
-          {folders > 0 ? ` and ${folders} ${folders === 1 ? "folder" : "folders"}` : ""}. It shows that it is a copy of “
-          {source.title || "Untitled collection"}” by {source.name}, and {source.name} is told about it.
+          {folders > 0 ? ` and ${folders} ${folders === 1 ? "folder" : "folders"}` : ""}. It says it is a copy of “
+          {source.title || "Untitled collection"}” by {source.name}, and {source.name} gets a notification in Q-Share+.
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Hub asks you to confirm, and the usual small QDN fee applies. Later changes to the original don't change your
