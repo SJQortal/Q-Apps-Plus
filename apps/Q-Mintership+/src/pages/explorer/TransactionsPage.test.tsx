@@ -1,6 +1,6 @@
 /**
  * Transactions on Qortal on the strict mock world: results at once
- * (Payments, the latest 1,000 blocks), every search confirmed with a block
+ * (every type but messages, the latest 1,000 blocks), every search confirmed with a block
  * range and 20 rows, what waits for a block apart, the type and blocks in
  * the URL (read with appParam, written in place), "from a block" with how
  * many blocks, oldest first, the rows narrowed by text (a name matching its
@@ -15,6 +15,7 @@ import { FUNDER, TIP, answerCore, type World } from '../../../e2e/world.mjs';
 import { renderPage } from '../../test/render';
 import { expectNoAxeViolations } from '../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
+import { typesOfChoice } from './tx/globalFilters';
 import TransactionsPage from './TransactionsPage';
 
 /** A list's rows, counted without a role query (cheap on 150 rows). */
@@ -89,11 +90,35 @@ const results = () => screen.findByRole('region', { name: 'Confirmed transaction
 afterEach(() => vi.useRealTimers());
 
 describe('Transactions on Qortal', () => {
-  it('searches at once: payments in the latest 1,000 blocks, offering more blocks', async () => {
-    const { user, container, posts } = await open();
+  it('searches at once: every type but messages, in the latest 1,000 blocks', async () => {
+    // Simon, 2026-10-18: All by default, no longer Payments.
+    const { container, posts } = await open();
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Transactions on Qortal' }, T)
     ).toBeVisible();
+    const found = await results();
+    expect(
+      await within(found).findByText(
+        /^(All \d+ transactions of every type except messages|No transactions of any type except messages) in blocks 2,756,501–2,757,500\.$/,
+        {},
+        T
+      )
+    ).toBeVisible();
+    const [first] = searches();
+    expect(first.getAll('txType')).toEqual([...typesOfChoice('all')]);
+    expect(first.getAll('txType')).not.toContain('MESSAGE');
+    expect(first.get('startBlock')).toBe(String(TIP - 999));
+    expect(first.get('blockLimit')).toBe('1000');
+    expect(screen.getByRole('combobox', { name: 'Type' })).toHaveValue('all');
+    // The default stays out of the URL.
+    expect(screen.getByTestId('at').textContent?.startsWith('|')).toBe(true);
+    await expectNoAxeViolations(container);
+    everySearchBounded();
+    noWrites(posts);
+  });
+
+  it('searches payments in the latest 1,000 blocks, offering more blocks', async () => {
+    const { user, container, posts } = await open('?type=payments');
     const found = await results();
     expect(
       await within(found).findByText('No payments in blocks 2,756,501–2,757,500.', {}, T)
@@ -111,7 +136,7 @@ describe('Transactions on Qortal', () => {
     await user.click(
       within(found).getByRole('button', { name: 'Look in the latest 10,000 blocks' })
     );
-    expect(screen.getByTestId('at')).toHaveTextContent('?blocks=10000|REPLACE');
+    expect(screen.getByTestId('at')).toHaveTextContent('?type=payments&blocks=10000|REPLACE');
     await waitFor(() => expect(searches().some((p) => p.get('blockLimit') === '10000')).toBe(true));
     expect(
       searches()
@@ -200,8 +225,8 @@ describe('Transactions on Qortal', () => {
     await open('?type=messages');
     await results();
     const type = screen.getByRole('combobox', { name: 'Type' });
-    // A link asking for messages opens the default (Payments).
-    expect(type).toHaveValue('payments');
+    // A link asking for messages opens the default (All, which leaves messages out).
+    expect(type).toHaveValue('all');
     const offered = [...type.querySelectorAll('option')].map((o) => o.getAttribute('value'));
     expect(offered).not.toContain('messages');
     expect(offered).not.toContain('MESSAGE');
@@ -210,7 +235,7 @@ describe('Transactions on Qortal', () => {
   });
 
   it('searches 10,000 blocks from a block typed in, and checks what is typed', async () => {
-    const { user } = await open();
+    const { user } = await open('?type=payments');
     await results();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Blocks' }), 'from');
     const field = screen.getByRole('textbox', { name: 'From block' });
@@ -226,7 +251,9 @@ describe('Transactions on Qortal', () => {
     // As the app shows block numbers, with commas (Simon, 2026-10-17).
     await user.type(field, '2,640,000');
     await user.click(screen.getByRole('button', { name: 'Show' }));
-    expect(screen.getByTestId('at')).toHaveTextContent('?blocks=from-2640000|REPLACE');
+    expect(screen.getByTestId('at')).toHaveTextContent(
+      '?type=payments&blocks=from-2640000|REPLACE'
+    );
     const found = await results();
     expect(
       await within(found).findByText('All 5 payments in blocks 2,640,000–2,649,999.', {}, T)
@@ -239,7 +266,7 @@ describe('Transactions on Qortal', () => {
   });
 
   it('shows older pages of 20, says what came, and keeps focus until none are left', async () => {
-    const { user, posts } = await open('', (world) =>
+    const { user, posts } = await open('?type=payments', (world) =>
       // 45 of Hal's payments in the range: pages of 20, 20 and 5.
       mockFetchRoute('/transactions/search', (url: URL) => {
         const p = url.searchParams;
@@ -275,7 +302,7 @@ describe('Transactions on Qortal', () => {
   });
 
   it('reads oldest first, and from a block for as many blocks as picked', async () => {
-    const { user } = await open('?blocks=from-2640000&order=oldest');
+    const { user } = await open('?type=payments&blocks=from-2640000&order=oldest');
     const found = await results();
     expect(
       await within(found).findByText('All 5 payments in blocks 2,640,000–2,649,999.', {}, T)
@@ -291,7 +318,7 @@ describe('Transactions on Qortal', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'How many blocks' }), '1000');
     await user.click(screen.getByRole('button', { name: 'Show' }));
     expect(screen.getByTestId('at')).toHaveTextContent(
-      '?blocks=from-2640000&order=oldest&span=1000|REPLACE'
+      '?type=payments&blocks=from-2640000&order=oldest&span=1000|REPLACE'
     );
     expect(
       await within(await results()).findByText(

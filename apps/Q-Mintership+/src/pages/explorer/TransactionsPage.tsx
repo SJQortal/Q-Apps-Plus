@@ -1,6 +1,7 @@
 /**
  * Transactions on Qortal: `/explorer/transactions`. Every confirmed
- * transaction of one type (Payments unless another is picked) in a range
+ * transaction of every type but messages, or of one family or type picked
+ * (Simon, 2026-10-18: All by default, no longer Payments), in a range
  * of blocks (the latest 1,000 unless another is picked), newest first
  * unless oldest first is picked, 20 a page, shown as soon as the page
  * opens; what waits for a block is listed apart. Messages are never listed

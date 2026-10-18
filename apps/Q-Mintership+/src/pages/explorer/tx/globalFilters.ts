@@ -1,6 +1,6 @@
 /**
- * Transactions on Qortal's filters and words. The type is All, a family
- * (Payments, the default) or one exact type; the blocks are the latest
+ * Transactions on Qortal's filters and words. The type is All (the
+ * default: Simon, 2026-10-18), a family or one exact type; the blocks are the latest
  * 1,000 (the default), the latest 10,000, or 1 to 10,000 from a block; the
  * order is newest first (the default) or oldest first. All live in the URL
  * (`?type=names`, `?type=REGISTER_NAME`, `?blocks=10000`,
@@ -29,7 +29,7 @@ import { FAMILY_NOUN } from '../account/transactions/txTabWords';
 /** A family key, or one of Core's type names. */
 export type GlobalType = string;
 
-export const DEFAULT_TYPE: GlobalType = 'payments';
+export const DEFAULT_TYPE: GlobalType = 'all';
 export const DEFAULT_BLOCKS: BlocksChoice = { kind: 'latest', blocks: 1000 };
 
 /**
@@ -41,7 +41,7 @@ const NOT_OFFERED: ReadonlySet<string> = new Set(['messages', ...typesFor('messa
 
 const EXACT: ReadonlySet<string> = new Set(ALL_TX_TYPES.filter((type) => !NOT_OFFERED.has(type)));
 
-/** `?type=`: a family key or an exact type, else Payments. */
+/** `?type=`: a family key or an exact type, else All. */
 export function parseTypeParam(value: string | null): GlobalType {
   if (value && !NOT_OFFERED.has(value) && (isTxFamilyKey(value) || EXACT.has(value))) return value;
   return DEFAULT_TYPE;
