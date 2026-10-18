@@ -5,8 +5,10 @@
  *
  * Fixtures: 24 shares from three publishers (one with a "+" in its name), a
  * four-file share (image, text, PDF, audio), a comment thread with a reply,
- * two collections (one with folders and covers), an album of five tracks
- * that plays as a playlist (silent WAVs) and a share of 120 files.
+ * three collections (one with folders and covers, one a copy of it by
+ * bob+builder), an album of five tracks that plays as a playlist (silent
+ * WAVs) and a share of 120 files. Even-numbered shares have a thumbnail; the
+ * odd ones show their first image on cards.
  * Publishing is always declined, so nothing can be sent.
  */
 const NAME = 'Tester';
@@ -39,6 +41,7 @@ const body = (i) => ({
     { filename: 'manual-with-a-long-file-name-for-wrapping.pdf', identifier: `qshare_file_d_${i}`, name: rows[i - 1].name, service: 'FILE', mimetype: 'application/pdf', size: 3_400_000 },
     { filename: 'song.mp3', identifier: `qshare_file_a_${i}`, name: rows[i - 1].name, service: 'FILE', mimetype: 'audio/mpeg', size: 5_100_000 },
   ],
+  ...(i % 2 === 0 ? { thumbnail: { service: 'THUMBNAIL', name: rows[i - 1].name, identifier: `qshare_thumb_share-number-${i}_th00${i}` } } : {}),
 });
 // The album that plays as a playlist, and a share with 120 files.
 const ALBUM = 'qshare_file_live-in-tokyo_pl0001_metadata';
@@ -70,6 +73,18 @@ const collectionBody = {
     { id: 'empty1', title: 'Empty', description: '', items: [], folders: [] },
   ],
 };
+const HOLIDAY = 'qshare_collection_holiday-pack_ab12cd';
+const TOOLS = 'qshare_collection_tools_ef34gh';
+const COPY = 'qshare_collection_holiday-pack_cp78ij';
+const collections = {
+  [HOLIDAY]: collectionBody,
+  [COPY]: { ...collectionBody, created: now - 3600_000, updated: now - 3600_000, copiedFrom: { name: NAME, identifier: HOLIDAY, title: 'Holiday pack' } },
+};
+const collectionRows = [
+  { name: NAME, service: 'DOCUMENT', identifier: HOLIDAY, created: now, updated: now, metadata: { title: 'Holiday pack', description: 'Photos and notes' } },
+  { name: 'bob+builder', service: 'DOCUMENT', identifier: COPY, created: now - 3600_000, updated: now - 3600_000, metadata: { title: 'Holiday pack', description: 'Photos and notes' } },
+  { name: 'Alice Wonder', service: 'DOCUMENT', identifier: TOOLS, created: now - 86400000, updated: now - 86400000, metadata: { title: 'Tools', description: '' } },
+];
 /** A silent mono 8-bit WAV of `seconds`, so the playlist really plays. */
 function silentWav(seconds) {
   const rate = 4000;
@@ -96,7 +111,7 @@ export default {
 
   async setup({ browser }) {
     const gen = await browser.newPage({ viewport: { width: 64, height: 64 } });
-    await gen.setContent('<div style="width:64px;height:64px;background:linear-gradient(135deg,#f59e0b,#3b82f6)"></div>');
+    await gen.setContent('<body style="margin:0"><div style="width:64px;height:64px;background:linear-gradient(135deg,#f59e0b,#3b82f6)"></div></body>');
     PNG = await gen.screenshot({ clip: { x: 0, y: 0, width: 64, height: 64 } });
     await gen.close();
   },
@@ -123,13 +138,14 @@ export default {
   qortal: () => `
     const bodies = ${JSON.stringify({ ...Object.fromEntries(rows.map((r, i) => [r.identifier, body(i + 1)])), ...extraBodies })};
     const collection = ${JSON.stringify(collectionBody)};
+    const collections = ${JSON.stringify(collections)};
     window.__qplusAnswer = async (p) => {
       switch (p.action) {
         case 'GET_USER_ACCOUNT': return { address: 'QTesterAddress', publicKey: 'pk' };
         case 'GET_ACCOUNT_NAMES': return [{ name: '${NAME}', owner: 'QTesterAddress' }, { name: 'Second Name', owner: 'QTesterAddress' }];
         case 'GET_PRIMARY_NAME': return '${NAME}';
         case 'GET_QDN_RESOURCE_URL': return '/arbitrary/' + p.service + '/' + p.name + '/' + p.identifier;
-        case 'FETCH_QDN_RESOURCE': return bodies[p.identifier] || (p.identifier && p.identifier.startsWith('qshare_collection_') ? collection : null);
+        case 'FETCH_QDN_RESOURCE': return bodies[p.identifier] || (p.identifier && p.identifier.startsWith('qshare_collection_') ? collections[p.identifier] || collection : null);
         case 'GET_LIST_ITEMS': return p.list_name === 'followedNames' ? ['Alice Wonder'] : ['spammer'];
         case 'LIST_QDN_RESOURCES': return [{ size: 1000 }];
         case 'SHOW_PDF_READER': return true;
@@ -156,10 +172,7 @@ export default {
       const name = sp.get('name');
       const query = sp.get('query') || '';
       if (ident.startsWith('qshare_collection_')) {
-        list = [
-          { name: NAME, service: 'DOCUMENT', identifier: 'qshare_collection_holiday-pack_ab12cd', created: now, updated: now, metadata: { title: 'Holiday pack', description: 'Photos and notes' } },
-          { name: 'Alice Wonder', service: 'DOCUMENT', identifier: 'qshare_collection_tools_ef34gh', created: now - 86400000, updated: now - 86400000, metadata: { title: 'Tools', description: '' } },
-        ];
+        list = collectionRows;
       } else if (sp.get('service') === 'BLOG_COMMENT') {
         list = query.includes('_base_')
           ? [1, 2].map((n) => ({ name: n === 1 ? 'Alice Wonder' : NAME, service: 'BLOG_COMMENT', identifier: `qcomment_v1_qshare_${'id001_metadata'.slice(-12)}_base_c${n}0000`, created: now - n * 3600_000 }))
@@ -175,6 +188,8 @@ export default {
       await json(route, list.slice(offset, offset + limit));
       return true;
     }
+    // Cards ask the node whether a share's first image is there before showing it.
+    if (p.includes('/arbitrary/resource/status/')) return json(route, { status: 'READY', percentLoaded: 100 }).then(() => true);
     const send = (contentType, body) => route.fulfill({ status: 200, contentType, body }).then(() => true);
     if (p.includes('/THUMBNAIL/')) return send('image/png', PNG);
     if (p.includes('/BLOG_COMMENT/')) return send('text/plain', 'A comment with enough words to wrap on a phone screen, and a qortal://APP/Q-Tube link.');
@@ -197,17 +212,24 @@ export default {
     { key: 'profile', path: `/channel/${encodeURIComponent('Alice Wonder')}`, after: async (page) => page.waitForSelector('li, [role=status]', { timeout: 8000 }).catch(() => {}) },
     { key: 'settings', path: '/settings' },
     { key: 'collections', path: '/collections', optional: true },
-    { key: 'collection', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd`, optional: true, after: async (page) => page.waitForSelector('text=Live recordings', { timeout: 8000 }).catch(() => {}) },
-    { key: 'folder', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd/folder/live01`, after: async (page) => page.waitForSelector('text=Live in Tokyo', { timeout: 8000 }).catch(() => {}) },
-    { key: 'folder-new', path: `/collection/${NAME}/qshare_collection_holiday-pack_ab12cd/folder/live01`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'New folder' }).first().click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'collection', path: `/collection/${NAME}/${HOLIDAY}`, optional: true, after: async (page) => page.waitForSelector('text=Live recordings', { timeout: 8000 }).catch(() => {}) },
+    { key: 'folder', path: `/collection/${NAME}/${HOLIDAY}/folder/live01`, after: async (page) => page.waitForSelector('text=Live in Tokyo', { timeout: 8000 }).catch(() => {}) },
+    { key: 'folder-new', path: `/collection/${NAME}/${HOLIDAY}/folder/live01`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'New folder' }).first().click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    // bob+builder's copy of Holiday pack: the "Copy of … by Tester" line, and Copy to my collections.
+    { key: 'collection-copied', path: `/collection/${encodeURIComponent('bob+builder')}/${COPY}`, after: async (page) => page.waitForSelector('text=Copy of', { timeout: 8000 }).catch(() => {}) },
+    { key: 'collection-copy', path: `/collection/${encodeURIComponent('Alice Wonder')}/${TOOLS}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Copy to my collections' }).first().click({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'share-many', path: `/share/${NAME}/${MANY}`, after: async (page) => page.waitForSelector('text=recording-050.zip', { timeout: 8000 }).catch(() => {}) },
     // Play all starts the player bar; the shot is taken with it playing.
     { key: 'playlist', path: `/share/${encodeURIComponent('Alice Wonder')}/${ALBUM}`, after: async (page) => { await page.getByRole('button', { name: 'Play all' }).first().click({ timeout: 4000 }); await page.getByRole('region', { name: 'Player' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'player-sheet', path: `/share/${encodeURIComponent('Alice Wonder')}/${ALBUM}`, mobileOnly: true, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Play all' }).first().click({ timeout: 4000 }); await page.getByRole('button', { name: /Open the player/ }).click({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'publish-many', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /share files/i }).first().click({ timeout: 2500 }); await page.setInputFiles('[data-testid=share-file-input]', Array.from({ length: 25 }, (_, i) => ({ name: `track-${i + 1}.mp3`, mimeType: 'audio/mpeg', buffer: Buffer.from('x') }))); await page.waitForTimeout(600); } },
+    // A real image: the thumbnail is made on the page from it.
+    { key: 'publish-thumbnail', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /share files/i }).first().click({ timeout: 2500 }); await page.setInputFiles('[data-testid=share-file-input]', [{ name: 'beach.png', mimeType: 'image/png', buffer: PNG }, { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('x') }]); await page.getByText('Made from beach.png.').waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(300); } },
     { key: 'publish', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /share files/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'account-menu', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /account menu/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
-    // Opening the bell runs the first check: a comment by bob+builder on share 1, and Alice Wonder's Tools collection holding it.
+    // Opening the bell runs the first check: a comment by bob+builder on share 1, Alice Wonder's Tools collection holding it, and bob+builder's copy of Holiday pack.
     { key: 'notifications', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Notifications/ }).first().click({ timeout: 2500 }); await page.getByText(/added .* to Tools/).first().waitFor({ timeout: 5000 }).catch(() => {}); await page.waitForTimeout(400); } },
+    // Last: the List choice is a setting, kept for the screens after it.
+    { key: 'collection-list', path: `/collection/${NAME}/${HOLIDAY}`, after: async (page) => { await page.getByRole('button', { name: 'List' }).first().click({ timeout: 4000 }); await page.waitForTimeout(400); } },
   ],
 };
