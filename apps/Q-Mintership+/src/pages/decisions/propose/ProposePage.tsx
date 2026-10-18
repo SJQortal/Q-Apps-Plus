@@ -232,6 +232,8 @@ function ProposeForm({
 
   const signer: Signer = useMemo(() => ({ address: me, publicKey }), [me, publicKey]);
   const queue = useDecisions();
+  // The queue gives the approvals needed and who already has a proposal waiting.
+  const queueFailed = !queue.data && queue.isError;
   const members = useMembers();
   const nominations = useNominations();
   const { ctx, waiting } = useProposeContext(
@@ -319,7 +321,7 @@ function ProposeForm({
   else if (checked.status === 'blocked') hint = 'This can’t be proposed now: see why above.';
   else if (reasonError) hint = reasonError;
   else if (banError) hint = banError;
-  else if (!ctx) hint = 'Reading the decisions…';
+  else if (!ctx) hint = queueFailed ? 'Couldn’t read the decisions.' : 'Reading the decisions…';
   else hint = 'Ready to propose.';
   const ready = Boolean(
     person && !stepDown && checked?.status === 'ok' && !reasonError && !banError && ctx
@@ -399,7 +401,7 @@ function ProposeForm({
           waiting={waiting}
           onPick={pick}
         />
-      ) : (
+      ) : queueFailed ? null : (
         <HeroSkeleton />
       );
       break;
@@ -513,6 +515,13 @@ function ProposeForm({
         </Section>
       ) : null}
 
+      {queueFailed ? (
+        <ErrorState
+          title="Couldn’t read the decisions on your node."
+          error={queue.error}
+          onRetry={() => void queue.refetch()}
+        />
+      ) : null}
       <WhatHappensNext kind={kind} ctx={ctx} withNote={withNote} />
 
       <Box

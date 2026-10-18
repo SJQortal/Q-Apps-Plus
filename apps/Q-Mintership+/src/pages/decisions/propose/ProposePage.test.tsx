@@ -11,11 +11,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLocation } from 'react-router-dom';
-import { fakeAddress } from '../../../../e2e/world.mjs';
+import { answerCore, fakeAddress } from '../../../../e2e/world.mjs';
 import { base58Decode, base58Encode } from '../../../qortal/base58';
 import { proposePath, type ProposePageKind } from '../../../routes/paths';
 import { renderPage, type RenderPageOptions } from '../../../test/render';
-import { mockQortalRequest, qortalCallsFor } from '../../../test/setup';
+import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../../test/setup';
 import { ADDR } from '../../../test/world';
 import { shortAddress } from '../../../utils/format';
 import { PROPOSE_KINDS } from '../proposeKinds';
@@ -119,6 +119,31 @@ describe('The + Propose pages', () => {
       route: '/propose/:kind',
     });
     expect(await screen.findByText('Sign in to propose', {}, T)).toBeVisible();
+  });
+
+  it('says so when the decisions can’t be read, and reads them again on Retry', async () => {
+    const u = user();
+    let down = true;
+    await openPropose('cancelBan', {
+      who: ADDR.banned,
+      setup: (world) =>
+        mockFetchRoute('/transactions/pending', (url: URL) =>
+          down
+            ? new Response('', { status: 500 })
+            : new Response(
+                JSON.stringify(answerCore(world, url.pathname, url.searchParams)?.body ?? [])
+              )
+        ),
+    });
+    expect(
+      await screen.findByText('Couldn’t read the decisions on your node.', {}, T)
+    ).toBeVisible();
+    down = false;
+    await u.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(
+      () => expect(screen.queryByText('Couldn’t read the decisions on your node.')).toBeNull(),
+      T
+    );
   });
 
   it('a kind it doesn’t know goes on to Decisions', async () => {
