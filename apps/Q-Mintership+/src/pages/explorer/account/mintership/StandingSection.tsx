@@ -18,7 +18,7 @@ import { statusSentence } from '../../../person/personWords';
 import type { MinterStory } from './useMinterStory';
 import { nominationLine, roundsLine } from './mintershipWords';
 import { Fact, Note } from './parts';
-import { BlocksMintedFact } from './BlocksMinted';
+import { QortMintedFact } from './QortMinted';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
 
 export function StandingSection({
@@ -65,11 +65,8 @@ export function StandingSection({
           }}
         >
           <Fact label="Level" value={String(person.level)} />
-          <BlocksMintedFact
-            address={address}
-            blocksMinted={person.blocksMinted}
-            neverMinted={person.blocksMinted === 0}
-          />
+          <Fact label="Blocks minted" value={formatCount(person.blocksMinted)} />
+          <QortMintedFact address={address} neverMinted={person.blocksMinted === 0} />
           <Fact
             label="Node online"
             value={

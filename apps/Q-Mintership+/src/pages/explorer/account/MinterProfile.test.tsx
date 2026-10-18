@@ -566,11 +566,11 @@ describe('Minter Profile: reads', () => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('Blocks minted / QORT minted', () => {
+describe('QORT minted on the Minter Profile', () => {
   const SLOW = { timeout: 20_000 };
   afterEach(() => getDefaultStore().set(activityFirstReadAtom, 1000));
 
-  it('shows QORT minted beside the blocks, with a fetch icon when its history needs reading', async () => {
+  it('shows QORT minted in a box of its own, with a fetch icon when its history needs reading', async () => {
     getDefaultStore().set(activityFirstReadAtom, 100);
     const user = userEvent.setup();
     await visit(ADDR.admin, 'admin', (world) => {
@@ -579,16 +579,16 @@ describe('Blocks minted / QORT minted', () => {
       setMintedTo(world, ADDR.admin, 77n);
     });
     const facts = (await status()).querySelector('dl[aria-label="MINTER facts"]') as HTMLElement;
-    const value = () =>
-      within(facts).getByText('Blocks minted / QORT minted').nextElementSibling as HTMLElement;
+    const value = () => within(facts).getByText('QORT minted').nextElementSibling as HTMLElement;
     const fetch = await within(facts).findByRole(
       'button',
       { name: 'Read the rest of its transactions to work out the QORT it minted' },
       SLOW
     );
-    expect(value()).toHaveTextContent(/^[\d,]+ \/$/);
+    expect(value()).not.toHaveTextContent(/QORT$/);
+    expect(within(facts).getByText('Blocks minted')).toBeInTheDocument();
     await user.click(fetch);
-    await waitFor(() => expect(value()).toHaveTextContent(/^[\d,]+ \/ 77 QORT$/), SLOW);
+    await waitFor(() => expect(value()).toHaveTextContent(/^77 QORT$/), SLOW);
     expect(
       within(value()).getByRole('button', { name: /^About QORT minted: 77 QORT\./ })
     ).toBeInTheDocument();
@@ -597,8 +597,9 @@ describe('Blocks minted / QORT minted', () => {
   it('says an account that never minted never did', async () => {
     await visit(ADDR.nominatedSigning, 'admin');
     const facts = (await status()).querySelector('dl[aria-label="MINTER facts"]') as HTMLElement;
-    expect(
-      within(facts).getByText('Blocks minted / QORT minted').nextElementSibling
-    ).toHaveTextContent('0 / Never minted');
+    expect(within(facts).getByText('Blocks minted').nextElementSibling).toHaveTextContent('0');
+    expect(within(facts).getByText('QORT minted').nextElementSibling).toHaveTextContent(
+      'Never minted'
+    );
   });
 });

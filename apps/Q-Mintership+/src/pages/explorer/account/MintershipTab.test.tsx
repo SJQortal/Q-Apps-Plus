@@ -116,10 +116,11 @@ describe('the Mintership tab', () => {
         T
       )
     ).toBeVisible();
-    // Blocks minted, with QORT minted beside it (Simon, 2026-10-17).
-    expect(
-      within(status).getByText('Blocks minted / QORT minted').nextElementSibling
-    ).toHaveTextContent(/^980,000 \//);
+    // Blocks minted, and QORT minted in a box of its own (Simon, 2026-10-18).
+    expect(within(status).getByText('Blocks minted').nextElementSibling).toHaveTextContent(
+      /^980,000$/
+    );
+    expect(within(status).getByText('QORT minted')).toBeInTheDocument();
 
     // Invited without a nomination record: its round in brief.
     const nomination = await region('Nomination');

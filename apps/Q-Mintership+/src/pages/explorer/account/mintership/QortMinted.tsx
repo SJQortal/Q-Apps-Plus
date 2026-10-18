@@ -1,16 +1,15 @@
 /**
- * The Minter Profile's Blocks minted with QORT minted beside it (Simon,
- * 2026-10-17: "In blocks minted, I would also like to see / QORT Minted
- * (and small fetch icon next to it if it needs fetching)"): "1,736,799 /
- * 19,306 QORT", worked out as on the Overview (overview/qortSummaries.tsx).
- * When its history is longer than the first read, a small fetch icon reads
- * the rest; its ⓘ says how it was worked out.
+ * The Minter Profile's QORT minted (Simon, 2026-10-17: "In blocks minted, I
+ * would also like to see / QORT Minted (and small fetch icon next to it if
+ * it needs fetching)"; 2026-10-18: "seperate Blocks minted / QORT minted"):
+ * a fact of its own beside Blocks minted, worked out as on the Overview
+ * (overview/qortSummaries.tsx). When its history is longer than the first
+ * read, a small fetch icon reads the rest; its ⓘ says how it was worked out.
  */
 import { Box, ButtonBase, CircularProgress, Tooltip } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import { InfoTip } from '../../../../components/common/InfoTip';
-import { formatCount } from '../../../../utils/format';
 import { useQortSummaries } from '../overview/qortSummaries';
 import { Fact } from './parts';
 
@@ -18,13 +17,11 @@ const TARGET = 44;
 const ICON = 20;
 const FETCH = 'Read the rest of its transactions to work out the QORT it minted';
 
-export function BlocksMintedFact({
+export function QortMintedFact({
   address,
-  blocksMinted,
   neverMinted,
 }: {
   address: string;
-  blocksMinted: number;
   neverMinted: boolean;
 }) {
   const qort = useQortSummaries(address, neverMinted, { trades: false });
@@ -70,16 +67,10 @@ export function BlocksMintedFact({
   else minted = '…';
   return (
     <Fact
-      label="Blocks minted / QORT minted"
+      label="QORT minted"
       value={
-        <Box
-          component="span"
-          sx={{ display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.5 }}
-        >
-          {formatCount(blocksMinted)} /{' '}
-          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-            {minted}
-          </Box>
+        <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+          {minted}
         </Box>
       }
     />
