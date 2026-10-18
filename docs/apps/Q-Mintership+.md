@@ -179,8 +179,8 @@ The status engine (`src/rules/status.ts`, loaded by `src/data/me.ts`) resolves t
 | JSON | `qmp-hide-<key>-<id>` | a Minter Admin, under their name | `{ v: 1, commentName, commentIdentifier, hidden: true \| false }` |
 | JSON | `qmp-vote-<nomineeAddress>-<yes\|no>-<id>` | anyone with a registered name who isn't a Minter Admin, under that name (a community vote) | `{ v: 1, nomineeAddress, vote: 'yes' \| 'no' }` |
 | JSON | `qmp-vote-<remove\|ban\|admin>-<subjectAddress>-<yes\|no>-<id>` | anyone with a registered name who isn't a Minter Admin or the account it is about, under that name (a community vote on a removal that isn't a declined join request, a ban, or a new Minter Admin; Yes is for the proposal) | `{ v: 1, kind: 'kick' \| 'ban' \| 'addAdmin', subjectAddress, vote: 'yes' \| 'no' }` |
-| DOCUMENT_PRIVATE | `qmp-adminpoll-<id>` (id: 8 letters or digits) | a Minter Admin, encrypted to the Minter Admins | `{ v: 1, id, question (10–200), details? (≤ 2000), durationDays (1–30), createdAt, endsAt, endHeight, readers: [addresses] }` |
-| DOCUMENT_PRIVATE | `qmp-adminvote-<pollId>` | each Minter Admin (republished to change) | `{ v: 1, pollId, vote: 'yes' \| 'no' \| 'neutral' }` |
+| DOCUMENT_PRIVATE | `qmp-adminpoll-<id>` (id: 8 letters or digits) | a Minter Admin, encrypted to the Minter Admins | `{ v: 1, id, question (10–200), details? (≤ 2000), durationDays (1–30), createdAt, endsAt, endHeight, readers: [addresses], answers? }`; `answers` (item 105): 2–6 `{ id: yes\|no\|neutral\|opt4\|opt5\|opt6, label (1–40), tone: 'green' \| 'red' \| 'neutral' }`, written only when not Yes, No and Neutral |
+| DOCUMENT_PRIVATE | `qmp-adminvote-<pollId>` | each Minter Admin (republished to change) | `{ v: 1, pollId, vote: <answer id> }` (`'yes' \| 'no' \| 'neutral'` for a poll without `answers`); a vote for an answer its poll doesn't have doesn't count |
 | DOCUMENT_PRIVATE | `qmp-admincomment-<pollId>-<cid>` | a Minter Admin | `{ v: 1, pollId, text, replyTo?, edited?, deleted? }` |
 | DOCUMENT_PRIVATE | `qmp-adminshare-<pollId>` | a Minter Admin who shares it | `{ v: 1, pollId, poll, pollPublisher, votes: [{ name, vote, updated }], comments, readers, sharedAt }` |
 
@@ -1013,6 +1013,12 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     Tests 2,371 passed; Overview captures clean.
 
 104. **Blocks minted and QORT minted apart** (Simon, 2026-10-18: "in the minter status I would like to seperate Blocks minted / QORT minted"). MINTER status shows them as two boxes side by side. QORT minted keeps its ⓘ, its fetch icon when the history needs reading, and "Never minted" for an account that never minted. Tests 2,371 passed; profile captures clean.
+
+105. **Minter Admin polls with answers of their own** (Simon, 2026-10-18: "for the ask the minter admins, for the answers, I would like to have it also with ability to change the vote descriptions and add more answers, so the default is Yes, No, Netural. and then MAs can rename it, change color (green, red, neutral) when they are creating the poll").
+    - **Asking.** Ask the Minter Admins has an Answers list that starts as Yes, No and Neutral. Each answer can be renamed and given a colour (green, red, or neutral grey). Answers can be added (up to six) or removed (down to two). Review shows them as coloured chips, and the same checks run as when reading: different words, 1–40 characters.
+    - **The card.** A poll's columns, vote buttons, the vote dialog, "You voted …", the counts and the comment badges all use its own answers and colours.
+    - **Data, additive.** An optional `answers` field on the poll, written only when the answers aren't the default (Data contract). Yes, No and Neutral keep their ids when renamed, and added answers are `opt4` to `opt6`. A poll without `answers`, and every earlier vote, reads exactly as before. A vote for an answer its poll doesn't have doesn't count, and the vote write refuses one before Hub opens. An older copy of the app shows a poll with its own answers as Yes, No and Neutral, and can't count votes for added answers.
+    - **Checks.** Tests 2,378 passed. A new screenshot screen (`decisions-ask-answers`) and the poll screens give 30 captures, all clean.
 
 ## Follow-ups
 
