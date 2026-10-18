@@ -102,6 +102,14 @@ describe("copying a collection", { timeout: 20_000 }, () => {
     expect(screen.getByTestId("where")).toHaveTextContent(/^\/collection\/alice\/qshare_collection_my-music_[a-z0-9]{6}$/);
     unmount();
 
+    // Once the copies are deleted (emptied), the collection can be copied again.
+    for (const held of Object.values(store.getState().collections.byKey)) {
+      if (held.name === "alice" && held.copiedFrom) store.dispatch(upsertCollection({ ...held, items: [], folders: [] }));
+    }
+    const again = renderPage();
+    expect(await screen.findByRole("button", { name: "Copy to my collections" })).toBeInTheDocument();
+    again.unmount();
+
     store.dispatch(addUser({ address: "Qdj", publicKey: "k", name: "dj b", names: [{ name: "dj b", owner: "Qdj" }] }));
     renderPage();
     expect(await screen.findByRole("button", { name: "Edit" })).toBeInTheDocument();

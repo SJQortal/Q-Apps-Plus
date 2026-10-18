@@ -42,6 +42,7 @@ import {
   contentsCount,
   findFolder,
   folderCount,
+  isEmptyCollection,
   moveItem,
   removeFolder,
   toggleItemIn,
@@ -244,14 +245,19 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
   const isOwner = Boolean(
     user && name && (user.name === name || (user.names ?? []).some((record) => record.name === name))
   );
-  // A copy of this collection the signed-in name already has.
+  // A copy of this collection the signed-in name already has (a deleted,
+  // emptied one doesn't count, so the collection can be copied again).
   const { myName, byKey: knownCollections } = useMyCollections(!isOwner && Boolean(user?.name));
   const myCopy = useMemo(
     () =>
       isOwner || !myName
         ? null
         : (Object.values(knownCollections).find(
-            (c) => c.name === myName && c.copiedFrom?.name === name && c.copiedFrom.identifier === id
+            (c) =>
+              c.name === myName &&
+              c.copiedFrom?.name === name &&
+              c.copiedFrom.identifier === id &&
+              !isEmptyCollection(c)
           ) ?? null),
     [isOwner, myName, knownCollections, name, id]
   );

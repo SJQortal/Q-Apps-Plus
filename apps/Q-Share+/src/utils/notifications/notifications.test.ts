@@ -260,6 +260,31 @@ describe("notification checks", () => {
     expect(items()[0]).toMatchObject({ kind: "collection", share: { identifier: "qshare_file_more_ffffff_metadata" } });
   });
 
+  it("says nothing of a copy that was deleted before you heard of it", async () => {
+    const coll = {
+      name: "bob",
+      service: "DOCUMENT",
+      identifier: "qshare_collection_gone-copy_dddddd",
+      created: NOW - DAY,
+      updated: NOW + 10,
+      metadata: { title: "Gone", description: recipientMarker(ADDRESS) },
+    };
+    bodies["bob/qshare_collection_gone-copy_dddddd"] = {
+      version: 1,
+      title: "Gone",
+      description: "",
+      items: [],
+      folders: [],
+      copiedFrom: { name: "alice", identifier: "qshare_collection_docs_aaaaaa", title: "Docs" },
+      created: 1,
+      updated: 2,
+    };
+    await check(NOW);
+    collections = [coll];
+    expect(await check(NOW + 60_000)).toBe(0);
+    expect(items()).toHaveLength(0);
+  });
+
   it("reads comments oldest first and moves only as far as the node has indexed", async () => {
     // The node is two hours behind (syncing): the window stops there.
     lastBlock = NOW - 2 * 60 * 60_000;

@@ -18,7 +18,7 @@
  */
 import { QSHARE_COLLECTION_BASE, QSHARE_COMMENT_BASE } from "../../constants/Identifiers";
 import { fetchCollection } from "../collections";
-import { allCollectionItems } from "../collectionFolders";
+import { allCollectionItems, isEmptyCollection } from "../collectionFolders";
 import { searchQdn, searchQdnAll, type QdnResourceSummary } from "../qdnSearch";
 import { recipientMarker } from "../recipientMarker";
 import { loadActivity, parseCommentIdentifier, shareCommentKey, type Activity } from "./activity";
@@ -170,7 +170,8 @@ async function run(account: CheckAccount, options: CheckOptions): Promise<number
         // A copy of one of your collections: one notification for the copy,
         // which also files the shares it came with as read (they're its news).
         const copied = collection?.copiedFrom;
-        if (collection && copied && mine.has(lower(copied.name))) {
+        // A copy deleted (emptied) before you heard of it isn't news.
+        if (collection && copied && mine.has(lower(copied.name)) && !isEmptyCollection(collection)) {
           const copyId = `cp:${key}`;
           if (!seen.has(copyId)) {
             seen.add(copyId);
