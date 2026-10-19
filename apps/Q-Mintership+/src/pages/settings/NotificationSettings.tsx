@@ -1,8 +1,9 @@
 /**
  * Settings → Notifications: Home's "Since your last visit" (on by default,
  * kept in this browser) and Hub alerts (off until you turn them on; Hub
- * keeps them for your account: qortal/hubAlerts.ts). While alerts are on,
- * a nominator's support alerts are brought in step with their open
+ * keeps them for your account: qortal/hubAlerts.ts), for each role and for
+ * replies to your comments (anyone with a registered name). While alerts are
+ * on, a nominator's support alerts are brought in step with their open
  * nominations here, without a Hub dialog.
  */
 import { useEffect, useId, useRef, useState } from 'react';
@@ -20,13 +21,15 @@ import {
   MAX_SUPPORT_ALERTS,
   SUPPORTED_YOURS_PREFIX,
   alertRole,
+  alertRules,
   getHubActions,
   getHubAlertIds,
   makesNominations,
+  replyAlertRules,
   rulesMatch,
   supportAlertNominees,
   supportsHubAlerts,
-  syncNominatorAlerts,
+  syncHubAlerts,
   turnOffHubAlerts,
   turnOnHubAlerts,
   type AlertRole,
@@ -61,16 +64,30 @@ const Copy = styled('span')({ display: 'block', flex: 1, minWidth: 0 });
 /** Text inside a row (a label holds no paragraphs). */
 const LINE = { component: 'span', sx: { display: 'block' } } as const;
 
-/** What the Hub alerts switch says for each role. */
-const ROLE_HINT: Record<AlertRole, string> = {
+/** What Hub tells each role about, before the replies. */
+const ROLE_EVENTS: Record<Exclude<AlertRole, 'none'>, string> = {
   admin:
-    'Hub tells you when a new nomination is published, and when someone adds their support to a nomination you made, even when this app is closed. Hub asks you once to allow it. No fee.',
-  nominator:
-    'Hub tells you when someone adds their support to a nomination you made, even when this app is closed. Hub asks you once to allow it. No fee.',
-  nominee:
-    'Hub tells you when someone nominates you or adds their support, even when this app is closed. Hub asks you once to allow it. No fee.',
-  none: 'Hub alerts are for Minter Admins, members at level 5 or above who nominate, and people not in MINTER yet. Nothing to alert you about now.',
+    'when a new nomination is published, when someone adds their support to a nomination you made',
+  nominator: 'when someone adds their support to a nomination you made',
+  nominee: 'when someone nominates you or adds their support',
 };
+
+const ALERTS_TAIL = 'even when this app is closed. Hub asks you once to allow it. No fee.';
+
+/**
+ * What the Hub alerts switch says for a role; `named`: the account has a
+ * registered name to comment under, so replies to its comments count too.
+ */
+function roleHint(role: AlertRole, named: boolean): string {
+  const replies = 'when someone replies to your comment';
+  if (role === 'none')
+    return named
+      ? `Hub tells you ${replies}, ${ALERTS_TAIL}`
+      : 'Hub alerts are for Minter Admins, members at level 5 or above who nominate, people not in MINTER yet, and anyone with a registered name who comments. Nothing to alert you about now.';
+  return named
+    ? `Hub tells you ${ROLE_EVENTS[role]}, and ${replies}, ${ALERTS_TAIL}`
+    : `Hub tells you ${ROLE_EVENTS[role]}, ${ALERTS_TAIL}`;
+}
 
 /** What the support alerts cover, for Minter Admins and nominators. */
 const SUPPORT_SCOPE = `Support alerts cover the nominations you made that are still open (up to ${MAX_SUPPORT_ALERTS}). While alerts are on, opening Settings adds the ones you made since and drops the ones that closed.`;
@@ -93,6 +110,7 @@ function HubAlertsRow() {
   const [note, setNote] = useState<Note>(null);
 
   const role = alertRole(status);
+  const name = session.name || null;
   const ids = alerts.data ?? [];
   const on = ids.length > 0;
   const stale = on && !rulesMatch(ids, role, session.address);
@@ -112,9 +130,9 @@ function HubAlertsRow() {
   else if (!supported) hint = "Your Hub doesn't offer app alerts. Home still shows what changed.";
   else if (alerts.isError) hint = "Couldn't read your Hub alerts. Try again later.";
   else if (stale)
-    // With no role now, they can only be turned off: the switch stays off after that.
+    // With nothing to alert about now, they can only be turned off: the switch stays off after that.
     hint =
-      role === 'none'
+      alertRules(role, session.address, nominees ?? [], name).length === 0
         ? 'These alerts were set up for your earlier role and no longer fit. Turn them off.'
         : 'These alerts were set up for your earlier role. Turn them off and on to update them.';
   else if (nominationsFailed)
@@ -122,35 +140,46 @@ function HubAlertsRow() {
   else if (!on && role === 'nominator' && all.isLoading)
     hint = 'Checking the nominations you made…';
   else if (noneOpen)
-    hint =
-      'Hub tells you when someone adds their support to a nomination you made. You have no open nominations now.';
-  else hint = ROLE_HINT[role];
+    hint = name
+      ? 'Hub tells you when someone replies to your comment, and when someone adds their support to a nomination you made. You have no open nominations now.'
+      : 'Hub tells you when someone adds their support to a nomination you made. You have no open nominations now.';
+  else hint = roleHint(role, Boolean(name));
 
   const ready = inHub && supported && !alerts.isLoading && !alerts.isError;
   // Not disabled while its own request runs: a disabled control loses focus.
-  // Presses meanwhile are ignored instead. A nominator's rules come from their
-  // open nominations: none (or not read yet), nothing to turn on.
+  // Presses meanwhile are ignored instead. A nominator's switch waits for the
+  // nominations they made (their support rules); otherwise there is nothing
+  // to turn on without role rules, a name for the reply rules, or open
+  // nominations.
   const disabled =
-    !ready || !status || (!on && (role === 'none' || (role === 'nominator' && !nominees?.length)));
+    !ready ||
+    !status ||
+    (!on &&
+      ((role === 'nominator' && nominees === null) ||
+        alertRules(role, session.address, nominees ?? [], name).length === 0));
 
-  // While alerts are on, bring the support rules in step once per visit and list of nominations.
+  // While alerts are on, bring the support and reply rules in step once per visit, list of
+  // nominations and name: once the nominations are read (or couldn't be), for those who nominate.
   const synced = useRef<string | null>(null);
   const [checked, setChecked] = useState<string | null>(null);
   const nomineesKey = nominees?.join(',') ?? null;
-  const syncKey = `${role}|${nomineesKey}`;
+  const nomineesSettled = !nominator || nomineesKey !== null || all.isError;
+  const syncKey = `${role}|${nomineesKey}|${name ?? ''}`;
   useEffect(() => {
-    if (!ready || !on || stale || !nominator || nomineesKey === null) return;
+    if (!ready || !on || stale || !nomineesSettled) return;
     if (synced.current === syncKey) return;
     synced.current = syncKey;
-    syncNominatorAlerts(role, nomineesKey ? nomineesKey.split(',') : [])
+    const list =
+      nominator && nomineesKey !== null ? (nomineesKey ? nomineesKey.split(',') : []) : null;
+    syncHubAlerts(role, list, name)
       .catch(() =>
         setNote({
           tone: 'warning',
-          text: "Couldn't update the alerts for your nominations. Try again later.",
+          text: "Couldn't update your alerts. Try again later.",
         })
       )
       .finally(() => setChecked(syncKey));
-  }, [ready, on, stale, nominator, role, nomineesKey, syncKey]);
+  }, [ready, on, stale, nomineesSettled, nominator, role, nomineesKey, name, syncKey]);
   // Try again stays while it reads, so focus stays on it; once the nominations are read it
   // goes, and focus moves on to the switch (or the page, when there is nothing to turn on).
   const [retrying, setRetrying] = useState(false);
@@ -181,11 +210,17 @@ function HubAlertsRow() {
     else focusPageTitle();
   }, [retrying, switchId]);
 
-  // Open nominations still without a rule once that is done (Hub didn't let the app add them).
+  // Open nominations still without a rule once that is done (Hub didn't let the app add them),
+  // and the reply rules likewise.
   const missing =
     on && !stale && nominees && checked === syncKey
       ? nominees.filter((n) => !ids.includes(`${SUPPORTED_YOURS_PREFIX}${n}`)).length
       : 0;
+  const repliesMissing =
+    on &&
+    !stale &&
+    checked === syncKey &&
+    replyAlertRules(role, name).some((r) => !ids.includes(r.notificationId));
 
   const toggle = async (next: boolean) => {
     if (busyRef.current) return;
@@ -194,7 +229,7 @@ function HubAlertsRow() {
     setNote(null);
     try {
       if (next) {
-        await turnOnHubAlerts(role, session.address, nominees ?? []);
+        await turnOnHubAlerts(role, session.address, nominees ?? [], name);
         setNote({ tone: 'success', text: 'Hub alerts are on.' });
       } else {
         await turnOffHubAlerts();
@@ -246,6 +281,12 @@ function HubAlertsRow() {
             <Typography variant="body2" color="text.secondary" {...LINE}>
               Alerts for {plural(missing, 'open nomination')} you made aren&apos;t set up yet: turn
               alerts off and on to add them.
+            </Typography>
+          ) : null}
+          {repliesMissing ? (
+            <Typography variant="body2" color="text.secondary" {...LINE}>
+              Alerts for replies to your comments aren&apos;t set up yet: turn alerts off and on to
+              add them.
             </Typography>
           ) : null}
           {ready && role !== 'none' ? (
@@ -315,7 +356,8 @@ export function NotificationSettings() {
             </Typography>
             <Typography id={hintId} variant="body2" color="text.secondary" {...LINE}>
               Home lists what changed since you last opened the app on this device: new decisions,
-              your nomination&apos;s progress, how the nominations you made ended.
+              your nomination&apos;s progress, how the nominations you made ended, replies to your
+              comments.
             </Typography>
           </Copy>
           <Switch

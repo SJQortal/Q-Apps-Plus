@@ -13,6 +13,7 @@
  * edit keeps its comment's kind. Nobody else reads or sees them.
  */
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -35,6 +36,7 @@ import {
 import { buildThreads, type CommentTarget, type CommentView } from '../../data/commentThread';
 import { invalidate } from '../../data/query';
 import { useAdmins } from '../../hooks/useData';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useQuery } from '../../hooks/useQuery';
 import { settleOptimistic, useMutedNames, useOptimisticComments } from '../../state/comments';
 import { signIn, signerOf, useSession } from '../../state/session';
@@ -54,6 +56,7 @@ import {
 } from './CommentDialogs';
 import { CommentReplies, ReplyComposerBox } from './CommentReplies';
 import { CommentItem, type CommentViewer } from './CommentItem';
+import { commentOfState, goToComment } from './commentLinkState';
 import type { AnswerBadges } from './answerBadges';
 
 const REFRESH_MS = 60_000;
@@ -167,6 +170,21 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   );
   // Show more: once the next comments are in, focus goes to the first of them
   // (the button may have gone with the last page).
+  // Opened from a comment's link (a reply alert, Home's replies): go to that comment once it shows.
+  const location = useLocation();
+  const reduced = useReducedMotion();
+  const linked = commentOfState(location.state);
+  const wentTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linked || wentTo.current === linked || !threads) return;
+    const target = [...document.querySelectorAll<HTMLElement>('[data-comment]')].find(
+      (el) => el.dataset.comment === linked
+    );
+    if (!target) return;
+    wentTo.current = linked;
+    goToComment(target, reduced);
+  }, [linked, threads, reduced]);
+
   const shownBefore = useRef<Set<string> | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   useEffect(() => {
@@ -269,7 +287,18 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
       });
     if (dialog.mode === 'edit' && dialog.about) {
       const c = dialog.about;
-      const ref = { name: c.name, identifier: c.identifier, key: c.key, replyTo: c.replyTo };
+      // A reply keeps its marker (data/replyMarkers.ts): one for the Minter Admins only when
+      // it answers another one of theirs, as when it was posted.
+      const parent = c.replyToRef
+        ? threads?.flatMap((t) => [t.comment, ...t.replies]).find((v) => v.ref === c.replyToRef)
+        : null;
+      const ref = {
+        name: c.name,
+        identifier: c.identifier,
+        key: c.key,
+        replyTo: c.replyTo,
+        replyToName: c.adminOnly && !parent?.adminOnly ? null : c.replyToName,
+      };
       if (c.adminOnly) {
         if (!adminWriter)
           return Promise.resolve({
@@ -290,6 +319,9 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
           key: target.postKey,
           text: dialog.text,
           replyTo: dialog.mode === 'reply' ? dialog.about?.identifier : null,
+          // Its author hears of it only when it answers another comment for the Minter Admins.
+          replyToName:
+            dialog.mode === 'reply' && dialog.about?.adminOnly ? dialog.about.name : null,
         },
         onStage
       );
@@ -307,6 +339,7 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
         key: target.postKey,
         text: dialog.text,
         replyTo: dialog.mode === 'reply' ? dialog.about?.identifier : null,
+        replyToName: dialog.mode === 'reply' ? dialog.about?.name : null,
       },
       onStage
     );

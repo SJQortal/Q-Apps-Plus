@@ -26,6 +26,7 @@ import {
 import { encryptionTargets, type EncryptionTargets } from '../data/adminPolls';
 import { commentRef } from '../data/commentRecords';
 import { invalidate } from '../data/query';
+import { replyDescriptionFor } from '../data/replyMarkers';
 import { setPendingAdminNote } from '../state/adminNotes';
 import { addOptimisticComment } from '../state/comments';
 import { errorMessage } from '../utils/hubErrors';
@@ -66,6 +67,8 @@ async function publishForAdmins<R extends AdminNoteRecord | AdminCommentRecord>(
   identifier: string;
   build: () => R;
   onStage?: (stage: WriteStage) => void;
+  /** A reply's marker (data/replyMarkers.ts). */
+  description?: string;
 }): Promise<{ outcome: WriteOutcome; record: R | null; targets: EncryptionTargets | null }> {
   const { writer, identifier, onStage } = spec;
   const name = spec.name ?? writer.name;
@@ -109,7 +112,13 @@ async function publishForAdmins<R extends AdminNoteRecord | AdminCommentRecord>(
     };
   }
   const outcome = await runWrite({
-    request: publishEncryptedRequest(name as string, identifier, record, targets.publicKeys),
+    request: publishEncryptedRequest(
+      name as string,
+      identifier,
+      record,
+      targets.publicKeys,
+      spec.description
+    ),
     signer: writer,
     match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
     onStage,
@@ -175,9 +184,14 @@ function markComment(name: string, identifier: string, record: AdminCommentRecor
 }
 
 /** A comment for the Minter Admins only about `key`; `replyTo` makes it a reply (to either kind). */
+/**
+ * A Minter Admin's comment for the Minter Admins. `replyToName` marks a reply
+ * to another one of these so its author hears of it (data/replyMarkers.ts);
+ * a reply to a public comment isn't marked, as its author may not read it.
+ */
 export async function postAdminComment(
   writer: AdminWriter,
-  input: { key: string; text: string; replyTo?: string | null },
+  input: { key: string; text: string; replyTo?: string | null; replyToName?: string | null },
   onStage?: (stage: WriteStage) => void
 ): Promise<CommentWrite> {
   let identifier: string;
@@ -191,6 +205,10 @@ export async function postAdminComment(
     identifier,
     build: () => buildAdminComment(input),
     onStage,
+    description:
+      input.replyTo && writer.name
+        ? replyDescriptionFor(writer.name, input.replyToName)
+        : undefined,
   });
   if (outcome.status === 'sent' && record && writer.name)
     markComment(writer.name, identifier, record);
@@ -201,7 +219,8 @@ async function republish(
   writer: AdminWriter,
   comment: CommentTargetRef,
   build: () => AdminCommentRecord,
-  onStage?: (stage: WriteStage) => void
+  onStage?: (stage: WriteStage) => void,
+  description?: string
 ): Promise<CommentWrite> {
   const { outcome, record } = await publishForAdmins({
     writer,
@@ -209,6 +228,7 @@ async function republish(
     identifier: comment.identifier,
     build,
     onStage,
+    description,
   });
   if (outcome.status === 'sent' && record) markComment(comment.name, comment.identifier, record);
   return { outcome, identifier: comment.identifier };
@@ -225,7 +245,9 @@ export function editAdminComment(
     writer,
     comment,
     () => buildAdminComment({ key: comment.key, text, replyTo: comment.replyTo, edited: true }),
-    onStage
+    onStage,
+    // A republish replaces the description too: a marked reply keeps its marker.
+    comment.replyTo ? replyDescriptionFor(comment.name, comment.replyToName) : undefined
   );
 }
 

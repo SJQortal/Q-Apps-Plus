@@ -820,6 +820,34 @@ export function answerCore(world, pathname, sp) {
     rows.sort((a, b) => a.created - b.created);
     return json(page(rows, sp));
   }
+  // The full search: here to find replies by the marker their description opens with.
+  if (p === '/arbitrary/resources/search') {
+    const service = sp.get('service');
+    const prefix = sp.get('prefix') === 'true';
+    const has = (value, part) =>
+      prefix ? value.toLowerCase().startsWith(part) : value.toLowerCase().includes(part);
+    const ident = (sp.get('identifier') || '').toLowerCase();
+    const desc = (sp.get('description') || '').toLowerCase();
+    let rows = world.records
+      .filter(() => !service || service === 'JSON')
+      .filter((r) => has(r.identifier, ident))
+      .filter((r) => !desc || has(r.description ?? '', desc))
+      .map((r) => ({
+        name: r.name,
+        service: 'JSON',
+        identifier: r.identifier,
+        latestSignature: sig(`qdn:${r.name}:${r.identifier}${r.updated ? `:${r.updated}` : ''}`),
+        size: 300,
+        created: r.created,
+        ...(r.updated ? { updated: r.updated } : {}),
+      }));
+    const names = sp.getAll('name');
+    if (names.length) rows = rows.filter((r) => names.includes(r.name));
+    const after = Number(sp.get('after') || 0);
+    if (after) rows = rows.filter((r) => r.created > after);
+    rows.sort((a, b) => a.created - b.created);
+    return json(page(rows, sp));
+  }
   if ((m = p.match(/^\/arbitrary\/JSON\/([^/]+)\/([^/]+)$/))) {
     const name = decodeURIComponent(m[1]);
     const identifier = decodeURIComponent(m[2]);
@@ -1294,7 +1322,30 @@ export function addComments(world) {
     text: 'Agreed, I see them online every day.',
     replyTo: ids.signed,
   });
+  // Each reply says whose comment it answers, as the app publishes it (src/data/replyMarkers.ts).
+  for (const record of world.records) {
+    const parent = record.body?.replyTo
+      ? world.records.find((r) => r.identifier === record.body.replyTo)
+      : null;
+    if (parent && parent.name.toLowerCase() !== record.name.toLowerCase() && !record.body.deleted)
+      record.description = replyDescriptionOf(parent.name);
+  }
   return { waitingKey, decisionKey, ids };
+}
+
+/** FNV-1a 64 of the text's UTF-8 bytes (src/data/replyMarkers.ts → fnv1a64). */
+function fnv1a64(text) {
+  let hash = 0xcbf29ce484222325n;
+  for (const byte of new TextEncoder().encode(text)) {
+    hash ^= BigInt(byte);
+    hash = (hash * 0x100000001b3n) & ((1n << 64n) - 1n);
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
+/** A reply's QDN description: the marker of whose comment it answers, then words. */
+export function replyDescriptionOf(name) {
+  return `~qmpre${fnv1a64(name.trim().toLowerCase())}~ A reply in Q-Mintership+`;
 }
 // ---- answers-wording (night 2): former members ready to mint, name search ----
 

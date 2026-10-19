@@ -4,6 +4,7 @@ import { addComments } from '../../e2e/world.mjs';
 import { mockQortalRequest, qortalCallsFor } from '../test/setup';
 import { ADDR, PEOPLE, installWorld } from '../test/world';
 import { commentRef, hideIdentifier, type CommentRecord } from '../data/commentRecords';
+import { nameMark } from '../data/replyMarkers';
 import {
   optimisticCommentsAtom,
   optimisticHidesAtom,
@@ -106,6 +107,34 @@ describe('postComment', () => {
       key: ADDR.nominatedWaiting,
       record: { text: 'Agreed.', replyTo },
     });
+    // Unmarked: nobody named whose comment it answers.
+    expect(call.description).toBeUndefined();
+  });
+
+  it('marks a reply with whose comment it answers, so they hear of it (Simon, 2026-10-19)', async () => {
+    const me = author('nominator');
+    mockQortalRequest('PUBLISH_QDN_RESOURCE', (r: Record<string, unknown>) =>
+      sentTx(String(r.identifier))
+    );
+    const replyTo = `qmp-comment-${ADDR.nominatedWaiting}-wren01`;
+    await postComment(me, {
+      key: ADDR.nominatedWaiting,
+      text: 'Agreed.',
+      replyTo,
+      replyToName: 'Wren Waiting',
+    });
+    // A reply to one's own comment, and a comment that answers nothing, tell nobody.
+    await postComment(me, {
+      key: ADDR.nominatedWaiting,
+      text: 'And one more thing.',
+      replyTo,
+      replyToName: 'nora nominator',
+    });
+    await postComment(me, { key: ADDR.nominatedWaiting, text: 'Hello', replyToName: 'Wren' });
+    const [reply, own, top] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
+    expect(reply.description).toBe(`~qmpre${nameMark('Wren Waiting')}~ A reply in Q-Mintership+`);
+    expect(own.description).toBeUndefined();
+    expect(top.description).toBeUndefined();
   });
 
   it('checks the fee against the confirmed balance first', async () => {
@@ -133,12 +162,19 @@ describe('edit and delete', () => {
       key: ADDR.nominatedWaiting,
       replyTo: ids.helped,
     };
-    const edited = await editComment(me, comment, 'Same here, and their guide is good.');
+    const edited = await editComment(
+      me,
+      { ...comment, replyToName: 'Member 7' },
+      'Same here, and their guide is good.'
+    );
     expect(edited.outcome.status).toBe('sent');
     const deleted = await deleteComment(me, comment);
     expect(deleted.outcome.status).toBe('sent');
     const [editCall, deleteCall] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
     expect(editCall.identifier).toBe(ids.sameHere);
+    // An edit keeps the reply's marker; a deletion drops it (nothing to read any more).
+    expect(editCall.description).toBe(`~qmpre${nameMark('Member 7')}~ A reply in Q-Mintership+`);
+    expect(deleteCall.description).toBeUndefined();
     expect(decode(editCall)).toEqual({
       v: 1,
       key: ADDR.nominatedWaiting,

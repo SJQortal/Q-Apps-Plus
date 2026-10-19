@@ -16,7 +16,17 @@ export const PATHS = {
   people: '/people',
   legacyCard: '/history/card',
   explorer: '/explorer',
+  comments: '/comments',
 } as const;
+
+/**
+ * `/comments/<name>/<identifier>`: one comment, opened where it was posted
+ * (its decision's or nomination's page, scrolled to it). Reply alerts and
+ * Home's replies open it.
+ */
+export function commentPath(name: string, identifier: string): string {
+  return `${PATHS.comments}/${encodeURIComponent(name)}/${encodeURIComponent(identifier)}`;
+}
 
 /**
  * A person's Minter Profile: their Explorer account's Minter Profile tab, its

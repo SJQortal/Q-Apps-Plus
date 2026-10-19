@@ -11,13 +11,17 @@ import {
   alertRules,
   getHubActions,
   getHubAlertIds,
+  isAlertId,
+  replyAlertRules,
   rulesMatch,
   supportAlertNominees,
   supportsHubAlerts,
+  syncHubAlerts,
   syncNominatorAlerts,
   turnOffHubAlerts,
   turnOnHubAlerts,
 } from './hubAlerts';
+import { nameMark } from '../data/replyMarkers';
 
 const ME = 'QZm1mjw9Wr7Xy2Pq8sTnFhYk3Lc5Vb6NdA';
 const N1 = 'QN1111111111111111111111111111111a';
@@ -116,11 +120,19 @@ describe('alert rules', () => {
 
   it('uses only filter keys Hub accepts', () => {
     // Qortal-Hub get.ts NOTIFICATION_FILTER_SPEC: an unknown key makes NOTIFICATION_ADD fail.
-    const accepted = new Set(['service', 'identifier', 'prefix', 'excludeBlocked', 'mode']);
+    const accepted = new Set([
+      'service',
+      'identifier',
+      'prefix',
+      'excludeBlocked',
+      'mode',
+      'description',
+    ]);
     for (const rule of [
-      ...alertRules('admin', ME, [N1]),
-      ...alertRules('nominator', ME, [N1]),
-      ...alertRules('nominee', ME),
+      ...alertRules('admin', ME, [N1], 'Ada'),
+      ...alertRules('nominator', ME, [N1], 'Ada'),
+      ...alertRules('nominee', ME, [], 'Ada'),
+      ...alertRules('none', ME, [], 'Ada'),
     ]) {
       expect(Object.keys(rule.filters).every((key) => accepted.has(key))).toBe(true);
     }
@@ -278,6 +290,81 @@ describe('turning alerts on and off', () => {
     await Promise.all([on, off]);
     expect(order).toEqual(['ask', 'add', 'remove', 'remove']);
     expect(await getHubAlertIds()).toEqual([]);
+  });
+});
+
+describe('alerts for replies to your comments (Simon, 2026-10-19)', () => {
+  const MARK = nameMark('Ada Lovelace');
+  it('gives anyone with a name a reply rule, matched by the marker; a Minter Admin a second one', () => {
+    expect(replyAlertRules('none', null)).toEqual([]);
+    expect(replyAlertRules('nominee', ' ')).toEqual([]);
+    const [open] = replyAlertRules('none', 'Ada Lovelace');
+    expect(open).toEqual({
+      notificationId: `qmp-replied-${MARK}`,
+      link: 'qortal://APP/Q-Mintership+/comments/{name}/{identifier}',
+      image: expect.stringContaining('qortal_avatar'),
+      message: { en: 'Someone replied to your comment.' },
+      filters: {
+        service: 'JSON',
+        identifier: 'qmp-comment-',
+        prefix: true,
+        excludeBlocked: true,
+        description: `~qmpre${MARK}~`,
+      },
+    });
+    const admin = replyAlertRules('admin', 'Ada Lovelace');
+    expect(admin.map((r) => r.notificationId)).toEqual([
+      `qmp-replied-${MARK}`,
+      `qmp-replied-ma-${MARK}`,
+    ]);
+    expect(admin[1].filters).toMatchObject({
+      service: 'DOCUMENT_PRIVATE',
+      identifier: 'qmp-macomment-',
+    });
+    // With the role's rules, before the support rules.
+    expect(alertRules('nominator', ME, [N1], 'Ada Lovelace').map((r) => r.notificationId)).toEqual([
+      `qmp-replied-${MARK}`,
+      yours(N1),
+    ]);
+  });
+
+  it('knows its ids, and leaves them out of whether the rules fit the role', () => {
+    expect(isAlertId(`qmp-replied-${MARK}`)).toBe(true);
+    expect(isAlertId(`qmp-replied-ma-${MARK}`)).toBe(true);
+    expect(isAlertId('qmp-replied-ada')).toBe(false);
+    expect(rulesMatch([`qmp-replied-${MARK}`], 'none', ME)).toBe(true);
+    expect(rulesMatch(['qmp-new-nomination', `qmp-replied-ma-${MARK}`], 'admin', ME)).toBe(true);
+  });
+
+  it('turns them on with the role’s rules', async () => {
+    mockQortalRequest('NOTIFICATION_PERMISSION', true);
+    mockQortalRequest('NOTIFICATION_ADD', true);
+    mockQortalRequest('NOTIFICATION_REMOVE', true);
+    expect(await turnOnHubAlerts('none', ME, [], 'Ada Lovelace')).toEqual([`qmp-replied-${MARK}`]);
+  });
+
+  it('brings them in step while alerts are on: a new name’s rule in, the old one out', async () => {
+    mockQortalRequest('SHOW_ACTIONS', [
+      'NOTIFICATION_PERMISSION',
+      'NOTIFICATION_ADD',
+      'NOTIFICATION_GET',
+      'NOTIFICATION_REMOVE',
+      'NOTIFICATION_HAS_PERMISSION',
+    ]);
+    mockQortalRequest('NOTIFICATION_HAS_PERMISSION', true);
+    mockQortalRequest('NOTIFICATION_PERMISSION', true);
+    mockQortalRequest('NOTIFICATION_ADD', true);
+    mockQortalRequest('NOTIFICATION_REMOVE', true);
+    const old = `qmp-replied-${nameMark('Ada')}`;
+    setQueryData('hub:alerts', ['qmp-nominated-you', 'qmp-supported-you', old]);
+    expect(await syncHubAlerts('nominee', null, 'Ada Lovelace')).toEqual([
+      'qmp-nominated-you',
+      'qmp-supported-you',
+      `qmp-replied-${MARK}`,
+    ]);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([old]);
+    // Left out, the reply rules stay as they are (the support rules alone).
+    expect(await syncHubAlerts('nominee', null)).toBeNull();
   });
 });
 

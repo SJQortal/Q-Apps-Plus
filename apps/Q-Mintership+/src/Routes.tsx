@@ -29,6 +29,7 @@ const HistoryPage = lazy(() => import('./pages/history/HistoryPage'));
 const LegacyCardPage = lazy(() => import('./pages/history/LegacyCardPage'));
 const ActivityPage = lazy(() => import('./pages/activity/ActivityPage'));
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage'));
+const CommentLinkPage = lazy(() => import('./pages/comments/CommentLinkPage'));
 
 /** `/people/<address or name>`: the person's Minter Profile, in the Explorer now. */
 function PeopleRedirect() {
@@ -86,6 +87,8 @@ const router = createBrowserRouter(
         { path: 'explorer/activity', element: <ActivityPage /> },
         { path: 'activity', element: <Navigate to={PATHS.activity} replace /> },
         { path: 'settings', element: <SettingsPage /> },
+        // One comment, opened where it was posted (reply alerts, Home's replies).
+        { path: 'comments/:name/:identifier', element: <CommentLinkPage /> },
         // The Explorer: any account or transaction, read-only.
         ...explorerRoutes,
         // Old routes of the scaffold and the original app's boards.

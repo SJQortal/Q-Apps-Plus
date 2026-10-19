@@ -17,7 +17,12 @@
  * - nominators (level 5+ members and Minter Admins): a support record on a
  *   nomination they made, one rule per open nomination (at most 20), kept
  *   in step on Settings while alerts are on (syncNominatorAlerts);
- * - accounts not in MINTER: a nomination or a support record about them.
+ * - accounts not in MINTER: a nomination or a support record about them;
+ * - anyone with a registered name: a reply to one of their comments (and,
+ *   for Minter Admins, to one of their comments for the Minter Admins). A
+ *   reply carries a marker for whose comment it answers in its description
+ *   (data/replyMarkers.ts), which the rule matches; Hub skips the account's
+ *   own publishes, and only a new identifier alerts (an edit doesn't).
  *
  * Signatures, approvals, expiry and joining are chain transactions: they
  * show on Home ("Since your last visit"), not as Hub alerts.
@@ -28,10 +33,13 @@
  * per five minutes per connection: the alerts can't pile up.
  */
 import { APP_NAME } from '../constants/plus';
+import { ADMIN_COMMENT_PREFIX, ADMIN_NOTE_SERVICE } from '../data/adminNoteRecords';
+import { COMMENT_PREFIX } from '../data/commentRecords';
 import { NOMINATOR_MIN_LEVEL } from '../data/constants';
 import type { Nomination } from '../data/nominations';
 import { NOMINATION_PREFIX, RECORD_SERVICE, SUPPORT_PREFIX } from '../data/records';
 import { fetchQuery, peekQuery, setQueryData } from '../data/query';
+import { nameMark, replyMarker } from '../data/replyMarkers';
 import { nominationPath, PATHS } from '../routes/paths';
 import { nominationsMade } from '../rules/sinceLastVisit';
 import type { MyStatus } from '../rules/status';
@@ -52,8 +60,19 @@ export const SUPPORTED_YOURS_PREFIX = 'qmp-supported-yours-';
 /** Support rules kept at most: a nominator's open nominations, newest first. */
 export const MAX_SUPPORT_ALERTS = 20;
 
+/**
+ * Anyone with a registered name: someone replied to your comment. The id ends
+ * in the name's mark (data/replyMarkers.ts), so a rule set up for another
+ * name reads as out of date.
+ */
+export const REPLIED_PREFIX = 'qmp-replied-';
+/** Minter Admins: someone replied to your comment for the Minter Admins. */
+export const REPLIED_ADMINS_PREFIX = 'qmp-replied-ma-';
+const REPLY_ALERT_RE = /^qmp-replied-(?:ma-)?[0-9a-f]{16}$/;
+
 export type RoleAlertId = (typeof ALERT_IDS)[keyof typeof ALERT_IDS];
-export type AlertId = RoleAlertId | `${typeof SUPPORTED_YOURS_PREFIX}${string}`;
+export type ReplyAlertId = `${typeof REPLIED_PREFIX}${string}`;
+export type AlertId = RoleAlertId | ReplyAlertId | `${typeof SUPPORTED_YOURS_PREFIX}${string}`;
 /** The rules that come with a role (the support rules come and go with nominations). */
 export const ALL_ALERT_IDS: readonly RoleAlertId[] = Object.values(ALERT_IDS);
 
@@ -65,9 +84,15 @@ function isRoleAlertId(id: string): id is RoleAlertId {
   return ALL_ALERT_IDS.includes(id as RoleAlertId);
 }
 
+export function isReplyAlertId(id: string): id is ReplyAlertId {
+  return REPLY_ALERT_RE.test(id);
+}
+
 /** One of this app's rule ids. */
 export function isAlertId(id: unknown): id is AlertId {
-  return typeof id === 'string' && (isRoleAlertId(id) || isSupportAlertId(id));
+  return (
+    typeof id === 'string' && (isRoleAlertId(id) || isSupportAlertId(id) || isReplyAlertId(id))
+  );
 }
 
 /** The Hub requests the alerts need (all listed by SHOW_ACTIONS in Hubs that have them). */
@@ -116,8 +141,17 @@ export interface HubAlertRule {
   link: string;
   image: string;
   message: { en: string };
-  /** Hub's NOTIFICATION_ADD filters (service, identifier, prefix, excludeBlocked). */
-  filters: { service: string; identifier: string; prefix: boolean; excludeBlocked: boolean };
+  /**
+   * Hub's NOTIFICATION_ADD filters (service, identifier, prefix, excludeBlocked;
+   * a reply rule's description too, matched from its start with `prefix`).
+   */
+  filters: {
+    service: string;
+    identifier: string;
+    prefix: boolean;
+    excludeBlocked: boolean;
+    description?: string;
+  };
 }
 
 /** The app's avatar on QDN, for the alert's icon (Hub prefixes the node). */
@@ -131,6 +165,54 @@ function rule(notificationId: AlertId, identifier: string, path: string, en: str
     message: { en },
     filters: { service: RECORD_SERVICE, identifier, prefix: true, excludeBlocked: true },
   };
+}
+
+/**
+ * The reply rules for an account publishing under `name` (pure): replies to
+ * its public comments, and for a Minter Admin to its comments for the Minter
+ * Admins. None without a name. The alert opens the reply where it was
+ * posted: Core fills in `{name}` and `{identifier}` (encoded) in the link.
+ */
+export function replyAlertRules(role: AlertRole, name: string | null | undefined): HubAlertRule[] {
+  if (!name?.trim()) return [];
+  const mark = nameMark(name);
+  const link = `${appLink(PATHS.comments)}/{name}/{identifier}`;
+  const reply = (
+    notificationId: ReplyAlertId,
+    service: string,
+    identifier: string,
+    en: string
+  ): HubAlertRule => ({
+    notificationId,
+    link,
+    image: IMAGE,
+    message: { en },
+    filters: {
+      service,
+      identifier,
+      prefix: true,
+      excludeBlocked: true,
+      description: replyMarker(name),
+    },
+  });
+  const rules = [
+    reply(
+      `${REPLIED_PREFIX}${mark}`,
+      RECORD_SERVICE,
+      COMMENT_PREFIX,
+      'Someone replied to your comment.'
+    ),
+  ];
+  if (role === 'admin')
+    rules.push(
+      reply(
+        `${REPLIED_ADMINS_PREFIX}${mark}`,
+        ADMIN_NOTE_SERVICE,
+        ADMIN_COMMENT_PREFIX,
+        'A Minter Admin replied to your comment for the Minter Admins.'
+      )
+    );
+  return rules;
 }
 
 /** One support rule per nominee (pure; at most MAX_SUPPORT_ALERTS). */
@@ -181,25 +263,26 @@ function roleRules(role: AlertRole, address: string): HubAlertRule[] {
 
 /**
  * The rules for `role` (pure: what NOTIFICATION_ADD is sent). `nominees`:
- * the open nominations the account made, for Minter Admins and nominators.
+ * the open nominations the account made, for Minter Admins and nominators;
+ * `name`: the name it comments under, for the reply rules.
  */
 export function alertRules(
   role: AlertRole,
   address: string,
-  nominees: readonly string[] = []
+  nominees: readonly string[] = [],
+  name?: string | null
 ): HubAlertRule[] {
   const support = makesNominations(role) ? supportAlertRules(nominees) : [];
-  return [...roleRules(role, address), ...support];
+  return [...roleRules(role, address), ...replyAlertRules(role, name), ...support];
 }
 
 /**
  * True when the rules Hub has fit the role: exactly its role rules, and
- * support rules only for a role that makes nominations. Which support rules
- * are there is kept in step separately (syncNominatorAlerts).
+ * support rules only for a role that makes nominations. Which support and
+ * reply rules are there is kept in step separately (syncHubAlerts).
  */
 export function rulesMatch(present: readonly string[], role: AlertRole, address: string): boolean {
   const ours = present.filter(isAlertId);
-  if (role === 'none') return ours.length === 0;
   if (!makesNominations(role) && ours.some(isSupportAlertId)) return false;
   const wanted = roleRules(role, address).map((r) => r.notificationId);
   const fixed = ours.filter(isRoleAlertId);
@@ -266,16 +349,18 @@ async function removeRules(ids: readonly AlertId[]): Promise<void> {
 /**
  * Turn the alerts on for `role`: Hub asks for permission (once; it remembers),
  * then the rules are added and any of this app's other rules removed.
- * `nominees`: the open nominations the account made (supportAlertNominees).
- * Rejects when Hub declines or stops waiting.
+ * `nominees`: the open nominations the account made (supportAlertNominees);
+ * `name`: the name it comments under (the reply rules). Rejects when Hub
+ * declines or stops waiting.
  */
 export function turnOnHubAlerts(
   role: AlertRole,
   address: string,
-  nominees: readonly string[] = []
+  nominees: readonly string[] = [],
+  name?: string | null
 ): Promise<AlertId[]> {
   return serial(async () => {
-    const rules = alertRules(role, address, nominees);
+    const rules = alertRules(role, address, nominees, name);
     if (!rules.length) throw new Error('No alerts fit this account.');
     await qortal({ action: 'NOTIFICATION_PERMISSION' });
     await qortal({ action: 'NOTIFICATION_ADD', notifications: rules });
@@ -312,26 +397,39 @@ async function mayAlert(): Promise<boolean> {
 }
 
 /**
- * Keep the support rules in step with the open nominations the account made
- * (Settings, only while alerts are on): rules for new ones are added and
- * rules for ones that closed are removed. Adding needs Hub's permission, and
- * it is only checked, never asked for: unless Hub says the app may alert,
- * nothing is added (Hub then shows no dialog). The app's last rule is never
- * removed here: one closed rule stays until a new one is added, so alerts
- * stay on until they are turned off (a nominator has no other rule).
- * Returns the rules Hub has now, or null when nothing changed.
+ * Keep the rules that come and go in step (Settings, only while alerts are
+ * on): the support rules with the open nominations a Minter Admin or
+ * nominator made (`nominees`; null when they couldn't be read, which leaves
+ * those rules as they are), and the reply rules with the name the account
+ * comments under (`name`; left out, they are left as they are). Rules for
+ * new ones are added and the others removed. Adding needs Hub's permission,
+ * and it is only checked, never asked for: unless Hub says the app may
+ * alert, nothing is added (Hub then shows no dialog). The app's last rule
+ * is never removed here: one closed rule stays until a new one is added, so
+ * alerts stay on until they are turned off. Returns the rules Hub has now,
+ * or null when nothing changed.
  */
-export function syncNominatorAlerts(
+export function syncHubAlerts(
   role: AlertRole,
-  nominees: readonly string[]
+  nominees: readonly string[] | null,
+  name?: string | null
 ): Promise<AlertId[] | null> {
   return serial(async () => {
     const present = knownAlertIds();
-    if (!makesNominations(role) || !present.length) return null;
-    const wanted = supportAlertRules(nominees);
-    const wantedIds = wanted.map((r) => r.notificationId);
+    const support = makesNominations(role) && nominees !== null;
+    const replies = name !== undefined;
+    if (!present.length || (!support && !replies)) return null;
+    const wanted = [
+      ...(replies ? replyAlertRules(role, name) : []),
+      ...(support ? supportAlertRules(nominees) : []),
+    ];
+    const wantedIds: string[] = wanted.map((r) => r.notificationId);
     const toAdd = wanted.filter((r) => !present.includes(r.notificationId));
-    const closed = present.filter((id) => isSupportAlertId(id) && !wantedIds.includes(id));
+    const closed = present.filter(
+      (id) =>
+        ((support && isSupportAlertId(id)) || (replies && isReplyAlertId(id))) &&
+        !wantedIds.includes(id)
+    );
     let added: AlertId[] = [];
     if (toAdd.length && (await mayAlert())) {
       // Hub has the permission: this only opens the session for NOTIFICATION_ADD.
@@ -346,4 +444,12 @@ export function syncNominatorAlerts(
     setQueryData<AlertId[]>('hub:alerts', next);
     return next;
   });
+}
+
+/** The support rules alone in step with the open nominations (syncHubAlerts without replies). */
+export function syncNominatorAlerts(
+  role: AlertRole,
+  nominees: readonly string[]
+): Promise<AlertId[] | null> {
+  return syncHubAlerts(role, nominees);
 }

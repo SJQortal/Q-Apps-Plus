@@ -16,10 +16,13 @@
  *   closed without a first signature), from the nominations Home already
  *   reads. Snapshots from before this was added have no `made`: nothing to
  *   compare until the next one.
+ * - Anyone with a registered name: replies to their comments published
+ *   since then (data/replies.ts, found by the reply marker; not their own).
  * - "You're in" is Home's welcome (pages/home/welcome.ts), not worked out
  *   here a second time.
  */
 import type { Nomination } from '../data/nominations';
+import type { ReplyRow } from '../data/replies';
 import type { TxRow } from '../data/types';
 import { KIND_BY_TYPE, type Decision, type DecisionKind } from './decision';
 import { isOpenState, type NominationState } from './nomination';
@@ -551,6 +554,8 @@ export interface SinceChanges {
   nominee: NomineeEvent[];
   /** Nominators: how the nominations they made ended (absent: none). */
   made?: MadeEvent[];
+  /** Replies to the account's comments, newest first (absent: none). */
+  replies?: ReplyRow[];
 }
 
 export function hasChanges(changes: SinceChanges): boolean {
@@ -559,6 +564,7 @@ export function hasChanges(changes: SinceChanges): boolean {
     changes.joined ||
     changes.nominee.length > 0 ||
     Boolean(changes.made?.length) ||
+    Boolean(changes.replies?.length) ||
     Boolean(a && (a.newDecisions.length || a.decided.length || a.newNominations.length))
   );
 }
@@ -614,5 +620,7 @@ export function sinceSummary(changes: SinceChanges): string | null {
     );
   if (ranOut)
     parts.push(count(ranOut, 'nomination you made ran out', 'nominations you made ran out'));
+  const replies = changes.replies?.length ?? 0;
+  if (replies) parts.push(count(replies, 'reply to your comment', 'replies to your comments'));
   return parts.length ? `Since your last visit: ${parts.join(', ')}.` : null;
 }

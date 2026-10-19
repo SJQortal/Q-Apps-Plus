@@ -2,8 +2,8 @@
  * Home's "Since your last visit": a compact list of what changed for the
  * signed-in account since this device last showed the app (new decisions
  * and decided ones for Minter Admins, the nomination's progress for a
- * nominee, how the nominations a nominator made ended, "You're in" from the
- * welcome). "Mark as seen" clears it; it comes back when something else
+ * nominee, how the nominations a nominator made ended, replies to the
+ * account's comments, "You're in" from the welcome). "Mark as seen" clears it; it comes back when something else
  * changes. Settings → Notifications can turn it off.
  *
  * A heading, a list, and one polite sentence read out once a session.
@@ -20,10 +20,12 @@ import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined';
 import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
+import ReplyOutlinedIcon from '@mui/icons-material/ReplyOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import { useAtomValue } from 'jotai';
 import { Card, Section } from '../../components/common/Section';
 import type { Nomination } from '../../data/nominations';
+import type { ReplyRow } from '../../data/replies';
 import { useDisplayName } from '../../hooks/useDisplayName';
 import { useAnnounceOnce, useSinceLastVisit } from '../../hooks/useLastVisit';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -36,7 +38,7 @@ import type {
 } from '../../rules/sinceLastVisit';
 import type { MyStatus } from '../../rules/status';
 import { signerState } from '../../rules/tally';
-import { decisionPath, nominationPath, PATHS } from '../../routes/paths';
+import { commentPath, decisionPath, nominationPath, PATHS } from '../../routes/paths';
 import { useSession } from '../../state/session';
 import { sinceLastVisitAtom } from '../../state/notifications';
 import { formatBlock, formatRelative, plural } from '../../utils/format';
@@ -377,6 +379,31 @@ function MadeItem({ event: e }: { event: MadeEvent }) {
   );
 }
 
+/** "Ada replied to your comment", opening the reply where it was posted. */
+function ReplyItem({ reply }: { reply: ReplyRow }) {
+  const title = reply.adminOnly
+    ? `${reply.name} replied to your comment for the Minter Admins`
+    : `${reply.name} replied to your comment`;
+  return (
+    <Item
+      Icon={ReplyOutlinedIcon}
+      tone="primary"
+      title={withMarkedName(title, reply.name, reply.name)}
+      action={
+        <Button
+          component={RouterLink}
+          to={commentPath(reply.name, reply.identifier)}
+          aria-label={`Open the reply from ${reply.name}`}
+        >
+          Open
+        </Button>
+      }
+    >
+      {formatRelative(reply.at)}
+    </Item>
+  );
+}
+
 function signaturesLine(signed: number, needed: number | null): string {
   return needed ? `${signed} of ${needed} approvals` : plural(signed, 'approval');
 }
@@ -478,6 +505,7 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
 
   const { joined, admin, nominee } = since.changes;
   const made = since.changes.made ?? [];
+  const replies = since.changes.replies ?? [];
 
   return (
     <Box sx={{ animation: reduced ? 'none' : `${appear} 200ms ease-out both` }}>
@@ -512,6 +540,16 @@ export function SinceLastVisit({ status, welcome }: { status: MyStatus; welcome:
             {nominee.map((e) => (
               <NomineeItem key={e.kind} event={e} />
             ))}
+            {replies.slice(0, TOP).map((reply) => (
+              <ReplyItem key={`reply-${reply.name}-${reply.identifier}`} reply={reply} />
+            ))}
+            {replies.length > TOP ? (
+              <Item
+                Icon={ReplyOutlinedIcon}
+                tone="neutral"
+                title={`And ${plural(replies.length - TOP, 'more reply', 'more replies')} to your comments`}
+              />
+            ) : null}
             {made.slice(0, TOP).map((e) => (
               <MadeItem key={`made-${e.nominee}`} event={e} />
             ))}

@@ -113,11 +113,16 @@ export function publishRecordRequest(
   };
 }
 
-/** A comment (or its edit or deletion) or a Minter Admin's hide record, under `name`. */
+/**
+ * A comment (or its edit or deletion) or a Minter Admin's hide record, under
+ * `name`. A reply's `description` says whose comment it answers
+ * (data/replyMarkers.ts).
+ */
 export function publishCommentRequest(
   name: string,
   identifier: string,
-  record: CommentRecord | HideRecord
+  record: CommentRecord | HideRecord,
+  description?: string
 ): HubRequest {
   return {
     action: 'PUBLISH_QDN_RESOURCE',
@@ -125,6 +130,7 @@ export function publishCommentRequest(
     service: COMMENT_SERVICE,
     identifier,
     data64: toData64(record),
+    ...(description ? { description } : {}),
   };
 }
 
@@ -147,7 +153,9 @@ export function publishEncryptedRequest(
     | ShareRecord
     | AdminNoteRecord
     | AdminCommentRecord,
-  publicKeys: readonly string[]
+  publicKeys: readonly string[],
+  /** A reply's marker (data/replyMarkers.ts): in the clear, like every QDN description. */
+  description?: string
 ): HubRequest {
   const keys = [...new Set(publicKeys)];
   if (!keys.length) throw new Error('Encrypting needs at least one public key.');
@@ -159,6 +167,7 @@ export function publishEncryptedRequest(
     data64: toData64(record),
     encrypt: true,
     publicKeys: keys,
+    ...(description ? { description } : {}),
   };
 }
 

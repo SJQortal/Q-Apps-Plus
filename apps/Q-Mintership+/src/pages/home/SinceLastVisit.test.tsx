@@ -15,6 +15,7 @@ import { fetchCallsFor } from '../../test/setup';
 import { renderPage } from '../../test/render';
 import { ADDR, NOW, TIP } from '../../test/world';
 import {
+  addComments,
   addDoubles,
   addNominatorHistory,
   lastVisitSnapshots,
@@ -530,5 +531,38 @@ describe('Since your last visit: nominators', () => {
     await renderPage(<HomePage />, { persona: 'nominator', setup: seedNominator });
     await homeLoaded();
     expect(screen.queryByRole('region', { name: 'Since your last visit' })).toBeNull();
+  });
+});
+
+describe('Since your last visit: replies to your comments (Simon, 2026-10-19)', () => {
+  it('lists who replied to your comment since, each opening the reply where it was posted', async () => {
+    let ids: ReturnType<typeof addComments>['ids'] | null = null;
+    const seen = { at: 0 };
+    await renderPage(<HomePage />, {
+      persona: 'nominator',
+      setup: (world) => {
+        ids = addComments(world).ids;
+        const { address, snapshot } = nominatorLastVisit(world);
+        seen.at = (snapshot as { at: number }).at;
+        window.localStorage.setItem(lastVisitStorageKey(address), JSON.stringify(snapshot));
+      },
+    });
+    const region = await panel();
+    // Zoë answered Nora's comment 18 hours ago (her other replies answer other people).
+    const row = (
+      await within(region).findByText('Zoë Newcomer replied to your comment', {}, T)
+    ).closest('li') as HTMLElement;
+    expect(row).toHaveTextContent('18 hours ago');
+    expect(
+      within(row).getByRole('link', { name: 'Open the reply from Zoë Newcomer' })
+    ).toHaveAttribute('href', `/comments/Zo%C3%AB%20Newcomer/${ids!.thanks}`);
+    expect(within(region).getAllByText(/replied to your comment/)).toHaveLength(1);
+    // One search, by Nora's marker, for replies since the last visit.
+    const searches = fetchCallsFor('/arbitrary/resources/search?');
+    expect(searches).toHaveLength(1);
+    const sp = new URL(searches[0], 'http://node').searchParams;
+    expect(sp.get('description')).toMatch(/^~qmpre[0-9a-f]{16}~$/);
+    expect(sp.get('identifier')).toBe('qmp-comment-');
+    expect(sp.get('after')).toBe(String(seen.at));
   });
 });

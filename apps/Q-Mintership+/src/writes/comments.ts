@@ -22,6 +22,7 @@ import {
   type CommentRecord,
 } from '../data/commentRecords';
 import { getAdmins } from '../data/group';
+import { replyDescriptionFor } from '../data/replyMarkers';
 import { addOptimisticComment, addOptimisticHide } from '../state/comments';
 import { publishCommentRequest } from './hubActions';
 import { runWrite, type Signer, type WriteOutcome, type WriteStage } from './runner';
@@ -45,6 +46,8 @@ export interface CommentTargetRef {
   key: string;
   /** Kept on an edit or a deletion, so a reply stays a reply. */
   replyTo?: string | null;
+  /** Whose comment it answers: an edit keeps the reply's marker (data/replyMarkers.ts). */
+  replyToName?: string | null;
 }
 
 /** The publishing name must be the signer's. */
@@ -79,10 +82,11 @@ async function publish(
   identifier: string,
   record: CommentRecord,
   key: string,
-  onStage?: (stage: WriteStage) => void
+  onStage?: (stage: WriteStage) => void,
+  description?: string
 ): Promise<CommentWrite> {
   const outcome = await runWrite({
-    request: publishCommentRequest(name, identifier, record),
+    request: publishCommentRequest(name, identifier, record, description),
     signer,
     precheck: () => guardCommentName(signer, name),
     match: (tx) => tx.type === 'ARBITRARY' && tx.identifier === identifier,
@@ -95,11 +99,12 @@ async function publish(
 
 /**
  * Post one comment about `key` under the author's name; `replyTo` makes it a
- * reply. Shown at once once Hub sends it.
+ * reply, and `replyToName` (whose comment that is) marks it so they hear of
+ * it (data/replyMarkers.ts). Shown at once once Hub sends it.
  */
 export async function postComment(
   author: CommentAuthor,
-  input: { key: string; text: string; replyTo?: string | null },
+  input: { key: string; text: string; replyTo?: string | null; replyToName?: string | null },
   onStage?: (stage: WriteStage) => void
 ): Promise<CommentWrite> {
   let identifier: string;
@@ -110,7 +115,10 @@ export async function postComment(
   } catch (error) {
     return blocked(error);
   }
-  return publish(author, author.name, identifier, record, input.key, onStage);
+  const description = input.replyTo
+    ? replyDescriptionFor(author.name, input.replyToName)
+    : undefined;
+  return publish(author, author.name, identifier, record, input.key, onStage, description);
 }
 
 /** Replace a comment's text (the same identifier, marked edited). */
@@ -126,7 +134,19 @@ export async function editComment(
   } catch (error) {
     return blocked(error);
   }
-  return publish(signer, comment.name, comment.identifier, record, comment.key, onStage);
+  // A republish replaces the description too: a reply keeps its marker.
+  const description = comment.replyTo
+    ? replyDescriptionFor(comment.name, comment.replyToName)
+    : undefined;
+  return publish(
+    signer,
+    comment.name,
+    comment.identifier,
+    record,
+    comment.key,
+    onStage,
+    description
+  );
 }
 
 /** Replace a comment with "Deleted" (its place and its replies stay). */

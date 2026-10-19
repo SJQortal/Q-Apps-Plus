@@ -34,6 +34,7 @@ import {
   type AnswerBadgeKind,
   type AnswerBadges,
 } from './answerBadges';
+import { goToComment } from './commentLinkState';
 import { MarkedName } from '../common/MarkedName';
 import { withMarkedName } from '../common/markedText';
 
@@ -112,9 +113,6 @@ function AdminsOnlyMark() {
   );
 }
 
-/** How long the comment a reply answers stays highlighted after going to it. */
-const FLASH_MS = 1600;
-
 /**
  * Above a reply's text: whose comment it answers and how that began. Pressing
  * it goes to that comment (scrolled to the middle, focused and briefly
@@ -128,11 +126,7 @@ function ReplyQuote({ comment: c }: { comment: CommentView }) {
       ...(thread ? [thread] : []),
       ...(thread?.querySelectorAll<HTMLElement>('[data-comment-ref]') ?? []),
     ].find((el) => el.dataset.commentRef === c.replyToRef);
-    if (!target) return;
-    target.scrollIntoView?.({ block: 'center', behavior: reduced ? 'auto' : 'smooth' });
-    target.focus({ preventScroll: true });
-    target.dataset.flash = 'true';
-    window.setTimeout(() => delete target.dataset.flash, FLASH_MS);
+    if (target) goToComment(target, reduced);
   };
   return (
     <ButtonBase

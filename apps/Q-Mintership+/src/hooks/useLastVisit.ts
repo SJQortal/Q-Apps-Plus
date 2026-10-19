@@ -7,7 +7,9 @@
  *
  * Neither polls. They read the keys other views already keep fresh
  * (`decisions:queue`, `nominations:all`, `nominations:for:<address>`); the
- * only extra reads are the decided decisions' outcomes, once each. A
+ * only extra reads are the decided decisions' outcomes, once each, and the
+ * replies to the account's comments since the last visit (one search, two
+ * for a Minter Admin; data/replies.ts). A
  * nominator's own nominations come from `nominations:all`, saved whenever
  * a screen has read it (Home does for every nominator).
  */
@@ -24,6 +26,7 @@ import {
   visitBaseline,
 } from '../data/lastVisit';
 import { loadNominationsFor, type Nomination, type NominationsData } from '../data/nominations';
+import { loadRepliesTo } from '../data/replies';
 import { peekQuery, subscribeQuery } from '../data/query';
 import { getAddressHistory } from '../data/txs';
 import {
@@ -157,6 +160,14 @@ export function useSinceLastVisit(
     getAddressHistory(address as string, { force })
   );
 
+  // Replies to its comments since the last visit: for anyone with a name to comment under.
+  const name = address ? status?.name || null : null;
+  const repliesSince = baseline && name ? baseline.at : null;
+  const replies = useQuery(
+    repliesSince !== null ? `replies:${name}:${isAdmin}:${repliesSince}` : null,
+    () => loadRepliesTo(name as string, repliesSince as number, { admin: isAdmin })
+  );
+
   const vanished =
     baseline && decisions.data ? vanishedDecisions(baseline, decisions.data.decisions) : [];
   const signatures = vanished.map((d) => d.signature);
@@ -185,7 +196,7 @@ export function useSinceLastVisit(
       ? madeEvents(baseline.made, nominations.data.all, address, admin?.decided)
       : [];
   const joined = Boolean(welcome && address && !isJoinedSeen(address));
-  const changes: SinceChanges = { joined, admin, nominee, made };
+  const changes: SinceChanges = { joined, admin, nominee, made, replies: replies.data ?? [] };
 
   const settled =
     (!isAdmin ||
@@ -200,7 +211,8 @@ export function useSinceLastVisit(
       !baseline ||
       ((mine.data !== undefined || mine.isError) &&
         (!lastInvite || history.data !== undefined || history.isError))) &&
-    (!nominator || !baseline?.made || nominations.data !== undefined || nominations.isError);
+    (!nominator || !baseline?.made || nominations.data !== undefined || nominations.isError) &&
+    (repliesSince === null || replies.data !== undefined || replies.isError);
 
   const seen = useCallback(() => {
     if (!address) return;
