@@ -105,7 +105,7 @@ describe('what a QDN publish answers', () => {
     expect(pages).toBe(10);
   });
 
-  it('finds the share a Q-Share+ comment is on by the key it ends in', async () => {
+  it('finds the share a Q-Share comment is on by the key it ends in', async () => {
     mockFetchRoute('/arbitrary/resources/search', (url: URL) => {
       expect(url.searchParams.get('identifier')).toBe('a1b_metadata');
       expect(url.searchParams.get('prefix')).toBeNull();
@@ -120,8 +120,8 @@ describe('what a QDN publish answers', () => {
         source('BLOG_COMMENT', 'Bo', 'qcomment_v1_qshare_a1b_metadata_base_xyz')
       )
     ).toEqual({
-      link: 'qortal://APP/Q-Share+/share/Ada/qshare_file_notes_a1b_metadata',
-      label: 'Open the share in Q-Share+',
+      link: 'qortal://APP/Q-Share/share/Ada/qshare_file_notes_a1b_metadata',
+      label: 'Open the share in Q-Share',
     });
   });
 

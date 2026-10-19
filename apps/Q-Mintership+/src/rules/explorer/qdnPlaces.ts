@@ -22,8 +22,10 @@
  *   likes `x9qg7nNIUHvVit<hash>`, follows `gY.TWOeB25Co.7<hash>`, super likes
  *   `2pHHSwGK1Ncwcd…`. A reply names its post in its body, as a repost and a
  *   follow do; a like hashes the post's id.
- * - Q-Share+ (published as a + app, so linked as one): shares, collections,
- *   files (their share is searched), comments (their share is searched).
+ * - Q-Share (Simon, 2026-10-19: "for q-share links its not q-share+ but just
+ *   q-share"): shares, files (their share is searched), comments (their share
+ *   is searched); a collection, which only Q-Share+ has a page for, opens its
+ *   publisher's channel.
  * - Q-Fund (crowdfunds, updates, comments), Q-Support (issues, comments),
  *   Q-Shop (stores, catalogues, reviews), Q-Blog, Q-Music, Ear-Bump.
  * - A website or a Q-App itself (its default identifier).
@@ -36,11 +38,11 @@
 import { isAddress } from '../../data/accounts';
 import { commentPath, legacyCardPath, nominationPath, personPath } from '../../routes/paths';
 
-/** The apps linked to, by their QDN names (a + app only where it is published). */
+/** The apps linked to, by their QDN names: the original apps (Simon, 2026-10-19). */
 export const QAPP = {
   qtube: 'Q-Tube',
   torq: 'Torq',
-  qshare: 'Q-Share+',
+  qshare: 'Q-Share',
   qfund: 'Q-Fund',
   qsupport: 'Q-Support',
   qshop: 'Q-Shop',
@@ -51,7 +53,7 @@ export const QAPP = {
 
 /**
  * `qortal://APP/<app>/<segments…>`: the app's name as written (Hub never
- * decodes it, so Q-Share+ keeps its `+`), each segment encoded.
+ * decodes it, so a + app would keep its `+`), each segment encoded.
  */
 export function qappLink(app: string, ...segments: string[]): string {
   const path = segments.map((segment) => encodeURIComponent(segment)).join('/');
@@ -354,7 +356,7 @@ function qtube(service: string, name: string, id: string): QdnPlace | null {
 
 function qshare(service: string, name: string, id: string): QdnPlace | null {
   const channel = {
-    label: 'Open their channel in Q-Share+',
+    label: 'Open their channel in Q-Share',
     link: qappLink(QAPP.qshare, 'channel', name),
   };
   if (service === 'DOCUMENT' && id.startsWith('qshare_file_') && id.endsWith('_metadata'))
@@ -362,7 +364,7 @@ function qshare(service: string, name: string, id: string): QdnPlace | null {
       app: QAPP.qshare,
       what: 'A share',
       link: qappLink(QAPP.qshare, 'share', name, id),
-      label: 'Open the share in Q-Share+',
+      label: 'Open the share in Q-Share',
     };
   if (service === 'FILE' && id.startsWith('qshare_file_'))
     return {
@@ -373,19 +375,15 @@ function qshare(service: string, name: string, id: string): QdnPlace | null {
       fallback: channel,
     };
   if (service === 'DOCUMENT' && id.startsWith('qshare_collection_'))
-    return {
-      app: QAPP.qshare,
-      what: 'A collection',
-      link: qappLink(QAPP.qshare, 'collection', name, id),
-      label: 'Open the collection in Q-Share+',
-    };
+    // Q-Share has no page for one: its publisher's channel.
+    return { app: QAPP.qshare, what: 'A collection', fallback: channel };
   if (service === 'BLOG_COMMENT' && qcommentKey(id, 'qshare'))
     return {
       app: QAPP.qshare,
       what: id.includes('_reply_') ? 'A reply to a comment on a share' : 'A comment on a share',
       read: 'qshareComment',
       target: 'the share it’s on',
-      fallback: { label: 'Open Q-Share+', link: qappLink(QAPP.qshare) },
+      fallback: { label: 'Open Q-Share', link: qappLink(QAPP.qshare) },
     };
   return null;
 }

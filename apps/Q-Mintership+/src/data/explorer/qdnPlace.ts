@@ -231,7 +231,7 @@ async function read(kind: PlaceRead, source: PlaceSource): Promise<PlaceFound | 
         if (Array.isArray(files) && files.some((file) => record(file).identifier === id))
           return {
             link: qappLink(QAPP.qshare, 'share', share.name, share.identifier),
-            label: 'Open its share in Q-Share+',
+            label: 'Open its share in Q-Share',
           };
       }
       return null;
@@ -244,7 +244,7 @@ async function read(kind: PlaceRead, source: PlaceSource): Promise<PlaceFound | 
           app: 'qshare',
           start: 'qshare_file_',
           route: 'share',
-          label: 'Open the share in Q-Share+',
+          label: 'Open the share in Q-Share',
           qapp: QAPP.qshare,
         },
         qfundComment: {

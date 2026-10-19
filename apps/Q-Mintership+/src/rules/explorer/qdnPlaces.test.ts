@@ -106,20 +106,32 @@ describe('where a QDN publish belongs (Simon, 2026-10-19)', () => {
     );
   });
 
-  it('opens Q-Share+ shares and collections; finds a file’s and a comment’s share', () => {
-    expect(qdnPlace('DOCUMENT', 'Ada', 'qshare_file_notes_a1_metadata')?.link).toBe(
-      'qortal://APP/Q-Share+/share/Ada/qshare_file_notes_a1_metadata'
-    );
-    expect(qdnPlace('DOCUMENT', 'Ada', 'qshare_collection_mine_abc123')?.link).toBe(
-      'qortal://APP/Q-Share+/collection/Ada/qshare_collection_mine_abc123'
-    );
+  it('opens Q-Share (not Q-Share+) shares; finds a file’s and a comment’s share (Simon, 2026-10-19)', () => {
+    expect(qdnPlace('DOCUMENT', 'Ada', 'qshare_file_notes_a1_metadata')).toMatchObject({
+      app: 'Q-Share',
+      link: 'qortal://APP/Q-Share/share/Ada/qshare_file_notes_a1_metadata',
+      label: 'Open the share in Q-Share',
+    });
+    // Only Q-Share+ has a page for a collection: its publisher's channel in Q-Share.
+    expect(qdnPlace('DOCUMENT', 'Ada', 'qshare_collection_mine_abc123')).toEqual({
+      app: 'Q-Share',
+      what: 'A collection',
+      fallback: {
+        label: 'Open their channel in Q-Share',
+        link: 'qortal://APP/Q-Share/channel/Ada',
+      },
+    });
     expect(qdnPlace('FILE', 'Ada', 'qshare_file_notes_b2')).toMatchObject({
       read: 'qshareFile',
-      fallback: { link: 'qortal://APP/Q-Share+/channel/Ada' },
+      fallback: { link: 'qortal://APP/Q-Share/channel/Ada' },
     });
     expect(
       qdnPlace('BLOG_COMMENT', 'Bo', 'qcomment_v1_qshare_a1b_metadata_base_xyz')
-    ).toMatchObject({ read: 'qshareComment', what: 'A comment on a share' });
+    ).toMatchObject({
+      read: 'qshareComment',
+      what: 'A comment on a share',
+      fallback: { link: 'qortal://APP/Q-Share' },
+    });
   });
 
   it('opens Q-Fund, Q-Support, Q-Shop, Q-Blog, Q-Music and Ear-Bump at their routes', () => {
