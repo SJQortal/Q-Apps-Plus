@@ -1,7 +1,8 @@
 /**
  * One transaction on its own page: the sentence first (with links), Open
  * File and Save File under it for a public QDN publish
- * (components/explorer/file), then the facts (block and time, or that it waits for a block, with a link to
+ * (components/explorer/file) and where it belongs (the app that shows it,
+ * and what a reply, a comment or a like answers: QdnPlaceSection), then the facts (block and time, or that it waits for a block, with a link to
  * every transaction in that block; the fee; where group approval stands,
  * only when it needs one; its signature, with Copy), the accounts involved,
  * for a group approval the transaction it answers, the type's fields in
@@ -29,6 +30,7 @@ import { formatCount, formatDateTime, formatRelative } from '../../../utils/form
 import { approvalWords, makerOf } from './txPageWords';
 import { FIELD_BLOCK_SX } from '../../../components/explorer/fieldBlock';
 import { QdnFileButtons } from '../../../components/explorer/file/QdnFileButtons';
+import { QdnPlaceSection } from '../../../components/explorer/QdnPlaceSection';
 import { openableResource } from '../../../rules/explorer/qdnFiles';
 import { isMinterGroupChange } from '../../../rules/decision';
 
@@ -206,6 +208,7 @@ export function TxView({ tx }: { tx: TxRow }) {
           <QdnFileButtons tx={tx} />
         </Box>
       ) : null}
+      <QdnPlaceSection tx={tx} />
       <Facts tx={tx} />
       <TxPeople addresses={words.participants} maker={makerOf(tx)} viewId={tx.signature} />
       {pending ? <AnsweredTx signature={tx.pendingSignature as string} /> : null}
