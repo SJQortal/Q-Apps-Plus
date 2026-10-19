@@ -896,6 +896,51 @@ describe('Connections: as a circle', () => {
     expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('list');
   });
 
+  it('lists the accounts under the circle on request: the circle’s, a line, then the rest (Simon, 2026-10-19)', async () => {
+    const { container, user } = await open(FUNDER.address);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    const circle = await region('Connections circle');
+    await within(circle).findByRole('list', { name: 'Sent to, the most transactions first' }, T);
+    // Its latest 100 payments, to 100 accounts: 10 on the circle, 90 counted.
+    const toggle = within(circle).getByRole('button', {
+      name: '90 more accounts with fewer transactions: see the list',
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAccessibleName('Hide the list');
+    // Under the circle, not the List view.
+    expect(screen.getByRole('button', { name: 'Circle' })).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(circle).getByRole('heading', { name: 'The list, the most transactions first' })
+    ).toBeInTheDocument();
+    const drawn = await within(circle).findByRole('list', { name: 'Sent to: in the circle' }, T);
+    expect(within(drawn).getAllByRole('listitem')).toHaveLength(10);
+    expect(
+      within(circle).getByRole('heading', {
+        name: 'Not in the circle: 90 accounts with fewer transactions',
+      })
+    ).toBeInTheDocument();
+    const rest = within(circle).getByRole('list', { name: 'Sent to: not in the circle' });
+    expect(within(rest).getAllByRole('listitem')).toHaveLength(20);
+    // The circle's avatars and the list's first rows are the same accounts, in the same order.
+    const avatars = within(
+      within(circle).getByRole('list', { name: 'Sent to, the most transactions first' })
+    ).getAllByRole('button');
+    // Each row read as its avatar is named: "Kit Kicked, 1 transaction sent, 5.43 QORT: show them".
+    const rows = within(drawn).getAllByRole('button');
+    expect(rows.map((row) => readText(row))).toEqual(
+      avatars.map((avatar) => avatar.getAttribute('aria-label'))
+    );
+    await expectNoAxeViolations(container);
+    await user.click(within(circle).getByRole('button', { name: 'Show more (70 more)' }));
+    await waitFor(() => expect(within(rest).getAllByRole('listitem')).toHaveLength(40), T);
+    // A row opens the same transactions as its avatar.
+    await user.click(within(rest).getAllByRole('button')[0]);
+    expect(await screen.findByRole('dialog', {}, T)).toBeInTheDocument();
+  });
+
   it('orders the circle by the most QORT on request, kept on this device (Simon, 2026-10-18)', async () => {
     const { container, user } = await open(ADDR.left);
     await region('Recorded between them');

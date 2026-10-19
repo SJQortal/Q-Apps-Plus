@@ -587,7 +587,6 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
               }
               order={circleOrder}
               onOrder={setCircleOrder}
-              onShowList={() => setView('list')}
             />
           ) : (
             <ListSkeleton count={2} label="Reading its links" />

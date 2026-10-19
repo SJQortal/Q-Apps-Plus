@@ -1303,6 +1303,23 @@ export default {
           .waitFor({ state: 'attached', timeout: 8000 });
       },
     },
+    // Its list under the circle (Simon, 2026-10-19): the circle's 10, a line, then the rest.
+    {
+      key: 'explorer-connections-circle-list',
+      path: `/explorer/account/${FUNDER.address}/connections?as=admin`,
+      after: async (page) => {
+        await page.addInitScript(
+          ([key, value]) => window.localStorage.setItem(key, value),
+          ['qmintershipplus-connections-view', 'circle']
+        );
+        await page.reload({ waitUntil: 'load' });
+        await explorerSettle(page);
+        await page.getByRole('button', { name: /: see the list$/ }).click();
+        await page
+          .getByRole('list', { name: 'Sent to: not in the circle' })
+          .waitFor({ state: 'visible', timeout: 8000 });
+      },
+    },
     // Ordered by QORT (Simon, 2026-10-18): the toggle between Received from and Sent to.
     {
       key: 'explorer-connections-circle-qort',

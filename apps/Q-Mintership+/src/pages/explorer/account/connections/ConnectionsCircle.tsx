@@ -26,6 +26,9 @@
  * (CircleNodeDialog), which also opens that account in the Explorer. The
  * avatars are lists of buttons, each side its own, the most transactions
  * (or QORT) first, each named with what it opens; the lines are decoration.
+ *
+ * "See the list" opens the accounts as a list under the circle (CircleList):
+ * the ones it draws, a line, then the ones it leaves out.
  */
 import { useEffect, useState } from 'react';
 import {
@@ -37,7 +40,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
 import { NameAvatar } from '../../../../components/common/NameAvatar';
 import { MarkedName } from '../../../../components/common/MarkedName';
@@ -58,22 +61,17 @@ import {
   type PlacedNode,
   type WayPart,
 } from '../../../../rules/explorer/circle';
-import type { AssetSum } from '../../../../rules/explorer/money';
 import type { Finding } from '../../../../rules/explorer/findings';
 import { formatCount, plural } from '../../../../utils/format';
+import { ExpandChevron } from '../../../../components/common/ExpandChevron';
+import { SmoothReveal } from '../../../../components/common/SmoothReveal';
+import { CircleList } from './CircleList';
 import { CircleNodeDialog } from './CircleNodeDialog';
+import { amountList, countWords, ringBackground, useSideColours } from './circleParts';
 import { sideWords } from './words';
 import { useViewState } from '../../../../hooks/useViewState';
 
-/** The line and ring colours: received, sent, and every other link. */
-function useSideColours() {
-  const theme = useTheme();
-  return {
-    in: theme.palette.success.main,
-    out: theme.palette.error.main,
-    other: theme.palette.primary.main,
-  };
-}
+const LIST_ID = 'connections-circle-list';
 
 function Lines({
   placed,
@@ -124,43 +122,6 @@ function Lines({
       })}
     </Box>
   );
-}
-
-/** QORT and each Q-Asset that moved, short: ["500 QORT", "1 10Coin"]. */
-function amountList(qort: bigint, assets: readonly AssetSum[]): string[] {
-  const out: string[] = [];
-  const q = circleQort(qort);
-  if (q) out.push(`${q} QORT`);
-  for (const sum of assets) {
-    const amount = circleQort(sum.atomic);
-    if (amount) out.push(`${amount} ${sum.asset}`);
-  }
-  return out;
-}
-
-/**
- * "4 transactions received, 500 QORT", "2 transactions sent, 1 10Coin",
- * "3 transactions"; both ways, "5 transactions: 3 received, 500 QORT; 2
- * sent, 20 QORT".
- */
-function countWords(node: CircleNode): string {
-  const list = amountList(node.qort, node.assets);
-  const amount = list.length ? `, ${list.join(', ')}` : '';
-  if (node.side === 'both' && node.split) {
-    const part = (way: WayPart) => {
-      const moved = amountList(way.qort, way.assets);
-      return moved.length ? `, ${moved.join(', ')}` : '';
-    };
-    // The total first: it is the number on the avatar.
-    return `${plural(node.count, 'transaction')}: ${formatCount(node.split.in.count)} received${part(
-      node.split.in
-    )}; ${formatCount(node.split.out.count)} sent${part(node.split.out)}`;
-  }
-  return node.side === 'in'
-    ? `${plural(node.count, 'transaction')} received${amount}`
-    : node.side === 'out'
-      ? `${plural(node.count, 'transaction')} sent${amount}`
-      : plural(node.count, 'transaction');
 }
 
 /** The least room between the centres of two avatars of a side: wide, phone (px). */
@@ -310,12 +271,7 @@ function Node({
       };
   // The ring's green share, from the top clockwise: what came in.
   const share = receivedShare(node);
-  const ring =
-    share >= 1
-      ? colours.in
-      : share <= 0
-        ? colours.out
-        : `conic-gradient(${colours.in} 0 ${share * 360}deg, ${colours.out} ${share * 360}deg 360deg)`;
+  const ring = ringBackground(node, colours);
   return (
     <Box
       component="li"
@@ -597,7 +553,6 @@ export function ConnectionsCircle({
   recorded,
   order,
   onOrder,
-  onShowList,
 }: {
   address: string;
   /** What was recorded between them (useRecorded). */
@@ -605,8 +560,6 @@ export function ConnectionsCircle({
   /** The most transactions first, or the most QORT (useCircleOrder). */
   order: CircleOrder;
   onOrder: (order: CircleOrder) => void;
-  /** Back to the list, where every link is. */
-  onShowList: () => void;
 }) {
   const me = useDisplayName(address);
   const phone = usePhoneLayout();
@@ -622,6 +575,9 @@ export function ConnectionsCircle({
     : null;
   const setPicked = (node: CircleNode | null) => setPickedKey(node ? node.key : null);
   const { placed, rest } = circleLayout(groups, options, order);
+  const notDrawn = rest.in + rest.out + rest.both;
+  // The list under the circle (Simon, 2026-10-19): kept for Back.
+  const [listOpen, setListOpen] = useViewState('circle:list', false);
   const maxWeight = Math.max(
     order === 'qort' ? 0 : 1,
     ...placed.map((node) => nodeWeight(node, order))
@@ -834,15 +790,36 @@ export function ConnectionsCircle({
           : ''}{' '}
         Press one for its transactions.
       </Typography>
-      {rest.in || rest.out || rest.both ? (
+      {placed.length ? (
         <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-          <Button onClick={onShowList} sx={{ minHeight: 44 }}>
-            {`${plural(rest.in + rest.out + rest.both, 'more account')} with ${
-              order === 'qort' ? 'less QORT' : 'fewer transactions'
-            }: see the list`}
+          <Button
+            onClick={() => setListOpen((open) => !open)}
+            aria-expanded={listOpen}
+            aria-controls={LIST_ID}
+            endIcon={<ExpandChevron open={listOpen} />}
+            sx={{ minHeight: 44 }}
+          >
+            {listOpen
+              ? 'Hide the list'
+              : notDrawn
+                ? `${plural(notDrawn, 'more account')} with ${
+                    order === 'qort' ? 'less QORT' : 'fewer transactions'
+                  }: see the list`
+                : 'See the list'}
           </Button>
         </Box>
       ) : null}
+      {/* Under the circle: the accounts it draws, a line, then the ones it leaves out. */}
+      <Box id={LIST_ID}>
+        <SmoothReveal open={listOpen && placed.length > 0}>
+          <CircleList
+            groups={groups}
+            inCircle={{ in: left.length, out: right.length, both: bottom.length }}
+            order={order}
+            onPick={setPicked}
+          />
+        </SmoothReveal>
+      </Box>
       <CircleNodeDialog node={picked} address={address} onClose={() => setPicked(null)} />
     </Box>
   );
