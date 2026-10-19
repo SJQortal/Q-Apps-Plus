@@ -11,7 +11,7 @@ import { useParams } from 'react-router-dom';
 import { Box, Button, LinearProgress, Typography } from '@mui/material';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
-import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { CopyShownLinkButton } from '../../components/common/CopyLinkButton';
 import { PersonChip } from '../../components/common/Person';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../components/common/personLinks';
 import { Section } from '../../components/common/Section';
@@ -20,7 +20,7 @@ import { isAddress } from '../../data/accounts';
 import { checkMoreFunded, firstPaidBy, FUNDED_BATCH, getFunded } from '../../data/explorer/funded';
 import { usePrimaryName } from '../../hooks/useData';
 import { useQuery } from '../../hooks/useQuery';
-import { explorerFundedPath, PATHS } from '../../routes/paths';
+import { PATHS } from '../../routes/paths';
 import { formatAmount } from '../../rules/explorer/txWords';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { formatCount, formatDate, plural, shortAddress } from '../../utils/format';
@@ -202,9 +202,7 @@ export default function FundedPage() {
         actions={
           <>
             <ExplorerHeaderSearch />
-            {valid ? (
-              <CopyLinkButton path={explorerFundedPath(address)} what="this list" />
-            ) : undefined}
+            {valid ? <CopyShownLinkButton /> : undefined}
           </>
         }
       />

@@ -19,7 +19,7 @@ import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Box, Typography, useMediaQuery } from '@mui/material';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
-import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { CopyShownLinkButton } from '../../components/common/CopyLinkButton';
 import { AddressText } from '../../components/common/Person';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../components/common/personLinks';
 import { RefreshButton } from '../../components/common/RefreshButton';
@@ -269,7 +269,7 @@ export default function AccountPage() {
     }
   } else if (kind === 'at') {
     title = 'AT address';
-    actions = <CopyLinkButton path={explorerAccountPath(who)} what="this AT address" />;
+    actions = <CopyShownLinkButton />;
     showTabs = true;
     body = (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -289,7 +289,7 @@ export default function AccountPage() {
     );
   } else if (explored.data?.kind === 'unused') {
     title = shortAddress(who);
-    actions = <CopyLinkButton path={explorerAccountPath(who)} what="this address" />;
+    actions = <CopyShownLinkButton />;
     body = (
       <>
         <EmptyState title={UNUSED_ADDRESS} description={<AddressText address={who} full />} />
@@ -308,7 +308,7 @@ export default function AccountPage() {
     showTabs = true;
     actions = (
       <>
-        <CopyLinkButton path={explorerAccountPath(account.address)} what="this account" />
+        <CopyShownLinkButton />
         {full ? (
           <>
             <CompareToggle address={account.address} label={label} />

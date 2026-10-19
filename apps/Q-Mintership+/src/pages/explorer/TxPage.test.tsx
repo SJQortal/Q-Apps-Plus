@@ -92,7 +92,7 @@ describe('one transaction', () => {
     expect(within(people).getByText('Creator')).toBeInTheDocument();
     const details = screen.getByRole('region', { name: 'Details' });
     expect(within(details).getByText('Amount', { selector: 'dt' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy a link to this transaction' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Copy the link' })).toBeVisible();
 
     const raw = screen.getByRole('button', { name: 'Raw API response' });
     expect(raw).toHaveAttribute('aria-expanded', 'false');

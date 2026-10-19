@@ -6,11 +6,16 @@
  * when the browser refuses, from a status region beside the button. The
  * button's name never changes, so going back to "Copy link" isn't read out
  * as news. The tick pops in (index.css → .qmp-pop).
+ *
+ * CopyShownLinkButton, in the Explorer's headers, copies the page as it is
+ * on screen instead.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Button, IconButton, Tooltip } from '@mui/material';
 import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
 import LinkOutlinedIcon from '@mui/icons-material/LinkOutlined';
+import { appSearch } from '../../routes/hubLocation';
 import { appLink, copyText } from '../../utils/links';
 
 type Copied = 'idle' | 'copied' | 'failed';
@@ -55,42 +60,57 @@ export function CopyLinkButton({
   what = 'this page',
   variant = 'icon',
 }: CopyLinkButtonProps) {
+  return variant === 'text' ? (
+    <CopyTextButton path={path} what={what} />
+  ) : (
+    <CopyIconButton path={path} name={`Copy a link to ${what}`} />
+  );
+}
+
+/**
+ * "Copy the link" to the page exactly as it is on screen: its tab, filters
+ * and search, the app's own query without Hub's (Simon, 2026-10-19: "it
+ * should copy the link that the user is currently viewing"). For the
+ * Explorer's headers.
+ */
+export function CopyShownLinkButton() {
+  const location = useLocation();
+  return (
+    <CopyIconButton path={location.pathname + appSearch(location.search)} name="Copy the link" />
+  );
+}
+
+function CopyTextButton({ path, what }: { path: string; what: string }) {
   const { state, copy, status } = useCopy(path);
-  if (variant === 'text') {
-    const shown =
-      state === 'copied' ? 'Link copied' : state === 'failed' ? 'Couldn’t copy' : 'Copy link';
-    return (
-      <>
-        <Button
-          size="small"
-          startIcon={
-            state === 'copied' ? <CheckOutlinedIcon className="qmp-pop" /> : <LinkOutlinedIcon />
-          }
-          onClick={() => void copy()}
-          // A fixed name: it starts with the visible words, then says what the link is to.
-          aria-label={`Copy link to ${what}`}
-          sx={{ minHeight: 44 }}
-        >
-          {shown}
-        </Button>
-        {status}
-      </>
-    );
-  }
+  const shown =
+    state === 'copied' ? 'Link copied' : state === 'failed' ? 'Couldn’t copy' : 'Copy link';
+  return (
+    <>
+      <Button
+        size="small"
+        startIcon={
+          state === 'copied' ? <CheckOutlinedIcon className="qmp-pop" /> : <LinkOutlinedIcon />
+        }
+        onClick={() => void copy()}
+        // A fixed name: it starts with the visible words, then says what the link is to.
+        aria-label={`Copy link to ${what}`}
+        sx={{ minHeight: 44 }}
+      >
+        {shown}
+      </Button>
+      {status}
+    </>
+  );
+}
+
+function CopyIconButton({ path, name }: { path: string; name: string }) {
+  const { state, copy, status } = useCopy(path);
   const title =
-    state === 'copied'
-      ? 'Link copied'
-      : state === 'failed'
-        ? 'Couldn’t copy the link'
-        : `Copy a link to ${what}`;
+    state === 'copied' ? 'Link copied' : state === 'failed' ? 'Couldn’t copy the link' : name;
   return (
     <>
       <Tooltip title={title}>
-        <IconButton
-          aria-label={`Copy a link to ${what}`}
-          onClick={() => void copy()}
-          sx={{ width: 44, height: 44 }}
-        >
+        <IconButton aria-label={name} onClick={() => void copy()} sx={{ width: 44, height: 44 }}>
           {state === 'copied' ? <CheckOutlinedIcon className="qmp-pop" /> : <LinkOutlinedIcon />}
         </IconButton>
       </Tooltip>

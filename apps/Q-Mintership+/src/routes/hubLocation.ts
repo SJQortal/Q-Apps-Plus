@@ -143,6 +143,23 @@ export function appParam(params: URLSearchParams, key: string): string | null {
   return value.split('?')[0] || null;
 }
 
+/** What Hub adds to the app's URL (Torq's hubBoot.ts strips the same). */
+const HUB_QUERY = new Set(['theme', 'lang', 'identifier', 'time', 'isManualNavigation']);
+
+/**
+ * The app's own query in `search` ("?kind=names&q=ada"), or '' when none:
+ * Hub's keys dropped, and everything after a second "?" too (appParam).
+ */
+export function appSearch(search: string): string {
+  const own = search.replace(/^\?/, '').split('?')[0];
+  const kept = new URLSearchParams();
+  new URLSearchParams(own).forEach((value, key) => {
+    if (!HUB_QUERY.has(key)) kept.append(key, value);
+  });
+  const query = kept.toString();
+  return query ? `?${query}` : '';
+}
+
 /**
  * A `qortal://APP/Q-Mintership+/<path>` link for sharing. Hub never decodes
  * the app name, so its `+` stays literal (docs/QORTAL.md → Deep links).

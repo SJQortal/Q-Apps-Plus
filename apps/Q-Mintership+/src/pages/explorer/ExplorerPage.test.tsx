@@ -90,7 +90,7 @@ describe('the Explorer’s landing page', () => {
     // A wide screen without touch: ready to type.
     expect(field).toHaveFocus();
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Copy a link to the Explorer' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the link' })).toBeInTheDocument();
     await screen.findByRole('list', { name: 'Recently joined MINTER' }, T);
     await expectNoAxeViolations(container);
     expect(posts).toEqual([]);

@@ -14,7 +14,7 @@
 import { useLocation, useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
-import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { CopyShownLinkButton } from '../../components/common/CopyLinkButton';
 import {
   EXPLORER_PERSON_LINKS,
   EXPLORER_START_LINKS,
@@ -25,7 +25,7 @@ import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/st
 import { ExplorerSearch } from '../../components/explorer/ExplorerSearch';
 import { getTx, isSignature } from '../../data/explorer/account';
 import { useQuery } from '../../hooks/useQuery';
-import { explorerTxPath, PATHS } from '../../routes/paths';
+import { PATHS } from '../../routes/paths';
 import { txTypeLabel } from '../../rules/explorer/txFamilies';
 import { cameFromExplorer } from '../../state/explorer';
 import { TxView } from './tx/TxView';
@@ -79,7 +79,7 @@ export default function TxPage() {
     const waiting = typeof tx.data.blockHeight !== 'number';
     actions = (
       <>
-        <CopyLinkButton path={explorerTxPath(signature)} what="this transaction" />
+        <CopyShownLinkButton />
         {waiting ? (
           <RefreshButton onClick={() => void tx.refetch()} fetching={tx.fetching} />
         ) : null}

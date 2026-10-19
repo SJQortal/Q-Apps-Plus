@@ -8,14 +8,19 @@
 import { qortal } from '../qortal/client';
 import { LINK_APP_NAME, ORIGINAL_APP_LINK } from '../constants/plus';
 
-/** `qortal://APP/Q-Mintership+/people/Q…` for sharing. `path` starts with "/". */
+/**
+ * `qortal://APP/Q-Mintership+/people/Q…` for sharing. `path` starts with "/",
+ * and may end in the app's own query ("?kind=names"), kept as it is.
+ */
 export function appLink(path: string): string {
-  const clean = path.startsWith('/') ? path : `/${path}`;
+  const [pathname, ...rest] = path.split('?');
+  const query = rest.length ? `?${rest.join('?')}` : '';
+  const clean = pathname.startsWith('/') ? pathname : `/${pathname}`;
   const encoded = clean
     .split('/')
     .map((segment, i) => (i === 0 ? segment : encodeURIComponent(decodeSafe(segment))))
     .join('/');
-  return `qortal://APP/${LINK_APP_NAME}${encoded === '/' ? '' : encoded}`;
+  return `qortal://APP/${LINK_APP_NAME}${encoded === '/' ? '' : encoded}${query}`;
 }
 
 function decodeSafe(segment: string): string {

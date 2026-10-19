@@ -67,7 +67,7 @@ describe('the accounts a sponsor sponsored', () => {
     expect(
       screen.getByText(/Before Oct 2024 most new accounts started minting/)
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy a link to this list' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the link' })).toBeInTheDocument();
     await expectNoAxeViolations(container);
     expect(posts).toEqual([]);
     expect(

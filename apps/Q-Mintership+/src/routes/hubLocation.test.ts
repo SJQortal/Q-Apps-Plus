@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   appParam,
+  appSearch,
   buildAppLink,
   currentQortalAppName,
   normalizeHubPath,
@@ -108,5 +109,18 @@ describe('appParam', () => {
     expect(appParam(new URLSearchParams('?show=open'), 'show')).toBe('open');
     expect(appParam(new URLSearchParams('?who=?theme=dark'), 'who')).toBeNull();
     expect(appParam(new URLSearchParams(''), 'who')).toBeNull();
+  });
+});
+
+describe('appSearch', () => {
+  it("keeps the app's own query and drops Hub's", () => {
+    expect(appSearch('?kind=names&q=ada')).toBe('?kind=names&q=ada');
+    expect(appSearch('?kind=names?theme=dark&lang=en')).toBe('?kind=names');
+    expect(
+      appSearch('?theme=dark&lang=en&identifier=null&time=123&isManualNavigation=false&q=ada')
+    ).toBe('?q=ada');
+    expect(appSearch('?theme=light&lang=en')).toBe('');
+    expect(appSearch('?q=Nora%E2%80%99s%20Shop')).toBe('?q=Nora%E2%80%99s+Shop');
+    expect(appSearch('')).toBe('');
   });
 });

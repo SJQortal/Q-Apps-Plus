@@ -123,7 +123,7 @@ describe('Compare: two accounts', () => {
           selector: '[role="note"]',
         })
       ).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /link to this comparison/i })).toBeVisible();
+      expect(screen.getByRole('button', { name: 'Copy the link' })).toBeVisible();
 
       // Each account lettered, with its level and where it stands in MINTER.
       const cards = screen.getByRole('list', { name: 'Accounts compared' });

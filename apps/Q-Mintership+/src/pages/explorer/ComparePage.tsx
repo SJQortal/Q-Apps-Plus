@@ -24,7 +24,7 @@ import { useTheme } from '@mui/material/styles';
 import { useSetAtom } from 'jotai';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
-import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { CopyShownLinkButton } from '../../components/common/CopyLinkButton';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../components/common/personLinks';
 import { EmptyState } from '../../components/common/states';
 import { getTip } from '../../data/chain';
@@ -343,9 +343,7 @@ export default function ComparePage() {
         actions={
           <>
             <ExplorerHeaderSearch />
-            {addresses.length ? (
-              <CopyLinkButton path={explorerComparePath([...addresses])} what="this comparison" />
-            ) : null}
+            {addresses.length ? <CopyShownLinkButton /> : null}
           </>
         }
       />

@@ -17,7 +17,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Button, TextField, Typography } from '@mui/material';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
-import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { CopyShownLinkButton } from '../../components/common/CopyLinkButton';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../components/common/personLinks';
 import { Section } from '../../components/common/Section';
 import { EmptyState, ErrorState, ListSkeleton } from '../../components/common/states';
@@ -30,7 +30,7 @@ import type { AccountInfo } from '../../data/types';
 import { usePrimaryName } from '../../hooks/useData';
 import { useHeavyScope } from '../../hooks/useHeavyScope';
 import { useQuery } from '../../hooks/useQuery';
-import { explorerComparePath, explorerSponseesPath, PATHS } from '../../routes/paths';
+import { explorerComparePath, PATHS } from '../../routes/paths';
 import { monthRange, sponseesOf } from '../../rules/explorer/connections';
 import { visibleName } from '../../rules/explorer/nameNotes';
 import { COMPARE_MAX } from '../../state/explorer';
@@ -235,9 +235,7 @@ export default function SponseesPage() {
         actions={
           <>
             <ExplorerHeaderSearch />
-            {valid ? (
-              <CopyLinkButton path={explorerSponseesPath(address)} what="this list" />
-            ) : undefined}
+            {valid ? <CopyShownLinkButton /> : undefined}
           </>
         }
       />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { linkLabel, linkName } from './links';
+import { appLink, linkLabel, linkName } from './links';
 
 describe('a qortal:// link in a record', () => {
   it('reads without its scheme, decoded', () => {
@@ -19,5 +19,17 @@ describe('a qortal:// link in a record', () => {
     expect(linkName('qortal://use-group/action-join/groupid-694')).toBeNull();
     expect(linkName('qortal://APP')).toBeNull();
     expect(linkName('qortal://APP/')).toBeNull();
+  });
+});
+
+describe('a link to share', () => {
+  it('keeps the + literal, encodes each segment and keeps the query as it is', () => {
+    expect(appLink('/')).toBe('qortal://APP/Q-Mintership+');
+    expect(appLink('/explorer/account/Nora Nominator')).toBe(
+      'qortal://APP/Q-Mintership+/explorer/account/Nora%20Nominator'
+    );
+    expect(appLink('/explorer/account/Q1/transactions?kind=names&q=ada+b')).toBe(
+      'qortal://APP/Q-Mintership+/explorer/account/Q1/transactions?kind=names&q=ada+b'
+    );
   });
 });

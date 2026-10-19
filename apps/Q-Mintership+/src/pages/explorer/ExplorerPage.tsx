@@ -30,7 +30,7 @@ import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
 import { focusPageTitle } from '../../components/layout/pageFocus';
-import { CopyLinkButton } from '../../components/common/CopyLinkButton';
+import { CopyShownLinkButton } from '../../components/common/CopyLinkButton';
 import { AvatarStack, PersonChip } from '../../components/common/Person';
 import { EXPLORER_START_LINKS, PersonLinkContext } from '../../components/common/personLinks';
 import { Card, Section } from '../../components/common/Section';
@@ -452,7 +452,7 @@ export default function ExplorerPage() {
       <PageHeader
         title="Explorer"
         subtitle="Look up any Qortal account or transaction"
-        actions={<CopyLinkButton path={PATHS.explorer} what="the Explorer" />}
+        actions={<CopyShownLinkButton />}
       />
       <PageBody>
         {/* No focus on phones or touch screens: the keyboard would cover the page. */}

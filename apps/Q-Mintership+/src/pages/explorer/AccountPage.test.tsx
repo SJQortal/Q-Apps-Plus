@@ -154,7 +154,7 @@ describe('an account in the Explorer', () => {
     expect(screen.getByText(ADDR.nominator)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy address' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Copy a link to this account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy the link' })).toBeInTheDocument();
     const tabs = screen.getByRole('tablist', { name: 'Account sections' });
     expect(
       within(tabs)
@@ -199,6 +199,32 @@ describe('an account in the Explorer', () => {
     await user.click(within(tabs).getByRole('tab', { name: 'Overview' }));
     await waitFor(() => expect(at()).toBe(`/explorer/account/${ADDR.nominator}|null|REPLACE`), T);
     expect(within(tabs).getByRole('tab', { name: 'Overview' })).toHaveFocus();
+  });
+
+  it('copies the link to the page as it is: its tab and filters, without Hub’s query', async () => {
+    const tx = explorerAccountPath(ADDR.nominator, 'transactions');
+    const { user } = await open(`${tx}?order=oldest&theme=dark&lang=en&time=12`);
+    // After userEvent.setup(), which puts its own clipboard in place.
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const copy = await screen.findByRole('button', { name: 'Copy the link' }, T);
+    await user.click(copy);
+    await waitFor(
+      () =>
+        expect(writeText).toHaveBeenLastCalledWith(`qortal://APP/Q-Mintership+${tx}?order=oldest`),
+      T
+    );
+    const tabs = screen.getByRole('tablist', { name: 'Account sections' });
+    await user.click(within(tabs).getByRole('tab', { name: 'Names' }));
+    await waitFor(() => expect(at()).toContain(`/explorer/account/${ADDR.nominator}/names|`), T);
+    await user.click(screen.getByRole('button', { name: 'Copy the link' }));
+    await waitFor(
+      () =>
+        expect(writeText).toHaveBeenLastCalledWith(
+          `qortal://APP/Q-Mintership+${explorerAccountPath(ADDR.nominator, 'names')}`
+        ),
+      T
+    );
   });
 
   it('swipes to the next tab and back on a touch screen, in place', async () => {
