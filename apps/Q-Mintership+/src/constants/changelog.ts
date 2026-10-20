@@ -18,6 +18,21 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.1',
+    date: '2026-10-20',
+    title: 'The original Admin Board, readable again',
+    summary:
+      'Minter Admins can read the cards and comments of the original encrypted Admin Board in History.',
+    sections: [
+      {
+        title: 'For Minter Admins',
+        notes: [
+          'History has an Admin Board filter: the cards the Minter Admins posted on the original encrypted Admin Board, with what each said, who it was about, its poll result and its comments, decrypted for you as you read them. Each says it was proposed in the original Q-Mintership.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.0',
     date: '2026-10-12',
     title: 'Q-Mintership+ 2.0: nominate, then approve',
