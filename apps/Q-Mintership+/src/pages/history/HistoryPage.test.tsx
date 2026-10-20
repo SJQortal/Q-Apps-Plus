@@ -5,7 +5,7 @@ import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockQortalRequest, qortalCalls, qortalCallsFor } from '../../test/setup';
 import { ADDR, NOW, PEOPLE, TIP } from '../../test/world';
 import { historySeenKey, readHistorySeen } from '../../data/historySeen';
-import { DECLINED, addDecline } from '../../../e2e/world.mjs';
+import { DECLINED, addDecline, answerDecrypt } from '../../../e2e/world.mjs';
 import HistoryPage from './HistoryPage';
 
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
@@ -402,20 +402,44 @@ describe('History page: the original app', () => {
     ).toBeInTheDocument();
   });
 
-  it('points Minter Admins to the encrypted admin board in the original app', async () => {
-    await renderPage(<HistoryPage />, { persona: 'admin', path: '/history' });
-    mockQortalRequest('OPEN_NEW_TAB', true);
-    const open = await screen.findByRole('button', { name: 'Open the original app' });
-    await userEvent.click(open);
-    expect(qortalCallsFor('OPEN_NEW_TAB')).toEqual([
-      { action: 'OPEN_NEW_TAB', qortalLink: 'qortal://APP/Q-Mintership' },
-    ]);
+  it('reads the encrypted Admin Board for Minter Admins, saying when its cards were proposed', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'admin',
+      path: '/history',
+      setup: (world) =>
+        mockQortalRequest('DECRYPT_DATA', (request: Record<string, unknown>) =>
+          answerDecrypt(world, 'admin', request)
+        ),
+    });
+    await screen.findByRole('list', { name: 'Cards from the original app, newest first' });
+    expect(qortalCallsFor('DECRYPT_DATA')).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Admin Board' }));
+    expect(
+      screen.getByText(
+        /^The original Minter Admin board: cards proposed in the original Q-Mintership/
+      )
+    ).toBeInTheDocument();
+    const list = await screen.findByRole('list', {
+      name: 'Cards from the original app, newest first',
+    });
+    expect(await within(list).findByText('Remove Member 12 from MINTER?')).toBeInTheDocument();
+    expect(within(list).getByText(/About Member 12 · by Admin B/)).toBeInTheDocument();
+    expect(await within(list).findByText('How we review removals')).toBeInTheDocument();
+    expect(within(list).getByText(/^Topic · by Admin C/)).toBeInTheDocument();
+    // Posted before Avery was a Minter Admin, and one sealed for no one.
+    expect(await within(list).findAllByText('Not encrypted to you')).toHaveLength(2);
+    expect(within(list).getAllByRole('link')).toHaveLength(4);
+    expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
   });
 
-  it('shows the encrypted board note to admins only', async () => {
+  it('offers the Admin Board to Minter Admins only, and decrypts nothing for others', async () => {
     await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
     await screen.findByRole('list', { name: 'Cards from the original app, newest first' });
-    expect(screen.queryByRole('button', { name: 'Open the original app' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Admin Board' })).toBeNull();
+    expect(qortalCallsFor('DECRYPT_DATA')).toEqual([]);
+    expect(
+      fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) => p.includes('MAIL_PRIVATE'))
+    ).toEqual([]);
   });
 });
 

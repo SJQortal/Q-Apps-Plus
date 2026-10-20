@@ -3,9 +3,10 @@ import { LegacyUnreadableError, type LegacyCard, type LegacyCardRow } from '../.
 import { QdnDeletedError } from '../../../data/qdn';
 import { formatDate } from '../../../utils/format';
 
-/** "Nomination", "Admin proposal: add", "Admin proposal: remove". */
-export function legacyKindLabel(card: Pick<LegacyCard, 'board' | 'promotion'>): string {
+/** "Nomination", "Admin proposal: add", "Admin proposal: remove", "Admin Board". */
+export function legacyKindLabel(card: Pick<LegacyCard, 'board' | 'promotion' | 'topic'>): string {
   if (card.board === 'minter') return 'Nomination';
+  if (card.board === 'admin') return card.topic ? 'Admin Board topic' : 'Admin Board';
   if (card.promotion === true) return 'Admin proposal: add';
   if (card.promotion === false) return 'Admin proposal: remove';
   return 'Admin proposal';
@@ -15,6 +16,7 @@ export function legacyKindLabel(card: Pick<LegacyCard, 'board' | 'promotion'>): 
 export function legacyMetaLine(card: LegacyCard | undefined, row: LegacyCardRow): string {
   const date = formatDate(row.createdAt);
   if (!card) return `By ${row.publisher} · ${date}`;
+  if (card.board === 'admin' && card.topic) return `Topic · by ${row.publisher} · ${date}`;
   const who = card.subject.name ?? 'an unnamed account';
   if (card.selfPosted) return `Posted by ${who} for themselves · ${date}`;
   const about =

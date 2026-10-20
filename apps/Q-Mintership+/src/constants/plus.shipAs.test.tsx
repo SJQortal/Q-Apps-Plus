@@ -6,8 +6,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ADMIN_BOARD_IDS, answerDecrypt } from '../../e2e/world.mjs';
 import { renderPage } from '../test/render';
-import { qortalCallsFor } from '../test/setup';
+import { mockQortalRequest } from '../test/setup';
 import HistoryPage from '../pages/history/HistoryPage';
 import LegacyCardPage from '../pages/history/LegacyCardPage';
 import SettingsPage from '../pages/settings/SettingsPage';
@@ -24,8 +26,15 @@ vi.mock('./plus', async (importOriginal) => ({
     adjective: 'Q-Mintership 3',
     adminBoard: "Q-Mintership 3's Minter Admin board",
     card: 'Q-Mintership 3 card',
+    era: 'before Q-Mintership 4.0.0',
   },
 }));
+
+/** Hub decrypting as Avery Admin's would. */
+const decryptAsAdmin = (world: Parameters<typeof answerDecrypt>[0]) =>
+  mockQortalRequest('DECRYPT_DATA', (request: Record<string, unknown>) =>
+    answerDecrypt(world, 'admin', request)
+  );
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -37,32 +46,40 @@ function saysNoPlusName() {
 }
 
 describe('shipped as Q-Mintership', () => {
-  it('History names Q-Mintership 3 and offers no link to it', async () => {
-    await renderPage(<HistoryPage />, { persona: 'admin', path: '/history' });
+  it('History names Q-Mintership 3, and its Admin Board says the cards were proposed before 4.0.0', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'admin',
+      path: '/history',
+      setup: decryptAsAdmin,
+    });
     expect(
       await screen.findByRole('list', { name: 'Cards from Q-Mintership 3, newest first' })
     ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Admin Board' }));
     expect(
       screen.getByText(
-        "Q-Mintership 3's Minter Admin board was encrypted to Minter Admins, so it isn't shown here."
+        /^Q-Mintership 3's Minter Admin board: cards proposed before Q-Mintership 4\.0\.0, encrypted to the Minter Admins/
       )
     ).toBeInTheDocument();
+    expect(await screen.findByText('Remove Member 12 from MINTER?')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Open / })).toBeNull();
     saysNoPlusName();
   });
 
-  it("an encrypted card's page isn't decrypted and has no link out", async () => {
+  it("an Admin Board card's page says it was proposed before Q-Mintership 4.0.0", async () => {
     await renderPage(<LegacyCardPage />, {
       persona: 'admin',
-      path: `/history/card/${encodeURIComponent('card-MAC-NC-1780000000000-a1B2c3')}`,
+      path: `/history/card/${encodeURIComponent(ADMIN_BOARD_IDS.removal)}`,
       route: '/history/card/:card',
+      setup: decryptAsAdmin,
     });
-    expect(await screen.findByText('Encrypted to Minter Admins')).toBeInTheDocument();
+    expect(await screen.findByRole('article')).toBeInTheDocument();
     expect(
-      screen.getByText(/^This card is from Q-Mintership 3's Minter Admin board/)
-    ).toHaveTextContent("Q-Mintership doesn't decrypt it.");
+      screen.getByText(
+        'Proposed before Q-Mintership 4.0.0. Encrypted to the Minter Admins, read-only.'
+      )
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Open in/ })).toBeNull();
-    expect(qortalCallsFor('DECRYPT_DATA')).toEqual([]);
     saysNoPlusName();
   });
 

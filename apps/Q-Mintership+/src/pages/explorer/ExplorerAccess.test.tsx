@@ -8,9 +8,12 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useLocation } from 'react-router-dom';
 import { renderPage, type RenderPageOptions } from '../../test/render';
 import { fetchCallsFor, qortalCalls } from '../../test/setup';
+import { APP_NAME } from '../../constants/plus';
+import { CHANGELOG } from '../../constants/changelog';
 import { ADDR, installWorld } from '../../test/world';
 import { explorerAccountPath, explorerComparePath, explorerSponseesPath } from '../../routes/paths';
 import { fullExplorerAccess, fullExplorerByRole } from '../../rules/explorer/access';
@@ -286,12 +289,26 @@ describe('the changelog', () => {
       persona: 'learner',
     });
     const dialog = await screen.findByRole('dialog', {}, T);
-    await within(dialog).findByText('For everyone', {}, T);
+    // The release that brought the Explorer's detailed parts (only the newest starts open).
+    const index = CHANGELOG.findIndex((r) => r.sections.some((section) => section.full));
+    const showFirst = async (inside: HTMLElement) => {
+      const release = await within(inside).findByLabelText(
+        `${APP_NAME} ${CHANGELOG[index].version}`,
+        {},
+        T
+      );
+      if (index > 0)
+        await userEvent.click(within(release).getByRole('button', { name: 'Show all changes' }));
+      return release;
+    };
+    const release = await showFirst(dialog);
+    await within(release).findByText('For everyone', {}, T);
     await new Promise((r) => setTimeout(r, 200));
-    expect(within(dialog).queryByText(SECTION)).toBeNull();
+    expect(within(release).queryByText(SECTION)).toBeNull();
     expect(dialog).not.toHaveTextContent(/Connections|Compare|QORT minted/);
     learner.unmount();
     await renderPage(<ChangelogDialog open onClose={() => undefined} />, { persona: 'admin' });
-    expect(await screen.findByText(SECTION, {}, T)).toBeInTheDocument();
+    const adminRelease = await showFirst(await screen.findByRole('dialog', {}, T));
+    expect(await within(adminRelease).findByText(SECTION, {}, T)).toBeInTheDocument();
   });
 });

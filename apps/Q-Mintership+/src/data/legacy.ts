@@ -6,8 +6,8 @@
  * - Minter Admin proposals (the add/remove admin board): BLOG_POST `QM-AR-card-<id>`;
  * - comments on either: BLOG_POST `comment-<cardId>-<id>`;
  * - each card's chain poll `<cardId>-poll` (results only: nobody votes here);
- * - the encrypted admin board (MAIL_PRIVATE `card-MAC-…`) is not decrypted,
- *   only listed, with a link to the original app.
+ * - the encrypted Admin Board (MAIL_PRIVATE `card-MAC-…` and its comments),
+ *   decrypted for Minter Admins in data/legacyAdminBoard.ts.
  *
  * Searches are paged and bounded, bodies are cached per version, and the
  * search row is trusted over the body: the publisher is the row's name, and
@@ -252,7 +252,6 @@ function sameName(a: string | null | undefined, b: string | null | undefined): b
 // ---- cards -----------------------------------------------------------------
 
 export interface LegacyCard extends LegacyCardRow {
-  board: 'minter' | 'ar';
   title: string;
   body: LegacyText;
   /** qortal:// links from the card's list and its text, deduped. */
@@ -266,6 +265,8 @@ export interface LegacyCard extends LegacyCardRow {
   pollName: string | null;
   /** AR cards: true = make a Minter Admin, false = remove one, null = not said. */
   promotion: boolean | null;
+  /** An Admin Board topic: a discussion about no one in particular. */
+  topic: boolean;
 }
 
 function promotionOf(value: unknown): boolean | null {
@@ -304,6 +305,7 @@ export function parseLegacyCard(body: unknown, row: LegacyCardRow): LegacyCard |
     selfPosted: !ar && !nominator && sameName(subjectName, row.publisher),
     pollName: str(b.poll, 120),
     promotion: ar ? promotionOf(b.promotionCard) : null,
+    topic: false,
   };
 }
 
@@ -460,7 +462,7 @@ export interface LegacyComments {
   truncated: boolean;
 }
 
-/** The comment rows of one card (key `legacy:comments:<cardId>`), at most 500. */
+/** The comment rows of one card (key `legacy:comments:<cardId>`), at most 500; Admin Board ones are MAIL_PRIVATE. */
 export function loadLegacyComments(
   cardIdentifier: string,
   options: { force?: boolean } = {}
@@ -469,8 +471,10 @@ export function loadLegacyComments(
     `legacy:comments:${cardIdentifier}`,
     async () => {
       const prefix = `comment-${cardIdentifier}-`;
+      const service =
+        legacyBoardOf(cardIdentifier) === 'admin' ? ADMIN_BOARD_SERVICE : LEGACY_SERVICE;
       const { rows, truncated } = await searchQdn(
-        { service: LEGACY_SERVICE, identifier: prefix, reverse: false, maxPages: 5 },
+        { service, identifier: prefix, reverse: false, maxPages: 5 },
         { force: options.force }
       );
       const seen = new Set<string>();

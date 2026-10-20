@@ -53,6 +53,11 @@ export const ORIGINAL_WORDS = {
   adminBoard: 'the original Minter Admin board',
   /** The title of one of its cards' pages. */
   card: 'Original card',
+  /**
+   * When its Admin Board cards were proposed: "Proposed in the original
+   * Q-Mintership." Shipped as Q-Mintership itself: "before Q-Mintership 4.0.0".
+   */
+  era: 'in the original Q-Mintership',
 } as const satisfies Record<string, string>;
 
 /** Prefix of every localStorage key this build writes. */

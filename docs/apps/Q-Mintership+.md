@@ -362,7 +362,7 @@ Hub alerts are not on the device: Hub keeps the rules for the account.
 
 ### Legacy reads (History, read-only)
 
-The original app's data stays readable: nomination cards (`BLOG_POST` `Minter-board-card-*`), their polls (`<card>-poll`) and comments (`comment-<card>-*`), and AR cards (`QM-AR-card-*`). The admin board (`MAIL_PRIVATE` `card-MAC-*`) is encrypted to admins: History links to the original app for it. Old deep links (`#/minter/<card>/<section>`) open the card in History.
+The original app's data stays readable: nomination cards (`BLOG_POST` `Minter-board-card-*`), their polls (`<card>-poll`) and comments (`comment-<card>-*`), and AR cards (`QM-AR-card-*`). The Admin Board (`MAIL_PRIVATE` `card-MAC-*`, comments `comment-<card>-*`, `{ minterName, header, content, links, creator, timestamp, poll, topicMode }`) is encrypted with Hub's group encryption to the Minter Admins of the day: since 1.0.1 History reads it for Minter Admins (`data/legacyAdminBoard.ts`): one paged `searchsimple?service=MAIL_PRIVATE&identifier=card-MAC-&prefix=true` when its filter is chosen, then per row shown `/arbitrary/MAIL_PRIVATE/{name}/{identifier}?encoding=base64` and Hub's `DECRYPT_DATA` (no dialog), kept per viewer and version for the session; one not encrypted to the viewer is locked. Nothing is written. Old deep links (`#/minter/<card>/<section>`) open the card in History.
 
 ## Testnet (dev-only)
 
@@ -1183,13 +1183,28 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 137. **The app's avatar at the top left** (Simon, 2026-10-20: "the top left where the logo supposed to be just add the avatar to the left of Q-Mintership text"). The rail's "QM+" placeholder is now the avatar of the `Q-Mintership` name on QDN (the blue Qortal cube Hub shows for the app), left of the name; on the narrow rail it stands alone. It is bundled, not read from QDN: a 96 px WebP of 2.2 kB, inlined by Vite into the main chunk, so it shows with the first paint, with no request and without a node (`src/assets/q-mintership-avatar.webp`, from `THUMBNAIL/Q-Mintership/qortal_avatar`; the `Q-Mintership+` name has no avatar). Decorative (`alt=""`), since the name beside it says the same. Test: the rail shows it before the name, with no "QM+" (`navItems.test.tsx`). Checked in the browser at 1280 and 800 px.
 
+### 1.0.1 (from 2026-10-20)
+
+1.0.0 was published on 2026-10-20, so new work is 1.0.1 (`package.json`, About and What's new say so). Branch `q-mintership-plus/1.0.1`, on top of #26.
+
+138. **The original Admin Board, readable in History** (Simon, 2026-10-20: "can you make it so the history reads them for Minter Admins, and it says that these were proposed befor 4.0.0"). The old encrypted board's cards were listed nowhere and only linked out to the original app.
+    - **History → From the original app** has a fourth filter, **Admin Board** (with a lock), for Minter Admins only. It lists the board's cards newest first, 20 at a time. Each row is decrypted as it shows: its title, "About Member 12 · by Admin B · date" (or "Topic · by …") and an "Admin Board" chip. A card that wasn't encrypted to the viewer reads "Not encrypted to you": one posted before they were a Minter Admin, or one sealed for no one.
+    - **The words:** "The original Minter Admin board: cards proposed in the original Q-Mintership, encrypted to the Minter Admins of the day and decrypted for you as you read them, read-only." Upstream, `ORIGINAL_WORDS.era` makes it "proposed before Q-Mintership 4.0.0".
+    - **A card's page** ("Admin Board card", subtitle "Proposed in the original Q-Mintership. Encrypted to the Minter Admins, read-only.") shows what it said, who it was about and who published it, its chain poll and its comments, decrypted one by one. A reply shows its quote, and a comment not encrypted to the viewer says so. A topic card names no one.
+    - **Others:** anyone else, or a Minter Admin a card wasn't encrypted to, sees who posted it and when. Nothing is decrypted for someone who isn't a Minter Admin, and Admin Board searches don't even run for them.
+    - **Reads:** see Data contract → Legacy reads. On mainnet on 2026-10-20: 217 cards (24 Dec 2024 to 8 Oct 2026, 12 names) and 720 comments. Decryption is per viewer: Hub decrypts only what was sealed for the signed-in account, and results are cached under the viewer's address, so switching accounts never shows another account's reading.
+    - **Files:** `data/legacyAdminBoard.ts` (index, card and comment reads, `parseAdminCard`), `legacy.ts` (`topic`, comments from MAIL_PRIVATE for Admin Board cards), `hooks/useViewerIsAdmin.ts` (`useAdminViewer`), `pages/history/LegacyBoards.tsx`, `LegacyCardPage.tsx`, `parts/LegacyCardItem.tsx`, `parts/legacyWords.ts`.
+    - **Mock world:** `e2e/world-legacy.mjs` has a removal card with its poll and three comments (one not encrypted to Avery Admin), a topic, a card posted before Avery was an admin, and the old unsealed card, sealed with the mock's stand-in encryption (`sealFor`).
+    - **Tests:** 9 data tests (search, base64 fetch and DECRYPT_DATA, locked kept, per-viewer keys, a Hub failure that isn't a lock, comments, no writes), page tests for History and the card page as an admin and as a learner, and the Ship-as values test for "Proposed before Q-Mintership 4.0.0". Screenshot check of the new screens (`history-admin-board`, `legacy-admin-card`, `legacy-admin-card-locked`) with `legacy-card` and `history`: 100 captures, 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations.
+    - **Needs a Hub check as a Minter Admin with real data:** that Hub decrypts the real cards without a dialog, and how long 20 rows take.
+
 ### The upstream PR, prepared (2026-10-20)
 
 Stage 4 of docs/RELEASE.md, after 1.0.0 was published and #23 merged. Nothing is pushed to Qortal yet: Simon reads the PR text first.
 
 - **The branch:** `q-mintership-upstream/4.0.0` from `scripts/upstream-pr.sh Q-Mintership+ --version 4.0.0`, a fast-forward of Qortal/Q-Mintership-Alpha's `Nominations` (cb6fcef2; their `main` is behind it) with 709 commits, in `.worktrees/upstream-q-mintership`. No Claude lines; the private-wording sweep over every commit message, every diff and the tree found nothing.
 - **"Ship as Q-Mintership 4.0.0"** (the last commit): the name and copied links, "Q-Mintership 3" for the boards it replaces, `qmintership-` storage keys (Q-Mintership 3's keys have no prefix), version 4.0.0 with one changelog entry, a README for their repo (theirs moves to `legacy/README.md`), `e2e/screens.mjs` standalone, doc citations as GitHub links, and `audit/` (a partial, unverified draft) left out. 2,480 tests, lint and build pass.
-- **Q-Mintership 3's encrypted Minter Admin board:** once 4.0 is published as `Q-Mintership`, Q-Mintership 3 has no publish, so its links are hidden (`ORIGINAL_APP_LINK` null) and the README and PR suggest publishing `legacy/` under a name of its own.
+- **Q-Mintership 3's encrypted Minter Admin board:** once 4.0 is published as `Q-Mintership`, Q-Mintership 3 has no publish, so its links are hidden (`ORIGINAL_APP_LINK` null). Simon chose (2026-10-20) to read the board in the app instead: 1.0.1's Admin Board in History (below), saying "Proposed before Q-Mintership 4.0.0" upstream. The README and PR text still suggest publishing `legacy/` and need that point rewritten when the branch is redone.
 - **The PR text:** `.worktrees/pr-q-mintership-4.0.0.md` (from docs/templates/upstream-pr.md), opening with the process change and listing what was dropped and why.
 - **Every name in constants/plus.ts** (branch `q-mintership-plus/plus-names`), so the next upstream round's Ship-as edits values, not 140 files:
   - `APP_NAME` everywhere the screens said "Q-Mintership+";
@@ -1458,7 +1473,7 @@ Both answered by item 86.
 
 1. **Version 4.0.0** (Q-Mintership 3 is v3.0.5b in the repo, v3.0.7 on QDN; RELEASE.md's default is one major up), next to the "Q-Mintership+ 2.0" name used so far. Keep?
 2. **The process change** is the PR's first point: nominations decided on chain by the Minter Admins replace the boards and card polls, with what was dropped and why. Put it to Qortal this directly?
-3. **Q-Mintership 3's encrypted Minter Admin board:** suggest Qortal publish `legacy/` under its own name (then `ORIGINAL_APP_LINK` brings the links back), or decrypt that board in the app in a later 1.0.x?
+3. **Q-Mintership 3's encrypted Minter Admin board:** answered (Simon, 2026-10-20: "make it so the history reads them for Minter Admins, and it says that these were proposed before 4.0.0"): built in 1.0.1.
 4. **Base branch `Nominations`** (their `main` is behind it). OK?
 
 ### Core: what an explorer needs that Core doesn't give (proposals)
