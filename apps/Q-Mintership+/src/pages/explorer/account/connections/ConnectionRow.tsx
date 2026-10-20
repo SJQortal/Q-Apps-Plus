@@ -11,7 +11,7 @@
  * The sentence is plain text (the name above is the link), and the
  * expanding part sits outside the toggle, so no control holds another.
  */
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { Box, Button, IconButton, Link, Tooltip, Typography } from '@mui/material';
 import { AnchoredNote } from '../../../../components/common/AnchoredNote';
@@ -20,15 +20,17 @@ import { ExpandChevron } from '../../../../components/common/ExpandChevron';
 import { PersonChip } from '../../../../components/common/Person';
 import { SmoothReveal } from '../../../../components/common/SmoothReveal';
 import { ErrorState, ListSkeleton } from '../../../../components/common/states';
+import { TxListRow } from '../../../../components/explorer/TxListRow';
 import { TxSentence } from '../../../../components/explorer/TxSentence';
 import { getTx } from '../../../../data/explorer/account';
+import { peekQuery, setQueryData } from '../../../../data/query';
 import type { TxRow } from '../../../../data/types';
 import { useDisplayName } from '../../../../hooks/useDisplayName';
 import { useQuery } from '../../../../hooks/useQuery';
-import { explorerAccountPath, explorerComparePath, explorerTxPath } from '../../../../routes/paths';
-import { describeTx, type TxPart } from '../../../../rules/explorer/txWords';
+import { explorerAccountPath, explorerComparePath } from '../../../../routes/paths';
+import type { TxPart } from '../../../../rules/explorer/txWords';
 import { addPick, COMPARE_FULL, COMPARE_MAX, useComparePicks } from '../../../../state/explorer';
-import { formatCount, formatDate, shortAddress } from '../../../../utils/format';
+import { formatCount, shortAddress } from '../../../../utils/format';
 import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../names/useShowMore';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
@@ -49,57 +51,15 @@ export const ROW_LIST_SX = {
   gap: 1,
 } as const;
 
-function EvidenceLine({
-  tx,
-  viewpoint,
-  privsRecipient,
-}: {
-  tx: TxRow;
-  viewpoint: string;
-  privsRecipient?: string | null;
-}) {
-  // Evidence comes from the account's own searches, so a minting-level move
-  // it didn't make was made to it (as useTxWords says it in its lists).
-  const recipient =
-    tx.type === 'TRANSFER_PRIVS' && tx.creatorAddress !== viewpoint ? viewpoint : privsRecipient;
-  const words = describeTx(tx, { viewpoint, privsRecipient: recipient });
-  const height = tx.blockHeight;
-  const flow = words.direction === 'in' || words.direction === 'out' ? words.direction : null;
-  return (
-    <Box
-      component="li"
-      tabIndex={-1}
-      data-direction={flow ?? undefined}
-      sx={(theme) => ({ minWidth: 0, ...FOCUSABLE_ROW_SX, ...directionRules(theme) })}
-    >
-      {/* A div: the people in the sentence are chips. */}
-      <Typography component="div" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
-        {flow ? <DirectionMark flow={flow} /> : null}
-        <TxSentence parts={words.parts} />
-      </Typography>
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 0.75 }}
-      >
-        <span>{formatDate(tx.timestamp)}</span>
-        <span aria-hidden>·</span>
-        <Link
-          component={RouterLink}
-          to={explorerTxPath(tx.signature)}
-          aria-label={`Open transaction ${tx.signature.slice(0, 8)}${
-            typeof height === 'number' ? `, block ${formatCount(height)}` : ''
-          }`}
-          sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 44 }}
-        >
-          {typeof height === 'number' ? `block ${formatCount(height)}` : 'waiting'}
-        </Link>
-      </Typography>
-    </Box>
-  );
-}
-
-/** The transactions behind a connection, newest first. */
+/**
+ * The transactions behind a connection, newest first, each a transaction
+ * row of the Explorer's lists (TxListRow: its details, the accounts in it,
+ * Open transaction, its raw response; Simon, 2026-10-20: "when expanded I
+ * want to see more details like the transactions details and buttons to
+ * open the transaction"). One alone opens to its details at once. What the
+ * links read already says about a minting level's recipient (`privs`) is
+ * kept where the rows look it up, so they read nothing more.
+ */
 export function EvidenceList({
   txs,
   viewpoint,
@@ -109,6 +69,11 @@ export function EvidenceList({
   viewpoint: string;
   privs?: Readonly<Record<string, string | null>>;
 }) {
+  useMemo(() => {
+    for (const [signature, recipient] of Object.entries(privs ?? {}))
+      if (peekQuery(`xprivs:${signature}`) === undefined)
+        setQueryData(`xprivs:${signature}`, recipient);
+  }, [privs]);
   // Kept for Back (useViewState), by the newest transaction listed.
   const [all, setAll] = useViewState(`evidence:${txs[0]?.signature ?? ''}`, false);
   const { listRef, focusFrom } = useFocusNewRows();
@@ -120,19 +85,19 @@ export function EvidenceList({
         flexDirection: 'column',
         gap: 0.5,
         mt: 0.5,
-        pl: 1.5,
         borderLeft: 2,
         borderColor: 'divider',
       }}
     >
-      <Box component="ul" ref={listRef} sx={{ ...ROW_LIST_SX, gap: 0.5 }}>
+      <Box
+        component="ul"
+        ref={listRef}
+        sx={{ ...ROW_LIST_SX, gap: 0, '& > li + li': { borderTop: 1, borderColor: 'divider' } }}
+      >
         {shown.map((tx) => (
-          <EvidenceLine
-            key={tx.signature}
-            tx={tx}
-            viewpoint={viewpoint}
-            privsRecipient={privs?.[tx.signature]}
-          />
+          <Box component="li" key={tx.signature} tabIndex={-1} sx={FOCUSABLE_ROW_SX}>
+            <TxListRow tx={tx} viewpoint={viewpoint} initiallyOpen={txs.length === 1} />
+          </Box>
         ))}
       </Box>
       {txs.length > shown.length ? (
@@ -141,7 +106,7 @@ export function EvidenceList({
             focusFrom(EVIDENCE_ROWS);
             setAll(true);
           }}
-          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+          sx={{ alignSelf: 'flex-start', minHeight: 44, ml: 1 }}
         >
           Show all {formatCount(txs.length)}
         </Button>
@@ -289,11 +254,12 @@ export function ConnectionRow({
     // Each connection on a panel of its own (fieldBlock.ts).
     <Box component="li" tabIndex={-1} sx={{ ...FIELD_BLOCK_SX, ...FOCUSABLE_ROW_SX }}>
       {/*
-       * Two columns: who and what on the left, Compare beside them; under
-       * them the date and block, with the evidence toggle at its right
-       * (Simon, 2026-10-20: "this expand button could be to the right of the
-       * list, so the list itself can be more compact"). Compare comes last in
-       * the reading order, as before.
+       * Two columns: who on the left with Compare beside it; under them what
+       * happened, with when right after it (Simon, 2026-10-20: "the block
+       * number can be moved to the right of the payment text so the view is
+       * more compressed"), and the evidence toggle at its right (Simon,
+       * 2026-10-20: "this expand button could be to the right of the list").
+       * Compare comes last in the reading order, as before.
        */}
       <Box
         sx={{
@@ -304,37 +270,43 @@ export function ConnectionRow({
           alignItems: 'center',
         }}
       >
-        <Box
-          sx={{
-            gridColumn: 1,
-            gridRow: 1,
-            alignSelf: 'start',
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.25,
-          }}
-        >
+        <Box sx={{ gridColumn: 1, gridRow: 1, alignSelf: 'start', minWidth: 0 }}>
           {isAt ? (
             <AtLink address={other} />
           ) : (
             <PersonChip address={other} size={32} secondary={secondary} />
           )}
-          <Typography
-            data-direction={flow}
-            sx={(theme) => ({ overflowWrap: 'anywhere', ...directionRules(theme) })}
-          >
-            {flow ? <DirectionMark flow={flow} /> : null}
-            {/* Its accounts and names open on a press, and from the keyboard too. */}
-            <TxSentence parts={parts} quiet tabbable />
-          </Typography>
         </Box>
         <Typography
-          variant="body2"
-          color="text.secondary"
-          sx={{ gridColumn: 1, gridRow: 2, minWidth: 0, overflowWrap: 'anywhere' }}
+          data-direction={flow}
+          sx={(theme) => ({
+            gridColumn: 1,
+            gridRow: 2,
+            minWidth: 0,
+            overflowWrap: 'anywhere',
+            ...directionRules(theme),
+          })}
         >
-          {when}
+          {flow ? <DirectionMark flow={flow} /> : null}
+          {/* Its accounts and names open on a press, and from the keyboard too. */}
+          <TxSentence parts={parts} quiet tabbable />
+          {when ? (
+            <Box
+              component="span"
+              // One piece with its dot: it moves to the next line whole, never leaving "·" behind.
+              sx={{
+                display: 'inline-block',
+                maxWidth: '100%',
+                typography: 'body2',
+                color: 'text.secondary',
+                ml: 0.75,
+              }}
+            >
+              <span aria-hidden>· </span>
+              {/* "block 1,364,165" never breaks between the word and its number. */}
+              {when.replace(/\b(blocks?) /g, '$1\u00a0')}
+            </Box>
+          ) : null}
         </Typography>
         {evidence && evidence.words ? (
           <Button

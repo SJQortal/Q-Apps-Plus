@@ -1276,6 +1276,17 @@ export default {
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
       after: asList,
     },
+    // A connection opened (Simon, 2026-10-20): its one transaction, straight to its details.
+    {
+      key: 'explorer-connections-open',
+      path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
+      after: async (page) => {
+        await asList(page);
+        await page.getByRole('button', { name: /^Show the 1 transaction with / }).first().click();
+        await page.getByRole('link', { name: 'Open transaction' }).first().waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // Searched (Simon, 2026-10-17): a slip finds Lou Left as similar.
     {
       key: 'explorer-connections-search',

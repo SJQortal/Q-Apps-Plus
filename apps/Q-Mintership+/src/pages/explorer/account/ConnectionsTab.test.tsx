@@ -195,13 +195,41 @@ describe('Connections: payments and first QORT', () => {
     const panel = document.getElementById(
       toggle.getAttribute('aria-controls') ?? ''
     ) as HTMLElement;
-    const links = await within(panel).findAllByRole('link', { name: /^Open transaction/ }, T);
-    expect(links).toHaveLength(4);
-    const kitLou = (world.explorer as { sigs: { kitLou: string[] } }).sigs.kitLou;
-    expect(links[0]).toHaveAttribute('href', `/explorer/tx/${kitLou[5]}`);
+    // Each payment a transaction row of the Explorer's lists, closed while there are several
+    // (Simon, 2026-10-20: "when expanded I want to see more details").
+    await waitFor(() => expect(panel.querySelectorAll('[data-tx-row]')).toHaveLength(4), T);
+    const rows = [...panel.querySelectorAll<HTMLElement>('[data-tx-row]')];
+    expect(rows.every((row) => row.getAttribute('aria-expanded') === 'false')).toBe(true);
     // (The avatar's letter sits before the name.)
     await waitFor(() => expect(panel).toHaveTextContent(/Received 60 QORT from K?Kit Kicked/), T);
+    await user.click(rows[0]);
+    const kitLou = (world.explorer as { sigs: { kitLou: string[] } }).sigs.kitLou;
+    const openTx = await within(panel).findByRole('link', { name: 'Open transaction' }, T);
+    expect(openTx).toHaveAttribute('href', `/explorer/tx/${kitLou[5]}`);
+    expect(within(panel).getByRole('button', { name: /Raw API response/ })).toBeInTheDocument();
     expect(document.body.textContent).not.toContain(MESSAGE_CONTENT);
+  });
+
+  it('opens the one payment behind a row straight to its details', async () => {
+    const { user } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const toggle = await within(recorded).findByRole(
+      'button',
+      { name: 'Show the 1 payment with Hal Helper' },
+      T
+    );
+    await user.click(toggle);
+    const panel = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? ''
+    ) as HTMLElement;
+    const row = await waitFor(() => {
+      const found = panel.querySelector<HTMLElement>('[data-tx-row]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    }, T);
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(await within(panel).findByRole('link', { name: 'Open transaction' }, T)).toBeVisible();
   });
 
   it('Compare picks both accounts and opens them side by side', async () => {

@@ -241,10 +241,14 @@ describe('Compare: two accounts', () => {
     const panel = document.getElementById(
       toggle.getAttribute('aria-controls') ?? ''
     ) as HTMLElement;
-    const links = await within(panel).findAllByRole('link', { name: /^Open transaction/ }, T);
-    expect(links).toHaveLength(4);
+    // Each a transaction row, opening to its details and Open transaction.
+    await waitFor(() => expect(panel.querySelectorAll('[data-tx-row]')).toHaveLength(4), T);
+    await user.click(panel.querySelector<HTMLElement>('[data-tx-row]') as HTMLElement);
     const kitLou = (world.explorer as { sigs: { kitLou: string[] } }).sigs.kitLou;
-    expect(links[0]).toHaveAttribute('href', `/explorer/tx/${kitLou[5]}`);
+    expect(await within(panel).findByRole('link', { name: 'Open transaction' }, T)).toHaveAttribute(
+      'href',
+      `/explorer/tx/${kitLou[5]}`
+    );
     const trade = await within(recorded).findByRole(
       'button',
       { name: 'Show the 1 trade from Lou Left to Kit Kicked' },

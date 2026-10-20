@@ -187,11 +187,19 @@ export interface TxListRowProps {
   top?: boolean;
   /** Why a search found it, under its time. */
   hint?: string | null;
+  /** Starts open to its details (the one transaction behind a connection). */
+  initiallyOpen?: boolean;
 }
 
-export function TxListRow({ tx, viewpoint = null, top = true, hint = null }: TxListRowProps) {
+export function TxListRow({
+  tx,
+  viewpoint = null,
+  top = true,
+  hint = null,
+  initiallyOpen = false,
+}: TxListRowProps) {
   // Kept for Back (useViewState): a row inside a run apart from the same one on its own.
-  const [open, setOpen] = useViewState(`tx:${tx.signature}${top ? '' : ':run'}`, false);
+  const [open, setOpen] = useViewState(`tx:${tx.signature}${top ? '' : ':run'}`, initiallyOpen);
   const words = useTxWords(tx, viewpoint);
   const links = usePersonLinks();
   const panelId = useId();
