@@ -1,11 +1,12 @@
 /**
  * One connection: the other account (its name links to its account in the
  * Explorer, with its MINTER mark and other plain tags), what happened in a
- * sentence, and when. Beside it, two separate 44 px controls: the evidence
- * toggle ("4 payments") that opens the transactions behind it, each a
- * sentence with its date and block linking to the transaction, and Compare,
- * which picks both accounts and opens them side by side (when Compare has
- * no room for both, it says so and picks neither).
+ * sentence, and when. On the right, two separate 44 px controls: Compare,
+ * beside the name, which picks both accounts and opens them side by side
+ * (when Compare has no room for both, it says so and picks neither), and,
+ * on the line of when, the evidence toggle ("4 payments") that opens the
+ * transactions behind it, each a sentence with its date and block linking
+ * to the transaction.
  *
  * The sentence is plain text (the name above is the link), and the
  * expanding part sits outside the toggle, so no control holds another.
@@ -287,8 +288,33 @@ export function ConnectionRow({
   return (
     // Each connection on a panel of its own (fieldBlock.ts).
     <Box component="li" tabIndex={-1} sx={{ ...FIELD_BLOCK_SX, ...FOCUSABLE_ROW_SX }}>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 0 }}>
-        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+      {/*
+       * Two columns: who and what on the left, Compare beside them; under
+       * them the date and block, with the evidence toggle at its right
+       * (Simon, 2026-10-20: "this expand button could be to the right of the
+       * list, so the list itself can be more compact"). Compare comes last in
+       * the reading order, as before.
+       */}
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          columnGap: 1,
+          rowGap: 0.25,
+          alignItems: 'center',
+        }}
+      >
+        <Box
+          sx={{
+            gridColumn: 1,
+            gridRow: 1,
+            alignSelf: 'start',
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.25,
+          }}
+        >
           {isAt ? (
             <AtLink address={other} />
           ) : (
@@ -302,31 +328,46 @@ export function ConnectionRow({
             {/* Its accounts and names open on a press, and from the keyboard too. */}
             <TxSentence parts={parts} quiet tabbable />
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {when}
-          </Typography>
-          {extra}
-          {evidence && evidence.words ? (
-            <Button
-              size="small"
-              onClick={() => setOpen((value) => !value)}
-              aria-expanded={open}
-              aria-controls={id}
-              aria-label={`Show the ${evidence.words} with ${otherLabel}`}
-              endIcon={<ExpandChevron open={open} />}
-              sx={{ alignSelf: 'flex-start', minHeight: 44, fontSize: 14, px: 1, ml: -1 }}
-            >
-              {evidence.words}
-            </Button>
-          ) : null}
         </Box>
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{ gridColumn: 1, gridRow: 2, minWidth: 0, overflowWrap: 'anywhere' }}
+        >
+          {when}
+        </Typography>
+        {evidence && evidence.words ? (
+          <Button
+            size="small"
+            onClick={() => setOpen((value) => !value)}
+            aria-expanded={open}
+            aria-controls={id}
+            aria-label={`Show the ${evidence.words} with ${otherLabel}`}
+            endIcon={<ExpandChevron open={open} />}
+            sx={{
+              gridColumn: 2,
+              gridRow: 2,
+              justifySelf: 'end',
+              minHeight: 44,
+              fontSize: 14,
+              px: 1,
+              mr: -0.5,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {evidence.words}
+          </Button>
+        ) : null}
+        {extra ? <Box sx={{ gridColumn: '1 / -1', gridRow: 3, minWidth: 0 }}>{extra}</Box> : null}
         {isAt ? null : (
-          <CompareButton
-            address={address}
-            accountLabel={accountLabel}
-            other={other}
-            otherLabel={otherLabel}
-          />
+          <Box sx={{ gridColumn: 2, gridRow: 1, alignSelf: 'start', justifySelf: 'end' }}>
+            <CompareButton
+              address={address}
+              accountLabel={accountLabel}
+              other={other}
+              otherLabel={otherLabel}
+            />
+          </Box>
         )}
       </Box>
       {evidence ? (

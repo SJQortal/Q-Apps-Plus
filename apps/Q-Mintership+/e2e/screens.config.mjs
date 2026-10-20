@@ -322,6 +322,17 @@ const memberDropdown = (typed, label) => async (page) => {
  * last visit" compares with it.
  */
 const visits = lastVisitSnapshots(world);
+/** An account's Connections as a list (kept on the device; the circle is the default). */
+const asList = async (page) => {
+  await page.addInitScript(
+    ([key, value]) => window.localStorage.setItem(key, value),
+    ['qmintershipplus-connections-view', 'list']
+  );
+  await page.reload({ waitUntil: 'load' });
+  await explorerSettle(page);
+  await page.getByRole('region', { name: 'Recorded between them' }).waitFor({ timeout: 8000 });
+};
+
 const sinceLastVisit = (persona, ready) => async (page) => {
   const { address, snapshot } = visits[persona];
   await page.addInitScript(
@@ -1259,16 +1270,17 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // As a list (the circle is the default: these screens pick the list).
     {
       key: 'explorer-connections',
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
-      after: explorerSettle,
+      after: asList,
     },
     // Searched (Simon, 2026-10-17): a slip finds Lou Left as similar.
     {
       key: 'explorer-connections-search',
       path: `/explorer/account/${ADDR.kicked}/connections?q=lou%20lfet&as=admin`,
-      after: explorerSettle,
+      after: asList,
     },
     // The same connections as a circle (List / Circle, kept on this device).
     {
