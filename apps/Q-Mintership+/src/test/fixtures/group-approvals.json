@@ -1,0 +1,47 @@
+{
+  "source": "GET /transactions/search?txType=GROUP_APPROVAL \u2026 and /transactions/signature/{sig}/raw on a mainnet node, 2026-10-12",
+  "approvals": [
+    {
+      "type": "GROUP_APPROVAL",
+      "timestamp": 1791299293764,
+      "reference": "5RbqzExbbudPRYmYUASv16KTkvkthWr9aC4D6eMYDGf4JMWUeYew46zFQfha9kJPj445guYQXAee84oW4Q3dG5iW",
+      "fee": "0.01000000",
+      "signature": "4ZNj2PLDk1pe9heSsBYVpiDHNkpvGfGvGBrMPA6nJrq5szBkedbPxBi3MLaxMdYmV2VqBMXTDYpTy6Sy7EQB3Veg",
+      "txGroupId": 0,
+      "blockHeight": 2750185,
+      "creatorAddress": "QNGudiv4m4hJsQj2z3G38XfXGSyb7X7f2R",
+      "adminPublicKey": "FqYJpKDWLkUWoAsqoET6CXWLT1zbuu8F9ioyeYfrx2zb",
+      "pendingSignature": "MabWyBK99yGEUeiTgix8ooFA7aPd4CBrrptFXgLz7GcBPxXc58LWxEBRweDwSn64C2qVBBEp8KrjdgoLMp79j83",
+      "approval": true,
+      "raw": "11179k6pS6nC79boBdUPfvsgt8ZjV1wnY9AgUhkucJAbvouiWp38XicskS5pB5DEjvKh5Wq8handTF6b82CRbzbnYZKfyD43ojPEchV2NsWM5Aqtjuw2A8mL8TPGpiHGUmE8478mTZdBfo7TWckaULw1cervy96VLcaaskegxMNpqwX6QnhoZgrmVwco9qv1TBAY6vBeWaAJFTrccESqz8y9cMKKjiwpFE9wZYHjjDu1tCvejSBPQvLrjwtrrncDpY6P9QoQ1kcgAWDieH7ygJxGsPAKrAsrzCz5yd1tZDM9uxmebkSGz1U92nCBt94tcztUGRH6UyiKzQYV7Z2"
+    },
+    {
+      "type": "GROUP_APPROVAL",
+      "timestamp": 1791340431140,
+      "reference": "2m6881CwFAKQejzY2XkLW5gVxTjvJamJKSiqoddDwXBnjgnTm5NpYbfpR1XvZUesdRPw8AZQ6sZK33kb9zx4ZGr5",
+      "fee": "0.01000000",
+      "signature": "VtuZDHZmvaz4fgqUUCMAxswgFCDa6JKtTs9DejVPv1Y6zYFrkWNdhbpt7BgzSjjbqiuWXxhzLceWVYymnmfjz2W",
+      "txGroupId": 0,
+      "blockHeight": 2750749,
+      "creatorAddress": "QZXRA1KywdbUrhSKxwTH1twsM4TAPztsrM",
+      "adminPublicKey": "6nHvEmQJ52LaoYxCxu32cLRbp394ziKET6rkh7F5Cyok",
+      "pendingSignature": "QkBFcwzn4CpzKxbkNVNGCpVp2SYwqknS2hdhsWEmszjSGgJ3WFEaDPeU4eoEMyedMttD4wENnRY1S6DX2CckApH",
+      "approval": true,
+      "raw": "11179k6pS6o7LUVpb7UeNh8Xp1d1zsUFg2U5VJd6AJYtSZt7PtTLTht8f5geYdtrVEXuiVPT9xAttQHTvguDb3fsT7xrtK1oLnERaAaw89X9aju1xV1v16bZc9duMeqC4V4CGrkRyd17ERr71uanyEXmbthrSkNqvgkvG53SnE9szmCHTaxFkaTtcr87VtUzds98bMjjoMXdMAgGbAxGSaZgnPzcdSj34vWJB27T9FNBagFgYYp9zDcZoXXWdkxdRfmRY1iXavoDU8MQN7opWp9EoKjAr4BqahSuXc9ZDQoCXZbqf6VBQD62QgkNxJ3X2NcZ9pgbGpc4HfYCshC"
+    },
+    {
+      "type": "GROUP_APPROVAL",
+      "timestamp": 1791512024705,
+      "reference": "4ZoEbzbryxrLgeG7jstVo8Gtike3fQTgJqgyxw3avU3fzF1URePy7a7UxYD6NCUoQkNbe65DYHVw8MWmozFKMoUw",
+      "fee": "0.01000000",
+      "signature": "3iZxZkhpfNQxhFRoeN7wtKBNwRw5YXsMkgJ7cUqNj2jCpPUtQvfqHbVoW7Nz8wBh6dxTNmQzhg4e9iPm2fzrd6zV",
+      "txGroupId": 0,
+      "blockHeight": 2753102,
+      "creatorAddress": "QTKKxJXRWWqNNTgaMmvw22Jb3F5ttriSah",
+      "adminPublicKey": "D7QGYFjMsS4t7zMp1v1NfEhfdQVcn9TgYmpmPM6MtamH",
+      "pendingSignature": "5YiHUjTEn7jQKzMb8BjGnaZuL4prNwk7hQbuBs1kVVFbmnwQrq9Qr4TQCckkBtWnaWyzYVEdKaJzGAtDKTtMy69d",
+      "approval": true,
+      "raw": "11179k6pS6rwNRqaukyt8JtfM9j9L7MwP61mjkdptBwFJMc5GY2jB55evcwCSqfo8jdZbcYpqNQBgAWevcW6yeg7xkaikxLS57WbADMTXKqJkgq46dAp5MwJWdBiveLZKPsYij7huRmsV2433PM1P3Fx1tfq1kp8TirRgT4Yas8hQHFPDFka63kidRYSbG7UMja79tht4UfCGjMGCZCHZcK6QzDRByQrTHAmkwkJacViYPYkwdydKfTMDgaay2v4NrHS8JMV8rmojuHpMU3aqX7y4GvnFGWq5H8asA7JA4pDbh1zKbEXqSumQmp6BFEBocwtcJPqNFv8jT9VPHs"
+    }
+  ]
+}

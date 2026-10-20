@@ -1,0 +1,158 @@
+import { Badge, Typography } from '@mui/material';
+import { styled } from '@mui/material/styles';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { headerFill, primarySoft } from '../../hub-theme';
+import { useCompactRail } from '../../hooks/usePhoneLayout';
+import { APP_NAME } from '../../constants/plus';
+// The Q-Mintership name's own avatar on QDN, bundled: it shows without a read.
+import appAvatarSrc from '../../assets/q-mintership-avatar.webp';
+import { badgeWords, isNavActive, railItems } from './navItems';
+
+export const RAIL_WIDTH = 220;
+export const RAIL_WIDTH_COMPACT = 72;
+
+const Rail = styled('nav')(({ theme }) => ({
+  position: 'sticky',
+  top: 0,
+  alignSelf: 'flex-start',
+  height: 'var(--qmp-app-height, 100dvh)',
+  width: RAIL_WIDTH,
+  flexShrink: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.spacing(0.5),
+  padding: theme.spacing(2, 1.5),
+  paddingTop: `calc(${theme.spacing(2)} + var(--qp-safe-top))`,
+  backgroundColor: headerFill(theme),
+  backdropFilter: 'blur(12px)',
+  borderRight: `1px solid ${theme.palette.divider}`,
+  overflowY: 'auto',
+  [theme.breakpoints.down('md')]: {
+    width: RAIL_WIDTH_COMPACT,
+    padding: theme.spacing(2, 1),
+    alignItems: 'center',
+  },
+}));
+
+const Brand = styled('div')(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1.25),
+  padding: theme.spacing(1, 1.5, 2),
+  [theme.breakpoints.down('md')]: { padding: theme.spacing(1, 0, 2), justifyContent: 'center' },
+}));
+
+const BrandMark = styled('img')({
+  width: 32,
+  height: 32,
+  objectFit: 'contain',
+  flexShrink: 0,
+});
+
+/**
+ * A rail item. The selected item's highlight is its own layer: on a page
+ * change the old one fades out as the new one fades in and settles to full
+ * size, so the selection glides from item to item.
+ */
+const NavButton = styled('button', {
+  shouldForwardProp: (prop) => prop !== '$active',
+})<{ $active?: boolean }>(({ theme, $active }) => ({
+  position: 'relative',
+  isolation: 'isolate',
+  display: 'flex',
+  alignItems: 'center',
+  gap: theme.spacing(1.5),
+  width: '100%',
+  minHeight: 44,
+  padding: theme.spacing(1.25, 1.5),
+  border: 0,
+  borderRadius:
+    theme.qplus.id === 'hub30' || theme.qplus.id === 'hub20' ? theme.shape.borderRadius : 999,
+  backgroundColor: 'transparent',
+  color: $active ? theme.palette.primary.main : theme.palette.text.primary,
+  cursor: 'pointer',
+  font: 'inherit',
+  fontSize: 15,
+  fontWeight: $active ? 700 : 500,
+  textAlign: 'left',
+  transition: 'background-color 160ms ease, color 160ms ease',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    inset: 0,
+    zIndex: -1,
+    borderRadius: 'inherit',
+    backgroundColor: primarySoft(theme),
+    opacity: $active ? 1 : 0,
+    scale: $active ? '1' : '0.92',
+    transition:
+      'opacity var(--qmp-motion-enter) var(--qmp-ease-fade), scale var(--qmp-motion-enter) var(--qmp-ease-enter)',
+  },
+  '&:hover': { backgroundColor: $active ? 'transparent' : theme.palette.action.hover },
+  '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+  '& svg': { fontSize: 24, flexShrink: 0 },
+  [theme.breakpoints.down('md')]: {
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    padding: theme.spacing(1.5),
+  },
+}));
+
+const NavLabel = styled('span')({
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+});
+
+export function NavRail({
+  decisionsBadge = 0,
+  historyBadge = 0,
+}: {
+  decisionsBadge?: number;
+  /** Changes decided since this Minter Admin last had History open. */
+  historyBadge?: number;
+}) {
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const compact = useCompactRail();
+  return (
+    <Rail aria-label="Main">
+      <Brand>
+        <BrandMark src={appAvatarSrc} alt="" width={32} height={32} />
+        {compact ? null : (
+          // One line: at 18 px the name broke after "Q-".
+          <Typography sx={{ fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>
+            {APP_NAME}
+          </Typography>
+        )}
+      </Brand>
+      {railItems().map(({ key, label, path, also, Icon }) => {
+        const active = isNavActive(pathname, path, also);
+        const badge = key === 'decisions' ? decisionsBadge : key === 'history' ? historyBadge : 0;
+        return (
+          <NavButton
+            key={key}
+            type="button"
+            $active={active}
+            aria-current={active ? 'page' : undefined}
+            title={compact ? label : undefined}
+            onClick={() => navigate(path)}
+          >
+            <Badge
+              badgeContent={badge}
+              color="error"
+              max={99}
+              overlap="circular"
+              slotProps={{ badge: { 'aria-hidden': true } }}
+            >
+              <Icon aria-hidden />
+            </Badge>
+            <NavLabel className={compact ? 'qmp-visually-hidden' : undefined}>{label}</NavLabel>
+            {badge ? <span className="qmp-visually-hidden">, {badgeWords(key, badge)}</span> : null}
+          </NavButton>
+        );
+      })}
+    </Rail>
+  );
+}

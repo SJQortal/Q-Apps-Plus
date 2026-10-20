@@ -1,3 +1,29 @@
+# Q-Mintership+ (2.0)
+
+**Q-Mintership+** is a rewrite of Q-Mintership on React 19.3 + MUI 9.4 with a simpler process for joining the MINTER group (694): **level 5+ minters and Minter Admins nominate; Minter Admins sign, reject, or let it expire.** No polls or votes. It is built in [Q-Apps+](https://github.com/SJQortal/Q-Apps-Plus), tested with the community as `Q-Mintership+` on QDN, and offered back here as a pull request once it has proven itself.
+
+- **Home speaks to you:** your MINTER status (not in MINTER yet, nominated, approved, member, former member, Minter Admin) with your real numbers, the one thing to do next, and what changed since your last visit (with opt-in Hub alerts).
+- **Nominations:** who nominated, who supports, the signatures and rejections so far, how many Minter Admins are considering, and the time left; nominees accept with one step, so approval makes them a minter at once.
+- **Decisions (Minter Admins):** one queue for nominations, removals, bans and admin changes, most urgent first, with k of n and a live countdown; sign one or several, reject, withdraw a signature, or say you're considering; before an admin change, what it would do to the target and every waiting decision; every Hub confirmation is explained before it opens, with its fee.
+- **Comments and links:** public comments on every decision and nomination, and a page with Copy link for each.
+- **Activity and History:** Minter Admin participation and the group's pulse, computed live from the chain; the original app's cards, polls and comments stay readable.
+
+Develop and check (from this folder):
+
+```bash
+npm ci
+npm run dev        # Vite; Qortal calls need Hub (or the mocks in tests)
+npm test           # every write is mocked; nothing reaches a node
+npm run lint
+npm run build
+npm run test:decode   # optional: GROUP_APPROVAL bytes checked by a local node's read-only decode endpoint
+npm run test:testnet  # optional: every write on a private one-node testnet (setup in the brief)
+```
+
+The new data (small QDN JSON records), every chain write and every read are listed in [docs/apps/Q-Mintership+.md](https://github.com/SJQortal/Q-Apps-Plus/blob/main/docs/apps/Q-Mintership+.md). The original app is kept in `legacy/` for reference.
+
+---
+
 # Q-Mintership-Alpha
 
 Q-Mintership-Alpha is the current version of the Q-Mintership app published on `qortal://APP/Q-Mintership`.

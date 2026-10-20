@@ -1,0 +1,423 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ADDR, NULL_OWNER, TIP, addOtherPending, installWorld } from '../test/world';
+import { addDecline, fakeAddress, fakeKey } from '../../e2e/world.mjs';
+import { fetchCalls, mockFetchRoute } from '../test/setup';
+import { getNameOwner } from './accounts';
+import { getChainNow, heightToTime } from './chain';
+import { loadDecisions } from './decisions';
+import { decisionTitle } from '../rules/decision';
+import { getAdmins, getGroupInfo, getMembers } from './group';
+import { loadMyStatus } from './me';
+import { loadNominations, loadNominationsFor } from './nominations';
+import { fetchQuery, invalidate, peekQuery, queryLoadCounts, resetQueries } from './query';
+import { getAddressHistory, getApprovalsInRange } from './txs';
+
+afterEach(() => vi.useRealTimers());
+
+describe('read store', () => {
+  it('merges identical loads, caches, and never caches a failure', async () => {
+    resetQueries();
+    let calls = 0;
+    const load = async () => {
+      calls++;
+      return calls;
+    };
+    await Promise.all([fetchQuery('t:a', load), fetchQuery('t:a', load)]);
+    expect(calls).toBe(1);
+    expect(await fetchQuery('t:a', load)).toBe(1);
+    invalidate('t:');
+    expect(await fetchQuery('t:a', load)).toBe(2);
+    await expect(fetchQuery('t:b', () => Promise.reject(new Error('down')))).rejects.toThrow(
+      'down'
+    );
+    expect(await fetchQuery('t:b', async () => 'up')).toBe('up');
+    expect(queryLoadCounts().t).toBe(4);
+  });
+});
+
+describe('name lookups', () => {
+  it('caches "no such name" only when Core says so, never a failed read', async () => {
+    installWorld();
+    expect(await getNameOwner('Nora Nominator')).toBe(ADDR.nominator);
+    expect(await getNameOwner('nobody-has-this-name')).toBeNull();
+    let down = true;
+    mockFetchRoute(/^\/names\/Leo/, () =>
+      down
+        ? new Response('Bad gateway', { status: 502 })
+        : { name: 'Leo Learner', owner: ADDR.learner }
+    );
+    await expect(getNameOwner('Leo Learner')).rejects.toThrow(/502/);
+    down = false;
+    expect(await getNameOwner('Leo Learner')).toBe(ADDR.learner);
+  });
+});
+
+describe('MINTER reads against the mock world', () => {
+  it('reads settings and admins with onlyAdmins=true, null owner counted', async () => {
+    installWorld();
+    const [info, admins] = await Promise.all([getGroupInfo(), getAdmins()]);
+    expect(info.approvalThreshold).toBe('PCT40');
+    expect(admins.adminCount).toBe(20);
+    expect(admins.admins.some((a) => a.member === NULL_OWNER)).toBe(true);
+    expect(admins.signers).toHaveLength(19);
+    expect(
+      fetchCalls.some((c) => c.startsWith('/groups/members/694?onlyAdmins=true&limit=100&offset=0'))
+    ).toBe(true);
+  });
+
+  it('pages the member list at 100 and never asks for limit=0', async () => {
+    installWorld();
+    const members = await getMembers();
+    expect(members.members.length).toBe(members.memberCount);
+    expect(fetchCalls.every((c) => !/[?&]limit=0(&|$)/.test(c))).toBe(true);
+  });
+
+  it('measures block time from real block timestamps', async () => {
+    installWorld();
+    const now = await getChainNow();
+    expect(now.height).toBe(TIP);
+    expect(Math.round(now.msPerBlock)).toBe(72_900);
+    expect(now.estimated).toBe(false);
+    expect(heightToTime(now, TIP + 10)).toBe(now.timestamp + 10 * now.msPerBlock);
+  });
+});
+
+describe('loadDecisions', () => {
+  it('builds every pending decision with its tally, clock and phase', async () => {
+    installWorld();
+    const data = await loadDecisions();
+    const byKind = (subject: string) => data.decisions.find((d) => d.subject === subject);
+    const signing = byKind(ADDR.nominatedSigning)!;
+    expect(signing.kind).toBe('invite');
+    expect(signing.tally?.approvalCount).toBe(5);
+    expect(signing.tally?.needed).toBe(8);
+    expect(signing.tally?.inFlight).toHaveLength(1);
+    expect(signing.phase).toBe('open');
+    expect(signing.window?.expiresAtHeight).toBe(TIP - 3_000 + 10_081);
+
+    expect(byKind(ADDR.met)?.phase).toBe('thresholdMet');
+    expect(byKind(ADDR.late)?.phase).toBe('tooLate');
+    expect(byKind(ADDR.early)?.phase).toBe('early');
+    expect(byKind(ADDR.demote)?.phase).toBe('unconfirmed');
+    expect(byKind(ADDR.kickTarget)?.reason).toBe('Not minting for 6 months');
+    expect(byKind(ADDR.banTarget)?.banSeconds).toBe(0);
+    // A cancelled invite's invitee comes from its raw bytes (Core's JSON leaves it out).
+    expect(data.decisions.find((d) => d.kind === 'cancelInvite')?.subject).toBe(
+      fakeAddress('stale-1')
+    );
+    // Most urgent first: the open ones by expiry.
+    expect(data.decisions[0].subject).toBe(ADDR.urgent);
+  });
+
+  it('lists a MINTER transaction on an unusual approval route, admins only', async () => {
+    installWorld();
+    const data = await loadDecisions();
+    expect(data.unusual).toHaveLength(1);
+    expect(data.unusual[0].unusualRoute).toBe(true);
+    expect(data.unusual[0].tally).toBeNull();
+    expect(data.decisions.every((d) => !d.unusualRoute)).toBe(true);
+  });
+
+  it('lists only MINTER group changes as decisions; other waiting transactions apart', async () => {
+    const { world } = installWorld();
+    const others = addOtherPending(world);
+    const data = await loadDecisions();
+    expect(data.decisions.some((d) => others.includes(d.signature))).toBe(false);
+    expect(data.others.map((o) => [o.label, o.groupId])).toEqual([
+      ['Invite to a group', 4242],
+      ['Register name', null],
+      ['Cancel a group invite', 4242],
+    ]);
+    // MINTER's own cancellation (group 694 in its raw bytes) stays a decision.
+    expect(data.decisions.filter((d) => d.kind === 'cancelInvite')).toHaveLength(1);
+    // The nominee's real nomination is still waiting for its first signature.
+    const nominations = await loadNominations();
+    const waiting = nominations.all.find((n) => n.nominee === ADDR.nominatedWaiting)!;
+    expect(waiting.state).toBe('waiting');
+    expect(waiting.decision).toBeNull();
+  });
+
+  it('never takes another group’s decided invite for a MINTER one', async () => {
+    const { world } = installWorld();
+    world.decided.push({
+      ...world.pending[0],
+      signature: fakeKey('other-decided', 64),
+      groupId: 4242,
+      invitee: ADDR.nominatedWaiting,
+      blockHeight: TIP - 500,
+      approvalStatus: 'APPROVED',
+      approvalHeight: TIP - 400,
+    });
+    const data = await loadNominations();
+    const waiting = data.all.find((n) => n.nominee === ADDR.nominatedWaiting)!;
+    expect(waiting.state).toBe('waiting');
+    expect(waiting.latestInvite).toBeNull();
+  });
+
+  it('keeps one entry per moving range, not one per block', async () => {
+    installWorld();
+    const keyOf = (end: number) => `approvals:${TIP - 100}:${end - (TIP - 100) + 1}`;
+    await getApprovalsInRange(TIP - 100, TIP - 1, { slot: 'test' });
+    expect(peekQuery(keyOf(TIP - 1))).toBeDefined();
+    // The tip moved: the new read replaces the old entry.
+    await getApprovalsInRange(TIP - 100, TIP, { slot: 'test' });
+    await Promise.resolve();
+    expect(peekQuery(keyOf(TIP))).toBeDefined();
+    expect(peekQuery(keyOf(TIP - 1))).toBeUndefined();
+    // Without a slot nothing is dropped.
+    await getApprovalsInRange(TIP - 100, TIP - 2);
+    await getApprovalsInRange(TIP - 100, TIP - 3);
+    expect(peekQuery(keyOf(TIP - 2))).toBeDefined();
+  });
+
+  it('reads approvals by block range, starting just below the oldest pending', async () => {
+    installWorld();
+    await loadDecisions();
+    const search = fetchCalls.find((c) =>
+      c.startsWith('/transactions/search?txType=GROUP_APPROVAL')
+    )!;
+    const start = Number(new URLSearchParams(search.split('?')[1]).get('startBlock'));
+    expect(start).toBe(TIP - 10_079 - 10);
+    expect(search).toContain('confirmationStatus=CONFIRMED');
+    expect(search).toContain('limit=100');
+  });
+});
+
+describe('loadDecisions: doubles', () => {
+  /** A MINTER admin change in the world, about `subject`, proposed by `creator`. */
+  function adminChange(
+    type: 'ADD_GROUP_ADMIN' | 'REMOVE_GROUP_ADMIN',
+    subject: string,
+    h: number,
+    extra: Record<string, unknown> = {}
+  ) {
+    const row = {
+      type,
+      timestamp: Date.now() - (TIP - h) * 72_900,
+      reference: fakeKey(`ref:double:${type}:${subject}:${h}`, 64),
+      fee: '0.01000000',
+      signature: fakeKey(`double:${type}:${subject}:${h}`, 64),
+      txGroupId: 694,
+      blockHeight: h,
+      approvalStatus: 'PENDING',
+      creatorAddress: subject,
+      ownerPublicKey: fakeKey(`pk:${subject}`),
+      groupId: 694,
+      ...(type === 'ADD_GROUP_ADMIN' ? { member: subject } : { admin: subject }),
+      ...extra,
+    };
+    return row;
+  }
+
+  it('marks admin changes that change nothing', async () => {
+    const { world } = installWorld();
+    const admin = fakeAddress('admin-2');
+    const already = adminChange('ADD_GROUP_ADMIN', admin, TIP - 2_000);
+    const notAdmin = adminChange('REMOVE_GROUP_ADMIN', ADDR.nominator, TIP - 1_500);
+    const promote = world.pending.find((t: { member?: string }) => t.member === ADDR.promote);
+    const copy = adminChange('ADD_GROUP_ADMIN', ADDR.promote, TIP - 1_000);
+    world.pending.push(already, notAdmin, copy);
+    const data = await loadDecisions();
+    const of = (signature: string) => data.decisions.find((d) => d.signature === signature)!;
+    expect(of(already.signature).double).toEqual({ reason: 'alreadyInEffect' });
+    expect(of(notAdmin.signature).double).toEqual({ reason: 'alreadyInEffect' });
+    expect(of(copy.signature).double).toEqual({
+      reason: 'duplicate',
+      otherSignature: promote.signature,
+    });
+    expect(of(promote.signature).double).toBeFalsy();
+    // Nothing else is a double: invites, kicks and bans never are.
+    expect(data.decisions.filter((d) => d.double)).toHaveLength(3);
+    // They stay in the queue, after the others.
+    expect(data.decisions.slice(-3).every((d) => d.double)).toBe(true);
+  });
+
+  it('names the approved addition only when their history is already read', async () => {
+    const { world } = installWorld();
+    const admin = fakeAddress('admin-2');
+    const approved = adminChange('ADD_GROUP_ADMIN', admin, TIP - 3_000, {
+      approvalStatus: 'APPROVED',
+      approvalHeight: TIP - 1_900,
+    });
+    world.decided.push(approved);
+    const waiting = adminChange('ADD_GROUP_ADMIN', admin, TIP - 2_000);
+    world.pending.push(waiting);
+    let data = await loadDecisions();
+    expect(data.decisions.find((d) => d.signature === waiting.signature)?.double).toEqual({
+      reason: 'alreadyInEffect',
+    });
+    // The queue never reads anyone's history for it.
+    expect(fetchCalls.some((c) => c.includes(`address=${admin}`))).toBe(false);
+
+    // Their page read it (the same cached key): the next queue read names it.
+    await getAddressHistory(admin);
+    data = await loadDecisions({ force: true });
+    expect(data.decisions.find((d) => d.signature === waiting.signature)?.double).toEqual({
+      reason: 'alreadyInEffect',
+      otherSignature: approved.signature,
+    });
+  });
+});
+
+describe('loadDecisions: declines', () => {
+  const joinRequestReads = () => fetchCalls.filter((c) => c.startsWith('/groups/joinrequests/694'));
+
+  it('titles a waiting kick of someone with a join request "Decline a join request"', async () => {
+    const { world } = installWorld();
+    const { waiting } = addDecline(world);
+    const data = await loadDecisions();
+    const decline = data.decisions.find((d) => d.signature === waiting.signature)!;
+    expect(decline).toMatchObject({ kind: 'kick', subject: waiting.subject, decline: true });
+    expect(decisionTitle(decline)).toBe('Decline a join request');
+    // Kai Target is a member: removing him stays a removal.
+    const removal = data.decisions.find((d) => d.subject === ADDR.kickTarget)!;
+    expect(removal.decline).toBeFalsy();
+    expect(decisionTitle(removal)).toBe('Remove from MINTER');
+    // One read of the join requests, cached for the nominations too.
+    expect(joinRequestReads()).toHaveLength(1);
+    await loadDecisions({ force: true });
+    expect(joinRequestReads()).toHaveLength(1);
+  });
+
+  it('reads no join requests while no kick waits', async () => {
+    const { world } = installWorld();
+    world.pending = world.pending.filter((t: { type: string }) => t.type !== 'GROUP_KICK');
+    await loadDecisions();
+    expect(joinRequestReads()).toHaveLength(0);
+  });
+});
+
+describe('loadNominations', () => {
+  it('re-validates publishers and joins records with the chain', async () => {
+    installWorld();
+    const data = await loadNominations();
+    const of = (address: string) => data.all.find((n) => n.nominee === address);
+    const waiting = of(ADDR.nominatedWaiting)!;
+    expect(waiting.state).toBe('waiting');
+    expect(waiting.nomination?.publisher.address).toBe(ADDR.nominator);
+    // adminL4 (an admin, level 4) counts; learner (level 2 member) is ignored.
+    expect(waiting.supporters.map((s) => s.publisher.address)).toEqual([ADDR.adminL4]);
+    expect(waiting.waitingEndsAt).toBeGreaterThan(Date.now());
+
+    const signing = of(ADDR.nominatedSigning)!;
+    expect(signing.state).toBe('signing');
+    expect(signing.hasJoinRequest).toBe(true);
+    expect(signing.decision?.tally?.approvalCount).toBe(5);
+
+    expect(of(ADDR.lapsed)?.state).toBe('lapsed');
+    expect(of(ADDR.newcomerName)).toBeUndefined();
+    expect(data.ignored.map((i) => i.why).sort()).toEqual(['invalid', 'publisher']);
+    expect(
+      data.open.every((n) => ['waiting', 'signing', 'approved', 'blocked'].includes(n.state))
+    ).toBe(true);
+  });
+
+  it("reads publishers' levels sparingly: never an admin's, a member's once per 30 minutes", async () => {
+    installWorld();
+    await loadNominations();
+    const accountReads = (who: string) => fetchCalls.filter((c) => c === `/addresses/${who}`);
+    // adminL4 publishes a support: an admin, so no level read.
+    expect(accountReads(ADDR.adminL4)).toHaveLength(0);
+    expect(accountReads(ADDR.nominator)).toHaveLength(1);
+    vi.setSystemTime(Date.now() + 5 * 60_000);
+    await loadNominations({ force: true });
+    expect(accountReads(ADDR.nominator)).toHaveLength(1);
+  });
+
+  it('treats an invite that expired after the record as the end of that round', async () => {
+    installWorld();
+    const data = await loadNominations();
+    expect(data.all.find((n) => n.nominee === ADDR.expired)?.state).toBe('expired');
+  });
+
+  it('includes pending invites with no record as chain nominations', async () => {
+    installWorld();
+    const data = await loadNominations();
+    const met = data.all.find((n) => n.nominee === ADDR.met)!;
+    expect(met.source).toBe('chain');
+    expect(met.state).toBe('signing');
+  });
+
+  it("reads one person's nominations without the member list", async () => {
+    installWorld();
+    const mine = await loadNominationsFor(ADDR.nominatedWaiting);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].state).toBe('waiting');
+    expect(fetchCalls.some((c) => c.startsWith('/groups/members/694?limit'))).toBe(false);
+  });
+});
+
+describe('loadMyStatus', () => {
+  const cases: Array<[string, string]> = [
+    ['admin', 'admin'],
+    ['adminL4', 'admin'],
+    ['nominator', 'memberNominator'],
+    ['learner', 'member'],
+    ['newcomer', 'newcomer'],
+    ['newcomerName', 'newcomer'],
+    ['nominatedWaiting', 'nominated'],
+    ['nominatedSigning', 'nominated'],
+    ['approved', 'approvedInvite'],
+    ['kicked', 'formerKicked'],
+    ['banned', 'formerBanned'],
+    ['left', 'formerLeft'],
+  ];
+  it.each(cases)('%s → %s', async (persona, kind) => {
+    const { address } = installWorld(persona);
+    const status = await loadMyStatus(address);
+    expect(status.kind).toBe(kind);
+  });
+
+  it('stops at membership for members and admins (nothing else changes their status)', async () => {
+    for (const persona of ['nominator', 'admin']) {
+      const { address } = installWorld(persona);
+      fetchCalls.length = 0;
+      await loadMyStatus(address, { force: true });
+      expect(fetchCalls.some((c) => c.startsWith('/transactions/'))).toBe(false);
+      expect(fetchCalls.some((c) => c.startsWith('/arbitrary/'))).toBe(false);
+      expect(fetchCalls.some((c) => c.startsWith('/groups/joinrequests/'))).toBe(false);
+      expect(fetchCalls.some((c) => c.startsWith('/groups/invites/'))).toBe(false);
+    }
+  });
+
+  it('a forced status refresh leaves the decisions queue to its own pollers', async () => {
+    const { address } = installWorld('nominatedWaiting');
+    await loadMyStatus(address);
+    const queueReads = () =>
+      fetchCalls.filter((c) => c.startsWith('/transactions/pending?txGroupId=694')).length;
+    const before = queueReads();
+    await loadMyStatus(address, { force: true });
+    expect(queueReads()).toBe(before);
+  });
+
+  it('carries the real numbers each home needs', async () => {
+    const { address } = installWorld('learner');
+    const status = await loadMyStatus(address);
+    expect(status.level).toBe(2);
+    expect(status.progress.blocksToTarget).toBe(618_400 - 90_500);
+    expect(status.canNominate).toBe(false);
+    expect(status.nominateBlock).toContain('level 5');
+  });
+
+  it('knows a kicked member was a member, and when', async () => {
+    const { address } = installWorld('kicked');
+    const status = await loadMyStatus(address);
+    expect(status.removal?.kind).toBe('kick');
+    expect(status.wasMember).toBe(true);
+    expect(status.level).toBe(3);
+  });
+
+  it('gives nominees their nomination with its signatures', async () => {
+    const { address } = installWorld('nominatedSigning');
+    const status = await loadMyStatus(address);
+    expect(status.nomination?.state).toBe('signing');
+    expect(status.hasJoinRequest).toBe(true);
+  });
+
+  it('an admin is a member too and can nominate at level 4', async () => {
+    const { address } = installWorld('adminL4');
+    const status = await loadMyStatus(address);
+    expect(status.isMember).toBe(true);
+    expect(status.canNominate).toBe(true);
+  });
+});

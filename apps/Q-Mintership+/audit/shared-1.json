@@ -1,0 +1,474 @@
+{
+  "chunk": "apps/Q-Mintership+/legacy/assets/js/Shared.js lines 1-2350 (Shared helpers part 1 of 2)",
+  "outputFile": "/tmp/claude-0/-home-user-Q-Apps-Plus/152e6584-81cd-54e8-8011-6af47ffe0865/scratchpad/audit/shared-1.json",
+  "summary": "Part 1 of Shared.js holds the cross-board helpers: HTML/attribute escaping and URL sanitising, an allow-list rich-text sanitizer (used to render every forum/board comment), Quill rich-text composer wrappers keyed `board-richtext-comment-<cardIdentifier>`, and the comment edit/reply state machines (edit own comment, reply-to with a collapsible 'Replying to' preview, shared action bar with Post Comment / Update Comment / Post Reply / Cancel). The second half is the data layer and HTML builders for the Account Inspector (opened by clicking any name/address chip): identity resolution (name -> owner address -> registered names), sponsorship info with /sponsor fallback, paged transaction history (200 per page with Load more / Load all TX), first-transaction date, MINTER group (694) membership plus kicked/banned history, asset balances, and per-transaction detail hydration (transfer flow From/Amount/To, group transactions, DEPLOY_AT ACCT sell orders via /at/<address>). No QDN resource is read or written in this chunk and no transaction is built; all network calls are plain Core REST fetches via qFetchBoardJson/searchTransactions, each memoised in module-level Maps for the session. The only identifier constant here is `Q-Mintership-blockedNames` (BLOG_POST), whose read/write live in part 2 (lines 4249-4363). Efficiency hot spots: names/address and asset balances use limit=0, and the MINTER status check triggers fetchAllKickBanTxData (two limit=0 GROUP_KICK/GROUP_BAN searches, 60s cache) per inspector open.",
+  "identifiers": [
+    {
+      "pattern": "Q-Mintership-blockedNames",
+      "service": "BLOG_POST",
+      "direction": "both",
+      "publisher": "admin (userState.accountName of a minter-admin; readers filter results to admin-group publishers)",
+      "jsonShape": "JSON array of blocked name strings: string[] e.g. [\"name1\",\"name2\"], base64-encoded via btoa(JSON.stringify(blockedNames)) as data64",
+      "encryption": "none",
+      "builtBy": "constant `blockedNamesIdentifier` (line 3); read by fetchBlockList (part 2, line 4249, searchSimple BLOG_POST identifier prefixOnly=true limit 0) and written by publishBlockList (part 2, line 4357, PUBLISH_QDN_RESOURCE)",
+      "example": "Q-Mintership-blockedNames",
+      "lines": "3 (defined); used at 4255 and 4361 in part 2",
+      "notes": "Exact literal string, no placeholders. Must stay `Q-Mintership-blockedNames` for the block list to remain compatible. Note the search uses prefixOnly=true, so any identifier starting with this string is picked up."
+    }
+  ],
+  "qortalCalls": [
+    {
+      "kind": "fetch",
+      "target": "GET /names/address/<address>?limit=0 (falls back to ?limit=20 if the first call throws)",
+      "params": "path param address (encodeURIComponent), query limit=0 then limit=20; Accept: application/json; base = baseUrl",
+      "whenFires": "Account Inspector: after identity resolves (resolveBoardAccountIdentity), and per transaction row when the transfer flow hydrates (from and to addresses)",
+      "frequency": "once per distinct address per session",
+      "unlimited": true,
+      "cached": true,
+      "lines": "1161-1196 (getBoardNamesForAddress), called at 1256, 2346-2348"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /names/<name> (via getNameInfoCached / getNameInfo in QortalApi.js)",
+      "params": "path param name (encodeURIComponent); returns {name, owner, data, registered, ...}",
+      "whenFires": "Account Inspector open when the identity is a name rather than a Q-address; second attempt when the address hint is not a Q-address",
+      "frequency": "once per name per session",
+      "unlimited": false,
+      "cached": true,
+      "lines": "1213-1240 (resolveBoardAccountIdentity)"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /names/<name> (via fetchOwnerAddressFromNameCached in QortalApi.js)",
+      "params": "path param name; returns owner address",
+      "whenFires": "When the user clicks Edit on a comment whose publisher name is not the current accountName (canCurrentUserEditPublishedComment)",
+      "frequency": "once per publisher name per session",
+      "unlimited": false,
+      "cached": true,
+      "lines": "759-783"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /addresses/sponsorship/<address> then, if empty/no meaningful data, GET /addresses/sponsorship/<address>/sponsor",
+      "params": "path param address; response fields inspected: sponseeCount, names[], nonRegisteredCount, avgBalance, arbitraryCount, transferAssetCount, transferPrivsCount, sellCount, sellAmount, buyCount, buyAmount",
+      "whenFires": "Account Inspector open",
+      "frequency": "1-2 calls per address per session",
+      "unlimited": false,
+      "cached": true,
+      "lines": "1269-1359 (getBoardAccountSponsorshipInfo)"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /transactions/search?address=<addr>&confirmationStatus=BOTH&limit=200&reverse=true[&offset=N] (via searchTransactions)",
+      "params": "txTypes [], address, confirmationStatus BOTH, limit 200 (boardAccountInspectorState.txLimit), reverse true, offset N",
+      "whenFires": "Account Inspector open (page 0); 'Load more' and 'Load all TX' buttons (loop lives in part 2, loadAllBoardAccountTransactions line 3714)",
+      "frequency": "once per address:offset:limit key per session",
+      "unlimited": false,
+      "cached": true,
+      "lines": "1361-1397 (getBoardAccountTransactions); controls 1509-1560"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /transactions/search?address=<addr>&confirmationStatus=BOTH&limit=1&reverse=false (via searchTransactions, silent)",
+      "params": "txTypes [], limit 1, reverse false, offset 0, silent true -> first (oldest) transaction for account-age date",
+      "whenFires": "Account Inspector open",
+      "frequency": "once per address per session (promise cached; cache entry deleted on error)",
+      "unlimited": false,
+      "cached": true,
+      "lines": "1399-1462 (getBoardAccountFirstTransactionInfo)"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /groups/<groupId>",
+      "params": "path param groupId; returns group object {groupId, groupName, owner, ...}",
+      "whenFires": "Per group-type transaction row (GROUP_INVITE/JOIN_GROUP/GROUP_BAN/GROUP_KICK/LEAVE_GROUP) when its details are expanded in the Account Inspector",
+      "frequency": "once per groupId per session (null cached on error)",
+      "unlimited": false,
+      "cached": true,
+      "lines": "1720-1749 (getBoardGroupInfo)"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /groups/member/<address> (via getUserGroups in QortalApi.js)",
+      "params": "path param address; returns array of {groupId, groupName, ...}",
+      "whenFires": "Account Inspector open (MINTER group status)",
+      "frequency": "once per address per session",
+      "unlimited": false,
+      "cached": true,
+      "lines": "1751-1826 (getBoardAccountMinterGroupStatus), call at 1766-1768"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /transactions/search?txType=GROUP_KICK&startBlock=1990000&confirmationStatus=CONFIRMED&limit=0&reverse=true and the same for txType=GROUP_BAN (via fetchAllKickBanTxData, defined in part 2 line 4385)",
+      "params": "txTypes [GROUP_KICK] / [GROUP_BAN], startBlock 1990000, confirmationStatus CONFIRMED, limit 0, reverse true, silent true; results partitioned by approvalStatus === 'PENDING'",
+      "whenFires": "Account Inspector open, to compute previouslyKicked/previouslyBanned for group 694",
+      "frequency": "per inspector open when the shared kick/ban cache is older than 60s (KICK_BAN_TX_CACHE_TTL_MS)",
+      "unlimited": true,
+      "cached": true,
+      "lines": "1769-1773 (call), 1794-1799 (filter by groupId 694 and member/offender)"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /assets/balances?address=<addr>&ordering=ASSET_BALANCE_ACCOUNT&limit=0",
+      "params": "query address, ordering ASSET_BALANCE_ACCOUNT, limit 0; response array or {balances: []} of {address, assetId, assetName, balance}; zero balances filtered out client-side; QORT (assetId 0) sorted first",
+      "whenFires": "Account Inspector when the asset balances section is expanded (assetBalancesExpanded state, UI in part 2)",
+      "frequency": "once per address per session (cache deleted on error)",
+      "unlimited": true,
+      "cached": true,
+      "lines": "1828-1885 (getBoardAccountAssetBalances)"
+    },
+    {
+      "kind": "fetch",
+      "target": "GET /at/<atAddress>",
+      "params": "path param AT address; response fields used: ATAddress, creation, version, assetId, creatorPublicKey, codeHash, isFinished, isSleeping, isFrozen, hadFatalError",
+      "whenFires": "Per DEPLOY_AT transaction whose name contains 'ACCT' when its row details render in the Account Inspector",
+      "frequency": "once per AT address per session (null cached on error)",
+      "unlimited": false,
+      "cached": true,
+      "lines": "1949-1984 (getBoardAtInfo); context 1923-1947"
+    }
+  ],
+  "transactions": [],
+  "features": [
+    {
+      "board": "shared",
+      "feature": "Safe rendering of rich-text content",
+      "description": "All board/forum comment bodies and rich content are run through qSanitizeRichHtml (allow-list: A B BLOCKQUOTE BR CODE DIV EM H1-H6 I LI OL P PRE S SPAN STRONG U UL; attrs class/dir on any tag, href/target/rel on A, data-* anywhere; on*/style stripped; dangerous tags removed; links forced rel=noopener noreferrer, target only _blank; href sanitised to qortal://, #, /, ./, ../, http(s), mailto). Plain text (no tags) is HTML-escaped instead.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "8-21, 39-62, 103-255"
+    },
+    {
+      "board": "shared",
+      "feature": "Rich-text comment composer (Quill)",
+      "description": "Each card gets a Quill 'snow' editor (id board-richtext-comment-<cardIdentifier>) with toolbar: header H2/H3, bold, italic, bullet list, clean; formats limited to header/bold/italic/list. Falls back to a plain contenteditable div when Quill is absent. Output HTML is sanitised before publishing; empty text yields empty HTML.",
+      "roles": "logged-in",
+      "readOrWrite": "write",
+      "lines": "299-455"
+    },
+    {
+      "board": "shared",
+      "feature": "Edit own comment",
+      "description": "Pencil button (mobi-mbri-edit-2, title 'Edit comment') on a comment. Allowed only when the current account name equals the publisher name (case-insensitive) or the publisher name resolves to the current address. Loads the cached comment HTML into the card composer, sets submit label 'Update Comment', shows 'Cancel Edit', status 'Editing comment by <name>.', opens and scrolls to the comments section, focuses the editor at the end.",
+      "roles": "logged-in (comment owner only)",
+      "readOrWrite": "write",
+      "lines": "458-463, 759-783, 878-909, 940-1005"
+    },
+    {
+      "board": "shared",
+      "feature": "Reply to comment",
+      "description": "Reply button (mobi-mbri-redo, title 'Reply to comment') on a comment. Captures publisher, timestamp text and body HTML from the DOM/cache, switches the card composer to reply mode: placeholder 'Write a reply...', submit label 'Post Reply', 'Cancel Reply' button, status 'Replying to <name>.', and a composer-variant reply preview.",
+      "roles": "logged-in",
+      "readOrWrite": "write",
+      "lines": "464-472, 911-938, 1007-1087"
+    },
+    {
+      "board": "shared",
+      "feature": "'Replying to' preview on comments",
+      "description": "Embedded preview block: kicker 'Replying to', clickable author chip (opens Account Inspector), timestamp label (toLocaleString), collapsible original content (default collapsed, arrow-down/arrow-up toggle with aria-expanded; 'Original comment unavailable.' when content missing). Content cached per comment identifier via rememberBoardCommentContent/Data.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "474-556, 557-720"
+    },
+    {
+      "board": "shared",
+      "feature": "Comment action bar",
+      "description": "Per-card action bar with aria-live status, reply preview slot, submit button (default handler postComment, label Post Comment / Update Comment / Post Reply) and a hidden cancel button (Cancel Edit / Cancel Reply). Cancelling clears both edit and reply state and empties the editor.",
+      "roles": "logged-in",
+      "readOrWrite": "write",
+      "lines": "722-757, 785-876"
+    },
+    {
+      "board": "account",
+      "feature": "Clickable name/address chips (Account Inspector trigger)",
+      "description": "buildBoardAccountTriggerHtml renders a button or keyboard-accessible span with data-account-name/data-account-address that opens the Account Inspector (openBoardAccountInspectorFromElement, part 2). Used for comment authors, reply authors, transaction parties and group owners.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1113-1159"
+    },
+    {
+      "board": "account",
+      "feature": "Account identity resolution",
+      "description": "Resolves a name or Q-address (regex ^Q[a-zA-Z0-9]{33}$) to {address, displayName, resolvedName, registeredNames[]}: name -> /names/<name>.owner; address -> /names/address list. Display name prefers the resolved name, then the typed name, then the first registered name, then the address; 'Unknown' when nothing resolves.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1198-1267"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: sponsorship section",
+      "description": "Shows /addresses/sponsorship data for the address; if the record is empty it falls back to the sponsor-side view (/sponsor) and flags usedFallback/sourceType ('sponsorship' | 'sponsor' | 'none').",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1269-1359"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: transaction history with Load more / Load all TX",
+      "description": "Pages of 200 transactions (confirmed + unconfirmed, newest first). Top controls show a warning paragraph ('Load all transaction history may take a long time...') plus 'Load more' and 'Load all TX' buttons; labels switch to 'Loading more...' / 'Loading all...' and both are disabled while busy or when no more pages. Controls are hidden when there is nothing more to load.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "274-297, 1361-1397, 1506-1560"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: first transaction (account age)",
+      "description": "Fetches the oldest transaction to display the first-activity date (toLocaleString); reports loaded/error states.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1399-1462"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: transaction type counts",
+      "description": "Grid of transaction types with counts from the loaded pages, ARBITRARY pinned first (highlighted row), then by count desc then name; empty state 'No transaction history loaded yet.'",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1464-1504"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: MINTER group status badge data",
+      "description": "Determines isInMinterGroup (member of groupId 694 or a group named 'minter'), previouslyKicked (final GROUP_KICK with groupId 694 and member === address) and previouslyBanned (final GROUP_BAN with groupId 694 and offender === address), hasHistory, currentGroup.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1751-1826"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: asset balances (expandable)",
+      "description": "Lazy-loaded list of non-zero asset balances for the address, QORT (assetId 0) first then alphabetical; state flags assetBalancesExpanded/Loaded/Loading/Error.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "286-291, 1828-1885"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: transfer flow detail (From -> Amount -> To)",
+      "description": "For transactions with a sender and recipient (or a single-recipient multi-payment, summed), shows two party panels (role label, up to 3 registered-name chips plus '+N more', clickable address chip, 'No registered names found.' / 'Unknown address.' empty states) around an amount panel with '<n> payments' note; hydrated lazily per row with 'Loading linked names...'. 8-decimal BigInt amount formatting.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1562-1681, 2158-2224, 2274-2350"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: group transaction detail",
+      "description": "For GROUP_INVITE / JOIN_GROUP / GROUP_BAN / GROUP_KICK / LEAVE_GROUP rows: action label (e.g. 'Group Invite'), group name (or 'Group <id>' / 'Unknown group'), owner chip (clickable) or 'Unknown owner.', and 'Group ID: <id>'.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "267-273, 1683-1749, 2226-2272"
+    },
+    {
+      "board": "account",
+      "feature": "Account Inspector: ACCT sell-order (DEPLOY_AT) detail",
+      "description": "For DEPLOY_AT rows whose name contains 'ACCT': summary chips SELL / Amount / Market (name with 'ACCT' stripped) / status; expanded banner plus meta grid (AT Address, Creation, Version, Asset ID, Creator public key, Code hash, Finished, Sleeping, Frozen, Fatal error) and note 'isFinished: true means the sell order has completed.' Status labels: Unavailable, Failed, Completed, Frozen, Sleeping, Running (plus 'Loading details...'). Error state 'Unable to load AT details for this sell order.'",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "1887-2157"
+    },
+    {
+      "board": "shared",
+      "feature": "Board switch cleanup",
+      "description": "clearQMintershipBodyContent removes body children matching the Mobirise section selectors (.features7, .features1, .footer1, .forum-main, .minter-board-main, .add-remove-admin-main, .stats-board-main, .tools-main) when a board mounts; qMintershipActiveBoard tracks the active board ('forum' default).",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "4, 64-101"
+    },
+    {
+      "board": "admin",
+      "feature": "Effective minter-admin count helper",
+      "description": "getEffectiveMinterAdminMembers/Count filter the admin list to non-empty members excluding the null address (QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG), used for admin-threshold maths elsewhere.",
+      "roles": "everyone",
+      "readOrWrite": "read",
+      "lines": "22-37"
+    }
+  ],
+  "routes": [
+    {
+      "form": "qMintershipActiveBoard = 'forum' | 'minter' | 'admin' | 'stats' | 'ar'",
+      "meaning": "Global that names the mounted board; defaults to 'forum' here, set by each board's load function in other files and compared with the hash route in Q-Mintership.js line 441 to decide whether to remount.",
+      "lines": "4"
+    },
+    {
+      "form": "Accepted link forms inside rendered rich text: qortal://..., #..., /..., ./..., ../..., http://, https://, mailto:",
+      "meaning": "qIsSafeUrl allow-list for href/src in sanitised comment HTML; javascript:, data: and vbscript: are dropped. Anchors are forced rel=noopener noreferrer and may only target _blank.",
+      "lines": "39-62, 211-227"
+    }
+  ],
+  "constants": [
+    { "name": "blockedNamesIdentifier", "value": "\"Q-Mintership-blockedNames\"", "lines": "3" },
+    { "name": "qMintershipActiveBoard (default)", "value": "\"forum\"", "lines": "4" },
+    { "name": "Q_MINTERSHIP_BODY_CONTENT_SELECTORS", "value": "[\".features7\",\".features1\",\".footer1\",\".forum-main\",\".minter-board-main\",\".add-remove-admin-main\",\".stats-board-main\",\".tools-main\"]", "lines": "64-73" },
+    { "name": "Q_RICH_TEXT_ALLOWED_TAGS", "value": "A B BLOCKQUOTE BR CODE DIV EM H1 H2 H3 H4 H5 H6 I LI OL P PRE S SPAN STRONG U UL", "lines": "103-127" },
+    { "name": "Q_RICH_TEXT_ALLOWED_ATTRS", "value": "* -> class, dir; A -> href, target, rel (plus any data-* attribute)", "lines": "129-132" },
+    { "name": "qSanitizeRichHtml dangerousTags", "value": "BASE FORM IFRAME INPUT LINK META OBJECT EMBED SCRIPT STYLE SVG MATH TEXTAREA SELECT BUTTON OPTION", "lines": "139-156" },
+    { "name": "BOARD_GROUP_TRANSACTION_TYPES", "value": "GROUP_INVITE, JOIN_GROUP, GROUP_BAN, GROUP_KICK, LEAVE_GROUP", "lines": "267-273" },
+    { "name": "boardAccountInspectorState.txLimit", "value": "200 (transactions per page)", "lines": "280" },
+    { "name": "BOARD_RICH_TEXT_TOOLBAR_OPTIONS", "value": "[[{header:[2,3,false]}],[\"bold\",\"italic\"],[{list:\"bullet\"}],[\"clean\"]]", "lines": "299-304" },
+    { "name": "BOARD_RICH_TEXT_EDITOR_FORMATS", "value": "[\"header\",\"bold\",\"italic\",\"list\"]", "lines": "305" },
+    { "name": "Rich-text editor DOM id pattern", "value": "board-richtext-<editorKey>; comment editors use editorKey comment-<cardIdentifier>", "lines": "307, 430-431" },
+    { "name": "Comment action bar DOM ids", "value": "comment-submit-button-<card>, comment-cancel-button-<card>, comment-editor-status-<card>, comment-editor-reply-preview-<card>, comments-section-<card>", "lines": "791-802, 843-870, 985-987" },
+    { "name": "Composer placeholders", "value": "\"Write a comment...\" (default/edit), \"Write a reply...\" (reply)", "lines": "323, 441, 969, 1058" },
+    { "name": "Submit/cancel labels", "value": "Post Comment | Update Comment | Post Reply; Cancel Edit | Cancel Reply", "lines": "811-819, 863, 872" },
+    { "name": "Composer status text", "value": "\"Editing comment by <name|you>.\" / \"Replying to <name|this comment>.\"", "lines": "822-827" },
+    { "name": "Reply preview labels", "value": "\"Replying to\", \"Original comment unavailable.\", \"Expand reply preview\" / \"Collapse reply preview\"", "lines": "638-640, 660, 668-670, 707-714" },
+    { "name": "qortalAddressPattern", "value": "/^Q[a-zA-Z0-9]{33}$/", "lines": "1199" },
+    { "name": "Names-for-address fetch limits", "value": "limit=0 first, fallback limit=20", "lines": "1172-1180" },
+    { "name": "Sponsorship 'meaningful' numeric fields", "value": "nonRegisteredCount, avgBalance, arbitraryCount, transferAssetCount, transferPrivsCount, sellCount, sellAmount, buyCount, buyAmount (plus sponseeCount>0 or names.length>0)", "lines": "1283-1313" },
+    { "name": "BOARD_ACCOUNT_TX_LOAD_ALL_WARNING", "value": "\"Load all transaction history may take a long time to complete depending on how old or active the account is. Please be patient...\"", "lines": "1506-1507" },
+    { "name": "TX control labels", "value": "\"Load more\", \"Load all TX\", \"Loading more...\", \"Loading all...\"", "lines": "1519-1525" },
+    { "name": "BOARD_TRANSACTION_AMOUNT_SCALE", "value": "100000000n (8 decimals)", "lines": "1562" },
+    { "name": "MINTER group id / name match", "value": "groupId === 694 OR groupName.toLowerCase() === \"minter\"; kick uses tx.member, ban uses tx.offender, both require groupId 694", "lines": "1782-1783, 1794-1799" },
+    { "name": "Kick/ban history search window", "value": "startBlock 1990000, limit 0, CONFIRMED (fetchAllKickBanTxData, part 2 line 4385), cache TTL KICK_BAN_TX_CACHE_TTL_MS = 60000 ms (part 2 line 4371)", "lines": "1769-1773 (call site)" },
+    { "name": "Asset balances query", "value": "ordering=ASSET_BALANCE_ACCOUNT&limit=0; zero balances filtered; assetId 0 sorted first", "lines": "1841-1871" },
+    { "name": "AT address candidate keys", "value": "atAddress, ATAddress, aTAddress, ataddress, ATADDRESS, at (plus any key normalising to 'ataddress')", "lines": "1894-1921" },
+    { "name": "ACCT detection", "value": "DEPLOY_AT whose name/atName/identifier matches /\\bACCT\\b/i; market name = name with 'ACCT' removed", "lines": "1923-1947" },
+    { "name": "AT status labels / classes", "value": "Unavailable (status-unavailable), Failed (status-error), Completed (status-complete), Frozen (status-frozen), Sleeping (status-sleeping), Running (status-active), Loading details... (status-loading)", "lines": "1986-2032, 2034-2038" },
+    { "name": "Transaction party visible names", "value": "first 3 names, then \"+N more\"", "lines": "2171-2172, 2188-2192" },
+    { "name": "nullAddress (from QortalApi.js)", "value": "\"QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG\"", "lines": "27-28 (used)" }
+  ],
+  "storage": [],
+  "bugs": [
+    {
+      "description": "Inline handlers `onclick=\"postComment('<cardIdentifier>')\"` and `clearBoardCommentEditState('<cardIdentifier>')` are built with qEscapeAttr, which turns `'` into `&#39;`; the browser decodes that entity back to `'` before evaluating the JS, so a card identifier containing a quote (publisher-controlled QDN identifier) breaks out of the string literal and can execute script. Escape for JS (or use data attributes + addEventListener) instead.",
+      "lines": "857-870",
+      "impact": "medium"
+    },
+    {
+      "description": "getBoardAccountMinterGroupStatus calls fetchAllKickBanTxData, which runs two limit=0 /transactions/search calls (all GROUP_KICK and all GROUP_BAN since block 1990000) just to check one address; with a 60s cache this is repeated on nearly every Account Inspector open and grows with chain history.",
+      "lines": "1751-1826 (call at 1769-1773)",
+      "impact": "high"
+    },
+    {
+      "description": "getBoardNamesForAddress requests /names/address/<addr>?limit=0 (unlimited) and getBoardAccountAssetBalances requests /assets/balances?...&limit=0; both violate the no-unlimited rule, though result sizes are usually small.",
+      "lines": "1172-1180, 1841-1844",
+      "impact": "low"
+    },
+    {
+      "description": "MINTER membership matches any group whose name lower-cases to 'minter' in addition to groupId 694; a different group registered with that name would produce a false 'in MINTER group' status.",
+      "lines": "1782-1783",
+      "impact": "low"
+    },
+    {
+      "description": "getBoardGroupInfo and getBoardAtInfo cache `null` for the whole session on any error (including transient network failures), so group names / AT status stay 'Unknown' until reload.",
+      "lines": "1744-1747, 1978-1982",
+      "impact": "low"
+    },
+    {
+      "description": "getBoardAccountFirstTransactionInfo calls searchTransactions unguarded (no typeof check) unlike getBoardAccountTransactions; if QortalApi.js failed to load the promise rejects and the cache entry is deleted, but the returned object reports loaded:false, error:true and the UI has no retry.",
+      "lines": "1399-1462",
+      "impact": "low"
+    },
+    {
+      "description": "openBoardCommentReplyFromElement reads the publisher name and body from the rendered DOM (`.comment-meta` text, `.comment-body` innerHTML) in preference to cached data; if the body already contains an embedded reply preview, the captured HTML nests preview inside preview, and a display label that differs from the registered name is stored as publisherName.",
+      "lines": "1030-1049",
+      "impact": "low"
+    },
+    {
+      "description": "Dead ternary `cached && typeof cached.then === 'function' ? cached : cached` returns the same value on both branches (intended promise de-dup is already achieved by storing the promise).",
+      "lines": "1409-1411, 1762-1764, 1835-1837, 1955-1957",
+      "impact": "low"
+    },
+    {
+      "description": "qSanitizeRichHtml keeps arbitrary `class` and `data-*` attributes on user content, so a comment can reuse the app's own CSS classes (e.g. admin/status badges or account-trigger chips) to impersonate UI elements.",
+      "lines": "129-132, 187-195",
+      "impact": "low"
+    },
+    {
+      "description": "canCurrentUserEditPublishedComment resolves the publisher name to an address only when the current account has a name mismatch; a user whose account has no registered name (accountName empty) can still edit if the resolved address matches, but the edit will later publish under an empty name (handled in MinterBoard.js) – behaviour is inconsistent with the name-based publish path.",
+      "lines": "759-783",
+      "impact": "low"
+    }
+  ],
+  "uxProblems": [
+    {
+      "description": "One shared composer per card handles new comment, edit and reply; starting a reply silently discards an in-progress edit (and vice versa) with no confirmation.",
+      "lines": "722-749, 956, 1051"
+    },
+    {
+      "description": "'Load all TX' warning paragraph is always shown above the controls and the buttons give no progress (count or pages loaded) while 'Loading all...' runs.",
+      "lines": "1509-1560"
+    },
+    {
+      "description": "Reply previews are collapsed by default with only a small arrow icon and no visible hint of the hidden text length; the toggle button is the only affordance.",
+      "lines": "607-720"
+    },
+    {
+      "description": "Timestamps everywhere use toLocaleString() with no relative time or timezone hint.",
+      "lines": "551, 1441, 2082"
+    },
+    {
+      "description": "AT sell-order detail dumps raw creator public key and code hash into the meta grid, which is noise for most users and makes the panel very tall on phones.",
+      "lines": "2059-2157"
+    },
+    {
+      "description": "Transaction flow hydration fetches registered names for both parties on every expanded row ('Loading linked names...'), so browsing a long history triggers many sequential lookups.",
+      "lines": "2313-2350"
+    },
+    {
+      "description": "Edit/reply buttons are icon-only (Mobirise icon font) with title/aria-label but no visible text, and rely on inline onclick attributes rather than event delegation.",
+      "lines": "878-938"
+    }
+  ],
+  "theme": [
+    { "token": "mobi-mbri-arrow-down / mobi-mbri-arrow-up", "value": "Mobirise icon font class", "usage": "Reply preview expand/collapse toggle (map to ExpandMore/ExpandLess)" },
+    { "token": "mobi-mbri-edit-2", "value": "Mobirise icon font class", "usage": "Edit comment button icon (map to EditOutlined)" },
+    { "token": "mobi-mbri-redo", "value": "Mobirise icon font class", "usage": "Reply to comment button icon (map to ReplyOutlined)" },
+    { "token": "account-tx-at-chip--status-*", "value": "loading | unavailable | error | complete | frozen | sleeping | active", "usage": "AT status chip colour classes (semantic status colours needed in the kit)" },
+    { "token": "account-tx-party--from / --to, account-tx-type-row--arbitrary", "value": "accent CSS classes", "usage": "Transfer flow party accents and highlighted ARBITRARY count row" },
+    { "token": "richtext-editor / ql-editor / board-rich-content", "value": "Quill 'snow' theme classes", "usage": "Composer and rendered rich content styling; Quill CSS is vendored" }
+  ],
+  "crossFileDeps": [
+    "baseUrl (QortalApi.js:5) – prefix for every fetch in qFetchBoardJson",
+    "nullAddress (QortalApi.js:7) – excluded from effective admin members",
+    "userState (QortalApi.js:227) – accountName / accountAddress for edit permission",
+    "fetchOwnerAddressFromNameCached (QortalApi.js:383) – name -> owner address",
+    "getNameInfoCached (QortalApi.js:490) / getNameInfo (QortalApi.js:499) – name info for identity resolution",
+    "getUserGroups (QortalApi.js:664) – GET /groups/member/<address>",
+    "searchTransactions (QortalApi.js:2267) – GET /transactions/search builder used for tx pages, first tx, kick/ban",
+    "fetchAllKickBanTxData (Shared.js:4385, part 2) and getEmptyKickBanTxData (Shared.js:4377) – kick/ban history",
+    "openBoardAccountInspectorFromElement (Shared.js:3334, part 2) – click handler for account chips",
+    "loadMoreBoardAccountTransactions (Shared.js:3680) / loadAllBoardAccountTransactions (Shared.js:3714) – tx control handlers",
+    "getBoardInlineLoadingHTML (Shared.js:3971) – inline loading markup",
+    "postComment (MinterBoard.js:5527) – default submit handler name in getBoardCommentActionBarHtml",
+    "Quill (global vendored library) – rich text editor",
+    "qortalRequest (Hub-injected global) – not called in this chunk but referenced by part 2 for the block list"
+  ],
+  "functions": [
+    { "name": "qEscapeHtml / qEscapeAttr", "lines": "8-21", "purpose": "HTML and attribute escaping (attr variant also escapes backticks)", "calls": "" },
+    { "name": "getEffectiveMinterAdminMembers / getEffectiveMinterAdminCount", "lines": "22-37", "purpose": "Filter admin list to real members (drop empty and nullAddress)", "calls": "nullAddress" },
+    { "name": "qIsSafeUrl / qSanitizeUrl", "lines": "39-62", "purpose": "URL scheme allow-list for links in rich content", "calls": "" },
+    { "name": "clearQMintershipBodyContent", "lines": "75-101", "purpose": "Remove Mobirise board sections from body on board switch", "calls": "" },
+    { "name": "qSanitizeRichHtml", "lines": "134-238", "purpose": "Allow-list DOM sanitizer for comment/rich HTML", "calls": "qSanitizeUrl" },
+    { "name": "qRenderBoardCommentHtml / qRenderRichContentHtml", "lines": "240-254", "purpose": "Render comment text: sanitise if it looks like HTML, else escape", "calls": "qSanitizeRichHtml, qEscapeHtml" },
+    { "name": "getBoardRichTextEditorId / getBoardRichTextComposerHtml / ensureBoardRichTextEditor / getBoardRichTextEditorInstance / getBoardRichTextEditorText / getBoardRichTextEditorHtml / setBoardRichTextEditorHtml / clearBoardRichTextEditor", "lines": "307-428", "purpose": "Quill editor lifecycle keyed by editorKey with contenteditable fallback", "calls": "Quill" },
+    { "name": "getBoardCommentEditorId / getBoardCommentComposerHtml / ensureBoardCommentEditor / getBoardCommentEditorInstance / getBoardCommentEditorText / getBoardCommentEditorHtml / clearBoardCommentEditor", "lines": "430-455", "purpose": "Comment-specific wrappers using editorKey comment-<cardIdentifier>", "calls": "rich text editor helpers" },
+    { "name": "rememberBoardCommentContent / rememberBoardCommentData / getBoardCommentData / getBoardCommentContent", "lines": "474-533", "purpose": "Session caches of comment HTML/data by comment identifier for edit and reply preview", "calls": "" },
+    { "name": "formatBoardCommentTimestampLabel / normalizeBoardCommentReplyTarget", "lines": "535-605", "purpose": "Normalise reply-target objects and timestamp labels", "calls": "" },
+    { "name": "buildBoardCommentReplyPreviewHtml / toggleBoardCommentReplyPreviewFromElement", "lines": "607-720", "purpose": "Render and toggle the collapsible 'Replying to' preview", "calls": "buildBoardAccountTriggerHtml, qRenderBoardCommentHtml" },
+    { "name": "clearBoardCommentComposerState / clearBoardCommentEditState / clearBoardCommentReplyState", "lines": "722-757", "purpose": "Reset edit/reply state, clear editor, refresh action bar", "calls": "clearBoardCommentEditor, updateBoardCommentActionBar" },
+    { "name": "canCurrentUserEditPublishedComment", "lines": "759-783", "purpose": "Owner check by name (case-insensitive) or resolved address", "calls": "fetchOwnerAddressFromNameCached (GET /names/<name>)" },
+    { "name": "updateBoardCommentActionBar / getBoardCommentActionBarHtml", "lines": "785-876", "purpose": "Render and update submit/cancel/status/reply-preview for a card composer", "calls": "buildBoardCommentReplyPreviewHtml, postComment (via inline onclick)" },
+    { "name": "buildBoardCommentEditButtonHtml / buildBoardCommentReplyButtonHtml", "lines": "878-938", "purpose": "Icon buttons carrying data-card-identifier / data-comment-identifier / data-comment-publisher", "calls": "" },
+    { "name": "openBoardCommentEditorFromElement", "lines": "940-1005", "purpose": "Enter edit mode for own comment, load content into composer, scroll and focus", "calls": "canCurrentUserEditPublishedComment, setBoardRichTextEditorHtml, updateBoardCommentActionBar" },
+    { "name": "openBoardCommentReplyFromElement", "lines": "1007-1087", "purpose": "Enter reply mode capturing target comment details from DOM/cache", "calls": "getBoardCommentData, ensureBoardCommentEditor, updateBoardCommentActionBar" },
+    { "name": "qFetchBoardJson", "lines": "1089-1111", "purpose": "GET baseUrl+path with Accept: application/json, throws HTTP <status> on !ok", "calls": "fetch" },
+    { "name": "buildBoardAccountTriggerHtml", "lines": "1113-1159", "purpose": "Clickable account chip (button or span) that opens the Account Inspector", "calls": "openBoardAccountInspectorFromElement (inline onclick)" },
+    { "name": "getBoardNamesForAddress", "lines": "1161-1196", "purpose": "Registered names for an address (limit=0 then 20 fallback), cached", "calls": "GET /names/address/<addr>?limit=" },
+    { "name": "resolveBoardAccountIdentity", "lines": "1198-1267", "purpose": "Resolve name/address input to address, display name and registered names", "calls": "getNameInfoCached, getBoardNamesForAddress" },
+    { "name": "getBoardAccountSponsorshipInfo", "lines": "1269-1359", "purpose": "Sponsorship record with /sponsor fallback and 'meaningful data' heuristic, cached", "calls": "GET /addresses/sponsorship/<addr>[/sponsor]" },
+    { "name": "getBoardAccountTransactions", "lines": "1361-1397", "purpose": "Page of 200 transactions for an address, cached per offset", "calls": "searchTransactions (GET /transactions/search)" },
+    { "name": "getBoardAccountFirstTransactionInfo", "lines": "1399-1462", "purpose": "Oldest transaction timestamp for account age, promise-cached", "calls": "searchTransactions limit 1 reverse false" },
+    { "name": "buildBoardAccountTransactionCountsHtml", "lines": "1464-1504", "purpose": "Type-count grid with ARBITRARY first", "calls": "" },
+    { "name": "buildBoardAccountTransactionControlsHtml", "lines": "1509-1560", "purpose": "Load more / Load all TX controls and warning", "calls": "loadMoreBoardAccountTransactions, loadAllBoardAccountTransactions (inline onclick)" },
+    { "name": "parseBoardTransactionAmountAtomic / formatBoardTransactionAmount / sumBoardTransactionPaymentAmounts", "lines": "1566-1623", "purpose": "BigInt 8-decimal amount parsing, formatting and summing", "calls": "" },
+    { "name": "getBoardTransactionFlowContext", "lines": "1625-1681", "purpose": "Derive from/to/amount/paymentCount from a transaction (handles multi-payment single recipient)", "calls": "" },
+    { "name": "getBoardTransactionGroupContext / getBoardGroupInfo", "lines": "1683-1749", "purpose": "Group id/action label for group tx types; fetch and cache group record", "calls": "GET /groups/<id>" },
+    { "name": "getBoardAccountMinterGroupStatus", "lines": "1751-1826", "purpose": "In-MINTER, previously kicked/banned flags for an address", "calls": "getUserGroups, fetchAllKickBanTxData, getEmptyKickBanTxData" },
+    { "name": "getBoardAccountAssetBalances", "lines": "1828-1885", "purpose": "Non-zero asset balances sorted QORT first, promise-cached", "calls": "GET /assets/balances?address=&ordering=ASSET_BALANCE_ACCOUNT&limit=0" },
+    { "name": "getBoardTransactionAtAddressValue / getBoardTransactionAtContext / getBoardAtInfo", "lines": "1887-1984", "purpose": "Detect ACCT DEPLOY_AT sell orders and fetch/cached AT record", "calls": "GET /at/<atAddress>" },
+    { "name": "getBoardTransactionAtStatusLabel / getBoardTransactionAtStatusClass / buildBoardTransactionAtSummaryHtml / buildBoardTransactionAtHtml", "lines": "1986-2157", "purpose": "AT status mapping and summary/detail markup", "calls": "" },
+    { "name": "buildBoardTransactionPartyNameListHtml / buildBoardTransactionPartyHtml / buildBoardTransactionGroupHtml / buildBoardTransactionFlowHtml", "lines": "2158-2311", "purpose": "Markup for tx parties (3 names + more), group detail and From/Amount/To flow", "calls": "buildBoardAccountTriggerHtml" },
+    { "name": "hydrateBoardAccountTransactionFlow", "lines": "2313-2350+ (continues in part 2)", "purpose": "Lazy per-row hydration of transfer flow with registered names (guards flowLoaded/flowLoading)", "calls": "getBoardNamesForAddress, getBoardInlineLoadingHTML" }
+  ]
+}

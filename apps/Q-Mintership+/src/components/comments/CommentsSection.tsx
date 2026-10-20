@@ -1,0 +1,120 @@
+/**
+ * Public comments on a decision or a nomination, behind a "Comments (n)"
+ * toggle so lists stay light. Self-contained: mount it with a target and a
+ * label anywhere (a card, or a decision's or nomination's own page with
+ * `defaultOpen`):
+ *
+ *   <CommentsSection target={decisionCommentTarget(decision, nomination)} label="Add to MINTER, Ada" />
+ *   <CommentsSection target={nominationCommentTarget(nomination)} label="the nomination of Ada" />
+ *   <CommentsSection target={commentTarget('decision', signature)} label="…" defaultOpen />
+ *
+ * Closed, it costs the shared count search (one GET for every card on the
+ * page), or its own search once on screen when that can't tell. The thread
+ * itself (and its code) loads only when opened, and opens and closes
+ * smoothly (SmoothReveal), so the page below glides instead of jumping.
+ * "Close comments" at the thread's foot closes it from there too (Simon,
+ * 2026-10-20: "from the bottom of the comments you can also close the
+ * comments in a nice smooth way"; then "I dont want the bottom part to move
+ * I only want to close the top part over the screen smoothly"): what is
+ * below the thread stays where it is on screen while the thread folds away
+ * above it, the page following the fold frame by frame, so the toggle ends
+ * where Close comments was and takes the focus.
+ */
+import { lazy, Suspense, useId, useRef, useState } from 'react';
+import { Box, Button } from '@mui/material';
+import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
+import type { CommentTarget } from '../../data/commentThread';
+import { formatCount } from '../../utils/format';
+import { ExpandChevron } from '../common/ExpandChevron';
+import { ListSkeleton } from '../common/states';
+import { SmoothReveal } from '../common/SmoothReveal';
+import { useCommentCount, useInView, useStableTarget } from './useComments';
+import type { AnswerBadges } from './answerBadges';
+
+const CommentsPanel = lazy(() => import('./CommentsPanel'));
+
+/** Longer than SmoothReveal's fold (260 ms) and its fallback end: the page follows it this long. */
+const FOLD_FOLLOW_MS = 600;
+
+export interface CommentsSectionProps {
+  /** What the comments are about (data/commentThread.ts builds it). */
+  target: CommentTarget;
+  /** The item, for screen readers: "Add to MINTER, Ada Approved", "the nomination of Ada". */
+  label: string;
+  /** Start open (on an item's own page). */
+  defaultOpen?: boolean;
+  /** 'card' (default) draws a divider above it, inside a card; 'plain' doesn't. */
+  variant?: 'card' | 'plain';
+  /** What each Minter Admin chose, for the badge next to their comments. */
+  answers?: AnswerBadges;
+}
+
+export function CommentsSection({
+  target: given,
+  label,
+  defaultOpen = false,
+  variant = 'card',
+  answers,
+}: CommentsSectionProps) {
+  const target = useStableTarget(given);
+  const [open, setOpen] = useState(defaultOpen);
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const nearScreen = useInView(node);
+  const count = useCommentCount(target, { nearScreen, open });
+  const panelId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const text = count === null ? 'Comments' : `Comments (${formatCount(count)})`;
+  // From the thread's foot: the section's bottom (and all below it) stays put on
+  // screen while the thread folds, by scrolling up as much as it shrinks, each
+  // frame, until the fold is done; a frame the browser already kept it is left alone.
+  const closeFromFoot = () => {
+    toggleRef.current?.focus({ preventScroll: true });
+    setOpen(false);
+    if (!node) return;
+    const keep = node.getBoundingClientRect().bottom;
+    const started = performance.now();
+    const follow = () => {
+      const drift = node.getBoundingClientRect().bottom - keep;
+      if (Math.abs(drift) >= 0.5) window.scrollBy(0, drift);
+      if (performance.now() - started < FOLD_FOLLOW_MS) requestAnimationFrame(follow);
+    };
+    requestAnimationFrame(follow);
+  };
+  return (
+    <Box
+      ref={setNode}
+      sx={{
+        minWidth: 0,
+        ...(variant === 'card' ? { borderTop: 1, borderColor: 'divider', pt: 0.5 } : {}),
+      }}
+    >
+      <Button
+        ref={toggleRef}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        aria-label={`${text}: ${label}`}
+        startIcon={<ChatBubbleOutlineOutlinedIcon />}
+        endIcon={<ExpandChevron open={open} />}
+        sx={{ minHeight: 44, ml: -1 }}
+      >
+        {text}
+      </Button>
+      <SmoothReveal open={open}>
+        <Suspense fallback={<ListSkeleton count={1} label="Loading comments" />}>
+          <CommentsPanel id={panelId} target={target} label={label} answers={answers} />
+        </Suspense>
+        <Button
+          onClick={closeFromFoot}
+          aria-expanded
+          aria-controls={panelId}
+          aria-label={`Close comments: ${label}`}
+          endIcon={<ExpandChevron open />}
+          sx={{ minHeight: 44, ml: -1, mt: 0.5 }}
+        >
+          Close comments
+        </Button>
+      </SmoothReveal>
+    </Box>
+  );
+}
