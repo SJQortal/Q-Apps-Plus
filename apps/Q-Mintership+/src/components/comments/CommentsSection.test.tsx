@@ -134,17 +134,10 @@ describe('CommentsSection', () => {
     expect(fetchCallsFor('/arbitrary/JSON/')).toEqual([]);
   });
 
-  it('closes from the thread’s foot too: back to the toggle, which takes the focus (Simon, 2026-10-20)', async () => {
+  it('closes from the thread’s foot too, keeping what is below it still on screen (Simon, 2026-10-20)', async () => {
     const user = userEvent.setup();
-    const scrolled: Element[] = [];
-    const scrollIntoView = vi.fn(function (this: Element) {
-      scrolled.push(this);
-    });
-    const original = Element.prototype.scrollIntoView;
-    Element.prototype.scrollIntoView = scrollIntoView;
-    onTestFinished(() => {
-      Element.prototype.scrollIntoView = original;
-    });
+    const scrollBy = vi.spyOn(window, 'scrollBy').mockImplementation(() => undefined);
+    onTestFinished(() => scrollBy.mockRestore());
     await show('learner', { open: true });
     await region();
     const top = await toggle();
@@ -155,11 +148,16 @@ describe('CommentsSection', () => {
     expect(
       (await region()).compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+    // The section ends 900 px down the screen; folded, it ends 300 px further up.
+    const section = top.parentElement as HTMLElement;
+    let bottom = 900;
+    section.getBoundingClientRect = () => ({ bottom }) as DOMRect;
     await user.click(foot);
     expect(top).toHaveAttribute('aria-expanded', 'false');
     expect(top).toHaveFocus();
-    expect(scrolled).toEqual([top]);
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' });
+    bottom = 600;
+    // The page follows the fold up by as much: what was below stays where it was.
+    await waitFor(() => expect(scrollBy).toHaveBeenCalledWith(0, -300));
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: `Close comments: ${LABEL}` })).toBeNull()
     );

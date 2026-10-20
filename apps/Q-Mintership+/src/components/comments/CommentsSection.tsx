@@ -14,15 +14,17 @@
  * smoothly (SmoothReveal), so the page below glides instead of jumping.
  * "Close comments" at the thread's foot closes it from there too (Simon,
  * 2026-10-20: "from the bottom of the comments you can also close the
- * comments in a nice smooth way"): the page glides back to the toggle as
- * the thread folds away, and the focus goes to the toggle.
+ * comments in a nice smooth way"; then "I dont want the bottom part to move
+ * I only want to close the top part over the screen smoothly"): what is
+ * below the thread stays where it is on screen while the thread folds away
+ * above it, the page following the fold frame by frame, so the toggle ends
+ * where Close comments was and takes the focus.
  */
 import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { Box, Button } from '@mui/material';
 import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import type { CommentTarget } from '../../data/commentThread';
 import { formatCount } from '../../utils/format';
-import { motionReduced } from '../../hooks/useCountUp';
 import { ExpandChevron } from '../common/ExpandChevron';
 import { ListSkeleton } from '../common/states';
 import { SmoothReveal } from '../common/SmoothReveal';
@@ -30,6 +32,9 @@ import { useCommentCount, useInView, useStableTarget } from './useComments';
 import type { AnswerBadges } from './answerBadges';
 
 const CommentsPanel = lazy(() => import('./CommentsPanel'));
+
+/** Longer than SmoothReveal's fold (260 ms) and its fallback end: the page follows it this long. */
+const FOLD_FOLLOW_MS = 600;
 
 export interface CommentsSectionProps {
   /** What the comments are about (data/commentThread.ts builds it). */
@@ -59,13 +64,21 @@ export function CommentsSection({
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const text = count === null ? 'Comments' : `Comments (${formatCount(count)})`;
-  // From the thread's foot: back to the toggle as the thread folds away, so the
-  // page doesn't land past it. Motion is read on the press (no listener per card).
+  // From the thread's foot: the section's bottom (and all below it) stays put on
+  // screen while the thread folds, by scrolling up as much as it shrinks, each
+  // frame, until the fold is done; a frame the browser already kept it is left alone.
   const closeFromFoot = () => {
-    const top = toggleRef.current;
-    top?.scrollIntoView?.({ block: 'nearest', behavior: motionReduced() ? 'auto' : 'smooth' });
-    top?.focus({ preventScroll: true });
+    toggleRef.current?.focus({ preventScroll: true });
     setOpen(false);
+    if (!node) return;
+    const keep = node.getBoundingClientRect().bottom;
+    const started = performance.now();
+    const follow = () => {
+      const drift = node.getBoundingClientRect().bottom - keep;
+      if (Math.abs(drift) >= 0.5) window.scrollBy(0, drift);
+      if (performance.now() - started < FOLD_FOLLOW_MS) requestAnimationFrame(follow);
+    };
+    requestAnimationFrame(follow);
   };
   return (
     <Box
