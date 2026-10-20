@@ -12,12 +12,17 @@
  * page), or its own search once on screen when that can't tell. The thread
  * itself (and its code) loads only when opened, and opens and closes
  * smoothly (SmoothReveal), so the page below glides instead of jumping.
+ * "Close comments" at the thread's foot closes it from there too (Simon,
+ * 2026-10-20: "from the bottom of the comments you can also close the
+ * comments in a nice smooth way"): the page glides back to the toggle as
+ * the thread folds away, and the focus goes to the toggle.
  */
-import { lazy, Suspense, useId, useState } from 'react';
+import { lazy, Suspense, useId, useRef, useState } from 'react';
 import { Box, Button } from '@mui/material';
 import ChatBubbleOutlineOutlinedIcon from '@mui/icons-material/ChatBubbleOutlineOutlined';
 import type { CommentTarget } from '../../data/commentThread';
 import { formatCount } from '../../utils/format';
+import { motionReduced } from '../../hooks/useCountUp';
 import { ExpandChevron } from '../common/ExpandChevron';
 import { ListSkeleton } from '../common/states';
 import { SmoothReveal } from '../common/SmoothReveal';
@@ -52,7 +57,16 @@ export function CommentsSection({
   const nearScreen = useInView(node);
   const count = useCommentCount(target, { nearScreen, open });
   const panelId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const text = count === null ? 'Comments' : `Comments (${formatCount(count)})`;
+  // From the thread's foot: back to the toggle as the thread folds away, so the
+  // page doesn't land past it. Motion is read on the press (no listener per card).
+  const closeFromFoot = () => {
+    const top = toggleRef.current;
+    top?.scrollIntoView?.({ block: 'nearest', behavior: motionReduced() ? 'auto' : 'smooth' });
+    top?.focus({ preventScroll: true });
+    setOpen(false);
+  };
   return (
     <Box
       ref={setNode}
@@ -62,6 +76,7 @@ export function CommentsSection({
       }}
     >
       <Button
+        ref={toggleRef}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
@@ -76,6 +91,16 @@ export function CommentsSection({
         <Suspense fallback={<ListSkeleton count={1} label="Loading comments" />}>
           <CommentsPanel id={panelId} target={target} label={label} answers={answers} />
         </Suspense>
+        <Button
+          onClick={closeFromFoot}
+          aria-expanded
+          aria-controls={panelId}
+          aria-label={`Close comments: ${label}`}
+          endIcon={<ExpandChevron open />}
+          sx={{ minHeight: 44, ml: -1, mt: 0.5 }}
+        >
+          Close comments
+        </Button>
       </SmoothReveal>
     </Box>
   );

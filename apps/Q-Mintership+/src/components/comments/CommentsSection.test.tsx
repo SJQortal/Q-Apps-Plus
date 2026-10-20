@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { addComments, answerCore } from '../../../e2e/world.mjs';
@@ -132,6 +132,37 @@ describe('CommentsSection', () => {
       )
     ).toHaveLength(1);
     expect(fetchCallsFor('/arbitrary/JSON/')).toEqual([]);
+  });
+
+  it('closes from the thread’s foot too: back to the toggle, which takes the focus (Simon, 2026-10-20)', async () => {
+    const user = userEvent.setup();
+    const scrolled: Element[] = [];
+    const scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    onTestFinished(() => {
+      Element.prototype.scrollIntoView = original;
+    });
+    await show('learner', { open: true });
+    await region();
+    const top = await toggle();
+    expect(top).toHaveAttribute('aria-expanded', 'true');
+    const foot = screen.getByRole('button', { name: `Close comments: ${LABEL}` });
+    expect(foot).toHaveTextContent('Close comments');
+    // Under the thread.
+    expect(
+      (await region()).compareDocumentPosition(foot) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    await user.click(foot);
+    expect(top).toHaveAttribute('aria-expanded', 'false');
+    expect(top).toHaveFocus();
+    expect(scrolled).toEqual([top]);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', behavior: 'smooth' });
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: `Close comments: ${LABEL}` })).toBeNull()
+    );
   });
 
   it('opens the thread: newest first, replies, deleted, edited and hidden', async () => {
