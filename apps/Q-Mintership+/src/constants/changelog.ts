@@ -22,7 +22,7 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-12',
     title: 'Q-Mintership+ 2.0: nominate, then approve',
     summary:
-      'A new, simpler way into MINTER: level 5+ minters and Minter Admins nominate, Minter Admins approve, reject or let it expire. Not published yet.',
+      'A new, simpler way into MINTER: level 5+ minters and Minter Admins nominate, Minter Admins approve, reject or let it expire.',
     sections: [
       {
         title: 'For everyone',
