@@ -8,7 +8,7 @@
  * it was worked out.
  */
 import { useEffect } from 'react';
-import { Box, ButtonBase, CircularProgress, Tooltip } from '@mui/material';
+import { Box, ButtonBase, CircularProgress, Link, Tooltip } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import { useQortSummaries } from '../overview/qortSummaries';
@@ -38,6 +38,16 @@ export function QortMintedFact({
   }, [atomic, onMinted]);
   let minted: React.ReactNode;
   if (qort.mintedWords) minted = qort.mintedWords;
+  // A read it needs failed: said, with Retry, rather than "…" for ever.
+  else if (qort.mintedFailed)
+    minted = (
+      <Box component="span" sx={{ fontWeight: 400, fontSize: 14 }}>
+        Couldn&rsquo;t read it.{' '}
+        <Link component="button" type="button" onClick={qort.retryMinted} sx={{ fontSize: 14 }}>
+          Retry
+        </Link>
+      </Box>
+    );
   else if (qort.readingRest)
     minted = (
       <Box component="span" role="status" sx={{ display: 'inline-flex', alignItems: 'center' }}>

@@ -48,6 +48,14 @@ describe('exact amounts', () => {
     expect(parseAtomic('4.30000000')).toBe(430_000_000n);
     expect(parseAtomic('0.1')).toBe(10_000_000n);
     expect(parseAtomic('1.123456789')).toBeNull();
+    // As Core writes a BigDecimal (Simon, 2026-10-20: TeresaTee's balance is "0E-8").
+    expect(parseAtomic('0E-8')).toBe(0n);
+    expect(parseAtomic('1E-8')).toBe(1n);
+    expect(parseAtomic('5E-7')).toBe(50n);
+    expect(parseAtomic('1.5E+3')).toBe(150_000_000_000n);
+    expect(parseAtomic('1.10000000')).toBe(110_000_000n);
+    expect(parseAtomic('1.123456780')).toBe(112_345_678n);
+    expect(parseAtomic('1E-9')).toBeNull();
     expect(parseAtomic('-1')).toBeNull();
     expect(parseAtomic('abc')).toBeNull();
     expect(formatAtomic(430_000_000n)).toBe('4.3');

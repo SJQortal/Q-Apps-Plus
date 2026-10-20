@@ -19,13 +19,24 @@ const ATOMIC = 100_000_000n;
 const ADDRESS_RE = /^[QA][1-9A-HJ-NP-Za-km-z]{33}$/;
 const AT_RE = /^A[1-9A-HJ-NP-Za-km-z]{33}$/;
 
-/** "4.3" → 430000000n; null for anything that isn't a plain non-negative decimal. */
+/**
+ * "4.3" → 430000000n; null for anything that isn't a non-negative decimal
+ * of at most 8 places. Core writes some amounts as Java's BigDecimal does,
+ * with an exponent: a zero balance is "0E-8" and one atomic unit "1E-8".
+ */
 export function parseAtomic(value: unknown): bigint | null {
   const match = String(value ?? '')
     .trim()
-    .match(/^(\d+)(?:\.(\d{1,8}))?$/);
+    .match(/^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
   if (!match) return null;
-  return BigInt(match[1]) * ATOMIC + BigInt((match[2] ?? '').padEnd(8, '0'));
+  const fraction = match[2] ?? '';
+  // The number is its digits, shifted: how many places they are from atomic units.
+  const shift = 8 + Number(match[3] ?? 0) - fraction.length;
+  const digits = BigInt(match[1] + fraction);
+  if (shift >= 0) return digits * 10n ** BigInt(shift);
+  const unit = 10n ** BigInt(-shift);
+  // More than 8 places that aren't zeros: not an amount in QORT's units.
+  return digits % unit === 0n ? digits / unit : null;
 }
 
 /** 430000000n → "4.3"; 120000000000n → "1,200". */

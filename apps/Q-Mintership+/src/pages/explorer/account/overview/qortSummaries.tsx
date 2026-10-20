@@ -81,6 +81,9 @@ export interface QortSummaryParts {
   mintedAtomic: bigint | null;
   /** What QORT minted says in its ⓘ, once worked out. */
   mintedInfo?: string;
+  /** A read QORT minted needs failed (its transactions, balance or asset orders): retryMinted. */
+  mintedFailed: boolean;
+  retryMinted: () => void;
   /** Its history is longer than the first read: it waits for readRest. */
   needsRest: boolean;
   /** Reading the rest now. */
@@ -227,7 +230,16 @@ export function useQortSummaries(
     </>
   );
   const needsRest = !done && Boolean(data) && !wantAll && held >= firstRead;
+  const mintedFailed = !neverMinted && (Boolean(error) || balance.isError || orders.isError);
+  const retryMinted = () => {
+    setFailed(null);
+    if (list.isError) void list.refetch();
+    if (balance.isError) void balance.refetch();
+    if (orders.isError) void orders.refetch();
+  };
   return {
+    mintedFailed,
+    retryMinted,
     mintedWords: typeof minted === 'string' && minted !== waiting ? minted : null,
     mintedAtomic,
     mintedInfo,

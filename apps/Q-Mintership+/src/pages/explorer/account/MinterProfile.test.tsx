@@ -185,6 +185,46 @@ describe('Minter Profile', () => {
     ).toBeInTheDocument();
   });
 
+  it('says when the QORT minted on the account a level came from can’t be read, with Retry', async () => {
+    const move = {
+      type: 'TRANSFER_PRIVS',
+      blockHeight: 2_000_000,
+      timestamp: Date.UTC(2025, 3, 30),
+      signature: 'tp-learner',
+      creatorAddress: ADDR.learner,
+    };
+    await visit(ADDR.admin, 'admin', (world) => {
+      mockFetchRoute(`/addresses/balance/${ADDR.learner}`, () => new Response('', { status: 500 }));
+      mockFetchRoute('/transactions/search', (url: URL) => {
+        const sp = url.searchParams;
+        const who = sp.get('address');
+        if (sp.get('txType') === 'REWARD_SHARE' && sp.get('limit') === '1')
+          return [
+            {
+              type: 'REWARD_SHARE',
+              blockHeight: who === ADDR.learner ? 500_000 : 2_000_100,
+              timestamp: 1,
+              signature: `rs-${who}`,
+            },
+          ];
+        if (sp.get('txType') === 'TRANSFER_PRIVS' && (who === ADDR.admin || who === ADDR.learner))
+          return [move];
+        const reply = answerCore(world, url.pathname, sp);
+        return new Response(JSON.stringify(reply?.body ?? null), { status: reply?.status ?? 404 });
+      });
+    });
+    const standing = await status();
+    const from = await within(standing).findByRole(
+      'list',
+      { name: 'Where its minting level came from' },
+      T
+    );
+    expect(await within(from).findByText(/^Couldn.t read it\./, {}, T)).toBeInTheDocument();
+    expect(within(from).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    // No total without it.
+    expect(within(standing).queryByText(/^QORT minted together with/)).toBeNull();
+  });
+
   it('shows a nominee being signed for, as a Minter Admin sees them', async () => {
     const { posts } = await visit(ADDR.nominatedSigning, 'admin');
     const standing = await status();
