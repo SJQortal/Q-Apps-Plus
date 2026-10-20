@@ -292,7 +292,12 @@ function NominatedNow() {
           label="Nominated now"
           items={open.map((nomination) => (
             <li key={nomination.nominee}>
-              <PersonChip address={nomination.nominee} name={nomination.nomineeName} size={32} />
+              <PersonChip
+                address={nomination.nominee}
+                // Unnamed (proposed on chain, as in the original app): looked up.
+                name={nomination.nomineeName ?? undefined}
+                size={32}
+              />
             </li>
           ))}
         />

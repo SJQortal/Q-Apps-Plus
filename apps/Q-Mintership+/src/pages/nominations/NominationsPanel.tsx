@@ -76,7 +76,8 @@ export function NominationsPanel({
   const searchRef = useRef<HTMLInputElement | null>(null);
   const [support, setSupport] = useState<{
     nominee: string;
-    name: string | null;
+    /** Undefined: the nomination doesn't say, so it is looked up. */
+    name: string | undefined;
     open: boolean;
   } | null>(null);
 
@@ -96,7 +97,8 @@ export function NominationsPanel({
       { replace: true }
     );
   const openSupport = (n: Nomination) =>
-    setSupport({ nominee: n.nominee, name: n.nomineeName, open: true });
+    // No name with the nomination: the dialog looks it up.
+    setSupport({ nominee: n.nominee, name: n.nomineeName ?? undefined, open: true });
   const canSupport = canNominate && Boolean(publishSigner);
 
   return (

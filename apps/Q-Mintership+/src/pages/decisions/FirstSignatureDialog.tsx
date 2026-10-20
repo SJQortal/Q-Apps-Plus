@@ -41,7 +41,8 @@ export function FirstSignatureDialog({
   /** Where focus goes on close once the nomination's card has left its list. */
   returnFocus?: () => HTMLElement | null;
 }) {
-  const nominee = useDisplayName(n?.nominee ?? '', n ? n.nomineeName : null);
+  // No name with the nomination (an older record, or one proposed on chain): looked up.
+  const nominee = useDisplayName(n?.nominee ?? '', n ? (n.nomineeName ?? undefined) : null);
   const [partial, setPartial] = useState<FirstSignatureOutcome | null>(null);
   // The invite step 1 made, which step 2 signs: Hub shows it as "pendingSignature".
   const [newSig, setNewSig] = useState<string | null>(null);

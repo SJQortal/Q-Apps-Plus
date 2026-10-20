@@ -190,6 +190,21 @@ describe('the Explorer’s landing page', () => {
     expect(
       within(nominated).getByRole('link', { name: 'Wren Waiting: explore this account' })
     ).toBeInTheDocument();
+    // Proposed on chain, as the original app does, with no nomination record: by name too
+    // (Simon, 2026-10-20: "users adress instead of name shows in Explorer").
+    expect(
+      await within(nominated).findByRole('link', { name: 'Mia Met: explore this account' }, T)
+    ).toBeInTheDocument();
+    await waitFor(
+      () =>
+        expect(
+          within(nominated)
+            .getAllByRole('link')
+            .map((link) => link.getAttribute('aria-label') ?? link.textContent ?? '')
+            .filter((name) => /^Q\w{3,6}…\w{3,6}/.test(name))
+        ).toEqual([]),
+      T
+    );
     const admins = await within(quick).findByRole('list', { name: 'Minter Admins' }, T);
     expect(
       within(admins).getByRole('link', { name: 'Avery Admin: explore this account' })
