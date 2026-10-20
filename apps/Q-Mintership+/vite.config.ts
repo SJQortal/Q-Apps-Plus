@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
-import { APP_NAME, THEME_STORAGE_KEY } from './src/constants/plus';
+import { APP_NAME, THEME_STORAGE_KEY } from './src/constants/plus.ts';
 
 /** index.html's title and theme key come from src/constants/plus.ts, like the app's words. */
 function plusNames(): Plugin {
