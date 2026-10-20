@@ -29,6 +29,13 @@ const FACTS_SX = {
   gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
 } as const;
 
+/** "crowetic-old account", "Ada and Bo accounts", "Ada, Bo and Cy accounts". */
+function togetherWith(names: string[]): string {
+  const list =
+    names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0];
+  return `${list} ${names.length > 1 ? 'accounts' : 'account'}`;
+}
+
 /** "127,265", "4.75": whole QORT from 100 up, two decimals below. */
 function shortQort(value: bigint): string {
   const n = Number(value) / 1e8;
@@ -131,7 +138,10 @@ export function LevelSources({
       {full && total !== null ? (
         <Box component="dl" aria-label="QORT minted with its level" sx={FACTS_SX}>
           <Fact
-            label="QORT minted, with theirs"
+            // Simon, 2026-10-20: "QORT minted together with crowetic-old account".
+            label={`QORT minted together with ${togetherWith(
+              sources.map((source) => nameOf(source.address))
+            )}`}
             value={`${shortQort(total)} QORT`}
             info={`${formatAtomic(total)} QORT: this account’s ${formatAtomic(
               ownMinted as bigint

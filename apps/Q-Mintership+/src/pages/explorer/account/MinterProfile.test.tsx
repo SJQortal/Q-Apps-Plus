@@ -178,8 +178,11 @@ describe('Minter Profile', () => {
     const from = within(standing).getByRole('list', { name: 'Where its minting level came from' });
     expect(from).toHaveTextContent('Moved its minting level to this account in block 2,000,000');
     expect(from).toHaveTextContent('Blocks 500,000–2,000,000');
-    // A Minter Admin sees the QORT it minted there.
+    // A Minter Admin sees the QORT it minted there, and both together once each is worked out.
     expect(within(from).getByText('QORT minted there')).toBeInTheDocument();
+    expect(
+      await within(standing).findByText('QORT minted together with Leo Learner account', {}, T)
+    ).toBeInTheDocument();
   });
 
   it('shows a nominee being signed for, as a Minter Admin sees them', async () => {
