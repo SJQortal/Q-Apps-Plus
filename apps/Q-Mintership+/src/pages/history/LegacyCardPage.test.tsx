@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
 import { mockQortalRequest, qortalCalls, qortalCallsFor } from '../../test/setup';
 import { ADDR, NOW, PEOPLE } from '../../test/world';
+import { ADMIN_BOARD_IDS, answerDecrypt } from '../../../e2e/world.mjs';
 import LegacyCardPage from './LegacyCardPage';
 
 const ROUTE = '/history/card/:card';
@@ -13,6 +14,19 @@ function open(card: string, persona = 'learner', section = '') {
     persona,
     path: `/history/card/${encodeURIComponent(card)}${section ? `/${section}` : ''}`,
     route: section ? `${ROUTE}/:section` : ROUTE,
+  });
+}
+
+/** An Admin Board card's page as Avery Admin, with Hub decrypting as Avery's would. */
+function openDecrypting(card: string) {
+  return renderPage(<LegacyCardPage />, {
+    persona: 'admin',
+    path: `/history/card/${encodeURIComponent(card)}`,
+    route: ROUTE,
+    setup: (world) =>
+      mockQortalRequest('DECRYPT_DATA', (request: Record<string, unknown>) =>
+        answerDecrypt(world, 'admin', request)
+      ),
   });
 }
 
@@ -42,7 +56,10 @@ describe('Original card page', () => {
     ).toBeInTheDocument();
     expect(within(card).getByText('• Node online 24/7')).toBeInTheDocument();
     // No markup, no scripts: the HTML was read as text (the app's own avatars aside).
-    const html = card.innerHTML.replace(/<img [^>]*src="[^"]*\/arbitrary\/THUMBNAIL\/[^"]*"[^>]*>/g, '');
+    const html = card.innerHTML.replace(
+      /<img [^>]*src="[^"]*\/arbitrary\/THUMBNAIL\/[^"]*"[^>]*>/g,
+      ''
+    );
     expect(html).not.toMatch(/<script|<img|onerror|<strong/);
     expect((window as { __legacyScriptRan?: boolean }).__legacyScriptRan).toBeUndefined();
     expect(within(card).getAllByRole('button', { name: /APP\/Q-Tube\/channel/ })).toHaveLength(1);
@@ -139,15 +156,55 @@ describe('Original card page', () => {
     }
   });
 
-  it('does not decrypt the admin board: it links to the original app', async () => {
-    await open('card-MAC-NC-1780000000000-a1B2c3', 'admin');
+  it('reads an Admin Board card for a Minter Admin: what it said, its poll and its comments', async () => {
+    await openDecrypting(ADMIN_BOARD_IDS.removal);
+    const card = await screen.findByRole('article');
+    expect(
+      within(card).getByRole('heading', { name: 'Remove Member 12 from MINTER?' })
+    ).toBeInTheDocument();
+    expect(within(card).getByText('Admin Board')).toBeInTheDocument();
+    expect(within(card).getByText('About')).toBeInTheDocument();
+    expect(within(card).getByText('Member 12')).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        'Member 12 has been offline for months and the sponsor asked us to look at it.'
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Proposed in the original Q-Mintership. Encrypted to the Minter Admins, read-only.'
+      )
+    ).toBeInTheDocument();
+    expect(await screen.findByText('5 yes')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Comments (3)' })).toBeInTheDocument();
+    // The comment, and the reply's quote of it.
+    expect(await screen.findAllByText('Agreed, the node has been down since spring.')).toHaveLength(
+      2
+    );
+    expect(await screen.findByText('Let us ask them first.')).toBeInTheDocument();
+    expect(await screen.findByText('Not encrypted to you.')).toBeInTheDocument();
+    expect(qortalCalls.filter((c) => /PUBLISH|SIGN|VOTE|POLL/.test(String(c.action)))).toEqual([]);
+  });
+
+  it('an Admin Board topic names no one, and a card not encrypted to the admin says so', async () => {
+    await openDecrypting(ADMIN_BOARD_IDS.topic);
+    const card = await screen.findByRole('article');
+    expect(within(card).getByText('Admin Board topic')).toBeInTheDocument();
+    expect(within(card).queryByText('About')).toBeNull();
+    cleanup();
+    await openDecrypting(ADMIN_BOARD_IDS.locked);
+    expect(
+      await screen.findByRole('heading', { name: 'Not encrypted to you' })
+    ).toBeInTheDocument();
+    expect(screen.getByText(/not to your account, so it can't be read here/)).toBeInTheDocument();
+    expect(await screen.findByText('Admin F')).toBeInTheDocument();
+  });
+
+  it('shows anyone else who posted an Admin Board card and when, and decrypts nothing', async () => {
+    await open(ADMIN_BOARD_IDS.removal, 'learner');
     expect(await screen.findByText('Encrypted to Minter Admins')).toBeInTheDocument();
-    expect(await screen.findByText('Admin E')).toBeInTheDocument();
-    mockQortalRequest('OPEN_NEW_TAB', true);
-    await userEvent.click(screen.getByRole('button', { name: 'Open in the original app' }));
-    expect(qortalCallsFor('OPEN_NEW_TAB')[0]).toMatchObject({
-      qortalLink: 'qortal://APP/Q-Mintership',
-    });
+    expect(await screen.findByText('Admin B')).toBeInTheDocument();
+    expect(screen.queryByRole('article')).toBeNull();
     expect(qortalCallsFor('DECRYPT_DATA')).toEqual([]);
   });
 

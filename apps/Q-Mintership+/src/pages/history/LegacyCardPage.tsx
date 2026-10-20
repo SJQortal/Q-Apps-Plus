@@ -2,14 +2,14 @@
  * One card from the original Q-Mintership, read-only: what it said, who it
  * was about and who posted it, its poll result and its comments. Old deep
  * links (#/minter/<card>/<section>) land here; "comments" scrolls to them.
- * Cards from the encrypted admin board are not decrypted: they link out to
- * the original app.
+ * Cards from the encrypted Admin Board are decrypted for Minter Admins
+ * (data/legacyAdminBoard.ts), comments included; anyone else, or an admin
+ * the card wasn't encrypted to, sees who posted it and when.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { Alert, Box, Button, Chip, Skeleton, Typography } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import {
   findLegacyCard,
   legacyBoardOf,
@@ -21,8 +21,16 @@ import {
   loadLegacyPoll,
   type LegacyCard,
   type LegacyCardRow,
+  type LegacyComment,
   type LegacyCommentRow,
 } from '../../data/legacy';
+import {
+  adminCardKey,
+  adminCommentKey,
+  loadAdminCard,
+  loadAdminComment,
+} from '../../data/legacyAdminBoard';
+import { useAdminViewer } from '../../hooks/useViewerIsAdmin';
 import { QdnDeletedError } from '../../data/qdn';
 import { useQuery } from '../../hooks/useQuery';
 import { PageHeader } from '../../components/layout/PageHeader';
@@ -38,7 +46,6 @@ import {
 } from '../../components/common/states';
 import { PATHS, decisionsViewPath, legacyCardPath } from '../../routes/paths';
 import { formatCount, formatDate, formatDateTime, plural, sentenceStart } from '../../utils/format';
-import { ORIGINAL_APP_LINK, openOriginalApp } from '../../utils/links';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { legacyKindLabel, legacyProblem } from './parts/legacyWords';
 import { LegacyTextView } from './parts/LegacyText';
@@ -47,12 +54,14 @@ import { PersonByName } from './parts/PersonByName';
 import { ListCard } from './parts/TimelineList';
 import { MarkedName } from '../../components/common/MarkedName';
 import { APP_NAME, ORIGINAL_WORDS } from '../../constants/plus';
+import { NOT_ENCRYPTED_TO_YOU } from './parts/LegacyCardItem';
 
 const COMMENTS_PAGE = 20;
 
 export default function LegacyCardPage() {
   const { card: identifier = '', section = '' } = useParams();
   const board = legacyBoardOf(identifier);
+  const { viewer, isAdmin, known } = useAdminViewer();
   const found = useQuery(board ? `legacy:find:${identifier}` : null, (force) =>
     findLegacyCard(identifier, { force })
   );
@@ -66,7 +75,9 @@ export default function LegacyCardPage() {
         description={`Links to ${ORIGINAL_WORDS.named}'s cards start with Minter-board-card, QM-AR-card or card-MAC.`}
       />
     );
-  } else if (board === 'admin') {
+  } else if (board === 'admin' && !known) {
+    content = <CardSkeleton lines={4} />;
+  } else if (board === 'admin' && !(isAdmin && viewer)) {
     content = <EncryptedCard row={row} loading={found.isLoading} />;
   } else if (found.isError) {
     content = (
@@ -87,6 +98,8 @@ export default function LegacyCardPage() {
         onAction={() => void found.refetch()}
       />
     );
+  } else if (board === 'admin' && viewer) {
+    content = <AdminCardView key={row.identifier} row={row} viewer={viewer} section={section} />;
   } else {
     content = <CardView key={row.identifier} row={row} section={section} />;
   }
@@ -94,8 +107,18 @@ export default function LegacyCardPage() {
   return (
     <>
       <PageHeader
-        title={board === 'ar' ? 'Admin proposal' : ORIGINAL_WORDS.card}
-        subtitle={`From ${ORIGINAL_WORDS.named}, read-only.`}
+        title={
+          board === 'ar'
+            ? 'Admin proposal'
+            : board === 'admin'
+              ? 'Admin Board card'
+              : ORIGINAL_WORDS.card
+        }
+        subtitle={
+          board === 'admin'
+            ? `Proposed ${ORIGINAL_WORDS.era}. Encrypted to the Minter Admins, read-only.`
+            : `From ${ORIGINAL_WORDS.named}, read-only.`
+        }
         back={PATHS.history}
         actions={
           board ? <CopyLinkButton path={legacyCardPath(identifier)} what="this card" /> : null
@@ -106,19 +129,28 @@ export default function LegacyCardPage() {
   );
 }
 
-function EncryptedCard({ row, loading }: { row: LegacyCardRow | null; loading: boolean }) {
+function EncryptedCard({
+  row,
+  loading,
+  locked = false,
+}: {
+  row: LegacyCardRow | null;
+  loading: boolean;
+  /** A Minter Admin the card wasn't encrypted to (else: not a Minter Admin). */
+  locked?: boolean;
+}) {
   return (
     <Card sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <LockOutlinedIcon aria-hidden sx={{ color: 'text.secondary' }} />
         <Typography component="h2" sx={{ fontWeight: 700, fontSize: 18 }}>
-          Encrypted to Minter Admins
+          {locked ? NOT_ENCRYPTED_TO_YOU : 'Encrypted to Minter Admins'}
         </Typography>
       </Box>
       <Typography>
-        This card is from {ORIGINAL_WORDS.adminBoard}, which only Minter Admins can read.
-        {APP_NAME} doesn&apos;t decrypt it
-        {ORIGINAL_APP_LINK ? `; open it in ${ORIGINAL_WORDS.app} instead.` : '.'}
+        {locked
+          ? `This card is from ${ORIGINAL_WORDS.adminBoard}. It was encrypted to the Minter Admins when it was posted, and not to your account, so it can't be read here.`
+          : `This card is from ${ORIGINAL_WORDS.adminBoard}, which only Minter Admins can read.`}
       </Typography>
       {row ? (
         <PersonByName
@@ -131,19 +163,51 @@ function EncryptedCard({ row, loading }: { row: LegacyCardRow | null; loading: b
           Your node doesn&apos;t list this card right now.
         </Typography>
       )}
-      {ORIGINAL_APP_LINK ? (
-        <Box>
-          <Button
-            variant="contained"
-            endIcon={<OpenInNewOutlinedIcon />}
-            onClick={() => void openOriginalApp()}
-            sx={{ minHeight: 44 }}
-          >
-            Open in {ORIGINAL_WORDS.app}
-          </Button>
-        </Box>
-      ) : null}
     </Card>
+  );
+}
+
+/** An Admin Board card, decrypted for the viewer (a Minter Admin). */
+function AdminCardView({
+  row,
+  viewer,
+  section,
+}: {
+  row: LegacyCardRow;
+  viewer: string;
+  section: string;
+}) {
+  const query = useQuery(adminCardKey(viewer, row), () => loadAdminCard(viewer, row));
+  const read = query.data;
+  if (read?.status === 'locked') return <EncryptedCard row={row} loading={false} locked />;
+  if (!read) {
+    if (query.isError) return <CardProblem row={row} error={query.error} onRetry={query.refetch} />;
+    return <CardSkeleton lines={4} />;
+  }
+  return <CardParts card={read.value} section={section} viewer={viewer} />;
+}
+
+function CardProblem({
+  row,
+  error,
+  onRetry,
+}: {
+  row: LegacyCardRow;
+  error: unknown;
+  onRetry: () => unknown;
+}) {
+  return error instanceof QdnDeletedError ? (
+    <EmptyState
+      title="This card was deleted by its publisher."
+      description={`${row.publisher} removed it from QDN.`}
+    />
+  ) : (
+    <EmptyState
+      title={`${legacyProblem(error)}.`}
+      description="Your node may still be fetching it from peers. Try again in a moment."
+      actionLabel="Try again"
+      onAction={() => void onRetry()}
+    />
   );
 }
 
@@ -151,23 +215,22 @@ function CardView({ row, section }: { row: LegacyCardRow; section: string }) {
   const query = useQuery(legacyCardKey(row), () => loadLegacyCard(row));
   const card = query.data;
   if (!card) {
-    if (query.isError) {
-      return query.error instanceof QdnDeletedError ? (
-        <EmptyState
-          title="This card was deleted by its publisher."
-          description={`${row.publisher} removed it from QDN.`}
-        />
-      ) : (
-        <EmptyState
-          title={`${legacyProblem(query.error)}.`}
-          description="Your node may still be fetching it from peers. Try again in a moment."
-          actionLabel="Try again"
-          onAction={() => void query.refetch()}
-        />
-      );
-    }
+    if (query.isError) return <CardProblem row={row} error={query.error} onRetry={query.refetch} />;
     return <CardSkeleton lines={4} />;
   }
+  return <CardParts card={card} section={section} />;
+}
+
+/** A card's body, poll and comments; `viewer` decrypts an Admin Board card's comments. */
+function CardParts({
+  card,
+  section,
+  viewer = null,
+}: {
+  card: LegacyCard;
+  section: string;
+  viewer?: string | null;
+}) {
   return (
     <>
       <CardBody card={card} />
@@ -195,15 +258,18 @@ function CardView({ row, section }: { row: LegacyCardRow; section: string }) {
       >
         {card.board === 'minter'
           ? `This board is read-only now, and ${APP_NAME} has no votes. New nominations happen in Nominations, and Minter Admins decide by approving or rejecting.`
-          : 'This board is read-only now. Admin changes are proposed and approved by Minter Admins in Decisions.'}
+          : card.board === 'admin'
+            ? 'This board is read-only now. Minter Admins decide in Decisions, and write for each other there: polls, notes and comments for the Minter Admins only.'
+            : 'This board is read-only now. Admin changes are proposed and approved by Minter Admins in Decisions.'}
       </Alert>
-      <Comments card={card} scrollTo={section === 'comments'} />
+      <Comments card={card} scrollTo={section === 'comments'} viewer={viewer} />
     </>
   );
 }
 
 function subjectLabel(card: LegacyCard): string {
   if (card.board === 'minter') return 'Nominee';
+  if (card.board === 'admin') return 'About';
   if (card.promotion === false) return 'Minter Admin to remove';
   return card.promotion === true ? 'Proposed Minter Admin' : 'About';
 }
@@ -231,15 +297,17 @@ function CardBody({ card }: { card: LegacyCard }) {
           gap: 1.5,
         }}
       >
-        <Fact label={subjectLabel(card)}>
-          {card.subject.address ? (
-            <PersonChip address={card.subject.address} name={card.subject.name} size={32} />
-          ) : card.subject.name ? (
-            <PersonByName name={card.subject.name} />
-          ) : (
-            <Typography color="text.secondary">Not named on the card</Typography>
-          )}
-        </Fact>
+        {card.topic ? null : (
+          <Fact label={subjectLabel(card)}>
+            {card.subject.address ? (
+              <PersonChip address={card.subject.address} name={card.subject.name} size={32} />
+            ) : card.subject.name ? (
+              <PersonByName name={card.subject.name} />
+            ) : (
+              <Typography color="text.secondary">Not named on the card</Typography>
+            )}
+          </Fact>
+        )}
         <Fact label={card.selfPosted ? 'Posted by the nominee' : 'Published by'}>
           <PersonByName
             name={card.publisher}
@@ -342,7 +410,16 @@ function PollResult({ card }: { card: LegacyCard }) {
   );
 }
 
-function Comments({ card, scrollTo }: { card: LegacyCard; scrollTo: boolean }) {
+function Comments({
+  card,
+  scrollTo,
+  viewer,
+}: {
+  card: LegacyCard;
+  scrollTo: boolean;
+  /** Decrypts an Admin Board card's comments. */
+  viewer: string | null;
+}) {
   const comments = useQuery(`legacy:comments:${card.identifier}`, (force) =>
     loadLegacyComments(card.identifier, { force })
   );
@@ -379,9 +456,23 @@ function Comments({ card, scrollTo }: { card: LegacyCard; scrollTo: boolean }) {
     body = (
       <>
         <ListCard>
-          <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          <Box
+            component="ul"
+            sx={{
+              listStyle: 'none',
+              m: 0,
+              p: 0,
+              '& > li + li': { borderTop: 1, borderColor: 'divider' },
+            }}
+          >
             {rows.slice(0, shown).map((row) => (
-              <CommentItem key={`${row.author}:${row.identifier}`} row={row} />
+              <li key={`${row.author}:${row.identifier}`}>
+                {card.board === 'admin' && viewer ? (
+                  <AdminCommentItem row={row} viewer={viewer} />
+                ) : (
+                  <CommentItem row={row} />
+                )}
+              </li>
             ))}
           </Box>
         </ListCard>
@@ -414,19 +505,53 @@ function Comments({ card, scrollTo }: { card: LegacyCard; scrollTo: boolean }) {
 
 function CommentItem({ row }: { row: LegacyCommentRow }) {
   const query = useQuery(legacyCommentKey(row), () => loadLegacyComment(row));
-  const comment = query.data;
-  if (!comment && query.error instanceof QdnDeletedError) return null;
+  if (!query.data && query.error instanceof QdnDeletedError) return null;
+  return (
+    <CommentView
+      row={row}
+      comment={query.data}
+      problem={!query.data && query.isError ? `${legacyProblem(query.error, 'comment')}.` : null}
+    />
+  );
+}
+
+function AdminCommentItem({ row, viewer }: { row: LegacyCommentRow; viewer: string }) {
+  const query = useQuery(adminCommentKey(viewer, row), () => loadAdminComment(viewer, row));
+  const read = query.data;
+  if (!read && query.error instanceof QdnDeletedError) return null;
+  return (
+    <CommentView
+      row={row}
+      comment={read?.status === 'ok' ? read.value : undefined}
+      problem={
+        read?.status === 'locked'
+          ? `${NOT_ENCRYPTED_TO_YOU}.`
+          : !read && query.isError
+            ? `${legacyProblem(query.error, 'comment')}.`
+            : null
+      }
+    />
+  );
+}
+
+function CommentView({
+  row,
+  comment,
+  problem,
+}: {
+  row: LegacyCommentRow;
+  comment: LegacyComment | undefined;
+  problem: string | null;
+}) {
   const edited = row.editedAt && row.editedAt > row.postedAt + 60_000;
   return (
     <Box
-      component="li"
       sx={{
         display: 'flex',
         flexDirection: 'column',
         gap: 1,
         py: 1.5,
         px: { xs: 1.5, sm: 2 },
-        '& + &': { borderTop: 1, borderColor: 'divider' },
       }}
     >
       <PersonByName
@@ -460,9 +585,9 @@ function CommentItem({ row }: { row: LegacyCommentRow }) {
           <LegacyTextView text={comment.body} />
           <QortalLinks links={comment.body.links} />
         </>
-      ) : query.isError ? (
+      ) : problem ? (
         <Typography variant="body2" color="text.secondary">
-          {legacyProblem(query.error, 'comment')}.
+          {problem}
         </Typography>
       ) : (
         <Box aria-hidden>

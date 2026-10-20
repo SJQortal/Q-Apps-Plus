@@ -26,7 +26,7 @@ export default function HistoryPage() {
       <PageBody>
         <PersonSearch />
         <ChainHistory />
-        <LegacyBoards isAdmin={Boolean(status?.isAdmin)} />
+        <LegacyBoards isAdmin={Boolean(status?.isAdmin)} viewer={status?.address ?? null} />
       </PageBody>
     </>
   );

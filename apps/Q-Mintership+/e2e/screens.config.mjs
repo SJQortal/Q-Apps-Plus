@@ -35,6 +35,7 @@ import {
 import { addTargetShift } from './world.mjs';
 import { nominatorLastVisit } from './world.mjs';
 import { AT_ADDRESS, FUNDER, SPONSOR, UNUSED_ADDRESS } from './world-explorer.mjs';
+import { ADMIN_BOARD_IDS } from './world-legacy.mjs';
 
 const world = createWorld();
 // Admins' Decisions also shows the transactions that aren't MINTER group changes.
@@ -740,11 +741,28 @@ export default {
       path: '/history/card/Minter-board-card-bQ7xK2?as=learner',
       after: wait('#legacy-poll-title'),
     },
-    // An encrypted admin-board card: listed, never decrypted; links to the original app.
+    // The original Admin Board, decrypted for a Minter Admin (e2e/world-legacy.mjs): a card
+    // with its poll and comments (one comment not encrypted to them), and a card that wasn't.
     {
       key: 'legacy-admin-card',
-      path: '/history/card/card-MAC-NC-1780000000000-a1B2c3?as=admin',
-      after: wait('main h2'),
+      path: `/history/card/${ADMIN_BOARD_IDS.removal}?as=admin`,
+      after: withDecrypt(wait('#legacy-comments-title')),
+    },
+    {
+      key: 'legacy-admin-card-locked',
+      path: `/history/card/${ADMIN_BOARD_IDS.locked}?as=admin`,
+      after: withDecrypt(wait('main h2')),
+    },
+    // History's Admin Board filter, as a Minter Admin.
+    {
+      key: 'history-admin-board',
+      path: '/history?as=admin',
+      after: withDecrypt(async (page) => {
+        await settle(page);
+        await page.getByRole('button', { name: 'Admin Board' }).click({ timeout: 8000 });
+        await page.getByText('Remove Member 12 from MINTER?').waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      }),
     },
     { key: 'activity', path: '/explorer/activity?as=admin', after: settle },
     // A Minter Admin who last had History open at TIP − 6,000: three changes decided since
@@ -1675,6 +1693,16 @@ function decryptScript() {
       },
     });
   })();`;
+}
+
+/** Answer DECRYPT_DATA as the persona's Hub would, load the page again, then `then`. */
+function withDecrypt(then) {
+  return async (page) => {
+    await settle(page);
+    await page.addInitScript(decryptScript());
+    await page.reload({ waitUntil: 'load' });
+    await then(page);
+  };
 }
 
 /**

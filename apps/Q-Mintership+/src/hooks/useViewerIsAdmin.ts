@@ -16,3 +16,21 @@ export function useViewerIsAdmin(): boolean {
   );
   return Boolean(address && status.data?.isAdmin && status.data.address === address);
 }
+
+/**
+ * The signed-in address and whether it is a Minter Admin, with `known` false
+ * until both are read (so a page can wait instead of showing the wrong view).
+ */
+export function useAdminViewer(): { viewer: string | null; isAdmin: boolean; known: boolean } {
+  const session = useSession();
+  const address = session.status === 'ready' ? session.address : null;
+  const status = useQuery(address ? `status:${address}` : null, (force) =>
+    loadMyStatus(address as string, { force })
+  );
+  const isAdmin = Boolean(address && status.data?.isAdmin && status.data.address === address);
+  const settled =
+    session.status !== 'idle' &&
+    session.status !== 'loading' &&
+    (!address || Boolean(status.data) || status.isError);
+  return { viewer: address, isAdmin, known: settled };
+}
