@@ -1,12 +1,28 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { APP_NAME, THEME_STORAGE_KEY } from './src/constants/plus.ts';
+
+/** index.html's title and theme key come from src/constants/plus.ts, like the app's words. */
+function plusNames(): Plugin {
+  const values: Record<string, string> = {
+    QMP_APP_NAME: APP_NAME,
+    QMP_THEME_STORAGE_KEY: THEME_STORAGE_KEY,
+  };
+  return {
+    name: 'qmp-plus-names',
+    transformIndexHtml: {
+      order: 'pre',
+      handler: (html) => html.replace(/%(QMP_[A-Z_]+)%/g, (all, key: string) => values[key] ?? all),
+    },
+  };
+}
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), plusNames()],
   // Off in every build and test run; only vite.testnet.config.ts turns it on, for its dev server.
   define: { __QMP_TESTNET__: 'false' },
-  // Relative asset URLs: the zip is served from /render/APP/Q-Mintership+/…
+  // Relative asset URLs: the zip is served from /render/APP/<its name>/…
   base: '',
   build: {
     target: 'es2020',

@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants/plus';
 /**
  * Who a reply answers, in the reply's QDN description (Simon, 2026-10-19: "if
  * there is a new reply to the comment I would like to see the notification
@@ -45,7 +46,7 @@ export function replyMarker(name: string): string {
 
 /** A reply's QDN description: the marker first, then words. */
 export function replyDescription(name: string): string {
-  return `${replyMarker(name)} A reply in Q-Mintership+`;
+  return `${replyMarker(name)} A reply in ${APP_NAME}`;
 }
 
 /**

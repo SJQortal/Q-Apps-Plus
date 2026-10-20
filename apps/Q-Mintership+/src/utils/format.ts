@@ -139,6 +139,11 @@ export function formatBlock(height: number): string {
 }
 
 /** "1 signature", "8 signatures". */
+/** `text` with its first letter capitalised, to start a sentence ("the original app" → "The original app"). */
+export function sentenceStart(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text;
+}
+
 export function plural(n: number, singular: string, pluralForm = `${singular}s`): string {
   return `${formatCount(n)} ${n === 1 ? singular : pluralForm}`;
 }

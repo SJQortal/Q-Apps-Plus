@@ -37,6 +37,7 @@
  */
 import { isAddress } from '../../data/accounts';
 import { commentPath, legacyCardPath, nominationPath, personPath } from '../../routes/paths';
+import { APP_NAME, ORIGINAL_APP_NAME, ORIGINAL_WORDS } from '../../constants/plus';
 
 /** The apps linked to, by their QDN names: the original apps (Simon, 2026-10-19). */
 export const QAPP = {
@@ -165,7 +166,7 @@ function mintership(identifier: string, name: string): QdnPlace | null {
   const nominee = subject('qmp-nomination-');
   if (nominee)
     return {
-      app: 'Q-Mintership+',
+      app: APP_NAME,
       what: 'A nomination',
       path: nominationPath(nominee),
       label: 'Open the nomination',
@@ -173,7 +174,7 @@ function mintership(identifier: string, name: string): QdnPlace | null {
   const supported = subject('qmp-support-');
   if (supported)
     return {
-      app: 'Q-Mintership+',
+      app: APP_NAME,
       what: 'Support for a nomination',
       path: nominationPath(supported),
       label: 'Open the nomination',
@@ -182,14 +183,14 @@ function mintership(identifier: string, name: string): QdnPlace | null {
     const parts = identifier.slice('qmp-vote-'.length).split('-');
     if (isAddress(parts[0]))
       return {
-        app: 'Q-Mintership+',
+        app: APP_NAME,
         what: 'A vote on a nomination',
         path: nominationPath(parts[0]),
         label: 'Open the nomination',
       };
     if (['remove', 'ban', 'admin'].includes(parts[0]) && isAddress(parts[1]))
       return {
-        app: 'Q-Mintership+',
+        app: APP_NAME,
         what: 'A vote on a proposal',
         path: personPath(parts[1]),
         label: 'Open their Minter Profile',
@@ -197,23 +198,23 @@ function mintership(identifier: string, name: string): QdnPlace | null {
   }
   if (identifier.startsWith('qmp-comment-'))
     return {
-      app: 'Q-Mintership+',
+      app: APP_NAME,
       what: 'A comment',
       path: commentPath(name, identifier),
       label: 'Open the comment',
     };
   if (identifier.startsWith('Minter-board-card-') || identifier.startsWith('QM-AR-card-'))
     return {
-      app: 'Q-Mintership',
-      what: 'A card of the original Q-Mintership',
+      app: ORIGINAL_APP_NAME,
+      what: `A card of ${ORIGINAL_WORDS.named}`,
       path: legacyCardPath(identifier),
       label: 'Open the card',
     };
   const card = /^comment-((?:Minter-board-card|QM-AR-card)-.+)-[^-]+$/.exec(identifier)?.[1];
   if (card)
     return {
-      app: 'Q-Mintership',
-      what: 'A comment on a card of the original Q-Mintership',
+      app: ORIGINAL_APP_NAME,
+      what: `A comment on a card of ${ORIGINAL_WORDS.named}`,
       path: legacyCardPath(card),
       label: 'Open the card',
     };

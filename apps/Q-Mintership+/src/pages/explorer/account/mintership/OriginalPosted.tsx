@@ -21,10 +21,17 @@ import { getQueryState, peekQuery, subscribeQuery } from '../../../../data/query
 import { useInView } from '../../../../hooks/useInView';
 import { useQuery } from '../../../../hooks/useQuery';
 import { legacyCardPath } from '../../../../routes/paths';
-import { formatBlock, formatCount, formatDate, plural } from '../../../../utils/format';
+import {
+  formatBlock,
+  formatCount,
+  formatDate,
+  plural,
+  sentenceStart,
+} from '../../../../utils/format';
 import { LegacyCardItem } from '../../../history/parts/LegacyCardItem';
 import { pollVotesCounted, pollVotesSummary } from './mintershipWords';
 import { AlsoChecked, ItemLink, NamesFound, Note, SteppedList, SubHeading } from './parts';
+import { ORIGINAL_WORDS } from '../../../../constants/plus';
 
 function subscribeIndex(listener: () => void) {
   return subscribeQuery('legacy:index', listener);
@@ -81,7 +88,7 @@ function PostedBody({ address, posted }: { address: string; posted: LegacyBy }) 
           <SteppedList
             items={own}
             card={false}
-            label="Original app cards they posted"
+            label={`${sentenceStart(ORIGINAL_WORDS.adjective)} cards they posted`}
             keyOf={(row) => row.identifier}
             render={(row) => <LegacyCardItem row={row} />}
           />
@@ -90,7 +97,7 @@ function PostedBody({ address, posted }: { address: string; posted: LegacyBy }) 
       {copies ? (
         <Note>
           {plural(copies, own.length ? 'more post' : 'post')} under a card’s identifier another name
-          used first (the original app shows that first card).
+          used first ({ORIGINAL_WORDS.app} shows that first card).
         </Note>
       ) : null}
       {comments.length ? <Note>Comments: {comments.join('; ')}.</Note> : null}
@@ -178,7 +185,7 @@ export function PollVotesPanel({ address }: { address: string }) {
       {data.votes.length ? (
         <SteppedList
           items={data.votes}
-          label="Their original app poll votes, newest first"
+          label={`Their ${ORIGINAL_WORDS.adjective} poll votes, newest first`}
           keyOf={(v) => v.signature}
           render={(vote) => <VoteRow vote={vote} />}
         />
@@ -195,7 +202,7 @@ export function OriginalPosted({ address, eager = false }: { address: string; ea
   });
   return (
     <Section
-      title="In the original app, under any of their names"
+      title={`In ${ORIGINAL_WORDS.app}, under any of their names`}
       id="explorer-mintership-original"
     >
       <Box ref={setNode} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
@@ -204,12 +211,12 @@ export function OriginalPosted({ address, eager = false }: { address: string; ea
         ) : posted.isError ? (
           <ErrorState
             compact
-            title="Couldn't read what they posted in the original app."
+            title={`Couldn't read what they posted in ${ORIGINAL_WORDS.app}.`}
             error={posted.error}
             onRetry={() => void posted.refetch()}
           />
         ) : (
-          <ListSkeleton count={1} label="Reading what they posted in the original app" />
+          <ListSkeleton count={1} label={`Reading what they posted in ${ORIGINAL_WORDS.app}`} />
         )}
       </Box>
     </Section>

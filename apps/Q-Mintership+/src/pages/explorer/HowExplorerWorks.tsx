@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { ResponsiveDialog } from '../../components/common/ResponsiveDialog';
 import { EXPLORER_NEUTRAL_LINE, EXPLORER_PURPOSE, EXPLORER_PURPOSE_BASIC } from './explorerWords';
+import { APP_NAME, ORIGINAL_WORDS } from '../../constants/plus';
 
 export const HOW_EXPLORER_WORKS = 'How Explorer Works';
 
@@ -63,7 +64,7 @@ function tabLines(full: boolean): Array<[string, string]> {
     ],
     [
       'Minter Profile',
-      'Where it stands in MINTER and what you can do for it (nominate, support, decide), its nominations and MINTER timeline, and its records in Q-Mintership+ and the original app.',
+      `Where it stands in MINTER and what you can do for it (nominate, support, decide), its nominations and MINTER timeline, and its records in ${APP_NAME} and ${ORIGINAL_WORDS.app}.`,
     ],
     [
       'Names',

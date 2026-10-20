@@ -23,6 +23,7 @@ import { fetchQdnJson, mapLimit, rowTime, searchQdn } from './qdn';
 import { fetchQuery, peekQuery } from './query';
 import { isQortalLink } from './records';
 import type { QdnRow } from './types';
+import { ORIGINAL_WORDS } from '../constants/plus';
 
 export const LEGACY_SERVICE = 'BLOG_POST';
 export const ADMIN_BOARD_SERVICE = 'MAIL_PRIVATE';
@@ -308,7 +309,7 @@ export function parseLegacyCard(body: unknown, row: LegacyCardRow): LegacyCard |
 
 export class LegacyUnreadableError extends Error {
   constructor(public readonly identifier: string) {
-    super("This card can't be read: its data isn't in the original app's format.");
+    super(`This card can't be read: its data isn't in ${ORIGINAL_WORDS.app}'s format.`);
     this.name = 'LegacyUnreadableError';
   }
 }

@@ -58,6 +58,7 @@ import { CommentReplies, ReplyComposerBox } from './CommentReplies';
 import { CommentItem, type CommentViewer } from './CommentItem';
 import { commentOfState, goToComment } from './commentLinkState';
 import type { AnswerBadges } from './answerBadges';
+import { APP_NAME } from '../../constants/plus';
 
 const REFRESH_MS = 60_000;
 
@@ -676,7 +677,7 @@ function Gate({
   if (status === 'outside') {
     return (
       <Typography variant="body2" color="text.secondary">
-        Open Q-Mintership+ in Qortal Hub to comment.
+        Open {APP_NAME} in Qortal Hub to comment.
       </Typography>
     );
   }

@@ -77,6 +77,7 @@ import { CANDIDATE_KEY, candidateBlock, loadCandidate, type Candidate } from './
 import { isStillOpenForSupport } from './filters';
 import { MarkedName } from '../../components/common/MarkedName';
 import { withMarkedName } from '../../components/common/markedText';
+import { APP_NAME } from '../../constants/plus';
 
 export default function NominatePage() {
   const session = useSession();
@@ -86,7 +87,7 @@ export default function NominatePage() {
   if (session.status === 'outside') {
     body = (
       <EmptyState
-        title="Open Q-Mintership+ in Qortal Hub or GO"
+        title={`Open ${APP_NAME} in Qortal Hub or GO`}
         description="A nomination is published under your Qortal name, so it needs Hub."
       />
     );
@@ -813,7 +814,7 @@ function WhatHappensNext({ name, named }: { name: string; named: boolean }) {
           <li>
             <Typography variant="body2">
               <strong>{named ? withMarkedName(`${name} accepts.`, name) : 'They accept.'}</strong>{' '}
-              In Q-Mintership+ they press Accept, which sends their join request (
+              In {APP_NAME} they press Accept, which sends their join request (
               <FeeNote txType="JOIN_GROUP" prefix="fee" />
               ), so an approval later makes them a member at once. You get a link to send them.
             </Typography>

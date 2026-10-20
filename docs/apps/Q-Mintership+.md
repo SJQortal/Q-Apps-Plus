@@ -1183,6 +1183,23 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 137. **The app's avatar at the top left** (Simon, 2026-10-20: "the top left where the logo supposed to be just add the avatar to the left of Q-Mintership text"). The rail's "QM+" placeholder is now the avatar of the `Q-Mintership` name on QDN (the blue Qortal cube Hub shows for the app), left of the name; on the narrow rail it stands alone. It is bundled, not read from QDN: a 96 px WebP of 2.2 kB, inlined by Vite into the main chunk, so it shows with the first paint, with no request and without a node (`src/assets/q-mintership-avatar.webp`, from `THUMBNAIL/Q-Mintership/qortal_avatar`; the `Q-Mintership+` name has no avatar). Decorative (`alt=""`), since the name beside it says the same. Test: the rail shows it before the name, with no "QM+" (`navItems.test.tsx`). Checked in the browser at 1280 and 800 px.
 
+### The upstream PR, prepared (2026-10-20)
+
+Stage 4 of docs/RELEASE.md, after 1.0.0 was published and #23 merged. Nothing is pushed to Qortal yet: Simon reads the PR text first.
+
+- **The branch:** `q-mintership-upstream/4.0.0` from `scripts/upstream-pr.sh Q-Mintership+ --version 4.0.0`, a fast-forward of Qortal/Q-Mintership-Alpha's `Nominations` (cb6fcef2; their `main` is behind it) with 709 commits, in `.worktrees/upstream-q-mintership`. No Claude lines; the private-wording sweep over every commit message, every diff and the tree found nothing.
+- **"Ship as Q-Mintership 4.0.0"** (the last commit): the name and copied links, "Q-Mintership 3" for the boards it replaces, `qmintership-` storage keys (Q-Mintership 3's keys have no prefix), version 4.0.0 with one changelog entry, a README for their repo (theirs moves to `legacy/README.md`), `e2e/screens.mjs` standalone, doc citations as GitHub links, and `audit/` (a partial, unverified draft) left out. 2,480 tests, lint and build pass.
+- **Q-Mintership 3's encrypted Minter Admin board:** once 4.0 is published as `Q-Mintership`, Q-Mintership 3 has no publish, so its links are hidden (`ORIGINAL_APP_LINK` null) and the README and PR suggest publishing `legacy/` under a name of its own.
+- **The PR text:** `.worktrees/pr-q-mintership-4.0.0.md` (from docs/templates/upstream-pr.md), opening with the process change and listing what was dropped and why.
+- **Every name in constants/plus.ts** (branch `q-mintership-plus/plus-names`), so the next upstream round's Ship-as edits values, not 140 files:
+  - `APP_NAME` everywhere the screens said "Q-Mintership+";
+  - `ORIGINAL_WORDS` for the original app (`app`, `named`, `adjective`, `adminBoard`, `card`) with `sentenceStart()`;
+  - `ORIGINAL_APP_LINK` nullable, with `openOriginalApp()` and the links hidden when it's null;
+  - index.html's title, description and theme key filled in by a Vite plugin (`%QMP_APP_NAME%`, `%QMP_THEME_STORAGE_KEY%`).
+
+  `src/constants/plus.shipAs.test.tsx` renders History, an encrypted card and Settings with Q-Mintership's values and finds no "Q-Mintership+", no "original app" and no link out. The changelog stays per build (rewritten in the Ship-as anyway). One visible change: "original app cards" and "poll votes" labels read "original-app", as the Explorer's sentences already did (four labels).
+  - The Ship-as commit on the upstream branch predates this. Before the PR is pushed, it can be redone from `main` with this merged, editing plus.ts only. One label it missed ("Original app poll votes" on the Minter Profile) is covered that way.
+
 ## Follow-ups
 
 ### Readiness
@@ -1436,6 +1453,13 @@ Both answered by item 86.
 4. **Ban an account** lists MINTER's members, and looks up anyone else below the list. Should it also list who asked to join (they are Decline a join request's list now)?
 5. **After picking someone**, focus goes to their card, as on Propose nomination; the old Decline dialog moved it to the reason field. OK?
 6. **Removing a Minter Admin from MINTER** still starts with "Propose removing their admin role" (Core refuses a kick or ban of an admin). Their row in Remove a member's list says "Minter Admin". Fine?
+
+### Open questions for Simon (the upstream PR, 2026-10-20)
+
+1. **Version 4.0.0** (Q-Mintership 3 is v3.0.5b in the repo, v3.0.7 on QDN; RELEASE.md's default is one major up), next to the "Q-Mintership+ 2.0" name used so far. Keep?
+2. **The process change** is the PR's first point: nominations decided on chain by the Minter Admins replace the boards and card polls, with what was dropped and why. Put it to Qortal this directly?
+3. **Q-Mintership 3's encrypted Minter Admin board:** suggest Qortal publish `legacy/` under its own name (then `ORIGINAL_APP_LINK` brings the links back), or decrypt that board in the app in a later 1.0.x?
+4. **Base branch `Nominations`** (their `main` is behind it). OK?
 
 ### Core: what an explorer needs that Core doesn't give (proposals)
 

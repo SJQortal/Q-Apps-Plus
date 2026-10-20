@@ -54,6 +54,8 @@ import { NOTHING_IN_MINTER, nothingChecked } from './mintership/mintershipWords'
 import { OriginalPosted, PollVotesPanel } from './mintership/OriginalPosted';
 import { NominationSummary, StandingSection } from './mintership/StandingSection';
 import { useMinterStory, type MinterStory } from './mintership/useMinterStory';
+import { ORIGINAL_WORDS } from '../../../constants/plus';
+import { sentenceStart } from '../../../utils/format';
 
 export interface MintershipTabProps {
   address: string;
@@ -206,7 +208,10 @@ export default function MintershipTab({ address }: MintershipTabProps) {
                 nothing.scanned?.total ?? 0
               )}
             />
-            <Section title="Original app poll votes" id="explorer-mintership-pollvotes">
+            <Section
+              title={`${sentenceStart(ORIGINAL_WORDS.adjective)} poll votes`}
+              id="explorer-mintership-pollvotes"
+            >
               <PollVotesPanel address={address} />
             </Section>
           </>

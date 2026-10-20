@@ -11,6 +11,7 @@ import { useMyStatus } from '../../hooks/useData';
 import { ChainHistory } from './ChainHistory';
 import { LegacyBoards } from './LegacyBoards';
 import { PersonSearch } from './parts/PersonSearch';
+import { ORIGINAL_WORDS } from '../../constants/plus';
 
 export default function HistoryPage() {
   const { status } = useMyStatus();
@@ -19,7 +20,7 @@ export default function HistoryPage() {
     <>
       <PageHeader
         title="History"
-        subtitle="MINTER on chain, and the original app’s boards."
+        subtitle={`MINTER on chain, and ${ORIGINAL_WORDS.app}’s boards.`}
         back={inNav ? undefined : PATHS.home}
       />
       <PageBody>

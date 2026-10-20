@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blockNumber, formatRoughDuration, formatTimeSpan } from './format';
+import { blockNumber, formatRoughDuration, formatTimeSpan, sentenceStart } from './format';
 
 const DAY = 86_400_000;
 
@@ -55,5 +55,14 @@ describe('blockNumber', () => {
       '1,234,567,890',
     ])
       expect(blockNumber(text), text).toBeNull();
+  });
+});
+
+describe('sentenceStart', () => {
+  it('capitalises the first letter only, and leaves a name as it is', () => {
+    expect(sentenceStart('the original app')).toBe('The original app');
+    expect(sentenceStart('original-app')).toBe('Original-app');
+    expect(sentenceStart('Q-Mintership 3')).toBe('Q-Mintership 3');
+    expect(sentenceStart('')).toBe('');
   });
 });

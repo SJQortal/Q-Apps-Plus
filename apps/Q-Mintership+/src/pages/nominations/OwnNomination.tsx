@@ -15,6 +15,7 @@ import { signIn, type Session } from '../../state/session';
 import { formatCount } from '../../utils/format';
 import type { Signer } from '../../writes/runner';
 import type { OwnNominationFacts } from './ownNominationFacts';
+import { APP_NAME } from '../../constants/plus';
 
 export function OwnNomination({
   facts,
@@ -85,7 +86,7 @@ export function NominateNote({
   if (session.status === 'outside') {
     return (
       <Alert severity="info" variant="outlined">
-        Open Q-Mintership+ in Qortal Hub or GO to propose a nomination or add your support.
+        Open {APP_NAME} in Qortal Hub or GO to propose a nomination or add your support.
       </Alert>
     );
   }

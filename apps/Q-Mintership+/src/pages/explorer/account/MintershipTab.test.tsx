@@ -370,7 +370,7 @@ describe('the Mintership tab', () => {
     ).toBeVisible();
     expect(within(original).getByText("1 vote on other apps' polls (counted only).")).toBeVisible();
     const list = within(original).getByRole('list', {
-      name: 'Their original app poll votes, newest first',
+      name: 'Their original-app poll votes, newest first',
     });
     expect(within(list).getByRole('link', { name: 'Voted No: open the card' })).toHaveAttribute(
       'href',
