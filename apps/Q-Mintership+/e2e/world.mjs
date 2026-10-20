@@ -14,6 +14,7 @@
  * Explorer) add their own data and endpoints.
  */
 import { extendLegacy, answerLegacy } from './world-legacy.mjs';
+export { ADMIN_BOARD_IDS } from './world-legacy.mjs';
 import { extendActivity, answerActivity } from './world-activity.mjs';
 import { extendExplorer, answerExplorer } from './world-explorer.mjs';
 
@@ -1826,6 +1827,12 @@ function data64Of(value) {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
+}
+
+/** `value` as JSON, sealed for `addresses` the way mockEncrypt does (their public keys). */
+export function sealFor(world, addresses, value) {
+  const keys = addresses.map((a) => world.accounts.get(a)?.publicKey ?? pk(a));
+  return mockEncrypt(keys, data64Of(value));
 }
 
 /** Answer DECRYPT_DATA as the persona's Hub would. */

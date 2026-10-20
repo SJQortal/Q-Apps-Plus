@@ -1,16 +1,26 @@
 /**
  * The original Q-Mintership's data in the mock world (read-only History):
  * nomination cards (BLOG_POST Minter-board-card-*), Minter Admin proposals
- * (QM-AR-card-*), their comments and chain polls, and one encrypted admin
- * card (MAIL_PRIVATE card-MAC-*). Shapes follow what a mainnet node answered
- * on 2026-10-12; every name, address and text here is made up.
+ * (QM-AR-card-*), their comments and chain polls, and the encrypted Admin
+ * Board (MAIL_PRIVATE card-MAC-* and comment-card-MAC-*, sealed with the
+ * mock's stand-in encryption for their `readers`). Shapes follow what a
+ * mainnet node answered on 2026-10-12 and 2026-10-20; every name, address
+ * and text here is made up.
  *
- * world.legacy = { resources: [{ service, name, identifier, created, updated?, body }], polls }
+ * world.legacy = { resources: [{ service, name, identifier, created, updated?, body, readers? }], polls }
  * Tests can push more resources or polls before rendering.
  */
-import { ADDR, NOW, PEOPLE, fakeKey } from './world.mjs';
+import { ADDR, NOW, PEOPLE, fakeKey, sealFor } from './world.mjs';
 
 const DAY = 86_400_000;
+
+/** The Admin Board cards the mock world adds (and the one sealed for no one: `unreadable`). */
+export const ADMIN_BOARD_IDS = {
+  removal: 'card-MAC-Member12-rM0vE1',
+  topic: 'card-MAC-TOPIC-tP1cA2',
+  locked: 'card-MAC-Member20-oLdK3y',
+  unreadable: 'card-MAC-NC-1780000000000-a1B2c3',
+};
 
 /** Add the old boards' records to `world`. */
 export function extendLegacy(world) {
@@ -189,13 +199,118 @@ export function extendLegacy(world) {
   // A poll created by someone other than the card's publisher (the original app hid that card).
   polls['Minter-board-card-old002-poll'].owner = addressOf('Admin A');
 
-  // 6. The encrypted admin board: listed by Core, never decrypted here.
+  // 6. The encrypted Admin Board. Readers are addresses, sealed when served; a body
+  //    that isn't sealed can't be decrypted by anyone.
   add(
     'MAIL_PRIVATE',
     'Admin E',
     'card-MAC-NC-1780000000000-a1B2c3',
     NOW - 50 * DAY,
     'ZW5jcnlwdGVk'
+  );
+  const signers = () => world.admins.filter((a) => world.accounts.get(a)?.name);
+  const sealed = (service, name, identifier, created, body, readers) =>
+    resources.push({ service, name, identifier, created, body, readers });
+  // A removal discussed by the admins, with its poll and three comments.
+  const removal = ADMIN_BOARD_IDS.removal;
+  sealed(
+    'MAIL_PRIVATE',
+    'Admin B',
+    removal,
+    NOW - 40 * DAY,
+    {
+      minterName: 'Member 12',
+      header: 'Remove Member 12 from MINTER?',
+      content:
+        '<p>Member 12 has been offline for months and the sponsor asked us to look at it.</p><p>See <a href="qortal://APP/Q-Mintership/explorer">the explorer</a>.</p>',
+      links: [],
+      creator: 'Admin B',
+      timestamp: NOW - 40 * DAY - 1_000,
+      poll: `${removal}-poll`,
+      topicMode: false,
+    },
+    signers
+  );
+  polls[`${removal}-poll`] = {
+    owner: addressOf('Admin B'),
+    description: 'Admin Board Poll Published By Admin B',
+    published: NOW - 40 * DAY,
+    yes: 5,
+    no: 1,
+  };
+  const adminComment = (cardId, name, uid, created, content, readers, replyTo) =>
+    sealed(
+      'MAIL_PRIVATE',
+      name,
+      `comment-${cardId}-${uid}`,
+      created,
+      {
+        content,
+        creator: name,
+        timestamp: created - 1_000,
+        ...(replyTo ? { replyTo } : {}),
+      },
+      readers
+    );
+  adminComment(
+    removal,
+    'Admin D ΑΩ',
+    'c1Ab2C',
+    NOW - 39 * DAY,
+    '<p>Agreed, the node has been down since spring.</p>',
+    signers
+  );
+  adminComment(
+    removal,
+    PEOPLE.admin.name,
+    'c2De3F',
+    NOW - 38 * DAY,
+    '<p>Let us ask them first.</p>',
+    signers,
+    {
+      creator: 'Admin D ΑΩ',
+      content: '<p>Agreed, the node has been down since spring.</p>',
+    }
+  );
+  // Encrypted to the admins of the day, before Avery Admin was one.
+  adminComment(removal, 'Admin C', 'c3Gh4I', NOW - 37 * DAY, '<p>An older note.</p>', () =>
+    signers().filter((a) => a !== ADDR.admin)
+  );
+  // A topic: a discussion about no one in particular.
+  sealed(
+    'MAIL_PRIVATE',
+    'Admin C',
+    ADMIN_BOARD_IDS.topic,
+    NOW - 30 * DAY,
+    {
+      minterName: '',
+      header: 'How we review removals',
+      content: '<p>A checklist for removals: activity, sponsor, and a message first.</p>',
+      links: [],
+      creator: 'Admin C',
+      timestamp: NOW - 30 * DAY - 1_000,
+      poll: `${ADMIN_BOARD_IDS.topic}-poll`,
+      topicMode: true,
+    },
+    signers
+  );
+  // Posted before Avery Admin was a Minter Admin: not encrypted to them.
+  sealed(
+    'MAIL_PRIVATE',
+    'Admin F',
+    ADMIN_BOARD_IDS.locked,
+    NOW - 300 * DAY,
+    {
+      minterName: 'Member 20',
+      header: 'Member 20',
+      content: '<p>Before your time.</p>',
+      links: [],
+      creator: 'Admin F',
+      timestamp: NOW - 300 * DAY,
+      poll: `${ADMIN_BOARD_IDS.locked}-poll`,
+      topicMode: false,
+    },
+    () => signers().filter((a) => a !== ADDR.admin)
   );
 
   world.legacy = { resources, polls };
@@ -249,6 +364,7 @@ export function answerLegacy(world, pathname, sp) {
       (x) => x.service === service && x.name === name && x.identifier === identifier
     );
     if (!r) return json({ error: 1401, message: 'not found' }, 404);
+    if (r.readers) return { status: 200, text: sealFor(world, r.readers(), r.body) };
     return typeof r.body === 'string' ? { status: 200, text: r.body } : json(r.body);
   }
 
