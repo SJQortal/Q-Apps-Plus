@@ -139,6 +139,49 @@ describe('Minter Profile', () => {
     ]);
   });
 
+  it('counts a minting level that moved here across the account it came from (Simon, 2026-10-20)', async () => {
+    const move = {
+      type: 'TRANSFER_PRIVS',
+      blockHeight: 2_000_000,
+      timestamp: Date.UTC(2025, 3, 30),
+      signature: 'tp-learner',
+      creatorAddress: ADDR.learner,
+    };
+    await visit(ADDR.admin, 'admin', (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) => {
+        const sp = url.searchParams;
+        const who = sp.get('address');
+        if (sp.get('txType') === 'REWARD_SHARE' && sp.get('limit') === '1')
+          return [
+            {
+              type: 'REWARD_SHARE',
+              blockHeight: who === ADDR.learner ? 500_000 : 2_000_100,
+              timestamp: 1,
+              signature: `rs-${who}`,
+            },
+          ];
+        if (sp.get('txType') === 'TRANSFER_PRIVS' && (who === ADDR.admin || who === ADDR.learner))
+          return [move];
+        const reply = answerCore(world, url.pathname, sp);
+        return new Response(JSON.stringify(reply?.body ?? null), { status: reply?.status ?? 404 });
+      })
+    );
+    const [value, info] = await nodeOnline();
+    expect(value).toMatch(/^\d+%$/);
+    expect(info).toContain(
+      'of the rewards its minting level could have had: Leo Learner from block 500,000 to block 2,000,000, then this account since block 2,000,100. Its minting level moved here with its blocks minted, so they count together.'
+    );
+    const standing = await status();
+    expect(
+      await within(standing).findByRole('heading', { name: 'Where its minting level came from' }, T)
+    ).toBeInTheDocument();
+    const from = within(standing).getByRole('list', { name: 'Where its minting level came from' });
+    expect(from).toHaveTextContent('Moved its minting level to this account in block 2,000,000');
+    expect(from).toHaveTextContent('Blocks 500,000–2,000,000');
+    // A Minter Admin sees the QORT it minted there.
+    expect(within(from).getByText('QORT minted there')).toBeInTheDocument();
+  });
+
   it('shows a nominee being signed for, as a Minter Admin sees them', async () => {
     const { posts } = await visit(ADDR.nominatedSigning, 'admin');
     const standing = await status();

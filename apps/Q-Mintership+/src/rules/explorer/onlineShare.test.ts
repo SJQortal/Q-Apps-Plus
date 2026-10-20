@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { countableBlocks, firstRoundAfter, onlineShare, percentWords } from './onlineShare';
+import {
+  countableBlocks,
+  firstRoundAfter,
+  lineageShare,
+  onlineShare,
+  percentWords,
+  type LevelLineage,
+} from './onlineShare';
 
 describe('countableBlocks', () => {
   it('counts one per block before the reward rounds, then 1,000 a round', () => {
@@ -52,5 +59,52 @@ describe('onlineShare', () => {
     expect(percentWords(100)).toBe('100%');
     expect(percentWords(0.4)).toBe('under 1%');
     expect(percentWords(0)).toBe('0%');
+  });
+});
+
+describe('a minting level that moved here (Simon, 2026-10-20)', () => {
+  // crowetic on 2026-10-20: its level came from crowetic-old in block 1,095,014.
+  const lineage: LevelLineage = {
+    periods: [
+      { address: 'Qcrowetic', from: 1_095_373, to: null },
+      { address: 'Qold', from: 2, to: 1_095_014 },
+    ],
+    sources: [
+      {
+        address: 'Qold',
+        name: 'crowetic-old',
+        to: 'Qcrowetic',
+        height: 1_095_014,
+        timestamp: 1,
+        signature: 'tp',
+        firstShare: 2,
+      },
+    ],
+    truncated: false,
+  };
+  const moved = {
+    firstShare: { height: 1_095_373, timestamp: 1 },
+    moved: { height: 1_095_014, away: false },
+  };
+
+  it('counts the rewards on every account the level was on', () => {
+    const share = lineageShare(2_664_893, lineage, 2_766_790);
+    // 1,095,012 on crowetic-old, then 412,627 + 1,258,000 here.
+    expect(share).toMatchObject({ kind: 'lineage', countable: 2_765_639 });
+    expect((share as { percent: number }).percent).toBeCloseTo(96.36, 1);
+    // Its own rewards alone would make it 159%: why it can't be told without them.
+    expect(onlineShare(2_664_893, moved, 2_766_790, lineage)).toEqual(share);
+  });
+
+  it('can’t tell without the accounts it came from, or when it moved away', () => {
+    expect(onlineShare(5, moved, 100, { ...lineage, sources: [] })).toEqual({
+      kind: 'moved',
+      height: 1_095_014,
+      to: false,
+    });
+    expect(onlineShare(5, moved, 100)).toMatchObject({ kind: 'moved' });
+    expect(
+      onlineShare(5, { ...moved, moved: { height: 7, away: true } }, 100, lineage)
+    ).toMatchObject({ kind: 'moved', to: true });
   });
 });

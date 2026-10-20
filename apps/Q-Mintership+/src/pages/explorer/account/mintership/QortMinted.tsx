@@ -7,6 +7,7 @@
  * read, a small fetch icon reads the rest; its ⓘ, beside the label, says how
  * it was worked out.
  */
+import { useEffect } from 'react';
 import { Box, ButtonBase, CircularProgress, Tooltip } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
@@ -20,11 +21,21 @@ const FETCH = 'Read the rest of its transactions to work out the QORT it minted'
 export function QortMintedFact({
   address,
   neverMinted,
+  label = 'QORT minted',
+  onMinted,
 }: {
   address: string;
   neverMinted: boolean;
+  /** "QORT minted there" for an account a minting level moved from. */
+  label?: string;
+  /** Told the QORT minted, atomic, once worked out (null until then). */
+  onMinted?: (atomic: bigint | null) => void;
 }) {
   const qort = useQortSummaries(address, neverMinted, { trades: false });
+  const atomic = qort.mintedAtomic;
+  useEffect(() => {
+    onMinted?.(atomic);
+  }, [atomic, onMinted]);
   let minted: React.ReactNode;
   if (qort.mintedWords) minted = qort.mintedWords;
   else if (qort.readingRest)
@@ -59,7 +70,7 @@ export function QortMintedFact({
   else minted = '…';
   return (
     <Fact
-      label="QORT minted"
+      label={label}
       info={qort.mintedWords ? qort.mintedInfo : null}
       value={
         <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>

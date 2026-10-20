@@ -3,12 +3,13 @@
  * from the app's status logic: nothing is worked out here), with its facts
  * (how much of the time its node was online among them: NodeOnline; QORT
  * minted only for viewers who see the Explorer's detailed parts,
- * rules/explorer/access.ts) and what the
+ * rules/explorer/access.ts), where its minting level came from when it moved
+ * here (LevelSources), and what the
  * viewer can do for it (the profile's actions); then its
  * nomination in full (the open one or the latest), its rounds in brief, and
  * a link to the nomination's own page.
  */
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
 import { Section } from '../../../../components/common/Section';
@@ -21,6 +22,7 @@ import type { MinterStory } from './useMinterStory';
 import { nominationLine, roundsLine } from './mintershipWords';
 import { Fact, Note } from './parts';
 import { QortMintedFact } from './QortMinted';
+import { LevelSources } from './LevelSources';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
 import { useNodeOnline } from '../../../../components/explorer/useNodeOnline';
 import { useFullExplorer } from '../../../../hooks/useFullExplorer';
@@ -56,6 +58,8 @@ export function StandingSection({
   const { status, since } = story;
   const person = status.data;
   const full = useFullExplorer() === true;
+  // Its own QORT minted, for the total with the accounts its level came from (LevelSources).
+  const [ownMinted, setOwnMinted] = useState<bigint | null>(null);
   let body;
   if (!person && status.isError) {
     body = (
@@ -86,7 +90,11 @@ export function StandingSection({
           <Fact label="Level" value={String(person.level)} />
           <Fact label="Blocks minted" value={formatCount(person.blocksMinted)} />
           {full ? (
-            <QortMintedFact address={address} neverMinted={person.blocksMinted === 0} />
+            <QortMintedFact
+              address={address}
+              neverMinted={person.blocksMinted === 0}
+              onMinted={setOwnMinted}
+            />
           ) : null}
           <NodeOnlineFact address={address} blocksMinted={person.blocksMinted} />
           {next.nextLevelAt !== null && next.blocksToNextLevel !== null ? (
@@ -104,6 +112,7 @@ export function StandingSection({
             <Fact label="Join request" value="Sent" />
           ) : null}
         </Box>
+        <LevelSources address={address} full={full} ownMinted={ownMinted} />
         {actions}
       </>
     );

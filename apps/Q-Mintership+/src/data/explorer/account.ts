@@ -7,12 +7,12 @@
  */
 import { CoreHttpError } from '../../qortal/client';
 import { base58Decode, base58Encode } from '../../qortal/base58';
-import { getAccount, isAddress } from '../accounts';
+import { getAccount, getPrimaryName, isAddress } from '../accounts';
 import { MINTER_GROUP_ID } from '../constants';
 import { getJson, getText, query, seg } from '../core';
 import { fetchQuery, peekQuery, setQueryData } from '../query';
 import type { AccountInfo, TxRow } from '../types';
-import type { MintingStart } from '../../rules/explorer/onlineShare';
+import type { LevelLineage, LevelSource, MintingStart } from '../../rules/explorer/onlineShare';
 
 const AT_ADDRESS_RE = /^A[1-9A-HJ-NP-Za-km-z]{33}$/;
 const SIGNATURE_RE = /^[1-9A-HJ-NP-Za-km-z]{86,90}$/;
@@ -278,6 +278,107 @@ export function getMintingStart(address: string): Promise<MintingStart> {
             ? { height: move.blockHeight, away: move.creatorAddress === address }
             : null,
       };
+    },
+    { ttlMs: 10 * 60_000 }
+  );
+}
+
+/** The minting-level moves into an account: who sent each, newest first, at most 20 (`xlevelin:<a>`). */
+export function getLevelMovesIn(
+  address: string
+): Promise<Array<{ from: string; height: number; timestamp: number; signature: string }>> {
+  return fetchQuery(
+    `xlevelin:${address}`,
+    async () => {
+      const rows = await getJson<TxRow[]>(
+        `/transactions/search?${query({
+          txType: 'TRANSFER_PRIVS',
+          address,
+          confirmationStatus: 'CONFIRMED',
+          limit: 20,
+          reverse: true,
+        })}`
+      );
+      return (Array.isArray(rows) ? rows : [])
+        .filter(
+          (tx) =>
+            typeof tx.blockHeight === 'number' &&
+            isAddress(tx.creatorAddress) &&
+            tx.creatorAddress !== address
+        )
+        .map((tx) => ({
+          from: tx.creatorAddress as string,
+          height: tx.blockHeight as number,
+          timestamp: tx.timestamp,
+          signature: tx.signature,
+        }));
+    },
+    { ttlMs: 10 * 60_000 }
+  );
+}
+
+/** Accounts followed back at most, and how many moves back. */
+export const LINEAGE_MAX_SOURCES = 6;
+export const LINEAGE_MAX_DEPTH = 3;
+
+/**
+ * Where an account's minting level was minted (`xlineage:<a>`; Simon,
+ * 2026-10-20: "when the minter level was moved from another account can you
+ * fetch that another account data for statistics as well"): the accounts it
+ * moved from, and the ones those got it from, each with its first reward
+ * share and the block it moved on, and the account itself since its own
+ * first share. Core adds a sender's blocks minted to the recipient's and
+ * clears the sender's, so the level's blocks minted are counted over all of
+ * them (rules/explorer/onlineShare.ts lineageShare). Per account: its
+ * moves in, its minting start and its name (one search, two of one row,
+ * one name), at most LINEAGE_MAX_SOURCES accounts, LINEAGE_MAX_DEPTH back.
+ */
+export function getLevelLineage(address: string): Promise<LevelLineage> {
+  return fetchQuery(
+    `xlineage:${address}`,
+    async () => {
+      const own = await getMintingStart(address);
+      const periods: LevelLineage['periods'] = own.firstShare
+        ? [{ address, from: own.firstShare.height, to: null }]
+        : [];
+      const sources: LevelSource[] = [];
+      const seen = new Set([address]);
+      let truncated = false;
+      const queue: Array<{ address: string; until: number; depth: number }> = [
+        { address, until: Number.POSITIVE_INFINITY, depth: 0 },
+      ];
+      while (queue.length) {
+        const next = queue.shift() as { address: string; until: number; depth: number };
+        const moves = (await getLevelMovesIn(next.address)).filter((m) => m.height <= next.until);
+        for (const move of moves) {
+          if (seen.has(move.from)) continue;
+          if (sources.length >= LINEAGE_MAX_SOURCES || next.depth >= LINEAGE_MAX_DEPTH) {
+            truncated = true;
+            continue;
+          }
+          seen.add(move.from);
+          const [start, name] = await Promise.all([
+            getMintingStart(move.from),
+            getPrimaryName(move.from).catch(() => null),
+          ]);
+          const first =
+            start.firstShare && start.firstShare.height < move.height
+              ? start.firstShare.height
+              : null;
+          sources.push({
+            address: move.from,
+            name,
+            to: next.address,
+            height: move.height,
+            timestamp: move.timestamp,
+            signature: move.signature,
+            firstShare: first,
+          });
+          if (first !== null) periods.push({ address: move.from, from: first, to: move.height });
+          queue.push({ address: move.from, until: move.height, depth: next.depth + 1 });
+        }
+      }
+      return { periods, sources, truncated };
     },
     { ttlMs: 10 * 60_000 }
   );

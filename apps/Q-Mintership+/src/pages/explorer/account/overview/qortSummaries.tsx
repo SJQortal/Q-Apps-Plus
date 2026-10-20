@@ -77,6 +77,8 @@ export interface QortSummaryParts {
   notice: ReactNode;
   /** QORT minted as plain words ("19,306 QORT", "Never minted"), null until worked out. */
   mintedWords: string | null;
+  /** QORT minted, atomic, once worked out (0 for never minted; null while unknown). */
+  mintedAtomic: bigint | null;
   /** What QORT minted says in its ⓘ, once worked out. */
   mintedInfo?: string;
   /** Its history is longer than the first read: it waits for readRest. */
@@ -143,7 +145,9 @@ export function useQortSummaries(
 
   let minted: ReactNode = waiting;
   let mintedInfo: string | undefined;
+  let mintedAtomic: bigint | null = null;
   if (neverMinted) {
+    mintedAtomic = 0n;
     minted = 'Never minted';
     mintedInfo = 'This account has never minted QORT: Qortal counts no blocks minted for it.';
   } else if (book && balance.data !== undefined && ordersNet !== undefined) {
@@ -153,6 +157,7 @@ export function useQortSummaries(
       minted = 'Unknown';
       mintedInfo = `Its transactions don't add up to its balance, so it can't be worked out. ${how}`;
     } else {
+      mintedAtomic = value;
       minted = `${short(value)} QORT`;
       mintedInfo = `${formatAtomic(value)} QORT. ${how}`;
     }
@@ -224,6 +229,7 @@ export function useQortSummaries(
   const needsRest = !done && Boolean(data) && !wantAll && held >= firstRead;
   return {
     mintedWords: typeof minted === 'string' && minted !== waiting ? minted : null,
+    mintedAtomic,
     mintedInfo,
     needsRest,
     readingRest: wantAll && !done,
