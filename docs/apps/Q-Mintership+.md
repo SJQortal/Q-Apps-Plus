@@ -2,9 +2,9 @@
 
 Who joins the MINTER group (694), and therefore who mints QORT: propose a nomination, then Minter Admins sign, reject or let it expire.
 
-**Published:** not yet.
+**Published:** on QDN as `Q-Mintership+` (APP, the testground), first on 2026-10-14 and republished by Simon as the feedback came in. The latest, on 2026-10-20 at 16:18 UTC, is built from `d4b5cf83` (item 135): the files its `index.html` loads match a fresh build of that commit. Simon hasn't called a publish 1.0.0 yet; the PR's head adds What's new's latest lines, item 136 and item 137 after it (zip: `release/Q-Mintership+.zip`).
 
-**Version on the branch:** `1.0.0` (not published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4. Nights 1 to 3 are done on the branch: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23). Night 2 added Simon's answers and proved every write on a private testnet. Night 3 marked "double" decisions, built Simon's answers to the night 2 questions and checked the app read-only in Hub with real data; Simon's guided real actions come next.
+**Version on the branch:** `1.0.0`, Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4, in one PR: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23) holds nights 1 to 3 (the new process, every write proven on a private testnet, a read-only Hub check with real data), the Explorer, and feedback round 1 (items 1 to 137, from Simon and the Minter Admins using the published app). Ready for review and merge since 2026-10-20 (Follow-ups → Readiness).
 
 ## Baseline at import
 
@@ -1187,7 +1187,9 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
 ### Readiness
 
-**Ready to publish as the testground, after the morning's guided actions.** Every write is proven on the private testnet (the full run, 15 of 15, on the final code); the app ran read-only in Hub with real data and in GO on a real phone with no errors; the tests, the screenshot check and the review are clean; the zip holds no testnet code. Nothing known blocks it. What only the morning can show: that Hub's dialogs for the real writes (a comment, a nomination, Considering, a first signature) say what the steps say. Publish once they match, then check Hub's own Copy link and the app in GO on its default node with the published app.
+**Ready for the PR (2026-10-20).** `q-mintership-plus/feedback-1` is merged into the rewrite branch, so #23 holds everything. On its head: `npm run build`, `npm run lint`, `scripts/sync-theme.sh --check` and the typecheck pass; `npm test` passes 2,480 tests (255 files); the zip is built; no Claude lines in any of its commit messages; the private-wording sweep finds nothing new. The app is in real use on mainnet: by 2026-10-20 (read-only count on Simon's node) Q-Mintership+ records from 18 names: 2 nominations, 2 community votes, 4 Considering, 26 comments, 3 notes and 3 comments for the Minter Admins only, 2 Minter Admin polls with 20 votes and 15 comments. What merging leaves open: the open questions below (Simon has answered most with "keep as built"), the Explorer's look at every size in Hub and GO (Next-pass ideas), and naming a publish 1.0.0. The upstream PR to Qortal/Q-Mintership-Alpha (docs/RELEASE.md, stage 4) starts from `main` once #23 is merged and Simon calls it ready.
+
+**Before publishing (2026-10-14):** ready as the testground after the morning's guided actions. Every write is proven on the private testnet (the full run, 15 of 15, on the final code); the app ran read-only in Hub with real data and in GO on a real phone with no errors; the tests, the screenshot check and the review are clean; the zip holds no testnet code. Nothing known blocks it. What only the morning can show: that Hub's dialogs for the real writes (a comment, a nomination, Considering, a first signature) say what the steps say. Publish once they match, then check Hub's own Copy link and the app in GO on its default node with the published app.
 
 **The Explorer (2026-10-16)** only reads, so it adds nothing to check in Hub's dialogs. It was checked with real data in a browser (the dev server reading the local node, signed out) and in the screenshot check, and on 2026-10-18 had a first look in a test Hub as a Minter Admin (complete: Connections, the QORT facts, Compare; item 122), but not yet at every size there or in GO: worth that look in Hub Dev Mode before publishing (Next-pass ideas).
 
