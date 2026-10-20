@@ -9,7 +9,10 @@
  * makeQuestion picks a level and a kind (rules/explorer/quiz/pick.ts: the
  * odds follow the streak, no kind among the last 3 asked, themes spread
  * out) and tries kinds until one makes a question: at most 12 tries and 20
- * seconds. Nothing here writes.
+ * seconds. A viewer who doesn't see the Explorer's detailed parts gets no
+ * kind answered only there (sponsees counted, who was paid most), and the
+ * others tell them where to look in the tabs they have (shared.ts `where`).
+ * Nothing here writes.
  */
 import { getTip } from '../../chain';
 import {
@@ -56,7 +59,10 @@ export interface MakeOptions {
   attempts?: number;
   budgetMs?: number;
   templates?: readonly QuizTemplate[];
-  /** The viewer sees the Explorer's detailed parts: false leaves out the questions found there. */
+  /**
+   * The viewer sees the Explorer's detailed parts: false leaves out the
+   * questions found only there, and the rest say where everyone can look.
+   */
   full?: boolean;
   now?: () => number;
 }
@@ -72,6 +78,7 @@ function finish(template: QuizTemplate, made: Made, tip: number): QuizQuestion {
     tip,
     ...made,
     kicker: made.kicker ?? KICKERS[template.theme],
+    ...(template.full ? { full: true as const } : {}),
   };
 }
 
@@ -79,7 +86,8 @@ function finish(template: QuizTemplate, made: Made, tip: number): QuizQuestion {
 export async function makeQuestion(options: MakeOptions = {}): Promise<QuizQuestion | null> {
   const rng = options.rng ?? Math.random;
   const all = options.templates ?? QUIZ_TEMPLATES;
-  const templates = options.full === false ? all.filter((t) => !t.full) : all;
+  const full = options.full !== false;
+  const templates = full ? all : all.filter((t) => !t.full);
   const history = options.history ?? NO_HISTORY;
   const now = options.now ?? (() => Date.now());
   const deadline = now() + (options.budgetMs ?? 20_000);
@@ -89,6 +97,7 @@ export async function makeQuestion(options: MakeOptions = {}): Promise<QuizQuest
     tip,
     seen: options.seen ?? (() => false),
     fresh: options.fresh ?? (() => true),
+    full,
   };
   const tried = new Map<string, number>();
   const attempts = options.attempts ?? 12;

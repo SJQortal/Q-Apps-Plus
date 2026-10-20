@@ -12,7 +12,14 @@ import userEvent from '@testing-library/user-event';
 import { ADDR, PEOPLE, TIP } from '../../../../e2e/world.mjs';
 import { renderPage } from '../../../test/render';
 import { expectNoAxeViolations } from '../../../test/axe';
-import { getQuiz, QUIZ_KEY, resetQuiz, setQuiz, EMPTY_QUIZ } from '../../../state/explorerQuiz';
+import {
+  getQuiz,
+  QUIZ_KEY,
+  resetQuiz,
+  setQuiz,
+  EMPTY_QUIZ,
+  type QuizHistoryEntry,
+} from '../../../state/explorerQuiz';
 import type { QuizQuestion } from '../../../rules/explorer/quiz/types';
 import QuizDock from './QuizDock';
 
@@ -294,5 +301,67 @@ describe('the Explorer Quiz bar', () => {
     expect(getQuiz().history).toMatchObject([
       { key: CHOICE.key, outcome: 'shown', picked: 'The same', answer: 'Higher' },
     ]);
+  });
+});
+
+describe('a question that says to look in Connections, kept on this device', () => {
+  const DETAILED: QuizQuestion = { ...QUESTION, key: 'test:detailed', full: true };
+  const entry = (key: string, words: string, full: boolean): QuizHistoryEntry => ({
+    key,
+    at: 1,
+    level: 'medium',
+    parts: [{ kind: 'text', text: words }],
+    answer: 'Lou Left',
+    outcome: 'right',
+    misses: 0,
+    hints: 0,
+    how: full ? 'Connections → Reward shares.' : 'Overview → At a glance.',
+    link: '/explorer',
+    linkLabel: 'Open it',
+    ...(full ? { full: true as const } : {}),
+  });
+
+  async function openAs(persona: string) {
+    resetQuiz();
+    setQuiz(() => ({
+      ...EMPTY_QUIZ,
+      on: true,
+      question: DETAILED,
+      score: { asked: 3, right: 1, streak: 1, best: 1 },
+      asked: [DETAILED.key],
+      history: [
+        entry('old:detailed', 'Who paid Lou Left most?', true),
+        entry('old:basic', 'What level is Lou Left?', false),
+      ],
+    }));
+    const user = userEvent.setup();
+    await renderPage(<QuizDock />, { persona, path: '/explorer' });
+    return { user, bar: screen.getByRole('region', { name: 'Explorer Quiz' }) };
+  }
+
+  it('is swapped for another, as if never asked, for a viewer who doesn’t see Connections', async () => {
+    const { user, bar } = await openAs('learner');
+    await waitFor(() => expect(getQuiz().question?.key).not.toBe(DETAILED.key), T);
+    await waitFor(() => expect(getQuiz().question).not.toBeNull(), T);
+    expect(getQuiz().question?.full).toBeUndefined();
+    expect(bar).not.toHaveTextContent('Who sponsored Leo Learner?');
+    // Not counted, not skipped: the score and the streak as they were.
+    expect(getQuiz().score).toMatchObject({ asked: 3, right: 1, streak: 1 });
+    expect(getQuiz().history.map((e) => e.key)).toEqual(['old:detailed', 'old:basic']);
+    // Its history lists only what this viewer can follow.
+    await user.click(await within(bar).findByRole('button', { name: 'Quiz history' }, T));
+    const dialog = await screen.findByRole('dialog', { name: 'Your quiz history' }, T);
+    expect(dialog).toHaveTextContent('What level is Lou Left?');
+    expect(dialog).not.toHaveTextContent(/Who paid Lou Left most|Connections/);
+  });
+
+  it('stays for a viewer who sees Connections, with its history', async () => {
+    const { user, bar } = await openAs('nominator');
+    expect(await within(bar).findByText('Minting archaeology', {}, T)).toBeVisible();
+    expect(bar).toHaveTextContent('Who sponsored Leo Learner?');
+    expect(getQuiz().question?.key).toBe(DETAILED.key);
+    await user.click(within(bar).getByRole('button', { name: 'Quiz history' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Your quiz history' }, T);
+    expect(dialog).toHaveTextContent('Who paid Lou Left most?');
   });
 });

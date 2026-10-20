@@ -12,8 +12,14 @@
  * Folds to one line; × closes it (the score and the questions asked stay).
  * Quiz history opens every question asked so far, with how it went
  * (QuizHistory). Loaded only while the quiz is on (AppShell).
+ *
+ * The quiz is kept on the device, not by account: a question that says to
+ * look in Connections (`full`) is shown only to a viewer who sees the
+ * Explorer's detailed parts. It waits while that is read, and for anyone
+ * else it is swapped for another (quizActions replaceDetailedQuestion) and
+ * left out of the history, with nothing said about it.
  */
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   Box,
@@ -40,6 +46,7 @@ import { BOTTOM_NAV_HEIGHT } from '../../layout/BottomNav';
 import { explorerAccountPath } from '../../../routes/paths';
 import { useBottomNavShown } from '../../layout/useBottomNav';
 import { BOTTOM_BAR_VAR, usePublishOverlay } from '../../../hooks/useOverlayPadding';
+import { useFullExplorer } from '../../../hooks/useFullExplorer';
 import { answerWords } from '../../../rules/explorer/quiz/check';
 import { QUIZ_LEVELS, type QuizQuestion } from '../../../rules/explorer/quiz/types';
 import {
@@ -60,6 +67,7 @@ import {
   askNext,
   closeQuiz,
   foldQuiz,
+  replaceDetailedQuestion,
   revealAnswer,
   setQuizLevel,
   showHint,
@@ -201,7 +209,16 @@ export default function QuizDock() {
   const fieldRef = useRef<HTMLInputElement>(null);
   const nextRef = useRef<HTMLButtonElement>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const historyButton = quiz.history.length ? (
+  const full = useFullExplorer();
+  const history = useMemo(
+    () => (full === true ? quiz.history : quiz.history.filter((entry) => !entry.full)),
+    [full, quiz.history]
+  );
+  const detailed = Boolean(quiz.question?.full) && full !== true;
+  useEffect(() => {
+    if (full === false && quiz.question?.full) void replaceDetailedQuestion();
+  }, [full, quiz.question]);
+  const historyButton = history.length ? (
     <Button
       startIcon={<HistoryOutlinedIcon />}
       onClick={() => setHistoryOpen(true)}
@@ -210,7 +227,8 @@ export default function QuizDock() {
       Quiz history
     </Button>
   ) : null;
-  const { question, status, folded } = quiz;
+  const { status, folded } = quiz;
+  const question = detailed ? null : quiz.question;
   const key = question?.key ?? null;
   const choice = question?.answer.kind === 'choice';
 
@@ -362,7 +380,7 @@ export default function QuizDock() {
         ) : null
       ) : (
         <Box id={bodyId} sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, minWidth: 0 }}>
-          {busy ? (
+          {busy || detailed ? (
             <Thinking />
           ) : failed || !question ? (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
@@ -607,7 +625,7 @@ export default function QuizDock() {
       <QuizHistory
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
-        history={quiz.history}
+        history={history}
         score={quiz.score}
       />
     </Box>

@@ -38,6 +38,12 @@ export interface QuizContext {
   seen: (key: string) => boolean;
   /** Not in a question lately (an address, `n:<name>`, `b:<height>`, `g:<group>`). */
   fresh: (subject: string) => boolean;
+  /**
+   * The viewer sees the Explorer's detailed parts (rules/explorer/access.ts):
+   * a question may send them to Connections. Otherwise it says where everyone
+   * can look (`where`).
+   */
+  full: boolean;
 }
 
 export type Made = Omit<QuizQuestion, 'v' | 'template' | 'level' | 'tip' | 'theme'>;
@@ -49,8 +55,10 @@ export interface QuizTemplate {
   /** How often it comes up against the others of its level (1 by default). */
   weight?: number;
   /**
-   * Its answer is found in the Explorer's detailed parts (Connections), which
-   * only some viewers see (rules/explorer/access.ts): asked only of them.
+   * Its answer is found only in the Explorer's detailed parts (Connections's
+   * totals), which only some viewers see (rules/explorer/access.ts): asked
+   * only of them. A question that can also be answered in the parts everyone
+   * sees asks everyone, and says where to look by the viewer (`where`).
    */
   full?: true;
   make: (ctx: QuizContext) => Promise<Made | null>;
@@ -132,6 +140,31 @@ export const subjects = (...items: Array<string | null | undefined | false>) =>
 export const nameSubject = (name: string) => `n:${name.toLowerCase()}`;
 export const blockSubject = (height: number) => `b:${height}`;
 export const groupSubject = (id: number) => `g:${id}`;
+
+// ---- where to look ---------------------------------------------------------------
+
+export type Where = Pick<Made, 'hint' | 'hint2' | 'how' | 'link' | 'linkLabel'>;
+
+/**
+ * Where to look, by the viewer: in Connections for those who see the
+ * Explorer's detailed parts (the question is then marked `full`, so it is
+ * never shown to anyone else on this device), in the tabs everyone sees
+ * for the rest. Nothing says that anything is left out.
+ */
+export function where(ctx: QuizContext, detailed: Where, basic: Where): Where & { full?: true } {
+  return ctx.full ? { ...detailed, full: true } : basic;
+}
+
+/** An account's Transactions tab with filters picked (rules/explorer/accountTxFilters.ts). */
+export function accountTxLink(
+  address: string,
+  filters: { kind?: string; type?: string; order?: 'oldest'; q?: string } = {}
+): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) if (value) params.set(key, value);
+  const search = params.toString();
+  return `${explorerAccountPath(address, 'transactions')}${search ? `?${search}` : ''}`;
+}
 
 // ---- links -----------------------------------------------------------------------
 

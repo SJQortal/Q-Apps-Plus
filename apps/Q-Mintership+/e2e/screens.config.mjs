@@ -199,6 +199,8 @@ const quizState = (status) => ({
     how: 'Connections → Reward shares: “Sponsored by …”. When several accounts sponsored it, the one Core counts is marked “the sponsor Core counts”.',
     link: `/explorer/account/${ADDR.learner}/connections`,
     linkLabel: 'Open its Connections',
+    // Asked of a viewer who sees Connections: shown once that is known.
+    full: true,
   },
   status,
   misses: 1,
@@ -260,8 +262,12 @@ const withQuiz = (status) => async (page) => {
   );
   await page.reload({ waitUntil: 'load' });
   await explorerSettle(page);
-  await page
-    .getByRole('region', { name: 'Explorer Quiz' })
+  const bar = page.getByRole('region', { name: 'Explorer Quiz' });
+  await bar.waitFor({ timeout: 8000 }).catch(() => {});
+  // A question that points to Connections shows once the viewer's access is read.
+  await bar
+    .getByText(status === 'choice' ? 'Who’s the veteran?' : 'Who sponsored', { exact: false })
+    .first()
     .waitFor({ timeout: 8000 })
     .catch(() => {});
 };

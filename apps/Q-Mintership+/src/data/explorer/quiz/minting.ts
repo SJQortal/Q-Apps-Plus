@@ -5,7 +5,9 @@
  * first 10 blocks now and then), how many self shares a stretch held,
  * where a minting level came from, and who sponsored the account it came
  * from. Sponsors are read as Connections reads them (its links search and
- * rules), so "first" means the first one Connections lists.
+ * rules), so "first" means the first one Connections lists, and the first
+ * account another account's Transactions tab shows starting a reward share
+ * with it, oldest first: viewers without Connections are sent there.
  */
 import { getPrivsRecipient } from '../account';
 import type { TxRow } from '../../types';
@@ -13,6 +15,7 @@ import { ordinal, say } from '../../../rules/explorer/quiz/words';
 import {
   ACCOUNT_PLACEHOLDER,
   accountLink,
+  accountTxLink,
   answerAccount,
   block,
   blockSubject,
@@ -29,10 +32,19 @@ import {
   shuffle,
   subjects,
   text,
+  where,
   wholeRange,
   type QuizContext,
   type QuizTemplate,
 } from './shared';
+
+/** An account's reward shares, oldest first, in its Transactions tab. */
+const sharesLink = (address: string) =>
+  accountTxLink(address, { kind: 'minting', type: 'REWARD_SHARE', order: 'oldest' });
+
+/** An account's minting level moves in its Transactions tab. */
+const movesLink = (address: string) =>
+  accountTxLink(address, { kind: 'minting', type: 'TRANSFER_PRIVS' });
 
 /** The first account that sponsored `address`, as Connections lists them (null: none, or capped). */
 async function firstSponsor(
@@ -50,7 +62,6 @@ const sponsor: QuizTemplate = {
   id: 'sponsor',
   level: 'medium',
   theme: 'minting',
-  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `sponsor:${m.address}`;
@@ -68,11 +79,22 @@ const sponsor: QuizTemplate = {
           : [personP(m), text(` had ${count(first.count)} sponsors. Which one came first?`)],
       answer: await answerAccount(first.sponsor),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Sponsors are in Connections, under Reward shares.',
-      how: 'Connections → Reward shares: “Sponsored by …”, the earliest first.',
+      ...where(
+        ctx,
+        {
+          hint: 'Sponsors are in Connections, under Reward shares.',
+          how: 'Connections → Reward shares: “Sponsored by …”, the earliest first.',
+          link: accountLink(m.address, 'connections'),
+          linkLabel: 'Open its Connections',
+        },
+        {
+          hint: 'A sponsor starts a reward share with the new minter: its Transactions tab can show just those, oldest first.',
+          how: 'Its Transactions tab → Minting → Reward share, Oldest first: the first account that “started a reward share with this account”.',
+          link: sharesLink(m.address),
+          linkLabel: 'Show its reward shares',
+        }
+      ),
       fact: `That reward share started in block ${count(first.height)}.`,
-      link: accountLink(m.address, 'connections'),
-      linkLabel: 'Open its Connections',
       subjects: subjects(m.address, first.sponsor),
     };
   },
@@ -82,7 +104,6 @@ const sponsorOfSponsor: QuizTemplate = {
   id: 'sponsorOfSponsor',
   level: 'expert',
   theme: 'detective',
-  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `sponsor2:${m.address}`;
@@ -101,11 +122,22 @@ const sponsorOfSponsor: QuizTemplate = {
       ],
       answer: await answerAccount(second.sponsor),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Two steps through Connections → Reward shares.',
-      how: 'Its Connections → Reward shares names its sponsor; open that account, and its Connections names the next one.',
+      ...where(
+        ctx,
+        {
+          hint: 'Two steps through Connections → Reward shares.',
+          how: 'Its Connections → Reward shares names its sponsor; open that account, and its Connections names the next one.',
+          link: accountLink(first.sponsor, 'connections'),
+          linkLabel: 'Open the sponsor’s Connections',
+        },
+        {
+          hint: 'Two steps through Transactions tabs: each account’s reward shares, oldest first.',
+          how: 'Its Transactions tab → Minting → Reward share, Oldest first: the first account that started a reward share with it is its sponsor. Open that account and do the same.',
+          link: sharesLink(first.sponsor),
+          linkLabel: 'Show the sponsor’s reward shares',
+        }
+      ),
       fact: `The middle step: ${middle.name ?? middle.address}.`,
-      link: accountLink(first.sponsor, 'connections'),
-      linkLabel: 'Open the sponsor’s Connections',
       subjects: subjects(m.address, first.sponsor, second.sponsor),
     };
   },
@@ -154,11 +186,14 @@ const shareRun: QuizTemplate = {
   id: 'shareRun',
   level: 'tricky',
   theme: 'minting',
-  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const links = await linksAbout(m.address);
-    const ended = links?.sponsors.filter((s) => s.blocks !== null && s.removal) ?? [];
+    // Without Connections's sentence, only a share started once and removed once is clear.
+    const ended =
+      links?.sponsors.filter(
+        (s) => s.blocks !== null && s.removal && (ctx.full || s.txs.length === 2)
+      ) ?? [];
     const share = ended[Math.floor(ctx.rng() * ended.length)];
     if (!share || share.sponsor === m.address) return null;
     const key = `shareRun:${m.address}:${share.sponsor}`;
@@ -174,11 +209,22 @@ const shareRun: QuizTemplate = {
       ],
       answer: { kind: 'number', value: String(share.blocks) },
       placeholder: 'A number of blocks',
-      hint: 'Connections → Reward shares says how long each sponsor’s share ran.',
-      how: 'Connections → Reward shares: “Sponsored by … at … % for N blocks”.',
+      ...where(
+        ctx,
+        {
+          hint: 'Connections → Reward shares says how long each sponsor’s share ran.',
+          how: 'Connections → Reward shares: “Sponsored by … at … % for N blocks”.',
+          link: accountLink(m.address, 'connections'),
+          linkLabel: 'Open its Connections',
+        },
+        {
+          hint: 'Its Transactions tab can show just its reward shares: find when that one started and when it was removed.',
+          how: 'Its Transactions tab → Minting → Reward share: the block where the sponsor “removed its reward share with this account”, less the block where it “started a reward share with this account”.',
+          link: sharesLink(m.address),
+          linkLabel: 'Show its reward shares',
+        }
+      ),
       fact: `From block ${count(share.start.height)} to block ${count(share.removal?.height ?? 0)}.`,
-      link: accountLink(m.address, 'connections'),
-      linkLabel: 'Open its Connections',
       subjects: subjects(m.address, share.sponsor),
     };
   },
@@ -355,7 +401,6 @@ const levelMoveFrom: QuizTemplate = {
   id: 'levelMoveFrom',
   level: 'tricky',
   theme: 'minting',
-  full: true,
   async make(ctx) {
     const move = await levelMove(ctx);
     if (!move) return null;
@@ -370,11 +415,22 @@ const levelMoveFrom: QuizTemplate = {
       ]),
       answer: await answerAccount(move.from),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Minting level moves are recorded between the two accounts.',
-      how: 'Connections → “Got its minting level from …” (the Explorer reads the recipient from the transaction’s raw bytes, since Core’s JSON leaves it out).',
+      ...where(
+        ctx,
+        {
+          hint: 'Minting level moves are recorded between the two accounts.',
+          how: 'Connections → “Got its minting level from …” (the Explorer reads the recipient from the transaction’s raw bytes, since Core’s JSON leaves it out).',
+          link: accountLink(move.to, 'connections'),
+          linkLabel: 'Open its Connections',
+        },
+        {
+          hint: 'Minting level moves are recorded between the two accounts: its Transactions tab can show just those.',
+          how: 'Its Transactions tab → Minting → Minting level move: “Got its minting level from …” (the Explorer reads the recipient from the transaction’s raw bytes, since Core’s JSON leaves it out).',
+          link: movesLink(move.to),
+          linkLabel: 'Show its minting level moves',
+        }
+      ),
       fact: `Moved in block ${count(move.tx.blockHeight ?? 0)}, ${day(move.tx.timestamp)}.`,
-      link: accountLink(move.to, 'connections'),
-      linkLabel: 'Open its Connections',
       subjects: subjects(move.to, move.from),
     };
   },
@@ -384,7 +440,6 @@ const levelMoveThenSponsor: QuizTemplate = {
   id: 'levelMoveThenSponsor',
   level: 'expert',
   theme: 'detective',
-  full: true,
   async make(ctx) {
     const move = await levelMove(ctx);
     if (!move) return null;
@@ -404,11 +459,22 @@ const levelMoveThenSponsor: QuizTemplate = {
       ],
       answer: await answerAccount(first.sponsor),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Two steps through Connections: where its level came from, then that account’s sponsor.',
-      how: 'Its Connections names who its level came from; that account’s Connections → Reward shares names its sponsor.',
+      ...where(
+        ctx,
+        {
+          hint: 'Two steps through Connections: where its level came from, then that account’s sponsor.',
+          how: 'Its Connections names who its level came from; that account’s Connections → Reward shares names its sponsor.',
+          link: accountLink(move.from, 'connections'),
+          linkLabel: 'Open the giver’s Connections',
+        },
+        {
+          hint: 'Two steps through Transactions tabs: where its level came from, then the first reward share another account started with that one.',
+          how: 'Its Transactions tab → Minting → Minting level move names who its level came from; that account’s Transactions tab → Minting → Reward share, Oldest first: the first account that started a reward share with it.',
+          link: sharesLink(move.from),
+          linkLabel: 'Show the giver’s reward shares',
+        }
+      ),
       fact: `The level came from ${from.name ?? from.address}.`,
-      link: accountLink(move.from, 'connections'),
-      linkLabel: 'Open the giver’s Connections',
       subjects: subjects(move.to, move.from, first.sponsor),
     };
   },

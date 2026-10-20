@@ -2,7 +2,8 @@
  * What the Explorer Quiz does: start it, make the next question (one at a
  * time; a second press waits for the first), check a typed answer or a
  * multiple-choice pick (one go), give a hint and then a closer one, show
- * the answer, pick a level, fold and close the bar. A live answer (a level,
+ * the answer, pick a level, fold and close the bar, and swap a question that
+ * points to Connections for one the viewer can follow. A live answer (a level,
  * how many names) is read again when what was typed doesn't match, so a
  * question asked yesterday is still fair today. State in
  * state/explorerQuiz.ts; questions from data/explorer/quiz/.
@@ -50,11 +51,40 @@ function remembered(state: QuizState, outcome: QuizOutcome, picked?: string): Qu
     ...(q.fact ? { fact: q.fact } : {}),
     link: q.link,
     linkLabel: q.linkLabel,
+    ...(q.full ? { full: q.full } : {}),
   };
   return {
     ...state,
     history: [...state.history.filter((e) => e.key !== q.key), entry].slice(-HISTORY_MAX),
   };
+}
+
+/**
+ * The open question says to look in the Explorer's detailed parts, and the
+ * viewer doesn't see them (another account signed in on this device): it
+ * goes as if it had never been asked (no score, no history, the streak
+ * kept), and another comes in its place.
+ */
+export function replaceDetailedQuestion(): Promise<boolean> | null {
+  const open = getQuiz().question;
+  if (!open?.full) return null;
+  setQuiz((state) =>
+    state.question?.key !== open.key
+      ? state
+      : {
+          ...state,
+          question: null,
+          status: 'asking',
+          misses: 0,
+          hints: 0,
+          picked: null,
+          score:
+            state.status === 'asking'
+              ? { ...state.score, asked: Math.max(0, state.score.asked - 1) }
+              : state.score,
+        }
+  );
+  return askNext();
 }
 
 /** A new question in place of the open one; false when none could be made. */

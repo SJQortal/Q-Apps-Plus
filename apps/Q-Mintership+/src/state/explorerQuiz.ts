@@ -48,6 +48,8 @@ export interface QuizHistoryEntry {
   fact?: string;
   link: string;
   linkLabel: string;
+  /** It said to look in the Explorer's detailed parts: listed only for a viewer who sees them. */
+  full?: true;
 }
 
 export const HISTORY_MAX = 100;

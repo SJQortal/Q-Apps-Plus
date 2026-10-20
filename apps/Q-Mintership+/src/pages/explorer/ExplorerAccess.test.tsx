@@ -197,30 +197,15 @@ describe('exchanges named as such', () => {
 });
 
 describe('the Explorer Quiz', () => {
-  it('asks what is found in Connections only of viewers who see it', async () => {
+  it('asks what is found only in Connections only of viewers who see it', async () => {
     installWorld('learner');
+    // Connections's totals; the rest say where everyone can look (generators.test.ts).
     expect(
       QUIZ_TEMPLATES.filter((t) => t.full)
         .map((t) => t.id)
         .sort()
-    ).toEqual(
-      [
-        'blockPayerFirstQort',
-        'firstQortFrom',
-        'firstQortTwoHops',
-        'levelMoveFrom',
-        'levelMoveThenSponsor',
-        'namePrice',
-        'nameSeller',
-        'payTotal',
-        'shareRun',
-        'sponseesCount',
-        'sponsor',
-        'sponsorOfSponsor',
-        'topPayee',
-      ].sort()
-    );
-    // Every question that sends the viewer to Connections is one of them.
+    ).toEqual(['sponseesCount', 'topPayee']);
+    // Every question that can only be answered in Connections is one of them.
     const fake = (id: string, full: boolean): QuizTemplate => ({
       id,
       level: 'easy',
@@ -246,6 +231,35 @@ describe('the Explorer Quiz', () => {
     for (let i = 0; i < 20; i++)
       both.add((await makeQuestion({ templates, level: 'easy', full: true }))?.template ?? '');
     expect(both).toEqual(new Set(['detailed', 'basic']));
+  });
+
+  it('sends a viewer without Connections to a Transactions tab that says it', async () => {
+    // Where a sponsor is found: Leo Learner's reward shares, oldest first.
+    await renderPage(<AccountPage />, {
+      persona: 'learner',
+      path: `${explorerAccountPath(ADDR.learner, 'transactions')}?kind=minting&type=REWARD_SHARE&order=oldest`,
+      route: ROUTE,
+    });
+    const panel = await screen.findByRole('tabpanel', { name: 'Transactions' }, T);
+    const rows = await within(panel).findAllByText(
+      /started a reward share with this account/,
+      {},
+      T
+    );
+    await waitFor(() => expect(rows[0].closest('li')).toHaveTextContent('Sid Sponsor'), T);
+    expect(panel).toHaveTextContent('removed its reward share with this account');
+    expect(screen.queryByRole('tab', { name: 'Connections' })).toBeNull();
+  });
+
+  it('… and to the minting level moves, where it got its level from', async () => {
+    await renderPage(<AccountPage />, {
+      persona: 'learner',
+      path: `${explorerAccountPath(ADDR.kickTarget, 'transactions')}?kind=minting&type=TRANSFER_PRIVS`,
+      route: ROUTE,
+    });
+    const panel = await screen.findByRole('tabpanel', { name: 'Transactions' }, T);
+    expect(await within(panel).findByText(/Got its minting level from/, {}, T)).toBeVisible();
+    await waitFor(() => expect(panel).toHaveTextContent('Olga Old'), T);
   });
 });
 

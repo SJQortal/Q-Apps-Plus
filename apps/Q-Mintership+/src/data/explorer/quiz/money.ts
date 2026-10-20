@@ -3,7 +3,10 @@
  * first QORT (and its payer's), what one account paid another in all, who
  * it paid most, the biggest payment of a block and its sum, and a trade
  * contract's payout. Totals between two accounts are live (more payments
- * may come) and read again when an answer doesn't match.
+ * may come) and read again when an answer doesn't match. Viewers without
+ * Connections are sent to an account's Transactions tab instead (its
+ * payments, oldest first, or searched for the other account); who was paid
+ * most is asked only of those with Connections, which adds it up.
  */
 import { isAddress } from '../../accounts';
 import { getJson, query } from '../../core';
@@ -15,6 +18,7 @@ import {
   ACCOUNT_PLACEHOLDER,
   accountLink,
   accountP,
+  accountTxLink,
   answerAccount,
   atomic,
   block,
@@ -32,9 +36,17 @@ import {
   searchRange,
   subjects,
   text,
+  where,
   wholeRange,
   type QuizTemplate,
 } from './shared';
+
+/** An account's payments, oldest first, in its Transactions tab. */
+const paymentsLink = (address: string) =>
+  accountTxLink(address, { kind: 'payments', order: 'oldest' });
+
+/** Most payments added up by hand, for a viewer without Connections's totals. */
+const BASIC_MAX_PAYMENTS = 8;
 
 const str = (value: unknown): string | null =>
   typeof value === 'string' && value.trim() ? value : null;
@@ -111,7 +123,6 @@ const firstQortFrom: QuizTemplate = {
   id: 'firstQortFrom',
   level: 'medium',
   theme: 'money',
-  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `firstQort:${m.address}`;
@@ -126,10 +137,21 @@ const firstQortFrom: QuizTemplate = {
       ]),
       answer: await answerAccount(from),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Connections → In common says where its first QORT came from.',
-      how: 'Connections → In common: “First QORT payment received: … from …”.',
-      link: accountLink(m.address, 'connections'),
-      linkLabel: 'Open its Connections',
+      ...where(
+        ctx,
+        {
+          hint: 'Connections → In common says where its first QORT came from.',
+          how: 'Connections → In common: “First QORT payment received: … from …”.',
+          link: accountLink(m.address, 'connections'),
+          linkLabel: 'Open its Connections',
+        },
+        {
+          hint: 'Its Transactions tab can show just its payments, oldest first.',
+          how: 'Its Transactions tab → Payments, Oldest first: the first payment it received names who sent it.',
+          link: paymentsLink(m.address),
+          linkLabel: 'Show its payments, oldest first',
+        }
+      ),
       subjects: subjects(m.address, from),
     };
   },
@@ -139,7 +161,6 @@ const firstQortTwoHops: QuizTemplate = {
   id: 'firstQortTwoHops',
   level: 'expert',
   theme: 'detective',
-  full: true,
   async make(ctx) {
     const m = await randomMember(ctx);
     const key = `firstQort2:${m.address}`;
@@ -158,11 +179,22 @@ const firstQortTwoHops: QuizTemplate = {
       ],
       answer: await answerAccount(second),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Connections → In common says where an account’s first QORT came from. Then do it again.',
-      how: 'Its Connections → In common names who sent its first QORT; open that account, and its In common names the next one.',
+      ...where(
+        ctx,
+        {
+          hint: 'Connections → In common says where an account’s first QORT came from. Then do it again.',
+          how: 'Its Connections → In common names who sent its first QORT; open that account, and its In common names the next one.',
+          link: accountLink(first, 'connections'),
+          linkLabel: 'Open the middle account’s Connections',
+        },
+        {
+          hint: 'An account’s Transactions tab can show its payments, oldest first: the first one it received. Then do it again.',
+          how: 'Its Transactions tab → Payments, Oldest first: the first payment it received names who sent it; open that account and do the same.',
+          link: paymentsLink(first),
+          linkLabel: 'Show the middle account’s payments, oldest first',
+        }
+      ),
       fact: `The middle step: ${middle.name ?? middle.address}.`,
-      link: accountLink(first, 'connections'),
-      linkLabel: 'Open the middle account’s Connections',
       subjects: subjects(m.address, first, second),
     };
   },
@@ -210,7 +242,6 @@ const payTotal: QuizTemplate = {
   id: 'payTotal',
   level: 'tricky',
   theme: 'money',
-  full: true,
   async make(ctx) {
     const found = await randomRows(ctx, ['PAYMENT'], 10_000, 500_000);
     if (!found) return null;
@@ -222,8 +253,11 @@ const payTotal: QuizTemplate = {
     if (ctx.seen(key)) return null;
     const paid = await paidBetween(tx.creatorAddress, to);
     if (!paid || (!asTotal && paid.count < 2)) return null;
+    // Without Connections's sum, only as many as are fair to add up by hand.
+    if (!ctx.full && paid.count > BASIC_MAX_PAYMENTS) return null;
     const from = await accountP(tx.creatorAddress);
-    const target = await accountP(to);
+    const payee = await person(to);
+    const target = personP(payee);
     return {
       key,
       parts: asTotal
@@ -253,13 +287,30 @@ const payTotal: QuizTemplate = {
         ? { kind: 'number', value: paid.total, unit: 'QORT' }
         : { kind: 'number', value: String(paid.count) },
       placeholder: asTotal ? 'An amount of QORT' : 'A number',
-      hint: 'Connections groups payments by the other account.',
-      how: 'The payer’s Connections → Payments → Sent to: “Paid … QORT in … payments”.',
+      ...where(
+        ctx,
+        {
+          hint: 'Connections groups payments by the other account.',
+          how: 'The payer’s Connections → Payments → Sent to: “Paid … QORT in … payments”.',
+          link: accountLink(tx.creatorAddress, 'connections'),
+          linkLabel: 'Open the payer’s Connections',
+        },
+        {
+          hint: 'The payer’s Transactions tab can show just its payments, and its search narrows them to one account.',
+          how: `The payer’s Transactions tab → Payments → Payment, searched for the other account: ${
+            asTotal ? 'add up' : 'count'
+          } the payments it sent there (not the ones it received).`,
+          link: accountTxLink(tx.creatorAddress, {
+            kind: 'payments',
+            type: 'PAYMENT',
+            q: payee.name ?? payee.address,
+          }),
+          linkLabel: 'Show the payer’s payments',
+        }
+      ),
       fact: asTotal
         ? `In ${count(paid.count)} ${paid.count === 1 ? 'payment' : 'payments'}.`
         : `${fromAtomic(atomic(paid.total)).replace(/\.?0+$/, '')} QORT in all.`,
-      link: accountLink(tx.creatorAddress, 'connections'),
-      linkLabel: 'Open the payer’s Connections',
       live: true,
       args: { from: tx.creatorAddress, to, kind: asTotal ? 'total' : 'count' },
       subjects: subjects(tx.creatorAddress, to),
@@ -421,7 +472,6 @@ const blockPayerFirstQort: QuizTemplate = {
   id: 'blockPayerFirstQort',
   level: 'expert',
   theme: 'detective',
-  full: true,
   async make(ctx) {
     const found = await paymentBlock(ctx);
     if (!found) return null;
@@ -446,11 +496,22 @@ const blockPayerFirstQort: QuizTemplate = {
       ],
       answer: await answerAccount(source),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Three steps: the block’s biggest payment, its payer, then that payer’s Connections → In common.',
-      how: 'Transactions on Qortal at that block names the biggest payer; its Connections → In common says where its first QORT came from.',
+      ...where(
+        ctx,
+        {
+          hint: 'Three steps: the block’s biggest payment, its payer, then that payer’s Connections → In common.',
+          how: 'Transactions on Qortal at that block names the biggest payer; its Connections → In common says where its first QORT came from.',
+          link: accountLink(payer, 'connections'),
+          linkLabel: 'Open the payer’s Connections',
+        },
+        {
+          hint: 'Three steps: the block’s biggest payment, its payer, then the first payment that payer received.',
+          how: 'Transactions on Qortal at that block names the biggest payer; its Transactions tab → Payments, Oldest first: the first payment it received names who sent it.',
+          link: paymentsLink(payer),
+          linkLabel: 'Show the payer’s payments, oldest first',
+        }
+      ),
       fact: `The payer: ${middle.name ?? middle.address}.`,
-      link: accountLink(payer, 'connections'),
-      linkLabel: 'Open the payer’s Connections',
       subjects: subjects(payer, source, blockSubject(found.height)),
     };
   },

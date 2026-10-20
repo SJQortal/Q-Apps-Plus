@@ -94,4 +94,10 @@ export interface QuizQuestion {
   args?: Record<string, string | number>;
   /** What it was about (accounts, names, blocks, groups), kept a while so they don't come back soon. */
   subjects?: string[];
+  /**
+   * It says to look in the Explorer's detailed parts (Connections), so it is
+   * shown only to a viewer who sees them: another account signed in on this
+   * device gets another question in its place, and its history leaves it out.
+   */
+  full?: true;
 }

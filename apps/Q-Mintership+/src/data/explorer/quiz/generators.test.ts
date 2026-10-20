@@ -283,6 +283,101 @@ describe('the Explorer Quiz’s questions', () => {
     expect(await recheckAnswer({ ...stale, live: false })).toBeNull();
   });
 
+  it('says where everyone can look, and Connections only to a viewer who sees it', async () => {
+    // Leo Learner alone: Sid Sponsor shared with him from block 1,371,641 to 1,378,875.
+    const leo = (subject: string) => subject === ADDR.learner || !subject.startsWith('Q');
+    const cases: Array<[string, Partial<Parameters<typeof makeQuestion>[0]>, RegExp]> = [
+      [
+        'sponsor',
+        { fresh: leo, rng: fixed(0.3) },
+        /\/transactions\?kind=minting&type=REWARD_SHARE&order=oldest$/,
+      ],
+      [
+        'shareRun',
+        { fresh: leo, rng: fixed(0.3) },
+        /\/transactions\?kind=minting&type=REWARD_SHARE&order=oldest$/,
+      ],
+      ['levelMoveFrom', { rng: fixed(0.6) }, /\/transactions\?kind=minting&type=TRANSFER_PRIVS$/],
+      ['firstQortFrom', { rng: fixed(0.01) }, /\/transactions\?kind=payments&order=oldest$/],
+      ['nameSeller', { rng: fixed(0.1) }, /\/transactions\?kind=names&type=BUY_NAME$/],
+      ['namePrice', { rng: fixed(0.1) }, /^\/explorer\/transactions\?type=BUY_NAME/],
+    ];
+    const answers: Record<string, unknown> = {};
+    for (const [id, options, basicLink] of cases) {
+      // Name sales: the only rows these two read, once the others are made.
+      if (id === 'nameSeller')
+        mockFetchRoute('/transactions/search', (url: URL) =>
+          url.searchParams.get('txType') === 'BUY_NAME'
+            ? [
+                {
+                  type: 'BUY_NAME',
+                  signature: 'sale-2',
+                  timestamp: 1,
+                  txGroupId: 0,
+                  blockHeight: 2_000_123,
+                  creatorAddress: ADDR.learner,
+                  seller: ADDR.left,
+                  name: 'Maple',
+                  amount: '27.50000000',
+                },
+              ]
+            : []
+        );
+      const t = template(id);
+      const make = (full: boolean) =>
+        makeQuestion({ templates: [t], level: t.level, full, attempts: 1, ...options });
+      const basic = await make(false);
+      const detailed = await make(true);
+      if (!basic || !detailed) throw new Error(`${id}: no question`);
+      // The same question and answer; only where to look differs.
+      expect([id, basic.parts]).toEqual([id, detailed.parts]);
+      expect([id, basic.answer]).toEqual([id, detailed.answer]);
+      answers[id] = basic.answer;
+      expect([id, basic.link]).toEqual([id, expect.stringMatching(basicLink)]);
+      expect([id, basic.full]).toEqual([id, undefined]);
+      const said = [basic.hint, basic.hint2, basic.how, basic.fact, basic.linkLabel].join(' ');
+      expect([id, said]).toEqual([id, expect.not.stringMatching(/Connections|In common/i)]);
+      expect([id, detailed.full]).toEqual([id, true]);
+      expect([id, detailed.how]).toEqual([id, expect.stringMatching(/Connections/)]);
+    }
+    expect(answers.sponsor).toMatchObject({ kind: 'account', name: 'Sid Sponsor' });
+    expect(answers.shareRun).toEqual({ kind: 'number', value: String(1_378_875 - 1_371_641) });
+    expect(answers.nameSeller).toMatchObject({ kind: 'account', address: ADDR.left });
+  });
+
+  it('asks a sum of payments of a viewer without Connections only when it is short', async () => {
+    expect(template('payTotal').full).toBeUndefined();
+    // Only Connections adds up who an account paid most, and counts a sponsor's sponsees.
+    expect(
+      QUIZ_TEMPLATES.filter((t) => t.full)
+        .map((t) => t.id)
+        .sort()
+    ).toEqual(['sponseesCount', 'topPayee']);
+  });
+
+  it('asks nothing that sends a viewer without Connections there', async () => {
+    const DETAILED =
+      /Connections|In common|Compare|QORT minted|purchased|received \/ sent|activity chart/i;
+    let made = 0;
+    for (const t of QUIZ_TEMPLATES)
+      for (const r of [0.05, 0.35, 0.65, 0.95]) {
+        const q = await makeQuestion({
+          templates: [t],
+          level: t.level,
+          rng: fixed(r),
+          full: false,
+          attempts: 1,
+        });
+        if (!q) continue;
+        made += 1;
+        expect(t.full).toBeUndefined();
+        const said = [q.hint, q.hint2, q.how, q.fact, q.link, q.linkLabel].join(' ');
+        expect([t.id, said]).toEqual([t.id, expect.not.stringMatching(DETAILED)]);
+        expect(q.full).toBeUndefined();
+      }
+    expect(made).toBeGreaterThan(20);
+  }, 30_000);
+
   it('skips accounts asked about lately', async () => {
     const lately = new Set<string>(Object.values(ADDR));
     const q = await makeQuestion({

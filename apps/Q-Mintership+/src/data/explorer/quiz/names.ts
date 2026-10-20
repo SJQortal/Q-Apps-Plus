@@ -2,7 +2,8 @@
  * Quiz questions about names: what one sold for and who sold it, an asking
  * price, a rename either way, how many were registered in 100 blocks, the
  * day of the week one was registered, and who registered a name that has
- * since changed hands.
+ * since changed hands. A sale is found in Transactions on Qortal by everyone;
+ * a viewer who has Connections is pointed to the buyer's there too.
  */
 import { isAddress } from '../../accounts';
 import { getNameData } from '../account';
@@ -11,6 +12,7 @@ import {
   ACCOUNT_PLACEHOLDER,
   accountLink,
   accountP,
+  accountTxLink,
   answerAccount,
   block,
   blockSubject,
@@ -27,6 +29,7 @@ import {
   stretchOf,
   subjects,
   text,
+  where,
   wholeRange,
   type QuizContext,
   type QuizTemplate,
@@ -55,7 +58,6 @@ const namePrice: QuizTemplate = {
   id: 'namePrice',
   level: 'medium',
   theme: 'names',
-  full: true,
   async make(ctx) {
     const tx = await nameSale(ctx);
     if (!tx) return null;
@@ -80,11 +82,22 @@ const namePrice: QuizTemplate = {
       ]),
       answer: { kind: 'number', value: tx.amount as string, unit: 'QORT' },
       placeholder: 'An amount of QORT',
-      hint: 'Name purchases are a type of their own in Transactions on Qortal; the buyer’s Connections lists them too.',
-      how: 'Transactions on Qortal → Name purchase at that block, or the buyer’s Connections → Names: “Bought … from … for … QORT”.',
+      ...where(
+        ctx,
+        {
+          hint: 'Name purchases are a type of their own in Transactions on Qortal; the buyer’s Connections lists them too.',
+          how: 'Transactions on Qortal → Name purchase at that block, or the buyer’s Connections → Names: “Bought … from … for … QORT”.',
+          link: globalLink('BUY_NAME', tx.blockHeight as number, 1),
+          linkLabel: 'Show that block’s name purchases',
+        },
+        {
+          hint: 'Name purchases are a type of their own in Transactions on Qortal; the buyer’s Transactions tab lists them too.',
+          how: 'Transactions on Qortal → Name purchase at that block, or the buyer’s Transactions tab → Names → Name purchase: “Bought the name … from … for … QORT”.',
+          link: globalLink('BUY_NAME', tx.blockHeight as number, 1),
+          linkLabel: 'Show that block’s name purchases',
+        }
+      ),
       fact: `Bought ${day(tx.timestamp)}.`,
-      link: globalLink('BUY_NAME', tx.blockHeight as number, 1),
-      linkLabel: 'Show that block’s name purchases',
       subjects: subjects(tx.creatorAddress, nameSubject(tx.name as string)),
     };
   },
@@ -94,7 +107,6 @@ const nameSeller: QuizTemplate = {
   id: 'nameSeller',
   level: 'medium',
   theme: 'names',
-  full: true,
   async make(ctx) {
     const tx = await nameSale(ctx);
     if (!tx) return null;
@@ -113,11 +125,22 @@ const nameSeller: QuizTemplate = {
       ]),
       answer: await answerAccount(tx.seller as string),
       placeholder: ACCOUNT_PLACEHOLDER,
-      hint: 'Look at the buyer’s connections, or the name’s history.',
-      how: 'The buyer’s Connections → Names says who sold it; the Names tab shows each name’s history too.',
+      ...where(
+        ctx,
+        {
+          hint: 'Look at the buyer’s connections, or the name’s history.',
+          how: 'The buyer’s Connections → Names says who sold it; the Names tab shows each name’s history too.',
+          link: accountLink(tx.creatorAddress as string, 'connections'),
+          linkLabel: 'Open the buyer’s Connections',
+        },
+        {
+          hint: 'Look at the buyer’s name purchases, or the name’s history.',
+          how: 'The buyer’s Transactions tab → Names → Name purchase: “Bought the name … from …”; the Names tab shows each name’s history too.',
+          link: accountTxLink(tx.creatorAddress as string, { kind: 'names', type: 'BUY_NAME' }),
+          linkLabel: 'Show the buyer’s name purchases',
+        }
+      ),
       fact: `It went for ${String(tx.amount).replace(/\.?0+$/, '')} QORT, ${day(tx.timestamp)}.`,
-      link: accountLink(tx.creatorAddress as string, 'connections'),
-      linkLabel: 'Open the buyer’s Connections',
       subjects: subjects(tx.creatorAddress, tx.seller as string, nameSubject(tx.name as string)),
     };
   },
