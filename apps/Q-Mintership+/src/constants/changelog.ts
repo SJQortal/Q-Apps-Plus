@@ -65,6 +65,12 @@ export const CHANGELOG: Release[] = [
           'On a phone or tablet, swipe left or right on an account to go through its tabs.',
           'Explorer’s Names shows each name as a card (or a list, if you prefer), sortable, with its history right beside it. What an account published on QDN is in Transactions.',
           'On a phone, Explorer is in the bottom bar, and Settings is the gear at the top of Home.',
+          'Replies reach you: Hub can alert you when someone replies to your comment (Settings → Notifications), Home lists the replies since your last visit, and opening one goes straight to it in its thread. Replies posted from this version on count.',
+          'Close comments at the bottom of a thread folds it away smoothly, and the rest of the page stays where it is.',
+          'A transaction’s page says where it belongs and opens it there: a Q-Tube video, comment or like, a Torq post, reply or like, a share in Q-Share, a crowdfund in Q-Fund, an issue in Q-Support, a store in Q-Shop, a blog post, a song, a website or a Q-App. A comment or a like that only holds a hash of what it is about is looked for when you ask.',
+          'Copy the link in the Explorer copies the page as it is, with its tab and filters.',
+          'When a minting level moved from another account, Node online counts the time on both accounts, and the Minter Profile shows where the level came from and when it moved.',
+          'Nominees proposed on chain, as the original Q-Mintership does, show by name in the Explorer.',
         ],
       },
       {
@@ -107,6 +113,10 @@ export const CHANGELOG: Release[] = [
           'A sponsor’s sponsored accounts in one list (in MINTER now, minting now, level, minting penalty), and on request who made their first QORT payment and where their QORT went.',
           'The Overview shows an account’s direct links, its activity over time (a chart with its milestones) and QORT minted, purchased / sold and received / sent, added up from its whole history; the Minter Profile shows QORT minted beside blocks minted. Exchanges’ accounts are named as such.',
           'The activity chart says plainly when it has read an account’s whole history, so there is nothing older to read; a longer one has Read older and Read all of it, phones included.',
+          'Connections rows are more compact: the block sits beside the sentence and the button that opens the transactions is on the right (just the count on a phone). Opened, each transaction shows its details, the accounts in it and Open transaction.',
+          'The Connections circle’s See the list opens the whole list under the circle: the accounts on the circle first, a clear line, then the ones it leaves out.',
+          'When a minting level moved from another account, the Minter Profile shows the QORT minted there and the QORT minted by both accounts together.',
+          'QORT minted reads accounts whose balance Core writes as 0E-8, and says when it can’t read something, with Retry.',
         ],
       },
       {
