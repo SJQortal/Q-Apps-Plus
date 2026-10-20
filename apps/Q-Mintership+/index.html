@@ -7,7 +7,7 @@
          saved theme's background before React loads. STORAGE_KEY and HUB20
          match src/theme/qplus-theme.ts. */
       (function () {
-        var STORAGE_KEY = 'qmintershipplus-ui-theme';
+        var STORAGE_KEY = '%QMP_THEME_STORAGE_KEY%';
         var HUB20 = { light: '#eef4f4', dark: '#07090b' };
         var BOOT = {"hub30":{"light":"#EEE7DC","dark":"#0E0F14"},"black":{"light":"#000000","dark":"#000000"},"white":{"light":"#ffffff","dark":"#ffffff"}};
         // Hub's light/dark: the URL's theme (remembered), else the remembered one (a
@@ -45,7 +45,7 @@
       })();
     </script>
     <script>
-      /* Hub serves the app under /render/APP/Q-Mintership+/…; a <base> keeps
+      /* Hub serves the app under /render/APP/<its name>/…; a <base> keeps
          relative asset URLs and client routes working there (docs/QORTAL.md). */
       (function () {
         var match = location.pathname.match(/^\/render\/(?:APP|WEBSITE)\/[^/]+/i);
@@ -59,8 +59,8 @@
     </script>
     <link rel="icon" type="image/png" href="favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Q-Mintership+: the Qortal minting forum and nomination boards" />
-    <title>Q-Mintership+</title>
+    <meta name="description" content="%QMP_APP_NAME%: the Qortal minting forum and nomination boards" />
+    <title>%QMP_APP_NAME%</title>
   </head>
   <body>
     <div id="root"></div>
