@@ -51,6 +51,7 @@ import { decisionsKindPath, decisionsViewPath } from '../decisionsViews';
 import { NeedsName } from '../NeedsName';
 import { PollAnswersEditor } from '../PollAnswersEditor';
 import { TONE_COLOUR } from '../pollAnswerTones';
+import { APP_NAME } from '../../../constants/plus';
 
 export const ASK_TITLE = 'Ask the Minter Admins';
 
@@ -66,7 +67,7 @@ export default function AskPage() {
   if (session.status === 'outside') {
     body = (
       <EmptyState
-        title="Open Q-Mintership+ in Qortal Hub or GO"
+        title={`Open ${APP_NAME} in Qortal Hub or GO`}
         description="A poll is published and encrypted through Hub, so it needs Hub."
       />
     );

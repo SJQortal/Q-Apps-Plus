@@ -7,12 +7,13 @@ import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
 import { signIn, useSession } from '../../../state/session';
 import { appLink } from '../../../utils/links';
 import { CopyButton, Hero, HeroText, Num } from '../Hero';
+import { APP_NAME } from '../../../constants/plus';
 
 export function AnonymousHero({ outside, needed }: { outside: boolean; needed: number | null }) {
   const session = useSession();
   return (
     <Hero
-      eyebrow="Q-Mintership+"
+      eyebrow={APP_NAME}
       title="Who mints QORT is decided here"
       actions={
         outside ? (

@@ -41,6 +41,7 @@ import {
   SubHeading,
 } from './parts';
 import { useDecisionSubject } from './useDecisionSubject';
+import { APP_NAME } from '../../../../constants/plus';
 
 /** Records of one kind about one person or item, newest first. */
 interface Group<T> {
@@ -346,19 +347,19 @@ export function MadeSection({ address, eager = false }: { address: string; eager
     enabled: near || eager,
   });
   return (
-    <Section title="In Q-Mintership+, under any of their names" id="explorer-mintership-made">
+    <Section title={`In ${APP_NAME}, under any of their names`} id="explorer-mintership-made">
       <Box ref={setNode} sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, minWidth: 0 }}>
         {made.data ? (
           <MadeBody made={made.data} />
         ) : made.isError ? (
           <ErrorState
             compact
-            title="Couldn't read their Q-Mintership+ records."
+            title={`Couldn't read their ${APP_NAME} records.`}
             error={made.error}
             onRetry={() => void made.refetch()}
           />
         ) : (
-          <ListSkeleton count={1} label="Reading their Q-Mintership+ records" />
+          <ListSkeleton count={1} label={`Reading their ${APP_NAME} records`} />
         )}
       </Box>
     </Section>

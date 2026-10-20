@@ -60,6 +60,11 @@ export function linkName(link: string): string | null {
 
 export { ORIGINAL_APP_LINK };
 
+/** Opens the original app, when it has a link (constants/plus.ts). */
+export function openOriginalApp(): Promise<boolean> {
+  return ORIGINAL_APP_LINK ? openQortalLink(ORIGINAL_APP_LINK) : Promise.resolve(false);
+}
+
 /** Copy text; true when it worked. */
 export async function copyText(text: string): Promise<boolean> {
   try {

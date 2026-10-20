@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { Box } from '@mui/material';
 import { ErrorState } from './states';
 import { isStaleBuildError, reloadForNewBuild } from '../../utils/staleBuild';
+import { APP_NAME } from '../../constants/plus';
 
 interface Props {
   children: ReactNode;
@@ -33,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: unknown, info: ErrorInfo): void {
     if (isStaleBuildError(error) && reloadForNewBuild()) return;
     if (this.state.reloading) this.setState({ reloading: false });
-    console.error('Q-Mintership+ could not show this screen:', error, info.componentStack);
+    console.error(`${APP_NAME} could not show this screen:`, error, info.componentStack);
   }
 
   componentDidUpdate(previous: Props, previousState: State): void {
@@ -50,7 +51,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError && this.state.reloading) {
       return (
         <Box sx={{ p: 2 }} role="status">
-          Q-Mintership+ was updated. Loading the new version…
+          {APP_NAME} was updated. Loading the new version…
         </Box>
       );
     }
@@ -59,7 +60,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <Box sx={{ p: 2 }}>
           <ErrorState
-            title="This part of Q-Mintership+ could not be shown."
+            title={`This part of ${APP_NAME} could not be shown.`}
             error="Reloading usually fixes it. Nothing on chain was changed."
             onRetry={() => window.location.reload()}
           />

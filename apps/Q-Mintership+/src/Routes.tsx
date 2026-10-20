@@ -18,6 +18,7 @@ import { nominationsRedirect } from './pages/decisions/decisionsViews';
 
 // Home is the first screen almost everyone sees; the rest load on demand.
 import HomePage from './pages/home/HomePage';
+import { APP_NAME } from './constants/plus';
 const NominationPage = lazy(() => import('./pages/nominations/NominationPage'));
 const NominatePage = lazy(() => import('./pages/nominations/NominatePage'));
 const ProposePage = lazy(() => import('./pages/decisions/propose/ProposePage'));
@@ -50,7 +51,7 @@ function RouteError() {
   return (
     <Box sx={{ p: 2 }}>
       <ErrorState
-        title="Q-Mintership+ could not open this page."
+        title={`${APP_NAME} could not open this page.`}
         error="Reloading usually fixes it. Nothing on chain was changed."
         onRetry={() => window.location.reload()}
       />

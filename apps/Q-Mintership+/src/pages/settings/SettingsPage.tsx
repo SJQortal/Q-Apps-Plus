@@ -52,14 +52,14 @@ import { APP_VERSION } from '../../constants/app';
 import {
   APP_NAME,
   ORIGINAL_APP_LINK,
-  ORIGINAL_APP_NAME,
+  ORIGINAL_WORDS,
   SOURCE_REPO,
   UPSTREAM_REPO,
 } from '../../constants/plus';
 import { PATHS } from '../../routes/paths';
-import { formatCount, plural } from '../../utils/format';
+import { formatCount, plural, sentenceStart } from '../../utils/format';
 import { ActivitySettingsDialog } from '../explorer/account/activity/ActivitySettings';
-import { copyText, openQortalLink } from '../../utils/links';
+import { copyText, openOriginalApp } from '../../utils/links';
 import { readable } from '../../utils/readable';
 
 const Card = styled('div')(({ theme }) => ({
@@ -433,22 +433,26 @@ export default function SettingsPage() {
               </Copy>
               <ArrowForwardIosIcon aria-hidden sx={{ fontSize: 16, opacity: 0.6 }} />
             </LinkRow>
-            <LinkRow type="button" onClick={() => void openQortalLink(ORIGINAL_APP_LINK)}>
-              <Copy>
-                <Typography sx={{ fontWeight: 700 }}>The original {ORIGINAL_APP_NAME}</Typography>
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  {ORIGINAL_APP_LINK}
-                </Typography>
-              </Copy>
-              <OpenInNewOutlinedIcon aria-hidden sx={{ fontSize: 18, opacity: 0.6 }} />
-            </LinkRow>
+            {ORIGINAL_APP_LINK ? (
+              <LinkRow type="button" onClick={() => void openOriginalApp()}>
+                <Copy>
+                  <Typography sx={{ fontWeight: 700 }}>
+                    {sentenceStart(ORIGINAL_WORDS.named)}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    {ORIGINAL_APP_LINK}
+                  </Typography>
+                </Copy>
+                <OpenInNewOutlinedIcon aria-hidden sx={{ fontSize: 18, opacity: 0.6 }} />
+              </LinkRow>
+            ) : null}
             <WebLinkRow title="Upstream source" url={UPSTREAM_REPO} />
             <WebLinkRow title="Q-Apps+ source" url={SOURCE_REPO} />
           </Card>
           <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
             {APP_NAME} reads MINTER straight from the chain, so it shows the same members, admins
-            and decisions as any other app. Nominations are small new records on QDN; the original
-            app&apos;s boards stay readable in History.
+            and decisions as any other app. Nominations are small new records on QDN;{' '}
+            {ORIGINAL_WORDS.app}&apos;s boards stay readable in History.
           </Typography>
         </Section>
       </PageBody>

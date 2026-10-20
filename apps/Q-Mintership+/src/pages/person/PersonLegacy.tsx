@@ -17,8 +17,9 @@ import { useInView } from '../../hooks/useInView';
 import { useQuery } from '../../hooks/useQuery';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../../components/common/states';
 import { Section } from '../../components/common/Section';
-import { formatCount } from '../../utils/format';
+import { formatCount, sentenceStart } from '../../utils/format';
 import { LegacyCardItem } from '../history/parts/LegacyCardItem';
+import { ORIGINAL_WORDS } from '../../constants/plus';
 
 export function PersonLegacy({ address, name }: { address: string; name: string | null }) {
   const [scan, setScan] = useState(LEGACY_SCAN_FIRST);
@@ -43,20 +44,20 @@ export function PersonLegacy({ address, name }: { address: string; name: string 
     body = (
       <ErrorState
         compact
-        title="Couldn't read the original app's cards."
+        title={`Couldn't read ${ORIGINAL_WORDS.app}'s cards.`}
         error={query.error}
         onRetry={() => void query.refetch()}
       />
     );
   } else if (!data) {
-    body = <ListSkeleton count={1} label="Looking through the original app's cards" />;
+    body = <ListSkeleton count={1} label={`Looking through ${ORIGINAL_WORDS.app}'s cards`} />;
   } else {
     body = (
       <>
         {data.cards.length ? (
           <Box
             component="ul"
-            aria-label={`Original app cards about ${who}`}
+            aria-label={`${sentenceStart(ORIGINAL_WORDS.adjective)} cards about ${who}`}
             sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
           >
             {data.cards.map((card) => (
@@ -66,7 +67,7 @@ export function PersonLegacy({ address, name }: { address: string; name: string 
             ))}
           </Box>
         ) : null}
-        {data.truncated ? <TruncatedNote what="the original app's cards" /> : null}
+        {data.truncated ? <TruncatedNote what={`${ORIGINAL_WORDS.app}'s cards`} /> : null}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 220px', px: 0.5 }}>
             {data.cards.length ? '' : `No cards about ${who}. `}
@@ -98,7 +99,7 @@ export function PersonLegacy({ address, name }: { address: string; name: string 
   }
 
   return (
-    <Section title="From the original app" id="person-original">
+    <Section title={`From ${ORIGINAL_WORDS.app}`} id="person-original">
       <Box ref={setNode}>{body}</Box>
     </Section>
   );

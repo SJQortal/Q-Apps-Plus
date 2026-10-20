@@ -95,6 +95,7 @@ import { AdminPicks, BanPicks, InvitePicks } from './PickLists';
 import { PickedSummary, ProposeHubStep, ProposedCard, WhatHappensNext } from './ProposeParts';
 import { useProposeContext } from './proposeContext';
 import { PICK_FIRST, PROPOSE_SUBTITLE, SUBMIT_LABEL } from './proposePageWords';
+import { APP_NAME } from '../../../constants/plus';
 
 export default function ProposePage() {
   const { kind: slug } = useParams();
@@ -108,7 +109,7 @@ export default function ProposePage() {
   if (session.status === 'outside') {
     body = (
       <EmptyState
-        title="Open Q-Mintership+ in Qortal Hub or GO"
+        title={`Open ${APP_NAME} in Qortal Hub or GO`}
         description="A proposal is signed in Hub, so it needs Hub."
       />
     );

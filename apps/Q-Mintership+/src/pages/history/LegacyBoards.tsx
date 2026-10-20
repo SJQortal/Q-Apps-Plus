@@ -16,9 +16,10 @@ import {
   TruncatedNote,
 } from '../../components/common/states';
 import { Card, Section } from '../../components/common/Section';
-import { ORIGINAL_APP_LINK, openQortalLink } from '../../utils/links';
-import { formatCount } from '../../utils/format';
+import { ORIGINAL_APP_LINK, openOriginalApp } from '../../utils/links';
+import { formatCount, sentenceStart } from '../../utils/format';
 import { LegacyCardItem } from './parts/LegacyCardItem';
+import { ORIGINAL_APP_NAME, ORIGINAL_WORDS } from '../../constants/plus';
 
 type Filter = 'all' | Exclude<LegacyBoard, 'admin'>;
 
@@ -32,18 +33,18 @@ export function LegacyBoards({ isAdmin }: { isAdmin: boolean }) {
   if (index.isError && !index.data) {
     body = (
       <ErrorState
-        title="Couldn't load the original app's cards."
+        title={`Couldn't load ${ORIGINAL_WORDS.app}'s cards.`}
         error={index.error}
         onRetry={() => void index.refetch()}
       />
     );
   } else if (!index.data) {
-    body = <ListSkeleton count={3} label="Loading the original app's cards" />;
+    body = <ListSkeleton count={3} label={`Loading ${ORIGINAL_WORDS.app}'s cards`} />;
   } else if (!cards.length) {
     body = (
       <EmptyState
         title="No cards here."
-        description="Your node didn't find any cards from the original app of this kind."
+        description={`Your node didn't find any cards from ${ORIGINAL_WORDS.app} of this kind.`}
       />
     );
   } else {
@@ -51,7 +52,7 @@ export function LegacyBoards({ isAdmin }: { isAdmin: boolean }) {
       <>
         <Box
           component="ul"
-          aria-label="Cards from the original app, newest first"
+          aria-label={`Cards from ${ORIGINAL_WORDS.app}, newest first`}
           sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
         >
           {cards.slice(0, shown).map((row) => (
@@ -60,7 +61,7 @@ export function LegacyBoards({ isAdmin }: { isAdmin: boolean }) {
             </li>
           ))}
         </Box>
-        {index.data.truncated ? <TruncatedNote what="the original app's cards" /> : null}
+        {index.data.truncated ? <TruncatedNote what={`${ORIGINAL_WORDS.app}'s cards`} /> : null}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 200px' }}>
             Showing {formatCount(Math.min(shown, cards.length))} of {formatCount(cards.length)}{' '}
@@ -81,10 +82,10 @@ export function LegacyBoards({ isAdmin }: { isAdmin: boolean }) {
   }
 
   return (
-    <Section title="From the original app" id="history-original">
+    <Section title={`From ${ORIGINAL_WORDS.app}`} id="history-original">
       <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-        Q-Mintership's nomination board and Minter Admin proposals, kept read-only with their poll
-        results and comments. New nominations happen in Nominations.
+        {ORIGINAL_APP_NAME}&apos;s nomination board and Minter Admin proposals, kept read-only with
+        their poll results and comments. New nominations happen in Nominations.
       </Typography>
       <ToggleButtonGroup
         exclusive
@@ -108,17 +109,20 @@ export function LegacyBoards({ isAdmin }: { isAdmin: boolean }) {
         <Card sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <LockOutlinedIcon aria-hidden sx={{ color: 'text.secondary' }} />
           <Typography variant="body2" sx={{ flex: '1 1 220px' }}>
-            The original Minter Admin board was encrypted to Minter Admins, so it isn't shown here.
-            You can still read it in the original app.
+            {sentenceStart(ORIGINAL_WORDS.adminBoard)} was encrypted to Minter Admins, so it
+            isn&apos;t shown here.
+            {ORIGINAL_APP_LINK ? ` You can still read it in ${ORIGINAL_WORDS.app}.` : null}
           </Typography>
-          <Button
-            variant="outlined"
-            endIcon={<OpenInNewOutlinedIcon />}
-            onClick={() => void openQortalLink(ORIGINAL_APP_LINK)}
-            sx={{ minHeight: 44 }}
-          >
-            Open the original app
-          </Button>
+          {ORIGINAL_APP_LINK ? (
+            <Button
+              variant="outlined"
+              endIcon={<OpenInNewOutlinedIcon />}
+              onClick={() => void openOriginalApp()}
+              sx={{ minHeight: 44 }}
+            >
+              Open {ORIGINAL_WORDS.app}
+            </Button>
+          ) : null}
         </Card>
       ) : null}
     </Section>

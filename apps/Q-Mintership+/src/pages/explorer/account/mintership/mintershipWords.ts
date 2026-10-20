@@ -11,6 +11,7 @@ import type { AdminActivity } from '../../../../rules/activity';
 import type { AnswersRead } from '../../../../data/explorer/answers';
 import type { PollVotes } from '../../../../data/explorer/legacyBy';
 import { formatCount, formatDate, plural } from '../../../../utils/format';
+import { APP_NAME, ORIGINAL_WORDS } from '../../../../constants/plus';
 
 /** The one line for an account with nothing in MINTER, its records or its votes. */
 export const NOTHING_IN_MINTER = 'Not in MINTER. No nominations, records or votes found.';
@@ -19,9 +20,9 @@ export const NOTHING_IN_MINTER = 'Not in MINTER. No nominations, records or vote
 export function nothingChecked(scanned: number, total: number): string {
   const cards =
     scanned >= total
-      ? `all ${formatCount(total)} original-app cards`
-      : `the newest ${formatCount(scanned)} of ${formatCount(total)} original-app cards`;
-  return `Checked their MINTER history, nominations, Q-Mintership+ records and original-app posts under any of their names, and ${cards} for ones about them.`;
+      ? `all ${formatCount(total)} ${ORIGINAL_WORDS.adjective} cards`
+      : `the newest ${formatCount(scanned)} of ${formatCount(total)} ${ORIGINAL_WORDS.adjective} cards`;
+  return `Checked their MINTER history, nominations, ${APP_NAME} records and ${ORIGINAL_WORDS.adjective} posts under any of their names, and ${cards} for ones about them.`;
 }
 
 /** "Also checked, nothing found: supports, Considering marks." (empty for nothing). */
@@ -153,10 +154,10 @@ export function pollVotesSummary(votes: PollVotes): string {
   const no = votes.votes.filter((v) => v.answer === 'no').length;
   const other = listed - yes - no;
   const scope = votes.truncated ? ' (in their newest 100 poll votes)' : '';
-  if (!listed) return `No votes in the original app's nomination or admin polls${scope}.`;
+  if (!listed) return `No votes in ${ORIGINAL_WORDS.app}'s nomination or admin polls${scope}.`;
   const parts = [`${formatCount(yes)} Yes`, `${formatCount(no)} No`];
   if (other) parts.push(`${formatCount(other)} other or unread`);
-  return `${plural(listed, 'vote')} in ${plural(polls, 'original-app poll')}${scope}: ${parts.join(', ')}.`;
+  return `${plural(listed, 'vote')} in ${plural(polls, `${ORIGINAL_WORDS.adjective} poll`)}${scope}: ${parts.join(', ')}.`;
 }
 
 /** The votes that are only counted (empty when none). */

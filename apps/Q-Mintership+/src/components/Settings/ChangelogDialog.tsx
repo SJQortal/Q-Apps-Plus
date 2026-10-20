@@ -5,6 +5,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import { APP_VERSION } from '../../constants/app';
 import { CHANGELOG, type Release } from '../../constants/changelog';
 import { useFullExplorer } from '../../hooks/useFullExplorer';
+import { APP_NAME } from '../../constants/plus';
 
 const Header = styled('div')(({ theme }) => ({
   alignItems: 'center',
@@ -57,7 +58,7 @@ function ReleaseEntry({ release, latest }: { release: Release; latest: boolean }
   const full = useFullExplorer() === true;
   const sections = release.sections.filter((section) => full || !section.full);
   return (
-    <ReleaseCard $latest={latest} aria-label={`Q-Mintership+ ${release.version}`}>
+    <ReleaseCard $latest={latest} aria-label={`${APP_NAME} ${release.version}`}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
         <Typography component="h3" sx={{ fontSize: 17, fontWeight: 700, flex: 1 }}>
           {release.title}
@@ -131,10 +132,10 @@ export function ChangelogDialog({ open, onClose }: { open: boolean; onClose: () 
       <Header>
         <Box sx={{ flex: 1, minWidth: 0 }} id="qm-changelog-title">
           <Typography sx={{ fontSize: 20, fontWeight: 700, lineHeight: 1.2 }}>
-            What&apos;s new in Q-Mintership+
+            What&apos;s new in {APP_NAME}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            You are on Q-Mintership+ {APP_VERSION}
+            You are on {APP_NAME} {APP_VERSION}
           </Typography>
         </Box>
         <IconButton aria-label="Close changelog" onClick={onClose} sx={{ width: 44, height: 44 }}>

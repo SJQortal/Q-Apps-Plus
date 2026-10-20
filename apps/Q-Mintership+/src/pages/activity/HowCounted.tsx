@@ -9,6 +9,7 @@ import { CHEVRON_TURN } from '../../components/common/ExpandChevron';
 import type { ActivityData } from '../../data/activity';
 import { formatCount } from '../../utils/format';
 import { blockTimeWords } from './format';
+import { ORIGINAL_WORDS } from '../../constants/plus';
 
 export function HowCounted({ data }: { data: ActivityData | undefined }) {
   const range = data?.range;
@@ -95,7 +96,7 @@ export function HowCounted({ data }: { data: ActivityData | undefined }) {
             : '.'}
         </Typography>
         <Typography component="li" variant="body2">
-          Votes and comments from the original Q-Mintership aren't counted: there are no polls any
+          Votes and comments from {ORIGINAL_WORDS.named} aren't counted: there are no polls any
           more, only approvals and rejections.
         </Typography>
       </Box>

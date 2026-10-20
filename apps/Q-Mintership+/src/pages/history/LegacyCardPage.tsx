@@ -37,8 +37,8 @@ import {
   TruncatedNote,
 } from '../../components/common/states';
 import { PATHS, decisionsViewPath, legacyCardPath } from '../../routes/paths';
-import { formatCount, formatDate, formatDateTime, plural } from '../../utils/format';
-import { ORIGINAL_APP_LINK, openQortalLink } from '../../utils/links';
+import { formatCount, formatDate, formatDateTime, plural, sentenceStart } from '../../utils/format';
+import { ORIGINAL_APP_LINK, openOriginalApp } from '../../utils/links';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
 import { legacyKindLabel, legacyProblem } from './parts/legacyWords';
 import { LegacyTextView } from './parts/LegacyText';
@@ -46,6 +46,7 @@ import { QortalLinks } from '../../components/common/QortalLinks';
 import { PersonByName } from './parts/PersonByName';
 import { ListCard } from './parts/TimelineList';
 import { MarkedName } from '../../components/common/MarkedName';
+import { APP_NAME, ORIGINAL_WORDS } from '../../constants/plus';
 
 const COMMENTS_PAGE = 20;
 
@@ -61,8 +62,8 @@ export default function LegacyCardPage() {
   if (!board) {
     content = (
       <EmptyState
-        title="That isn't a card from the original app."
-        description="Links to the original Q-Mintership's cards start with Minter-board-card, QM-AR-card or card-MAC."
+        title={`That isn't a card from ${ORIGINAL_WORDS.app}.`}
+        description={`Links to ${ORIGINAL_WORDS.named}'s cards start with Minter-board-card, QM-AR-card or card-MAC.`}
       />
     );
   } else if (board === 'admin') {
@@ -93,8 +94,8 @@ export default function LegacyCardPage() {
   return (
     <>
       <PageHeader
-        title={board === 'ar' ? 'Admin proposal' : 'Original card'}
-        subtitle="From the original Q-Mintership, read-only."
+        title={board === 'ar' ? 'Admin proposal' : ORIGINAL_WORDS.card}
+        subtitle={`From ${ORIGINAL_WORDS.named}, read-only.`}
         back={PATHS.history}
         actions={
           board ? <CopyLinkButton path={legacyCardPath(identifier)} what="this card" /> : null
@@ -115,8 +116,9 @@ function EncryptedCard({ row, loading }: { row: LegacyCardRow | null; loading: b
         </Typography>
       </Box>
       <Typography>
-        This card is from the original Minter Admin board, which only Minter Admins can read.
-        Q-Mintership+ doesn&apos;t decrypt it; open it in the original app instead.
+        This card is from {ORIGINAL_WORDS.adminBoard}, which only Minter Admins can read.
+        {APP_NAME} doesn&apos;t decrypt it
+        {ORIGINAL_APP_LINK ? `; open it in ${ORIGINAL_WORDS.app} instead.` : '.'}
       </Typography>
       {row ? (
         <PersonByName
@@ -129,16 +131,18 @@ function EncryptedCard({ row, loading }: { row: LegacyCardRow | null; loading: b
           Your node doesn&apos;t list this card right now.
         </Typography>
       )}
-      <Box>
-        <Button
-          variant="contained"
-          endIcon={<OpenInNewOutlinedIcon />}
-          onClick={() => void openQortalLink(ORIGINAL_APP_LINK)}
-          sx={{ minHeight: 44 }}
-        >
-          Open in the original app
-        </Button>
-      </Box>
+      {ORIGINAL_APP_LINK ? (
+        <Box>
+          <Button
+            variant="contained"
+            endIcon={<OpenInNewOutlinedIcon />}
+            onClick={() => void openOriginalApp()}
+            sx={{ minHeight: 44 }}
+          >
+            Open in {ORIGINAL_WORDS.app}
+          </Button>
+        </Box>
+      ) : null}
     </Card>
   );
 }
@@ -190,7 +194,7 @@ function CardView({ row, section }: { row: LegacyCardRow; section: string }) {
         }}
       >
         {card.board === 'minter'
-          ? 'This board is read-only now, and Q-Mintership+ has no votes. New nominations happen in Nominations, and Minter Admins decide by approving or rejecting.'
+          ? `This board is read-only now, and ${APP_NAME} has no votes. New nominations happen in Nominations, and Minter Admins decide by approving or rejecting.`
           : 'This board is read-only now. Admin changes are proposed and approved by Minter Admins in Decisions.'}
       </Alert>
       <Comments card={card} scrollTo={section === 'comments'} />
@@ -324,8 +328,8 @@ function PollResult({ card }: { card: LegacyCard }) {
         </Box>
         {poll.data.ownerMatches === false ? (
           <Typography variant="body2" color="text.secondary">
-            The original app didn&apos;t list this card: its poll belongs to a different account
-            than the card&apos;s publisher.
+            {sentenceStart(ORIGINAL_WORDS.app)} didn&apos;t list this card: its poll belongs to a
+            different account than the card&apos;s publisher.
           </Typography>
         ) : null}
       </>
