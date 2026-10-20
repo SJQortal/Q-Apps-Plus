@@ -104,6 +104,18 @@ describe('the bars on screen', () => {
     expect(explorer).toBeGreaterThan(-1);
     expect(settings).toBe(explorer + 1);
   });
+
+  it('the rail’s top left shows the app’s avatar to the left of its name, as decoration', () => {
+    screenWidth(1440);
+    show(<NavRail />, '/');
+    const rail = screen.getByRole('navigation', { name: 'Main' });
+    const avatar = rail.querySelector('img');
+    expect(avatar).toHaveAttribute('alt', '');
+    expect(avatar?.getAttribute('src')).toMatch(/q-mintership-avatar|^data:image\/webp/);
+    const name = within(rail).getByText('Q-Mintership+');
+    expect(avatar?.compareDocumentPosition(name)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(rail).not.toHaveTextContent('QM+');
+  });
 });
 
 describe('Settings on phones', () => {

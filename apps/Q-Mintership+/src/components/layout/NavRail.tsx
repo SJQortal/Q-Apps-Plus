@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { headerFill, primarySoft } from '../../hub-theme';
 import { useCompactRail } from '../../hooks/usePhoneLayout';
 import { APP_NAME } from '../../constants/plus';
+// The Q-Mintership name's own avatar on QDN, bundled: it shows without a read.
+import appAvatarSrc from '../../assets/q-mintership-avatar.webp';
 import { badgeWords, isNavActive, railItems } from './navItems';
 
 export const RAIL_WIDTH = 220;
@@ -40,19 +42,12 @@ const Brand = styled('div')(({ theme }) => ({
   [theme.breakpoints.down('md')]: { padding: theme.spacing(1, 0, 2), justifyContent: 'center' },
 }));
 
-const BrandMark = styled('span')(({ theme }) => ({
+const BrandMark = styled('img')({
   width: 32,
   height: 32,
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: primarySoft(theme),
-  color: theme.palette.primary.main,
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontWeight: 800,
-  fontSize: 13,
+  objectFit: 'contain',
   flexShrink: 0,
-}));
+});
 
 /**
  * A rail item. The selected item's highlight is its own layer: on a page
@@ -124,7 +119,7 @@ export function NavRail({
   return (
     <Rail aria-label="Main">
       <Brand>
-        <BrandMark aria-hidden>QM+</BrandMark>
+        <BrandMark src={appAvatarSrc} alt="" width={32} height={32} />
         {compact ? null : (
           // One line: at 18 px the name broke after "Q-".
           <Typography sx={{ fontWeight: 700, fontSize: 16, whiteSpace: 'nowrap' }}>
