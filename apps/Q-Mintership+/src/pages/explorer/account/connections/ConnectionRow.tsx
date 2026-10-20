@@ -321,13 +321,22 @@ export function ConnectionRow({
               gridRow: 2,
               justifySelf: 'end',
               minHeight: 44,
+              minWidth: 44,
               fontSize: 14,
-              px: 1,
+              px: { xs: 0.75, sm: 1 },
               mr: -0.5,
               whiteSpace: 'nowrap',
+              '& .MuiButton-endIcon': { ml: { xs: 0.25, sm: 1 } },
             }}
           >
-            {evidence.words}
+            {/* On phones only the count (Simon, 2026-10-20: "on mobile the expand button could be
+                better compressed"): the sentence says what they are, and the name says it all. */}
+            <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
+              {evidence.words}
+            </Box>
+            <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+              {/^[\d,]+/.exec(evidence.words)?.[0] ?? evidence.words}
+            </Box>
           </Button>
         ) : null}
         {extra ? <Box sx={{ gridColumn: '1 / -1', gridRow: 3, minWidth: 0 }}>{extra}</Box> : null}
