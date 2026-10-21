@@ -424,6 +424,8 @@ export default {
         // The circle a circle screen picked is saved too: the screens after it start as a list.
         localStorage.removeItem('qmintershipplus-connections-view');
         localStorage.removeItem('qmintershipplus-connections-circle-order');
+        // And the list an Assets screen picked.
+        localStorage.removeItem('qmintershipplus-assets-view');
       } catch (e) {}
     })();`,
   ],
@@ -431,7 +433,7 @@ export default {
   qortal,
 
   async route(route, url) {
-    if (url.pathname.includes('/THUMBNAIL/')) {
+    if (url.pathname.includes('/THUMBNAIL/') || url.pathname.startsWith('/arbitrary/IMAGE/')) {
       await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
       return true;
     }
@@ -1323,6 +1325,72 @@ export default {
         await dialog.getByRole('button', { name: 'Make the report' }).click();
         await dialog.getByRole('button', { name: 'Save .md' }).waitFor({ timeout: 15000 });
         await page.waitForTimeout(400);
+      },
+    },
+    // The Assets tab (Simon, 2026-10-21): Ben Target's five Q-Assets as cards, worth most first,
+    // GEMCOIN's and 🐉's avatars from their owners, the rest as coins; then the list.
+    {
+      key: 'explorer-assets',
+      path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('list', { name: 'Its Q-Assets' }).waitFor({ timeout: 8000 });
+        await page.getByText('≈ 282.75 QORT').waitFor({ timeout: 8000 });
+      },
+    },
+    {
+      key: 'explorer-assets-list',
+      path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
+      after: async (page) => {
+        await page.addInitScript(() => window.localStorage.setItem('qmintershipplus-assets-view', 'list'));
+        await page.reload({ waitUntil: 'load' });
+        await explorerSettle(page);
+        await page.getByRole('list', { name: 'Its Q-Assets' }).waitFor({ timeout: 8000 });
+        await page.getByText('≈ 282.75 QORT').waitFor({ timeout: 8000 });
+      },
+    },
+    // An asset opened: its holders (Ben is #2 of 3) and who bought from whom.
+    {
+      key: 'explorer-assets-open',
+      path: `/explorer/account/${ADDR.banTarget}/assets?asset=77&as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText('This account: #2 of 3 holders.').waitFor({ timeout: 8000 });
+        await dialog.getByRole('list', { name: 'Latest trades with QORT' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // What buyers would pay now, asset by asset (Simon, 2026-10-21: "realistic sale amount with
+    // its own window").
+    {
+      key: 'explorer-assets-sale',
+      path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'How it adds up' }).click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'What buyers would pay now' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // An asset's popup opened from the Overview's Q-Assets (Simon, 2026-10-21: "its own popup").
+    {
+      key: 'explorer-account-asset-open',
+      path: `/explorer/account/${ADDR.admin}?asset=77&as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText('This account: #3 of 3 holders.').waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // None held: Lou Left.
+    {
+      key: 'explorer-assets-empty',
+      path: `/explorer/account/${ADDR.left}/assets?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByText('Holds no Q-Assets.').waitFor({ timeout: 8000 });
       },
     },
     // A connection opened (Simon, 2026-10-20): its one transaction, straight to its details.

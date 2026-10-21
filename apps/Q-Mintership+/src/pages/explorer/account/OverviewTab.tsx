@@ -3,7 +3,8 @@
  * where it stands in MINTER, its names, when it was first seen and last
  * sent a transaction), the direct links recorded with other accounts, its
  * facts (level and progress, blocks minted, balance, first seen, groups),
- * its activity, MINTER, minting, its latest transactions, and notes when
+ * the Q-Assets it holds (a quick list; the Assets tab has them all), its
+ * activity, MINTER, minting, its latest transactions, and notes when
  * there are any. The direct links, the activity chart and the QORT facts are
  * for viewers who see the Explorer's detailed parts (rules/explorer/access.ts);
  * anyone else gets the rest, as if that were all there is.
@@ -25,6 +26,7 @@ import { useFullExplorer } from '../../../hooks/useFullExplorer';
 import { useQuery } from '../../../hooks/useQuery';
 import { DirectLinksPreview } from './DirectLinksPreview';
 import { LatestTransactions } from './LatestTransactions';
+import { AssetsSection } from './overview/AssetsSection';
 import { FactsSection } from './overview/FactsSection';
 import { GroupsSection } from './overview/GroupsSection';
 import { ActivitySection } from './activity/ActivitySection';
@@ -81,6 +83,7 @@ export default function OverviewTab({ address }: OverviewTabProps) {
       />
       {full ? <DirectLinksPreview address={address} /> : null}
       <FactsSection address={address} account={a} firstSeen={firstSeen} full={full} />
+      <AssetsSection address={address} />
       {full ? <ActivitySection address={address} firstSeen={firstSeen} /> : null}
       <GroupsSection address={address} />
       <MinterSection address={address} status={status} memberSince={memberSince} />

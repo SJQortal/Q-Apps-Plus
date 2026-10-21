@@ -191,9 +191,9 @@ try {
           if (!handled) await route.fulfill({ status: 404, body: '' });
         };
         await page.route(/\/(arbitrary|names|lists|addresses|transactions|blocks|crosschain|chat|groups|admin|polls)\//, answerCore);
-        // Core's asset API (/assets/orders/…, /assets/order/…/trades) shares /assets/ with the
-        // build's files, which are one segment deep (/assets/index-….js): only two or more go to Core.
-        await page.route(/^https?:\/\/[^/]+\/assets\/[^/?]+\/[^?]/, answerCore);
+        // Core's asset API (/assets, /assets/balances, /assets/orders/…) shares /assets/ with the
+        // build's files, which always have a dot in their name (/assets/index-….js): no dot, Core.
+        await page.route(/^https?:\/\/[^/]+\/assets(?:\/[^/?.]+(?:\/[^?]*)?)?(?:\?.*)?$/, answerCore);
         let ok = true;
         try {
           await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=${MODE}`, { waitUntil: 'load', timeout: 12000 });
