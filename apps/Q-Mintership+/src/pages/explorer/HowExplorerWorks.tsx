@@ -64,7 +64,7 @@ function tabLines(full: boolean): Array<[string, string]> {
     ],
     [
       'Assets',
-      'The Q-Assets it holds, as cards or a list: each with its avatar (the one its owner published, as the Q-Assets app does), how much it holds and its share of all there is, its last trade price in QORT and what the holding is worth at it; how that worth splits; and the assets it owns. Each opens to its description, its biggest holders and who bought it from whom.',
+      'The Q-Assets it holds, as cards or a list: each with its avatar (the one its owner published, as the Q-Assets app does), how much it holds and its share of all there is, its last trade price in QORT and what the holding is worth at it; how that worth splits; and the assets it owns. An asset in whole units only says Indivisible. Each opens its own window, on the Overview too: its description, its biggest holders and who bought it from whom.',
     ],
     [
       'Minter Profile',
