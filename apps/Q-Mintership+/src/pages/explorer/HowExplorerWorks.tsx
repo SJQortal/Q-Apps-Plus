@@ -47,8 +47,8 @@ function tabLines(full: boolean): Array<[string, string]> {
     [
       'Overview',
       full
-        ? 'Who the account is: its level and progress, blocks minted and how much of the time its node was online, balance, first seen and groups; its direct links to other accounts; its activity over time, a chart with its milestones; QORT minted, purchased / sold and received / sent, added up from its whole history; MINTER, minting now, its latest transactions and notes.'
-        : 'Who the account is: its level and progress, blocks minted and how much of the time its node was online, balance, first seen and groups; MINTER, minting now, its latest transactions and notes.',
+        ? 'Who the account is: its level and progress, blocks minted and how much of the time its node was online, balance, first seen and groups; the Q-Assets it holds; its direct links to other accounts; its activity over time, a chart with its milestones; QORT minted, purchased / sold and received / sent, added up from its whole history; MINTER, minting now, its latest transactions and notes.'
+        : 'Who the account is: its level and progress, blocks minted and how much of the time its node was online, balance, first seen and groups; the Q-Assets it holds; MINTER, minting now, its latest transactions and notes.',
     ],
     ...(full
       ? ([
@@ -61,6 +61,10 @@ function tabLines(full: boolean): Array<[string, string]> {
     [
       'Transactions',
       'Everything it sent or took part in, in plain words: by kind, type, name, time or blocks, newest or oldest first. An asset order says how it was filled and with whom. Each one opens to its fields and its raw API response.',
+    ],
+    [
+      'Assets',
+      'The Q-Assets it holds, as cards or a list: each with its avatar (the one its owner published, as the Q-Assets app does), how much it holds and its share of all there is, its last trade price in QORT and what the holding is worth at it; how that worth splits; and the assets it owns. Each opens to its description, its biggest holders and who bought it from whom.',
     ],
     [
       'Minter Profile',
