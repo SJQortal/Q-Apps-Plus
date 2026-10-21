@@ -244,7 +244,7 @@ describe('the Overview’s Q-Assets, under At a glance', () => {
       () =>
         expect(
           within(tiles)
-            .getAllByRole('button', { name: /: details$/ })
+            .getAllByRole('button')
             .map((tile) => tile.textContent)
         ).toEqual([
           'GGEMCOIN2 · ≈ 40 QORT',
@@ -256,7 +256,8 @@ describe('the Overview’s Q-Assets, under At a glance', () => {
     );
     expect(within(section).getByRole('link', { name: /Open Assets/ })).toBeInTheDocument();
     // A tile opens the asset's popup on the Overview itself.
-    await user.click(within(tiles).getByRole('button', { name: 'GEMCOIN: details' }));
+    // Its name is its own words, as seen (WCAG 2.5.3).
+    await user.click(within(tiles).getByRole('button', { name: /^GEMCOIN 2 ?· ≈ 40 QORT$/ }));
     const dialog = await screen.findByRole('dialog', { name: 'GEMCOIN' }, T);
     expect(screen.getByTestId('search')).toHaveTextContent('?asset=77');
     expect(

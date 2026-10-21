@@ -43,7 +43,6 @@ function Tile({ view, onOpen }: { view: AssetView; onOpen: () => void }) {
       <ButtonBase
         onClick={onOpen}
         aria-haspopup="dialog"
-        aria-label={`${view.name}: details`}
         sx={{
           width: '100%',
           justifyContent: 'flex-start',
