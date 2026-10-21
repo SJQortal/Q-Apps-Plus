@@ -1198,6 +1198,32 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     - **Tests:** 9 data tests (search, base64 fetch and DECRYPT_DATA, locked kept, per-viewer keys, a Hub failure that isn't a lock, comments, no writes), page tests for History and the card page as an admin and as a learner, and the Ship-as values test for "Proposed before Q-Mintership 4.0.0". Screenshot check of the new screens (`history-admin-board`, `legacy-admin-card`, `legacy-admin-card-locked`) with `legacy-card` and `history`: 100 captures, 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations.
     - **Needs a Hub check as a Minter Admin with real data:** that Hub decrypts the real cards without a dialog, and how long 20 rows take.
 
+139. **Connections shows every payment, and the whole history once read** (Simon, 2026-10-21, on igorcoin's Connections: "igor sent me 495 QORT which is seen in transactions, but is not visible in connections"; then "since I fetched all the accounts transactions in overview, it should show all history in connections and so on").
+    - **The cause:** Connections read only the newest 100 payments each way, from `payments/between`. igorcoin has sent 214, so its 495 QORT of May 2025 and 1 QORT of Aug 2025 to Simon were older than that window. On Simon's node, all 266 of igorcoin's payments read in about 40 ms.
+    - **Now:**
+      - Payments are read 1,000 at a time until Core has no more, up to 10,000 each way; "Check older" adds 1,000 more past that.
+      - Asset transfers and multi-payments are read 1,000 at a time, up to 5,000.
+      - Compare's "the same accounts in their payments" and the sponsee sets read the same keys, and their words say "up to the newest 10,000".
+    - **The whole history:** once the All list (`xtx:<a>:all`) is read to its end (Overview's Read all of it, the QORT summaries, or any account with fewer than 100 transactions), payments, asset transfers and the links search come from it, complete (`data/explorer/fullHistory.ts`). This covers Connections, Overview's Direct links, Compare, the sponsee sets and the Quiz alike. When it reaches its end, or grows after that, those keys are marked stale so the screen reads them again from it.
+    - **Tests:** reads of 1,000 and the 10,000 cap, asset transfers' 5,000 cap, the whole history serving payments, transfers and links with no search, and the stale mark once per new length. Hal Helper's 640 payments now read in one go.
+
+140. **Q-Asset trades in Connections and Transactions** (Simon, 2026-10-21: "both connections and transactions is missing Q-Assets sales and buys, as for example I bought 500 QORT of igorcoin").
+    - **Why they were missing:** a trade isn't a transaction between two accounts. Each places its own order (CREATE_ASSET_ORDER; the order's id is its signature), and Core matches them and records the trade against both orders. Simon's case on mainnet: his order bought 23 igorcoin for 529 QORT on 29 Jul 2026, filling igorcoin's sell order of 23 Aug 2025.
+    - **Reads** (`data/explorer/trades.ts`, `xassettrades:<a>`; `xtrades:` was taken by the Trade Portal summaries):
+      - the account's orders, `/assets/orders/{a}`, newest first, 100 a page, up to 5 pages. Core's `includeClosed` and `includeFulfilled` are exact filters (`is_closed = X AND is_fulfilled = Y`), so three reads: closed and fulfilled, closed but not fulfilled, open. The first version read only the first: on igorcoin, 7 of its orders;
+      - for each filled order (the newest 200, 4 at a time), its trades (`/assets/order/{id}/trades`) and the other order (`/assets/order/{id}`, for who placed it);
+      - the two order transactions, as evidence and for the trade's block (the later order's). `xfills:<id>` per order, kept for the session.
+    - **Connections:** an "Asset trades" part (after Names), one finding per account. One trade reads "Bought 23 igorcoin from igorcoin for 529 QORT" or "Sold … to … for …"; several add up, "3 asset trades with X: got …, gave …". Each opens to its orders. On the circle, what came in and what went out both count, so an account traded with sits at the bottom. It is searched, listed in Copy findings ("Asset trades: every filled order (7).") and in "Also checked, nothing found".
+    - **Transactions:** an order's row says how it was filled, "Filled: Sold 23 igorcoin to Simon James for 529 QORT · 29 Jul 2026" (and "and N more"); opened, it lists every trade. The tab reads the account's trades once its rows include an order it placed, so the search finds the order by the other account too. Elsewhere (an evidence list, Transactions on Qortal) an order reads its own fills when opened.
+    - **Checked on mainnet** through the dev server reading Simon's node, signed out:
+      - igorcoin's Transactions, Trading, searched "simon": "Placed an order to trade igorcoin for QORT (23 Aug 2025). Filled: Sold 23 igorcoin to Simon James for 529 QORT · 29 Jul 2026";
+      - Simon's, searched "igorcoin": "Filled: Bought 23 igorcoin from igorcoin for 529 QORT";
+      - no console errors.
+
+      Connections needs full Explorer access, so it was checked in the tests only.
+    - **Mock world:** Pia Promote's sell order of 6 GEMCOIN, filled by Ben Target's buy order for 120 QORT, and Ben's open order nobody filled. The order routes follow Core's exact filters.
+    - **Tests:** the data reads (the three order states, fills only for filled orders, both sides, caching), the words (bought, sold, traded, summed, coverage), the finding and the circle split, Ben's and Pia's Connections, the circle, an account with none, and Ben's Transactions row and search.
+
 ### The upstream PR, prepared (2026-10-20)
 
 Stage 4 of docs/RELEASE.md, after 1.0.0 was published and #23 merged. Nothing is pushed to Qortal yet: Simon reads the PR text first.
