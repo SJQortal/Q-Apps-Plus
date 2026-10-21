@@ -187,7 +187,7 @@ export default function AssetsTab({ address }: { address: string }) {
                         p: 0,
                         display: 'grid',
                         gap: 1.5,
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 270px), 1fr))',
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 300px), 1fr))',
                       }
                     : { listStyle: 'none', m: 0, p: 0 }
                 }
