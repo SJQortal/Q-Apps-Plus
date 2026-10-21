@@ -55,6 +55,8 @@ import { alikeRuns } from '../../rules/explorer/alikeRuns';
 import { TxSentence } from './TxSentence';
 import { QdnFileButtons } from './file/QdnFileButtons';
 import { useTxWords } from './useTxWords';
+import { useOrderFills } from './useOrderFills';
+import { fillParts, tradesWords, type AssetTrade } from '../../rules/explorer/trades';
 import { useViewState } from '../../hooks/useViewState';
 
 const NOWRAP = { whiteSpace: 'nowrap' } as const;
@@ -144,6 +146,13 @@ const HintLine = styled('span')(({ theme }) => ({
   fontStyle: 'italic',
   overflowWrap: 'anywhere',
 }));
+// An asset order's trades: who filled it, for what (Simon, 2026-10-21).
+const FillLine = styled('span')(({ theme }) => ({
+  ...theme.typography.body2,
+  display: 'block',
+  marginTop: 2,
+  overflowWrap: 'anywhere',
+}));
 // How many alike transactions a row stands for: "×6".
 const Count = styled('span')(({ theme }) => ({
   ...theme.typography.body2,
@@ -209,6 +218,7 @@ export function TxListRow({
   const maker = words.participants[0] ?? null;
   // Which way it went from the list's account: incoming green, outgoing red.
   const flow = words.direction === 'in' || words.direction === 'out' ? words.direction : null;
+  const fills = useOrderFills(tx, open);
 
   return (
     <Row ref={setNode}>
@@ -234,6 +244,12 @@ export function TxListRow({
           <WhenLine>
             <When tx={tx} />
           </WhenLine>
+          {fills?.length ? (
+            <FillLine>
+              Filled: <TxSentence parts={fillParts(fills[0])} quiet />
+              {fills.length > 1 ? ` and ${formatCount(fills.length - 1)} more` : ''}
+            </FillLine>
+          ) : null}
           {hint ? <HintLine>{hint}</HintLine> : null}
         </Lines>
         <Slot aria-hidden>
@@ -258,6 +274,7 @@ export function TxListRow({
             {words.title}
           </Typography>
           <TxFields fields={words.fields} label={`${words.title} details`} viewId={tx.signature} />
+          {fills ? <OrderFills fills={fills} /> : null}
           <TxPeople addresses={words.participants} maker={maker} viewId={tx.signature} />
           <RawResponse
             tx={tx}
@@ -281,6 +298,31 @@ export function TxListRow({
         </Box>
       </SmoothReveal>
     </Row>
+  );
+}
+
+/** An open order row's trades, each with the other account. */
+function OrderFills({ fills }: { fills: readonly AssetTrade[] }) {
+  return (
+    <Box>
+      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+        {fills.length ? `Filled by ${tradesWords(fills.length)}` : 'Not filled'}
+      </Typography>
+      {fills.length ? (
+        <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+          {fills.map((fill) => (
+            <Typography
+              component="li"
+              variant="body2"
+              key={`${fill.orderId}:${fill.otherOrderId}:${fill.timestamp}`}
+              sx={{ overflowWrap: 'anywhere' }}
+            >
+              <TxSentence parts={fillParts(fill)} />
+            </Typography>
+          ))}
+        </Box>
+      ) : null}
+    </Box>
   );
 }
 

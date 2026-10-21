@@ -2,14 +2,19 @@
  * The search over a list of transactions (an account's Transactions tab):
  * each row's text as the row shows it (rules/explorer/searchText.ts, told
  * from the list's account, a minting level's recipient as the row says
- * it), the accounts in it, and useRowSearch. Rows that match come first,
- * in the list's order, then those only similar.
+ * it), the accounts in it, and useRowSearch. An asset order of the list's
+ * account counts its trades too, once they are read (`xassettrades:<a>`): the
+ * words "Filled: sold 23 igorcoin to …" and the accounts that filled it.
+ * Rows that match come first, in the list's order, then those only similar.
  */
 import { useCallback, useMemo } from 'react';
 import { peekQuery } from '../../../data/query';
 import type { TxRow } from '../../../data/types';
 import { txSearchText } from '../../../rules/explorer/searchText';
+import { fillParts } from '../../../rules/explorer/trades';
 import { describeTx, type TxWords } from '../../../rules/explorer/txWords';
+import { tradesKey, type AccountTrades } from '../../../data/explorer/trades';
+import { useStoreValues } from '../../../hooks/useStoreValues';
 import { foldText } from '../../../utils/fuzzySearch';
 import { shortAddress } from '../../../utils/format';
 import { useRowSearch, type RowSearch } from './useRowSearch';
@@ -41,9 +46,35 @@ export function useTxSearch(
   hintOf: (tx: TxRow) => string | null;
 } {
   const active = text.trim() !== '';
+  const [trades] = useStoreValues<AccountTrades>(viewpoint ? [tradesKey(viewpoint)] : []);
+  const fillsOf = useCallback(
+    (tx: TxRow) =>
+      tx.type === 'CREATE_ASSET_ORDER' && trades
+        ? trades.trades.filter((trade) => trade.orderId === tx.signature)
+        : [],
+    [trades]
+  );
+  // An order's trades: their words and accounts count as the row's.
+  const withFills = useCallback(
+    (tx: TxRow, words: TxWords): TxWords => {
+      const fills = fillsOf(tx);
+      if (!fills.length) return words;
+      const others = fills.flatMap((fill) => (fill.other ? [fill.other] : []));
+      return {
+        ...words,
+        parts: [
+          ...words.parts,
+          { kind: 'text', text: ' Filled: ' },
+          ...fills.flatMap((fill) => fillParts(fill)),
+        ],
+        participants: [...new Set([...words.participants, ...others])],
+      };
+    },
+    [fillsOf]
+  );
   const described = useMemo(
-    () => (active ? rows.map((tx) => ({ tx, words: wordsOf(tx, viewpoint) })) : []),
-    [active, rows, viewpoint]
+    () => (active ? rows.map((tx) => ({ tx, words: withFills(tx, wordsOf(tx, viewpoint)) })) : []),
+    [active, rows, viewpoint, withFills]
   );
   const accounts = useMemo(() => described.flatMap(({ words }) => words.participants), [described]);
   const search = useRowSearch(text, accounts);
@@ -52,7 +83,8 @@ export function useTxSearch(
   const tiersOf = useCallback(
     (list: readonly TxRow[], known?: ReadonlyArray<{ tx: TxRow; words: TxWords }>) => {
       const tiers: TxSearchTiers = { match: [], similar: [] };
-      const entries = known ?? list.map((tx) => ({ tx, words: wordsOf(tx, viewpoint) }));
+      const entries =
+        known ?? list.map((tx) => ({ tx, words: withFills(tx, wordsOf(tx, viewpoint)) }));
       for (const { tx, words } of entries) {
         const found = test({
           text: foldText(txSearchText(tx, words, names)),
@@ -64,7 +96,7 @@ export function useTxSearch(
       }
       return tiers;
     },
-    [names, test, viewpoint]
+    [names, test, viewpoint, withFills]
   );
   const tiers = useMemo(
     () => (query ? tiersOf(rows, described) : null),
