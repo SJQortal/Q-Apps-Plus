@@ -14,7 +14,7 @@ import type { RootState } from "../../state/store";
 import { collectionKey, collectionPath, type CollectionSummary } from "../../utils/collections";
 import { avatarUrl, profilePath } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
-import { allCollectionItems, folderCount } from "../../utils/collectionFolders";
+import { allCollectionItems, folderCount, isDeletedCollection } from "../../utils/collectionFolders";
 import { CollectionCover } from "./CollectionCover";
 import { CollectionDialog } from "./CollectionDialog";
 import { useCollectionList } from "./useCollectionList";
@@ -103,13 +103,13 @@ export function CollectionsPage() {
     }
   }, [tab, myName, loading, error, mineName, rows, dispatch]);
 
-  const visible =
-    tab === "all"
-      ? rows.filter((row) => {
-          const known = byKey[collectionKey(row.name, row.identifier)];
-          return !known || allCollectionItems(known).length > 0;
-        })
-      : rows;
+  // Deleted collections go from every list as soon as their body says so
+  // (at once on this device); others' empty ones too, as before the flag.
+  const visible = rows.filter((row) => {
+    const known = byKey[collectionKey(row.name, row.identifier)];
+    if (!known) return true;
+    return tab === "all" ? allCollectionItems(known).length > 0 : !isDeletedCollection(known);
+  });
 
   const goBack = useSafeBack("/");
   const newButton = myName ? (

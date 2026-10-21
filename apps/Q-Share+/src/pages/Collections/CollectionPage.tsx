@@ -42,6 +42,7 @@ import {
   contentsCount,
   findFolder,
   folderCount,
+  isDeletedCollection,
   isEmptyCollection,
   moveItem,
   removeFolder,
@@ -401,6 +402,16 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
         description="It may not have reached your node yet, or the link is wrong."
         actionLabel="Retry"
         onAction={retry}
+      />
+    );
+  } else if (collection && isDeletedCollection(collection)) {
+    body = (
+      <EmptyState
+        icon={<CollectionsBookmarkOutlinedIcon />}
+        title={`${collection.title || "This collection"} was deleted`}
+        description={`${name} deleted this collection. The shares that were in it are still on QDN.`}
+        actionLabel="Collections"
+        onAction={() => navigate("/collections", { replace: true })}
       />
     );
   } else if (folderId && !here) {

@@ -1,6 +1,7 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchCollection, searchCollections } from "../../../utils/collections";
+import { isDeletedCollection } from "../../../utils/collectionFolders";
+import { collectionKey, fetchCollection, searchCollections } from "../../../utils/collections";
 import { QDN_PAGE } from "../../../utils/qdnSearch";
 import {
   setLoadingMine,
@@ -81,12 +82,23 @@ export function useMyCollections(autoLoad = true) {
   }, [autoLoad, myName, loadingMine, mineName, mine, mineError, load]);
 
   const current = mineName === myName;
+  // Deleted ones are no place to save a share.
+  const listed = useMemo(
+    () =>
+      current && mine
+        ? mine.filter((row) => {
+            const known = byKey[collectionKey(row.name, row.identifier)];
+            return !known || !isDeletedCollection(known);
+          })
+        : null,
+    [current, mine, byKey]
+  );
   // Resolves once the list and every body in it have been read (from the
   // session's cache when they already were).
   const ensure = useCallback(() => load(), [load]);
   return {
     myName,
-    mine: current ? mine : null,
+    mine: listed,
     loading: loadingMine,
     error: current && mineError,
     byKey,
