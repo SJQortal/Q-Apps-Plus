@@ -1,5 +1,5 @@
 /**
- * The Explorer's Assets tab (Simon, 2026-10-21),
+ * The Explorer's Assets tab and the Overview's Q-Assets (Simon, 2026-10-21),
  * in the mock world: Ben Target holds five assets (three priced: 🐉 at 75
  * QORT, GEMCOIN at 20, Bean Token at 0.5) and owns Moonrise No. 1 and Ben’s
  * Tickets, which he holds none of. Avatars are published as the Q-Assets
@@ -16,6 +16,7 @@ import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/co
 import { explorerAccountPath } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
 import AssetsTab from './AssetsTab';
+import OverviewTab from './OverviewTab';
 
 const T = { timeout: 8000 };
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL|ORDER|SEND|TRANSFER/;
@@ -206,5 +207,60 @@ describe('the Assets tab', () => {
     });
     expect(await screen.findByText('Couldn’t load its Q-Assets.', {}, T)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+  });
+});
+
+describe('the Overview’s Q-Assets, under At a glance', () => {
+  it('Avery’s, worth most first, each opening in the Assets tab', async () => {
+    await renderPage(
+      <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
+        <OverviewTab address={ADDR.admin} />
+      </PersonLinkContext>,
+      {
+        persona: 'learner',
+        path: explorerAccountPath(ADDR.admin),
+        route: '/explorer/account/:who/:tab?',
+        strict: true,
+      }
+    );
+    const glance = await screen.findByRole('region', { name: 'At a glance' }, T);
+    const section = await screen.findByRole('region', { name: 'Q-Assets' }, T);
+    // Right under At a glance.
+    expect(glance.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const tiles = await within(section).findByRole(
+      'list',
+      { name: 'Its Q-Assets, worth most first' },
+      T
+    );
+    await waitFor(
+      () =>
+        expect(
+          within(tiles)
+            .getAllByRole('link')
+            .map((a) => a.textContent)
+        ).toEqual([
+          'GGEMCOIN2 · ≈ 40 QORT',
+          'BTBean Token10 · ≈ 5 QORT',
+          'LQLegacy-QORA512.25',
+          'QFQORT-from-QORA3.5',
+        ]),
+      T
+    );
+    expect(within(tiles).getAllByRole('link')[0]).toHaveAttribute(
+      'href',
+      `${explorerAccountPath(ADDR.admin, 'assets')}?asset=77`
+    );
+    expect(within(section).getByRole('link', { name: /Open Assets/ })).toBeInTheDocument();
+  });
+
+  it('none: one line', async () => {
+    await renderPage(<OverviewTab address={ADDR.left} />, {
+      persona: 'learner',
+      path: explorerAccountPath(ADDR.left),
+      route: '/explorer/account/:who/:tab?',
+      strict: true,
+    });
+    const section = await screen.findByRole('region', { name: 'Q-Assets' }, T);
+    expect(await within(section).findByText('Holds no Q-Assets.', {}, T)).toBeInTheDocument();
   });
 });
