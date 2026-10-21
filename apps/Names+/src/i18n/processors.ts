@@ -1,16 +1,18 @@
-export const capitalizeAll = {
+import type { PostProcessorModule } from 'i18next';
+
+export const capitalizeAll: PostProcessorModule = {
   type: 'postProcessor',
   name: 'capitalizeAll',
   process: (value: string) => value.toUpperCase(),
 };
 
-export const capitalizeFirstChar = {
+export const capitalizeFirstChar: PostProcessorModule = {
   type: 'postProcessor',
   name: 'capitalizeFirstChar',
   process: (value: string) => value.charAt(0).toUpperCase() + value.slice(1),
 };
 
-export const capitalizeFirstWord = {
+export const capitalizeFirstWord: PostProcessorModule = {
   type: 'postProcessor',
   name: 'capitalizeFirstWord',
   process: (value: string) => {
