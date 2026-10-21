@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { useState, useEffect } from "react";
 import {
   Typography,
@@ -48,7 +49,7 @@ import { supportedCoinsArray } from "../../constants/supported-coins";
 import { QortalSVG } from "../../assets/svgs/QortalSVG";
 import { ARRRSVG } from "../../assets/svgs/ARRRSVG";
 import { ReusableModal } from "./ReusableModal";
-import { DATA_CONTAINER_BASE, STORE_BASE } from "../../constants/identifiers";
+import { DATA_CONTAINER_BASE } from "../../constants/identifiers";
 import { objectToBase64 } from "../../utils/toBase64";
 import { ShortDataContainer } from "../../wrappers/GlobalWrapper";
 import { setNotification } from "../../state/features/notificationsSlice";

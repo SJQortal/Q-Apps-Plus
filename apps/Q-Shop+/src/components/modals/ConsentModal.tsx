@@ -1,3 +1,4 @@
+/* eslint-disable no-empty, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import * as React from "react";
 import Button from "@mui/material/Button";
 import Dialog from "@mui/material/Dialog";

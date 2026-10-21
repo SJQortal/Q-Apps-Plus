@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { FC, useEffect, useState } from "react";
 import {
   AcceptedCoin,

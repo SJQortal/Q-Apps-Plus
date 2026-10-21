@@ -1,13 +1,13 @@
 import { styled } from "@mui/system";
 import { Box, TextareaAutosize } from "@mui/material";
 
-export const AddReviewHeader = styled(Box)(({ theme }) => ({
+export const AddReviewHeader = styled(Box)(() => ({
   display: "flex",
   flexDirection: "row",
   alignItems: "center"
 }));
 
-export const AddReviewContainer = styled(Box)(({ theme }) => ({
+export const AddReviewContainer = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "center",

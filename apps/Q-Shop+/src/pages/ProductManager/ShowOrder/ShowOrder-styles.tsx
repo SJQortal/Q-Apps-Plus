@@ -1,21 +1,21 @@
 import { styled } from "@mui/system";
-import { Box, Button, Select, TextField, Typography } from "@mui/material";
+import { Box, Button, Select, Typography } from "@mui/material";
 import { TimesSVG } from "../../../assets/svgs/TimesSVG";
 
-export const ShowOrderHeader = styled(Box)(({ theme }) => ({
+export const ShowOrderHeader = styled(Box)(() => ({
   display: "flex",
   justifyContent: "space-between",
   width: "100%",
   alignItems: "flex-start",
 }));
 
-export const ShowOrderImages = styled(Box)(({ theme }) => ({
+export const ShowOrderImages = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "5px",
 }));
 
-export const ShowOrderCol = styled(Box)(({ theme }) => ({
+export const ShowOrderCol = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-start",
@@ -23,14 +23,14 @@ export const ShowOrderCol = styled(Box)(({ theme }) => ({
   gap: "5px",
 }));
 
-export const ShowOrderProductImage = styled("img")(({ theme }) => ({
+export const ShowOrderProductImage = styled("img")(() => ({
   width: "60px",
   height: "60px",
   borderRadius: "3px",
   objectFit: "cover",
 }));
 
-export const ShowOrderTitle = styled("a")(({ theme }) => ({
+export const ShowOrderTitle = styled("a")(() => ({
   display: "flex",
   gap: "5px",
   alignItems: "center",
@@ -103,13 +103,13 @@ export const ShowOrderContent = styled(Box)(({ theme }) => ({
   },
 }));
 
-export const SellerOrderStatusRow = styled(Box)(({ theme }) => ({
+export const SellerOrderStatusRow = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   gap: "10px",
 }));
 
-export const OrderStatusRow = styled(Box)(({ theme }) => ({
+export const OrderStatusRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -118,7 +118,7 @@ export const OrderStatusRow = styled(Box)(({ theme }) => ({
   padding: "0 10px",
 }));
 
-export const OrderStatusCard = styled(Box)(({ theme }) => ({
+export const OrderStatusCard = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "5px",
@@ -167,7 +167,7 @@ export const OrderDetails = styled(Box)(({ theme }) => ({
   },
 }));
 
-export const OrderDetailsContainer = styled(Box)(({ theme }) => ({
+export const OrderDetailsContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "15px",
@@ -185,7 +185,7 @@ export const OrderDetailsCard = styled(Box)(({ theme }) => ({
   width: "100%",
 }));
 
-export const OrderTitleCol = styled(Box)(({ theme }) => ({
+export const OrderTitleCol = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
@@ -209,7 +209,7 @@ export const OrderId = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.primary,
 }));
 
-export const OrderQuantityRow = styled(Box)(({ theme }) => ({
+export const OrderQuantityRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-end",
@@ -217,7 +217,7 @@ export const OrderQuantityRow = styled(Box)(({ theme }) => ({
   width: "100%",
 }));
 
-export const TotalPriceRow = styled(Box)(({ theme }) => ({
+export const TotalPriceRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -225,13 +225,13 @@ export const TotalPriceRow = styled(Box)(({ theme }) => ({
   width: "100%",
 }));
 
-export const TotalCostContainer = styled(Box)(({ theme }) => ({
+export const TotalCostContainer = styled(Box)(() => ({
   position: "relative",
   display: "flex",
   gap: "25px",
 }));
 
-export const TotalCostCol = styled(Box)(({ theme }) => ({
+export const TotalCostCol = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -239,12 +239,12 @@ export const TotalCostCol = styled(Box)(({ theme }) => ({
   gap: "10px",
 }));
 
-export const TotalCostFont = styled(Typography)(({ theme }) => ({
+export const TotalCostFont = styled(Typography)(() => ({
   fontSize: "18px",
   fontWeight: 500,
 }));
 
-export const DetailsFont = styled(Typography)(({ theme }) => ({
+export const DetailsFont = styled(Typography)(() => ({
   fontSize: "16px",
   fontWeight: 400,
 }));
@@ -256,7 +256,7 @@ export const Divider = styled("div")(({ theme }) => ({
   userSelect: "none",
 }));
 
-export const PriceRow = styled(Box)(({ theme }) => ({
+export const PriceRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "5px",
@@ -318,7 +318,7 @@ export const DetailsCard = styled(Box)(({ theme }) => ({
   },
 }));
 
-export const CloseDetailsCardIcon = styled(TimesSVG)(({ theme }) => ({
+export const CloseDetailsCardIcon = styled(TimesSVG)(() => ({
   position: "absolute",
   top: "5px",
   right: "5px",
@@ -340,12 +340,12 @@ export const DeliveryInfoCard = styled(Box)(({ theme }) => ({
   margin: "15px",
 }));
 
-export const CloseButtonRow = styled(Box)(({ theme }) => ({
+export const CloseButtonRow = styled(Box)(() => ({
   display: "flex",
   gap: 1,
   justifyContent: "flex-end",
 }));
 
-export const CloseButton = styled(Button)(({ theme }) => ({
+export const CloseButton = styled(Button)(() => ({
   fontSize: "15px",
 }));

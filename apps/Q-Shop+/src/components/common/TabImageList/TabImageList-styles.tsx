@@ -1,7 +1,7 @@
 import { styled } from "@mui/system";
 import { Box } from "@mui/material";
 
-export const TabImageListStyle = styled(Box)(({ theme }) => ({
+export const TabImageListStyle = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   flexDirection: "column",
@@ -10,7 +10,7 @@ export const TabImageListStyle = styled(Box)(({ theme }) => ({
   width: "100%"
 }));
 
-export const TabImageContainer = styled(Box)(({ theme }) => ({
+export const TabImageContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-start",
@@ -18,7 +18,7 @@ export const TabImageContainer = styled(Box)(({ theme }) => ({
   gap: "15px"
 }));
 
-export const TabImageStyle = styled("img")(({ theme }) => ({
+export const TabImageStyle = styled("img")(() => ({
   width: "30%",
   height: "100%"
 }));

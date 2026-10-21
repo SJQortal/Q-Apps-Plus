@@ -1,5 +1,4 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { RootState } from "../store";
 import { CurrentStore, DataContainer, ProductDataContainer } from "./globalSlice";
 import { ForeignCoins } from "../../components/modals/CreateStoreModal";
 import { CoinFilter } from "../../pages/Store/Store/Store";
@@ -117,7 +116,7 @@ export const storeSlice = createSlice({
       state.myStores.push(action.payload);
     },
     setViewedStoreDataContainer: (state, action) => {
-      let categories: any = {};
+      const categories: any = {};
       state.viewedStoreDataContainer = action.payload;
       const mappedProducts = Object.keys(action.payload.products)
         .map((key) => {

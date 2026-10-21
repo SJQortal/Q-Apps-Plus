@@ -1,5 +1,4 @@
 import { createSlice } from '@reduxjs/toolkit'
-import { RootState } from '../store'
 import { Product } from './storeSlice'
 
 interface OrderState {

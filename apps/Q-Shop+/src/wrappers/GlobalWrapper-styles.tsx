@@ -23,7 +23,7 @@ export const CustomModalButton = styled(Button)(({ theme }) => ({
   }
 }));
 
-export const DownloadQortalCol = styled(Stack)(({theme}) => ({
+export const DownloadQortalCol = styled(Stack)(() => ({
   display: "flex",
   flexDirection: "column",
   justifyContent: "flex-start",

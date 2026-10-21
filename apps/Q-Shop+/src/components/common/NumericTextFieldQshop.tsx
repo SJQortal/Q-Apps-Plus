@@ -115,10 +115,10 @@ export const NumericTextFieldQshop = React.forwardRef<
             ? {
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={(e) => changeValueWithButton(1)}>
+                    <IconButton onClick={() => changeValueWithButton(1)}>
                       <AddIcon />{" "}
                     </IconButton>
-                    <IconButton onClick={(e) => changeValueWithButton(-1)}>
+                    <IconButton onClick={() => changeValueWithButton(-1)}>
                       <RemoveIcon />{" "}
                     </IconButton>
                   </InputAdornment>

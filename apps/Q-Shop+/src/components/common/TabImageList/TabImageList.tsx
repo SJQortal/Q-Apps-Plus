@@ -17,16 +17,15 @@ const TabImageList = ({
   imgStyle = {},
   images
 }: TabImageListProps) => {
+  const [imageFocusedIndex, setImageFocusedIndex] = useState<number>(0);
   if (images) {
-    const [mainImage, setMainImage] = useState<string>(images[0]);
-    const [imageFocusedIndex, setImageFocusedIndex] = useState<number>(0);
+    const mainImage = images[imageFocusedIndex] ?? images[0];
 
     const imageTabOutlineStyle = {
       outline: "4px solid #03A9F4"
     };
 
     const switchMainImage = (index: number) => {
-      setMainImage(images[index]);
       setImageFocusedIndex(index);
     };
     const imageRow =

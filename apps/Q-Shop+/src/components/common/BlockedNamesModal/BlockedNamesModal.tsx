@@ -1,10 +1,8 @@
+/* eslint-disable no-empty, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import React, { useState } from "react";
 import {
-  Box,
   Button,
-  Modal,
   Typography,
-  SelectChangeEvent,
   ListItem,
   List,
   useTheme

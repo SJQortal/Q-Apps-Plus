@@ -22,7 +22,7 @@ export const CreateProductButton = styled(Button)(({ theme }) => ({
   }
 }));
 
-export const CloseIcon = styled(TimesSVG)(({ theme }) => ({
+export const CloseIcon = styled(TimesSVG)(() => ({
   position: "absolute",
   top: "0",
   right: "8px",
@@ -33,7 +33,7 @@ export const CloseIcon = styled(TimesSVG)(({ theme }) => ({
   }
 }));
 
-export const ProductImagesRow = styled(Box)(({ theme }) => ({
+export const ProductImagesRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "10px"
@@ -57,14 +57,14 @@ export const CustomSelect = styled(Select)(({ theme }) => ({
   }
 }));
 
-export const CategoryRow = styled(Box)(({ theme }) => ({
+export const CategoryRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "25px",
   flexGrow: 1
 }));
 
-export const CustomMenuItem = styled(MenuItem)(({ theme }) => ({
+export const CustomMenuItem = styled(MenuItem)(() => ({
   letterSpacing: 0,
   fontSize: "18px"
 }));

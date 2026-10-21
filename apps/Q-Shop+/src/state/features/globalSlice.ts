@@ -107,7 +107,7 @@ export const globalSlice = createSlice({
     },
 
     setDataContainer: (state, action) => {
-      let categories: any = {};
+      const categories: any = {};
       state.dataContainer = action.payload;
       const mappedProducts = Object.keys(action.payload.products)
         .map((key) => {

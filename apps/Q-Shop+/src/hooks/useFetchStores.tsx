@@ -4,7 +4,6 @@ import { addToHashMapStores } from "../state/features/storeSlice";
 import { removeFromHashMapStores } from "../state/features/storeSlice";
 
 import { RootState } from "../state/store";
-import { fetchAndEvaluateProducts } from "../utils/fetchPosts";
 import { fetchAndEvaluateStores } from "../utils/fetchStores";
 
 interface Resource {

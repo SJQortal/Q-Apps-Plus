@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { Box, Button, TextField, Typography, Modal } from '@mui/material'
+import { Box } from '@mui/material'
 import {
   useDropzone,
   DropzoneRootProps,
@@ -44,7 +44,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ children, onPick }) => {
               compressedFile = file
               resolve()
             },
-            error(err) {}
+            error() {}
           })
         })
         if (!compressedFile) return
@@ -61,7 +61,7 @@ const ImageUploader: React.FC<ImageUploaderProps> = ({ children, onPick }) => {
   const {
     getRootProps,
     getInputProps,
-    isDragActive
+    
   }: {
     getRootProps: () => DropzoneRootProps
     getInputProps: () => DropzoneInputProps

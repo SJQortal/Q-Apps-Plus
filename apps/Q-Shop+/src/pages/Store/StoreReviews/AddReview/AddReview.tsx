@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { FC, useState } from "react";
 import {
   AddReviewContainer,
@@ -16,7 +17,7 @@ import {
   StoreTitle
 } from "../../StoreDetails/StoreDetails-styles";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState, store } from "../../../../state/store";
+import { RootState } from "../../../../state/store";
 import ShortUniqueId from "short-unique-id";
 import { setNotification } from "../../../../state/features/notificationsSlice";
 import { objectToBase64 } from "../../../../utils/toBase64";
@@ -217,7 +218,7 @@ export const AddReview: FC<AddReviewProps> = ({
       <AddReviewContainer style={{ padding: 0 }}>
         <AddReviewContainer style={{ padding: 0, gap: "15px" }}>
           <Rating
-            onChange={(e: React.ChangeEvent<{}>, newValue: number | null) => {
+            onChange={(_e: React.SyntheticEvent, newValue: number | null) => {
               setRating(newValue);
             }}
             precision={0.5}

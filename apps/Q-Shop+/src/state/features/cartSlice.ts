@@ -1,5 +1,4 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { RootState } from "../store";
 
 interface CartState {
   // hashMapCarts: Record<string, Cart>

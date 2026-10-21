@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import React, { useEffect, useState } from "react";
 import { Box, FormControl, SelectChangeEvent, useTheme } from "@mui/material";
 import ImageUploader from "../../../components/common/ImageUploader";
@@ -130,7 +131,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
       return;
     }
 
-    let price = []
+    const price = []
     price.push({
       currency: "qort",
       value: product.price,

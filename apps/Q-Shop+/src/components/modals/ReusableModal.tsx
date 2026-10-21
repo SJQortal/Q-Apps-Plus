@@ -1,5 +1,5 @@
 import React from "react";
-import { Box, Modal, useTheme } from "@mui/material";
+import { Modal } from "@mui/material";
 import { ReusableModalBody } from "./ReusableModal-styles";
 
 interface MyModalProps {
@@ -21,7 +21,6 @@ export const ReusableModal: React.FC<MyModalProps> = ({
   customStyles = {},
   className
 }) => {
-  const theme = useTheme();
   return (
     <Modal
       open={open}

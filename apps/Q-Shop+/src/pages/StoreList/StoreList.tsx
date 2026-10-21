@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { useState, useCallback, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";

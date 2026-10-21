@@ -1,3 +1,4 @@
+/* eslint-disable no-empty -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { checkStructureStoreReviews } from "./checkStructure";
 
 export const fetchAndEvaluateStoreReviews = async (data: any) => {

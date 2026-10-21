@@ -1,7 +1,6 @@
 import * as React from "react";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
-import Typography from "@mui/material/Typography";
 import { CopyToClipboard } from "react-copy-to-clipboard";
 import { useDispatch } from "react-redux";
 import { setNotification } from "../../../state/features/notificationsSlice";
@@ -9,9 +8,6 @@ import { Box } from "@mui/material";
 
 export default function ContextMenuResource({
   children,
-  name,
-  service,
-  identifier,
   link
 }: any) {
   const [contextMenu, setContextMenu] = React.useState<{

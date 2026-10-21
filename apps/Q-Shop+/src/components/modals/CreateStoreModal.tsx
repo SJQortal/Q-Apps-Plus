@@ -1,4 +1,5 @@
-import { FC, ChangeEvent, useState, useEffect } from "react";
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
+import { ChangeEvent, useState, useEffect } from "react";
 import {
   Typography,
   Modal,

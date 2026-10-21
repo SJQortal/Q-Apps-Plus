@@ -28,7 +28,7 @@ export const AddReviewButton = styled(Button)(({ theme }) => ({
   }
 }));
 
-export const AverageReviewContainer = styled(Box)(({ theme }) => ({
+export const AverageReviewContainer = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -86,13 +86,13 @@ export const ReviewContainer = styled(Box)<StoreReviewsProps>(
   })
 );
 
-export const ReviewHeader = styled(Box)(({ theme }) => ({
+export const ReviewHeader = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   gap: "1px"
 }));
 
-export const ReviewTitleRow = styled(Box)(({ theme }) => ({
+export const ReviewTitleRow = styled(Box)(() => ({
   display: "flex",
   flexDirection: "row",
   alignItems: "center",
@@ -156,7 +156,7 @@ export const StoreReviewsContainer = styled(Box)(({ theme }) => ({
   }
 }));
 
-export const CloseIconModal = styled(TimesSVG)(({ theme }) => ({
+export const CloseIconModal = styled(TimesSVG)(() => ({
   position: "absolute",
   top: "15px",
   right: "5px",

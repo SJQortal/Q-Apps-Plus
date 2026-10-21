@@ -1,13 +1,12 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { useState, useEffect, useMemo } from "react";
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import {
-  CircularProgress,
   Grid,
   useTheme,
   useMediaQuery,
   FormControl,
   SelectChangeEvent,
-  Box,
 } from "@mui/material";
 import {
   addQuantityToCart,
@@ -363,7 +362,7 @@ export const Cart = () => {
       );
       return;
     }
-    let res = await qortalRequest({
+    const res = await qortalRequest({
       action: "GET_NAME_DATA",
       name: storeOwner,
     });
@@ -481,7 +480,7 @@ export const Cart = () => {
       };
 
       const mailId = mailUid();
-      let identifier = `qortal_qmail_${storeOwner?.slice(0, 20)}_${address.slice(
+      const identifier = `qortal_qmail_${storeOwner?.slice(0, 20)}_${address.slice(
         -6
       )}_mail_${mailId}`;
 
@@ -743,7 +742,7 @@ export const Cart = () => {
       };
 
       const mailObjectToBase64 = await objectToBase64(mailObject);
-      let mailRequestBody: any = {
+      const mailRequestBody: any = {
         action: "PUBLISH_QDN_RESOURCE",
         name: username,
         service: MAIL_SERVICE_TYPE,

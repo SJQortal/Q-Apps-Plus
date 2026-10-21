@@ -1,7 +1,7 @@
 import { styled } from "@mui/system";
 import { Box, Button } from "@mui/material";
 
-export const EmailUser = styled("a")(({ theme }) => ({
+export const EmailUser = styled("a")(() => ({
   display: "flex",
   gap: "5px",
   alignItems: "center",
@@ -9,13 +9,13 @@ export const EmailUser = styled("a")(({ theme }) => ({
   fontSize: "21px",
 }));
 
-export const CloseButtonRow = styled(Box)(({ theme }) => ({
+export const CloseButtonRow = styled(Box)(() => ({
   display: "flex",
   gap: 1,
   justifyContent: "flex-end",
 }));
 
-export const CloseButton = styled(Button)(({ theme }) => ({
+export const CloseButton = styled(Button)(() => ({
   fontSize: "15px",
 }));
 

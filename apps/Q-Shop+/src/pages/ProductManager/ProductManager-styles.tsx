@@ -5,14 +5,14 @@ import Tab from "@mui/material/Tab";
 import { TimesSVG } from "../../assets/svgs/TimesSVG";
 import { MinimizeSVG } from "../../assets/svgs/MinimizeSVG";
 
-export const ProductManagerContainer = styled(Box)(({ theme }) => ({
+export const ProductManagerContainer = styled(Box)(() => ({
   display: "flex",
   width: "100%",
   flexDirection: "column",
   backgroundColor: "background.paper"
 }));
 
-export const TabsContainer = styled(Box)(({ theme }) => ({
+export const TabsContainer = styled(Box)(() => ({
   borderBottom: 1,
   borderColor: "divider",
   display: "flex",
@@ -58,7 +58,7 @@ export const ProductsToSaveCard = styled(Box)(({ theme }) => ({
   zIndex: 2
 }));
 
-export const ProductToSaveCard = styled(Box)(({ theme }) => ({
+export const ProductToSaveCard = styled(Box)(() => ({
   position: "relative",
   display: "flex",
   flexDirection: "column",
@@ -106,21 +106,21 @@ export const ProductsCol = styled(Grid)(({ theme }) => ({
   }
 }));
 
-export const ProductToSaveImageRow = styled(Box)(({ theme }) => ({
+export const ProductToSaveImageRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-evenly",
   gap: "4px"
 }));
 
-export const CardHeader = styled(Typography)(({ theme }) => ({
+export const CardHeader = styled(Typography)(() => ({
   fontSize: "18px",
   userSelect: "none",
   color: "#000000",
   letterSpacing: 0
 }));
 
-export const Bulletpoints = styled(Typography)(({ theme }) => ({
+export const Bulletpoints = styled(Typography)(() => ({
   fontSize: "17px",
   userSelect: "none",
   color: "#000000",
@@ -132,7 +132,7 @@ export const Bulletpoints = styled(Typography)(({ theme }) => ({
   width: "100%"
 }));
 
-export const TimesIcon = styled(TimesSVG)(({ theme }) => ({
+export const TimesIcon = styled(TimesSVG)(() => ({
   position: "absolute",
   top: "2px",
   right: "5px",
@@ -143,7 +143,7 @@ export const TimesIcon = styled(TimesSVG)(({ theme }) => ({
   }
 }));
 
-export const AddMoreButton = styled(Button)(({ theme }) => ({
+export const AddMoreButton = styled(Button)(() => ({
   fontSize: "15px",
   backgroundColor: "#cfd432",
   color: "black",
@@ -153,7 +153,7 @@ export const AddMoreButton = styled(Button)(({ theme }) => ({
   }
 }));
 
-export const CardButtonRow = styled(Box)(({ theme }) => ({
+export const CardButtonRow = styled(Box)(() => ({
   display: "flex",
   width: "100%",
   alignItems: "center",
@@ -161,7 +161,7 @@ export const CardButtonRow = styled(Box)(({ theme }) => ({
   gap: "15px"
 }));
 
-export const MinimizeIcon = styled(MinimizeSVG)(({ theme }) => ({
+export const MinimizeIcon = styled(MinimizeSVG)(() => ({
   position: "absolute",
   top: "5px",
   right: "5px",
@@ -174,7 +174,7 @@ export const MinimizeIcon = styled(MinimizeSVG)(({ theme }) => ({
   }
 }));
 
-export const DockedMinimizeIcon = styled(MinimizeSVG)(({ theme }) => ({
+export const DockedMinimizeIcon = styled(MinimizeSVG)(() => ({
   padding: "3px",
   backgroundColor: "transparent",
   transition: "all 0.2s ease-in-out",

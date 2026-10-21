@@ -4,7 +4,7 @@ import { PlusCircleSVG } from "../../assets/svgs/PlusCircle";
 import { MinusCircleSVG } from "../../assets/svgs/MinusCircle";
 import { GarbageSVG } from "../../assets/svgs/GarbageSVG";
 
-export const CartContainer = styled(Grid)(({ theme }) => ({
+export const CartContainer = styled(Grid)(() => ({
   display: "flex",
   alignItems: "center",
   flexDirection: "column",
@@ -40,7 +40,7 @@ export const ColumnTitle = styled(Typography)(({ theme }) => ({
   color: theme.palette.text.primary,
 }));
 
-export const ProductInfoCol = styled(Grid)(({ theme }) => ({
+export const ProductInfoCol = styled(Grid)(() => ({
   display: "flex",
   flexDirection: "column",
   gap: "10px",
@@ -48,7 +48,7 @@ export const ProductInfoCol = styled(Grid)(({ theme }) => ({
   flexGrow: 1,
 }));
 
-export const ProductDetailsCol = styled(Grid)(({ theme }) => ({
+export const ProductDetailsCol = styled(Grid)(() => ({
   boxSizing: "border-box",
   margin: "0px",
   flexBasis: "100%",
@@ -120,20 +120,20 @@ export const ProductImage = styled("img")({
   objectFit: "contain",
 });
 
-export const ProductDetailsRow = styled(Box)(({ theme }) => ({
+export const ProductDetailsRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
   width: "100%",
 }));
 
-export const IconsRow = styled(Box)(({ theme }) => ({
+export const IconsRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "20px",
 }));
 
-export const RemoveQuantityButton = styled(MinusCircleSVG)(({ theme }) => ({
+export const RemoveQuantityButton = styled(MinusCircleSVG)(() => ({
   transition: "all 0.2s ease-in-out",
   "&:hover": {
     cursor: "pointer",
@@ -141,7 +141,7 @@ export const RemoveQuantityButton = styled(MinusCircleSVG)(({ theme }) => ({
   },
 }));
 
-export const AddQuantityButton = styled(PlusCircleSVG)(({ theme }) => ({
+export const AddQuantityButton = styled(PlusCircleSVG)(() => ({
   transition: "all 0.2s ease-in-out",
   "&:hover": {
     cursor: "pointer",
@@ -149,7 +149,7 @@ export const AddQuantityButton = styled(PlusCircleSVG)(({ theme }) => ({
   },
 }));
 
-export const GarbageIcon = styled(GarbageSVG)(({ theme }) => ({
+export const GarbageIcon = styled(GarbageSVG)(() => ({
   transition: "all 0.2s ease-in-out",
   "&:hover": {
     cursor: "pointer",
@@ -187,7 +187,7 @@ export const TotalSumContainer = styled(Grid)(({ theme }) => ({
   marginRight: "10px",
 }));
 
-export const TotalSumHeader = styled(Box)(({ theme }) => ({
+export const TotalSumHeader = styled(Box)(() => ({
   display: "flex",
   alignItems: "flex-start",
   fontWeight: "bold",
@@ -206,7 +206,7 @@ export const TotalSumItems = styled(Box)(({ theme }) => ({
   borderBottom: `1px solid ${theme.palette.background.paper}`,
 }));
 
-export const TotalSumItem = styled(Box)(({ theme }) => ({
+export const TotalSumItem = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -242,7 +242,7 @@ export const OrderTotalRow = styled(Box)(({ theme }) => ({
   },
 }));
 
-export const ConfirmPurchaseContainer = styled(Box)(({ theme }) => ({
+export const ConfirmPurchaseContainer = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -251,7 +251,7 @@ export const ConfirmPurchaseContainer = styled(Box)(({ theme }) => ({
   padding: "25px",
 }));
 
-export const ConfirmPurchaseRow = styled(Box)(({ theme }) => ({
+export const ConfirmPurchaseRow = styled(Box)(() => ({
   display: "flex",
   flexDirection: "row",
   alignItems: "center",
@@ -261,7 +261,7 @@ export const ConfirmPurchaseRow = styled(Box)(({ theme }) => ({
   userSelect: "none",
 }));
 
-export const CoinToPayInRow = styled(Box)(({ theme }) => ({
+export const CoinToPayInRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "flex-start",

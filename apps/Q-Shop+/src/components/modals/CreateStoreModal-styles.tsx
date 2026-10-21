@@ -45,13 +45,13 @@ export const ModalBody = styled(Box)(({ theme }) => ({
   },
 }));
 
-export const ModalTitle = styled(Typography)(({ theme }) => ({
+export const ModalTitle = styled(Typography)(() => ({
   fontWeight: 400,
   fontSize: "25px",
   userSelect: "none",
 }));
 
-export const StoreLogoPreview = styled("img")(({ theme }) => ({
+export const StoreLogoPreview = styled("img")(() => ({
   width: "100px",
   height: "100px",
   objectFit: "contain",
@@ -84,13 +84,13 @@ export const AddLogoButton = styled(Button)(({ theme }) => ({
   },
 }));
 
-export const LogoPreviewRow = styled(Box)(({ theme }) => ({
+export const LogoPreviewRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "10px",
 }));
 
-export const AddLogoIcon = styled(AddPhotoAlternateIcon)(({ theme }) => ({
+export const AddLogoIcon = styled(AddPhotoAlternateIcon)(() => ({
   color: "#fff",
   height: "25px",
   width: "auto",
@@ -154,17 +154,17 @@ export const CustomNumberField = styled(NumericTextFieldQshop)(({ theme }) =>
   customInputStyle(theme as Theme)
 );
 
-export const ButtonRow = styled(Box)(({ theme }) => ({
+export const ButtonRow = styled(Box)(() => ({
   display: "flex",
   gap: "10px",
   justifyContent: "flex-end",
 }));
 
-export const CancelButton = styled(Button)(({ theme }) => ({
+export const CancelButton = styled(Button)(() => ({
   fontSize: "15px",
 }));
 
-export const CreateButton = styled(Button)(({ theme }) => ({
+export const CreateButton = styled(Button)(() => ({
   fontSize: "15px",
   backgroundColor: "#32d43a",
   color: "black",
@@ -174,7 +174,7 @@ export const CreateButton = styled(Button)(({ theme }) => ({
   },
 }));
 
-export const WalletRow = styled(Box)(({ theme }) => ({
+export const WalletRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "10px",
@@ -215,7 +215,7 @@ export const CreateNewDataContainerRow = styled(Box)({
   alignItems: "center",
 });
 
-export const CreateNewDataContainerButton = styled(Button)(({ theme }) => ({
+export const CreateNewDataContainerButton = styled(Button)(() => ({
   backgroundColor: "#d43232",
   textTransform: "none",
   fontWeight: 300,

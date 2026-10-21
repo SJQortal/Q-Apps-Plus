@@ -1,7 +1,5 @@
 import { useState } from "react";
-import ConfirmationModal, {
-  ModalProps
-} from "../components/common/ConfirmationModal/ConfirmationModal";
+import ConfirmationModal from "../components/common/ConfirmationModal/ConfirmationModal";
 
 const useConfirmationModal = (props: any) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);

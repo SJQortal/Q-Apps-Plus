@@ -26,13 +26,13 @@ export const FiltersCol = styled(Grid)(({ theme }) => ({
   borderRight: `1px solid ${theme.palette.background.paper}`,
 }));
 
-export const FiltersContainer = styled(Box)(({ theme }) => ({
+export const FiltersContainer = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   justifyContent: "space-between",
 }));
 
-export const FiltersRow = styled(Box)(({ theme }) => ({
+export const FiltersRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -52,7 +52,7 @@ export const FiltersTitle = styled(Typography)(({ theme }) => ({
   userSelect: "none",
 }));
 
-export const FiltersCheckbox = styled(Checkbox)(({ theme }) => ({
+export const FiltersCheckbox = styled(Checkbox)(() => ({
   color: "#c0d4ff",
   "&.Mui-checked": {
     color: "#6596ff",
@@ -96,7 +96,7 @@ export const FilterSelectMenuItems = styled(TextField)(({ theme }) => ({
   },
 }));
 
-export const ProductManagerRow = styled(Box)(({ theme }) => ({
+export const ProductManagerRow = styled(Box)(() => ({
   display: "grid",
   gridTemplateColumns: "1fr auto",
   alignItems: "center",
@@ -127,14 +127,14 @@ export const StoreTitle = styled(Typography)(({ theme }) => ({
   },
 }));
 
-export const StoreLogo = styled("img")(({ theme }) => ({
+export const StoreLogo = styled("img")(() => ({
   width: "70px",
   height: "70px",
   borderRadius: "3px",
   objectFit: "cover",
 }));
 
-export const FiltersSubContainer = styled(Box)(({ theme }) => ({
+export const FiltersSubContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   flexDirection: "column",
@@ -146,13 +146,13 @@ export const FilterDropdownLabel = styled(InputLabel)(({ theme }) => ({
   color: theme.palette.text.primary,
 }));
 
-export const StoreControlsRow = styled(Box)(({ theme }) => ({
+export const StoreControlsRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   gap: "10px",
 }));
 
-export const EditStoreButton = styled(Button)(({ theme }) => ({
+export const EditStoreButton = styled(Button)(() => ({
   display: "flex",
   alignItems: "center",
   padding: "3px 12px",
@@ -275,7 +275,7 @@ export const StoreTitleCol = styled(Box)({
   flexDirection: "column",
 });
 
-export const RatingContainer = styled(Box)(({ theme }) => ({
+export const RatingContainer = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   padding: "1px 5px",

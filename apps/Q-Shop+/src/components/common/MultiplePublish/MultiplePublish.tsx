@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react-hooks/refs -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import {
     Box,
     Button,
@@ -81,7 +81,7 @@ interface MultiplePublishProps {
     );
   
     const retry = ()=> {
-      let newlistOfMultiplePublishes: any[] = [];
+      const newlistOfMultiplePublishes: any[] = [];
       listOfUnsuccessfulPublishes?.forEach((item)=> {
               const findPub = publishes?.resources.find((res: any)=> res?.identifier === item.identifier)
               if(findPub){

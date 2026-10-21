@@ -14,7 +14,7 @@ import {
 } from "@mui/material";
 import { DoubleArrowDownSVG } from "../../assets/svgs/DoubleArrowDownSVG";
 
-export const StoresContainer = styled(Grid)(({ theme }) => ({
+export const StoresContainer = styled(Grid)(() => ({
   position: "relative",
   padding: "10px 55px 30px 55px",
   flexDirection: "column",
@@ -46,13 +46,13 @@ export const WelcomeSubFont = styled(Typography)(({ theme }) => ({
   opacity: 0.8,
 }));
 
-export const WelcomeCol = styled(Box)(({ theme }) => ({
+export const WelcomeCol = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
 }));
 
-export const StoresRow = styled(Grid)(({ theme }) => ({
+export const StoresRow = styled(Grid)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
@@ -97,7 +97,7 @@ export const StyledStoreCard = styled(Grid)<StoreListProps>(
   })
 );
 
-export const StoreCardInfo = styled(Grid)(({ theme }) => ({
+export const StoreCardInfo = styled(Grid)(() => ({
   position: "relative",
   display: "flex",
   flexDirection: "column",
@@ -105,7 +105,7 @@ export const StoreCardInfo = styled(Grid)(({ theme }) => ({
   padding: "0 20px 10px 15px",
 }));
 
-export const StoreCardImageContainer = styled(Box)(({ theme }) => ({}));
+export const StoreCardImageContainer = styled(Box)(() => ({}));
 
 export const OpenStoreCard = styled(Box)(({ theme }) => ({
   position: "absolute",
@@ -123,7 +123,7 @@ export const OpenStoreCard = styled(Box)(({ theme }) => ({
   transition: "all 0.2s ease-in",
 }));
 
-export const StoreCardImage = styled("img")(({ theme }) => ({
+export const StoreCardImage = styled("img")(() => ({
   width: "100%",
   objectFit: "contain",
   maxHeight: "250px",
@@ -225,7 +225,7 @@ export const YouOwnIcon = styled(IconButton)(({ theme }) => ({
   },
 }));
 
-export const MyStoresRow = styled(Grid)(({ theme }) => ({
+export const MyStoresRow = styled(Grid)(() => ({
   display: "flex",
   flexDirection: "row",
   justifyContent: "flex-end",
@@ -247,7 +247,7 @@ export const MyStoresCard = styled(Box)(({ theme }) => ({
   gap: "8px",
 }));
 
-export const MyStoresCheckbox = styled(Checkbox)(({ theme }) => ({
+export const MyStoresCheckbox = styled(Checkbox)(() => ({
   color: "#c0d4ff",
   padding: 0,
   "&.Mui-checked": {
@@ -256,7 +256,7 @@ export const MyStoresCheckbox = styled(Checkbox)(({ theme }) => ({
 }));
 
 export const ExpandDescriptionIcon = styled(DoubleArrowDownSVG)<StoreListProps>(
-  ({ theme, showCompleteStoreDescription }) => ({
+  ({ showCompleteStoreDescription }) => ({
     position: "absolute",
     top: "30px",
     right: "5px",
@@ -276,14 +276,14 @@ export const ExpandDescriptionIcon = styled(DoubleArrowDownSVG)<StoreListProps>(
   })
 );
 
-export const LogoRow = styled(Box)(({ theme }) => ({
+export const LogoRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   flexDirection: "row",
   gap: "5px",
 }));
 
-export const QShopLogo = styled("img")(({ theme }) => ({
+export const QShopLogo = styled("img")(() => ({
   width: "200px",
   height: "100%",
   objectFit: "contain",
@@ -304,7 +304,7 @@ export const ExchangeRateCard = styled(Box)(({ theme }) => ({
   marginTop: "10px",
 }));
 
-export const ExchangeRateRow = styled(Box)(({ theme }) => ({
+export const ExchangeRateRow = styled(Box)(() => ({
   display: "flex",
   alignItems: "center",
   justifyContent: "center",

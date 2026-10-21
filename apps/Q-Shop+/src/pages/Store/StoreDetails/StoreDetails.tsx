@@ -14,7 +14,7 @@ import {
   CurrencyRow,
 } from "./StoreDetails-styles";
 import { OwnerSVG } from "../../../assets/svgs/OwnerSVG";
-import { Box, useTheme } from "@mui/material";
+import { useTheme } from "@mui/material";
 import { CalendarSVG } from "../../../assets/svgs/CalendarSVG";
 import { CloseIconModal } from "../StoreReviews/StoreReviews-styles";
 import { DescriptionSVG } from "../../../assets/svgs/DescriptionSVG";
@@ -47,7 +47,6 @@ export const StoreDetails: FC<StoreDetailsProps> = ({
   location,
   shipsTo,
   setOpenStoreDetails,
-  supportedCoins,
   foreignCoins
 }) => {
   const theme = useTheme();

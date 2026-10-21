@@ -5,7 +5,6 @@ export const DownloadCircleSVG: React.FC<IconTypes> = ({
   height,
   width,
   className,
-  onClickFunc,
 }) => {
   return (
     <svg

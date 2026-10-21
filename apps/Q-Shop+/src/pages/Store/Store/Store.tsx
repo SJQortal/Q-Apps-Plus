@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import React, {
   useState,
   useEffect,
@@ -13,7 +14,6 @@ import {
   useTheme,
   Grid,
   CircularProgress,
-  Chip,
   FormControl,
   Rating,
   Typography,
@@ -21,8 +21,6 @@ import {
 } from "@mui/material";
 import {
   Catalogue,
-  resetListProducts,
-  resetProducts,
   setIsLoadingGlobal,
   updateRecentlyVisitedStoreId,
 } from "../../../state/features/globalSlice";
@@ -338,7 +336,7 @@ export const Store = () => {
 
   // Get store on mount & dipatch setCurrentViewedStore to redux when it's not your store. If it is your store, this is handled already in the global wrapper, so we do nothing as well.
   const getStore = useCallback(async () => {
-    let name = username;
+    const name = username;
     if (!name) return;
     if (!store) return;
 
@@ -436,7 +434,7 @@ export const Store = () => {
               id: `${store}-${DATA_CONTAINER_BASE}`,
             })
           );
-          // If they haven't published a datacontainer, by querying "/arbitrary​/resources​/search", and it comes back as []
+          // If they haven't published a datacontainer, by querying "/arbitrary/resources/search", and it comes back as []
           // If you can't find the data container, aka response code of 404, and it's not your own store, redirect to home page.
         } else if (
           responseContainer.status === 404 &&
@@ -449,7 +447,7 @@ export const Store = () => {
               alertType: "error",
             })
           );
-          // If they haven't published a datacontainer, by querying "/arbitrary​/resources​/search", and it comes back as []
+          // If they haven't published a datacontainer, by querying "/arbitrary/resources/search", and it comes back as []
           // If you can't find the data container, aka response code of 404, and it's your own store, prompt to create the data container.
         } else if (
           !responseContainer.ok &&

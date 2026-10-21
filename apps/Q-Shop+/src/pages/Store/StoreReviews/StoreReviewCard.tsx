@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { useState, FC, useEffect } from "react";
 import { Rating } from "@mui/material";
 import {

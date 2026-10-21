@@ -1,4 +1,4 @@
-import { checkStructure, checkStructureStore } from './checkStructure'
+import { checkStructureStore } from './checkStructure'
 
 export const fetchAndEvaluateStores = async (data: any) => {
   const getStoreStores = async () => {

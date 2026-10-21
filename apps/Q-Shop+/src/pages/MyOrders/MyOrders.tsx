@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "../../state/store";

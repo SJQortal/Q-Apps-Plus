@@ -1,5 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { useEffect } from "react";
-import { Box, Modal, useTheme } from "@mui/material";
+import { Box, Modal } from "@mui/material";
 import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../../state/store";
@@ -48,7 +49,6 @@ export const NewProduct = ({
   const dataContainer = useSelector(
     (state: RootState) => state.global.dataContainer
   );
-  const theme = useTheme();
 
   const dispatch = useDispatch();
 

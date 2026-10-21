@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps, react-hooks/immutability, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { addUser } from "../state/features/authSlice";
@@ -120,7 +121,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
 
   const getAvatar = async () => {
     try {
-      let url = await qortalRequest({
+      const url = await qortalRequest({
         action: "GET_QDN_RESOURCE_URL",
         name: user?.name,
         service: "THUMBNAIL",
@@ -257,7 +258,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
 
   const askForAccountInformation = React.useCallback(async () => {
     try {
-      let account = await qortalRequest({
+      const account = await qortalRequest({
         action: "GET_USER_ACCOUNT",
       });
 
@@ -332,7 +333,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
         const storeToBase64 = await objectToBase64(storeObj);
 
         // Publish Store to QDN
-        let metadescription =
+        const metadescription =
           `**coins:QORTtrue,ARRR${supportedCoins.includes("ARRR")}**` +
           description.slice(0, 180);
 
@@ -483,7 +484,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       try {
         const storeToBase64 = await objectToBase64(storeObj);
 
-        let metadescription =
+        const metadescription =
           `**coins:QORTtrue,ARRR${supportedCoins.includes("ARRR")}**` +
           description.slice(0, 180);
         const resourceResponse = await qortalRequest({

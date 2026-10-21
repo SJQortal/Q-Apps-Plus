@@ -1,5 +1,6 @@
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { FC, useState, useCallback, useEffect } from "react";
-import { CircularProgress, Grid, Rating, useTheme } from "@mui/material";
+import { Grid, Rating, useTheme } from "@mui/material";
 import {
   CardDetailsContainer,
   Divider,

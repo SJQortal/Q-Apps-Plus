@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import React, { useState, useEffect, useRef } from "react";
 import { useInView } from "react-intersection-observer";
 import CircularProgress from "@mui/material/CircularProgress";

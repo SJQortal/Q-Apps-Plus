@@ -1,4 +1,3 @@
-import { checkStructure } from './checkStructure'
 
 export const fetchAndEvaluateCatalogues = async (data: any) => {
   const getCatalogues = async () => {

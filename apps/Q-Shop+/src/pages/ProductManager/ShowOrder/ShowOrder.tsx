@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { FC, useEffect, useState, useMemo } from "react";
 import { ReusableModal } from "../../../components/modals/ReusableModal";
 import { Box, CircularProgress, useTheme } from "@mui/material";
@@ -119,7 +120,7 @@ export const ShowOrder: FC<ShowOrderProps> = ({
       };
       const orderStatusToBase64 = await objectToBase64(orderStateObject);
 
-      let res = await qortalRequest({
+      const res = await qortalRequest({
         action: "GET_NAME_DATA",
         name: order?.user,
       });
@@ -175,7 +176,7 @@ export const ShowOrder: FC<ShowOrderProps> = ({
       if (responseData.length === 0) return;
       // Get the raw data if the resource exists
       else {
-        let orderRawData = await qortalRequest({
+        const orderRawData = await qortalRequest({
           action: "FETCH_QDN_RESOURCE",
           name: from === "ProductManager" ? username : order?.sellerName,
           service: "DOCUMENT_PRIVATE",
@@ -183,7 +184,7 @@ export const ShowOrder: FC<ShowOrderProps> = ({
           encoding: "base64",
         });
         const base64 = orderRawData;
-        let orderUserName = await qortalRequest({
+        const orderUserName = await qortalRequest({
           action: "GET_NAME_DATA",
           name: order?.user,
         });
@@ -195,7 +196,7 @@ export const ShowOrder: FC<ShowOrderProps> = ({
         if (!resAddress?.publicKey) throw new Error("Cannot find order owner");
         const recipientPublicKey = resAddress.publicKey;
         // Decrypt the raw data since it was encrypted when the status was changed
-        let requestEncryptBody: any = {
+        const requestEncryptBody: any = {
           action: "DECRYPT_DATA",
           encryptedData: base64,
           publicKey: recipientPublicKey,

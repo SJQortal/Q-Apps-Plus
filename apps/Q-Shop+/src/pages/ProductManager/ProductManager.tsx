@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import React, { useMemo, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -47,10 +48,8 @@ import { CategorySVG } from "../../assets/svgs/CategorySVG";
 import { LoyaltySVG } from "../../assets/svgs/LoyaltySVG";
 import useConfirmationModal from "../../hooks/useConfirmModal";
 import { CreateButton } from "../../components/modals/CreateStoreModal-styles";
-// import { useProductsToSaveLocalStorage } from "../../hooks/useProductsToSaveLocalStorage";
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import { useParams } from "react-router-dom";
-import { useLocation } from "react-router-dom";
 import {
   CATALOGUE_BASE,
   DATA_CONTAINER_BASE,
@@ -105,18 +104,9 @@ export const ProductManager = () => {
     return user.name;
   }, [user]);
 
-  // get and set productsToSave from local storage
-  // const { productsToSaveLS, saveProductsToLocalStorage } =
-  //   useProductsToSaveLocalStorage();
 
   // Redirect to Store page if they're hot reloading
 
-  // Get productsToSave from Redux store and set them in local storage
-  // useEffect(() => {
-  //   if (Object.keys(productsToSave).length > 0) {
-  //     saveProductsToLocalStorage(productsToSave);
-  //   }
-  // }, [productsToSave]);
 
   // Publish productsToSave to QDN
   async function publishQDNResource() {
@@ -338,7 +328,7 @@ export const ProductManager = () => {
       }
 
       if (!currentStore) return;
-      let publishMultipleCatalogues = [];
+      const publishMultipleCatalogues = [];
       // Loop through listOfCataloguesToPublish and publish the base64 converted object to QDN
       for (const catalogue of listOfCataloguesToPublish) {
         const catalogueToBase64 = await objectToBase64(catalogue);
@@ -396,7 +386,7 @@ export const ProductManager = () => {
       dispatch(setProducts(newProductsArray));
 
       const newCatalogueHashMapFunc = () => {
-        let newCatalogueHashMap: Record<string, Catalogue> = {};
+        const newCatalogueHashMap: Record<string, Catalogue> = {};
 
         listOfCataloguesToPublish.forEach(catalogue => {
           newCatalogueHashMap[catalogue.id] = catalogue;

@@ -1,5 +1,4 @@
-import { Status } from '../state/features/orderSlice'
-import { checkStructure, checkStructureOrders } from './checkStructure'
+import { checkStructureOrders } from './checkStructure'
 import { base64ToObject } from './toBase64'
 
 export const fetchAndEvaluateOrders = async (data: any) => {
@@ -26,7 +25,7 @@ export const fetchAndEvaluateOrders = async (data: any) => {
         action: 'DECRYPT_DATA',
         encryptedData: data
       })
-      let statusDocument: any = {
+      const statusDocument: any = {
         status: 'Received',
         note: ''
       }

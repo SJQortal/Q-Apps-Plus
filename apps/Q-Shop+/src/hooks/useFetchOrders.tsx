@@ -1,3 +1,4 @@
+/* eslint-disable no-empty, react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import React from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Product } from "../state/features/storeSlice";

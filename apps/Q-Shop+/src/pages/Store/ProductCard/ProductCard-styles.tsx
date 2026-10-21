@@ -50,7 +50,7 @@ export const StyledCard = styled(Card)(({ theme }) => ({
   flexDirection: "column"
 }));
 
-export const StyledCardContent = styled(CardContent)(({ theme }) => ({
+export const StyledCardContent = styled(CardContent)(() => ({
   height: "100%",
   padding: "8px 16px",
   gap: "10px",

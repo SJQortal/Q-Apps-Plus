@@ -3,7 +3,7 @@ import { Box, Button, Switch, Typography } from "@mui/material";
 import ARRRLogoGold from "../../assets/img/arrr.png";
 import ARRRLogoWhite from "../../assets/img/ArrrLogoWhite.png";
 
-export const ProductLayout = styled(Box)(({ theme }) => ({
+export const ProductLayout = styled(Box)(() => ({
   position: "relative",
   display: "grid",
   gridTemplateColumns: "1fr 2fr",
@@ -11,7 +11,7 @@ export const ProductLayout = styled(Box)(({ theme }) => ({
   gap: "60px",
 }));
 
-export const CartBox = styled(Box)(({ theme }) => ({
+export const CartBox = styled(Box)(() => ({
   position: "absolute",
   top: "15px",
   right: "35px",
@@ -29,7 +29,7 @@ export const ProductNotFound = styled(Box)(({ theme }) => ({
   userSelect: "none",
 }));
 
-export const ProductDetailsContainer = styled(Box)(({ theme }) => ({
+export const ProductDetailsContainer = styled(Box)(() => ({
   display: "flex",
   flexDirection: "column",
   alignItems: "flex-start",
@@ -82,7 +82,7 @@ export const AddToCartButton = styled(Button)(({ theme }) => ({
   },
 }));
 
-export const UnavailableButton = styled(Button)(({ theme }) => ({
+export const UnavailableButton = styled(Button)(() => ({
   display: "flex",
   alignItems: "center",
   padding: "4px 12px",
