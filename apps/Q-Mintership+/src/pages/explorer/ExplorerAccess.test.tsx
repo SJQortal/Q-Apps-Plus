@@ -81,7 +81,7 @@ describe('an account, for a viewer who doesn’t see the detailed parts', () => 
     await account('learner');
     // The status is read first, then nothing about the detailed parts.
     await screen.findByRole('region', { name: 'At a glance' }, T);
-    expect(tabNames()).toEqual(['Overview', 'Transactions', 'Minter Profile', 'Names']);
+    expect(tabNames()).toEqual(['Overview', 'Transactions', 'Assets', 'Minter Profile', 'Names']);
     expect(screen.queryByRole('button', { name: /Compare/ })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Direct links' })).toBeNull();
     expect(screen.queryByRole('region', { name: 'Activity' })).toBeNull();
@@ -124,6 +124,7 @@ describe('an account, for a viewer who sees them', () => {
         'Overview',
         'Connections',
         'Transactions',
+        'Assets',
         'Minter Profile',
         'Names',
       ])

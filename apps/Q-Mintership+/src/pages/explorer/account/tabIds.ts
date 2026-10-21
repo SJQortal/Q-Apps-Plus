@@ -5,6 +5,8 @@ export const TAB_LABEL: Record<ExplorerTab, string> = {
   overview: 'Overview',
   connections: 'Connections',
   transactions: 'Transactions',
+  // The Q-Assets it holds (Simon, 2026-10-21: "In between transactions and minter profile").
+  assets: 'Assets',
   // An account's Minter Profile, its one place (Simon, 2026-10-17: "I want it to be called :
   // "Minter Profile""); its URL stays `mintership`.
   mintership: 'Minter Profile',
@@ -16,6 +18,7 @@ export const ACCOUNT_TABS: readonly ExplorerTab[] = [
   'overview',
   'connections',
   'transactions',
+  'assets',
   'mintership',
   'names',
 ];

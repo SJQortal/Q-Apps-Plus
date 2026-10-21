@@ -126,6 +126,7 @@ export const EXPLORER_TABS = [
   'overview',
   'connections',
   'transactions',
+  'assets',
   'mintership',
   'names',
 ] as const;
