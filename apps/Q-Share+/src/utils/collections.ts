@@ -421,6 +421,11 @@ export function summaryToCollection(row: QdnResourceSummary): CollectionSummary 
 export interface SearchCollectionsParams {
   /** Only this publisher's collections (exact name). */
   name?: string;
+  /**
+   * Words to look for: Core matches them anywhere in the name, identifier,
+   * title or description, ignoring case (`query`, without `prefix`).
+   */
+  query?: string;
   offset?: number;
   /** Defaults to a page of 20; never 0. */
   limit?: number;
@@ -434,6 +439,7 @@ export async function searchCollections(params: SearchCollectionsParams = {}): P
       service: COLLECTION_SERVICE,
       identifier: QSHARE_COLLECTION_BASE,
       name: params.name || undefined,
+      query: params.query?.trim() || undefined,
       includemetadata: true,
       limit: params.limit ?? QDN_PAGE,
       offset: params.offset ?? 0,

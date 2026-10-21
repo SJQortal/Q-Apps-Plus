@@ -12,23 +12,24 @@ function mergeRows(prev: CollectionSummary[], page: CollectionSummary[]): Collec
 }
 
 /**
- * One paged collection search (a name's, or everyone's), plus the bodies of
- * the rows it returned, fetched through the app's request queue and kept in
- * the collections slice. No search is made per row.
+ * One paged collection search (a name's, or everyone's, optionally matching
+ * `query`), plus the bodies of the rows it returned, fetched through the
+ * app's request queue and kept in the collections slice. No search is made
+ * per row.
  */
-export function useCollectionList(name: string | undefined) {
+export function useCollectionList(name: string | undefined, query = "") {
   const dispatch = useDispatch();
   const byKey = useSelector((state: RootState) => state.collections.byKey);
   const [rows, setRows] = useState<CollectionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [complete, setComplete] = useState(false);
-  const [listName, setListName] = useState(name);
+  const [listKey, setListKey] = useState({ name, query });
   const requestRef = useRef(0);
 
-  // A different name is a different list: reset while rendering, then the effect fetches.
-  if (listName !== name) {
-    setListName(name);
+  // A different name or query is a different list: reset while rendering, then the effect fetches.
+  if (listKey.name !== name || listKey.query !== query) {
+    setListKey({ name, query });
     setRows([]);
     setLoading(true);
     setError(false);
@@ -39,7 +40,7 @@ export function useCollectionList(name: string | undefined) {
   const fetchPage = useCallback(
     (offset: number, fresh: boolean): Promise<void> => {
       const id = ++requestRef.current;
-      return searchCollections({ name, offset, limit: QDN_PAGE, fresh }).then(
+      return searchCollections({ name, query, offset, limit: QDN_PAGE, fresh }).then(
         (page) => {
           if (id !== requestRef.current) return;
           setRows((prev) => (offset === 0 ? page : mergeRows(prev, page)));
@@ -55,7 +56,7 @@ export function useCollectionList(name: string | undefined) {
         }
       );
     },
-    [name]
+    [name, query]
   );
 
   useEffect(() => {

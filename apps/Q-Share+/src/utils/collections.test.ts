@@ -435,6 +435,17 @@ describe('searchCollections and fetchCollection', () => {
     expect(second).not.toContain('name=');
   });
 
+  it('looks for words anywhere in a collection, never as a prefix, and leaves out an empty query', async () => {
+    mockFetch('/arbitrary/resources/search', []);
+    await searchCollections({ query: '  live music ' });
+    await searchCollections({ query: '   ' });
+    const [withWords, blank] = fetchCallsMatching('/arbitrary/resources/search');
+    expect(new URL(withWords, 'http://n').searchParams.get('query')).toBe('live music');
+    // Core makes `query` a prefix match when `prefix` is set (for the identifier too).
+    expect(withWords).not.toContain('prefix=');
+    expect(blank).not.toContain('query=');
+  });
+
   it('fetches a body once per session and refreshes after a publish', async () => {
     mockQortalAction('FETCH_QDN_RESOURCE', { version: 1, title: 'Docs', description: '', items: [], created: 1, updated: 1 });
     mockQortalAction('PUBLISH_QDN_RESOURCE', true);
