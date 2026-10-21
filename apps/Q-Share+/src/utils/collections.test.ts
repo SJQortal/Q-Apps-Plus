@@ -28,7 +28,9 @@ import {
   slugifyCollectionTitle,
   toggleItem,
   type Collection,
+  deletedCollectionBody,
 } from './collections';
+import { isDeletedCollection } from './collectionFolders';
 
 const decode = (data64: string) => JSON.parse(atob(data64));
 
@@ -309,6 +311,46 @@ describe('folders and covers (1.0.1)', () => {
     await publishCollection({ name: 'dj', identifier: 'qshare_collection_music_ab12cd', body: next, previous });
     const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
     expect(payload.description).toBe(recipientMarker('QBobAddress1234567890123456789012'));
+  });
+});
+
+describe('deleted collections (1.0.1)', () => {
+  const held: Collection = {
+    version: 1,
+    name: 'alice',
+    identifier: 'qshare_collection_holiday_ab12cd',
+    title: 'Holiday',
+    description: 'Pics',
+    items: [{ name: 'alice', identifier: 'qshare_file_h_1_metadata' }],
+    folders: [{ id: 'f00001', title: 'Beach', description: '', items: [], folders: [] }],
+    cover: { service: 'THUMBNAIL', name: 'alice', identifier: 'qshare_cover_hol00001' },
+    created: 1,
+    updated: 2,
+    fetchedAt: 3,
+    extra: { theme: 'sea' },
+  };
+
+  it('stores a deleted collection empty, flagged, with its title and unknown fields', () => {
+    const body = deletedCollectionBody(held, 100);
+    const stored = storedCollectionJson(body);
+    expect(stored).toEqual({ theme: 'sea', version: 1, title: 'Holiday', description: 'Pics', items: [], created: 1, updated: 100, deleted: true });
+    const parsed = parseCollection(JSON.stringify(stored));
+    expect(parsed?.deleted).toBe(true);
+    expect(isDeletedCollection(parsed!)).toBe(true);
+    // A collection that was never deleted, empty or not, isn't.
+    expect(isDeletedCollection({ ...held, items: [], folders: [] })).toBe(false);
+    expect(storedCollectionJson(editCollectionBody(held))).not.toHaveProperty('deleted');
+  });
+
+  it('is a collection again once edited, and only a flag on an empty one counts', () => {
+    const deleted = { ...parseCollection(storedCollectionJson(deletedCollectionBody(held, 100)))!, name: held.name, identifier: held.identifier, fetchedAt: 4 };
+    const revived = editCollectionBody(deleted, { items: [{ name: 'bob', identifier: 'qshare_file_b_1_metadata' }] }, 200);
+    expect(revived.deleted).toBeUndefined();
+    expect(storedCollectionJson(revived)).not.toHaveProperty('deleted');
+    // A flag left on by an older version that added a share doesn't hide it.
+    expect(isDeletedCollection({ ...deleted, items: [{ name: 'bob', identifier: 'x' }] })).toBe(false);
+    // Anything but true is not the flag.
+    expect(parseCollection(JSON.stringify({ version: 1, title: 'T', items: [], deleted: 'yes' }))?.deleted).toBeUndefined();
   });
 });
 

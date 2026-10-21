@@ -75,6 +75,15 @@ export function isEmptyCollection(body: Container): boolean {
   return allCollectionItems(body).length === 0 && folderCount(body) === 0;
 }
 
+/**
+ * Deleted with Delete, and still empty. (One deleted before 1.0.1 has no
+ * flag: it is merely empty, which the lists of other people's collections
+ * leave out anyway.)
+ */
+export function isDeletedCollection(body: Container & { deleted?: boolean }): boolean {
+  return body.deleted === true && isEmptyCollection(body);
+}
+
 /** 1 for the collection's own folders, 2 inside those, and so on; 0 for the collection. */
 export function folderDepth(body: Container, id: string | null): number {
   return id === null ? 0 : (findFolder(body, id)?.path.length ?? 0);

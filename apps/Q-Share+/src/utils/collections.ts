@@ -94,6 +94,12 @@ export interface CollectionBody {
   folders?: CollectionFolder[];
   /** Set on a copy: the collection it was copied from. */
   copiedFrom?: CollectionSource;
+  /**
+   * Set by Delete (QDN can't remove a resource, so it is republished empty).
+   * Lists leave it out; any later edit drops the flag, so a collection that
+   * gets shares again is a collection again (collectionFolders.isDeletedCollection).
+   */
+  deleted?: true;
   /** Fields of the stored JSON this version doesn't know, written back unchanged. */
   extra?: Record<string, unknown>;
 }
@@ -200,6 +206,7 @@ export function buildCollectionBody(input: {
   cover?: CollectionCover | null;
   folders?: CollectionFolder[];
   copiedFrom?: CollectionSource;
+  deleted?: boolean;
   extra?: Record<string, unknown>;
 }): CollectionBody {
   const now = input.now ?? Date.now();
@@ -218,6 +225,7 @@ export function buildCollectionBody(input: {
   if (input.cover) body.cover = input.cover;
   if (input.folders && input.folders.length > 0) body.folders = input.folders;
   if (input.copiedFrom) body.copiedFrom = input.copiedFrom;
+  if (input.deleted) body.deleted = true;
   if (input.extra && Object.keys(input.extra).length > 0) body.extra = input.extra;
   return body;
 }
@@ -245,6 +253,26 @@ export function editCollectionBody(
 }
 
 /**
+ * A deleted collection: no shares, folders or cover, and `deleted`. Its
+ * title, copy source and unknown fields stay, so a link to it can still say
+ * what it was.
+ */
+export function deletedCollectionBody(current: CollectionBody, now?: number): CollectionBody {
+  return buildCollectionBody({
+    title: current.title,
+    description: current.description,
+    items: [],
+    created: current.created,
+    now,
+    cover: null,
+    folders: [],
+    copiedFrom: current.copiedFrom,
+    deleted: true,
+    extra: current.extra,
+  });
+}
+
+/**
  * A copy of someone's collection, to publish under the copier's name: its
  * shares, folders and covers (the covers stay the original's images), a
  * title and description of the copier's choosing, and `copiedFrom`.
@@ -266,13 +294,14 @@ export function copyCollectionBody(
 
 /** The JSON stored on QDN: unknown fields first, then the known ones; empty folders and no cover are left out. */
 export function storedCollectionJson(body: CollectionBody): Record<string, unknown> {
-  const { extra, cover, folders, copiedFrom, ...known } = body;
+  const { extra, cover, folders, copiedFrom, deleted, ...known } = body;
   return {
     ...(extra ?? {}),
     ...known,
     ...(cover ? { cover } : {}),
     ...(folders && folders.length > 0 ? { folders } : {}),
     ...(copiedFrom ? { copiedFrom } : {}),
+    ...(deleted ? { deleted: true } : {}),
   };
 }
 
@@ -352,7 +381,7 @@ export function parseFolders(raw: unknown, depth = 1, seen = new Set<string>()):
   return out;
 }
 
-const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders", "copiedFrom"]);
+const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders", "copiedFrom", "deleted"]);
 
 /** A copy's source read from QDN, or undefined for anything else. */
 export function parseSource(raw: unknown): CollectionSource | undefined {
@@ -402,6 +431,7 @@ export function parseCollection(raw: unknown): CollectionBody | null {
   if (folders.length > 0) body.folders = folders;
   const copiedFrom = parseSource(obj.copiedFrom);
   if (copiedFrom) body.copiedFrom = copiedFrom;
+  if (obj.deleted === true) body.deleted = true;
   const extra = Object.fromEntries(Object.entries(obj).filter(([key]) => !KNOWN_FIELDS.has(key)));
   if (Object.keys(extra).length > 0) body.extra = extra;
   return body;
