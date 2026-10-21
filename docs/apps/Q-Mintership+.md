@@ -1235,6 +1235,10 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     - **The reads** (`data/explorer/accountReport.ts`) use the account page's own keys, so what the page has read costs nothing again. Core's sponsorship report (1 to 5 seconds) is read only when the report is made. The names of the accounts it mentions are read 4 at a time, at most 500. Nothing is written.
     - **Copy findings** on Connections is gone with it (the report has all it had); Compare keeps its own.
     - **Tests:** the builder (sections in order, tables and escaping, UTC, the history not read, connections with full signatures, payments tables, failed parts, the 2,000 cap, an unused address, the file name with accents and `+`), Kai Target's whole report from the tab (Copy, and Save .md through SAVE_FILE with its file name and text), a part that couldn't be read, the capped links line, and Core's report read only when the report is made.
+    - **Screenshot check** (items 139–141, Hub 3.0 dark, every size): the first run found 404s on the 11 screens that read asset orders, because `scripts/screens.mjs` sent only some Core paths to the mock, and `/assets/` was left out since the build's own files sit there. Core's two-segment `/assets/<x>/…` paths now go to the mock (a `Repo:` commit). Then:
+      - those 11 screens and the made report: 240 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets;
+      - the other 10 Explorer screens from the first run: 200 captures, all 0;
+      - axe: one moderate `region` node on one capture (a connection opened, 390×844), in 2 of 5 runs of that screen, never on the others. It looks like something passing outside the landmarks while axe runs.
 
 ### The upstream PR, prepared (2026-10-20)
 
