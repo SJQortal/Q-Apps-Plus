@@ -42,6 +42,23 @@ if (typeof window.matchMedia !== 'function') {
   });
 }
 
+// jsdom has no IntersectionObserver; a stub that never reports an element in
+// view keeps "load more" sentinels and lazy images quiet unless a test fires them.
+if (typeof (globalThis as any).IntersectionObserver !== 'function') {
+  class IntersectionObserverStub {
+    readonly root = null;
+    readonly rootMargin = '';
+    readonly thresholds = [];
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() {
+      return [];
+    }
+  }
+  (globalThis as any).IntersectionObserver = IntersectionObserverStub;
+}
+
 // localforage (consent flag) keeps everything in memory.
 vi.mock('localforage', () => {
   const store: Record<string, unknown> = {};

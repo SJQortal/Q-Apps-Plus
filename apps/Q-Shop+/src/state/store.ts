@@ -7,21 +7,27 @@ import cartReducer from './features/cartSlice'
 import orderReducer from './features/orderSlice'
 import { writeStoredSettings } from '../utils/settingsStorage'
 
-export const store = configureStore({
-  reducer: {
-    notifications: notificationsReducer,
-    auth: authReducer,
-    global: globalReducer,
-    store: storeReducer,
-    cart: cartReducer,
-    order: orderReducer
-  },
-  middleware: (getDefaultMiddleware) =>
-    getDefaultMiddleware({
-      serializableCheck: false
-    }),
-  preloadedState: undefined // optional, can be any valid state object
-})
+const reducer = {
+  notifications: notificationsReducer,
+  auth: authReducer,
+  global: globalReducer,
+  store: storeReducer,
+  cart: cartReducer,
+  order: orderReducer
+}
+
+/** A fresh store; the app uses the one below, tests make their own. */
+export function createAppStore() {
+  return configureStore({
+    reducer,
+    middleware: (getDefaultMiddleware) =>
+      getDefaultMiddleware({
+        serializableCheck: false
+      })
+  })
+}
+
+export const store = createAppStore()
 
 // Remember the preferred coin between visits (Settings -> Shop).
 let lastPreferredCoin = store.getState().store.preferredCoin
