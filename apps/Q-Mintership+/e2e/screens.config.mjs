@@ -1361,6 +1361,17 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // An asset's popup opened from the Overview's Q-Assets (Simon, 2026-10-21: "its own popup").
+    {
+      key: 'explorer-account-asset-open',
+      path: `/explorer/account/${ADDR.admin}?asset=77&as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText('This account: #3 of 3 holders.').waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // None held: Lou Left.
     {
       key: 'explorer-assets-empty',
