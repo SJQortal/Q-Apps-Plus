@@ -27,6 +27,7 @@ export const CHANGELOG: Release[] = [
       "Shares get a thumbnail, made on your device from the first image or video, or a picture you choose. Cards and rows show it.",
       "Copy someone's collection into yours. Your copy names the original, and its owner gets a notification.",
       "Explore collections, under the filters on Home: everyone else's collections, with a search of their own.",
+      "Deleting a collection, or removing or moving a share in one, shows at once, and comes back if Hub says no.",
       "A bell at the top tells you when someone comments on your shares, replies to your comments, adds your share to a collection or copies one of your collections.",
       "Turn on Hub alerts in Settings → Notifications, and Qortal Hub tells you about new comments even while Q-Share+ is closed.",
       "Audio and video files say Play audio and Play video, and Close player once the player is open.",
