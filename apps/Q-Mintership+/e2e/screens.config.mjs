@@ -1300,6 +1300,15 @@ export default {
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
       after: asList,
     },
+    // Q-Asset trades (Simon, 2026-10-21): Ben Target bought 6 GEMCOIN from Pia Promote.
+    {
+      key: 'explorer-connections-trades',
+      path: `/explorer/account/${ADDR.banTarget}/connections?as=admin`,
+      after: async (page) => {
+        await asList(page);
+        await page.getByRole('list', { name: 'Asset trades' }).waitFor({ timeout: 8000 });
+      },
+    },
     // A connection opened (Simon, 2026-10-20): its one transaction, straight to its details.
     {
       key: 'explorer-connections-open',
@@ -1417,6 +1426,15 @@ export default {
       key: 'explorer-transactions',
       path: `/explorer/account/${ADDR.admin}/transactions?as=admin`,
       after: explorerSettle,
+    },
+    // An asset order's row says how it was filled (Simon, 2026-10-21).
+    {
+      key: 'explorer-transactions-trades',
+      path: `/explorer/account/${ADDR.banTarget}/transactions?kind=trading&as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByText(/^Filled:/).first().waitFor({ timeout: 8000 });
+      },
     },
     {
       key: 'explorer-transactions-search',
