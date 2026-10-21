@@ -80,7 +80,7 @@ export default function ExploreCollectionsDialog({ open, onClose }: ExploreColle
         fullWidth
         size="small"
         label="Search collections"
-        placeholder="Title, description or name"
+        placeholder="Title or name"
         value={typed}
         onChange={(e) => setTyped(e.target.value)}
         // On phones the keyboard would cover the list before anyone asked for it.
