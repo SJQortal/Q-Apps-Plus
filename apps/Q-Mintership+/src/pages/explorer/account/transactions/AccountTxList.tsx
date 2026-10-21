@@ -29,6 +29,7 @@ import {
   type AccountTxView,
 } from '../../../../data/explorer/accountTx';
 import { getTxWindow, txWindowKey } from '../../../../data/explorer/txWindow';
+import { getAccountTrades, tradesKey } from '../../../../data/explorer/trades';
 import type { TxRow } from '../../../../data/types';
 import { useQuery } from '../../../../hooks/useQuery';
 import { useViewState } from '../../../../hooks/useViewState';
@@ -134,6 +135,13 @@ export function AccountTxList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [read, filters.name, filters.order]
   );
+  // Its asset orders' trades, for their rows ("Filled: …") and the search: read once
+  // the rows read include an order it placed (a few reads per filled order).
+  const hasOrders = useMemo(
+    () => read.some((tx) => tx.type === 'CREATE_ASSET_ORDER' && tx.creatorAddress === address),
+    [read, address]
+  );
+  useQuery(hasOrders ? tradesKey(address) : null, (force) => getAccountTrades(address, { force }));
   // The search: what matches first, then what is similar.
   const txSearch = useTxSearch(rows, address, search);
   const tiers = txSearch.tiers;

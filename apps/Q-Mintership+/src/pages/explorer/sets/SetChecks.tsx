@@ -7,7 +7,7 @@
  * - "Who made their first QORT payment": where each one's first QORT came
  *   from, grouped by the payer ("H made the first QORT payment to 7 of
  *   these 48 accounts. H has sent 500+ payments.");
- * - "Where their QORT went": each one's latest 100 payments sent, grouped
+ * - "Where their QORT went": each one's payments sent (up to 10,000), grouped
  *   by the recipient ("K received QORT from 9 of these 48 accounts: 23
  *   payments, 1,200 QORT"), AT addresses left out and counted.
  *
@@ -260,7 +260,7 @@ function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>
               <TxSentence
                 parts={[
                   ...wentToParts(entry, total),
-                  { kind: 'text', text: ', in each one’s latest 100 payments' },
+                  { kind: 'text', text: ', in each one’s payments (up to the newest 10,000)' },
                 ]}
               />
             </Typography>
@@ -323,7 +323,7 @@ export function SetChecks({ accounts, scope }: { accounts: readonly string[]; sc
       <CheckCard
         title="Where their QORT went"
         id="set-went-to"
-        about="Each account’s latest 100 QORT payments sent, grouped by who received them. Two accounts at a time."
+        about="Each account’s QORT payments sent (up to the newest 10,000), grouped by who received them. Two accounts at a time."
         total={total}
         run={went.run as Run<unknown>}
         onStart={() => void went.start()}

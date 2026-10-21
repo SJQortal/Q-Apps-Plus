@@ -98,11 +98,11 @@ describe('Copy findings: what was read', () => {
   it('every read in: how far each one goes', () => {
     expect(coverageLines(compareData(), { paymentsBetween: true })).toEqual([
       'Payments between each pair: every QORT payment each way, up to the newest 100.',
-      'Asset transfers and multi-payments: each account’s newest 100.',
+      'Asset transfers and multi-payments: all of each account’s.',
       'Trade portal sales: each account’s newest 100.',
       'Reward shares, level moves and name sales: all of each account’s.',
       'Q-Mintership records: under every name each account owns.',
-      'The same accounts in their payments: in each account’s newest 100 QORT payments each way and newest 100 asset transfers and multi-payments.',
+      'The same accounts in their payments: in each account’s QORT payments each way (up to the newest 10,000) and asset transfers and multi-payments (up to the newest 5,000).',
     ]);
   });
 
@@ -111,7 +111,7 @@ describe('Copy findings: what was read', () => {
       compareData({
         links: [read({ rows: [], truncated: true, privs: {} }), read(undefined)],
         made: [read(made({ namesTruncated: true })), read(made({ truncated: ['vote'] }))],
-        assets: [read({ rows: [], truncated: false }), failedRead()],
+        assets: [read({ rows: [], truncated: true }), failedRead()],
         trades: [read({ rows: [], capped: false }), read(undefined)],
         sides: [{ trades: { rows: [], capped: false } }, { trades: undefined }],
       }),
@@ -119,11 +119,11 @@ describe('Copy findings: what was read', () => {
     );
     expect(lines).toEqual([
       'Payments between each pair: from the sender’s newest 100 QORT payments (this node can’t search the payments between two accounts).',
-      'Asset transfers and multi-payments: A’s newest 100; couldn’t be read for B.',
+      'Asset transfers and multi-payments: A’s newest 5,000; couldn’t be read for B.',
       'Trade portal sales: A’s newest 100; not read yet for B.',
       'Reward shares, level moves and name sales: A’s newest 500 (every level move read); not read yet for B.',
       'Q-Mintership records: under every name each account owns; only the first 500 names of A; some kinds stopped at their ceiling for B (the newest 300 records of a kind per 40 names).',
-      'The same accounts in their payments: in A’s newest 100 QORT payments each way and newest 100 asset transfers and multi-payments; couldn’t be read for B.',
+      'The same accounts in their payments: in A’s QORT payments each way (up to the newest 10,000) and asset transfers and multi-payments (up to the newest 5,000); couldn’t be read for B.',
     ]);
     // Nothing read yet for anyone: no claim at all, only that it is still out.
     expect(coverageLines(compareData({ links: [read(undefined), read(undefined)] }))[3]).toBe(

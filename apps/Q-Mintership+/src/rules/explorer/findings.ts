@@ -1,10 +1,12 @@
 /**
  * The Connections tab's findings, in the order the page lists them, and
- * "Copy findings": the same as plain text to paste into a chat or a note.
+ * the same as plain text: partsText for the Account report's sentences
+ * (accountReport.ts), and findingsText, the short plain-text form that
+ * "Copy findings" used before the Account report replaced it.
  *
  * "Recorded between them": level moves, sponsors, minting with another
- * account now, the accounts it sponsored, names bought or sold, then
- * payments by the other account (most first, both ways). Overview's
+ * account now, the accounts it sponsored, names bought or sold, Q-Asset
+ * trades, then payments by the other account (most first, both ways). Overview's
  * Direct links shows the first three.
  *
  * The text says which account and at which block it was checked, how much
@@ -28,6 +30,7 @@ import {
   type Links,
 } from './connections';
 import { flowParts, type AssetSum, type Flow } from './money';
+import { tradesByAccount, tradeSums, tradesFindingParts, type AssetTrade } from './trades';
 import { visibleName } from './nameNotes';
 import { groupWords, type TxPart } from './txWords';
 
@@ -137,7 +140,21 @@ export function findingsText(input: FindingsInput): string {
 // ---- the findings list ----------------------------------------------------------
 
 export type FindingKind =
-  'levelMove' | 'sponsor' | 'mintingWith' | 'sponsees' | 'nameDeal' | 'paidTo' | 'paidBy';
+  | 'levelMove'
+  | 'sponsor'
+  | 'mintingWith'
+  | 'sponsees'
+  | 'nameDeal'
+  | 'traded'
+  | 'paidTo'
+  | 'paidBy';
+
+/** One way of a trade finding: what came in (`got`) or went out (`gave`). */
+export interface TradeWay {
+  count: number;
+  qort: bigint;
+  assets: AssetSum[];
+}
 
 export interface Finding extends FindingLine {
   /** Stable across loads, for React keys. */
@@ -158,6 +175,8 @@ export interface Finding extends FindingLine {
   qort?: bigint;
   /** Other assets moved (Q-Assets), by name, in atomic units: payments and transfers only. */
   assets?: AssetSum[];
+  /** Q-Asset trades: what the account got and gave (the circle draws both ways). */
+  trade?: { got: TradeWay; gave: TradeWay };
 }
 
 export interface RecordedInput {
@@ -169,6 +188,8 @@ export interface RecordedInput {
   received?: readonly Flow[] | null;
   /** Each account's level now, where loaded (for "P is now level 0."). */
   levels?: Readonly<Record<string, number | undefined>>;
+  /** Its Q-Asset trades (null while they load). */
+  trades?: readonly AssetTrade[] | null;
 }
 
 const one = (tx: TxRow) => ({
@@ -256,6 +277,34 @@ export function recordedFindings(input: RecordedInput): Finding[] {
       evidence: [deal.tx],
       evidenceWords: '1 transaction',
     });
+  for (const [other, trades] of tradesByAccount(input.trades ?? [])) {
+    const newest = trades[0];
+    const oldest = trades[trades.length - 1];
+    const evidence = [
+      ...new Map(trades.flatMap((trade) => trade.txs).map((tx) => [tx.signature, tx])).values(),
+    ].sort((a, b) => (b.blockHeight ?? 0) - (a.blockHeight ?? 0) || b.timestamp - a.timestamp);
+    const got = tradeSums(trades, 'got');
+    const gave = tradeSums(trades, 'gave');
+    out.push({
+      key: `traded:${other}`,
+      kind: 'traded',
+      other,
+      parts: tradesFindingParts(other, trades),
+      height: newest.height,
+      ...(oldest.height !== newest.height
+        ? { firstHeight: oldest.height, firstTimestamp: oldest.timestamp }
+        : {}),
+      timestamp: newest.timestamp,
+      signature: newest.initiated ? newest.orderId : newest.otherOrderId,
+      ...(trades.length > 1 ? { count: trades.length } : {}),
+      evidence,
+      evidenceWords: plural(evidence.length, 'order'),
+      trade: {
+        got: { count: trades.length, ...got },
+        gave: { count: trades.length, ...gave },
+      },
+    });
+  }
   const flows = [
     ...(input.sent ?? []).map((flow) => ({ flow, kind: 'paidTo' as const })),
     ...(input.received ?? []).map((flow) => ({ flow, kind: 'paidBy' as const })),
@@ -287,7 +336,7 @@ export function recordedFindings(input: RecordedInput): Finding[] {
   return out;
 }
 
-/** How much of its links was read, for Copy findings. */
+/** How much of its links was read, for the Account report. */
 export function linksCoverage(links: { rows: readonly unknown[]; truncated: boolean }): string {
   return links.truncated
     ? `Reward shares, level moves and name sales: its newest ${formatCount(links.rows.length)} (every level move read).`

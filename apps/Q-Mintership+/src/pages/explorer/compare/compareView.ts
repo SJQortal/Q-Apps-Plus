@@ -158,7 +158,7 @@ function unreadParts(statuses: ReadonlyArray<[string, ReadStatus]>): string[] {
 
 /**
  * Copy findings' "What was read", from what was read: each line says how
- * far it goes (the newest 100, the newest 500, the first 500 names), and
+ * far it goes (all of it, the newest 100, the newest 500, the first 500 names), and
  * for which accounts a read is still out or failed.
  */
 export function coverageLines(data: CompareData, caps?: { paymentsBetween: boolean }): string[] {
@@ -184,6 +184,10 @@ export function coverageLines(data: CompareData, caps?: { paymentsBetween: boole
     return [...(read.length ? [`${whose(read)} newest 100`] : []), ...unreadParts(each(status))];
   };
 
+  const assetsIn = readIn(assets);
+  const assetsFull = assetsIn.filter((i) => !data.assets[i].data?.truncated).map(letterOf);
+  const assetsCapped = assetsIn.filter((i) => data.assets[i].data?.truncated).map(letterOf);
+
   const linksIn = readIn(links);
   const full = linksIn.filter((i) => !data.links[i].data?.truncated).map(letterOf);
   const capped = linksIn.filter((i) => data.links[i].data?.truncated).map(letterOf);
@@ -204,7 +208,11 @@ export function coverageLines(data: CompareData, caps?: { paymentsBetween: boole
     caps?.paymentsBetween === false
       ? 'Payments between each pair: from the sender’s newest 100 QORT payments (this node can’t search the payments between two accounts).'
       : 'Payments between each pair: every QORT payment each way, up to the newest 100.',
-    line('Asset transfers and multi-payments', newest100(assets)),
+    line('Asset transfers and multi-payments', [
+      ...(assetsFull.length ? [`all of ${whose(assetsFull)}`] : []),
+      ...(assetsCapped.length ? [`${whose(assetsCapped)} newest 5,000`] : []),
+      ...unreadParts(each(assets)),
+    ]),
     line('Trade portal sales', newest100(trades)),
     line('Reward shares, level moves and name sales', [
       ...(full.length ? [`all of ${whose(full)}`] : []),
@@ -224,7 +232,7 @@ export function coverageLines(data: CompareData, caps?: { paymentsBetween: boole
     line('The same accounts in their payments', [
       ...(readIn(payments).length
         ? [
-            `in ${whose(readIn(payments).map(letterOf))} newest 100 QORT payments each way and newest 100 asset transfers and multi-payments`,
+            `in ${whose(readIn(payments).map(letterOf))} QORT payments each way (up to the newest 10,000) and asset transfers and multi-payments (up to the newest 5,000)`,
           ]
         : []),
       ...unreadParts(each(payments)),
