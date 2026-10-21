@@ -1,6 +1,6 @@
 /**
- * The account page's tabs: Overview · Connections · Transactions ·
- * Mintership · Names. Each tab is a link that swaps the URL in place
+ * The account page's tabs: Overview · Connections · Transactions · Assets ·
+ * Minter Profile · Names. Each tab is a link that swaps the URL in place
  * (`replace`), so Back leaves the account rather than stepping through its
  * tabs, and a copied link opens the same tab. They scroll sideways on
  * narrow screens (with arrows on phones too). The page keeps focus on the
