@@ -11,6 +11,14 @@
  * order's have-asset (`amount`) and the target order's (`otherAmount`).
  * With QORT on one side, that is so many QORT for so many units.
  *
+ * The last trade can be one tiny sale: a single soak sold for 700 QORT made
+ * crowetic's 70,000 "worth" 49 million QORT (Simon, 2026-10-21). So next to
+ * it, what buyers would pay now (Simon: "also add realistic sale amount with
+ * its own window next to it"): the holding sold into the open buy orders on
+ * chain, the best price first, until it or the buyers run out; the
+ * account's own buy orders don't count. That can never be more than QORT
+ * buyers have actually put up.
+ *
  * Avatars follow the Q-Assets app: an IMAGE published as
  * `asset<id>_<name>_aavatar` under a name of the asset's owner; anyone
  * else's image for it is never shown. Without one, a coin in a colour of
@@ -77,8 +85,75 @@ export interface AssetView {
   worth?: bigint;
   /** Its share of all there is (0–1); absent when that isn't known. */
   share?: number;
+  /** What buyers would pay for the holding now; absent until the open buy orders are read. */
+  sale?: SaleNow;
   /** The account owns (controls) this asset. */
   owned: boolean;
+}
+
+/** An open order to buy an asset with QORT (`/assets/openorders/0/<id>`). */
+export interface BuyOrder {
+  creator: string;
+  /** QORT for one whole unit, atomic. */
+  price: bigint;
+  /** Units it still wants, atomic. */
+  units: bigint;
+}
+
+/** The holding sold into the open buy orders now, the best price first. */
+export interface SaleNow {
+  /** What it would fetch, atomic QORT. */
+  qort: bigint;
+  /** Units the buyers would take, and the rest no buyer wants now. */
+  sold: bigint;
+  unsold: bigint;
+  /** The best price a buyer offers (atomic QORT a unit), when one does. */
+  bestBid?: bigint;
+  /** More buy orders than were read, so it could fetch more: "at least". */
+  atLeast: boolean;
+}
+
+/** A row of `/assets/openorders/0/<id>` as a buy order, or null (nothing left to fill). */
+export function buyOrderOf(row: unknown): BuyOrder | null {
+  if (!row || typeof row !== 'object') return null;
+  const r = row as Record<string, unknown>;
+  const amount = parseAtomic(r.amount);
+  const fulfilled = parseAtomic(r.fulfilled) ?? 0n;
+  const price = parseAtomic(r.price);
+  if (amount === null || price === null || typeof r.creator !== 'string') return null;
+  const units = amount - fulfilled;
+  return units > 0n && price > 0n ? { creator: r.creator, price, units } : null;
+}
+
+/**
+ * Selling `balance` into the open buy orders, the best price first, never
+ * to the account's own (`self`). `truncated`: Core had more orders than
+ * were read, so with units left over it could fetch more.
+ */
+export function saleNow(
+  balance: bigint,
+  orders: readonly BuyOrder[],
+  self: string,
+  truncated = false
+): SaleNow {
+  const bids = orders
+    .filter((order) => order.creator !== self)
+    .sort((a, b) => (a.price === b.price ? 0 : a.price > b.price ? -1 : 1));
+  let left = balance;
+  let qort = 0n;
+  for (const bid of bids) {
+    if (left <= 0n) break;
+    const take = left < bid.units ? left : bid.units;
+    qort += (take * bid.price) / ATOMIC;
+    left -= take;
+  }
+  return {
+    qort,
+    sold: balance - left,
+    unsold: left,
+    ...(bids.length ? { bestBid: bids[0].price } : {}),
+    atLeast: truncated && left > 0n,
+  };
 }
 
 /** A row of Core's asset list, or null when it isn't one. */
@@ -176,6 +251,33 @@ export function dealOf(row: unknown): AssetDeal | null {
   };
 }
 
+/** One price level of an order book: so many units wanted (or offered) at a price, atomic. */
+export interface OrderLevel {
+  /** QORT for one whole unit. */
+  price: bigint;
+  units: bigint;
+}
+
+/** A row of `/assets/orderbook/<a>/<b>` (aggregated by price), or null. */
+export function orderLevelOf(row: unknown): OrderLevel | null {
+  if (!row || typeof row !== 'object') return null;
+  const r = row as Record<string, unknown>;
+  const price = parseAtomic(r.price);
+  const units = parseAtomic(r.unfulfilled);
+  return price && units ? { price, units } : null;
+}
+
+/** Buy orders by price level, the best (highest) first, at most `max`. */
+export function bidLevels(orders: readonly BuyOrder[], max = 5): OrderLevel[] {
+  const byPrice = new Map<bigint, bigint>();
+  for (const order of orders)
+    byPrice.set(order.price, (byPrice.get(order.price) ?? 0n) + order.units);
+  return [...byPrice.entries()]
+    .sort(([a], [b]) => (a === b ? 0 : a > b ? -1 : 1))
+    .slice(0, max)
+    .map(([price, units]) => ({ price, units }));
+}
+
 /** Each asset's newest trade with QORT, as its price; trades between two assets are left out. */
 export function pricesFrom(trades: readonly RecentTrade[]): Map<number, AssetPrice> {
   const prices = new Map<number, AssetPrice>();
@@ -216,13 +318,15 @@ export function assetViews(
   holdings: readonly Holding[],
   address: string,
   catalogue?: ReadonlyMap<number, AssetMeta>,
-  prices?: ReadonlyMap<number, AssetPrice>
+  prices?: ReadonlyMap<number, AssetPrice>,
+  sales?: ReadonlyMap<number, SaleNow>
 ): AssetView[] {
   return holdings
     .filter((h) => h.assetId !== QORT_ASSET_ID && h.balance > 0n)
     .map((h) => {
       const meta = catalogue?.get(h.assetId);
       const price = prices?.get(h.assetId);
+      const sale = sales?.get(h.assetId);
       const share = meta ? shareOf(h.balance, meta.quantity) : undefined;
       return {
         assetId: h.assetId,
@@ -231,6 +335,7 @@ export function assetViews(
         ...(meta ? { meta } : {}),
         ...(price ? { price, worth: worthOf(h.balance, price) } : {}),
         ...(share !== undefined ? { share } : {}),
+        ...(sale ? { sale } : {}),
         owned: meta?.owner === address,
       };
     });
@@ -250,10 +355,11 @@ export function ownedNotHeld(
 
 // ---- sorting and searching ---------------------------------------------------------
 
-export type AssetSort = 'worth' | 'share' | 'name' | 'id';
+export type AssetSort = 'worth' | 'sale' | 'share' | 'name' | 'id';
 
 export const ASSET_SORTS: ReadonlyArray<{ value: AssetSort; label: string }> = [
   { value: 'worth', label: 'Worth most first' },
+  { value: 'sale', label: 'Buyers pay most first' },
   { value: 'share', label: 'Biggest share of all first' },
   { value: 'name', label: 'Name, A to Z' },
   { value: 'id', label: 'Oldest asset first' },
@@ -278,6 +384,15 @@ export function sortAssets(views: readonly AssetView[], sort: AssetSort): AssetV
         if ((a.worth === undefined) !== (b.worth === undefined))
           return a.worth === undefined ? 1 : -1;
         return (b.share ?? -1) - (a.share ?? -1) || byName(a, b);
+      });
+    case 'sale':
+      return list.sort((a, b) => {
+        const x = a.sale?.qort ?? -1n;
+        const y = b.sale?.qort ?? -1n;
+        if (x !== y) return x > y ? -1 : 1;
+        if (a.worth !== b.worth && a.worth !== undefined && b.worth !== undefined)
+          return a.worth > b.worth ? -1 : 1;
+        return byName(a, b);
       });
     case 'share':
       return list.sort((a, b) => (b.share ?? -1) - (a.share ?? -1) || byName(a, b));
@@ -304,17 +419,44 @@ export interface AssetsTotals {
   /** Holdings that have a price, and what they are worth together (atomic QORT). */
   priced: number;
   worth: bigint;
+  /** Holdings whose buy orders were read, and what buyers would pay for them together. */
+  saleRead: number;
+  sale: bigint;
+  /** Of those: buyers for all of it, for part of it, for none of it. */
+  saleAll: number;
+  salePart: number;
+  saleNone: number;
+  /** Some book had more orders than were read: the sale could fetch more. */
+  saleAtLeast: boolean;
 }
 
 export function assetsTotals(views: readonly AssetView[]): AssetsTotals {
-  let worth = 0n;
-  let priced = 0;
-  for (const view of views)
+  const totals: AssetsTotals = {
+    held: views.length,
+    priced: 0,
+    worth: 0n,
+    saleRead: 0,
+    sale: 0n,
+    saleAll: 0,
+    salePart: 0,
+    saleNone: 0,
+    saleAtLeast: false,
+  };
+  for (const view of views) {
     if (view.worth !== undefined) {
-      worth += view.worth;
-      priced += 1;
+      totals.worth += view.worth;
+      totals.priced += 1;
     }
-  return { held: views.length, priced, worth };
+    const sale = view.sale;
+    if (!sale) continue;
+    totals.saleRead += 1;
+    totals.sale += sale.qort;
+    if (!sale.sold) totals.saleNone += 1;
+    else if (sale.unsold) totals.salePart += 1;
+    else totals.saleAll += 1;
+    if (sale.atLeast) totals.saleAtLeast = true;
+  }
+  return totals;
 }
 
 /** One part of the allocation bar: an asset, or the rest together (assetId null). */

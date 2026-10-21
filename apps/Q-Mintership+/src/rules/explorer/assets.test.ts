@@ -7,16 +7,20 @@ import {
   assetMetaOf,
   assetsTotals,
   assetViews,
+  bidLevels,
+  buyOrderOf,
   dealOf,
   avatarAssetId,
   avatarPublishers,
   holdingOf,
   matchesAsset,
+  orderLevelOf,
   ownedNotHeld,
   pricesFrom,
   qortWords,
   quantityWords,
   recentTradeOf,
+  saleNow,
   shareOf,
   shareWords,
   sortAssets,
@@ -160,6 +164,68 @@ describe('prices from the latest trades', () => {
   });
 });
 
+describe('what buyers would pay now', () => {
+  // crowetic's soak (Simon, 2026-10-21): one sold for 700 QORT, so 70,000 "worth" 49,000,000.
+  const order = (creator: string, price: string, amount: string, fulfilled = '0') =>
+    buyOrderOf({ creator, price, amount, fulfilled })!;
+
+  it('reads an open buy order: what it still wants', () => {
+    expect(order(B, '0.17750000', '30000', '25900')).toEqual({
+      creator: B,
+      price: 17_750_000n,
+      units: 4_100n * U,
+    });
+    expect(buyOrderOf({ creator: B, price: '1', amount: '5', fulfilled: '5' })).toBeNull();
+  });
+
+  it('sells into the best price first, until the holding or the buyers run out', () => {
+    // Q-Asset: 4,100 at 0.1775, then 25,000 at 0.1666 (crowetic's 27,810.37 on Simon's node).
+    const book = [order(B, '0.16660000', '25000'), order(B, '0.17750000', '4100')];
+    const sale = saleNow(2_781_037_000_000n, book, A);
+    expect(sale.qort).toBe(
+      72_775_000_000n + ((2_781_037_000_000n - 410_000_000_000n) * 16_660_000n) / U
+    );
+    expect(sale.unsold).toBe(0n);
+    expect(sale.bestBid).toBe(17_750_000n);
+    // More than the buyers want: the rest is unsold.
+    const big = saleNow(40_000n * U, book, A);
+    expect(big.sold).toBe(29_100n * U);
+    expect(big.unsold).toBe(10_900n * U);
+    expect(big.atLeast).toBe(false);
+    expect(saleNow(40_000n * U, book, A, true).atLeast).toBe(true);
+  });
+
+  it('no buyers: nothing, whatever its last trade said', () => {
+    expect(saleNow(70_000n * U, [], A)).toEqual({
+      qort: 0n,
+      sold: 0n,
+      unsold: 70_000n * U,
+      atLeast: false,
+    });
+  });
+
+  it('never sells to the account’s own buy orders', () => {
+    const sale = saleNow(6n * U, [order(A, '20', '6'), order(B, '18', '4')], A);
+    expect(sale).toMatchObject({ qort: 72n * U, sold: 4n * U, unsold: 2n * U, bestBid: 18n * U });
+  });
+
+  it('the book’s price levels', () => {
+    expect(orderLevelOf({ price: '0.19200000', unfulfilled: '22310.00000000' })).toEqual({
+      price: 19_200_000n,
+      units: 22_310n * U,
+    });
+    expect(
+      bidLevels([order(B, '1', '2'), order(A, '2', '1'), order(B, '1', '3')]).map((l) => [
+        l.price,
+        l.units,
+      ])
+    ).toEqual([
+      [2n * U, U],
+      [U, 5n * U],
+    ]);
+  });
+});
+
 describe('the account’s assets', () => {
   const catalogue = new Map([
     [6, meta(6, 'Q-Asset', B, 10_000_000n)],
@@ -209,7 +275,31 @@ describe('the account’s assets', () => {
   });
 
   it('adds up what the priced ones are worth, and splits it for the bar', () => {
-    expect(assetsTotals(views)).toEqual({ held: 3, priced: 2, worth: 529n * U + 42_067_500_000n });
+    expect(assetsTotals(views)).toMatchObject({
+      held: 3,
+      priced: 2,
+      worth: 529n * U + 42_067_500_000n,
+      saleRead: 0,
+    });
+    const sold = assetViews(
+      holdings,
+      A,
+      catalogue,
+      prices,
+      new Map([
+        [6, saleNow(2370n * U, [buyOrderOf({ creator: B, price: '0.1775', amount: '4100' })!], A)],
+        [11, saleNow(23n * U, [buyOrderOf({ creator: B, price: '2', amount: '1' })!], A)],
+        [13, saleNow(50n * U, [], A)],
+      ])
+    );
+    expect(assetsTotals(sold)).toMatchObject({
+      saleRead: 3,
+      sale: 42_067_500_000n + 2n * U,
+      saleAll: 1,
+      salePart: 1,
+      saleNone: 1,
+    });
+    expect(sortAssets(sold, 'sale').map((v) => v.assetId)).toEqual([6, 11, 13]);
     const parts = allocation(views);
     expect(parts.map((p) => p.assetId)).toEqual([11, 6]);
     expect(parts[0].fraction + parts[1].fraction).toBeCloseTo(1, 5);
