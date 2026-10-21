@@ -2,9 +2,9 @@
 
 Who joins the MINTER group (694), and therefore who mints QORT: propose a nomination, then Minter Admins sign, reject or let it expire.
 
-**Published:** **1.0.0** on 2026-10-20 (18:29 UTC) as `Q-Mintership+` on QDN, built from commit `8952279e` (the files its `index.html` loads match the build of that commit and `release/Q-Mintership+.zip`). Earlier testground publishes from 2026-10-14 on, the one before it from `d4b5cf83`.
+**Published:** **1.0.1** on 2026-10-21 (15:43 UTC) as `Q-Mintership+` on QDN, built from commit `2c5f6ed2` (the files its `index.html` loads match `release/Q-Mintership+.zip`, built from that commit). Before it, **1.0.0** on 2026-10-20 (18:29 UTC) from `8952279e`; earlier testground publishes from 2026-10-14 on, the one before 1.0.0 from `d4b5cf83`.
 
-**Version on the branch:** `1.0.0` (published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23) holds nights 1 to 3 (the new process, every write proven on a private testnet, a read-only Hub check with real data), the Explorer, and feedback round 1 (items 1 to 137, from Simon and the Minter Admins using the published app), merged into `main` on 2026-10-20. The next changes are 1.0.1 (docs/RELEASE.md, stage 3).
+**Version on the branch:** `1.0.1` (published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23) holds nights 1 to 3 (the new process, every write proven on a private testnet, a read-only Hub check with real data), the Explorer, and feedback round 1 (items 1 to 137, from Simon and the Minter Admins using the published app), merged into `main` on 2026-10-20. **1.0.1** (published): the original Admin Board in History for Minter Admins ([#27](https://github.com/SJQortal/Q-Apps-Plus/pull/27)), and items 139 to 141 ([#29](https://github.com/SJQortal/Q-Apps-Plus/pull/29)): every payment and the whole history once read in Connections, Q-Asset trades, and the Account report. The next changes are 1.0.2 (docs/RELEASE.md, stage 3).
 
 ## Baseline at import
 
@@ -1197,6 +1197,48 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
     - **Mock world:** `e2e/world-legacy.mjs` has a removal card with its poll and three comments (one not encrypted to Avery Admin), a topic, a card posted before Avery was an admin, and the old unsealed card, sealed with the mock's stand-in encryption (`sealFor`).
     - **Tests:** 9 data tests (search, base64 fetch and DECRYPT_DATA, locked kept, per-viewer keys, a Hub failure that isn't a lock, comments, no writes), page tests for History and the card page as an admin and as a learner, and the Ship-as values test for "Proposed before Q-Mintership 4.0.0". Screenshot check of the new screens (`history-admin-board`, `legacy-admin-card`, `legacy-admin-card-locked`) with `legacy-card` and `history`: 100 captures, 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations.
     - **Needs a Hub check as a Minter Admin with real data:** that Hub decrypts the real cards without a dialog, and how long 20 rows take.
+
+139. **Connections shows every payment, and the whole history once read** (Simon, 2026-10-21, on igorcoin's Connections: "igor sent me 495 QORT which is seen in transactions, but is not visible in connections"; then "since I fetched all the accounts transactions in overview, it should show all history in connections and so on").
+    - **The cause:** Connections read only the newest 100 payments each way, from `payments/between`. igorcoin has sent 214, so its 495 QORT of May 2025 and 1 QORT of Aug 2025 to Simon were older than that window. On Simon's node, all 266 of igorcoin's payments read in about 40 ms.
+    - **Now:**
+      - Payments are read 1,000 at a time until Core has no more, up to 10,000 each way; "Check older" adds 1,000 more past that.
+      - Asset transfers and multi-payments are read 1,000 at a time, up to 5,000.
+      - Compare's "the same accounts in their payments" and the sponsee sets read the same keys, and their words say "up to the newest 10,000".
+    - **The whole history:** once the All list (`xtx:<a>:all`) is read to its end (Overview's Read all of it, the QORT summaries, or any account with fewer than 100 transactions), payments, asset transfers and the links search come from it, complete (`data/explorer/fullHistory.ts`). This covers Connections, Overview's Direct links, Compare, the sponsee sets and the Quiz alike. When it reaches its end, or grows after that, those keys are marked stale so the screen reads them again from it.
+    - **Tests:** reads of 1,000 and the 10,000 cap, asset transfers' 5,000 cap, the whole history serving payments, transfers and links with no search, and the stale mark once per new length. Hal Helper's 640 payments now read in one go.
+
+140. **Q-Asset trades in Connections and Transactions** (Simon, 2026-10-21: "both connections and transactions is missing Q-Assets sales and buys, as for example I bought 500 QORT of igorcoin").
+    - **Why they were missing:** a trade isn't a transaction between two accounts. Each places its own order (CREATE_ASSET_ORDER; the order's id is its signature), and Core matches them and records the trade against both orders. Simon's case on mainnet: his order bought 23 igorcoin for 529 QORT on 29 Jul 2026, filling igorcoin's sell order of 23 Aug 2025.
+    - **Reads** (`data/explorer/trades.ts`, `xassettrades:<a>`; `xtrades:` was taken by the Trade Portal summaries):
+      - the account's orders, `/assets/orders/{a}`, newest first, 100 a page, up to 5 pages. Core's `includeClosed` and `includeFulfilled` are exact filters (`is_closed = X AND is_fulfilled = Y`), so three reads: closed and fulfilled, closed but not fulfilled, open. The first version read only the first: on igorcoin, 7 of its orders;
+      - for each filled order (the newest 200, 4 at a time), its trades (`/assets/order/{id}/trades`) and the other order (`/assets/order/{id}`, for who placed it);
+      - the two order transactions, as evidence and for the trade's block (the later order's). `xfills:<id>` per order, kept for the session.
+    - **Connections:** an "Asset trades" part (after Names), one finding per account. One trade reads "Bought 23 igorcoin from igorcoin for 529 QORT" or "Sold … to … for …"; several add up, "3 asset trades with X: got …, gave …". Each opens to its orders. On the circle, what came in and what went out both count, so an account traded with sits at the bottom. It is searched, listed in Copy findings ("Asset trades: every filled order (7).") and in "Also checked, nothing found".
+    - **Transactions:** an order's row says how it was filled, "Filled: Sold 23 igorcoin to Simon James for 529 QORT · 29 Jul 2026" (and "and N more"); opened, it lists every trade. The tab reads the account's trades once its rows include an order it placed, so the search finds the order by the other account too. Elsewhere (an evidence list, Transactions on Qortal) an order reads its own fills when opened.
+    - **Checked on mainnet** through the dev server reading Simon's node, signed out:
+      - igorcoin's Transactions, Trading, searched "simon": "Placed an order to trade igorcoin for QORT (23 Aug 2025). Filled: Sold 23 igorcoin to Simon James for 529 QORT · 29 Jul 2026";
+      - Simon's, searched "igorcoin": "Filled: Bought 23 igorcoin from igorcoin for 529 QORT";
+      - no console errors.
+
+      Connections needs full Explorer access, so it was checked in the tests only.
+    - **Mock world:** Pia Promote's sell order of 6 GEMCOIN, filled by Ben Target's buy order for 120 QORT, and Ben's open order nobody filled. The order routes follow Core's exact filters.
+    - **Tests:** the data reads (the three order states, fills only for filled orders, both sides, caching), the words (bought, sold, traded, summed, coverage), the finding and the circle split, Ben's and Pia's Connections, the circle, an account with none, and Ben's Transactions row and search.
+
+141. **One Account report on Connections** (Simon, 2026-10-21: "Cores own report, and public chain and QDN facts, I would like it to be a one button, that creates .md file from all the information known on chain about this account and its connections … and when clicking this it is recommended that user reads entire onchain history of that account first").
+    - **The button:** Connections' footer had three things: Core's own sponsorship report, the "public chain and QDN facts" note, and Copy findings. They are now one section, "Account report", with one button that opens a dialog:
+      - it recommends reading the account's whole history first and has Read it all there (1,000 at a time through the heavy-read limiter, with Stop); once read, it says so with the count;
+      - Make the report reads the rest, shows the file and its name (`account-report-<name>-<YYYY-MM-DD>.md`), and offers Save .md (Hub's SAVE_FILE, `text/markdown`, or a download outside Hub) and Copy.
+    - **The file** (`rules/explorer/accountReport.ts`, pure) has the same sections, in the same order, every time, so reports of different accounts read alike side by side:
+      - a header table: address, primary name, when it was made (UTC) and at which block, how much of the history was read, the app and version, and a link to open the account;
+      - the facts note, then: Account (public key, level, blocks minted, balance, MINTER, minting now, names, groups, first seen, its first own transaction, first QORT received); QORT totals (only once the whole history is read); Activity by type (count, first and last); Connections (level moves, reward shares, names bought or sold, asset trades, payments each way as tables, exchanges, accounts sponsored by the same sponsor, and what was checked and found nothing); Core's sponsorship report; What was read; and the transactions behind the connections (block, time, type, from, full signature; the newest 2,000).
+      - Every connection names its block, date and full signature, so each can be checked on any node. Times are UTC; `|` in names is escaped so the tables hold. A part that couldn't be read is named under "Couldn't be read", never taken for none. No verdicts: it says what is on chain, nothing more.
+    - **The reads** (`data/explorer/accountReport.ts`) use the account page's own keys, so what the page has read costs nothing again. Core's sponsorship report (1 to 5 seconds) is read only when the report is made. The names of the accounts it mentions are read 4 at a time, at most 500. Nothing is written.
+    - **Copy findings** on Connections is gone with it (the report has all it had); Compare keeps its own.
+    - **Tests:** the builder (sections in order, tables and escaping, UTC, the history not read, connections with full signatures, payments tables, failed parts, the 2,000 cap, an unused address, the file name with accents and `+`), Kai Target's whole report from the tab (Copy, and Save .md through SAVE_FILE with its file name and text), a part that couldn't be read, the capped links line, and Core's report read only when the report is made.
+    - **Screenshot check** (items 139–141, Hub 3.0 dark, every size): the first run found 404s on the 11 screens that read asset orders, because `scripts/screens.mjs` sent only some Core paths to the mock, and `/assets/` was left out since the build's own files sit there. Core's two-segment `/assets/<x>/…` paths now go to the mock (a `Repo:` commit). Then:
+      - those 11 screens and the made report: 240 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 small targets;
+      - the other 10 Explorer screens from the first run: 200 captures, all 0;
+      - axe: one moderate `region` node on one capture (a connection opened, 390×844), in 2 of 5 runs of that screen, never on the others. It looks like something passing outside the landmarks while axe runs.
 
 ### The upstream PR, prepared (2026-10-20)
 

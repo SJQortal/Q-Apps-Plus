@@ -3,7 +3,8 @@
  * Overview's Direct links (the same keys, so either one's reads serve the
  * other): the account's links (xlinks:<a>, heavy), its QORT payments each
  * way (xpay:<a>:sent|recv, light), its asset transfers and multi-payments
- * (xassets:<a>, heavy), and who is minting now (xonline, shared with the
+ * (xassets:<a>, heavy), its Q-Asset trades (xassettrades:<a>, its filled orders
+ * and who filled them), and who is minting now (xonline, shared with the
  * header). Nothing polls; Refresh marks these keys stale.
  */
 import { useMemo } from 'react';
@@ -15,6 +16,7 @@ import {
   type AssetTransfers,
   type PaymentPage,
 } from '../../../../data/explorer/money';
+import { getAccountTrades, tradesKey, type AccountTrades } from '../../../../data/explorer/trades';
 import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
 import {
   linksOf,
@@ -26,13 +28,14 @@ import { flowsOf, type Flow } from '../../../../rules/explorer/money';
 import { recordedFindings, type Finding } from '../../../../rules/explorer/findings';
 
 /** The reads "Recorded between them" is built from. */
-export type ConnectionsPart = 'links' | 'sent' | 'recv' | 'assets';
+export type ConnectionsPart = 'links' | 'sent' | 'recv' | 'assets' | 'trades';
 
 export interface ConnectionsData {
   links: UseQueryResult<AccountLinks>;
   sent: UseQueryResult<PaymentPage>;
   recv: UseQueryResult<PaymentPage>;
   assets: UseQueryResult<AssetTransfers>;
+  trades: UseQueryResult<AccountTrades>;
   online: UseQueryResult<OnlineShare[]>;
   /** What the links say (null until they load). */
   parsed: Links | null;
@@ -60,6 +63,7 @@ export function useConnections(address: string, enabled = true): ConnectionsData
     getPayments(address, 'recv', { force })
   );
   const assets = useQuery(on && `xassets:${on}`, (force) => getAssetTransfers(address, { force }));
+  const trades = useQuery(on && tradesKey(on), (force) => getAccountTrades(address, { force }));
   const online = useQuery(on && 'xonline', () => getOnline());
 
   const parsed = useMemo(
@@ -84,8 +88,10 @@ export function useConnections(address: string, enabled = true): ConnectionsData
         : null,
     [recv.data, assets.data, address]
   );
-  const settled = [links, sent, recv, assets].every((q) => q.data !== undefined || q.isError);
-  const parts = { links, sent, recv, assets };
+  const settled = [links, sent, recv, assets, trades].every(
+    (q) => q.data !== undefined || q.isError
+  );
+  const parts = { links, sent, recv, assets, trades };
   const failed = (Object.keys(parts) as ConnectionsPart[]).filter(
     (part) => parts[part].isError && parts[part].data === undefined
   );
@@ -97,6 +103,7 @@ export function useConnections(address: string, enabled = true): ConnectionsData
     sent,
     recv,
     assets,
+    trades,
     online,
     parsed,
     mintingWith,
@@ -114,6 +121,7 @@ export function useRecorded(
   levels?: Record<string, number | undefined>
 ): Finding[] {
   const { parsed, mintingWith, flowsSent, flowsReceived } = data;
+  const trades = data.trades.data?.trades ?? null;
   return useMemo(
     () =>
       recordedFindings({
@@ -122,7 +130,8 @@ export function useRecorded(
         sent: flowsSent,
         received: flowsReceived,
         levels,
+        trades,
       }),
-    [parsed, mintingWith, flowsSent, flowsReceived, levels]
+    [parsed, mintingWith, flowsSent, flowsReceived, levels, trades]
   );
 }

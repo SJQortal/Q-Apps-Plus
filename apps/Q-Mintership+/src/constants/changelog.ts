@@ -20,14 +20,30 @@ export const CHANGELOG: Release[] = [
   {
     version: '1.0.1',
     date: '2026-10-20',
-    title: 'The original Admin Board, readable again',
+    title: 'The original Admin Board, readable again; Q-Asset trades',
     summary:
-      'Minter Admins can read the cards and comments of the original encrypted Admin Board in History.',
+      'Minter Admins can read the original encrypted Admin Board in History, and the Explorer shows Q-Asset buys and sells and an account’s whole history.',
     sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'Explorer’s Transactions: an asset order says how it was filled and with whom (“Filled: bought 23 igorcoin from igorcoin for 529 QORT”), and the tab’s search finds it by that account too.',
+        ],
+      },
       {
         title: 'For Minter Admins',
         notes: [
           'History has an Admin Board filter: the cards the Minter Admins posted on the original encrypted Admin Board, with what each said, who it was about, its poll result and its comments, decrypted for you as you read them. Each says it was proposed in the original Q-Mintership.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'Connections reads every QORT payment each way (up to 10,000), not only the newest 100: a payment from long ago now shows.',
+          'Once Overview has read an account’s whole history, Connections, Compare and the sponsee lists use all of it.',
+          'Connections lists Q-Asset trades: who an account bought from and sold to, for what, with the two orders behind each; on the circle, what came in and what went out both count.',
+          'Connections has one Account report: everything read on chain about the account and its connections, with Core’s own sponsorship report, as a plain Markdown file to save or copy. Each connection names its block, date and full signature, and the report says what was read. It suggests reading the whole history first, and can do it there.',
         ],
       },
     ],

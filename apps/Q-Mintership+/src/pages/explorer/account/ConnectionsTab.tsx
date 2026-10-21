@@ -5,21 +5,23 @@
  *
  * What was recorded between them as a circle (the default) or a list (Circle
  * and List, kept on this device: ConnectionsCircle; typing a search shows
- * the list), the facts first, then the fixed
- * neutral line and Copy findings:
+ * the list), the facts first, then the Account report:
  * - Recorded between them: minting level moved, reward shares (its
  *   sponsor, minting with another account now, the accounts it sponsored),
- *   names bought or sold, and payments by the other account;
+ *   names bought or sold, Q-Asset trades, and payments by the other account;
  * - In common: where its first QORT came from, the sponsor it shares with
  *   others, and who got their first QORT payment from it;
  * - In Q-Mintership: nominations, supports and votes between it and others
  *   (MintershipLinks);
- * - "Also checked, nothing found: …", and Core's own report on request.
+ * - "Also checked, nothing found: …";
+ * - Account report (connections/AccountReport.tsx): one button for a .md
+ *   file of everything known on chain about the account, Core's own
+ *   sponsorship report and the neutral line included (Simon, 2026-10-21:
+ *   it replaced Core's own report, the note and Copy findings).
  * Above them, QORT sent to exchanges or got from them (ExchangeNotice).
  * When the links read stopped at its ceiling (its newest 500 rows), the
  * tab says so, and what those rows didn't show isn't claimed as none.
- * A section shows only when it has something. "Copy findings" copies the
- * lot as text, with the block it was checked at.
+ * A section shows only when it has something.
  *
  * A small search over the tab (Simon, 2026-10-17; `?q=` in the URL)
  * narrows every list to the rows that show what was typed: a name (also
@@ -40,36 +42,22 @@ import { Box, Button, Link, ToggleButton, ToggleButtonGroup, Typography } from '
 import BubbleChartOutlinedIcon from '@mui/icons-material/BubbleChartOutlined';
 import ViewListOutlinedIcon from '@mui/icons-material/ViewListOutlined';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
-import CheckOutlinedIcon from '@mui/icons-material/CheckOutlined';
-import ContentCopyOutlinedIcon from '@mui/icons-material/ContentCopyOutlined';
 import { Section } from '../../../components/common/Section';
 import { ErrorState, ListSkeleton } from '../../../components/common/states';
-import { getTip } from '../../../data/chain';
 import { coreSponsorKey, getCoreSponsor } from '../../../data/explorer/sponsorship';
 import { useQuery } from '../../../hooks/useQuery';
-import { peekQuery } from '../../../data/query';
 import { useDisplayName } from '../../../hooks/useDisplayName';
 import { useInView } from '../../../hooks/useInView';
-import { explorerAccountPath, explorerSponseesPath } from '../../../routes/paths';
+import { explorerSponseesPath } from '../../../routes/paths';
 import {
   emptyLinkChecks,
-  fundingParts,
   nothingFoundLine,
-  siblingsParts,
   type EmptyCheck,
 } from '../../../rules/explorer/connections';
-import {
-  findingsText,
-  linksCoverage,
-  type Finding,
-  type FindingLine,
-} from '../../../rules/explorer/findings';
-import { paymentsCoverage } from '../../../rules/explorer/money';
-import { appLink, copyText } from '../../../utils/links';
+import type { Finding } from '../../../rules/explorer/findings';
 import { formatCount } from '../../../utils/format';
-import { EXPLORER_NEUTRAL_LINE } from '../explorerWords';
 import { ConnectionRow, ROW_LIST_SX } from './connections/ConnectionRow';
-import { CoreReport } from './connections/CoreReport';
+import { AccountReport } from './connections/AccountReport';
 import { useLevels, useMinterMarks, type MinterMarks } from './connections/hooks';
 import { InCommonSection, type InCommonFound } from './connections/InCommon';
 import type { Flow } from '../../../rules/explorer/money';
@@ -85,7 +73,6 @@ import {
   LINKS_CAPPED_NOTE,
   connectionsSearchLine,
   textOf,
-  unreadWords,
   whenLine,
 } from './connections/words';
 import { MintershipLinks } from './MintershipLinks';
@@ -223,34 +210,6 @@ function FindingRow({
   );
 }
 
-/** Copies the findings as text; says once whether it worked. */
-function CopyFindingsButton({ build }: { build: () => Promise<string> }) {
-  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
-  return (
-    <>
-      <Button
-        variant="outlined"
-        startIcon={state === 'copied' ? <CheckOutlinedIcon /> : <ContentCopyOutlinedIcon />}
-        onClick={async () => {
-          setState('idle');
-          const ok = await copyText(await build());
-          setState(ok ? 'copied' : 'failed');
-        }}
-        sx={{ minHeight: 44 }}
-      >
-        {state === 'copied' ? 'Findings copied' : 'Copy findings'}
-      </Button>
-      <span role="status" className="qmp-visually-hidden">
-        {state === 'copied'
-          ? 'Findings copied'
-          : state === 'failed'
-            ? 'Couldn’t copy the findings'
-            : ''}
-      </span>
-    </>
-  );
-}
-
 const LINK_SX = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -323,7 +282,9 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
     getCoreSponsor(address, { force })
   );
   const names = of('nameDeal');
-  const linkFindings = levelMoves.length + sponsors.length + mintingWith.length + names.length;
+  const trades = of('traded');
+  const linkFindings =
+    levelMoves.length + sponsors.length + mintingWith.length + names.length + trades.length;
   const sharesShown = sponsors.length + mintingWith.length > 0 || sponsees !== null;
 
   const paymentsPending =
@@ -380,6 +341,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const sharesFound = splitFound([...sponsors, ...mintingWith], findFinding);
   const sponseesFound: MatchStrength | null = sponsees ? findFinding(sponsees) : null;
   const namesFound = splitFound(names, findFinding);
+  const tradesFound = splitFound(trades, findFinding);
   const sentFound = splitFound(data.flowsSent ?? [], (flow) => findFlow(flow, 'sent'));
   const receivedFound = splitFound(data.flowsReceived ?? [], (flow) => findFlow(flow, 'received'));
   const sentAny = (data.sent.data?.rows.length ?? 0) > 0;
@@ -413,6 +375,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
     levelFound,
     sharesFound,
     namesFound,
+    tradesFound,
     sentFound,
     receivedFound,
     mintershipFound,
@@ -433,7 +396,10 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const paymentsFound = sentFound.all.length + receivedFound.all.length;
   const showPayments = showPaymentsAll && (!searching || paymentsFound > 0);
   const linkFindingsFound = searching
-    ? levelFound.all.length + sharesFound.all.length + namesFound.all.length
+    ? levelFound.all.length +
+      sharesFound.all.length +
+      namesFound.all.length +
+      tradesFound.all.length
     : linkFindings;
   const sponseesShown = sponsees !== null && (!searching || sponseesFound !== null);
   const showRecorded =
@@ -460,6 +426,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
         if (!pairedOnline) empty.push(check);
       } else cappedEmpty.push(check);
     }
+  if (data.trades.data && !trades.length) empty.push('assetTrades');
   if (
     data.flowsSent &&
     data.flowsReceived &&
@@ -471,45 +438,6 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   if (common.first.data && !funding) empty.push('firstQort');
   const noneLine = nothingFoundLine(empty);
   const cappedLine = cappedNothingLine(nothingFoundLine(cappedEmpty));
-
-  const build = async () => {
-    const tip = await getTip().catch(() => null);
-    const coverage: string[] = [];
-    if (data.links.data) coverage.push(linksCoverage(data.links.data));
-    if (data.sent.data && data.recv.data)
-      coverage.push(
-        paymentsCoverage(
-          { count: data.sent.data.rows.length, done: data.sent.data.done },
-          { count: data.recv.data.rows.length, done: data.recv.data.done },
-          data.assets.data
-            ? { count: data.assets.data.rows.length, truncated: data.assets.data.truncated }
-            : undefined
-        )
-      );
-    // What isn't above was not read: never "none found".
-    if (data.failed.length) coverage.push(`Couldn’t read ${unreadWords(data.failed)}.`);
-    const commonLines: FindingLine[] = [];
-    if (funding)
-      commonLines.push({
-        parts: fundingParts(funding, common.band),
-        height: funding.height,
-        signature: funding.signature,
-      });
-    if (sponsor && common.siblings)
-      commonLines.push({ parts: siblingsParts(sponsor, common.siblings) });
-    return findingsText({
-      address,
-      name: peekQuery<string | null>(`name:${address}`) ?? null,
-      checkedAt: tip?.height ?? null,
-      neutralLine: EXPLORER_NEUTRAL_LINE,
-      coverage,
-      recorded,
-      common: commonLines,
-      noneFound: [noneLine, cappedLine].filter(Boolean).join('\n\n') || null,
-      link: appLink(explorerAccountPath(address, 'connections')),
-      nameOf: (other) => peekQuery<string | null>(`name:${other}`),
-    });
-  };
 
   const row = (finding: Finding) => (
     <FindingRow
@@ -653,6 +581,16 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
               />
             </Part>
           ) : null}
+          {tradesFound.all.length ? (
+            <Part title="Asset trades">
+              <FoundRows label="Asset trades" found={tradesFound} render={row} typed={typed} />
+              {data.trades.data?.truncated ? (
+                <Typography variant="body2" color="text.secondary">
+                  From its newest {formatCount(data.trades.data.orders)} filled orders.
+                </Typography>
+              ) : null}
+            </Part>
+          ) : null}
           {showPayments ? (
             <Box ref={setPaymentsNode}>
               <Part title="Payments">
@@ -716,15 +654,8 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
         </Typography>
       ) : null}
 
-      <CoreReport address={address} />
-
-      {/* What these facts are and aren't, and Copy findings, after the facts (Simon, 2026-10-16). */}
-      <Typography role="note" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
-        {EXPLORER_NEUTRAL_LINE}
-      </Typography>
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-        <CopyFindingsButton build={build} />
-      </Box>
+      {/* Core's own report, the facts note and Copy findings, as one report (Simon, 2026-10-21). */}
+      <AccountReport address={address} label={accountLabel} />
     </>
   );
 }

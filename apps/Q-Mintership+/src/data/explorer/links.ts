@@ -5,7 +5,9 @@
  * and levels. One heavy address search (`xlinks:<a>`), 100 rows a page,
  * newest first, until a short page and never more than 5 pages. When the
  * cap cuts it short, one more search for TRANSFER_PRIVS alone, so a level
- * move is never left out.
+ * move is never left out. When the account's whole history is read
+ * (fullHistory.ts), its rows of these types come from it instead, all of
+ * them.
  *
  * A level move the account sent names its recipient only in the raw bytes
  * (Core's JSON leaves it out): each one is decoded once (`xprivs:<sig>`).
@@ -14,6 +16,7 @@ import type { TxRow } from '../types';
 import { getJson, query } from '../core';
 import { heavyQuery } from './heavy';
 import { getPrivsRecipient } from './account';
+import { fullHistory, rowsOfTypes } from './fullHistory';
 
 /** The types one search reads. */
 export const LINK_TX_TYPES = [
@@ -51,9 +54,10 @@ function searchPath(address: string, types: readonly string[], offset: number): 
 }
 
 async function readLinks(address: string): Promise<AccountLinks> {
-  const rows: TxRow[] = [];
-  let truncated = true;
-  for (let page = 0; page < LINK_PAGES; page++) {
+  const full = fullHistory(address);
+  const rows: TxRow[] = full ? rowsOfTypes(full, LINK_TX_TYPES) : [];
+  let truncated = !full;
+  for (let page = 0; page < LINK_PAGES && !full; page++) {
     const chunk = await getJson<TxRow[]>(searchPath(address, LINK_TX_TYPES, page * LINK_PAGE));
     const list = Array.isArray(chunk) ? chunk : [];
     rows.push(...list);

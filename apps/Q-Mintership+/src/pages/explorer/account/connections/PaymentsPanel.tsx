@@ -7,8 +7,9 @@
  * ("Show more"). "MINTER members only" filters by the
  * app's cached member list (read once this part is near the screen). The
  * line under the list says how far back it read; "Check older" reads the
- * next 100 that way. With the tab's search (`found`), each way lists only
- * the accounts found, sorted as picked: the matches, then those only
+ * next 1,000 that way (past the first 10,000). With the tab's search
+ * (`found`), each way lists only the accounts found, sorted as picked: the
+ * matches, then those only
  * similar under "Similar to …"; the counts on Sent to and Received from
  * are what was found.
  */

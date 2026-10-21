@@ -35,7 +35,7 @@ import { copyText } from '../../utils/links';
 import { readableTone } from '../../utils/readable';
 import { useViewState } from '../../hooks/useViewState';
 
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+export const MONO = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 /** Every other line's tint (of the text colour over the box). */
 const STRIPE = 0.04;
 

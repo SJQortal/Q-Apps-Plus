@@ -127,6 +127,8 @@ const SIDE_OF: Readonly<Record<Finding['kind'], CircleSide>> = {
   mintingWith: 'other',
   sponsees: 'other',
   nameDeal: 'other',
+  // A trade moves both ways: drawn on both sides (circleNodes).
+  traded: 'in',
 };
 
 /** What a node weighs in `order`: its transactions, or its QORT (whole QORT). */
@@ -152,6 +154,31 @@ export function circleNodes(
   const nodes = new Map<string, CircleNode>();
   for (const finding of findings) {
     if (!finding.other) continue;
+    if (finding.trade) {
+      // What it got comes in, what it gave goes out: one node each way, the
+      // finding listed once (on the incoming one; joined when both are there).
+      for (const [side, way] of [
+        ['in', finding.trade.got],
+        ['out', finding.trade.gave],
+      ] as const) {
+        const key = `${side}:${finding.other}`;
+        const node = nodes.get(key) ?? {
+          key,
+          address: finding.other,
+          side,
+          count: 0,
+          findings: [],
+          qort: 0n,
+          assets: [],
+        };
+        node.count += way.count;
+        node.qort += way.qort;
+        node.assets = addAssets(node.assets, way.assets);
+        if (side === 'in') node.findings.push(finding);
+        nodes.set(key, node);
+      }
+      continue;
+    }
     const side = SIDE_OF[finding.kind];
     const key = `${side}:${finding.other}`;
     const node = nodes.get(key) ?? {

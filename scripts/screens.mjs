@@ -184,12 +184,16 @@ try {
         page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 160)); });
         page.on('pageerror', (e) => errors.push('pageerror: ' + String(e).slice(0, 160)));
         await routeAssets(page);
-        await page.route(/\/(arbitrary|names|lists|addresses|transactions|blocks|crosschain|chat|groups|admin|polls)\//, async (route) => {
+        const answerCore = async (route) => {
           const url = new URL(route.request().url());
           page.__fetches.push(url.pathname + url.search);
           const handled = config.route ? await config.route(route, url, ctx) : false;
           if (!handled) await route.fulfill({ status: 404, body: '' });
-        });
+        };
+        await page.route(/\/(arbitrary|names|lists|addresses|transactions|blocks|crosschain|chat|groups|admin|polls)\//, answerCore);
+        // Core's asset API (/assets/orders/…, /assets/order/…/trades) shares /assets/ with the
+        // build's files, which are one segment deep (/assets/index-….js): only two or more go to Core.
+        await page.route(/^https?:\/\/[^/]+\/assets\/[^/?]+\/[^?]/, answerCore);
         let ok = true;
         try {
           await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=${MODE}`, { waitUntil: 'load', timeout: 12000 });

@@ -56,6 +56,7 @@ export function unreadWords(failed: readonly ConnectionsPart[]): string {
             ? 'its payments received'
             : null,
       has('assets') ? 'its asset transfers and multi-payments' : null,
+      has('trades') ? 'its asset trades' : null,
     ].filter((words): words is string => words !== null)
   );
 }

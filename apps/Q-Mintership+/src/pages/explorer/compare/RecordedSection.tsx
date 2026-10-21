@@ -152,7 +152,7 @@ export function RecordedSection({
         <Note>
           Payments between each pair are read both ways (up to the newest 100 each way). Asset
           transfers, reward shares, level moves, name sales, Q-Mintership records and trade portal
-          sales come from each account’s own newest ones.
+          sales come from each account’s own transactions (its newest ones, for a busy account).
         </Note>
         {found.map((pair) => (
           <PairBlock key={pair.pair.id} data={data} pair={pair} accents={accents} />

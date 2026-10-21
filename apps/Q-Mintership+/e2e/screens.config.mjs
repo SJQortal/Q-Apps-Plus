@@ -1300,6 +1300,31 @@ export default {
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
       after: asList,
     },
+    // Q-Asset trades (Simon, 2026-10-21): Ben Target bought 6 GEMCOIN from Pia Promote.
+    {
+      key: 'explorer-connections-trades',
+      path: `/explorer/account/${ADDR.banTarget}/connections?as=admin`,
+      after: async (page) => {
+        await asList(page);
+        await page.getByRole('list', { name: 'Asset trades' }).waitFor({ timeout: 8000 });
+      },
+    },
+    // The Account report (Simon, 2026-10-21): its whole history read, then made, ready to save.
+    {
+      key: 'explorer-connections-report',
+      path: `/explorer/account/${ADDR.banTarget}/connections?as=admin`,
+      after: async (page) => {
+        await asList(page);
+        await page.getByRole('button', { name: 'Account report' }).click();
+        const dialog = page.getByRole('dialog');
+        const readAll = dialog.getByRole('button', { name: 'Read it all' });
+        if (await readAll.isVisible().catch(() => false)) await readAll.click();
+        await dialog.getByText(/whole on-chain history is read/).waitFor({ timeout: 8000 });
+        await dialog.getByRole('button', { name: 'Make the report' }).click();
+        await dialog.getByRole('button', { name: 'Save .md' }).waitFor({ timeout: 15000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // A connection opened (Simon, 2026-10-20): its one transaction, straight to its details.
     {
       key: 'explorer-connections-open',
@@ -1417,6 +1442,15 @@ export default {
       key: 'explorer-transactions',
       path: `/explorer/account/${ADDR.admin}/transactions?as=admin`,
       after: explorerSettle,
+    },
+    // An asset order's row says how it was filled (Simon, 2026-10-21).
+    {
+      key: 'explorer-transactions-trades',
+      path: `/explorer/account/${ADDR.banTarget}/transactions?kind=trading&as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByText(/^Filled:/).first().waitFor({ timeout: 8000 });
+      },
     },
     {
       key: 'explorer-transactions-search',

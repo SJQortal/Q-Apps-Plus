@@ -479,7 +479,14 @@ export function fundingParts(funding: Funding, band?: PayerBand): TxPart[] {
 
 /** A part of the links that was read and found nothing, in the order the page lists them. */
 export type EmptyCheck =
-  'levelMoves' | 'sponsor' | 'sponsees' | 'mintingWith' | 'nameSales' | 'payments' | 'firstQort';
+  | 'levelMoves'
+  | 'sponsor'
+  | 'sponsees'
+  | 'mintingWith'
+  | 'nameSales'
+  | 'assetTrades'
+  | 'payments'
+  | 'firstQort';
 
 const EMPTY_WORDS: Record<EmptyCheck, string> = {
   levelMoves: 'level moves',
@@ -487,6 +494,7 @@ const EMPTY_WORDS: Record<EmptyCheck, string> = {
   sponsees: 'accounts it sponsored',
   mintingWith: 'minting with another account now',
   nameSales: 'name sales',
+  assetTrades: 'asset trades',
   payments: 'payments',
   firstQort: 'where its first QORT came from',
 };
