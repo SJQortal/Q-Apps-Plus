@@ -23,14 +23,14 @@ import {
 import { formatDate, shortAddress } from '../../../../utils/format';
 import { assetAccent } from './assetAccent';
 import {
+  INDIVISIBLE_EXPLANATION,
+  INDIVISIBLE_WORDS,
   NEVER_TRADED,
   OWNS_EXPLANATION,
   OWNS_WORDS,
   priceWords,
   UNSPENDABLE_EXPLANATION,
   UNSPENDABLE_WORDS,
-  WHOLE_EXPLANATION,
-  WHOLE_WORDS,
   worthWords,
 } from './assetsWords';
 
@@ -40,14 +40,23 @@ export function OwnerWords({ owner }: { owner: string }) {
   return <bdi dir="auto">{name || shortAddress(owner)}</bdi>;
 }
 
-/** Its marks: the account's own asset, whole units only, can't be sent. Above the stretched button. */
+/**
+ * Its marks: the account's own asset; indivisible, when it can't be split
+ * (Simon, 2026-10-21: "just show it if asset is indivisible"); can't be
+ * sent. Above the stretched button.
+ */
 export function AssetChips({ meta, owned }: { meta?: AssetMeta; owned: boolean }) {
   const chips: ReactNode[] = [];
   if (owned)
     chips.push(<StatusChip key="own" label={OWNS_WORDS} kind="owner" explain={OWNS_EXPLANATION} />);
   if (meta && !meta.isDivisible)
     chips.push(
-      <StatusChip key="whole" label={WHOLE_WORDS} kind="plain" explain={WHOLE_EXPLANATION} />
+      <StatusChip
+        key="indivisible"
+        label={INDIVISIBLE_WORDS}
+        kind="plain"
+        explain={INDIVISIBLE_EXPLANATION}
+      />
     );
   if (meta?.isUnspendable)
     chips.push(
@@ -157,11 +166,12 @@ function NameText({ name, lines = 2 }: { name: string; lines?: number }) {
   );
 }
 
-/** "#77 · by Pia Promote". */
-function IdLine({ view }: { view: AssetView }) {
+/** "#77 · by Pia Promote"; in a row, which has no marks, "#79 · indivisible · by Sid Sponsor". */
+function IdLine({ view, indivisible = false }: { view: AssetView; indivisible?: boolean }) {
   return (
     <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: 'anywhere' }}>
       #{view.assetId}
+      {indivisible && view.meta && !view.meta.isDivisible ? ' · indivisible' : null}
       {view.meta?.owner ? (
         <>
           {' · by '}
@@ -300,7 +310,7 @@ export function AssetRow({ view, onOpen }: { view: AssetView; onOpen: () => void
         <OpenButton name={view.name} onOpen={onOpen}>
           <NameText name={view.name} lines={1} />
         </OpenButton>
-        <IdLine view={view} />
+        <IdLine view={view} indivisible />
       </Box>
       <Box
         sx={{

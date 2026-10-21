@@ -13,8 +13,9 @@ export const NEVER_TRADED = 'Never traded for QORT';
 export const UNSPENDABLE_WORDS = 'Can’t be sent';
 export const UNSPENDABLE_EXPLANATION =
   'One of Qortal’s own genesis assets: it can’t be sent or traded.';
-export const WHOLE_WORDS = 'Whole units';
-export const WHOLE_EXPLANATION = 'It comes in whole units only: it can’t be split.';
+/** Said only of an asset that can't be split (Simon, 2026-10-21: "just show it if asset is indivisible"). */
+export const INDIVISIBLE_WORDS = 'Indivisible';
+export const INDIVISIBLE_EXPLANATION = 'Whole units only: it can’t be split.';
 export const OWNS_WORDS = 'Its own';
 export const OWNS_EXPLANATION =
   'This account owns the asset: it issued it, or got it by an update.';

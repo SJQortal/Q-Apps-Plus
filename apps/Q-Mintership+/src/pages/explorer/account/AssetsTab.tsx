@@ -31,7 +31,6 @@ import {
   sortAssets,
   type AssetMeta,
   type AssetSort,
-  type AssetView,
 } from '../../../rules/explorer/assets';
 import { appParam } from '../../../routes/hubLocation';
 import { formatCount } from '../../../utils/format';
@@ -40,16 +39,12 @@ import { AssetCard, AssetChips, AssetRow } from './assets/AssetItems';
 import { AssetsSummary } from './assets/AssetsSummary';
 import { assetsTitle, NO_ASSETS, ownedTitle, showMoreWords } from './assets/assetsWords';
 import { useAssets } from './assets/useAssets';
+import { useOpenAsset } from './assets/useOpenAsset';
 import { useListView } from './useListView';
 import { ViewToggle } from './ViewToggle';
 
 /** Assets shown at first, and added by each "Show the next". */
 export const ASSETS_PAGE = 24;
-
-/** An asset it owns and holds none of, as a view the dialog can show. */
-function ownedView(meta: AssetMeta): AssetView {
-  return { assetId: meta.assetId, name: meta.name, balance: 0n, meta, share: 0, owned: true };
-}
 
 /** An asset it owns and holds none of: avatar, name (opens it), all there is and its marks. */
 function OwnedRow({ meta, onOpen }: { meta: AssetMeta; onOpen: () => void }) {
@@ -92,7 +87,7 @@ export default function AssetsTab({ address }: { address: string }) {
   const [sort, setSort] = useViewState<AssetSort>('assets:sort', 'worth');
   const [shown, setShown] = useViewState('assets:shown', ASSETS_PAGE);
   const search = appParam(params, 'q') ?? '';
-  const openId = Number(appParam(params, 'asset'));
+  const { open, setOpen } = useOpenAsset(address, views, list.data);
 
   const setParam = (key: string, value: string | null) =>
     setParams(
@@ -115,15 +110,6 @@ export default function AssetsTab({ address }: { address: string }) {
         : [],
     [views, search, sort]
   );
-
-  // The asset in the URL: one it holds, one it owns, or any other from Core's list.
-  const open: AssetView | null = useMemo(() => {
-    if (!Number.isInteger(openId) || openId <= 0) return null;
-    const held = views?.find((v) => v.assetId === openId);
-    if (held) return held;
-    const meta = list.data?.get(openId);
-    return meta ? { ...ownedView(meta), owned: meta.owner === address, share: 0 } : null;
-  }, [openId, views, list.data, address]);
 
   if (holdings.isError && !holdings.data)
     return (
@@ -204,14 +190,10 @@ export default function AssetsTab({ address }: { address: string }) {
                     <AssetCard
                       key={item.assetId}
                       view={item}
-                      onOpen={() => setParam('asset', String(item.assetId))}
+                      onOpen={() => setOpen(item.assetId)}
                     />
                   ) : (
-                    <AssetRow
-                      key={item.assetId}
-                      view={item}
-                      onOpen={() => setParam('asset', String(item.assetId))}
-                    />
+                    <AssetRow key={item.assetId} view={item} onOpen={() => setOpen(item.assetId)} />
                   )
                 )}
               </Box>
@@ -250,18 +232,12 @@ export default function AssetsTab({ address }: { address: string }) {
             sx={{ listStyle: 'none', m: 0, p: 0 }}
           >
             {owned.map((meta) => (
-              <OwnedRow
-                key={meta.assetId}
-                meta={meta}
-                onOpen={() => setParam('asset', String(meta.assetId))}
-              />
+              <OwnedRow key={meta.assetId} meta={meta} onOpen={() => setOpen(meta.assetId)} />
             ))}
           </Box>
         </Section>
       ) : null}
-      {open ? (
-        <AssetDialog address={address} asset={open} onClose={() => setParam('asset', null)} />
-      ) : null}
+      {open ? <AssetDialog address={address} asset={open} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }

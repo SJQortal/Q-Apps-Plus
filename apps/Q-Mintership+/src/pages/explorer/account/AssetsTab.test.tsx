@@ -92,7 +92,9 @@ describe('the Assets tab', () => {
     expect(moon).toHaveTextContent('100 % of 1');
     expect(moon).toHaveTextContent('Never traded for QORT');
     expect(within(moon).getByText('Its own')).toBeInTheDocument();
-    expect(within(moon).getByText('Whole units')).toBeInTheDocument();
+    // Only an asset that can't be split says so (Simon, 2026-10-21).
+    expect(within(moon).getByText('Indivisible')).toBeInTheDocument();
+    expect(within(gem).queryByText(/divisible/i)).toBeNull();
     const fund = screen
       .getByRole('button', { name: 'The Harbour Lighthouse Restoration Fund: details' })
       .closest('li')!;
@@ -156,6 +158,8 @@ describe('the Assets tab', () => {
     const dialog = await screen.findByRole('dialog', { name: 'GEMCOIN' }, T);
     expect(screen.getByTestId('search')).toHaveTextContent('?asset=77');
     expect(dialog).toHaveTextContent('Gems for Pia’s promotions');
+    // GEMCOIN divides: nothing said about it.
+    expect(dialog).not.toHaveTextContent(/divisible/i);
     expect(
       await within(dialog).findByText('This account: #2 of 3 holders.', {}, T)
     ).toBeInTheDocument();
@@ -179,6 +183,8 @@ describe('the Assets tab', () => {
     await assets(ADDR.banTarget, '?asset=82');
     const dialog = await screen.findByRole('dialog', { name: 'Ben’s Tickets' }, T);
     expect(dialog).toHaveTextContent('This account holdsNone');
+    // Tickets come whole.
+    expect(within(dialog).getByText('Whole units only: it can’t be split.')).toBeInTheDocument();
     expect(
       await within(dialog).findByText('This account: Not among its holders.', {}, T)
     ).toBeInTheDocument();
@@ -211,10 +217,12 @@ describe('the Assets tab', () => {
 });
 
 describe('the Overview’s Q-Assets, under At a glance', () => {
-  it('Avery’s, worth most first, each opening in the Assets tab', async () => {
+  it('Avery’s, worth most first, each opening its own popup right here', async () => {
+    const user = userEvent.setup();
     await renderPage(
       <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
         <OverviewTab address={ADDR.admin} />
+        <Search />
       </PersonLinkContext>,
       {
         persona: 'learner',
@@ -236,8 +244,8 @@ describe('the Overview’s Q-Assets, under At a glance', () => {
       () =>
         expect(
           within(tiles)
-            .getAllByRole('link')
-            .map((a) => a.textContent)
+            .getAllByRole('button', { name: /: details$/ })
+            .map((tile) => tile.textContent)
         ).toEqual([
           'GGEMCOIN2 · ≈ 40 QORT',
           'BTBean Token10 · ≈ 5 QORT',
@@ -246,11 +254,17 @@ describe('the Overview’s Q-Assets, under At a glance', () => {
         ]),
       T
     );
-    expect(within(tiles).getAllByRole('link')[0]).toHaveAttribute(
-      'href',
-      `${explorerAccountPath(ADDR.admin, 'assets')}?asset=77`
-    );
     expect(within(section).getByRole('link', { name: /Open Assets/ })).toBeInTheDocument();
+    // A tile opens the asset's popup on the Overview itself.
+    await user.click(within(tiles).getByRole('button', { name: 'GEMCOIN: details' }));
+    const dialog = await screen.findByRole('dialog', { name: 'GEMCOIN' }, T);
+    expect(screen.getByTestId('search')).toHaveTextContent('?asset=77');
+    expect(
+      await within(dialog).findByText('This account: #3 of 3 holders.', {}, T)
+    ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), T);
+    expect(screen.getByTestId('search')).toBeEmptyDOMElement();
   });
 
   it('none: one line', async () => {

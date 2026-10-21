@@ -1,10 +1,12 @@
 /**
- * One asset, opened from the Assets tab (or a link with `?asset=<id>`): its
- * avatar, number, owner and marks; its description as its owner wrote it;
- * what this account holds of it and its share; how much there is; its last
- * trade price and what the holding is worth at it; its biggest holders,
- * this account marked and where it stands; and its latest trades with QORT,
- * who bought from whom. The holders and the trades are read when it opens
+ * One asset's own popup (Simon, 2026-10-21: "when clicking on each asset it
+ * gets its own popup overview window"), from the Assets tab, the Overview's
+ * Q-Assets or a link with `?asset=<id>`: its avatar, number, owner and
+ * marks; its description as its owner wrote it; what this account holds of
+ * it and its share; how much there is, and that it is indivisible when it
+ * is; its last trade price and what the holding is worth at it; its biggest
+ * holders, this account marked and where it stands; and its latest trades
+ * with QORT, who bought from whom. The holders and the trades are read when it opens
  * (data/explorer/assets.ts); the rest is the tab's. Its transactions with
  * this account are the Transactions tab, searched for the asset's name.
  */
@@ -39,7 +41,14 @@ import { explorerAccountPath } from '../../../../routes/paths';
 import { formatDate } from '../../../../utils/format';
 import { AssetChips, ShareBar } from './AssetItems';
 import { assetAccent } from './assetAccent';
-import { NEVER_TRADED, priceWords, rankLine, worthWords } from './assetsWords';
+import {
+  INDIVISIBLE_EXPLANATION,
+  INDIVISIBLE_WORDS,
+  NEVER_TRADED,
+  priceWords,
+  rankLine,
+  worthWords,
+} from './assetsWords';
 
 /** Holders shown at first; the rest of those read on request. */
 const HOLDERS_SHOWN = 10;
@@ -314,10 +323,10 @@ export function AssetDialog({
               '–'
             )}
           </Fact>
-          <Fact label="All there is">
-            {meta ? quantityWords(meta.quantity) : '–'}
-            {meta && !meta.isDivisible ? ' (whole units)' : ''}
-          </Fact>
+          <Fact label="All there is">{meta ? quantityWords(meta.quantity) : '–'}</Fact>
+          {meta && !meta.isDivisible ? (
+            <Fact label={INDIVISIBLE_WORDS}>{INDIVISIBLE_EXPLANATION}</Fact>
+          ) : null}
           <Fact label="Last trade">
             {asset.price
               ? `${priceWords(asset.price)}, ${formatDate(asset.price.at)}`
