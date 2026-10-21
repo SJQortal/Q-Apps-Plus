@@ -22,6 +22,8 @@ export const ACCOUNT_KEY_PREFIXES = [
   'xpay:',
   'xassets:',
   'xassettrades:',
+  'xholdings:',
+  'xassetprices:',
   'xtx:',
   'xnamehist:',
   'xmade:',
