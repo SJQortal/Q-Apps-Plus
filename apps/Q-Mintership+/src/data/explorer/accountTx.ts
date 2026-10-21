@@ -44,6 +44,7 @@ import { peekQuery, fetchQuery } from '../query';
 import { getUnconfirmedBy } from '../txs';
 import { heavyQuery } from './heavy';
 import { inWindow, windowKeyPart, type TxWindow } from './txWindow';
+import { noteAllList } from './fullHistory';
 
 /** Which part of the list, in which order: all of it, newest first, by default. */
 export interface AccountTxView {
@@ -297,7 +298,7 @@ export function getAccountTx(
 ): Promise<AccountTxList> {
   const view = options.view ?? {};
   const key = accountTxKey(address, types, view);
-  return heavyQuery(
+  const read = heavyQuery(
     address,
     key,
     async () => {
@@ -324,6 +325,13 @@ export function getAccountTx(
     },
     { ttlMs: TTL_MS, force: options.force || options.older }
   );
+  // The All list read to its end: the Connections reads come from it now (fullHistory.ts).
+  if (!types.length && isDefaultView(view))
+    void read.then(
+      (list) => noteAllList(address, list),
+      () => undefined
+    );
+  return read;
 }
 
 /** `xunconf:<publicKey>`: the store key of what an account sent that waits for a block. */

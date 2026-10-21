@@ -124,7 +124,7 @@ export function checkFirstFunding(
   return across(accounts, async (address) => (await getFirstSeen(address)).funding, options);
 }
 
-/** Each account's newest 100 QORT payments sent (`xpay:<a>:sent`, cached per account). */
+/** Each account's QORT payments sent, up to 10,000 (`xpay:<a>:sent`, cached per account). */
 export function checkPaymentsSent(
   accounts: readonly string[],
   options: RunOptions = {}

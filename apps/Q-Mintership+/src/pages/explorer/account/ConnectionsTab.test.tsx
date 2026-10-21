@@ -297,7 +297,7 @@ describe('Connections: payments and first QORT', () => {
         // 25 payments from Kit, for the evidence list's Show all.
         url.searchParams.get('recipientAddress') === FUNDER.address &&
         !url.searchParams.get('senderAddress') &&
-        url.searchParams.get('limit') === '100' &&
+        url.searchParams.get('limit') === '1000' &&
         !Number(url.searchParams.get('offset'))
           ? Array.from({ length: 25 }, (_, i) => ({
               type: 'PAYMENT',
@@ -314,7 +314,7 @@ describe('Connections: payments and first QORT', () => {
     const recorded = await region('Recorded between them');
     const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
     await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(20), T);
-    await user.click(within(recorded).getByRole('button', { name: 'Show more (80 more)' }));
+    await user.click(within(recorded).getByRole('button', { name: 'Show more (620 more)' }));
     await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(40), T);
     expect(within(sent).getAllByRole('listitem')[20]).toHaveFocus();
 
@@ -437,20 +437,20 @@ describe('Connections: payments and first QORT', () => {
     ).toBeVisible();
   });
 
-  it('Hal Helper: the newest 100 of 640, 20 rows at a time, and Check older', async () => {
-    const { user } = await open(FUNDER.address);
+  it('Hal Helper: all 640 payments in one read, 20 rows at a time, nothing older to check (Simon, 2026-10-21)', async () => {
+    await open(FUNDER.address);
     const recorded = await region('Recorded between them');
     const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
     await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(20), T);
     expect(
-      within(recorded).getByRole('button', { name: 'Show more (80 more)' })
+      within(recorded).getByRole('button', { name: 'Show more (620 more)' })
     ).toBeInTheDocument();
     expect(recorded).toHaveTextContent(
-      'Read: its latest 100 QORT payments sent, every QORT payment it received (none)'
+      'Read: every QORT payment it sent (640), every QORT payment it received (none)'
     );
-    await user.click(within(recorded).getByRole('button', { name: 'Check older payments sent' }));
-    expect(await screen.findByText('100 older payments checked.', {}, T)).toBeInTheDocument();
-    expect(recorded).toHaveTextContent('its latest 200 QORT payments sent');
+    expect(
+      within(recorded).queryByRole('button', { name: 'Check older payments sent' })
+    ).toBeNull();
     // Payer bands only for the rows on screen (and Hal's own first-QORT lookup).
     expect(fetchCallsFor('/transactions/payments/between?senderAddress=Q').length).toBeLessThan(80);
   });
@@ -930,9 +930,9 @@ describe('Connections: as a circle', () => {
     await user.click(screen.getByRole('button', { name: 'Circle' }));
     const circle = await region('Connections circle');
     await within(circle).findByRole('list', { name: 'Sent to, the most transactions first' }, T);
-    // Its latest 100 payments, to 100 accounts: 10 on the circle, 90 counted.
+    // All 640 payments, to 640 accounts: 10 on the circle, 630 counted.
     const toggle = within(circle).getByRole('button', {
-      name: '90 more accounts with fewer transactions: see the list',
+      name: '630 more accounts with fewer transactions: see the list',
     });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await user.click(toggle);
@@ -947,7 +947,7 @@ describe('Connections: as a circle', () => {
     expect(within(drawn).getAllByRole('listitem')).toHaveLength(10);
     expect(
       within(circle).getByRole('heading', {
-        name: 'Not in the circle: 90 accounts with fewer transactions',
+        name: 'Not in the circle: 630 accounts with fewer transactions',
       })
     ).toBeInTheDocument();
     const rest = within(circle).getByRole('list', { name: 'Sent to: not in the circle' });
@@ -962,7 +962,7 @@ describe('Connections: as a circle', () => {
       avatars.map((avatar) => avatar.getAttribute('aria-label'))
     );
     await expectNoAxeViolations(container);
-    await user.click(within(circle).getByRole('button', { name: 'Show more (70 more)' }));
+    await user.click(within(circle).getByRole('button', { name: 'Show more (610 more)' }));
     await waitFor(() => expect(within(rest).getAllByRole('listitem')).toHaveLength(40), T);
     // A row opens the same transactions as its avatar.
     await user.click(within(rest).getAllByRole('button')[0]);

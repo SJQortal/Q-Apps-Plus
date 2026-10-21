@@ -104,8 +104,9 @@ export function InCommonSection({ data }: { data: CompareData }) {
             />
             {leftOut ? <Note>{leftOut}</Note> : null}
             <Note>
-              In each account’s newest 100 QORT payments each way and its newest 100 asset transfers
-              and multi-payments; the compared accounts themselves are left out.
+              In each account’s QORT payments each way (up to the newest 10,000) and its asset
+              transfers and multi-payments (up to the newest 5,000); the compared accounts
+              themselves are left out.
             </Note>
           </Box>
         ) : leftOut ? (

@@ -3,10 +3,18 @@
  *
  * - QORT payments (PAYMENT) come from `/transactions/payments/between`,
  *   the fastest counterparty read Core has (a few ms, not a heavy search):
- *   `xpay:<a>:sent` and `xpay:<a>:recv`, 100 a read, newest first, each
- *   `{rows, nextOffset, done}`. "Check older" appends the next 100.
+ *   `xpay:<a>:sent` and `xpay:<a>:recv`, newest first, each
+ *   `{rows, nextOffset, done}`: every payment, 1,000 a read, up to 10,000
+ *   each way (Simon, 2026-10-21: a payment from May 2025 was missing when
+ *   only the newest 100 were read; 266 payments read in about 40 ms).
+ *   "Check older" appends the next 1,000 past that.
  * - Asset transfers and multi-payments (TRANSFER_ASSET, MULTI_PAYMENT) need
- *   an address search, so they are heavy: `xassets:<a>`, the newest 100.
+ *   an address search, so they are heavy: `xassets:<a>`, 1,000 a read, up
+ *   to 5,000.
+ * - When the account's whole history is read (the All list of
+ *   accountTx.ts, read to its end: Overview's "Read all of it", or an
+ *   account with fewer than 100 transactions), both come from it instead,
+ *   complete (data/explorer/fullHistory.ts).
  *
  * A node without `payments/between` (it answers 404 or 400) is told once
  * per session (`xcaps`); then payments come from a PAYMENT address search
@@ -18,6 +26,7 @@ import { getJson, query } from '../core';
 import { fetchQuery, peekQuery, setQueryData } from '../query';
 import { heavy, heavyQuery } from './heavy';
 import { KNOWN_EXCHANGES, exchangeFlow, type ExchangeFlow } from '../../rules/explorer/exchanges';
+import { assetTransfersFrom, fullHistory, paymentsFrom } from './fullHistory';
 
 export type PayDirection = 'sent' | 'recv';
 
@@ -42,7 +51,12 @@ export interface PaymentCaps {
   paymentsBetween: boolean;
 }
 
-export const PAY_PAGE = 100;
+/** Payments per read, and reads each way at first. */
+export const PAY_PAGE = 1000;
+export const PAY_FIRST_PAGES = 10;
+/** Asset transfers per read, and reads at most. */
+export const ASSETS_PAGE = 1000;
+export const ASSETS_PAGES = 5;
 export const payKey = (address: string, direction: PayDirection) => `xpay:${address}:${direction}`;
 export const assetsKey = (address: string) => `xassets:${address}`;
 
@@ -77,7 +91,7 @@ const EXCHANGE_PAGES = 10;
  * What an account paid each known exchange, and got from it
  * (`xexch:<a>`): `/transactions/payments/between` with the sender and the
  * recipient both given, a few ms each, so it is exact however busy the
- * account is (up to 1,000 payments a way, then `more`). Null on a node
+ * account is (up to 10,000 payments a way, then `more`). Null on a node
  * without that endpoint: the Connections lists' payments say it then.
  */
 export function getExchangePayments(address: string): Promise<ExchangeFlow[] | null> {
@@ -174,17 +188,52 @@ async function readPage(
   return { rows, nextOffset: offset + raw.length, done: raw.length < PAY_PAGE };
 }
 
+/** Pages from offset 0 until Core has no more, or `PAY_FIRST_PAGES` were read. */
+async function readFirstPages(
+  address: string,
+  direction: PayDirection,
+  caps: PaymentCaps
+): Promise<PaymentPage> {
+  const rows: TxRow[] = [];
+  const seen = new Set<string>();
+  let page: PaymentPage = { rows: [], nextOffset: 0, done: false };
+  for (let i = 0; i < PAY_FIRST_PAGES && !page.done; i++) {
+    page = await readPage(address, direction, page.nextOffset, caps);
+    for (const row of page.rows)
+      if (!seen.has(row.signature)) {
+        seen.add(row.signature);
+        rows.push(row);
+      }
+  }
+  return { rows, nextOffset: page.nextOffset, done: page.done };
+}
+
 /**
- * The newest 100 QORT payments an account sent (`sent`) or received
- * (`recv`). `scope` is the page's account, for the heavy fallback.
+ * Every QORT payment an account sent (`sent`) or received (`recv`), up to
+ * 10,000 each way; from its whole history when that is read. `scope` is
+ * the page's account, for the heavy fallback.
  */
 export async function getPayments(
   address: string,
   direction: PayDirection,
   options: { force?: boolean; scope?: string } = {}
 ): Promise<PaymentPage> {
+  const full = fullHistory(address);
+  if (full)
+    return fetchQuery(
+      payKey(address, direction),
+      async () => paymentsFrom(full, address, direction),
+      {
+        ttlMs: 10 * 60_000,
+        force: options.force,
+      }
+    );
   const caps = await getPaymentCaps(address);
-  const load = () => readPage(address, direction, 0, caps);
+  const load = async () => {
+    // The whole history may have finished reading while this waited.
+    const now = fullHistory(address);
+    return now ? paymentsFrom(now, address, direction) : readFirstPages(address, direction, caps);
+  };
   const fetchOptions = { ttlMs: 10 * 60_000, force: options.force };
   return caps.paymentsBetween
     ? fetchQuery(payKey(address, direction), load, fetchOptions)
@@ -192,7 +241,7 @@ export async function getPayments(
 }
 
 /**
- * "Check older": the next 100, appended to what is loaded (a transaction
+ * "Check older": the next 1,000, appended to what is loaded (a transaction
  * already there is not added twice). Returns the new page, or what was
  * there when nothing older is left.
  */
@@ -217,7 +266,10 @@ export async function loadOlderPayments(
   return merged;
 }
 
-/** The newest 100 asset transfers and multi-payments the account took part in (heavy). */
+/**
+ * The asset transfers and multi-payments the account took part in (heavy):
+ * 1,000 a read, up to 5,000; from its whole history when that is read.
+ */
 export function getAssetTransfers(
   address: string,
   options: { force?: boolean; scope?: string } = {}
@@ -226,17 +278,25 @@ export function getAssetTransfers(
     options.scope ?? address,
     assetsKey(address),
     async () => {
-      const rows = await getJson<TxRow[]>(
-        `/transactions/search?${query({
-          address,
-          txType: ['TRANSFER_ASSET', 'MULTI_PAYMENT'],
-          confirmationStatus: 'CONFIRMED',
-          limit: PAY_PAGE,
-          reverse: true,
-        })}`
-      );
-      const list = Array.isArray(rows) ? rows : [];
-      return { rows: list, truncated: list.length >= PAY_PAGE };
+      const full = fullHistory(address);
+      if (full) return { rows: assetTransfersFrom(full), truncated: false };
+      const rows: TxRow[] = [];
+      for (let page = 0; page < ASSETS_PAGES; page++) {
+        const chunk = await getJson<TxRow[]>(
+          `/transactions/search?${query({
+            address,
+            txType: ['TRANSFER_ASSET', 'MULTI_PAYMENT'],
+            confirmationStatus: 'CONFIRMED',
+            limit: ASSETS_PAGE,
+            offset: page * ASSETS_PAGE,
+            reverse: true,
+          })}`
+        );
+        const list = Array.isArray(chunk) ? chunk : [];
+        rows.push(...list);
+        if (list.length < ASSETS_PAGE) return { rows, truncated: false };
+      }
+      return { rows, truncated: true };
     },
     { ttlMs: 10 * 60_000, force: options.force }
   );
