@@ -43,6 +43,7 @@ export const CHANGELOG: Release[] = [
           'Connections reads every QORT payment each way (up to 10,000), not only the newest 100: a payment from long ago now shows.',
           'Once Overview has read an account’s whole history, Connections, Compare and the sponsee lists use all of it.',
           'Connections lists Q-Asset trades: who an account bought from and sold to, for what, with the two orders behind each; on the circle, what came in and what went out both count.',
+          'Connections has one Account report: everything read on chain about the account and its connections, with Core’s own sponsorship report, as a plain Markdown file to save or copy. Each connection names its block, date and full signature, and the report says what was read. It suggests reading the whole history first, and can do it there.',
         ],
       },
     ],

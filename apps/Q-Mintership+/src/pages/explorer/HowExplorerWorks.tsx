@@ -54,7 +54,7 @@ function tabLines(full: boolean): Array<[string, string]> {
       ? ([
           [
             'Connections',
-            'How it is linked to other accounts, as a circle or a list: payments each way, Q-Asset trades, sponsorships, minting levels and names moved between them, where its first QORT came from, QORT sent to or got from exchanges, and what they have in common. Each link opens to the transactions behind it; the circle puts the most transactions first, or the most QORT. Once Overview has read its whole history, all of it counts here.',
+            'How it is linked to other accounts, as a circle or a list: payments each way, Q-Asset trades, sponsorships, minting levels and names moved between them, where its first QORT came from, QORT sent to or got from exchanges, and what they have in common. Each link opens to the transactions behind it; the circle puts the most transactions first, or the most QORT. Once Overview has read its whole history, all of it counts here. Account report makes one Markdown file of all of it, with Core’s own sponsorship report, every transaction behind each link and what was read, to keep or compare.',
           ],
         ] as Array<[string, string]>)
       : []),
