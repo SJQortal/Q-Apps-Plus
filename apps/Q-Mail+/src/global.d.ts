@@ -43,6 +43,7 @@ interface QortalRequestOptions {
   notificationIds?: string[];
   encrypt?: boolean;
   publicKeys?: string[];
+  build?: boolean;
 }
 
 declare function qortalRequest(options: QortalRequestOptions): Promise<any>;
@@ -66,4 +67,3 @@ declare global {
   }
 }
 
-declare module "quill-image-resize-module-react" {}

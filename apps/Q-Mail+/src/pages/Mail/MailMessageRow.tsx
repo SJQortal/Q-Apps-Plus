@@ -1,403 +1,614 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+/**
+ * One message in a list (inbox, archived, sent, alias inbox, search results).
+ *
+ * - the row body is a real button (tap opens); the checkbox and the delete
+ *   button are their own targets next to it, so nothing propagates (UX #5);
+ * - unread = a dot plus weight, decided by the read store (Bugs #5);
+ * - the date as in the reader (weekday, date, time), its detail on hover or,
+ *   on touch screens, on a tap of the date (MailListDate);
+ * - the avatar resolves lazily when the row is on screen (avatarCache);
+ * - a subject that was never decrypted reads "Locked · open to read", never
+ *   the ciphertext (Bugs #18, UX #27);
+ * - fluid widths, nothing under 14 px, colours from the theme (UX #12, #14, #26);
+ * - in a wide list (nothing open beside it) a row reads as one line of
+ *   columns, name | subject | date, instead of two lines stretched across
+ *   the whole main area (container query on the list pane, MailShell).
+ */
+import React, { useCallback, useMemo, useState } from "react";
+import { useInView } from "../../hooks/useInView";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import AttachFileOutlinedIcon from "@mui/icons-material/AttachFileOutlined";
 import {
-  MailMessageRowContainer,
-  MailMessageRowInfo,
-  MailMessageRowInfoImg,
-  MailMessageRowInfoStatusNotDecrypted,
-  MailMessageRowInfoStatusRead,
-  MailMessageRowProfile,
-  MessageExtraDate,
-  MessageExtraInfo,
-  MessageExtraName,
-} from "./Mail-styles";
-import { AvatarWrapper } from "./MailTable";
-import { formatFullTimestamp } from "../../utils/time";
-import LockSVG from '../../assets/svgs/Lock.svg'
-import AttachmentSVG from '../../assets/svgs/Attachment.svg'
+  Box,
+  ButtonBase,
+  Checkbox,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Tooltip,
+  Typography,
+  type Theme,
+} from "@mui/material";
 import { useSelector } from "react-redux";
 import { RootState } from "../../state/store";
-import { base64ToUint8Array, uint8ArrayToObject } from "../../utils/toBase64";
-import { Box, CircularProgress, IconButton, Tooltip, useMediaQuery } from "@mui/material";
-import { parseSentRecipientFromIdentifier } from "./mailIdentifier";
+import { AvatarWrapper } from "./MailTable";
+import { MailListDate } from "./MailListDate";
+import { spokenMailDate } from "./readerTime";
+import { useSentRecipient } from "../../utils/sentRecipientCache";
+import { selectReadState } from "../../state/features/mailSlice";
+import { isMessageRead } from "../../utils/readState";
+import { UnreadDot } from "../../layout/states";
+import { useDecryptedSubject } from "../../utils/subjectCache";
+import { primarySoft } from "../../hub-theme";
+import { LIST_CONTAINER } from "../../layout/MailShell";
+import { NameText, spokenName } from "../../components/common/NameText";
+import { useRowMenu } from "./useRowMenu";
+import { lazyNamed } from "../../components/common/lazyNamed";
+import { messageRowActions } from "./rowMenuActions";
+import { isOpenableMessage } from "./messageOpener";
+import { AttachmentIcon } from "../../components/AttachmentPreview/AttachmentIcon";
+import { attachmentDisplayName, attachmentKind } from "../../utils/attachmentMeta";
 
-const subjectDecryptCache = new Map<string, string>()
-let subjectDecryptQueue: Promise<void> = Promise.resolve()
+export const LOCKED_SUBJECT_LABEL = "Locked · open to read";
+/** The list width from which a row lays out as columns (the list pane is the container). */
+export const WIDE_ROW_MIN_WIDTH = 720;
+/** The container query of a wide list, where rows read as one line of columns. */
+export const WIDE_ROW_QUERY = `@container ${LIST_CONTAINER} (min-width: ${WIDE_ROW_MIN_WIDTH}px)`;
+const WIDE = WIDE_ROW_QUERY;
+/** A list with room for an indent and one-line dates in a sender group's rows. */
+export const ROOMY_LIST_QUERY = `@container ${LIST_CONTAINER} (min-width: 480px)`;
+/** A list too narrow for avatars (the 300 px list of a 700 px window): names get their room. */
+export const NARROW_LIST_QUERY = `@container ${LIST_CONTAINER} (max-width: 339.98px)`;
+/** Column order in a wide row; the DOM (and the row's label) keep the two-line order. */
+const wideOrder = (order: number) => ({ [WIDE]: { order } });
+const RowAttachmentsDialog = lazyNamed(() => import("./RowAttachmentsDialog"), "RowAttachmentsDialog");
 
-const decryptSubjectQueued = async (encryptedSubject: string): Promise<string> => {
-  if (!encryptedSubject) return ""
-  if (subjectDecryptCache.has(encryptedSubject)) {
-    return subjectDecryptCache.get(encryptedSubject) || ""
-  }
+export const NO_SUBJECT_LABEL = "(no subject)";
 
-  let resolved = ""
-  await new Promise<void>((resolve, reject) => {
-    subjectDecryptQueue = subjectDecryptQueue
-      .then(async () => {
-        const requestEncryptSubject: any = {
-          action: "DECRYPT_DATA",
-          encryptedData: encryptedSubject,
-        }
-        const resDecryptSubject = await qortalRequest(requestEncryptSubject)
-        const decryptToUnit8ArraySubject = base64ToUint8Array(resDecryptSubject)
-        const responseDataSubject = uint8ArrayToObject(decryptToUnit8ArraySubject)
-        resolved =
-          typeof responseDataSubject === "string"
-            ? responseDataSubject
-            : responseDataSubject !== null && responseDataSubject !== undefined
-              ? String(responseDataSubject)
-              : ""
-        subjectDecryptCache.set(encryptedSubject, resolved)
-        resolve()
-      })
-      .catch(error => {
-        reject(error)
-      })
-  })
-
-  return resolved
-}
-
-interface MailMessageRowProp {
+export interface MailMessageRowProps {
   messageData: any;
-  openMessage: (user: string, id: string, content: any, alias?: string) => void;
+  /** Opens the message; may resolve with it once decrypted (the menu's Reply uses that). */
+  openMessage: (
+    user: string,
+    id: string,
+    content: any,
+    alias?: string
+  ) => unknown;
   isOpen?: boolean;
-  isFromSent?: boolean
+  isFromSent?: boolean;
   onDeleteMessage?: (message: any) => void | boolean | Promise<void | boolean>;
   isDeleting?: boolean;
+  /** Inside an expanded sender group: one line, no avatar or name. */
   compact?: boolean;
-  useFullTimestamp?: boolean;
+  /** When given, a checkbox renders as its own tap target. */
+  selected?: boolean;
+  onToggleSelected?: () => void;
+  /** A small label after the subject, e.g. the mailbox a search hit lives in. */
+  context?: React.ReactNode;
+  /** Terms to highlight in the name and subject. */
+  highlightTerms?: string[];
+  /** "li" when the row sits directly inside a list (ul); the default "div" expects a wrapping li. */
+  component?: "div" | "li";
+  /**
+   * The row's menu (right click, long press). Reply, Reply all and Forward
+   * open the message first when it isn't decrypted yet; the others act on
+   * this message alone, as the list's bulk bar does on a selection.
+   */
+  onReply?: (message: any, options?: { replyAll?: boolean }) => void;
+  onForward?: (message: any) => void;
+  onMarkAsRead?: (messages: any[]) => unknown;
+  onMarkAsUnread?: (messages: any[]) => unknown;
+  onArchive?: (messages: any[]) => unknown;
+  onUnarchive?: (messages: any[]) => unknown;
 }
+
+/** Splits `text` into plain and highlighted runs for the given terms. */
+export function highlightRuns(
+  text: string,
+  terms: string[] | undefined
+): Array<{ text: string; hit: boolean }> {
+  const cleanTerms = (terms || []).map(t => t.toLowerCase()).filter(Boolean);
+  if (!text || !cleanTerms.length) return [{ text, hit: false }];
+  const lower = text.toLowerCase();
+  const runs: Array<{ text: string; hit: boolean }> = [];
+  let index = 0;
+  while (index < text.length) {
+    let best = -1;
+    let bestLength = 0;
+    cleanTerms.forEach(term => {
+      const at = lower.indexOf(term, index);
+      if (at === -1) return;
+      if (best === -1 || at < best || (at === best && term.length > bestLength)) {
+        best = at;
+        bestLength = term.length;
+      }
+    });
+    if (best === -1) {
+      runs.push({ text: text.slice(index), hit: false });
+      break;
+    }
+    if (best > index) runs.push({ text: text.slice(index, best), hit: false });
+    runs.push({ text: text.slice(best, best + bestLength), hit: true });
+    index = best + bestLength;
+  }
+  return runs;
+}
+
+export function Highlight({ text, terms }: { text: string; terms?: string[] }) {
+  const runs = useMemo(() => highlightRuns(text, terms), [text, terms]);
+  if (runs.length === 1 && !runs[0].hit) return <>{text}</>;
+  return (
+    <>
+      {runs.map((run, i) =>
+        run.hit ? (
+          <Box
+            key={i}
+            component="mark"
+            sx={theme => ({
+              backgroundColor: primarySoft(theme),
+              color: "inherit",
+              borderRadius: "3px",
+              padding: "0 1px",
+            })}
+          >
+            {run.text}
+          </Box>
+        ) : (
+          <React.Fragment key={i}>{run.text}</React.Fragment>
+        )
+      )}
+    </>
+  );
+}
+
+/** "Screenshot 2026-10…png": a short name that keeps the extension. */
+export function shortFileName(name: string, max = 18): string {
+  if (name.length <= max) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 && name.length - dot <= 6 ? name.slice(dot) : "";
+  return `${name.slice(0, Math.max(1, max - ext.length - 1))}…${ext}`;
+}
+
+const ATTACHMENT_CHIPS_SHOWN = 2;
+
+/**
+ * The attachments' names beside the subject (where the list has room), so
+ * you see what's there. A click shows them (the row's attachments dialog)
+ * without opening the message; keyboards use the paperclip button, and the
+ * row's own label reads the names.
+ */
+function AttachmentChips({ names, onOpen }: { names: string[]; onOpen: () => void }) {
+  const shown = names.slice(0, ATTACHMENT_CHIPS_SHOWN);
+  const more = names.length - shown.length;
+  const stop = (event: React.SyntheticEvent) => event.stopPropagation();
+  const chipSx = (theme: Theme) => ({
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 0.5,
+    height: 24,
+    px: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    maxWidth: 170,
+    borderRadius: 999,
+    border: `1px solid ${theme.palette.divider}`,
+    color: theme.palette.text.secondary,
+    fontSize: "0.8125rem",
+    whiteSpace: "nowrap" as const,
+    overflow: "hidden",
+    cursor: "pointer",
+    "&:hover": { backgroundColor: theme.palette.action.hover, color: theme.palette.text.primary },
+  });
+  return (
+    <Box
+      aria-hidden
+      data-attachment-chips=""
+      onMouseDown={stop}
+      onTouchStart={stop}
+      onClick={event => {
+        event.stopPropagation();
+        event.preventDefault();
+        onOpen();
+      }}
+      sx={{
+        display: "none",
+        [ROOMY_LIST_QUERY]: { display: "inline-flex" },
+        alignItems: "center",
+        gap: 0.5,
+        minWidth: 0,
+        flexShrink: 1,
+        ...wideOrder(3),
+      }}
+    >
+      {shown.map((name, index) => (
+        <Box key={`${name}-${index}`} component="span" title={name} sx={chipSx}>
+          <AttachmentIcon kind={attachmentKind({ originalFilename: name })} sx={{ fontSize: 14, flexShrink: 0 }} />
+          <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+            {shortFileName(name)}
+          </Box>
+        </Box>
+      ))}
+      {more > 0 && (
+        <Box component="span" sx={[chipSx, { flexShrink: 0 }]}>
+          +{more}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 export const MailMessageRow = ({
   messageData,
   openMessage,
-  isOpen,
-  isFromSent,
+  isOpen = false,
+  isFromSent = false,
   onDeleteMessage,
   isDeleting = false,
   compact = false,
-  useFullTimestamp = true,
-}: MailMessageRowProp) => {
-  const username = useSelector((state: RootState) => state.auth?.user?.name)
-  const [subjectInHashDecrypted, setSubjectInHashDecrypted] = useState<null | string>(null)
-  const [hasAttachment, setHasAttachment] = useState<null | boolean>(null)
-  const [sentToNameInfo, setSentToNameInfo] = useState({
-    name: ""
-  })
-    const isMobile = useMediaQuery("(max-width:950px)");
-  
-  const [alias, setAlias] = useState<null | string>(null)
-
-  const identifier = messageData?.id || messageData?.identifier
-  const hashMapMailMessages = useSelector(
-    (state: RootState) => state.mail.hashMapMailMessages
+  selected = false,
+  onToggleSelected,
+  context,
+  highlightTerms,
+  component = "div",
+  onReply,
+  onForward,
+  onMarkAsRead,
+  onMarkAsUnread,
+  onArchive,
+  onUnarchive,
+}: MailMessageRowProps) => {
+  const username = useSelector((state: RootState) => state.auth?.user?.name);
+  const identifier: string = String(messageData?.id || messageData?.identifier || "");
+  const data: any = useSelector(
+    (state: RootState) => state.mail.hashMapMailMessages[identifier]
   );
-  const hashMapSavedSubjects = useSelector(
-    (state: RootState) => state.mail.hashMapSavedSubjects
+  const subjectInHash = useSelector(
+    (state: RootState) => state.mail.hashMapSavedSubjects[identifier]
   );
-  const subjectInHash = hashMapSavedSubjects[identifier]
-  const data = hashMapMailMessages[identifier]
+  const readState = useSelector(selectReadState);
 
-  useEffect(() => {
-    setSubjectInHashDecrypted(null)
-    setHasAttachment(null)
-    setAlias(null)
-    setSentToNameInfo({ name: "" })
-  }, [identifier])
+  // The read store decides (src/utils/readState.ts); threadV2 is only the
+  // compatibility fallback inside isMessageRead, never emptied or injected.
+  const isUnread = !isFromSent && !isMessageRead(messageData, readState);
+  const isDecrypted = Boolean(data && data?.isValid && !data?.unableToDecrypt);
 
-  const getSentToName = useCallback(async (id: string)=> {
-    try {
-      setAlias(null)
-      setSentToNameInfo({ name: "" })
-      const { recipientName, recipientAddress } =
-        parseSentRecipientFromIdentifier(id);
-      if(!recipientAddress && recipientName){
-        setAlias(recipientName)
-        return
-      }
-      if(!recipientName || !recipientAddress) return
-      setSentToNameInfo({ name: recipientName })
-      const response = await qortalRequest({
-        action: "SEARCH_NAMES",
-        query: recipientName,
-        prefix: true, 
-        limit: 10,
-        reverse: false
-      })
-      const normalizedRecipientAddress = recipientAddress.toLowerCase()
-      const findName = response?.find((item: any)=> {
-        const owner = typeof item?.owner === "string" ? item.owner.toLowerCase() : ""
-        const candidateName = typeof item?.name === "string" ? item.name.toLowerCase() : ""
-        return (
-          owner.endsWith(normalizedRecipientAddress) &&
-          candidateName.startsWith(recipientName.toLowerCase())
-        )
-      })
-      if(findName){
-        setSentToNameInfo({
-          name: findName.name
-        })
-      }
-    } catch (error) {
-      
-    }
-  }, [])
-  useEffect(()=> {
-    if(isFromSent && identifier){
-      getSentToName(identifier)
-    }
-  }, [isFromSent, identifier, getSentToName])
-  let isEncrypted = true;
-  let hasAttachments = null
-  let subject = ""
-  const isMarkedRead = Array.isArray(messageData?.generalData?.threadV2)
-    ? messageData.generalData.threadV2.length > 0
-    : false;
-  if(subjectInHashDecrypted !== null){
-    subject = subjectInHashDecrypted || "- no subject"
-    hasAttachments = hasAttachment || false
+  // Hub requests for this row wait until it is on screen.
+  const [rowNode, setRowNode] = useState<HTMLElement | null>(null);
+  const inView = useInView(rowNode);
+  const savedSubject = useDecryptedSubject(
+    isDecrypted ? undefined : subjectInHash?.subject,
+    inView
+  );
+
+  let subject: string | null = null;
+  let hasAttachments: boolean | null = null;
+  if (isDecrypted) {
+    subject = typeof data?.subject === "string" ? data.subject : "";
+    hasAttachments = (data?.attachments || []).length > 0;
+  } else if (savedSubject !== null) {
+    subject = savedSubject;
+    hasAttachments = Boolean(subjectInHash?.attachments);
   }
-  if(data && data?.isValid && !data?.unableToDecrypt){
-      isEncrypted = false
-      subject = data?.subject || "- no subject"
-      hasAttachments = (data?.attachments || [])?.length > 0
-  }
+  const isLocked = subject === null;
 
+  // The attachments' names: from the decrypted message, else from the
+  // subject cache (encrypted like the subject, decrypted once on screen).
+  const savedNames = useDecryptedSubject(
+    isDecrypted ? undefined : subjectInHash?.attachmentNames,
+    inView && !isDecrypted && Boolean(subjectInHash?.attachmentNames)
+  );
+  const attachmentNames: string[] = isDecrypted
+    ? (Array.isArray(data?.attachments) ? data.attachments : []).map((item: any) => attachmentDisplayName(item)).filter(Boolean)
+    : savedNames
+      ? savedNames.split("\n").filter(Boolean)
+      : [];
 
-const getSubjectFromHash = useCallback(async (subjectValue: string, hasAttachmentParam: boolean) => {
-  if(subjectValue === undefined || subjectValue === null) throw new Error('no subject')
-  if(subjectValue === ""){
-    setSubjectInHashDecrypted("")
-    setHasAttachment(hasAttachmentParam)
-    return
-  }
-  let decryptedSubject = ""
-  try {
-    decryptedSubject = await decryptSubjectQueued(subjectValue)
-  } catch (error) {
-    // Fallback for cases where stored subject may already be plaintext.
-    decryptedSubject = subjectValue
-  }
-  setSubjectInHashDecrypted(decryptedSubject)
-  setHasAttachment(hasAttachmentParam)
-}, [])
+  // Sent rows: the recipient from the decrypted copy when we have it, else
+  // one cached lookup per (name prefix, address suffix) group (I4).
+  const decryptedRecipient =
+    isFromSent && isDecrypted && typeof data?.recipient === "string"
+      ? data.recipient.trim()
+      : "";
+  const sentRecipient = useSentRecipient(isFromSent ? identifier : "", decryptedRecipient, inView);
+  const alias = sentRecipient.isAlias ? sentRecipient.name : null;
+  const name: string = isFromSent
+    ? sentRecipient.name
+    : typeof messageData?.user === "string"
+      ? messageData.user
+      : "";
+  const isAliasRecipient = isFromSent && sentRecipient.isAlias;
 
+  const createdAt = messageData?.createdAt;
+  const spokenDate = useMemo(() => spokenMailDate(createdAt), [createdAt]);
 
-useEffect(()=> {
-  if(!isEncrypted) return
+  const openRow = useCallback((): unknown => {
+    if (!identifier) return null;
+    return openMessage(
+      messageData?.user,
+      identifier,
+      messageData,
+      isFromSent ? alias || name : username
+    );
+  }, [alias, identifier, isFromSent, messageData, name, openMessage, username]);
+  const open = useCallback(() => {
+    void openRow();
+  }, [openRow]);
 
-  if(subjectInHashDecrypted !== null) return
-  if(!subjectInHash || subjectInHash?.subject === undefined || subjectInHash?.subject === null ) return
-  void getSubjectFromHash(subjectInHash?.subject, !!subjectInHash?.attachments)
-}, [isEncrypted, subjectInHashDecrypted, subjectInHash, getSubjectFromHash])
-
-const name = useMemo(()=> {
-  if(isFromSent){
-    return sentToNameInfo?.name || ""
-  }
-  return messageData?.user
-}, [sentToNameInfo, isFromSent, messageData])
-
-  const createdAtLabel = useMemo(() => {
-    return formatFullTimestamp(messageData?.createdAt)
-  }, [messageData?.createdAt])
-
-  const shouldBoldUnread = !isFromSent && isEncrypted && !isMarkedRead;
+  const rowMenu = useRowMenu();
+  // Reply and Forward need the decrypted message: open it, then act on it.
+  const withOpened = (act: (opened: any) => void) => () => {
+    void Promise.resolve(openRow()).then(opened => {
+      if (isOpenableMessage(opened)) act(opened);
+    });
+  };
+  const onlyThis = (handler?: (messages: any[]) => unknown) =>
+    handler ? () => void handler([messageData]) : undefined;
 
   const handleDeleteClick = useCallback(
     async (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.stopPropagation()
-      event.preventDefault()
-      if (!isFromSent || !onDeleteMessage || isDeleting) return
-      await onDeleteMessage(messageData)
+      event.stopPropagation();
+      event.preventDefault();
+      if (!isFromSent || !onDeleteMessage || isDeleting) return;
+      await onDeleteMessage(messageData);
     },
     [isDeleting, isFromSent, messageData, onDeleteMessage]
-  )
- 
-  if (compact) {
-    return (
-      <MailMessageRowContainer
-        sx={{
-          background: isOpen ? "var(--qmail-shell-hover-strong)" : "unset",
-          alignItems: "center",
-          borderRadius: "10px",
-          padding: "8px 12px",
-          outline: "1px solid var(--qmail-shell-border)",
-          marginTop: "0px",
-        }}
-        onClick={() => {
-          if (!identifier) return
-          openMessage(
-            messageData?.user,
-            identifier,
-            messageData,
-            isFromSent ? alias || name : username
-          )
-        }}
-      >
-        <MailMessageRowInfo
-          sx={{
-            width: "100%",
-            gap: "10px",
-          }}
-        >
-          <MessageExtraDate
-            sx={{
-              color: "var(--qmail-thread-muted)",
-              minWidth: {
-                xs: "unset",
-                md: "168px",
-              },
-              flexShrink: 0,
-            }}
-          >
-            {createdAtLabel}
-          </MessageExtraDate>
-          {subject ? (
-            <MailMessageRowInfoStatusRead
-              sx={{
-                fontWeight: shouldBoldUnread ? 600 : 300,
-                textOverflow: "ellipsis",
-                overflow: "hidden",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {subject}
-            </MailMessageRowInfoStatusRead>
-          ) : isEncrypted ? (
-            <MailMessageRowInfoStatusNotDecrypted
-              sx={{
-                fontWeight: shouldBoldUnread ? 900 : 300,
-              }}
-            >
-              ACCESS TO DECRYPT
-            </MailMessageRowInfoStatusNotDecrypted>
-          ) : null}
-        </MailMessageRowInfo>
-        {isFromSent && onDeleteMessage && (
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              flexShrink: 0,
-            }}
-          >
-            <Tooltip title="Delete sent message">
-              <span>
-                <IconButton
-                  size="small"
-                  onClick={handleDeleteClick}
-                  disabled={isDeleting}
-                  aria-label="Delete sent message"
-                  sx={{
-                    color: "var(--qmail-danger-text)",
-                    border: "1px solid var(--qmail-shell-border)",
-                    background: "var(--qmail-shell-hover)",
-                    "&:hover": {
-                      background: "var(--qmail-shell-hover-strong)",
-                    },
-                    "&.Mui-disabled": {
-                      color: "var(--qmail-shell-muted)",
-                      borderColor: "var(--qmail-shell-border)",
-                    },
-                  }}
-                >
-                  {isDeleting ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : (
-                    <DeleteOutlineIcon fontSize="small" />
-                  )}
-                </IconButton>
-              </span>
-            </Tooltip>
-          </Box>
-        )}
-      </MailMessageRowContainer>
-    )
-  }
+  );
+
+  const subjectLabel = isLocked
+    ? LOCKED_SUBJECT_LABEL
+    : subject || NO_SUBJECT_LABEL;
+  const nameLabel = isFromSent ? `To: ${name || "…"}` : name || "Unknown sender";
+  const spokenLabel = isFromSent ? `To: ${name ? spokenName(name) : "…"}` : name ? spokenName(name) : "Unknown sender";
+  const spokenAttachments = attachmentNames.length ? `, attachments: ${attachmentNames.join(", ")}` : "";
+  const ariaLabel = `${isUnread ? "Unread. " : ""}${spokenLabel}, ${subjectLabel}${spokenAttachments}${spokenDate ? `, ${spokenDate}` : ""}`;
+
+  // A message with attachments has a paperclip button at the row's end instead.
+  const statusIcon = isLocked ? (
+    <LockOutlinedIcon
+      fontSize="inherit"
+      aria-label="Encrypted, not opened yet"
+      role="img"
+      sx={{ color: "text.secondary", fontSize: 16, flexShrink: 0, ...(compact ? {} : wideOrder(2)) }}
+    />
+  ) : null;
+
+  // The attachments without opening the message (its own chunk, loaded on first use).
+  const [attachmentsDialog, setAttachmentsDialog] = useState<"closed" | "open" | "closing">("closed");
+  const showAttachments = useCallback(() => setAttachmentsDialog("open"), []);
+  const canShowAttachments = Boolean(identifier) && typeof messageData?.user === "string" && Boolean(messageData.user);
+
+  // Beside two lines the day sits over the time, so name and subject keep
+  // their room on a phone; one line (compact, or a wide row) keeps it inline.
+  const dateNode = compact ? (
+    // In a narrow list the date stacks here too, or the subject keeps three letters.
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={ROOMY_LIST_QUERY} sx={{ ml: "auto" }} />
+  ) : (
+    <MailListDate timestamp={createdAt} emphasis={isUnread} stacked inlineFrom={WIDE} sx={{ [WIDE]: { order: 5, ml: "auto" } }} />
+  );
 
   return (
-    <MailMessageRowContainer sx={{
-      background: isOpen ? 'var(--qmail-shell-hover-strong)' : 'unset',
-      flexDirection: isMobile ? 'column': 'row',
-      alignItems: isMobile ? 'flex-start' : 'center',
-      borderRadius: isMobile ? '10px' : "56px 5px 10px 56px",
-      padding: isMobile ? '5px' : 'center',
-      outline: isMobile ? '1px solid var(--qmail-shell-border)' : 'none',
-      marginTop: isMobile ? '10px' : '0px'
-    }} onClick={()=> {
-        if(!identifier) return
-        openMessage(messageData?.user, identifier, messageData, isFromSent ? (alias || name) : username)
-    }}>
-      <MailMessageRowProfile>
-        <AvatarWrapper isAlias={!!alias} height="50px" user={name} fallback={alias || name}></AvatarWrapper>
-        <MessageExtraInfo>
-          <MessageExtraName sx={{
-            fontWeight: shouldBoldUnread ? "900" : "300"
-          }}>{isFromSent ? "To: " : ""} {alias || name}</MessageExtraName>
-          <MessageExtraDate>{createdAtLabel}</MessageExtraDate>
-        </MessageExtraInfo>
-      </MailMessageRowProfile>
-      <MailMessageRowInfo>
-        {hasAttachments ?  <MailMessageRowInfoImg src={AttachmentSVG} /> : hasAttachments === false ? null : isEncrypted ?  <MailMessageRowInfoImg src={LockSVG} />   : null}
-       
-
-        {subject ? (
-          <MailMessageRowInfoStatusRead
-            sx={{
-              fontWeight: shouldBoldUnread ? 600 : 300,
-            }}
-          >
-            {subject}
-          </MailMessageRowInfoStatusRead>
-        )  : isEncrypted ? (
-          <MailMessageRowInfoStatusNotDecrypted
-            sx={{
-              fontWeight: shouldBoldUnread ? 900 : 300,
-            }}
-          >
-            ACCESS TO DECRYPT
-          </MailMessageRowInfoStatusNotDecrypted>
-        ) : null}
-      </MailMessageRowInfo>
-      {isFromSent && onDeleteMessage && (
+    <>
+    <Box
+      ref={setRowNode}
+      component={component}
+      data-message-row={identifier}
+      {...rowMenu.triggerFor(undefined)}
+      sx={theme => ({
+        display: "flex",
+        alignItems: "center",
+        width: "100%",
+        minWidth: 0,
+        gap: 0.5,
+        listStyle: "none",
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        backgroundColor: isOpen ? primarySoft(theme) : rowMenu.isOpen ? theme.palette.action.selected : "transparent",
+        // A long press opens the row's menu, not iOS's own callout.
+        WebkitTouchCallout: "none",
+      })}
+    >
+      {onToggleSelected && (
+        <Checkbox
+          checked={selected}
+          onChange={onToggleSelected}
+          slotProps={{ input: { "aria-label": `Select: ${subjectLabel}` } }}
+          sx={{ minWidth: 44, minHeight: 44, flexShrink: 0 }}
+        />
+      )}
+      <ButtonBase
+        onClick={open}
+        aria-label={ariaLabel}
+        aria-current={isOpen ? "true" : undefined}
+        sx={theme => ({
+          flex: 1,
+          minWidth: 0,
+          minHeight: compact ? 44 : 64,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-start",
+          textAlign: "left",
+          gap: 1.5,
+          px: onToggleSelected ? 1 : 2,
+          py: compact ? 0.5 : 1,
+          borderRadius: theme.shape.borderRadius,
+          transition: "background-color 150ms ease",
+          "&:hover": { backgroundColor: theme.palette.action.hover },
+          "&:focus-visible": {
+            outline: `2px solid ${theme.palette.primary.main}`,
+            outlineOffset: -2,
+          },
+          "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+        })}
+      >
+        {!compact && (
+          <Box sx={{ flexShrink: 0, display: "flex", [NARROW_LIST_QUERY]: { display: "none" } }}>
+            <AvatarWrapper
+              isAlias={isAliasRecipient}
+              height="40px"
+              user={isAliasRecipient ? alias : name}
+              fallback={name || "?"}
+            />
+          </Box>
+        )}
         <Box
-          sx={{
+          sx={theme => ({
+            flex: 1,
+            minWidth: 0,
             display: "flex",
             alignItems: "center",
-            flexShrink: 0,
-          }}
+            gap: 1,
+            ...(compact
+              ? {}
+              : {
+                  [WIDE]: {
+                    gap: theme.spacing(1.5),
+                    // Both lines' items and the date become this row's columns.
+                    "& > [data-row-text], & [data-row-line]": { display: "contents" },
+                  },
+                }),
+          })}
         >
-          <Tooltip title="Delete sent message">
-            <span>
-              <IconButton
-                size="small"
-                onClick={handleDeleteClick}
-                disabled={isDeleting}
-                aria-label="Delete sent message"
+          <Box data-row-text sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+            <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+              {isUnread && <UnreadDot />}
+              {compact && statusIcon}
+              <Typography
+                noWrap
                 sx={{
-                  color: "var(--qmail-danger-text)",
-                  border: "1px solid var(--qmail-shell-border)",
-                  background: "var(--qmail-shell-hover)",
-                  "&:hover": {
-                    background: "var(--qmail-shell-hover-strong)",
-                  },
-                  "&.Mui-disabled": {
-                    color: "var(--qmail-shell-muted)",
-                    borderColor: "var(--qmail-shell-border)",
-                  },
+                  // A compact row's subject leaves room for its attachments right after it.
+                  flex: compact && attachmentNames.length ? "0 1 auto" : 1,
+                  minWidth: 0,
+                  fontSize: "1rem",
+                  lineHeight: 1.3,
+                  fontWeight: isUnread ? 700 : 500,
+                  // Unread reads blue (the theme's primary), read in the text colour.
+                  color: isUnread ? "primary.main" : isLocked && compact ? "text.secondary" : "text.primary",
+                  fontStyle: compact && (isLocked || !subject) ? "italic" : "normal",
+                  ...(compact
+                    ? {}
+                    : // A wide row: the subject follows the name, not a fixed column away.
+                      { [WIDE]: { order: 1, flex: "0 1 auto", maxWidth: "clamp(160px, 24%, 260px)" } }),
                 }}
               >
-                {isDeleting ? (
-                  <CircularProgress size={16} color="inherit" />
+                {compact ? (
+                  <Highlight text={subjectLabel} terms={highlightTerms} />
+                ) : name ? (
+                  <>
+                    {isFromSent && <Highlight text="To: " terms={highlightTerms} />}
+                    <NameText name={name}>
+                      <Highlight text={name} terms={highlightTerms} />
+                    </NameText>
+                  </>
                 ) : (
-                  <DeleteOutlineIcon fontSize="small" />
+                  <Highlight text={nameLabel} terms={highlightTerms} />
                 )}
-              </IconButton>
-            </span>
-          </Tooltip>
+              </Typography>
+              {compact && attachmentNames.length > 0 && (
+                <AttachmentChips names={attachmentNames} onOpen={showAttachments} />
+              )}
+              {compact && dateNode}
+            </Box>
+            {!compact && (
+              <Box data-row-line sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                {statusIcon}
+                <Typography
+                  noWrap
+                  sx={{
+                    flex: attachmentNames.length ? "0 1 auto" : 1,
+                    minWidth: 0,
+                    fontSize: "0.875rem",
+                    lineHeight: 1.35,
+                    fontWeight: isUnread ? 600 : 400,
+                    color: isUnread && !isLocked ? "text.primary" : "text.secondary",
+                    fontStyle: isLocked || !subject ? "italic" : "normal",
+                    ...wideOrder(3),
+                  }}
+                >
+                  <Highlight text={subjectLabel} terms={highlightTerms} />
+                </Typography>
+                {attachmentNames.length > 0 && <AttachmentChips names={attachmentNames} onOpen={showAttachments} />}
+                {context && (
+                  <Chip
+                    label={context}
+                    size="small"
+                    variant="outlined"
+                    sx={{ height: 24, fontSize: "0.875rem", flexShrink: 0, ...wideOrder(4) }}
+                  />
+                )}
+              </Box>
+            )}
+          </Box>
+          {!compact && dateNode}
         </Box>
+      </ButtonBase>
+      {hasAttachments && canShowAttachments && (
+        <Tooltip title="Attachments">
+          <IconButton
+            onClick={showAttachments}
+            aria-label={`Attachments: ${subjectLabel}`}
+            sx={{ minWidth: 44, minHeight: 44, color: "text.secondary", flexShrink: 0 }}
+          >
+            <AttachFileOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
       )}
-    </MailMessageRowContainer>
+      {isFromSent && onDeleteMessage && (
+        <Tooltip title="Delete sent message">
+          <span>
+            <IconButton
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              aria-label="Delete sent message"
+              sx={{ minWidth: 44, minHeight: 44, color: "text.secondary" }}
+            >
+              {isDeleting ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                <DeleteOutlineIcon fontSize="small" />
+              )}
+            </IconButton>
+          </span>
+        </Tooltip>
+      )}
+    </Box>
+    {rowMenu.renderMenu(() => ({
+      title: name ? (
+        <>
+          {isFromSent && "To: "}
+          <NameText name={name} />
+        </>
+      ) : (
+        nameLabel
+      ),
+      ariaLabel: `Actions for ${spokenLabel}: ${subjectLabel}`,
+      actions: messageRowActions({
+        isFromSent,
+        isUnread,
+        selected,
+        open,
+        reply: onReply ? replyAll => withOpened(opened => onReply(opened, { replyAll }))() : undefined,
+        forward: onForward ? withOpened(onForward) : undefined,
+        attachments: canShowAttachments && hasAttachments !== false ? showAttachments : undefined,
+        markRead: onlyThis(onMarkAsRead),
+        markUnread: onlyThis(onMarkAsUnread),
+        archive: onlyThis(onArchive),
+        unarchive: onlyThis(onUnarchive),
+        toggleSelected: onToggleSelected,
+        remove: isFromSent && onDeleteMessage && !isDeleting ? () => void onDeleteMessage(messageData) : undefined,
+      }),
+    }))}
+    {attachmentsDialog !== "closed" && (
+      <React.Suspense fallback={null}>
+        <RowAttachmentsDialog
+          open={attachmentsDialog === "open"}
+          onClose={() => setAttachmentsDialog("closing")}
+          publisher={messageData.user}
+          identifier={identifier}
+          subject={subjectLabel}
+          onOpenMessage={open}
+        />
+      </React.Suspense>
+    )}
+    </>
   );
 };

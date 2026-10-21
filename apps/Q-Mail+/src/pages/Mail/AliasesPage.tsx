@@ -12,6 +12,9 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import LinkIcon from "@mui/icons-material/Link";
 import { formatFullTimestamp } from "../../utils/time";
+import { HIDDEN_CHARACTERS_TITLE, NameText, spokenName, strikeInputSx } from "../../components/common/NameText";
+import { hasInvisibleCharacters } from "../../utils/invisibleCharacters";
+import { ALIAS_SCAN_MAX_PAGES, ALIAS_SCAN_PAGE_SIZE, aliasScanButtonLabel } from "./aliasScan";
 
 interface AliasScanState {
   isRunning: boolean;
@@ -21,6 +24,18 @@ interface AliasScanState {
   totalCount: number;
   discoveredCount: number;
   statusMessage: string;
+  /** N9: the capped run. `scannedCount`/`totalCount` are pages fetched / the page cap. */
+  paging?: AliasScanPaging;
+}
+
+export interface AliasScanPaging {
+  resourcesWalked: number;
+  candidatesChecked: number;
+  maxPages: number;
+  /** The whole index has been walked; a run only checks new mail. */
+  complete: boolean;
+  /** The last run stopped at the page cap. */
+  stoppedAtCap: boolean;
 }
 
 interface AliasesPageProps {
@@ -71,10 +86,17 @@ export const AliasesPage = ({
     return new Set(aliasesWithMessages.map(aliasName => aliasName.toLowerCase()));
   }, [aliasesWithMessages]);
 
+  // Pages read out of the per-run cap; a run that reached the end of the
+  // index before the cap is finished, so the bar fills.
+  const scanFinished = !scanState.isRunning && Boolean(scanState.paging?.complete);
   const scanProgressValue = useMemo(() => {
+    if (scanFinished) return 100;
     if (!scanState.totalCount) return 0;
     return Math.min(100, Math.round((scanState.scannedCount / scanState.totalCount) * 100));
-  }, [scanState.scannedCount, scanState.totalCount]);
+  }, [scanFinished, scanState.scannedCount, scanState.totalCount]);
+
+  const maxPages = scanState.paging?.maxPages || ALIAS_SCAN_MAX_PAGES;
+  const maxResourcesPerRun = maxPages * ALIAS_SCAN_PAGE_SIZE;
 
   return (
     <Box
@@ -96,7 +118,7 @@ export const AliasesPage = ({
       >
         <Typography
           sx={{
-            color: "var(--qmail-thread-text)",
+            color: "text.primary",
             fontSize: "1.2rem",
             fontWeight: 700,
           }}
@@ -105,7 +127,7 @@ export const AliasesPage = ({
         </Typography>
         <Typography
           sx={{
-            color: "var(--qmail-thread-subtle-text)",
+            color: "text.secondary",
             fontSize: "0.95rem",
           }}
         >
@@ -119,10 +141,10 @@ export const AliasesPage = ({
           alignItems: "center",
           gap: "10px",
           flexWrap: "wrap",
-          border: "1px solid var(--qmail-shell-border)",
+          border: "1px solid", borderColor: "divider",
           borderRadius: "12px",
           padding: "12px",
-          backgroundColor: "var(--qmail-thread-card-bg)",
+          backgroundColor: "background.paper",
         }}
       >
         <TextField
@@ -144,7 +166,7 @@ export const AliasesPage = ({
             minWidth: "240px",
             flex: 1,
             "& .MuiInputBase-root": {
-              color: "var(--qmail-thread-text)",
+              color: "text.primary",
             },
           }}
         />
@@ -157,13 +179,14 @@ export const AliasesPage = ({
             setNewAliasInput("");
           }}
           sx={{
-            textTransform: "none",
-            borderColor: "var(--qmail-shell-border)",
-            color: "var(--qmail-thread-text)",
-            backgroundColor: "var(--qmail-shell-hover)",
+            minHeight: 44,
+                    textTransform: "none",
+            borderColor: "divider",
+            color: "text.primary",
+            backgroundColor: "action.hover",
             "&:hover": {
-              borderColor: "var(--qmail-shell-active-strong)",
-              backgroundColor: "var(--qmail-shell-hover-strong)",
+              borderColor: "primary.main",
+              backgroundColor: "action.selected",
             },
           }}
         >
@@ -176,10 +199,10 @@ export const AliasesPage = ({
           display: "flex",
           flexDirection: "column",
           gap: "10px",
-          border: "1px solid var(--qmail-shell-border)",
+          border: "1px solid", borderColor: "divider",
           borderRadius: "12px",
           padding: "12px",
-          backgroundColor: "var(--qmail-thread-card-bg)",
+          backgroundColor: "background.paper",
         }}
       >
         <Box
@@ -193,7 +216,7 @@ export const AliasesPage = ({
         >
           <Typography
             sx={{
-              color: "var(--qmail-thread-text)",
+              color: "text.primary",
               fontSize: "1rem",
               fontWeight: 650,
             }}
@@ -204,42 +227,50 @@ export const AliasesPage = ({
             variant="outlined"
             onClick={scanState.isRunning ? onCancelAliasScan : onRunAliasScan}
             sx={{
-              textTransform: "none",
-              borderColor: "var(--qmail-shell-border)",
-              color: "var(--qmail-thread-text)",
-              backgroundColor: "var(--qmail-shell-hover)",
+              minHeight: 44,
+                    textTransform: "none",
+              borderColor: "divider",
+              color: "text.primary",
+              backgroundColor: "action.hover",
               "&:hover": {
-                borderColor: "var(--qmail-shell-active-strong)",
-                backgroundColor: "var(--qmail-shell-hover-strong)",
+                borderColor: "primary.main",
+                backgroundColor: "action.selected",
               },
             }}
           >
-            {scanState.isRunning
-              ? scanState.isCancelRequested
-                ? "Cancel Requested"
-                : "Cancel Scan"
-              : hasScanCheckpoint
-              ? "Resume Scan"
-              : "Alias Scan"}
+            {aliasScanButtonLabel(
+              {
+                isRunning: scanState.isRunning,
+                isCancelRequested: scanState.isCancelRequested,
+                complete: scanState.paging?.complete,
+              },
+              hasScanCheckpoint
+            )}
           </Button>
         </Box>
         <Typography
           sx={{
-            color: "var(--qmail-thread-subtle-text)",
+            color: "text.secondary",
             fontSize: "0.9rem",
           }}
         >
-          Full scan checks Q-Mail resources, skips owned names, and attempts decryption to discover
-          previously used aliases.
+          Reads the network&apos;s Q-Mail resources newest first, up to {maxResourcesPerRun} per run
+          ({maxPages} pages of {ALIAS_SCAN_PAGE_SIZE}). It skips mail to your names and mail it already checked, and tries
+          to decrypt the rest to discover aliases people used to write to you.
         </Typography>
-        {hasScanCheckpoint && scanCheckpointTimestamp > 0 && (
+        {hasScanCheckpoint && (
           <Typography
+            data-testid="alias-scan-coverage"
             sx={{
-              color: "var(--qmail-thread-subtle-text)",
-              fontSize: "0.8rem",
+              color: "text.secondary",
+              fontSize: "0.875rem",
             }}
           >
-            Last checkpoint: {formatFullTimestamp(scanCheckpointTimestamp)}
+            {scanState.paging?.complete
+              ? "All Q-Mail resources have been scanned. The next run only checks new mail."
+              : "Older mail has not been scanned yet. Scan more to continue where the last run stopped."}
+            {scanCheckpointTimestamp > 0 &&
+              ` Newest scanned: ${formatFullTimestamp(scanCheckpointTimestamp)}.`}
           </Typography>
         )}
         {(scanState.isRunning || scanState.statusMessage) && (
@@ -264,8 +295,8 @@ export const AliasesPage = ({
               )}
               <Typography
                 sx={{
-                  color: "var(--qmail-thread-subtle-text)",
-                  fontSize: "0.85rem",
+                  color: "text.secondary",
+                  fontSize: "0.875rem",
                 }}
               >
                 {scanState.statusMessage}
@@ -276,20 +307,27 @@ export const AliasesPage = ({
                 <LinearProgress
                   variant="determinate"
                   value={scanProgressValue}
+                  aria-label="Alias scan progress"
+                  aria-describedby="qmail-alias-scan-progress"
                   sx={{
                     borderRadius: "999px",
                     height: "7px",
-                    backgroundColor: "var(--qmail-shell-hover-strong)",
+                    backgroundColor: "action.selected",
                   }}
                 />
                 <Typography
+                  id="qmail-alias-scan-progress"
+                  data-testid="alias-scan-progress"
                   sx={{
-                    color: "var(--qmail-thread-subtle-text)",
-                    fontSize: "0.8rem",
+                    color: "text.secondary",
+                    fontSize: "0.875rem",
                   }}
                 >
-                  Scanned {scanState.scannedCount}/{scanState.totalCount} • Discovered{" "}
-                  {scanState.discoveredCount}
+                  Page {scanState.scannedCount} of {scanState.totalCount}
+                  {scanState.paging
+                    ? ` • ${scanState.paging.resourcesWalked} resources read • ${scanState.paging.candidatesChecked} checked`
+                    : ""}
+                  {` • ${scanState.discoveredCount} discovered`}
                 </Typography>
               </>
             )}
@@ -306,7 +344,7 @@ export const AliasesPage = ({
       >
         <Typography
           sx={{
-            color: "var(--qmail-thread-text)",
+            color: "text.primary",
             fontSize: "1rem",
             fontWeight: 650,
           }}
@@ -320,18 +358,18 @@ export const AliasesPage = ({
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              color: "var(--qmail-thread-subtle-text)",
+              color: "text.secondary",
             }}
           >
             <CircularProgress size={16} />
-            <Typography sx={{ fontSize: "0.85rem" }}>Checking alias activity...</Typography>
+            <Typography sx={{ fontSize: "0.875rem" }}>Checking alias activity...</Typography>
           </Box>
         )}
 
         {sortedAliases.length === 0 && (
           <Typography
             sx={{
-              color: "var(--qmail-thread-subtle-text)",
+              color: "text.secondary",
               fontSize: "0.9rem",
             }}
           >
@@ -346,13 +384,14 @@ export const AliasesPage = ({
             editingReplyAliasByName[aliasName] !== undefined
               ? editingReplyAliasByName[aliasName]
               : linkedReplyAlias;
+          const strikeReplyAlias = hasInvisibleCharacters(replyAliasDraft);
           return (
             <Box
               key={aliasName}
               sx={{
-                border: "1px solid var(--qmail-shell-border)",
+                border: "1px solid", borderColor: "divider",
                 borderRadius: "10px",
-                backgroundColor: "var(--qmail-thread-card-bg)",
+                backgroundColor: "background.paper",
                 display: "flex",
                 alignItems: "flex-start",
                 justifyContent: "space-between",
@@ -371,36 +410,41 @@ export const AliasesPage = ({
               >
                 <Typography
                   sx={{
-                    color: "var(--qmail-thread-text)",
+                    color: "text.primary",
                     fontSize: "0.98rem",
                     fontWeight: 600,
                   }}
                 >
-                  {aliasName}
+                  <NameText name={aliasName} />
                 </Typography>
                 <Typography
                   sx={{
-                    color: "var(--qmail-thread-subtle-text)",
-                    fontSize: "0.78rem",
+                    color: "text.secondary",
+                    fontSize: "0.875rem",
                   }}
                 >
                   {hasMessages ? "Has messages" : "No messages detected yet"}
                 </Typography>
                 <Typography
-                  sx={{
-                    color: linkedReplyAlias
-                      ? "var(--qmail-shell-active-strong)"
-                      : "var(--qmail-thread-subtle-text)",
-                    fontSize: "0.78rem",
+                  sx={[{
+                    fontSize: "0.875rem",
                     display: "flex",
                     alignItems: "center",
-                    gap: "6px",
-                  }}
+                    gap: "6px"
+                  }, linkedReplyAlias ? {
+                    color: "primary.main"
+                  } : {
+                    color: "text.secondary"
+                  }]}
                 >
                   <LinkIcon sx={{ fontSize: "0.9rem" }} />
-                  {linkedReplyAlias
-                    ? `Reply alias linked: ${linkedReplyAlias}`
-                    : "No reply alias linked"}
+                  {linkedReplyAlias ? (
+                    <span>
+                      Reply alias linked: <NameText name={linkedReplyAlias} />
+                    </span>
+                  ) : (
+                    "No reply alias linked"
+                  )}
                 </Typography>
               </Box>
               <Box
@@ -425,18 +469,27 @@ export const AliasesPage = ({
                   }}
                   placeholder="Optional reply alias for this inbox"
                   size="small"
-                  sx={{
-                    "& .MuiInputBase-root": {
-                      color: "var(--qmail-thread-text)",
+                  slotProps={{
+                    htmlInput: {
+                      title: strikeReplyAlias ? HIDDEN_CHARACTERS_TITLE : undefined,
                     },
                   }}
+                  sx={[
+                    {
+                      "& .MuiInputBase-root": {
+                        color: "text.primary",
+                      },
+                    },
+                    strikeReplyAlias && strikeInputSx,
+                  ]}
                 />
                 <Stack
                   direction="row"
                   spacing={1}
-                  flexWrap="wrap"
-                  justifyContent="flex-end"
-                >
+                  sx={{
+                    flexWrap: "wrap",
+                    justifyContent: "flex-end"
+                  }}>
                   <Button
                     size="small"
                     variant="outlined"
@@ -445,13 +498,14 @@ export const AliasesPage = ({
                       onOpenAlias(aliasName);
                     }}
                     sx={{
-                      textTransform: "none",
-                      borderColor: "var(--qmail-shell-border)",
-                      color: "var(--qmail-thread-text)",
-                      backgroundColor: "var(--qmail-shell-hover)",
+                      minHeight: 44,
+                    textTransform: "none",
+                      borderColor: "divider",
+                      color: "text.primary",
+                      backgroundColor: "action.hover",
                       "&:hover": {
-                        borderColor: "var(--qmail-shell-active-strong)",
-                        backgroundColor: "var(--qmail-shell-hover-strong)",
+                        borderColor: "primary.main",
+                        backgroundColor: "action.selected",
                       },
                     }}
                   >
@@ -470,9 +524,10 @@ export const AliasesPage = ({
                       }));
                     }}
                     sx={{
-                      textTransform: "none",
-                      borderColor: "var(--qmail-shell-border)",
-                      color: "var(--qmail-thread-text)",
+                      minHeight: 44,
+                    textTransform: "none",
+                      borderColor: "divider",
+                      color: "text.primary",
                     }}
                   >
                     Save Reply Alias
@@ -489,21 +544,25 @@ export const AliasesPage = ({
                       }));
                     }}
                     sx={{
-                      textTransform: "none",
-                      color: "var(--qmail-thread-subtle-text)",
+                      minHeight: 44,
+                    textTransform: "none",
+                      color: "text.secondary",
                     }}
                   >
                     Clear Link
                   </Button>
                   <IconButton
                     size="small"
+                    aria-label={`Remove alias ${spokenName(aliasName)}`}
                     onClick={() => {
                       onRemoveAlias(aliasName);
                     }}
                     sx={{
-                      color: "var(--qmail-thread-subtle-text)",
+                      minWidth: 44,
+                      minHeight: 44,
+                      color: "text.secondary",
                       "&:hover": {
-                        color: "var(--qmail-thread-text)",
+                        color: "text.primary",
                       },
                     }}
                   >

@@ -112,7 +112,6 @@ declare module '@qortal/qapp-lib/app-shell/adapters' {
 }
 
 declare module '@qortal/qapp-lib/app-shell/react' {
-  import type { ComponentType } from 'react';
   import type {
     AppShellController,
     AppShellDeps,
@@ -147,16 +146,9 @@ declare module '@qortal/qapp-lib/app-shell/react' {
   ): AppShellController;
 
   export function useAppShellState(controller: AppShellController): AppShellState;
-
-  export const AppMenu: ComponentType<any>;
 }
 
 declare module '@qortal/qapp-lib/typography' {
-  export function ensureLexendIllinoisTypographyStyle(options?: {
-    id?: string;
-    textSizeScale?: Partial<Record<'small' | 'medium' | 'large', number>>;
-  }): HTMLStyleElement;
-
   export function applyQAppTextSize(
     root: HTMLElement,
     textSize: 'small' | 'medium' | 'large'
@@ -244,42 +236,4 @@ declare module '@qortal/qapp-lib/left-sidebar/core' {
     closeDelayMs?: number;
     onAnchorClickMode?: LeftSidebarAnchorClickMode;
   }
-}
-
-declare module '@qortal/qapp-lib/left-sidebar/react' {
-  import type { ComponentType, ReactNode } from 'react';
-  import type {
-    LeftSidebarConfig,
-    LeftSidebarController,
-    LeftSidebarDeps,
-    LeftSidebarItem,
-    LeftSidebarState,
-  } from '@qortal/qapp-lib/left-sidebar/core';
-
-  export function useLeftSidebarController(
-    config: LeftSidebarConfig,
-    deps: LeftSidebarDeps
-  ): LeftSidebarController;
-
-  export function useLeftSidebarHoverPreview(
-    controller: LeftSidebarController,
-    options?: import('@qortal/qapp-lib/left-sidebar/core').LeftSidebarHoverPreviewOptions
-  ): import('@qortal/qapp-lib/left-sidebar/core').LeftSidebarHoverPreviewBindings;
-
-  export function useLeftSidebarState(
-    controller: LeftSidebarController
-  ): LeftSidebarState;
-
-  export const LeftSidebar: ComponentType<{
-    state: LeftSidebarState;
-    controller?: LeftSidebarController;
-    onSelectItem?: (itemId: string) => void;
-    renderItemIcon?: (item: LeftSidebarItem) => ReactNode;
-    hoverPreviewBindings?: Partial<
-      Pick<
-        import('@qortal/qapp-lib/left-sidebar/core').LeftSidebarHoverPreviewBindings,
-        'onSidebarPointerEnter' | 'onSidebarPointerLeave'
-      >
-    >;
-  }>;
 }

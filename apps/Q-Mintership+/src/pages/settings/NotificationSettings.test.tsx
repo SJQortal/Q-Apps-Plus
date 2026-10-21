@@ -1,0 +1,507 @@
+/** Settings → Notifications: the in-app panel switch and the opt-in Hub alerts. */
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { getDefaultStore } from 'jotai';
+import { peekQuery } from '../../data/query';
+import { SINCE_LAST_VISIT_KEY, sinceLastVisitAtom } from '../../state/notifications';
+import { renderPage } from '../../test/render';
+import { mockFetchRoute, mockQortalRequest, qortalCalls, qortalCallsFor } from '../../test/setup';
+import { ADDR, NOW } from '../../test/world';
+import { answerCore, type World } from '../../../e2e/world.mjs';
+import { nameMark } from '../../data/replyMarkers';
+import { NotificationSettings } from './NotificationSettings';
+
+const T = { timeout: 4000 };
+const ACTIONS = [
+  'GET_USER_ACCOUNT',
+  'NOTIFICATION_PERMISSION',
+  'NOTIFICATION_ADD',
+  'NOTIFICATION_GET',
+  'NOTIFICATION_REMOVE',
+];
+
+afterEach(() => {
+  vi.useRealTimers();
+  getDefaultStore().set(sinceLastVisitAtom, true);
+});
+
+/** A Hub that offers alerts, with `rules` already registered for this app. */
+function hubWithAlerts(rules: string[] = []) {
+  mockQortalRequest('SHOW_ACTIONS', ACTIONS);
+  mockQortalRequest('NOTIFICATION_GET', () => rules.map((notificationId) => ({ notificationId })));
+  mockQortalRequest('NOTIFICATION_PERMISSION', true);
+  mockQortalRequest('NOTIFICATION_ADD', true);
+  mockQortalRequest('NOTIFICATION_REMOVE', true);
+}
+
+/** The search for every nomination fails while `failing()` says so; the rest reads as usual. */
+function failNominationSearch(world: World, failing: () => boolean) {
+  mockFetchRoute('/arbitrary/resources/searchsimple', (url: URL) => {
+    if (failing() && url.searchParams.get('identifier') === 'qmp-nomination-') {
+      return new Response('', { status: 500 });
+    }
+    const answer = answerCore(world, url.pathname, url.searchParams);
+    return new Response(JSON.stringify(answer?.body ?? null), {
+      status: answer?.status ?? 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  });
+}
+
+/** The reply rules of a name: replies to its comments, and (Minter Admins) to those for them. */
+const replied = (name: string) => `qmp-replied-${nameMark(name)}`;
+const repliedMa = (name: string) => `qmp-replied-ma-${nameMark(name)}`;
+
+const hubSwitch = () => screen.getByRole('switch', { name: 'Hub alerts' });
+const section = () => screen.getByRole('region', { name: 'Notifications' });
+
+describe('Settings → Notifications', () => {
+  it('turns the "Since your last visit" panel off and on, in this browser', async () => {
+    const u = userEvent.setup();
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    const panel = screen.getByRole('switch', { name: 'Since your last visit' });
+    expect(panel).toBeChecked();
+    await u.click(panel);
+    expect(panel).not.toBeChecked();
+    expect(window.localStorage.getItem(SINCE_LAST_VISIT_KEY)).toBe('false');
+    await u.click(panel);
+    expect(panel).toBeChecked();
+  });
+
+  it("is off by default and says when Hub doesn't offer alerts", async () => {
+    mockQortalRequest('SHOW_ACTIONS', ['GET_USER_ACCOUNT', 'SIGN_TRANSACTION']);
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    expect(
+      await within(section()).findByText(/Your Hub doesn't offer app alerts/, {}, T)
+    ).toBeVisible();
+    expect(hubSwitch()).not.toBeChecked();
+    expect(hubSwitch()).toBeDisabled();
+    expect(qortalCallsFor('NOTIFICATION_GET')).toHaveLength(0);
+  });
+
+  it('lets a Minter Admin turn alerts on: permission, then the rules', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    expect(
+      await within(section()).findByText(
+        /Hub tells you when a new nomination is published, .*, and when someone replies to your comment, even when/,
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(within(section()).getByText(/Hub asks you once to allow it\. No fee\./)).toBeVisible();
+    await waitFor(() => expect(hubSwitch()).toBeEnabled());
+    expect(hubSwitch()).not.toBeChecked();
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeChecked();
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(1);
+    const added = qortalCallsFor('NOTIFICATION_ADD')[0].notifications as Array<{
+      notificationId: string;
+      link: string;
+      filters: Record<string, unknown>;
+    }>;
+    expect(added.map((r) => r.notificationId)).toEqual([
+      'qmp-new-nomination',
+      replied('Avery Admin'),
+      repliedMa('Avery Admin'),
+    ]);
+    // A reply to one of their comments: found by its marker, opened where it was posted.
+    expect(added[1].filters).toEqual({
+      service: 'JSON',
+      identifier: 'qmp-comment-',
+      prefix: true,
+      excludeBlocked: true,
+      description: `~qmpre${nameMark('Avery Admin')}~`,
+    });
+    expect(added[1].link).toBe('qortal://APP/Q-Mintership+/comments/{name}/{identifier}');
+    expect(added[2].filters).toMatchObject({
+      service: 'DOCUMENT_PRIVATE',
+      identifier: 'qmp-macomment-',
+      description: `~qmpre${nameMark('Avery Admin')}~`,
+    });
+  });
+
+  it('keeps focus on the switch while Hub asks, and ignores another press meanwhile', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    let allow: (value: boolean) => void = () => undefined;
+    mockQortalRequest(
+      'NOTIFICATION_PERMISSION',
+      () => new Promise<boolean>((resolve) => (allow = resolve))
+    );
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(await within(section()).findByText('Waiting for Hub…', {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeEnabled();
+    expect(hubSwitch()).toHaveFocus();
+    expect(hubSwitch()).toHaveAttribute('aria-busy', 'true');
+    await u.click(hubSwitch());
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(1);
+    allow(true);
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toHaveFocus();
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(1);
+  });
+
+  it('turns them off again without asking for permission', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts(['qmp-new-nomination']);
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    await waitFor(() => expect(hubSwitch()).toBeChecked(), T);
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are off.', {}, T)).toBeVisible();
+    expect(hubSwitch()).not.toBeChecked();
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(0);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(1);
+  });
+
+  it("tells a nominee without a name that Hub won't listen, and changes nothing on a decline", async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    mockQortalRequest('NOTIFICATION_PERMISSION', () => {
+      throw { error: 'User declined request', message: 'User declined request' };
+    });
+    await renderPage(<NotificationSettings />, { persona: 'newcomer', path: '/settings' });
+    expect(
+      await within(section()).findByText(/Hub tells you when someone nominates you/, {}, T)
+    ).toBeVisible();
+    expect(
+      within(section()).getByText(
+        'Hub listens for app alerts only on accounts with a registered name.'
+      )
+    ).toBeVisible();
+    await waitFor(() => expect(hubSwitch()).toBeEnabled());
+    await u.click(hubSwitch());
+    expect(
+      await screen.findByText("You didn't allow alerts in Hub. Nothing changed.", {}, T)
+    ).toBeVisible();
+    expect(hubSwitch()).not.toBeChecked();
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(0);
+  });
+
+  it('says what to do when Hub stops waiting', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    mockQortalRequest('NOTIFICATION_PERMISSION', () => {
+      throw { error: 'timeout', message: 'Request timed out after 30000 ms' };
+    });
+    await renderPage(<NotificationSettings />, { persona: 'nominatedWaiting', path: '/settings' });
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(
+      await screen.findByText(
+        'Hub stopped waiting. If you allowed alerts there, turn this on again to finish.',
+        {},
+        T
+      )
+    ).toBeVisible();
+  });
+
+  it('offers a member who is not an admin the alerts for replies to their comments', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    await renderPage(<NotificationSettings />, { persona: 'learner', path: '/settings' });
+    expect(
+      await within(section()).findByText(
+        'Hub tells you when someone replies to your comment, even when this app is closed. Hub asks you once to allow it. No fee.',
+        {},
+        T
+      )
+    ).toBeVisible();
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    const added = qortalCallsFor('NOTIFICATION_ADD')[0].notifications as Array<{
+      notificationId: string;
+    }>;
+    expect(added.map((r) => r.notificationId)).toEqual([replied('Leo Learner')]);
+  });
+
+  it('has nothing to offer a member below level 5 without a registered name', async () => {
+    hubWithAlerts();
+    await renderPage(<NotificationSettings />, {
+      persona: 'learner',
+      path: '/settings',
+      setup: (world) => {
+        const me = world.accounts.get(ADDR.learner);
+        if (me) me.name = null;
+        world.names.delete('Leo Learner');
+      },
+    });
+    expect(
+      await within(section()).findByText(/Nothing to alert you about now/, {}, T)
+    ).toBeVisible();
+    expect(hubSwitch()).toBeDisabled();
+  });
+
+  it('notices alerts set up for an earlier role', async () => {
+    hubWithAlerts(['qmp-nominated-you', 'qmp-supported-you']);
+    await renderPage(<NotificationSettings />, { persona: 'admin', path: '/settings' });
+    expect(await within(section()).findByText(/set up for your earlier role/, {}, T)).toBeVisible();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toBeEnabled();
+  });
+
+  it('says to turn off alerts that no longer fit a role with nothing to alert about', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts(['qmp-nominated-you', 'qmp-supported-you']);
+    await renderPage(<NotificationSettings />, {
+      persona: 'learner',
+      path: '/settings',
+      setup: (world) => {
+        const me = world.accounts.get(ADDR.learner);
+        if (me) me.name = null;
+        world.names.delete('Leo Learner');
+      },
+    });
+    expect(
+      await within(section()).findByText(/no longer fit\. Turn them off\./, {}, T)
+    ).toBeVisible();
+    expect(within(section()).queryByText(/Turn them off and on/)).toBeNull();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toBeEnabled();
+    await u.click(hubSwitch());
+    expect(
+      await within(section()).findByText(/Nothing to alert you about now/, {}, T)
+    ).toBeVisible();
+    await waitFor(() => expect(hubSwitch()).toBeDisabled());
+    expect(hubSwitch()).not.toBeChecked();
+  });
+
+  it('says to turn alerts from an earlier role off and on, for a member who can have reply alerts', async () => {
+    hubWithAlerts(['qmp-nominated-you', 'qmp-supported-you']);
+    await renderPage(<NotificationSettings />, { persona: 'learner', path: '/settings' });
+    expect(
+      await within(section()).findByText(
+        /earlier role\. Turn them off and on to update them\./,
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(hubSwitch()).toBeChecked();
+  });
+
+  it('points to Hub or GO outside Hub', async () => {
+    await renderPage(<NotificationSettings />, { persona: 'outside', path: '/settings' });
+    expect(within(section()).getByText(/Open this app in Qortal Hub or GO/)).toBeVisible();
+    expect(hubSwitch()).toBeDisabled();
+    expect(qortalCallsFor('SHOW_ACTIONS')).toHaveLength(0);
+  });
+});
+
+describe('Settings → Notifications: support alerts for nominators', () => {
+  const yours = (nominee: string) => `qmp-supported-yours-${nominee}`;
+  /** Nora Nominator's open nominations, newest first. */
+  const OPEN = [ADDR.nominatedWaiting, ADDR.nominatedSigning, ADDR.urgent];
+  const ids = (call: Record<string, unknown>) =>
+    (call.notifications as Array<{ notificationId: string }>).map((r) => r.notificationId);
+
+  /** A Hub that offers alerts and can say, without a dialog, whether the app may alert. */
+  function hubThatChecks(rules: string[], allowed: boolean) {
+    hubWithAlerts(rules);
+    mockQortalRequest('SHOW_ACTIONS', [...ACTIONS, 'NOTIFICATION_HAS_PERMISSION']);
+    mockQortalRequest('NOTIFICATION_HAS_PERMISSION', allowed);
+  }
+
+  it('lets a level 5+ nominator turn on alerts for support on the nominations they made', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    await renderPage(<NotificationSettings />, { persona: 'nominator', path: '/settings' });
+    expect(
+      await within(section()).findByText(
+        /^Hub tells you when someone adds their support to a nomination you made, and when someone replies to your comment, even when/,
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(
+      within(section()).getByText(
+        /^Support alerts cover the nominations you made that are still open \(up to 20\)\./
+      )
+    ).toBeVisible();
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    const add = qortalCallsFor('NOTIFICATION_ADD')[0];
+    expect(ids(add)).toEqual([replied('Nora Nominator'), ...OPEN.map(yours)]);
+    const filters = (add.notifications as Array<{ filters: { identifier: string } }>).map(
+      (r) => r.filters.identifier
+    );
+    expect(filters).toEqual(['qmp-comment-', ...OPEN.map((a) => `qmp-support-${a}`)]);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([
+      'qmp-new-nomination',
+      'qmp-nominated-you',
+      'qmp-supported-you',
+    ]);
+  });
+
+  it('adds a Minter Admin’s support alerts with the new-nomination one', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    await renderPage(<NotificationSettings />, {
+      persona: 'admin',
+      path: '/settings',
+      setup: (world) => {
+        world.records.push({
+          name: 'Avery Admin',
+          identifier: `qmp-nomination-${ADDR.newcomerName}`,
+          created: NOW - 3_600_000,
+          body: {
+            v: 1,
+            nomineeAddress: ADDR.newcomerName,
+            reason: 'Runs a reliable node and helps in the minting chat every week.',
+            links: [],
+          },
+        });
+      },
+    });
+    await waitFor(() => expect(peekQuery('nominations:all')).toBeDefined(), T);
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    expect(ids(qortalCallsFor('NOTIFICATION_ADD')[0])).toEqual([
+      'qmp-new-nomination',
+      replied('Avery Admin'),
+      repliedMa('Avery Admin'),
+      yours(ADDR.newcomerName),
+    ]);
+  });
+
+  it('offers a nominator with no open nominations the reply alerts', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    await renderPage(<NotificationSettings />, { persona: 'promote', path: '/settings' });
+    expect(
+      await within(section()).findByText(
+        /^Hub tells you when someone replies to your comment, and when someone adds their support to a nomination you made\. You have no open nominations now\.$/,
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(within(section()).queryByText(/^Support alerts cover/)).toBeNull();
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are on.', {}, T)).toBeVisible();
+    expect(ids(qortalCallsFor('NOTIFICATION_ADD')[0])).toEqual([replied('Pia Promote')]);
+  });
+
+  it('says when the nominations they made can’t be read, with Try again', async () => {
+    const u = userEvent.setup();
+    hubWithAlerts();
+    let failing = true;
+    await renderPage(<NotificationSettings />, {
+      persona: 'nominator',
+      path: '/settings',
+      setup: (world) => failNominationSearch(world, () => failing),
+    });
+    expect(
+      await within(section()).findByText(
+        "Couldn't read the nominations you made, so there's nothing to turn on yet.",
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(hubSwitch()).toBeDisabled();
+    expect(within(section()).queryByText(/^Support alerts cover/)).toBeNull();
+    const again = screen.getByRole('button', {
+      name: 'Try again to read the nominations you made',
+    });
+    expect(again).toHaveTextContent('Try again');
+
+    // Still failing: it says so, and focus stays on the button.
+    await u.click(again);
+    expect(
+      await within(section()).findByText(
+        "Still couldn't read the nominations you made. Try again in a moment.",
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(again).toHaveFocus();
+
+    // Read now: the switch can be turned on, and takes focus from the button that went away.
+    failing = false;
+    await u.click(again);
+    await waitFor(() => expect(hubSwitch()).toBeEnabled(), T);
+    expect(screen.queryByRole('button', { name: /Try again/ })).toBeNull();
+    expect(hubSwitch()).toHaveFocus();
+    expect(hubSwitch()).not.toBeChecked();
+    expect(within(section()).getByText(/^Support alerts cover/)).toBeVisible();
+  });
+
+  it('stays on when none of the nominations they made is open any more', async () => {
+    const u = userEvent.setup();
+    // Set up while Lapsed Person's nomination was open; Pia has none open now, and Hub won't
+    // let the app add her reply rule without asking.
+    hubThatChecks([yours(ADDR.lapsed)], false);
+    await renderPage(<NotificationSettings />, { persona: 'promote', path: '/settings' });
+    await waitFor(() => expect(peekQuery('nominations:all')).toBeDefined(), T);
+    expect(
+      await within(section()).findByText(/You have no open nominations now\.$/, {}, T)
+    ).toBeVisible();
+    // Give the sync its turn: it drops nothing, the last rule.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(0);
+    expect(
+      await within(section()).findByText(
+        "Alerts for replies to your comments aren't set up yet: turn alerts off and on to add them.",
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(hubSwitch()).toBeChecked();
+    expect(hubSwitch()).toBeEnabled();
+    expect(
+      within(section()).getByText(
+        /While alerts are on, opening Settings adds the ones you made since/
+      )
+    ).toBeVisible();
+    // Turning them off still removes every rule.
+    await u.click(hubSwitch());
+    expect(await screen.findByText('Hub alerts are off.', {}, T)).toBeVisible();
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toContain(yours(ADDR.lapsed));
+    expect(hubSwitch()).not.toBeChecked();
+  });
+
+  it('keeps them in step while alerts are on: checks first, so Hub shows no dialog', async () => {
+    // Set up earlier: Lapsed Person's nomination has closed since, two are new.
+    hubThatChecks([yours(ADDR.lapsed), yours(ADDR.urgent)], true);
+    await renderPage(<NotificationSettings />, { persona: 'nominator', path: '/settings' });
+    await waitFor(() => expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(1), T);
+    const order = qortalCalls.map((c) => c.action);
+    expect(order.indexOf('NOTIFICATION_HAS_PERMISSION')).toBeLessThan(
+      order.indexOf('NOTIFICATION_PERMISSION')
+    );
+    // The reply rule, set up before there were any, comes in too.
+    expect(ids(qortalCallsFor('NOTIFICATION_ADD')[0])).toEqual([
+      replied('Nora Nominator'),
+      yours(ADDR.nominatedWaiting),
+      yours(ADDR.nominatedSigning),
+    ]);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([yours(ADDR.lapsed)]);
+    expect(hubSwitch()).toBeChecked();
+    expect(within(section()).queryByText(/aren't set up yet/)).toBeNull();
+    expect(within(section()).queryByText(/earlier role/)).toBeNull();
+  });
+
+  it("adds nothing when Hub doesn't let the app alert, and says how to add them", async () => {
+    hubThatChecks([yours(ADDR.urgent)], false);
+    await renderPage(<NotificationSettings />, { persona: 'nominator', path: '/settings' });
+    expect(
+      await within(section()).findByText(
+        "Alerts for 2 open nominations you made aren't set up yet: turn alerts off and on to add them.",
+        {},
+        T
+      )
+    ).toBeVisible();
+    expect(qortalCallsFor('NOTIFICATION_PERMISSION')).toHaveLength(0);
+    expect(qortalCallsFor('NOTIFICATION_ADD')).toHaveLength(0);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')).toHaveLength(0);
+    expect(hubSwitch()).toBeChecked();
+  });
+});

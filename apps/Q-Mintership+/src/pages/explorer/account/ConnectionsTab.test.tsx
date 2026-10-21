@@ -1,0 +1,1151 @@
+/**
+ * The Connections tab in the mock world, strict (any read the world can't
+ * answer fails): what was recorded between accounts (level moves, reward
+ * shares, names, payments), what they have in common, the line of what was
+ * checked and found nothing, evidence toggles, Compare, payer bands, Copy
+ * findings and Core's own report. Read-only: no POST, no write request.
+ */
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { getDefaultStore } from 'jotai';
+import { renderPage, type RenderPageOptions } from '../../../test/render';
+import { expectNoAxeViolations } from '../../../test/axe';
+import {
+  fetchCallsFor,
+  mockFetchRoute,
+  mockQortalRequest,
+  qortalCalls,
+  qortalCallsFor,
+} from '../../../test/setup';
+import { ADDR } from '../../../test/world';
+import {
+  FUNDER,
+  MESSAGE_CONTENT,
+  OLD_MINTER,
+  SPONSEES,
+  SPONSOR,
+  NOW,
+  TIP,
+  answerCore,
+  fakeKey,
+  type World,
+} from '../../../../e2e/world.mjs';
+import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
+import { explorerAccountPath } from '../../../routes/paths';
+import { queryLoadCounts } from '../../../data/query';
+import { comparePicksAtom, resetExplorerState } from '../../../state/explorer';
+import ConnectionsTab from './ConnectionsTab';
+import { readText } from '../../../test/readText';
+
+const T = { timeout: 5000 };
+
+/**
+ * The world's own answer to a read this test's route passes on, served the
+ * way the harness serves it (its status too). A read the world can't answer
+ * fails the test, as strict mode does, instead of coming back as 200 null.
+ */
+function worldAnswer(world: World, url: URL): Response {
+  const answer = answerCore(world, url.pathname, url.searchParams);
+  if (!answer) {
+    const path = `${url.pathname}${url.search}`;
+    onTestFinished(() => {
+      throw new Error(`The mock world has no answer for: ${path}`);
+    });
+    throw new Error(`no mock for GET ${path}`);
+  }
+  if (answer.text !== undefined) return new Response(answer.text, { status: answer.status });
+  return new Response(JSON.stringify(answer.body), { status: answer.status });
+}
+const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
+const VERDICTS =
+  /\b(alts?|suspicious|same person|fraud|strong(est)?|weak|consolidation|linked accounts|likel(y|ihood)|score)\b/i;
+
+async function open(address: string, setup?: RenderPageOptions['setup']) {
+  const result = await renderPage(
+    <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
+      <ConnectionsTab address={address} />
+    </PersonLinkContext>,
+    {
+      persona: 'learner',
+      path: explorerAccountPath(address, 'connections'),
+      route: '/explorer/account/:who/:tab?',
+      strict: true,
+      setup,
+    }
+  );
+  return { ...result, user: userEvent.setup() };
+}
+
+function noWrites(posts: string[]) {
+  expect(posts).toEqual([]);
+  expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
+}
+
+const region = (name: string) => screen.findByRole('region', { name }, T);
+
+/** Opens the Account report, makes it, and gives its text and dialog. */
+async function makeReport(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Account report' }));
+  const dialog = await screen.findByRole('dialog', {}, T);
+  await user.click(within(dialog).getByRole('button', { name: 'Make the report' }));
+  const preview = await within(dialog).findByLabelText(/^account-report-.+\.md$/, {}, T);
+  return { dialog, text: preview.textContent ?? '' };
+}
+
+/**
+ * The links search for `who` fills all 5 pages (its own rows first, then
+ * account-flag rows that link nothing), so the read stops at its ceiling.
+ */
+function cappedLinks(world: World, who: string) {
+  mockFetchRoute('/transactions/search', (url: URL) => {
+    const sp = url.searchParams;
+    const own = answerCore(world, url.pathname, sp)?.body;
+    if (sp.get('address') !== who || !sp.getAll('txType').includes('REWARD_SHARE')) return own;
+    const offset = Number(sp.get('offset') ?? 0);
+    const real = offset === 0 && Array.isArray(own) ? own : [];
+    const filler = Array.from({ length: 100 - real.length }, (_, i) => ({
+      type: 'ACCOUNT_FLAGS',
+      timestamp: 1_600_000_000_000 + offset + i,
+      signature: `filler${offset + i}`,
+      blockHeight: 1_000 + offset + i,
+      creatorAddress: ADDR.admin,
+      target: who,
+    }));
+    return [...real, ...filler];
+  });
+}
+
+const VIEW_KEY = 'qmintershipplus-connections-view';
+beforeEach(() => {
+  resetExplorerState();
+  // The circle is the default; most tests here read the list.
+  window.localStorage.setItem(VIEW_KEY, 'list');
+});
+afterEach(() => vi.useRealTimers());
+
+describe('Connections: payments and first QORT', () => {
+  it('Lou Left: payments with Kit each way, first QORT from a busy funder, and what was checked', async () => {
+    const { container, posts, user } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    // The facts first; the Account report after them, at the bottom (Simon, 2026-10-21).
+    const report = await region('Account report');
+    expect(
+      recorded.compareDocumentPosition(report) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await waitFor(
+      () => expect(sent).toHaveTextContent('Paid Kit Kicked 6.3 QORT in 2 payments'),
+      T
+    );
+    // Received from: Kit's four payments (exact sum) and Hal's first QORT.
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    await waitFor(
+      () => expect(got).toHaveTextContent('Received 120 QORT from Kit Kicked in 4 payments'),
+      T
+    );
+    expect(got).toHaveTextContent('Received 5.4321 QORT from Hal Helper in 1 payment');
+    // Hal has sent 640 payments: marked, and named as where its first QORT came from.
+    await waitFor(() => expect(got).toHaveTextContent('has sent 500+ payments'), T);
+    expect(got).toHaveTextContent('its first QORT came from them');
+    expect(recorded).toHaveTextContent(
+      'Read: every QORT payment it sent (2), every QORT payment it received (5) and every asset transfer and multi-payment (none).'
+    );
+
+    const common = await region('In common');
+    await waitFor(
+      () =>
+        expect(common).toHaveTextContent(
+          'First QORT payment received: 5.4321 QORT from Hal Helper. Hal Helper has sent 500+ payments.'
+        ),
+      T
+    );
+    expect(
+      within(common).getByRole('link', {
+        name: 'Who got their first QORT payment from this account',
+      })
+    ).toHaveAttribute('href', `/explorer/funded/${ADDR.left}`);
+
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, asset trades.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    // No reward-share or name parts when there are none.
+    expect(within(recorded).queryByRole('heading', { name: 'Names' })).toBeNull();
+    expect(within(recorded).queryByRole('heading', { name: 'Reward shares' })).toBeNull();
+    expect(document.body.textContent).not.toContain(MESSAGE_CONTENT);
+    expect(document.body.textContent).not.toMatch(VERDICTS);
+    await expectNoAxeViolations(container);
+    noWrites(posts);
+  });
+
+  it('opens the payments behind a row, each linking to its transaction', async () => {
+    const { user, world } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const toggle = await within(recorded).findByRole(
+      'button',
+      { name: 'Show the 4 payments with Kit Kicked' },
+      T
+    );
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(toggle).toHaveTextContent('4 payments');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const panel = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? ''
+    ) as HTMLElement;
+    // Each payment a transaction row of the Explorer's lists, closed while there are several
+    // (Simon, 2026-10-20: "when expanded I want to see more details").
+    await waitFor(() => expect(panel.querySelectorAll('[data-tx-row]')).toHaveLength(4), T);
+    const rows = [...panel.querySelectorAll<HTMLElement>('[data-tx-row]')];
+    expect(rows.every((row) => row.getAttribute('aria-expanded') === 'false')).toBe(true);
+    // (The avatar's letter sits before the name.)
+    await waitFor(() => expect(panel).toHaveTextContent(/Received 60 QORT from K?Kit Kicked/), T);
+    await user.click(rows[0]);
+    const kitLou = (world.explorer as { sigs: { kitLou: string[] } }).sigs.kitLou;
+    const openTx = await within(panel).findByRole('link', { name: 'Open transaction' }, T);
+    expect(openTx).toHaveAttribute('href', `/explorer/tx/${kitLou[5]}`);
+    expect(within(panel).getByRole('button', { name: /Raw API response/ })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(MESSAGE_CONTENT);
+  });
+
+  it('opens the one payment behind a row straight to its details', async () => {
+    const { user } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const toggle = await within(recorded).findByRole(
+      'button',
+      { name: 'Show the 1 payment with Hal Helper' },
+      T
+    );
+    await user.click(toggle);
+    const panel = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? ''
+    ) as HTMLElement;
+    const row = await waitFor(() => {
+      const found = panel.querySelector<HTMLElement>('[data-tx-row]');
+      expect(found).not.toBeNull();
+      return found as HTMLElement;
+    }, T);
+    expect(row).toHaveAttribute('aria-expanded', 'true');
+    expect(await within(panel).findByRole('link', { name: 'Open transaction' }, T)).toBeVisible();
+  });
+
+  it('Compare picks both accounts and opens them side by side', async () => {
+    const { user } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    const compare = await within(recorded).findByRole(
+      'button',
+      { name: 'Compare Lou Left with Kit Kicked' },
+      T
+    );
+    await user.click(compare);
+    // The compare page isn't mounted here: the router left this route.
+    expect(await screen.findByTestId('navigated-away', {}, T)).toBeInTheDocument();
+    expect(getDefaultStore().get(comparePicksAtom)).toEqual([ADDR.left, ADDR.kicked]);
+  });
+
+  it('tags the first-incoming account by what it sent: a reward share is not its first QORT', async () => {
+    const ugo = SPONSEES[3].address;
+    await open(ugo, (world) => {
+      // Sid, whose reward share was Ugo's first incoming transaction, pays it later.
+      const x = world.explorer as {
+        rows: Array<Record<string, unknown>>;
+        bySig: Map<string, unknown>;
+        parties: Map<string, string[]>;
+      };
+      const row = {
+        type: 'PAYMENT',
+        timestamp: 1_700_000_000_000,
+        fee: '0.01000000',
+        signature:
+          'sidPaysUgo1111111111111111111111111111111111111111111111111111111111111111111111111',
+        txGroupId: 0,
+        blockHeight: 2_710_000,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: SPONSOR.address,
+        senderPublicKey: world.accounts.get(SPONSOR.address)?.publicKey,
+        recipient: ugo,
+        amount: '3.00000000',
+      };
+      x.rows.push(row);
+      x.bySig.set(row.signature, row);
+      x.parties.set(row.signature, [SPONSOR.address, ugo]);
+    });
+    const recorded = await region('Recorded between them');
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    await waitFor(() => expect(got).toHaveTextContent('Received 3 QORT from Sid Sponsor'), T);
+    await waitFor(
+      () => expect(got).toHaveTextContent('its first incoming transaction came from them'),
+      T
+    );
+    expect(got).not.toHaveTextContent('its first QORT came from them');
+    const common = await region('In common');
+    await waitFor(
+      () =>
+        expect(common).toHaveTextContent(
+          'Its first incoming transaction: a 0 % reward share from Sid Sponsor'
+        ),
+      T
+    );
+  });
+
+  it('Show more and Show all hand the focus to the first row they add', async () => {
+    const { user } = await open(FUNDER.address, (world) =>
+      mockFetchRoute('/transactions/payments/between', (url: URL) =>
+        // 25 payments from Kit, for the evidence list's Show all.
+        url.searchParams.get('recipientAddress') === FUNDER.address &&
+        !url.searchParams.get('senderAddress') &&
+        url.searchParams.get('limit') === '1000' &&
+        !Number(url.searchParams.get('offset'))
+          ? Array.from({ length: 25 }, (_, i) => ({
+              type: 'PAYMENT',
+              timestamp: 1_700_000_000_000 + i,
+              signature: `kitPays${'z'.repeat(70)}${'123456789ABCDEFGHJKLMNPQR'[i]}`,
+              blockHeight: 2_700_000 + i,
+              creatorAddress: ADDR.kicked,
+              recipient: FUNDER.address,
+              amount: '1.00000000',
+            }))
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const recorded = await region('Recorded between them');
+    const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(20), T);
+    await user.click(within(recorded).getByRole('button', { name: 'Show more (620 more)' }));
+    await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(40), T);
+    expect(within(sent).getAllByRole('listitem')[20]).toHaveFocus();
+
+    // Kit's 25 payments to Hal: the evidence shows 20, then all.
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const toggle = await within(recorded).findByRole(
+      'button',
+      { name: 'Show the 25 payments with Kit Kicked' },
+      T
+    );
+    await user.click(toggle);
+    const panel = document.getElementById(
+      toggle.getAttribute('aria-controls') ?? ''
+    ) as HTMLElement;
+    const evidence = within(panel).getByRole('list');
+    expect(within(evidence).getAllByRole('listitem')).toHaveLength(20);
+    await user.click(within(panel).getByRole('button', { name: 'Show all 25' }));
+    expect(within(evidence).getAllByRole('listitem')).toHaveLength(25);
+    expect(within(evidence).getAllByRole('listitem')[20]).toHaveFocus();
+  });
+
+  it('AT addresses come 20 at a time too, with Show more, never cut silently', async () => {
+    const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+    const ats = Array.from({ length: 25 }, (_, i) => `A${'x'.repeat(32)}${B58[i]}`);
+    const { user } = await open(ADDR.newcomer, (world) =>
+      mockFetchRoute('/transactions/payments/between', (url: URL) =>
+        url.searchParams.get('senderAddress') === ADDR.newcomer
+          ? ats.map((at, i) => ({
+              type: 'PAYMENT',
+              timestamp: 1_700_000_000_000 + i,
+              signature: `toAt${B58[i]}${'z'.repeat(80)}`,
+              blockHeight: 2_700_000 + i,
+              creatorAddress: ADDR.newcomer,
+              recipient: at,
+              amount: '1.00000000',
+            }))
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const recorded = await region('Recorded between them');
+    const list = await within(recorded).findByRole(
+      'list',
+      { name: 'AT addresses (automated contracts)' },
+      T
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(20);
+    expect(within(recorded).getByRole('button', { name: /^Sent to · 25$/ })).toBeInTheDocument();
+    await user.click(
+      within(recorded).getByRole('button', { name: 'Show more AT addresses (5 more)' })
+    );
+    expect(within(list).getAllByRole('listitem')).toHaveLength(25);
+    expect(within(list).getAllByRole('listitem')[20]).toHaveFocus();
+    expect(within(recorded).queryByRole('button', { name: /^Show more AT/ })).toBeNull();
+  });
+
+  it('Compare with no room for both says so and picks neither', async () => {
+    const { user, posts } = await open(ADDR.left);
+    const store = getDefaultStore();
+    const three = [ADDR.admin, ADDR.nominator, ADDR.learner];
+    store.set(comparePicksAtom, three);
+    const recorded = await region('Recorded between them');
+    await user.click(
+      await within(recorded).findByRole('button', { name: 'Compare Lou Left with Kit Kicked' }, T)
+    );
+    expect(
+      await screen.findByText('Compare holds 4 accounts. Remove one first.', {}, T)
+    ).toBeInTheDocument();
+    expect(store.get(comparePicksAtom)).toEqual(three);
+    expect(screen.queryByTestId('navigated-away')).toBeNull();
+    noWrites(posts);
+  });
+
+  it('Compare with one of the two picked already adds the other', async () => {
+    const { user, posts } = await open(ADDR.left);
+    const store = getDefaultStore();
+    store.set(comparePicksAtom, [ADDR.admin, ADDR.left, ADDR.learner]);
+    const recorded = await region('Recorded between them');
+    await user.click(
+      await within(recorded).findByRole('button', { name: 'Compare Lou Left with Kit Kicked' }, T)
+    );
+    expect(await screen.findByTestId('navigated-away', {}, T)).toBeInTheDocument();
+    expect(store.get(comparePicksAtom)).toEqual([ADDR.admin, ADDR.left, ADDR.learner, ADDR.kicked]);
+    noWrites(posts);
+  });
+
+  it('MINTER members only: none of Lou’s payments were with members', async () => {
+    const { user } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    const only = within(recorded).getByRole('switch', { name: 'MINTER members only' });
+    await waitFor(() => expect(only).toBeEnabled(), T);
+    await user.click(only);
+    expect(
+      await within(recorded).findByText('None with MINTER members in the data checked.', {}, T)
+    ).toBeInTheDocument();
+  });
+
+  it('folds accounts that have sent 1,000+ payments into one line', async () => {
+    const { user } = await open(ADDR.left, (world) =>
+      mockFetchRoute('/transactions/payments/between', (url: URL) => {
+        // Kit has sent 1,000+ payments here.
+        if (url.searchParams.get('senderAddress') === ADDR.kicked && url.searchParams.get('offset'))
+          return [{ type: 'PAYMENT' }];
+        return worldAnswer(world, url);
+      })
+    );
+    const recorded = await region('Recorded between them');
+    const fold = await within(recorded).findByRole(
+      'button',
+      { name: '1 more with an account that has sent 1,000+ payments' },
+      T
+    );
+    expect(within(recorded).queryByRole('list', { name: 'Sent to' })).toBeEmptyDOMElement();
+    await user.click(fold);
+    expect(fold).toHaveAttribute('aria-expanded', 'true');
+    const busy = within(recorded).getByRole('list', {
+      name: 'Accounts that have sent 1,000+ payments',
+    });
+    expect(
+      await within(busy).findByText('has sent 1,000+ payments', { exact: false }, T)
+    ).toBeVisible();
+  });
+
+  it('Hal Helper: all 640 payments in one read, 20 rows at a time, nothing older to check (Simon, 2026-10-21)', async () => {
+    await open(FUNDER.address);
+    const recorded = await region('Recorded between them');
+    const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await waitFor(() => expect(within(sent).getAllByRole('listitem')).toHaveLength(20), T);
+    expect(
+      within(recorded).getByRole('button', { name: 'Show more (620 more)' })
+    ).toBeInTheDocument();
+    expect(recorded).toHaveTextContent(
+      'Read: every QORT payment it sent (640), every QORT payment it received (none)'
+    );
+    expect(
+      within(recorded).queryByRole('button', { name: 'Check older payments sent' })
+    ).toBeNull();
+    // Payer bands only for the rows on screen (and Hal's own first-QORT lookup).
+    expect(fetchCallsFor('/transactions/payments/between?senderAddress=Q').length).toBeLessThan(80);
+  });
+});
+
+describe('Connections: minting and names', () => {
+  it('Kai Target got its minting level from Olga Old, who is level 0 now', async () => {
+    const { container, user } = await open(ADDR.kickTarget);
+    const recorded = await region('Recorded between them');
+    const level = await within(recorded).findByRole('list', { name: 'Minting level moved' }, T);
+    await waitFor(
+      () =>
+        expect(level).toHaveTextContent(
+          'Got its minting level from Olga Old. Olga Old is now level 0.'
+        ),
+      T
+    );
+    expect(level).toHaveTextContent('block 2,000,000');
+    // The transaction behind it says the same, from Kai's side.
+    await user.click(within(level).getByRole('button', { name: /^Show the 1 transaction with/ }));
+    const open1 = await within(level).findByRole('link', { name: /^Open transaction/ }, T);
+    const evidence = open1.closest('li');
+    await waitFor(
+      () => expect(evidence).toHaveTextContent(/^Incoming: Got its minting level from O?Olga Old/),
+      T
+    );
+    // It sent nothing: the payments open on what it received.
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    await waitFor(
+      () => expect(got).toHaveTextContent('Received 2 QORT from Avery Admin in 1 payment'),
+      T
+    );
+    expect(within(recorded).getByRole('button', { name: /^Received from/ })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await expectNoAxeViolations(container);
+  });
+
+  it('Olga Old moved its level to Kai Target (read from the raw bytes)', async () => {
+    await open(OLD_MINTER.address);
+    const recorded = await region('Recorded between them');
+    const level = await within(recorded).findByRole('list', { name: 'Minting level moved' }, T);
+    await waitFor(
+      () => expect(level).toHaveTextContent('Moved its minting level to Kai Target'),
+      T
+    );
+  });
+
+  it('Leo Learner: sponsored by Sid, sold a name, and shares Sid with 4 others', async () => {
+    const { container } = await open(ADDR.learner);
+    const recorded = await region('Recorded between them');
+    const shares = await within(recorded).findByRole('list', { name: 'Reward shares' }, T);
+    await waitFor(
+      () => expect(shares).toHaveTextContent('Sponsored by Sid Sponsor at 0 % for 7,234 blocks'),
+      T
+    );
+    expect(recorded).toHaveTextContent('Before Oct 2024 most new accounts started minting');
+    // Q-Minter's history page explains reward shares, in a new Hub tab.
+    mockQortalRequest('OPEN_NEW_TAB', () => true);
+    await userEvent.click(
+      within(recorded).getByRole('button', { name: 'How reward shares worked: Q-Minter' })
+    );
+    expect(qortalCallsFor('OPEN_NEW_TAB').map((c) => c.qortalLink)).toEqual([
+      'qortal://WEBSITE/Q-Minter/#/history',
+    ]);
+    const names = within(recorded).getByRole('list', { name: 'Names bought or sold' });
+    await waitFor(
+      () =>
+        expect(readText(names)).toContain(
+          'Sold the name “Spare Room” to Nora Nominator for 5 QORT'
+        ),
+      T
+    );
+    const common = await region('In common');
+    await waitFor(
+      () => expect(common).toHaveTextContent('Also sponsored by Sid Sponsor (4 others)'),
+      T
+    );
+    expect(
+      within(common).getByRole('link', { name: /The 5 accounts it sponsored/ })
+    ).toHaveAttribute('href', `/explorer/sponsees/${SPONSOR.address}`);
+    await expectNoAxeViolations(container);
+  });
+
+  it('Sid Sponsor: the accounts it sponsored, and minting with Ugo now', async () => {
+    await open(SPONSOR.address);
+    const recorded = await region('Recorded between them');
+    const link = await within(recorded).findByRole('link', { name: /^Sponsored 5 accounts/ }, T);
+    expect(link).toHaveAttribute('href', `/explorer/sponsees/${SPONSOR.address}`);
+    const shares = within(recorded).getByRole('list', { name: 'Reward shares' });
+    await waitFor(
+      () => expect(shares).toHaveTextContent(`Minting with ${SPONSEES[3].name} now`),
+      T
+    );
+  });
+
+  it('Avery Admin: MINTER marks from the cached lists', async () => {
+    await open(ADDR.admin);
+    const recorded = await region('Recorded between them');
+    const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await waitFor(() => expect(sent).toHaveTextContent('Leo LearnerMINTER member'), T);
+  });
+});
+
+describe('Connections: nothing found, and the Account report', () => {
+  it('an account with no links: only the line of what was checked', async () => {
+    const { container, posts } = await open(ADDR.newcomer);
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, asset trades, payments, where its first QORT came from.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Recorded between them' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'In common' })).toBeNull();
+    await expectNoAxeViolations(container);
+    noWrites(posts);
+  });
+
+  it('the Account report: whose, when, at which block, what was read, each connection with its block and signature (Simon, 2026-10-21)', async () => {
+    const { user } = await open(ADDR.kickTarget);
+    // After userEvent.setup(), which puts its own clipboard in place.
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    mockQortalRequest('SAVE_FILE', true);
+    const recorded = await region('Recorded between them');
+    await waitFor(() => expect(recorded).toHaveTextContent('Olga Old is now level 0'), T);
+    await screen.findByText(/^Also checked, nothing found/, {}, T);
+    const { dialog, text } = await makeReport(user);
+    // It recommends reading the whole history first.
+    expect(within(dialog).getByRole('button', { name: 'Read it all' })).toBeInTheDocument();
+    expect(text.split('\n')[0]).toBe('# Account report: Kai Target');
+    expect(text).toContain(`| Address | \`${ADDR.kickTarget}\` |`);
+    expect(text).toMatch(/\| Made \| \d{4}-\d\d-\d\d \d\d:\d\d UTC, at block 2,757,500 \|/);
+    expect(text).toContain('> Public chain and QDN facts.');
+    for (const heading of [
+      '## Account',
+      '## QORT totals',
+      '## Activity by type',
+      '## Connections',
+      '## Core’s sponsorship report',
+      '## What was read',
+      '## Transactions behind the connections',
+    ])
+      expect(text).toContain(`\n${heading}\n`);
+    expect(text).toMatch(
+      /- Got its minting level from Olga Old \(Q\w{5}…\w{4}\)\. Olga Old \(Q\w{5}…\w{4}\) is now level 0 \(block 2,000,000, \d{4}-\d\d-\d\d, `\w{80,}`\)/
+    );
+    expect(text).toContain('- Reward shares, level moves and name sales: all ');
+    expect(text).toContain('Also checked, nothing found:');
+    expect(text).toContain(
+      `qortal://APP/Q-Mintership+/explorer/account/${ADDR.kickTarget}/connections`
+    );
+    expect(text).not.toMatch(VERDICTS);
+    // Copy, and Save .md through Hub.
+    await user.click(within(dialog).getByRole('button', { name: 'Copy' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(text), T);
+    await user.click(within(dialog).getByRole('button', { name: 'Save .md' }));
+    await waitFor(() => expect(qortalCallsFor('SAVE_FILE')).toHaveLength(1), T);
+    const save = qortalCallsFor('SAVE_FILE')[0];
+    expect(save.filename).toMatch(/^account-report-Kai-Target-\d{4}-\d\d-\d\d\.md$/);
+    expect(save.mimeType).toBe('text/markdown');
+    expect(await (save.blob as Blob).text()).toBe(text);
+    expect(
+      await within(dialog).findByText(/^Saved as account-report-Kai-Target-/, {
+        selector: '[role="status"]',
+      })
+    ).toBeInTheDocument();
+  });
+
+  it('a part that couldn’t be read is named with Retry, and left out of what was checked', async () => {
+    const { user } = await open(ADDR.newcomer, (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) =>
+        url.searchParams.getAll('txType').includes('TRANSFER_ASSET')
+          ? new Response('{"error":5,"message":"repository issue"}', { status: 500 })
+          : answerCore(world, url.pathname, url.searchParams)?.body
+      )
+    );
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const recorded = await region('Recorded between them');
+    expect(
+      await within(recorded).findByText(
+        /^Couldn’t read its asset transfers and multi-payments\./,
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(within(recorded).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    // Payments: not claimed as none found.
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, asset trades, where its first QORT came from.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    const { text } = await makeReport(user);
+    expect(text).toContain('- Couldn’t be read: its asset transfers and multi-payments.');
+    // Payments: not claimed as none found in the report either.
+    expect(text).not.toMatch(/nothing found:[^\n]*payments/);
+  });
+
+  it('links read to their ceiling: said on the tab, and only level moves claimed as none', async () => {
+    const { user } = await open(ADDR.newcomer, (world) => cappedLinks(world, ADDR.newcomer));
+    const writeText = vi.fn(async (text: string) => void text);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    expect(
+      await screen.findByText(
+        'Also checked, nothing found: level moves, minting with another account now, asset trades, payments, where its first QORT came from.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
+      )
+    ).toBeInTheDocument();
+    const { text } = await makeReport(user);
+    expect(text).toContain('Reward shares, level moves and name sales: its newest 500');
+    expect(text).toContain(
+      'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
+    );
+  });
+
+  it('Sid Sponsor, links read to their ceiling: what was found, and a line that there may be older ones', async () => {
+    await open(SPONSOR.address, (world) => cappedLinks(world, SPONSOR.address));
+    const recorded = await region('Recorded between them');
+    expect(
+      await within(recorded).findByText(
+        'From its newest 500 reward shares, level moves and name sales: there may be older ones. Every level move was read.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(
+      await within(recorded).findByRole('link', { name: /^Sponsored 5 accounts/ }, T)
+    ).toBeInTheDocument();
+    expect(
+      await screen.findByText(
+        'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, name sales.',
+        {},
+        T
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Also checked, nothing found:.*a sponsor/)).toBeNull();
+  });
+
+  it('In common and In Q-Mintership read nothing until they near the screen', async () => {
+    // Nothing ever comes into view here.
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+        takeRecords() {
+          return [];
+        }
+      }
+    );
+    try {
+      const { posts } = await open(ADDR.nominator);
+      const recorded = await region('Recorded between them');
+      await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+      await screen.findByText(/^Also checked, nothing found/, {}, T);
+      const loads = queryLoadCounts();
+      expect(loads.xmade).toBeUndefined();
+      expect(loads.nominations).toBeUndefined();
+      expect(loads.communityvotes).toBeUndefined();
+      expect(loads.xfirst).toBeUndefined();
+      noWrites(posts);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('Core’s sponsorship report only in the Account report, with what its numbers count', async () => {
+    const { user } = await open(SPONSOR.address);
+    await region('Recorded between them');
+    expect(screen.queryByRole('region', { name: 'Core’s own report' })).toBeNull();
+    expect(fetchCallsFor('/addresses/sponsorship/')).toEqual([]);
+    const { text } = await makeReport(user);
+    expect(text).toContain('- Accounts it ever made a reward share to: 5');
+    expect(text).toContain('Core counts names, not accounts');
+    expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);
+  });
+});
+
+describe('Connections: the circle first, the list for a search', () => {
+  it('opens as a circle, and typing a search shows the list until it is cleared', async () => {
+    window.localStorage.removeItem(VIEW_KEY);
+    const { user } = await open(ADDR.left);
+    expect(await screen.findByRole('button', { name: 'Circle' }, T)).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await region('Connections circle');
+    const field = await screen.findByRole(
+      'searchbox',
+      { name: /^Search this account’s connections/ },
+      T
+    );
+    await user.type(field, 'k');
+    await waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        ),
+      T
+    );
+    expect(screen.queryByRole('region', { name: 'Connections circle' })).toBeNull();
+    // For this visit only: the circle stays the one kept.
+    expect(window.localStorage.getItem(VIEW_KEY)).toBeNull();
+    await user.clear(field);
+    await waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: 'Circle' })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        ),
+      T
+    );
+  });
+
+  it('keeps a view picked by hand while searching', async () => {
+    window.localStorage.removeItem(VIEW_KEY);
+    const { user } = await open(ADDR.left);
+    const field = await screen.findByRole(
+      'searchbox',
+      { name: /^Search this account’s connections/ },
+      T
+    );
+    await user.type(field, 'k');
+    await waitFor(
+      () =>
+        expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        ),
+      T
+    );
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    await user.clear(field);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('Connections: exchanges', () => {
+  const TRADEOGRE = 'QcZPChiGmwLu3Lrp2mfLSjZ3yHKmtrogRe';
+  /** A payment in the mock world, found by sender and recipient as on a node. */
+  function payment(world: World, from: string, to: string, h: number, amount: string) {
+    const signature = fakeKey(`exch:${from}:${to}:${h}`, 64);
+    const row = {
+      type: 'PAYMENT',
+      timestamp: NOW - (TIP - h) * 60_000,
+      reference: fakeKey(`exch-ref:${h}`, 64),
+      fee: '0.01000000',
+      signature,
+      txGroupId: 0,
+      blockHeight: h,
+      approvalStatus: 'NOT_REQUIRED',
+      creatorAddress: from,
+      recipient: to,
+      amount,
+    };
+    world.explorer.rows.push(row);
+    world.explorer.bySig.set(signature, row);
+    world.explorer.parties.set(signature, [from, to]);
+  }
+
+  it('says what it sent to an exchange and got back, read by sender and recipient', async () => {
+    const { user } = await open(ADDR.left, (world) => {
+      payment(world, ADDR.left, TRADEOGRE, 2_700_000, '100.00000000');
+      payment(world, ADDR.left, TRADEOGRE, 2_710_000, '25.50000000');
+      payment(world, TRADEOGRE, ADDR.left, 2_720_000, '3.00000000');
+    });
+    const notice = await screen.findByRole('region', { name: 'Sent QORT to an exchange' }, T);
+    expect(notice).toHaveTextContent(
+      /Sent 125.5 QORT to TradeOgre, an exchange, in 2 payments \(.+\)\./
+    );
+    expect(notice).toHaveTextContent(
+      /Received 3 QORT from TradeOgre, an exchange, in 1 payment \(.+\)\./
+    );
+    // Exactly, by sender and recipient: the fast read, not a search.
+    const between = fetchCallsFor('/transactions/payments/between').map(
+      (url) => new URL(url, 'http://x').searchParams
+    );
+    expect(
+      between.some(
+        (p) => p.get('senderAddress') === ADDR.left && p.get('recipientAddress') === TRADEOGRE
+      )
+    ).toBe(true);
+    await user.click(
+      within(notice).getByRole('button', { name: /^Show the payments: Sent 125.5 QORT/ })
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Sent to TradeOgre' }, T);
+    expect(
+      within(dialog)
+        .getByRole('list', { name: 'Sent to TradeOgre: the payments' })
+        .querySelectorAll('[data-tx-row]')
+    ).toHaveLength(2);
+  });
+
+  it('says nothing when it never paid one', async () => {
+    await open(ADDR.left);
+    await region('Recorded between them');
+    await waitFor(
+      () => expect(fetchCallsFor('/transactions/payments/between').length).toBeGreaterThan(0),
+      T
+    );
+    expect(screen.queryByRole('region', { name: /exchange/ })).toBeNull();
+  });
+});
+
+describe('Connections: as a circle', () => {
+  it('draws what came in on the left, what went out on the right, both ways at the bottom; an avatar lists its transactions', async () => {
+    const { container, user, world } = await open(ADDR.left);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    expect(screen.getByRole('button', { name: 'Circle' })).toHaveAttribute('aria-pressed', 'true');
+    expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('circle');
+    const circle = await region('Connections circle');
+    expect(screen.queryByRole('region', { name: 'Recorded between them' })).toBeNull();
+    // Each side its own list and heading; Kit, paid each way, is one avatar at the bottom.
+    const received = await within(circle).findByRole(
+      'list',
+      { name: 'Received from, the most transactions first' },
+      T
+    );
+    const both = within(circle).getByRole('list', {
+      name: 'Sent and received, the most transactions first',
+    });
+    expect(within(circle).getByRole('heading', { name: 'Received from' })).toBeInTheDocument();
+    expect(within(circle).getByRole('heading', { name: 'Sent to' })).toBeInTheDocument();
+    expect(within(circle).getByRole('heading', { name: 'Sent and received' })).toBeInTheDocument();
+    // Nothing went out only.
+    expect(
+      within(circle).queryByRole('list', { name: 'Sent to, the most transactions first' })
+    ).toBeNull();
+    expect(
+      within(received).getByRole('button', {
+        name: /^Hal Helper, 1 transaction received, [\d,.]+ QORT: show them$/,
+      })
+    ).toBeInTheDocument();
+    expect(within(received).queryByRole('button', { name: /^Kit Kicked/ })).toBeNull();
+    const kit = within(both).getByRole('button', {
+      name: 'Kit Kicked, 6 transactions: 4 received, 120 QORT; 2 sent, 6.3 QORT: show them',
+    });
+    // Its ring green and red in proportion: 120 of 126.3 QORT came in.
+    const ring = kit.querySelector('[data-ring]') as HTMLElement;
+    expect(ring).toHaveAttribute('data-received', '0.95');
+    // Each name with the QORT that went that way, in brackets (Simon, 2026-10-17).
+    expect(within(received).getAllByText(/^\([\d,.]+ QORT\)$/).length).toBeGreaterThan(0);
+    expect(within(both).getByText('120 QORT in, 6.3 out')).toBeInTheDocument();
+    // Nothing links away: pressing an avatar lists its transactions.
+    expect(within(circle).queryAllByRole('link')).toEqual([]);
+    await expectNoAxeViolations(container);
+
+    await user.click(kit);
+    const dialog = await screen.findByRole(
+      'dialog',
+      { name: 'Sent to and received from Kit Kicked' },
+      T
+    );
+    // What was recorded each way, as the list says it (the avatar's letter is hidden from reading).
+    expect(readText(dialog)).toContain('Received 120 QORT from Kit Kicked in 4 payments');
+    expect(readText(dialog)).toContain('Paid Kit Kicked 6.3 QORT in 2 payments');
+    const rows = within(dialog).getByRole('list', {
+      name: 'Sent to and received from Kit Kicked: its transactions',
+    });
+    expect(rows.querySelectorAll('[data-tx-row]')).toHaveLength(6);
+    expect(within(dialog).getByRole('link', { name: 'Explore Kit Kicked' })).toHaveAttribute(
+      'href',
+      explorerAccountPath(ADDR.kicked)
+    );
+    expect(world).toBeTruthy();
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), T);
+
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    expect(await region('Recorded between them')).toBeInTheDocument();
+    expect(window.localStorage.getItem('qmintershipplus-connections-view')).toBe('list');
+  });
+
+  it('lists the accounts under the circle on request: the circle’s, a line, then the rest (Simon, 2026-10-19)', async () => {
+    const { container, user } = await open(FUNDER.address);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    const circle = await region('Connections circle');
+    await within(circle).findByRole('list', { name: 'Sent to, the most transactions first' }, T);
+    // All 640 payments, to 640 accounts: 10 on the circle, 630 counted.
+    const toggle = within(circle).getByRole('button', {
+      name: '630 more accounts with fewer transactions: see the list',
+    });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(toggle).toHaveAccessibleName('Hide the list');
+    // Under the circle, not the List view.
+    expect(screen.getByRole('button', { name: 'Circle' })).toHaveAttribute('aria-pressed', 'true');
+    expect(
+      within(circle).getByRole('heading', { name: 'The list, the most transactions first' })
+    ).toBeInTheDocument();
+    const drawn = await within(circle).findByRole('list', { name: 'Sent to: in the circle' }, T);
+    expect(within(drawn).getAllByRole('listitem')).toHaveLength(10);
+    expect(
+      within(circle).getByRole('heading', {
+        name: 'Not in the circle: 630 accounts with fewer transactions',
+      })
+    ).toBeInTheDocument();
+    const rest = within(circle).getByRole('list', { name: 'Sent to: not in the circle' });
+    expect(within(rest).getAllByRole('listitem')).toHaveLength(20);
+    // The circle's avatars and the list's first rows are the same accounts, in the same order.
+    const avatars = within(
+      within(circle).getByRole('list', { name: 'Sent to, the most transactions first' })
+    ).getAllByRole('button');
+    // Each row read as its avatar is named: "Kit Kicked, 1 transaction sent, 5.43 QORT: show them".
+    const rows = within(drawn).getAllByRole('button');
+    expect(rows.map((row) => readText(row))).toEqual(
+      avatars.map((avatar) => avatar.getAttribute('aria-label'))
+    );
+    await expectNoAxeViolations(container);
+    await user.click(within(circle).getByRole('button', { name: 'Show more (610 more)' }));
+    await waitFor(() => expect(within(rest).getAllByRole('listitem')).toHaveLength(40), T);
+    // A row opens the same transactions as its avatar.
+    await user.click(within(rest).getAllByRole('button')[0]);
+    expect(await screen.findByRole('dialog', {}, T)).toBeInTheDocument();
+  });
+
+  it('orders the circle by the most QORT on request, kept on this device (Simon, 2026-10-18)', async () => {
+    const { container, user } = await open(ADDR.left);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    const circle = await region('Connections circle');
+    // Between Received from and Sent to: the most transactions first, as before.
+    const order = await within(circle).findByRole('group', { name: 'Order the accounts by' }, T);
+    expect(within(order).getByRole('button', { name: 'Most transactions' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    await within(circle).findByRole(
+      'list',
+      { name: 'Sent and received, the most transactions first' },
+      T
+    );
+    const kit = () => within(circle).getByRole('button', { name: /^Kit Kicked, 6 transactions/ });
+    // The number on Kit's avatar: its 6 transactions.
+    expect(kit().querySelector('[data-count]')).toHaveAttribute('data-count', '6');
+    expect(circle).toHaveTextContent('the more transactions went that way');
+
+    await user.click(within(order).getByRole('button', { name: 'Most QORT' }));
+    expect(within(order).getByRole('button', { name: 'Most QORT' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    expect(window.localStorage.getItem('qmintershipplus-connections-circle-order')).toBe('qort');
+    expect(
+      within(circle).getByRole('list', { name: 'Received from, the most QORT first' })
+    ).toBeInTheDocument();
+    expect(
+      within(circle).getByRole('list', { name: 'Sent and received, the most QORT first' })
+    ).toBeInTheDocument();
+    // Now the QORT that moved both ways: 120 in, 6.3 out.
+    expect(kit().querySelector('[data-count]')).toHaveAttribute('data-count', '126');
+    expect(circle).toHaveTextContent('the more QORT went that way; the number on it is that QORT.');
+    await expectNoAxeViolations(container);
+
+    // The list's payments start with the most QORT too.
+    await user.click(screen.getByRole('button', { name: 'List' }));
+    const recorded = await region('Recorded between them');
+    expect(within(recorded).getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Most QORT');
+  });
+
+  it('puts the links that aren’t transfers in a row under the circle', async () => {
+    const { user } = await open(ADDR.learner);
+    await region('Recorded between them');
+    await user.click(screen.getByRole('button', { name: 'Circle' }));
+    const circle = await region('Connections circle');
+    // A Q-Asset with its ticker and amount, as QORT is (Simon, 2026-10-17).
+    const received = await within(circle).findByRole(
+      'list',
+      { name: 'Received from, the most transactions first' },
+      T
+    );
+    expect(
+      within(received).getByRole('button', {
+        name: /, 1 transaction received, 50 Bean Token: show them$/,
+      })
+    ).toBeInTheDocument();
+    expect(within(received).getByText('(50 Bean Token)')).toBeInTheDocument();
+    const others = await within(circle).findByRole('list', { name: 'Other links' }, T);
+    // Named by what it shows first (the name, then the count), as axe asks.
+    const sid = within(others).getByRole('button', {
+      name: /^Sid Sponsor \d+ transactions?: show them$/,
+    });
+    await user.click(sid);
+    const dialog = await screen.findByRole('dialog', { name: 'Sid Sponsor: other links' }, T);
+    expect(dialog).toHaveTextContent('Sid Sponsor');
+  });
+});
+
+describe('Connections: searched', () => {
+  const field = () =>
+    screen.findByRole('searchbox', { name: /^Search this account’s connections/ }, T);
+  const said = () => screen.getByText(/rows? match|Nothing (matches|in this account)/);
+
+  it('narrows every list to the rows that show what was typed; the rest step aside', async () => {
+    const { user, posts, container } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await region('In common');
+    await user.type(await field(), 'kit');
+    await waitFor(() => expect(said()).toHaveTextContent('2 rows match “kit”.'), T);
+    // Payments: Kit each way, and the counts are what was found.
+    expect(within(recorded).getByRole('button', { name: /^Sent to · 1/ })).toBeInTheDocument();
+    expect(
+      within(recorded).getByRole('button', { name: /^Received from · 1/ })
+    ).toBeInTheDocument();
+    expect(within(recorded).getByRole('list', { name: 'Sent to' })).toHaveTextContent(
+      'Paid Kit Kicked 6.3 QORT in 2 payments'
+    );
+    // In common (Hal Helper's first QORT) has nothing about Kit: gone.
+    expect(screen.queryByRole('region', { name: 'In common' })).toBeNull();
+    // Nor the line of what was checked: it isn't about the search.
+    expect(screen.queryByText(/^Also checked, nothing found/)).toBeNull();
+
+    // Received from, searched too.
+    await user.click(within(recorded).getByRole('button', { name: /^Received from/ }));
+    const got = await within(recorded).findByRole('list', { name: 'Received from' }, T);
+    expect(got).toHaveTextContent('Received 120 QORT from Kit Kicked in 4 payments');
+    expect(got).not.toHaveTextContent('Hal Helper');
+    await expectNoAxeViolations(container);
+    noWrites(posts);
+  });
+
+  it('finds a slip as similar, under its own heading', async () => {
+    const { user } = await open(ADDR.left);
+    const recorded = await region('Recorded between them');
+    await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await user.type(await field(), 'kitt kickd');
+    await waitFor(
+      () =>
+        expect(said()).toHaveTextContent(
+          'Nothing matches “kitt kickd” exactly; 2 rows are similar.'
+        ),
+      T
+    );
+    expect(
+      within(recorded).getByRole('heading', { name: /^Similar to “kitt kickd”/ })
+    ).toBeInTheDocument();
+    expect(
+      within(recorded).getByRole('list', { name: 'Sent to, similar to “kitt kickd”' })
+    ).toHaveTextContent('Kit Kicked');
+  });
+
+  it('finds an account by a name it holds besides the one shown, and says so', async () => {
+    const { user } = await open(ADDR.nominator);
+    const recorded = await region('Recorded between them');
+    await within(recorded).findByRole('list', { name: 'Sent to' }, T);
+    await user.type(await field(), 'AA Ma');
+    // Its row shows Avery Admin; Core's name search finds "AA Maps", which Avery holds. Until
+    // that search answers nothing matches, so the section is drawn anew: read it again.
+    const sent = () =>
+      within(screen.getByRole('region', { name: 'Recorded between them' })).getByRole('list', {
+        name: 'Sent to',
+      });
+    // Sent to and Received from: Avery each way, nobody else.
+    await waitFor(() => expect(said()).toHaveTextContent('2 rows match “AA Ma”.'), T);
+    expect(sent()).toHaveTextContent('Avery Admin');
+    expect(sent()).toHaveTextContent('holds the name “AA Maps”');
+    expect(sent()).not.toHaveTextContent('Leo Learner');
+  });
+
+  it('says when nothing matches, and Clear brings every list back', async () => {
+    const { user } = await open(ADDR.left);
+    await region('Recorded between them');
+    await user.type(await field(), 'zzzz');
+    await waitFor(
+      () =>
+        expect(said()).toHaveTextContent('Nothing in this account’s connections matches “zzzz”.'),
+      T
+    );
+    expect(screen.queryByRole('region', { name: 'Recorded between them' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Clear the search' }));
+    expect(await region('Recorded between them')).toBeInTheDocument();
+  });
+});

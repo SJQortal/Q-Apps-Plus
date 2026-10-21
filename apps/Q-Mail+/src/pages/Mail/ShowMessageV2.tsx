@@ -1,32 +1,106 @@
-import React, { useState } from "react";
-import { Box, IconButton, Typography, useMediaQuery } from "@mui/material";
+/**
+ * The message reader: header (avatar, sender, recipient, date), subject,
+ * action row (Reply, Reply all, Forward, Save all, and Archive / Move to
+ * inbox and Mark unread when the caller offers them), attachments, body, and
+ * the earlier messages of the conversation collapsed with a count.
+ *
+ * Layout follows the pane's own width (ResizeObserver), not a viewport
+ * query, so a 700 px Hub pane and a phone both get the compact form.
+ *
+ * Earlier messages come from generalData.threadV2 through
+ * useEarlierMessages: embedded copies show at once, reference-only entries
+ * (Q-Mail+ 1.0.1 replies) are fetched from QDN when "Show earlier" opens,
+ * the newest EARLIER_PAGE_SIZE first, with "Show older" for the rest.
+ *
+ * The header names the recipient ("to …") and, for mail written with Cc
+ * names (Q-Mail+'s additive `cc`), a "cc …" line.
+ *
+ * Props stay compatible with Mail.tsx (message, setReplyTo, setForwardInfo,
+ * alias, onClose, setIsOpen); onReplyAll, onForward, onArchive and
+ * onMarkUnread are optional extras. Archive and Mark unread are labelled
+ * buttons in a wide pane and 44 px icon buttons with aria-labels in a
+ * compact one (phones); they carry aria-keyshortcuts for the e / u keys.
+ */
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Box, Button, Collapse, IconButton, Tooltip, Typography, useTheme } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import ReplyOutlinedIcon from "@mui/icons-material/ReplyOutlined";
+import ReplyAllOutlinedIcon from "@mui/icons-material/ReplyAllOutlined";
+import ForwardOutlinedIcon from "@mui/icons-material/ForwardOutlined";
+import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
+import ExpandMoreOutlinedIcon from "@mui/icons-material/ExpandMoreOutlined";
+import ExpandLessOutlinedIcon from "@mui/icons-material/ExpandLessOutlined";
+import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
+import MarkEmailUnreadOutlinedIcon from "@mui/icons-material/MarkEmailUnreadOutlined";
 import DOMPurify from "dompurify";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
+import { setNotification } from "../../state/features/notificationsSlice";
 import ReadOnlySlate from "../../components/editor/ReadOnlySlate";
 import { AvatarWrapper } from "./MailTable";
-import { formatFullTimestamp } from "../../utils/time";
-import FileElement from "../../components/FileElement";
+import { NameText, spokenName, srOnly } from "../../components/common/NameText";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import { Spacer } from "../../components/common/Spacer";
-import {
-  MailAttachmentImg,
-  MoreImg,
-  MoreP,
-  ShowMessageButton,
-  ShowMessageButtonImg,
-  ShowMessageButtonP,
-  ShowMessageNameP,
-  ShowMessageSubjectP,
-  ShowMessageTimeP,
-} from "./Mail-styles";
-import ReplySVG from "../../assets/svgs/Reply.svg";
-import ForwardSVG from "../../assets/svgs/Forward.svg";
-import AttachmentMailSVG from "../../assets/svgs/AttachmentMail.svg";
-import MoreSVG from "../../assets/svgs/More.svg";
-import { ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { EarlierMessagePlaceholder, EarlierMessageUnreadable, ShowMessageV2Replies } from "./ShowMessageV2Replies";
+import { ErrorBoundary } from "../../components/common/ErrorBoundary";
+import { useEarlierMessages } from "./useEarlierMessages";
+import { useFoldTimeout } from "../../hooks/useReducedMotion";
+import { EARLIER_PAGE_SIZE } from "./earlierMessages";
 import { updateMessageDetails } from "../../utils/helpers";
+import { AttachmentList, usableAttachments } from "../../components/AttachmentPreview/AttachmentList";
+import { useDownloadAll } from "../../components/AttachmentPreview/useDownloadAll";
+import { MessageDate } from "./MessageDate";
+
+/** "Show 2 older messages", or "Show 5 older messages (7 left)" when more are hidden than a page. */
+export function olderLabel(hidden: number): string {
+  const next = Math.min(EARLIER_PAGE_SIZE, hidden);
+  const label = `Show ${next} older message${next === 1 ? "" : "s"}`;
+  return hidden > next ? `${label} (${hidden} left)` : label;
+}
+
+/** A Cc list longer than this (by more than one) shows these names and "and N more". */
+export const CC_NAMES_SHOWN = 3;
+
+/** Below this pane width the reader stacks (subject under the header, wrapped actions). */
+export const READER_COMPACT_WIDTH = 600;
+
+export function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
+  const ref = useRef<T | null>(null);
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    setWidth(node.clientWidth);
+    if (typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect?.width;
+      if (typeof w === "number") setWidth(Math.round(w));
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return [ref, width];
+}
+
+export interface ShowMessageV2Props {
+  message: any;
+  setReplyTo?: (message: any) => void;
+  setForwardInfo?: (html: string) => void;
+  alias?: string | null;
+  onClose?: () => void;
+  setIsOpen?: (open: boolean) => void;
+  isOpen?: boolean;
+  /** Optional: shows a Reply all button that receives the message. */
+  onReplyAll?: (message: any) => void;
+  /** Optional: richer forward hand-off; when absent, setForwardInfo(html) is called. */
+  onForward?: (info: { html: string; subject: string; attachments: any[]; message: any }) => void;
+  /** Optional: shows Archive (or Move to inbox when `archived`); the caller closes the reader. */
+  onArchive?: (message: any) => void;
+  /** The message is in Archived: the archive action reads "Move to inbox". */
+  archived?: boolean;
+  /** Optional: shows Mark unread; the caller closes the reader. */
+  onMarkUnread?: (message: any) => void;
+}
 
 export const ShowMessageV2 = ({
   setIsOpen,
@@ -35,312 +109,339 @@ export const ShowMessageV2 = ({
   alias,
   setForwardInfo,
   onClose,
-}: any) => {
+  onReplyAll,
+  onForward,
+  onArchive,
+  archived = false,
+  onMarkUnread,
+}: ShowMessageV2Props) => {
+  const theme = useTheme();
+  const dispatch = useDispatch();
   const username = useSelector((state: RootState) => state.auth?.user?.name);
-  const isMobile = useMediaQuery("(max-width:950px)");
-  const [expandAttachments, setExpandAttachments] = useState<boolean>(false);
+  const [rootRef, width] = useElementWidth<HTMLDivElement>();
+  const compact = width > 0 && width < READER_COMPACT_WIDTH;
+  // "Show earlier" belongs to the message it was opened on. The reader is
+  // reused for the next message, so the section is closed for it in that same
+  // render, before the loader could start on its history. Each message opens
+  // with it closed, also on the way back to one that had it open.
+  const messageKey = `${message?.user || ""}|${message?.id || ""}`;
+  const [earlierOpenFor, setEarlierOpenFor] = useState<string | null>(null);
+  const [ccOpenFor, setCcOpenFor] = useState<string | null>(null);
+  const [shownKey, setShownKey] = useState(messageKey);
+  if (shownKey !== messageKey) {
+    setShownKey(messageKey);
+    setEarlierOpenFor(null);
+    setCcOpenFor(null);
+  }
+  const showEarlier = earlierOpenFor === messageKey;
+
+  const attachments = useMemo(() => usableAttachments(message?.attachments), [message?.attachments]);
+  const downloadAll = useDownloadAll(attachments);
+
+  const earlier = useEarlierMessages(message, showEarlier);
+  const foldTimeout = useFoldTimeout();
+
+  // Focus follows the earlier messages: a pressed Retry leaves focus on the
+  // message's place in the list (which stays while it loads), and "Show
+  // older" moves it to the first message it brought in, just under the ones
+  // shown before, rather than leaving it on the button (or on the page, once
+  // the button goes away).
+  const earlierItemEls = useRef(new Map<string, HTMLElement>());
+  // How many were shown when "Show older" was pressed, until the next render.
+  const shownBeforeOlder = useRef<number | null>(null);
+  useEffect(() => {
+    const before = shownBeforeOlder.current;
+    if (before === null || earlier.items.length <= before) return;
+    shownBeforeOlder.current = null;
+    // Newest first on screen: the first new one is at display place `before`.
+    const firstNew = earlier.items[earlier.items.length - 1 - before];
+    if (firstNew) earlierItemEls.current.get(firstNew.entry.key)?.focus();
+  });
+  const showOlderEarlier = () => {
+    shownBeforeOlder.current = earlier.items.length;
+    earlier.showOlder();
+  };
 
   const handleClose = () => {
     if (typeof onClose === "function") {
       onClose();
       return;
     }
-    if (typeof setIsOpen === "function") {
-      setIsOpen(false);
-    }
+    if (typeof setIsOpen === "function") setIsOpen(false);
   };
 
-  const handleReply = () => {
-    setReplyTo(message);
-  };
+  const handleReply = () => setReplyTo?.(message);
 
-  const handleForwardedMessage = () => {
+  const handleForwardedMessage = useCallback(() => {
     if (!username) return;
     let secondpart = "";
-    if (message?.textContentV2) {
-      secondpart = message.textContentV2;
-    }
-    if (message?.htmlContent) {
-      secondpart = DOMPurify.sanitize(message.htmlContent);
-    }
+    if (message?.textContentV2) secondpart = message.textContentV2;
+    if (message?.htmlContent) secondpart = DOMPurify.sanitize(message.htmlContent);
     let newTo = username;
-    if (alias) {
-      newTo = `${alias} (alias inbox)`;
-    }
-    const firstPart = updateMessageDetails(
-      message?.user,
-      message?.subject || "",
-      newTo
-    );
+    if (alias) newTo = `${alias} (alias inbox)`;
+    // updateMessageDetails escapes its arguments (src/utils/mailCompose.ts).
+    const firstPart = updateMessageDetails(message?.user, message?.subject || "", newTo);
     const fullMessage = firstPart + secondpart;
-    setForwardInfo(fullMessage);
+    if (onForward) {
+      onForward({ html: fullMessage, subject: message?.subject || "", attachments, message });
+      return;
+    }
+    setForwardInfo?.(fullMessage);
+  }, [alias, attachments, message, onForward, setForwardInfo, username]);
+
+  const saveAll = async () => {
+    const result = await downloadAll.run();
+    if (result.failed.length) {
+      dispatch(setNotification({ msg: `Could not save: ${result.failed.join(", ")}`, alertType: "error" }));
+    } else if (result.saved > 0) {
+      dispatch(setNotification({ msg: `Saved ${result.saved} file${result.saved === 1 ? "" : "s"}`, alertType: "success" }));
+    }
   };
 
-  let cleanHTML = "";
-  if (message?.htmlContent) {
-    cleanHTML = DOMPurify.sanitize(message.htmlContent);
-  }
+  // The To of the send. Every copy of a Q-Mail+ send carries it in `to`
+  // (§17), while `recipient` names the copy's own target, a Cc or Bcc name
+  // on those copies; mail from the original app has only `recipient`.
+  // Strings only: a decrypted body can hold anything, and an object here
+  // would break the whole reader.
+  const recipient: string | undefined =
+    Array.isArray(message?.to) && typeof message.to[0] === "string" && message.to[0].trim()
+      ? message.to[0]
+      : typeof message?.recipient === "string" && message.recipient.trim()
+        ? message.recipient
+        : typeof message?.to === "string" && message.to.trim()
+          ? message.to
+          : undefined;
+  // Cc names Q-Mail+ writes into every copy (data contract §17); Bcc never.
+  const ccNames: string[] = Array.isArray(message?.cc)
+    ? Array.from(new Set(message.cc.filter((name: unknown): name is string => typeof name === "string" && name.trim().length > 0)))
+    : [];
+  // A long Cc list shows its first names and "and N more", which shows the
+  // rest. The line wraps, so every name is readable on a phone (no hover).
+  const ccShown = ccOpenFor === messageKey || ccNames.length <= CC_NAMES_SHOWN + 1 ? ccNames : ccNames.slice(0, CC_NAMES_SHOWN);
+  const ccMore = ccNames.length - ccShown.length;
+  // "and N more" goes away when pressed: focus moves to the whole line.
+  const ccLineRef = useRef<HTMLParagraphElement | null>(null);
+  const subject = typeof message?.subject === "string" && message.subject ? message.subject : "(no subject)";
+  const cleanHTML = message?.htmlContent ? DOMPurify.sanitize(message.htmlContent) : "";
 
-  const replyAndForwardButtons = (
-    <>
-      <ShowMessageButton
-        sx={{
-          padding: "6px 12px",
-          minWidth: "unset",
-        }}
-        onClick={handleReply}
-      >
-        <ShowMessageButtonImg src={ReplySVG} />
-        <ShowMessageButtonP>Reply</ShowMessageButtonP>
-      </ShowMessageButton>
-      <ShowMessageButton
-        sx={{
-          padding: "6px 12px",
-          minWidth: "unset",
-        }}
-        onClick={handleForwardedMessage}
-      >
-        <ShowMessageButtonP>Forward</ShowMessageButtonP>
-        <ShowMessageButtonImg src={ForwardSVG} />
-      </ShowMessageButton>
-    </>
+  const actionSx = { minHeight: 44, textTransform: "none" as const, flexShrink: 0 };
+  const iconActionSx = { minWidth: 44, minHeight: 44, flexShrink: 0 };
+  const archiveLabel = archived ? "Move to inbox" : "Archive";
+  const archiveIcon = archived ? <UnarchiveOutlinedIcon /> : <ArchiveOutlinedIcon />;
+  // Wide pane: labelled buttons. Compact (phones): icon buttons with a label
+  // for screen readers and a tooltip on long-press.
+  const sideAction = (label: string, icon: React.ReactNode, onClick: () => void, shortcut: string) =>
+    compact ? (
+      <Tooltip key={label} title={label} enterTouchDelay={500}>
+        <IconButton aria-label={label} aria-keyshortcuts={shortcut} onClick={onClick} sx={iconActionSx}>
+          {icon}
+        </IconButton>
+      </Tooltip>
+    ) : (
+      <Button key={label} variant="outlined" startIcon={icon} aria-keyshortcuts={shortcut} onClick={onClick} sx={actionSx}>
+        {label}
+      </Button>
+    );
+  const actions = (
+    <Box role="group" aria-label="Message actions" sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+      <Button variant="outlined" startIcon={<ReplyOutlinedIcon />} onClick={handleReply} disabled={!setReplyTo} sx={actionSx}>
+        Reply
+      </Button>
+      {onReplyAll && (
+        <Button variant="outlined" startIcon={<ReplyAllOutlinedIcon />} onClick={() => onReplyAll(message)} sx={actionSx}>
+          Reply all
+        </Button>
+      )}
+      <Button variant="outlined" startIcon={<ForwardOutlinedIcon />} onClick={handleForwardedMessage} disabled={!username} sx={actionSx}>
+        Forward
+      </Button>
+      {attachments.length > 1 && (
+        <Button
+          variant="outlined"
+          startIcon={<DownloadOutlinedIcon />}
+          onClick={downloadAll.progress.active ? downloadAll.cancel : () => void saveAll()}
+          sx={actionSx}
+        >
+          {downloadAll.progress.active ? `Saving ${downloadAll.progress.current} of ${downloadAll.progress.total}… Cancel` : `Save all (${attachments.length})`}
+        </Button>
+      )}
+      {onArchive && sideAction(archiveLabel, archiveIcon, () => onArchive(message), "e")}
+      {onMarkUnread && sideAction("Mark unread", <MarkEmailUnreadOutlinedIcon />, () => onMarkUnread(message), "u")}
+    </Box>
   );
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        width: "100%",
-      }}
-    >
-      <Box
-        sx={{
-          width: "100%",
-          padding: "0 15px",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            width: "100%",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: "12px",
-          }}
-        >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              minWidth: 0,
-              flex: 1,
-            }}
-          >
-            <AvatarWrapper height="50px" user={message?.user} />
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "1px",
-                justifyContent: "flex-start",
-                minWidth: 0,
-              }}
-            >
-              <ShowMessageNameP>{message?.user}</ShowMessageNameP>
-              <ShowMessageTimeP sx={{ marginTop: "2px" }}>
-                to: {message?.to}
-              </ShowMessageTimeP>
-              <ShowMessageTimeP>
-                {formatFullTimestamp(message?.createdAt)}
-              </ShowMessageTimeP>
-            </Box>
+    <Box ref={rootRef} component="article" aria-label={subject} sx={{ display: "flex", flexDirection: "column", width: "100%", minWidth: 0 }}>
+      <Box sx={{ width: "100%", px: compact ? 1.5 : 2.5, pt: 1.5, display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
+        <Box component="header" sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0 }}>
+          <AvatarWrapper height="48px" user={message?.user} fallback={message?.user} />
+          <Box sx={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, gap: 0.25 }}>
+            <Typography component="p" noWrap sx={{ fontSize: "1rem", fontWeight: 700, lineHeight: 1.3 }}>
+              <NameText name={message?.user} />
+            </Typography>
+            {recipient && (
+              <Typography variant="body2" color="text.secondary" noWrap>
+                to <NameText name={recipient} />
+              </Typography>
+            )}
+            {ccNames.length > 0 && (
+              <Typography
+                ref={ccLineRef}
+                tabIndex={-1}
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  overflowWrap: "anywhere",
+                  "&:focus": { outline: "none" },
+                  "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, borderRadius: 1 },
+                }}
+              >
+                cc{" "}
+                {ccShown.map((name, index) => (
+                  <React.Fragment key={name}>
+                    {index > 0 && ", "}
+                    <NameText name={name} />
+                  </React.Fragment>
+                ))}
+                {ccMore > 0 && (
+                  <>
+                    {" "}
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={() => {
+                        ccLineRef.current?.focus();
+                        setCcOpenFor(messageKey);
+                      }}
+                      sx={{
+                        background: "none",
+                        border: 0,
+                        p: 0,
+                        // A 44 px target that keeps the line's height.
+                        minHeight: 44,
+                        my: "-12px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        verticalAlign: "baseline",
+                        font: "inherit",
+                        color: "primary.main",
+                        cursor: "pointer",
+                        textDecoration: "underline",
+                        "&:focus-visible": { outline: (theme) => `2px solid ${theme.palette.primary.main}`, borderRadius: 1 },
+                      }}
+                    >
+                      {/* Spoken "and 2 more Cc names": the name keeps the visible words (WCAG 2.5.3). */}
+                      {`and ${ccMore} more `}
+                      <Box component="span" sx={srOnly}>
+                        Cc names
+                      </Box>
+                    </Box>
+                  </>
+                )}
+              </Typography>
+            )}
+            <MessageDate timestamp={message?.createdAt} />
           </Box>
-
-          {!isMobile && (
-            <ShowMessageSubjectP
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                wordBreak: "break-word",
-              }}
-            >
-              {message?.subject || "- no subject"}
-            </ShowMessageSubjectP>
-          )}
-
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              flexShrink: 0,
-            }}
-          >
-            {!isMobile && replyAndForwardButtons}
-            <IconButton
-              aria-label="Close message"
-              onClick={handleClose}
-              sx={{
-                borderRadius: "4px",
-                border: "0.5px solid var(--qmail-message-button-border)",
-                color: "var(--qmail-message-button-text)",
-                backgroundColor: "var(--qmail-message-button-bg)",
-                "&:hover": {
-                  background: "var(--qmail-message-button-hover)",
-                },
-              }}
-            >
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </Box>
+          <IconButton aria-label="Close message" onClick={handleClose} sx={{ minWidth: 44, minHeight: 44, flexShrink: 0 }}>
+            <CloseIcon />
+          </IconButton>
         </Box>
 
-        {isMobile && (
-          <ShowMessageSubjectP
-            sx={{
-              width: "100%",
-              minWidth: 0,
-              wordBreak: "break-word",
-            }}
-          >
-            {message?.subject || "- no subject"}
-          </ShowMessageSubjectP>
-        )}
+        {/* h2: the view's one h1 is the PaneHeader's (the list's, or the phone reader's). */}
+        <Typography component="h2" sx={{ fontSize: compact ? "1.15rem" : "1.3rem", fontWeight: 600, lineHeight: 1.3, wordBreak: "break-word" }}>
+          {subject}
+        </Typography>
 
-        {isMobile && (
-          <Box
-            sx={{
-              display: "flex",
-              gap: "10px",
-              justifyContent: "flex-start",
-              flexWrap: "wrap",
-            }}
-          >
-            {replyAndForwardButtons}
+        {actions}
+
+        {attachments.length > 0 && (
+          <Box sx={{ width: "100%" }}>
+            <AttachmentList attachments={attachments} hideDownloadAll />
           </Box>
         )}
 
-        {message?.attachments?.length > 0 && (
-          <Box
-            sx={{
-              width: "100%",
-              marginTop: "6px",
-            }}
+        <Box sx={{ width: "100%", minWidth: 0, pt: 0.5 }}>
+          {message?.textContentV2 && <DisplayHtml html={message?.textContentV2} />}
+          {message?.htmlContent && <DisplayHtml html={cleanHTML} />}
+          {message?.textContent && <ReadOnlySlate content={message.textContent} mode="mail" />}
+          {!message?.textContentV2 && !message?.htmlContent && !message?.textContent && (
+            <Typography variant="body2" color="text.secondary">
+              This message has no text.
+            </Typography>
+          )}
+        </Box>
+      </Box>
+
+      {earlier.total > 0 && (
+        <Box component="section" aria-label="Earlier messages in this conversation" sx={{ width: "100%", mt: 3, px: compact ? 1.5 : 2.5, pb: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+          <Button
+            onClick={() => setEarlierOpenFor(showEarlier ? null : messageKey)}
+            aria-expanded={showEarlier}
+            startIcon={showEarlier ? <ExpandLessOutlinedIcon /> : <ExpandMoreOutlinedIcon />}
+            sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none", color: theme.palette.text.secondary }}
           >
-            {message?.attachments.map((file: any, index: number) => {
-              const isFirst = index === 0;
+            {showEarlier ? "Hide earlier" : `Show earlier · ${earlier.total} message${earlier.total === 1 ? "" : "s"}`}
+          </Button>
+          {/* Newest first, right under the message; older ones further down, then "Show older".
+              It folds open and shut; a new message gets a fresh one (key), closed. */}
+          <Collapse
+            key={messageKey}
+            in={showEarlier}
+            timeout={foldTimeout}
+            unmountOnExit
+            sx={{ "& .MuiCollapse-wrapperInner": { display: "flex", flexDirection: "column", gap: 1 } }}
+          >
+          {[...earlier.items].reverse().map(({ entry, load }, index) => {
+              const newest = index === 0;
+              const card = !load ? (
+                <ShowMessageV2Replies message={entry.data} quotedBy={entry.quotedBy || message?.user} defaultExpanded={newest} />
+              ) : load.status === "loaded" ? (
+                <ShowMessageV2Replies message={load.message} verified defaultExpanded={newest} />
+              ) : (
+                <EarlierMessagePlaceholder
+                  name={entry.reference?.name || "Unknown"}
+                  status={load.status}
+                  onRetry={() => {
+                    earlierItemEls.current.get(entry.key)?.focus();
+                    earlier.retry(entry.key);
+                  }}
+                />
+              );
               return (
                 <Box
-                  key={`${file?.filename || "attachment"}-${index}`}
+                  key={entry.key}
+                  ref={(el: HTMLElement | null) => {
+                    if (el) earlierItemEls.current.set(entry.key, el);
+                    else earlierItemEls.current.delete(entry.key);
+                  }}
+                  tabIndex={-1}
+                  role="group"
+                  aria-label={`Earlier message from ${spokenName(
+                    entry.reference?.name || (typeof entry.data?.user === "string" ? entry.data.user : "") || "Unknown"
+                  )}`}
+                  data-earlier-item=""
                   sx={{
-                    display:
-                      expandAttachments || (!expandAttachments && isFirst)
-                        ? "flex"
-                        : "none",
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                    width: "100%",
+                    borderRadius: 1,
+                    "&:focus": { outline: "none" },
+                    "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
                   }}
                 >
-                  <Box
-                    sx={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "5px",
-                      cursor: "pointer",
-                      width: "auto",
-                    }}
-                  >
-                    <FileElement
-                      fileInfo={{ ...file, mimeTypeSaved: file?.type }}
-                      title={file?.filename}
-                      mode="mail"
-                      otherUser={message?.user}
-                    >
-                      <MailAttachmentImg src={AttachmentMailSVG} />
-
-                      <Typography
-                        sx={{
-                          fontSize: "1rem",
-                          transition: "0.2s all",
-                          "&:hover": {
-                            textDecoration: "underline",
-                          },
-                        }}
-                      >
-                        {file?.originalFilename || file?.filename}
-                      </Typography>
-                    </FileElement>
-                    {message?.attachments?.length > 1 && isFirst && (
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "5px",
-                        }}
-                        onClick={() => {
-                          setExpandAttachments((prev) => !prev);
-                        }}
-                      >
-                        <MoreImg
-                          sx={{
-                            marginLeft: "5px",
-                            transform: expandAttachments ? "rotate(180deg)" : "unset",
-                          }}
-                          src={MoreSVG}
-                        />
-                        <MoreP>
-                          {expandAttachments
-                            ? "hide"
-                            : `(${message?.attachments?.length - 1} more)`}
-                        </MoreP>
-                      </Box>
-                    )}
-                  </Box>
+                  {/* One earlier message that cannot be drawn says so in its place. */}
+                  <ErrorBoundary fallback={<EarlierMessageUnreadable />}>{card}</ErrorBoundary>
                 </Box>
               );
             })}
-          </Box>
-        )}
-
-        <Spacer height="7px" />
-        {message?.textContentV2 && <DisplayHtml html={message?.textContentV2} />}
-        {message?.htmlContent && <div dangerouslySetInnerHTML={{ __html: cleanHTML }} />}
-      </Box>
-
-      <Spacer height="20px" />
-      <Box
-        sx={{
-          width: "100%",
-          display: "flex",
-          flexDirection: "column",
-          gap: "8px",
-        }}
-      >
-        {message?.generalData?.threadV2 &&
-          [...(message?.generalData?.threadV2 || [])]
-            .sort((a, b) => {
-              if (!a.data || !b.data) return 0;
-              return a.data.createdAt - b.data.createdAt;
-            })
-            .map((msg) => {
-              if (!msg?.data) return null;
-              return <ShowMessageV2Replies key={msg.data.id} message={msg.data} />;
-            })}
-        <Box
-          sx={{
-            width: "100%",
-            padding: "15px",
-          }}
-        >
-          {message?.textContent && <ReadOnlySlate content={message.textContent} mode="mail" />}
+          {earlier.hidden > 0 && (
+            <Button
+              onClick={showOlderEarlier}
+              sx={{ alignSelf: "flex-start", minHeight: 44, textTransform: "none" }}
+            >
+              {olderLabel(earlier.hidden)}
+            </Button>
+          )}
+          </Collapse>
         </Box>
-      </Box>
+      )}
     </Box>
   );
 };

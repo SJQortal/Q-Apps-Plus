@@ -2,9 +2,35 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- Theme kit boot: paints the saved theme's background before the app loads (shared/hub-theme/boot-inline.js). -->
+    <script>
+(function () {
+  var STORAGE_KEY = 'qmailplus-ui-theme';
+  var HUB20 = { light: '#e7f0ff', dark: '#0b1220' };
+  var BOOT = {"hub30":{"light":"#EEE7DC","dark":"#0E0F14"},"black":{"light":"#000000","dark":"#000000"},"white":{"light":"#ffffff","dark":"#ffffff"}};
+  var params = new URLSearchParams(location.search);
+  var mode = window._qdnTheme || params.get('theme') || 'dark';
+  if (mode !== 'light' && mode !== 'dark') mode = 'dark';
+  var ui = 'hub30';
+  try {
+    var stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (stored === 'hub20' || BOOT.hasOwnProperty(stored)) ui = stored;
+  } catch (e) {}
+  var shown = ui === 'black' ? 'dark' : ui === 'white' ? 'light' : mode;
+  var bg = ui === 'hub20' ? HUB20[mode] : BOOT[ui][mode];
+  var root = document.documentElement;
+  root.setAttribute('data-theme', shown);
+  root.setAttribute('data-ui-theme', ui);
+  root.style.colorScheme = shown;
+  root.style.background = bg;
+  document.addEventListener('DOMContentLoaded', function () {
+    document.body.style.background = bg;
+  });
+})();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Q-Mail</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Q-Mail+</title>
   </head>
   <body>
     <div id="root"></div>

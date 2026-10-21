@@ -27,3 +27,5 @@ AGENTS.md
 .clinerules
 
 DEVELOPMENT
+# screenshot check output (scripts/screens.mjs Q-Mail+)
+e2e/shots*/

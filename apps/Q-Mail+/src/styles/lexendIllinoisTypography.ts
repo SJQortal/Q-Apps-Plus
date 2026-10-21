@@ -1,5 +1,11 @@
-import robotoRegularTtfUrl from './fonts/Roboto-Regular.ttf'
-import robotoMediumTtfUrl from './fonts/Roboto-Medium.ttf'
+// Q-Mail Classic's Roboto: Latin + Latin Extended subsets in WOFF2, the two
+// weights the theme uses (fonts/LICENSE-Roboto.txt). 57 kB instead of the
+// 337 kB TTF pair.
+import robotoRegularWoff2Url from './fonts/Roboto-Regular.woff2'
+import robotoMediumWoff2Url from './fonts/Roboto-Medium.woff2'
+
+/** What the subsets cover; text outside it falls back to the system stack. */
+const ROBOTO_UNICODE_RANGE = 'U+0000-024F, U+2000-206F, U+20AC, U+2122'
 
 type TextSize = 'small' | 'medium' | 'large'
 
@@ -25,7 +31,6 @@ function buildLexendIllinoisTypographyCss(
   options: EnsureTypographyStyleOptions = {}
 ): string {
   const {
-    includeTtfFallback = true,
     fontDisplay = 'swap',
     textSizeScale = {},
   } = options
@@ -38,18 +43,20 @@ function buildLexendIllinoisTypographyCss(
   return `
 @font-face {
   font-family: 'Roboto';
-  src: url('${robotoRegularTtfUrl}') format('truetype');
+  src: url('${robotoRegularWoff2Url}') format('woff2');
   font-display: ${fontDisplay};
   font-weight: 400;
   font-style: normal;
+  unicode-range: ${ROBOTO_UNICODE_RANGE};
 }
 
 @font-face {
   font-family: 'Roboto';
-  src: url('${robotoMediumTtfUrl}') format('truetype');
+  src: url('${robotoMediumWoff2Url}') format('woff2');
   font-display: ${fontDisplay};
   font-weight: 500;
   font-style: normal;
+  unicode-range: ${ROBOTO_UNICODE_RANGE};
 }
 
 :root {

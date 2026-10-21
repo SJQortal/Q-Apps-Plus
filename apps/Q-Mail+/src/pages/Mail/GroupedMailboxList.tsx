@@ -1,17 +1,44 @@
-import React, { useEffect, useMemo, useState } from "react";
+/**
+ * A mailbox list grouped by sender (inbox, archived, alias inbox) or by
+ * recipient (sent), with expand/collapse per group, select all, and a sticky
+ * bulk bar (Mark read / Mark unread / Archive / Move to inbox).
+ *
+ * States (docs/DESIGN.md → Components and states): `status` drives a skeleton
+ * while the first load runs, an ErrorState with Retry, and an EmptyState with
+ * a next action; the list itself shows as soon as there are rows.
+ */
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useInView } from "../../hooks/useInView";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import { Box, Typography, Checkbox, Button } from "@mui/material";
 import CheckIcon from "@mui/icons-material/Check";
-import { formatFullTimestamp } from "../../utils/time";
-import { MailMessageRow } from "./MailMessageRow";
+import MarkEmailUnreadOutlinedIcon from "@mui/icons-material/MarkEmailUnreadOutlined";
+import ArchiveOutlinedIcon from "@mui/icons-material/ArchiveOutlined";
+import UnarchiveOutlinedIcon from "@mui/icons-material/UnarchiveOutlined";
+import InboxOutlinedIcon from "@mui/icons-material/InboxOutlined";
+import { Box, Button, ButtonBase, Checkbox, Collapse, Typography } from "@mui/material";
+import { useSelector } from "react-redux";
+import { MailListDate } from "./MailListDate";
+import { MailMessageRow, NARROW_LIST_QUERY, ROOMY_LIST_QUERY, WIDE_ROW_QUERY } from "./MailMessageRow";
 import { AvatarWrapper } from "./MailTable";
-import { MessagesContainer } from "./Mail-styles";
+import { NameText, spokenName } from "../../components/common/NameText";
 import {
   getSentRecipientDisplayLabel,
   getSentRecipientGroupKey,
 } from "./mailIdentifier";
+import { useRowMenu } from "./useRowMenu";
+import { UndoSnackbar, type UndoToast } from "../../components/common/UndoSnackbar";
+import { useFoldTimeout } from "../../hooks/useReducedMotion";
+import { groupRowActions } from "./rowMenuActions";
+import { selectReadState } from "../../state/features/mailSlice";
+import { RootState } from "../../state/store";
+import { isMessageRead } from "../../utils/readState";
+import { useSentRecipient } from "../../utils/sentRecipientCache";
+import { EmptyState, ErrorState, ListSkeleton, UnreadDot } from "../../layout/states";
+import { headerFill } from "../../hub-theme";
 
 type MailboxType = "inbox" | "sent";
+
+export type ListStatus = "idle" | "loading" | "error" | "ready";
 
 interface GroupedMailboxListProps {
   messages: any[];
@@ -22,12 +49,36 @@ interface GroupedMailboxListProps {
     identifier: string,
     content: any,
     alias?: string
-  ) => void | Promise<void>;
+  ) => unknown;
   openedMessageId?: string | number | null;
+  /** Reply / Reply all from a row's menu (received mail). */
+  onReply?: (message: any, options?: { replyAll?: boolean }) => void;
+  /** Forward from a row's menu. */
+  onForward?: (message: any) => void;
   onDeleteMessage?: (message: any) => void | boolean | Promise<void | boolean>;
   isDeletingMessage?: (messageId: string) => boolean;
   onMarkAsRead?: (messages: any[]) => void | Promise<void>;
   onMarkAsUnread?: (messages: any[]) => void | Promise<void>;
+  /** Archive the selected messages (local only; shown in the Archived view). */
+  onArchive?: (messages: any[]) => void | Promise<void>;
+  /** Move the selected messages back to the inbox. */
+  onUnarchive?: (messages: any[]) => void | Promise<void>;
+  /** Undo for Archive (moves them back): offered in a toast after archiving from the list. */
+  onUndoArchive?: (messages: any[]) => unknown;
+  /** Undo for Move to inbox (archives them again). */
+  onUndoUnarchive?: (messages: any[]) => unknown;
+  /** Load state of the list; `loading`/`error` only matter while there are no rows. */
+  status?: ListStatus;
+  emptyIcon?: ReactNode;
+  emptyTitle?: string;
+  emptyHint?: React.ReactNode;
+  emptyAction?: ReactNode;
+  errorMessage?: string;
+  onRetry?: () => void;
+  /** Search terms to highlight in the rows. */
+  highlightTerms?: string[];
+  /** Rendered after the rows (e.g. a Load more control). */
+  footer?: ReactNode;
 }
 
 interface MessageGroup {
@@ -52,22 +103,105 @@ const getMessageId = (message: any): string => {
   return String(value);
 };
 
-const isMessageMarkedRead = (message: any): boolean => {
-  const thread = message?.generalData?.threadV2;
-  return Array.isArray(thread) && thread.length > 0;
-};
+/** Pure grouping, exported for tests. */
+export function groupMessages(messages: any[], mailboxType: MailboxType): MessageGroup[] {
+  const groupMap = new Map<string, MessageGroup>();
+
+  messages.forEach(message => {
+    const identifier = getMessageId(message);
+    if (!identifier) return;
+
+    let key = "";
+    let label = "";
+
+    if (mailboxType === "sent") {
+      key = getSentRecipientGroupKey(identifier);
+      label = getSentRecipientDisplayLabel(identifier);
+    } else {
+      const sender =
+        typeof message?.user === "string" ? message.user.trim() : "";
+      key = sender ? `sender:${sender.toLowerCase()}` : "sender:unknown";
+      label = sender || "Unknown sender";
+    }
+
+    const existingGroup = groupMap.get(key);
+    if (existingGroup) {
+      existingGroup.messages.push(message);
+      if (
+        toTimestamp(message?.createdAt) >
+        toTimestamp(existingGroup.latestCreatedAt)
+      ) {
+        existingGroup.latestCreatedAt = message?.createdAt || 0;
+      }
+      return;
+    }
+
+    groupMap.set(key, {
+      key,
+      label,
+      latestCreatedAt: message?.createdAt || 0,
+      messages: [message],
+    });
+  });
+
+  const groups = Array.from(groupMap.values()).map(group => ({
+    ...group,
+    messages: [...group.messages].sort(sortMessagesByCreatedDescending),
+  }));
+
+  groups.sort(
+    (a, b) => toTimestamp(b.latestCreatedAt) - toTimestamp(a.latestCreatedAt)
+  );
+  return groups;
+}
+
+const checkboxSx = { minWidth: 44, minHeight: 44, flexShrink: 0 } as const;
+
+/** "To: <name>" for a sent group: the decrypted recipient of any opened message, else one cached lookup. */
+function SentGroupLabel({ identifier, known }: { identifier: string; known?: string }) {
+  // The lookup waits until the group is on screen.
+  const [node, setNode] = useState<HTMLSpanElement | null>(null);
+  const inView = useInView(node);
+  const recipient = useSentRecipient(identifier, known, inView);
+  return (
+    <span ref={setNode}>
+      To: <NameText name={recipient.name} />
+    </span>
+  );
+}
 
 export const GroupedMailboxList = ({
   messages,
   mailboxType,
   openMessage,
   openedMessageId,
+  onReply,
+  onForward,
   onDeleteMessage,
   isDeletingMessage,
   showSelectAll = false,
   onMarkAsRead,
   onMarkAsUnread,
+  onArchive: archiveRaw,
+  onUnarchive: unarchiveRaw,
+  onUndoArchive,
+  onUndoUnarchive,
+  status = "ready",
+  emptyIcon,
+  emptyTitle,
+  emptyHint,
+  emptyAction,
+  errorMessage,
+  onRetry,
+  highlightTerms,
+  footer,
 }: GroupedMailboxListProps) => {
+  // Read/unread comes from the read store (src/utils/readState.ts), never
+  // from generalData.threadV2, so a real reply chain is left alone (Bugs #5).
+  const readState = useSelector(selectReadState);
+  const hashMapMailMessages = useSelector(
+    (state: RootState) => state.mail.hashMapMailMessages
+  );
   const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(
     new Set()
   );
@@ -75,62 +209,14 @@ export const GroupedMailboxList = ({
     {}
   );
 
-  const groupedMessages = useMemo(() => {
-    const groupMap = new Map<string, MessageGroup>();
-
-    messages.forEach(message => {
-      const identifier = getMessageId(message);
-      if (!identifier) return;
-
-      let key = "";
-      let label = "";
-
-      if (mailboxType === "sent") {
-        key = getSentRecipientGroupKey(identifier);
-        label = getSentRecipientDisplayLabel(identifier);
-      } else {
-        const sender =
-          typeof message?.user === "string" ? message.user.trim() : "";
-        key = sender ? `sender:${sender.toLowerCase()}` : "sender:unknown";
-        label = sender || "Unknown sender";
-      }
-
-      const existingGroup = groupMap.get(key);
-      if (existingGroup) {
-        existingGroup.messages.push(message);
-        if (
-          toTimestamp(message?.createdAt) >
-          toTimestamp(existingGroup.latestCreatedAt)
-        ) {
-          existingGroup.latestCreatedAt = message?.createdAt || 0;
-        }
-        return;
-      }
-
-      groupMap.set(key, {
-        key,
-        label,
-        latestCreatedAt: message?.createdAt || 0,
-        messages: [message],
-      });
-    });
-
-    const groups = Array.from(groupMap.values()).map(group => ({
-      ...group,
-      messages: [...group.messages].sort(sortMessagesByCreatedDescending),
-    }));
-
-    groups.sort(
-      (a, b) => toTimestamp(b.latestCreatedAt) - toTimestamp(a.latestCreatedAt)
-    );
-    return groups;
-  }, [messages, mailboxType]);
+  const groupedMessages = useMemo(
+    () => groupMessages(messages, mailboxType),
+    [messages, mailboxType]
+  );
 
   const allVisibleMessageIds = useMemo(() => {
     return groupedMessages.flatMap(group =>
-      group.messages
-        .map(getMessageId)
-        .filter(Boolean) as string[]
+      group.messages.map(getMessageId).filter(Boolean) as string[]
     );
   }, [groupedMessages]);
 
@@ -159,21 +245,13 @@ export const GroupedMailboxList = ({
 
   const handleToggleSelectAllVisible = () => {
     if (!allVisibleMessageIds.length) return;
-
     setSelectedMessageIds(previous => {
       const newSet = new Set(previous);
-      const isAllSelected =
-        allVisibleMessageIds.length > 0 &&
-        allVisibleMessageIds.every(id => newSet.has(id));
-
+      const isAllSelected = allVisibleMessageIds.every(id => newSet.has(id));
       allVisibleMessageIds.forEach(id => {
-        if (isAllSelected) {
-          newSet.delete(id);
-        } else {
-          newSet.add(id);
-        }
+        if (isAllSelected) newSet.delete(id);
+        else newSet.add(id);
       });
-
       return newSet;
     });
   };
@@ -181,50 +259,77 @@ export const GroupedMailboxList = ({
   const handleToggleAll = (groupKey: string) => {
     const group = groupedMessages.find(g => g.key === groupKey);
     if (!group) return;
-
     setSelectedMessageIds(previous => {
       const newSet = new Set(previous);
       const groupMessageIds = group.messages
         .map(getMessageId)
         .filter(Boolean) as string[];
       const isAllSelected = groupMessageIds.every(id => newSet.has(id));
-
       groupMessageIds.forEach(id => {
-        if (isAllSelected) {
-          newSet.delete(id);
-          return;
-        }
-        newSet.add(id);
+        if (isAllSelected) newSet.delete(id);
+        else newSet.add(id);
       });
       return newSet;
     });
   };
 
-  const handleMarkAsRead = async () => {
-    if (selectedMessageIds.size === 0 || !onMarkAsRead) return;
-    await onMarkAsRead(
-      Array.from(selectedMessageIds)
-        .map(id => {
-          const message = messages.find(m => getMessageId(m) === id);
-          return message || null;
-        })
-        .filter(Boolean)
-    );
+  const selectedMessages = () =>
+    Array.from(selectedMessageIds)
+      .map(id => messages.find(m => getMessageId(m) === id) || null)
+      .filter(Boolean);
+
+  // Archive and Move to inbox take mail out of this list: a toast says so and
+  // offers Undo, and focus goes to the next row rather than to the page.
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const [toast, setToast] = useState<UndoToast | null>(null);
+  const nextRowAfter = (moved: any[]) => {
+    const movedIds = new Set(moved.map(getMessageId));
+    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>("[data-message-row]") || []);
+    const lastMoved = rows.reduce((at, row, index) => (movedIds.has(row.getAttribute("data-message-row") || "") ? index : at), -1);
+    const next =
+      rows.slice(lastMoved + 1).find(row => !movedIds.has(row.getAttribute("data-message-row") || "")) ||
+      [...rows.slice(0, Math.max(0, lastMoved))].reverse().find(row => !movedIds.has(row.getAttribute("data-message-row") || ""));
+    const nextId = next?.getAttribute("data-message-row") || "";
+    return () =>
+      (nextId
+        ? listRef.current?.querySelector<HTMLElement>(`[data-message-row="${CSS.escape(nextId)}"] > button`)
+        : null) || listRef.current?.querySelector<HTMLElement>("button");
+  };
+  const withUndo = (
+    handler: ((messages: any[]) => void | Promise<void>) | undefined,
+    undo: ((messages: any[]) => unknown) | undefined,
+    done: (count: number) => string
+  ) =>
+    handler
+      ? async (moved: any[]) => {
+          if (!moved.length) return;
+          const returnFocus = nextRowAfter(moved);
+          await handler(moved);
+          setToast(previous => ({
+            key: (previous?.key ?? 0) + 1,
+            message: done(moved.length),
+            onUndo: undo ? () => void undo(moved) : undefined,
+            returnFocus,
+          }));
+        }
+      : undefined;
+  const onArchive = withUndo(archiveRaw, onUndoArchive, count => (count === 1 ? "Archived" : `${count} archived`));
+  const onUnarchive = withUndo(unarchiveRaw, onUndoUnarchive, count =>
+    count === 1 ? "Moved to the inbox" : `${count} moved to the inbox`
+  );
+
+  const runOnSelection = async (
+    handler?: (messages: any[]) => void | Promise<void>
+  ) => {
+    if (selectedMessageIds.size === 0 || !handler) return;
+    await handler(selectedMessages());
     setSelectedMessageIds(new Set());
   };
 
-  const handleMarkAsUnread = async () => {
-    if (selectedMessageIds.size === 0 || !onMarkAsUnread) return;
-    await onMarkAsUnread(
-      Array.from(selectedMessageIds)
-        .map(id => {
-          const message = messages.find(m => getMessageId(m) === id);
-          return message || null;
-        })
-        .filter(Boolean)
-    );
-    setSelectedMessageIds(new Set());
-  };
+  // A sender group's menu (right click, long press on its header).
+  const groupMenu = useRowMenu<string>();
+  // A sender group folds open and shut (0 ms with reduced motion).
+  const foldTimeout = useFoldTimeout();
 
   useEffect(() => {
     const groupedMessageIds = new Set<string>();
@@ -234,101 +339,136 @@ export const GroupedMailboxList = ({
         if (messageId) groupedMessageIds.add(messageId);
       });
     });
-
     setSelectedMessageIds(previous => {
-      return new Set(Array.from(previous).filter(id => groupedMessageIds.has(id)));
+      const next = new Set(Array.from(previous).filter(id => groupedMessageIds.has(id)));
+      return next.size === previous.size ? previous : next;
     });
   }, [groupedMessages]);
 
+  // Archiving the last messages empties the list: the toast (and its Undo) stays.
+  const toastNode = <UndoSnackbar toast={toast} onDone={() => setToast(null)} />;
   if (!groupedMessages.length) {
+    if (status === "loading" || status === "idle") {
+      return (
+        <>
+          <ListSkeleton rows={6} />
+          {toastNode}
+        </>
+      );
+    }
+    if (status === "error") {
+      return (
+        <ErrorState
+          title="Couldn't load this mailbox"
+          message={errorMessage || "The node did not answer. Check your connection and try again."}
+          onRetry={onRetry}
+        />
+      );
+    }
     return (
-      <Box
-        sx={{
-          width: "100%",
-          minHeight: "220px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "var(--qmail-thread-subtle-text)",
-        }}
-      >
-        <Typography sx={{ fontSize: "1rem", fontWeight: 500 }}>
-          No messages to display.
-        </Typography>
-      </Box>
+      <>
+        <EmptyState
+          icon={emptyIcon ?? <InboxOutlinedIcon />}
+          title={emptyTitle || (mailboxType === "sent" ? "No sent mail yet" : "No mail yet")}
+          hint={emptyHint}
+          action={emptyAction}
+        />
+        {toastNode}
+      </>
     );
   }
 
+  const hasBulkActions = Boolean(onMarkAsRead || onMarkAsUnread || onArchive || onUnarchive);
+  const selectable = showSelectAll || hasBulkActions;
+  // Each row's menu offers what this list can do with one message.
+  const rowActions = {
+    onReply: mailboxType === "sent" ? undefined : onReply,
+    onForward,
+    onMarkAsRead: mailboxType === "sent" ? undefined : onMarkAsRead,
+    onMarkAsUnread: mailboxType === "sent" ? undefined : onMarkAsUnread,
+    onArchive,
+    onUnarchive,
+  };
+  const groupMenuContent = (groupKey: string) => {
+    const group = groupedMessages.find(g => g.key === groupKey);
+    const all = group?.messages || [];
+    const ids = all.map(getMessageId).filter(Boolean) as string[];
+    const unread = mailboxType === "sent" ? 0 : all.filter(message => !isMessageRead(message, readState)).length;
+    const forAll = (handler?: (messages: any[]) => void | Promise<void>) =>
+      handler && all.length ? () => void handler(all) : undefined;
+    return {
+      title: !group ? undefined : mailboxType === "sent" ? (
+        `To: ${group.label}`
+      ) : group.key === "sender:unknown" ? (
+        group.label
+      ) : (
+        <NameText name={group.label} />
+      ),
+      ariaLabel: `Actions for all from ${group ? (mailboxType === "sent" ? `To: ${group.label}` : spokenName(group.label)) : "this group"}`,
+      actions: groupRowActions({
+        count: all.length,
+        unreadCount: unread,
+        expanded: Boolean(expandedGroups[groupKey]),
+        allSelected: ids.length > 0 && ids.every(id => selectedMessageIds.has(id)),
+        toggleExpanded: () => setExpandedGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] })),
+        markRead: mailboxType === "sent" ? undefined : forAll(onMarkAsRead),
+        markUnread: mailboxType === "sent" ? undefined : forAll(onMarkAsUnread),
+        archive: forAll(onArchive),
+        unarchive: forAll(onUnarchive),
+        toggleSelected: selectable ? () => handleToggleAll(groupKey) : undefined,
+      }),
+    };
+  };
+  const bulkButtonSx = { minHeight: 44, textTransform: "none", fontWeight: 600 } as const;
+
   return (
-    <MessagesContainer>
+    <Box ref={listRef} sx={{ width: "100%", display: "flex", flexDirection: "column", minWidth: 0 }}>
       {showSelectAll && allVisibleMessageIds.length > 0 && (
         <Box
-          sx={{
-            width: "100%",
+          sx={theme => ({
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            gap: "12px",
-            border: "1px solid var(--qmail-shell-border)",
-            borderRadius: "10px",
-            background: "var(--qmail-shell-hover)",
-            padding: "10px 14px",
-            marginBottom: "10px",
-          }}
+            gap: 0.5,
+            px: 1,
+            minHeight: 44,
+            borderBottom: `1px solid ${theme.palette.divider}`,
+          })}
         >
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              minWidth: 0,
-            }}
-          >
-            <Checkbox
-              checked={areAllVisibleSelected}
-              indeterminate={isVisibleSelectionIndeterminate}
-              onChange={handleToggleSelectAllVisible}
-              sx={{
-                color: "var(--qmail-action-primary-text)",
-                "&.Mui-checked": {
-                  color: "var(--qmail-action-primary-text)",
-                },
-              }}
-            />
-            <Typography
-              sx={{
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                color: "var(--qmail-thread-text)",
-              }}
-            >
-              Select all
-            </Typography>
-          </Box>
+          <Checkbox
+            checked={areAllVisibleSelected}
+            indeterminate={isVisibleSelectionIndeterminate}
+            onChange={handleToggleSelectAllVisible}
+            slotProps={{ input: { "aria-label": "Select all messages" } }}
+            sx={checkboxSx}
+          />
+          <Typography sx={{ fontSize: "0.875rem", fontWeight: 600 }}>Select all</Typography>
           <Typography
-            sx={{
-              fontSize: "0.85rem",
-              color: "var(--qmail-thread-subtle-text)",
-              whiteSpace: "nowrap",
-            }}
+            sx={{ ml: "auto", fontSize: "0.875rem", color: "text.secondary", whiteSpace: "nowrap" }}
           >
             {selectedVisibleCount}/{allVisibleMessageIds.length} selected
           </Typography>
         </Box>
       )}
+
+      <Box
+        component="ul"
+        aria-label={mailboxType === "sent" ? "Sent messages by recipient" : "Messages by sender"}
+        sx={{ listStyle: "none", m: 0, p: 0, width: "100%", minWidth: 0 }}
+      >
       {groupedMessages.map(group => {
         const isExpandableGroup = group.messages.length > 1;
         const isExpanded = Boolean(expandedGroups[group.key]);
         const latestMessage = group.messages[0];
-        const latestMessageDate = formatFullTimestamp(latestMessage?.createdAt);
         const isAliasGroup =
           mailboxType === "sent" && group.key.startsWith("alias:");
         const groupMessageIds = group.messages
           .map(getMessageId)
           .filter(Boolean) as string[];
-        const groupHasUnread = group.messages.some(
-          message => !isMessageMarkedRead(message)
-        );
+        const unreadCount =
+          mailboxType === "sent"
+            ? 0
+            : group.messages.filter(message => !isMessageRead(message, readState)).length;
+        const groupHasUnread = unreadCount > 0;
         const selectedCount = groupMessageIds.filter(id =>
           selectedMessageIds.has(id)
         ).length;
@@ -337,262 +477,276 @@ export const GroupedMailboxList = ({
         const isGroupIndeterminate =
           selectedCount > 0 && selectedCount < groupMessageIds.length;
 
-        return (
-          <Box
-            key={group.key}
-            sx={{
-              width: "100%",
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-            }}
-          >
-            <Box
-              onClick={() => {
-                if (!isExpandableGroup) {
-                  const onlyMessage = group.messages[0];
-                  const messageId = getMessageId(onlyMessage);
-                  if (!messageId) return;
-                  openMessage(
-                    onlyMessage?.user,
-                    messageId,
-                    onlyMessage,
-                    mailboxType === "sent" ? group.label : undefined
-                  );
-                  return;
+        if (!isExpandableGroup) {
+          const messageId = getMessageId(latestMessage);
+          return (
+            <Box key={group.key} component="li" data-group={group.key}>
+              <MailMessageRow
+                messageData={latestMessage}
+                openMessage={openMessage}
+                isFromSent={mailboxType === "sent"}
+                selected={selectedMessageIds.has(messageId)}
+                onToggleSelected={selectable ? () => handleToggleMessage(messageId) : undefined}
+                onDeleteMessage={mailboxType === "sent" ? onDeleteMessage : undefined}
+                isDeleting={
+                  mailboxType === "sent" && Boolean(messageId) && isDeletingMessage
+                    ? isDeletingMessage(messageId)
+                    : false
                 }
-                setExpandedGroups(prev => ({
-                  ...prev,
-                  [group.key]: !prev[group.key],
-                }));
-              }}
-              sx={{
+                {...rowActions}
+                isOpen={
+                  openedMessageId !== null &&
+                  openedMessageId !== undefined &&
+                  String(openedMessageId) === String(messageId)
+                }
+                highlightTerms={highlightTerms}
+              />
+            </Box>
+          );
+        }
+
+        const decryptedRecipient =
+          mailboxType === "sent"
+            ? group.messages
+                .map(message => {
+                  const copy: any = hashMapMailMessages[getMessageId(message)];
+                  return copy?.isValid && typeof copy?.recipient === "string"
+                    ? copy.recipient.trim()
+                    : "";
+                })
+                .find(Boolean)
+            : "";
+        const label = mailboxType === "sent" ? `To: ${decryptedRecipient || group.label}` : group.label;
+        // Received groups are labelled by the sender's name.
+        const spokenGroup = mailboxType === "sent" || group.key === "sender:unknown" ? group.label : spokenName(group.label);
+        const summary = `${group.messages.length} messages${
+          groupHasUnread ? ` · ${unreadCount} unread` : ""
+        }`;
+
+        return (
+          <Box key={group.key} component="li" data-group={group.key} sx={{ display: "flex", flexDirection: "column" }}>
+            <Box
+              {...groupMenu.triggerFor(group.key)}
+              sx={theme => ({
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "space-between",
-                gap: "12px",
-                width: "100%",
-                borderRadius: "12px",
-                cursor: "pointer",
-                border: "1px solid var(--qmail-shell-border)",
-                background: "var(--qmail-shell-hover)",
-                padding: "10px 14px",
-                "&:hover": {
-                  background: "var(--qmail-shell-hover-strong)",
-                },
-              }}
+                gap: 0.5,
+                borderBottom: `1px solid ${theme.palette.divider}`,
+                WebkitTouchCallout: "none",
+              })}
             >
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                  minWidth: 0,
-                  overflow: "hidden",
-                }}
-              >
+              {selectable && (
                 <Checkbox
                   checked={isGroupChecked}
                   indeterminate={isGroupIndeterminate}
-                  onClick={event => {
-                    event.stopPropagation();
-                  }}
                   onChange={() => handleToggleAll(group.key)}
-                  sx={{
-                    color: "var(--qmail-action-primary-text)",
-                    "&.Mui-checked": {
-                      color: "var(--qmail-action-primary-text)",
-                    },
-                  }}
-                />
-                <AvatarWrapper
-                  isAlias={isAliasGroup}
-                  height="50px"
-                  user={group.label}
-                  fallback={group.label}
-                />
-                <Box
-                  sx={{
-                    display: "flex",
-                    flexDirection: "column",
-                    minWidth: 0,
-                  }}
-                >
-                  <Typography
-                    sx={{
-                      fontSize: "1rem",
-                      fontWeight:
-                        mailboxType === "sent"
-                          ? 300
-                          : groupHasUnread
-                          ? 700
-                          : 300,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {mailboxType === "sent" ? "To: " : ""}
-                    {group.label}
-                  </Typography>
-                  <Typography
-                    sx={{
-                      fontSize: "0.875rem",
-                      fontWeight: 500,
-                      color: "var(--qmail-thread-subtle-text)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {group.messages.length} message
-                    {group.messages.length === 1 ? "" : "s"} •{" "}
-                    {latestMessageDate}
-                  </Typography>
-                </Box>
-              </Box>
-              {isExpandableGroup && (
-                <ExpandMoreIcon
-                  sx={{
-                    color: "var(--qmail-thread-subtle-text)",
-                    transform: isExpanded ? "rotate(180deg)" : "rotate(90deg)",
-                    transition: "transform 0.2s ease",
-                  }}
+                  slotProps={{ input: { "aria-label": `Select all from ${spokenGroup}` } }}
+                  sx={checkboxSx}
                 />
               )}
-            </Box>
-            {isExpandableGroup && isExpanded && (
-              <Box
-                sx={{
-                  width: "100%",
+              <ButtonBase
+                onClick={() =>
+                  setExpandedGroups(prev => ({ ...prev, [group.key]: !prev[group.key] }))
+                }
+                aria-expanded={isExpanded}
+                sx={theme => ({
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 64,
                   display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                  pl: {
-                    xs: "0px",
-                    md: "28px",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  textAlign: "left",
+                  gap: 1.5,
+                  px: selectable ? 1 : 2,
+                  py: 1,
+                  borderRadius: theme.shape.borderRadius,
+                  transition: "background-color 150ms ease",
+                  "&:hover": { backgroundColor: theme.palette.action.hover },
+                  "&:focus-visible": {
+                    outline: `2px solid ${theme.palette.primary.main}`,
+                    outlineOffset: -2,
                   },
-                }}
+                  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+                })}
+              >
+                <Box sx={{ flexShrink: 0, display: "flex", [NARROW_LIST_QUERY]: { display: "none" } }}>
+                  <AvatarWrapper
+                    isAlias={isAliasGroup}
+                    height="40px"
+                    user={group.label}
+                    fallback={group.label}
+                  />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.25 }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                    {groupHasUnread && <UnreadDot />}
+                    <Typography
+                      noWrap
+                      sx={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: "1rem",
+                        lineHeight: 1.3,
+                        fontWeight: groupHasUnread ? 700 : 500,
+                        // Unread reads blue, as a message row does.
+                        color: groupHasUnread ? "primary.main" : "text.primary",
+                      }}
+                    >
+                      {mailboxType === "sent" ? (
+                        <SentGroupLabel
+                          identifier={getMessageId(latestMessage)}
+                          known={decryptedRecipient}
+                        />
+                      ) : group.key === "sender:unknown" ? (
+                        label
+                      ) : (
+                        <NameText name={group.label} />
+                      )}
+                    </Typography>
+                  </Box>
+                  <Typography
+                    noWrap
+                    sx={{
+                      fontSize: "0.875rem",
+                      lineHeight: 1.35,
+                      color: "text.secondary",
+                      fontWeight: groupHasUnread ? 600 : 400,
+                    }}
+                  >
+                    {summary}
+                  </Typography>
+                </Box>
+                <MailListDate
+                  timestamp={latestMessage?.createdAt}
+                  emphasis={groupHasUnread}
+                  detailPrefix="Latest: "
+                  stacked
+                  inlineFrom={WIDE_ROW_QUERY}
+                />
+                <ExpandMoreIcon
+                  aria-hidden
+                  sx={{
+                    color: "text.secondary",
+                    flexShrink: 0,
+                    transition: "transform 150ms ease",
+                    transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                    "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+                  }}
+                />
+              </ButtonBase>
+            </Box>
+            <Collapse in={isExpanded} timeout={foldTimeout} unmountOnExit>
+              <Box
+                component="ul"
+                aria-label={mailboxType === "sent" ? `Messages to ${group.label}` : `Messages from ${spokenGroup}`}
+                sx={{ listStyle: "none", m: 0, p: 0, [ROOMY_LIST_QUERY]: { pl: 3 }, display: "flex", flexDirection: "column" }}
               >
                 {group.messages.map(message => {
                   const messageId = getMessageId(message);
-                  const isMessageSelected = selectedMessageIds.has(messageId);
-
                   return (
-                    <Box
+                    <MailMessageRow
                       key={messageId}
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        width: "100%",
-                        borderRadius: "8px",
-                        padding: "6px 8px",
-                        cursor: "pointer",
-                        border: "1px solid var(--qmail-shell-border)",
-                        background: "var(--qmail-shell-hover)",
-                        "&:hover": {
-                          background: "var(--qmail-shell-hover-strong)",
-                        },
-                      }}
-                      onClick={() => handleToggleMessage(messageId)}
-                    >
-                      <Checkbox
-                        checked={isMessageSelected}
-                        onClick={event => {
-                          event.stopPropagation();
-                        }}
-                        onChange={() => handleToggleMessage(messageId)}
-                        sx={{
-                          color: "var(--qmail-action-primary-text)",
-                          "&.Mui-checked": {
-                            color: "var(--qmail-action-primary-text)",
-                          },
-                        }}
-                      />
-                      <MailMessageRow
-                        messageData={message}
-                        openMessage={openMessage}
-                        isFromSent={mailboxType === "sent"}
-                        compact
-                        useFullTimestamp
-                        onDeleteMessage={
-                          mailboxType === "sent" ? onDeleteMessage : undefined
-                        }
-                        isDeleting={
-                          mailboxType === "sent" &&
-                          Boolean(messageId) &&
-                          isDeletingMessage
-                            ? isDeletingMessage(String(messageId))
-                            : false
-                        }
-                        isOpen={
-                          openedMessageId !== null &&
-                          openedMessageId !== undefined &&
-                          String(openedMessageId) === String(messageId)
-                        }
-                      />
-                    </Box>
+                      component="li"
+                      messageData={message}
+                      openMessage={openMessage}
+                      isFromSent={mailboxType === "sent"}
+                      compact
+                      selected={selectedMessageIds.has(messageId)}
+                      onToggleSelected={
+                        selectable ? () => handleToggleMessage(messageId) : undefined
+                      }
+                      onDeleteMessage={mailboxType === "sent" ? onDeleteMessage : undefined}
+                      isDeleting={
+                        mailboxType === "sent" && Boolean(messageId) && isDeletingMessage
+                          ? isDeletingMessage(messageId)
+                          : false
+                      }
+                      {...rowActions}
+                      isOpen={
+                        openedMessageId !== null &&
+                        openedMessageId !== undefined &&
+                        String(openedMessageId) === String(messageId)
+                      }
+                      highlightTerms={highlightTerms}
+                    />
                   );
                 })}
               </Box>
-            )}
+            </Collapse>
           </Box>
         );
       })}
-      {selectedMessageIds.size > 0 && (onMarkAsRead || onMarkAsUnread) && (
+      </Box>
+
+      {footer}
+      {groupMenu.renderMenu(groupMenuContent)}
+      {toastNode}
+
+      {selectedMessageIds.size > 0 && hasBulkActions && (
         <Box
-          sx={{
-            width: "100%",
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "10px",
+          role="toolbar"
+          aria-label="Selected messages"
+          sx={theme => ({
             position: "sticky",
             bottom: 0,
-            padding: "12px 16px",
-            background:
-              "linear-gradient(to top, var(--qmail-shell-bg), rgba(0,0,0,0))",
             zIndex: 2,
-          }}
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 1,
+            px: 1.5,
+            py: 1,
+            borderTop: `1px solid ${theme.palette.divider}`,
+            backgroundColor: headerFill(theme, "chromeStrong"),
+            backdropFilter: "blur(12px)",
+          })}
         >
+          <Typography sx={{ fontSize: "0.875rem", fontWeight: 600, mr: "auto" }}>
+            {selectedMessageIds.size} selected
+          </Typography>
+          {onArchive && (
+            <Button
+              variant="outlined"
+              startIcon={<ArchiveOutlinedIcon />}
+              onClick={() => void runOnSelection(onArchive)}
+              sx={bulkButtonSx}
+            >
+              Archive
+            </Button>
+          )}
+          {onUnarchive && (
+            <Button
+              variant="outlined"
+              startIcon={<UnarchiveOutlinedIcon />}
+              onClick={() => void runOnSelection(onUnarchive)}
+              sx={bulkButtonSx}
+            >
+              Move to inbox
+            </Button>
+          )}
           {onMarkAsUnread && (
             <Button
-              onClick={handleMarkAsUnread}
               variant="outlined"
-              sx={{
-                fontWeight: 700,
-                textTransform: "none",
-                borderColor: "var(--qmail-shell-border)",
-                color: "var(--qmail-thread-text)",
-                background: "var(--qmail-shell-hover)",
-                "&:hover": {
-                  background: "var(--qmail-shell-hover-strong)",
-                },
-              }}
+              startIcon={<MarkEmailUnreadOutlinedIcon />}
+              onClick={() => void runOnSelection(onMarkAsUnread)}
+              sx={bulkButtonSx}
             >
-              Mark as Unread ({selectedMessageIds.size})
+              Mark as unread
             </Button>
           )}
           {onMarkAsRead && (
             <Button
-              onClick={handleMarkAsRead}
-              startIcon={<CheckIcon />}
               variant="contained"
-              sx={{
-                fontWeight: 700,
-                textTransform: "none",
-                color: "var(--qmail-action-primary-text)",
-                background: "var(--qmail-action-primary-bg)",
-                "&:hover": {
-                  background: "var(--qmail-action-primary-hover-bg)",
-                },
-              }}
+              startIcon={<CheckIcon />}
+              onClick={() => void runOnSelection(onMarkAsRead)}
+              sx={bulkButtonSx}
             >
-              Mark as Read ({selectedMessageIds.size})
+              Mark as read
             </Button>
           )}
         </Box>
       )}
-    </MessagesContainer>
+    </Box>
   );
 };

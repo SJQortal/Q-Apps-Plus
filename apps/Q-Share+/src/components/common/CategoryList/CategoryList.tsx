@@ -10,9 +10,10 @@ import {
   Theme,
 } from "@mui/material";
 
-import React, { forwardRef, useImperativeHandle, useState } from "react";
+import React, { useEffect, useId, useImperativeHandle, useState } from "react";
 import { CategoryContainer } from "./CategoryList-styles.tsx";
 import { allCategoryData } from "../../../constants/Categories/1stCategories.ts";
+import type { CategoriesObject } from "../../../utils/publishPayload";
 
 export interface Category {
   id: number;
@@ -28,12 +29,13 @@ export interface CategoryData {
   subCategories: Categories[];
 }
 
-type ListDirection = "column" | "row";
 interface CategoryListProps {
   sx?: SxProps<Theme>;
   categoryData: CategoryData;
   initialCategories?: string[];
   columns?: number;
+  /** Small inputs and tight spacing, for the filter rail. */
+  dense?: boolean;
 }
 
 export type CategoryListRef = {
@@ -41,34 +43,36 @@ export type CategoryListRef = {
   setSelectedCategories: (arr: string[]) => void;
   clearCategories: () => void;
   getCategoriesFetchString: () => string;
-  categoriesToObject: () => object;
+  categoriesToObject: () => CategoriesObject;
 };
 
-export const CategoryList = React.forwardRef<
-  CategoryListRef,
-  CategoryListProps
->(
-  (
-    { sx, categoryData, initialCategories, columns = 1 }: CategoryListProps,
-    ref
-  ) => {
-    const categoriesLength = categoryData.subCategories.length + 1;
+/** Visible labels per level; the ids and stored values stay numeric. */
+const LEVEL_LABELS = ["Category", "Subcategory", "Sub-subcategory"];
+const levelLabel = (level: number) => LEVEL_LABELS[level] ?? `Level ${level + 1}`;
 
-    let emptyCategories: string[] = [];
+export const CategoryList = React.forwardRef<CategoryListRef, CategoryListProps>(
+  ({ sx, categoryData, initialCategories, columns = 1, dense = false }: CategoryListProps, ref) => {
+    const categoriesLength = categoryData.subCategories.length + 1;
+    const idPrefix = useId();
+
+    const emptyCategories: string[] = [];
     for (let i = 0; i < categoriesLength; i++) emptyCategories.push("");
 
-    const [selectedCategories, setSelectedCategories] = useState<string[]>(
-      initialCategories || emptyCategories
-    );
+    const [selectedCategories, setSelectedCategories] = useState<string[]>(initialCategories || emptyCategories);
+
+    // A parent that loads the share to edit after mounting hands the ids in late.
+    const initialKey = initialCategories ? initialCategories.join("|") : null;
+    useEffect(() => {
+      if (initialKey !== null) setSelectedCategories(initialKey.split("|"));
+    }, [initialKey]);
 
     const categoriesToObject = () => {
-      let categoriesObject = {};
-      selectedCategories.map((category, index) => {
+      const categoriesObject = {};
+      selectedCategories.forEach((category, index) => {
         if (index === 0) categoriesObject["category"] = category;
         else if (index === 1) categoriesObject["subcategory"] = category;
         else categoriesObject[`subcategory${index}`] = category;
       });
-      console.log("categoriesObject is: ", categoriesObject);
       return categoriesObject;
     };
 
@@ -80,14 +84,11 @@ export const CategoryList = React.forwardRef<
       getSelectedCategories: () => {
         return selectedCategories;
       },
-      setSelectedCategories: categories => {
-        console.log("setSelectedCategories: ", categories);
-        //categories.map((category, index) => selectCategory(category, index));
+      setSelectedCategories: (categories) => {
         setSelectedCategories(categories);
       },
       clearCategories,
-      getCategoriesFetchString: () =>
-        getCategoriesFetchString(selectedCategories),
+      getCategoriesFetchString: () => getCategoriesFetchString(selectedCategories),
       categoriesToObject,
     }));
 
@@ -96,18 +97,17 @@ export const CategoryList = React.forwardRef<
       const subCategoryIndex = index - 1;
 
       const selectedOption = isMainCategory
-        ? categoryData.category.find(option => option.id === +optionId)
-        : categoryData.subCategories[subCategoryIndex][
-            selectedCategories[subCategoryIndex]
-          ].find(option => option.id === +optionId);
+        ? categoryData.category.find((option) => option.id === +optionId)
+        : categoryData.subCategories[subCategoryIndex][selectedCategories[subCategoryIndex]].find(
+            (option) => option.id === +optionId
+          );
+      if (!selectedOption) return;
 
-      const newSelectedCategories: string[] = selectedCategories.map(
-        (category, categoryIndex) => {
-          if (index > categoryIndex) return category;
-          else if (index === categoryIndex) return selectedOption.id.toString();
-          else return "";
-        }
-      );
+      const newSelectedCategories: string[] = selectedCategories.map((category, categoryIndex) => {
+        if (index > categoryIndex) return category;
+        else if (index === categoryIndex) return selectedOption.id.toString();
+        else return "";
+      });
       setSelectedCategories(newSelectedCategories);
     };
 
@@ -116,39 +116,12 @@ export const CategoryList = React.forwardRef<
       selectCategory(optionId, index);
     };
 
-    const categorySelectSX = {
-      // Target the input field
-      ".MuiSelect-select": {
-        fontSize: "16px", // Change font size for the selected value
-        padding: "10px 5px 15px 15px;",
-      },
-      // Target the dropdown icon
-      ".MuiSelect-icon": {
-        fontSize: "20px", // Adjust if needed
-      },
-      // Target the dropdown menu
-      "& .MuiMenu-paper": {
-        ".MuiMenuItem-root": {
-          fontSize: "14px", // Change font size for the menu items
-        },
-      },
-    };
-
     const fillMenu = (category: Categories, index: number) => {
       const subCategoryIndex = selectedCategories[index];
-      console.log("selected categories: ", selectedCategories);
-      console.log("index is: ", index);
-      console.log("subCategoryIndex is: ", subCategoryIndex);
-      console.log("category is: ", category);
-      console.log(
-        "subCategoryIndex within category: ",
-        selectedCategories[subCategoryIndex]
-      );
-      console.log("categoryData: ", categoryData);
 
       const menuToFill = category[subCategoryIndex];
       if (menuToFill)
-        return menuToFill.map(option => (
+        return menuToFill.map((option) => (
           <MenuItem key={option.id} value={option.id}>
             {option.name}
           </MenuItem>
@@ -161,96 +134,62 @@ export const CategoryList = React.forwardRef<
       return subCategory && subCategoryIndex;
     };
 
+    const size = dense ? "small" : "medium";
+    const mainLabelId = `${idPrefix}-level-0`;
+
     return (
       <CategoryContainer sx={{ width: "100%", ...sx }}>
-        <FormControl sx={{ width: "100%" }}>
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: "repeat(" + columns + ", 1fr)",
-              width: "100%",
-              gap: "20px",
-              alignItems: "center",
-              marginTop: "30px",
-            }}
-          >
-            <FormControl fullWidth sx={{ marginBottom: 1 }}>
-              <InputLabel
-                sx={{
-                  fontSize: "16px",
-                }}
-                id="Category-1"
-              >
-                Category
-              </InputLabel>
-              <Select
-                labelId="Category 1"
-                input={<OutlinedInput label="Category 1" />}
-                value={selectedCategories[0] || ""}
-                onChange={e => {
-                  selectCategoryEvent(e, 0);
-                }}
-                sx={categorySelectSX}
-              >
-                {categoryData.category.map(option => (
-                  <MenuItem key={option.id} value={option.id}>
-                    {option.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: columns > 1 ? "repeat(auto-fit, minmax(180px, 1fr))" : "1fr",
+            },
+            width: "100%",
+            gap: dense ? "12px" : "16px",
+            alignItems: "center",
+          }}
+        >
+          <FormControl fullWidth size={size}>
+            <InputLabel id={mainLabelId}>{levelLabel(0)}</InputLabel>
+            <Select
+              labelId={mainLabelId}
+              input={<OutlinedInput label={levelLabel(0)} />}
+              value={selectedCategories[0] || ""}
+              onChange={(e) => {
+                selectCategoryEvent(e, 0);
+              }}
+            >
+              {categoryData.category.map((option) => (
+                <MenuItem key={option.id} value={option.id}>
+                  {option.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
-            {categoryData.subCategories.map(
-              (category, index) =>
-                hasSubCategory(category, index) && (
-                  <FormControl
-                    fullWidth
-                    sx={{
-                      marginBottom: 1,
-                    }}
-                    key={selectedCategories[index] + index}
-                  >
-                    <InputLabel
-                      sx={{
-                        fontSize: "16px",
-                      }}
-                      id={`Category-${index + 2}`}
-                    >
-                      {`Category-${index + 2}`}
-                    </InputLabel>
-                    <Select
-                      labelId={`Category ${index + 2}`}
-                      input={<OutlinedInput label={`Category ${index + 2}`} />}
-                      value={selectedCategories[index + 1] || ""}
-                      onChange={e => {
-                        selectCategoryEvent(e, index + 1);
-                      }}
-                      sx={{
-                        width: "100%",
-                        // Target the input field
-                        ".MuiSelect-select": {
-                          fontSize: "16px", // Change font size for the selected value
-                          padding: "10px 5px 15px 15px;",
-                        },
-                        // Target the dropdown icon
-                        ".MuiSelect-icon": {
-                          fontSize: "20px", // Adjust if needed
-                        },
-                        // Target the dropdown menu
-                        "& .MuiMenu-paper": {
-                          ".MuiMenuItem-root": {
-                            fontSize: "14px", // Change font size for the menu items
-                          },
-                        },
-                      }}
-                    >
-                      {fillMenu(category, index)}
-                    </Select>
-                  </FormControl>
-                )
-            )}
-          </Box>
-        </FormControl>
+          {categoryData.subCategories.map((category, index) => {
+            if (!hasSubCategory(category, index)) return null;
+            const labelId = `${idPrefix}-level-${index + 1}`;
+            return (
+              <FormControl fullWidth size={size} key={selectedCategories[index] + index}>
+                <InputLabel id={labelId}>{levelLabel(index + 1)}</InputLabel>
+                <Select
+                  labelId={labelId}
+                  input={<OutlinedInput label={levelLabel(index + 1)} />}
+                  value={selectedCategories[index + 1] || ""}
+                  onChange={(e) => {
+                    selectCategoryEvent(e, index + 1);
+                  }}
+                  sx={{ width: "100%" }}
+                >
+                  {fillMenu(category, index)}
+                </Select>
+              </FormControl>
+            );
+          })}
+        </Box>
       </CategoryContainer>
     );
   }
@@ -258,14 +197,13 @@ export const CategoryList = React.forwardRef<
 
 export const getCategoriesFetchString = (categories: string[]) => {
   let fetchString = "";
-  categories.map((category, index) => {
+  categories.forEach((category, index) => {
     if (category) {
       if (index === 0) fetchString += `cat:${category}`;
       else if (index === 1) fetchString += `;sub:${category}`;
       else fetchString += `;sub${index}:${category}`;
     }
   });
-  console.log("categoriesAsDescription: ", fetchString);
   return fetchString;
 };
 
@@ -274,10 +212,8 @@ export const getCategoriesFromObject = (editFileProperties: any) => {
   const categoryCount = allCategoryData.subCategories.length + 1;
 
   for (let i = 0; i < categoryCount; i++) {
-    if (i === 0 && editFileProperties.category)
-      categoryList.push(editFileProperties.category);
-    else if (i === 1 && editFileProperties.subcategory)
-      categoryList.push(editFileProperties.subcategory);
+    if (i === 0 && editFileProperties.category) categoryList.push(editFileProperties.category);
+    else if (i === 1 && editFileProperties.subcategory) categoryList.push(editFileProperties.subcategory);
     else categoryList.push(editFileProperties[`subcategory${i}`] || "");
   }
   return categoryList;

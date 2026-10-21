@@ -23,3 +23,5 @@ dist-ssr
 *.sln
 *.sw?
 *.zip
+# screenshot check output (scripts/screens.mjs Q-Share+)
+e2e/shots*/

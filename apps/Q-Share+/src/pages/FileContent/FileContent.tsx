@@ -1,575 +1,543 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
-import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
-import { FollowButton } from "../../components/common/FollowButton.tsx";
-import { fontSizeMedium } from "../../constants/Misc.ts";
-import { setIsLoadingGlobal } from "../../state/features/globalSlice";
-import { Avatar, Box, Typography, useTheme } from "@mui/material";
-import { RootState } from "../../state/store";
-import { addToHashMap } from "../../state/features/fileSlice.ts";
+import { Avatar, Box, Button, IconButton, LinearProgress, Skeleton, Typography } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
-import DownloadIcon from "@mui/icons-material/Download";
-import {
-  AuthorTextComment,
-  FileAttachmentContainer,
-  FileAttachmentFont,
-  FileDescription,
-  FilePlayerContainer,
-  FileTitle,
-  Spacer,
-  StyledCardColComment,
-  StyledCardHeaderComment,
-} from "./FileContent-styles.tsx";
-import { formatDate } from "../../utils/time";
+import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
+import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import { CopyLinkButton } from "../../components/common/CopyLinkButton.tsx";
+import { SaveAllZipButton } from "../../components/common/SaveAllZipButton";
+import { SaveToCollectionButton } from "../../components/common/SaveToCollection/SaveToCollectionButton";
+import { FollowButton } from "../../components/common/FollowButton.tsx";
+import { EmptyState } from "../../components/common/EmptyState.tsx";
 import { CommentSection } from "../../components/common/Comments/CommentSection";
-import { QSHARE_FILE_BASE } from "../../constants/Identifiers.ts";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import FileElement from "../../components/common/FileElement";
+import { MyContext, isFailedStatus } from "../../wrappers/DownloadWrapper";
+import { RootState } from "../../state/store";
+import { addToHashMap, heldShare, setEditFile, type Video } from "../../state/features/fileSlice.ts";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useSafeBack } from "../../hooks/useSafeBack";
+import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
+import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
+import { formatDate } from "../../utils/time";
+import { fetchQdnResource, isShareBody, needsEncodedFetch, notShareFlags, shareFromBody } from "../../utils/fetchVideos";
+import { resourceStatus } from "../../utils/qdnResource";
+import { summaryToVideo } from "../../hooks/useFetchFiles.tsx";
+import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
+import { getCategoriesFromObject, type Category } from "../../components/common/CategoryList/CategoryList.tsx";
+import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
+import { FileRow, type ShareFile } from "./FileRow";
 import {
-  allCategoryData,
-  iconCategories,
-} from "../../constants/Categories/1stCategories.ts";
-import {
-  Category,
-  getCategoriesFromObject,
-} from "../../components/common/CategoryList/CategoryList.tsx";
-import {
-  findAllCategoryData,
-  findCategoryData,
-  getCategoriesWithIcons,
-  getIconsFromObject,
-} from "../../constants/Categories/CategoryFunctions.ts";
+  ActionRow,
+  AuthorLink,
+  Card,
+  CategoryIcon,
+  CompactActionRow,
+  DescriptionFade,
+  FileDescription,
+  FileList,
+  FileTitle,
+  Meta,
+  Page,
+  SectionTitle,
+  SubHeader,
+} from "./FileContent-styles.tsx";
 
-export const formatBytes = (bytes: number | string, decimals = 2) => {
-  bytes = Number(bytes);
-  if (bytes === 0) return "0 Bytes";
+const DESCRIPTION_COLLAPSE_PX = 300;
 
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
+/**
+ * - "fetching": the JSON is on the network but not on this node yet.
+ * - "missing": still not here after the retries below.
+ * - "deleted": the publisher replaced the body with a delete marker.
+ */
+type LoadState = "loading" | "fetching" | "ready" | "notfound" | "deleted" | "missing" | "error";
+type FetchState = Exclude<LoadState, "ready">;
 
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
+/** Waits between status checks while the JSON comes from peers (about 30 s in all). */
+export const SHARE_RETRY_DELAYS_MS = [2_000, 4_000, 8_000, 16_000];
+/** The node is getting the JSON from peers, or has it: worth waiting for. */
+const ON_THE_WAY = new Set(["PUBLISHED", "DOWNLOADING", "DOWNLOADED", "BUILDING", "MISSING_DATA"]);
+/** Every chunk is here: FETCH again (the node builds it on the way). */
+const LOCAL = new Set(["READY", "DOWNLOADED", "BUILDING"]);
 
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+/** "Category > Subcategory" from the share's stored category ids. */
+export function categoryPath(fileData: any): string {
+  if (!fileData) return "";
+  const ids = getCategoriesFromObject(fileData);
+  const names = ids.map((categoryId, index) => {
+    let match: Category | undefined;
+    if (index === 0) {
+      match = allCategoryData.category.find((item) => item?.id === +ids[0]);
+    } else {
+      const subCategories = allCategoryData.subCategories[index - 1];
+      const list = subCategories?.[ids[index - 1]];
+      match = list?.find((item) => item?.id === +ids[index]);
+    }
+    return match?.name;
+  });
+  return names.filter(Boolean).join(" > ");
+}
+
+type ShareLookup =
+  | { kind: "notfound" }
+  | { kind: "deleted"; row: Video }
+  | { kind: "unavailable"; percent: number | null }
+  | { kind: "found"; data: any };
+
+type ResourceStatus = { status?: string; percentLoaded?: number | null };
+
+/** Through resourceStatus, which encodes names such as "Vallot-/8/" that q-apps.js would break. */
+async function readShareStatus(name: string, id: string): Promise<ResourceStatus | null> {
+  try {
+    return await resourceStatus({ service: "DOCUMENT", name, identifier: id });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deletes elsewhere (Torq, qapp-core) replace the JSON with a non-JSON body
+ * such as "D" or "\n", which q-apps.js hands back as a string; some also
+ * retitle the metadata "deleted" with the tag "deleted".
+ */
+function isDeletedShare(summary: QdnResourceSummary, body: unknown): boolean {
+  // A short marker is a delete; longer text is an error page (Jetty's 400, a
+  // proxy's 502), which notShareFlags throws for, so the page offers Retry.
+  if (!isShareBody(body)) {
+    notShareFlags(body);
+    return true;
+  }
+  const meta = summary?.metadata;
+  const files = (body as { files?: unknown }).files;
+  return meta?.title === "deleted" && !!meta.tags?.includes("deleted") && !(Array.isArray(files) && files.length > 0);
+}
+
+/**
+ * One search (limit 1) for the metadata, then one FETCH_QDN_RESOURCE for the
+ * JSON body. Core answers that FETCH with "Data unavailable" within
+ * milliseconds when the JSON isn't on this node yet (it has asked its peers),
+ * so a failed FETCH asks for the status to tell "on its way" from "gone".
+ */
+async function fetchShare(name: string, id: string): Promise<ShareLookup> {
+  const rows = await searchQdn({ service: "DOCUMENT", identifier: id, name, limit: 1, includemetadata: true });
+  if (!rows.length) return { kind: "notfound" };
+  const summary = rows[0];
+  let body: any;
+  try {
+    // q-apps.js doesn't encode the name: "Vallot-/8/" would get Core's HTTP 400 page back as the body.
+    body = needsEncodedFetch(name)
+      ? await fetchQdnResource("DOCUMENT", name, id)
+      : await qortalRequest({ action: "FETCH_QDN_RESOURCE", name, service: "DOCUMENT", identifier: id });
+  } catch (error) {
+    const status = await readShareStatus(name, id);
+    if (status?.status === "NOT_PUBLISHED") return { kind: "notfound" };
+    if (status?.status && ON_THE_WAY.has(status.status)) return { kind: "unavailable", percent: status.percentLoaded ?? null };
+    throw error;
+  }
+  if (isDeletedShare(summary, body)) {
+    return { kind: "deleted", row: { ...summaryToVideo(summary), isValid: false, deleted: true } };
+  }
+  if (body.error) throw new Error(typeof body.error === "string" ? body.error : "Could not read the share");
+  // The body's title and description replace the metadata's shorter ones; the
+  // search row's name, identifier and dates stay (see shareFromBody).
+  return { kind: "found", data: shareFromBody(summaryToVideo(summary), body) };
+}
+
+export interface FileContentProps {
+  /** Extra primary actions, rendered after Fetch all and Save all as .zip (full width on phones). */
+  extraActions?: ReactNode;
+}
+
+/**
+ * The share page, /share/:name/:id. Cold open: one search (limit 1) for the
+ * metadata and one FETCH_QDN_RESOURCE for the JSON; a share already in
+ * `hashMapFiles` renders with no calls at all. Keyed by the share id so every
+ * share starts with fresh page state.
+ */
+export const FileContent = (props: FileContentProps = {}) => {
+  const params = useParams();
+  const name = decodeParam(params.name);
+  const id = decodeParam(params.id);
+  return <SharePage key={`${name}/${id}`} name={name} id={id} {...props} />;
 };
 
-export const FileContent = () => {
-  const { name, id } = useParams();
-  const [isExpandedDescription, setIsExpandedDescription] =
-    useState<boolean>(false);
-  const [descriptionHeight, setDescriptionHeight] = useState<null | number>(
-    null
-  );
-  const [icon, setIcon] = useState<string>("");
-  const userAvatarHash = useSelector(
-    (state: RootState) => state.global.userAvatarHash
-  );
-  const contentRef = useRef(null);
+interface SharePageProps extends FileContentProps {
+  name: string;
+  id: string;
+}
 
-  const avatarUrl = useMemo(() => {
-    let url = "";
-    if (name && userAvatarHash[name]) {
-      url = userAvatarHash[name];
-    }
-
-    return url;
-  }, [userAvatarHash, name]);
+const SharePage = ({ name, id, extraActions }: SharePageProps) => {
+  const phone = usePhoneLayout();
   const navigate = useNavigate();
-  const theme = useTheme();
-
-  const [fileData, setFileData] = useState<any>(null);
-  const [playlistData, setPlaylistData] = useState<any>(null);
-
-  const hashMapVideos = useSelector(
-    (state: RootState) => state.file.hashMapFiles
-  );
-  const videoReference = useMemo(() => {
-    if (!fileData) return null;
-    const { videoReference } = fileData;
-    if (
-      videoReference?.identifier &&
-      videoReference?.name &&
-      videoReference?.service
-    ) {
-      return videoReference;
-    } else {
-      return null;
-    }
-  }, [fileData]);
-
-  const videoCover = useMemo(() => {
-    if (!fileData) return null;
-    const { videoImage } = fileData;
-    return videoImage || null;
-  }, [fileData]);
   const dispatch = useDispatch();
+  const { downloadVideo } = useContext(MyContext);
+  const downloads = useSelector((state: RootState) => state.global.downloads);
+  const username = useSelector((state: RootState) => state.auth.user?.name);
+  // A body another name published under this identifier is not this share.
+  const cached = useSelector((state: RootState) => heldShare(state.file, name, id));
 
-  const getVideoData = React.useCallback(async (name: string, id: string) => {
-    try {
-      if (!name || !id) return;
-      dispatch(setIsLoadingGlobal(true));
+  const [fetchState, setFetchState] = useState<FetchState>("loading");
+  const [fetchPercent, setFetchPercent] = useState<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [expanded, setExpanded] = useState(false);
+  const [collapsible, setCollapsible] = useState(false);
+  // A list row whose body turned out not to be a share: marked deleted, or
+  // unreadable (then this page looks for itself).
+  const cachedDeleted = (cached as { deleted?: unknown } | undefined)?.deleted === true;
+  const usable = cached && cached.isValid !== false && !cachedDeleted ? cached : null;
+  const fileData: any = usable;
+  const state: LoadState = cachedDeleted ? "deleted" : usable ? "ready" : fetchState;
 
-      const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&query=${QSHARE_FILE_BASE}&limit=1&includemetadata=true&reverse=true&excludeblocked=true&name=${name}&exactmatchnames=true&offset=0&identifier=${id}`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseDataSearch = await response.json();
-
-      if (responseDataSearch?.length > 0) {
-        let resourceData = responseDataSearch[0];
-        resourceData = {
-          title: resourceData?.metadata?.title,
-          category: resourceData?.metadata?.category,
-          categoryName: resourceData?.metadata?.categoryName,
-          tags: resourceData?.metadata?.tags || [],
-          description: resourceData?.metadata?.description,
-          created: resourceData?.created,
-          updated: resourceData?.updated,
-          user: resourceData.name,
-          videoImage: "",
-          id: resourceData.identifier,
-        };
-
-        const responseData = await qortalRequest({
-          action: "FETCH_QDN_RESOURCE",
-          name: name,
-          service: "DOCUMENT",
-          identifier: id,
-        });
-
-        if (responseData && !responseData.error) {
-          const combinedData = {
-            ...resourceData,
-            ...responseData,
-          };
-          setFileData(combinedData);
-          dispatch(addToHashMap(combinedData));
-          checkforPlaylist(name, id, combinedData?.code);
-        }
-      }
-    } catch (error) {
-    } finally {
-      dispatch(setIsLoadingGlobal(false));
-    }
+  // Measured once the description is in the DOM; long ones start collapsed.
+  const measureDescription = useCallback((el: HTMLDivElement | null) => {
+    if (el) setCollapsible(el.scrollHeight > DESCRIPTION_COLLAPSE_PX);
   }, []);
 
-  const checkforPlaylist = React.useCallback(async (name, id, code) => {
-    try {
-      if (!name || !id || !code) return;
-
-      const url = `/arbitrary/resources/search?mode=ALL&service=PLAYLIST&description=c:${code}&limit=1&includemetadata=true&reverse=true&excludeblocked=true&name=${name}&exactmatchnames=true&offset=0`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseDataSearch = await response.json();
-
-      if (responseDataSearch?.length > 0) {
-        let resourceData = responseDataSearch[0];
-        resourceData = {
-          title: resourceData?.metadata?.title,
-          category: resourceData?.metadata?.category,
-          categoryName: resourceData?.metadata?.categoryName,
-          tags: resourceData?.metadata?.tags || [],
-          description: resourceData?.metadata?.description,
-          created: resourceData?.created,
-          updated: resourceData?.updated,
-          name: resourceData.name,
-          videoImage: "",
-          identifier: resourceData.identifier,
-          service: resourceData.service,
-        };
-
-        const responseData = await qortalRequest({
-          action: "FETCH_QDN_RESOURCE",
-          name: resourceData.name,
-          service: resourceData.service,
-          identifier: resourceData.identifier,
-        });
-
-        if (responseData && !responseData.error) {
-          const combinedData = {
-            ...resourceData,
-            ...responseData,
-          };
-          const videos = [];
-          if (combinedData?.videos) {
-            for (const vid of combinedData.videos) {
-              const url = `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=${vid.identifier}&limit=1&includemetadata=true&reverse=true&name=${vid.name}&exactmatchnames=true&offset=0`;
-              const response = await fetch(url, {
-                method: "GET",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-              });
-              const responseDataSearchVid = await response.json();
-
-              if (responseDataSearchVid?.length > 0) {
-                let resourceData2 = responseDataSearchVid[0];
-                videos.push(resourceData2);
-              }
-            }
-          }
-          combinedData.videos = videos;
-          setPlaylistData(combinedData);
-        }
-      }
-    } catch (error) {}
-  }, []);
-
-  React.useEffect(() => {
-    if (name && id) {
-      const existingVideo = hashMapVideos[id];
-
-      if (existingVideo) {
-        setFileData(existingVideo);
-        checkforPlaylist(name, id, existingVideo?.code);
-      } else {
-        getVideoData(name, id);
-      }
-    }
-  }, [id, name]);
-
-  // const getAvatar = React.useCallback(async (author: string) => {
-  //   try {
-  //     let url = await qortalRequest({
-  //       action: 'GET_QDN_RESOURCE_URL',
-  //       name: author,
-  //       service: 'THUMBNAIL',
-  //       identifier: 'qortal_avatar'
-  //     })
-
-  //     setAvatarUrl(url)
-  //     dispatch(setUserAvatarHash({
-  //       name: author,
-  //       url
-  //     }))
-  //   } catch (error) { }
-  // }, [])
-
-  // React.useEffect(() => {
-  //   if (name && !avatarUrl) {
-  //     const existingAvatar = userAvatarHash[name]
-
-  //     if (existingAvatar) {
-  //       setAvatarUrl(existingAvatar)
-  //     } else {
-  //       getAvatar(name)
-  //     }
-
-  //   }
-
-  // }, [name, userAvatarHash])
-
+  /**
+   * Cold open. The found share goes into hashMapFiles, which is what the page
+   * renders from (and what makes the next open warm). When the JSON is still
+   * on its way from peers, the node's status is checked again after each of
+   * SHARE_RETRY_DELAYS_MS (held while the tab is hidden) and the FETCH repeats
+   * once every chunk is local. Cleanup drops late answers and timers.
+   */
   useEffect(() => {
-    if (contentRef.current) {
-      const height = contentRef.current.offsetHeight;
-      if (height > 100) {
-        // Assuming 100px is your threshold
-        setDescriptionHeight(100);
-      }
-    }
-    if (fileData) {
-      //const icon = getIconsFromObject(fileData)[0]?.icon || null;
+    if (!name || !id || usable || cachedDeleted) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let onVisible: (() => void) | undefined;
 
-      const icon = getIconsFromObject(fileData);
-      setIcon(icon);
-    }
-  }, [fileData]);
+    const whenVisible = (fn: () => void) => {
+      if (document.visibilityState !== "hidden") return fn();
+      const listener = () => {
+        if (document.visibilityState === "hidden") return;
+        document.removeEventListener("visibilitychange", listener);
+        onVisible = undefined;
+        if (active) fn();
+      };
+      onVisible = listener;
+      document.addEventListener("visibilitychange", listener);
+    };
 
-  const categoriesDisplay = useMemo(() => {
-    if (fileData) {
-      const categoryList = getCategoriesFromObject(fileData);
-
-      const categoryNames = categoryList.map((categoryID, index) => {
-        let categoryName: Category;
-        if (index === 0) {
-          categoryName = allCategoryData.category.find(
-            item => item?.id === +categoryList[0]
-          );
-        } else {
-          const subCategories = allCategoryData.subCategories[index - 1];
-          const selectedSubCategory = subCategories[categoryList[index - 1]];
-          if (selectedSubCategory) {
-            categoryName = selectedSubCategory.find(
-              item => item?.id === +categoryList[index]
-            );
+    const attempt = (next: number) => {
+      fetchShare(name, id).then(
+        (result) => {
+          if (!active) return;
+          if (result.kind === "found") dispatch(addToHashMap(result.data));
+          else if (result.kind === "unavailable") wait(next, result.percent);
+          else {
+            // Stored the way a list stores a delete marker, so Home and
+            // profiles leave the share out too (and stop calling it unavailable).
+            if (result.kind === "deleted") dispatch(addToHashMap(result.row));
+            setFetchState(result.kind);
           }
+        },
+        () => {
+          if (active) setFetchState("error");
         }
-        return categoryName?.name;
+      );
+    };
+
+    const wait = (next: number, percent: number | null) => {
+      if (next >= SHARE_RETRY_DELAYS_MS.length) {
+        setFetchState("missing");
+        return;
+      }
+      setFetchPercent(percent);
+      setFetchState("fetching");
+      timer = setTimeout(
+        () =>
+          whenVisible(() => {
+            void readShareStatus(name, id).then((status) => {
+              if (!active) return;
+              if (status?.status === "NOT_PUBLISHED") setFetchState("notfound");
+              else if (status?.status && LOCAL.has(status.status)) attempt(next + 1);
+              else wait(next + 1, status?.percentLoaded ?? percent);
+            });
+          }),
+        SHARE_RETRY_DELAYS_MS[next]
+      );
+    };
+
+    attempt(0);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      if (onVisible) document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [cachedDeleted, dispatch, id, name, reloadKey, usable]);
+
+  const retry = () => {
+    setFetchState("loading");
+    setFetchPercent(null);
+    setReloadKey((k) => k + 1);
+  };
+
+  const icon = useMemo(() => (fileData ? getIconsFromObject(fileData) : undefined), [fileData]);
+  const categories = useMemo(() => categoryPath(fileData), [fileData]);
+  const files: ShareFile[] = useMemo(() => (Array.isArray(fileData?.files) ? fileData.files : []), [fileData]);
+  const author: string = fileData?.user || name;
+
+  const pendingFiles = useMemo(
+    () => files.filter((f) => f?.identifier && (!downloads?.[f.identifier] || isFailedStatus(downloads[f.identifier]?.status?.status))),
+    [downloads, files]
+  );
+  const allReady = files.length > 0 && files.every((f) => downloads?.[f.identifier]?.status?.status === "READY");
+
+  const fetchAll = () => {
+    for (const file of pendingFiles) {
+      const service = file.service || "FILE";
+      downloadVideo({
+        name: file.name,
+        service,
+        identifier: file.identifier,
+        properties: { ...file, service, mimeType: file.mimetype, jsonId: id },
       });
-      const filteredCategoryNames = categoryNames.filter(name => name);
-      let categoryDisplay = "";
-      const separator = " > ";
-      filteredCategoryNames.map((name, index) => {
-        categoryDisplay +=
-          index !== filteredCategoryNames.length - 1 ? name + separator : name;
-      });
-      return categoryDisplay;
     }
-    return "No file data";
-  }, [fileData]);
+  };
+
+  // window.history is shared by every Hub tab, so Back follows the app's own stack.
+  const goBack = useSafeBack("/");
+  const title: string = fileData?.title || "";
+
+  // A single file has its own Download in its row, so "Fetch all" only
+  // appears for two or more (the .zip button has the same rule).
+  const primaryActions =
+    files.length > 1 || extraActions ? (
+      <>
+        {files.length > 1 && (
+          <Button variant="contained" startIcon={<CloudDownloadOutlinedIcon />} onClick={fetchAll} disabled={pendingFiles.length === 0}>
+            {allReady ? "All files ready" : pendingFiles.length === 0 ? "Fetching…" : "Fetch all files"}
+          </Button>
+        )}
+        <SaveAllZipButton files={files} title={title} allReady={allReady} />
+        {extraActions}
+      </>
+    ) : null;
+  // On phones these become one compact row of icon-over-label buttons.
+  const secondaryActions = fileData ? (
+    <>
+      <CopyLinkButton link={shareLink(author, id)} tooltipTitle="Copy link" label="Copy link" />
+      <SaveToCollectionButton
+        share={{ name: author, identifier: id, title: fileData.title }}
+        variant="button"
+        size="medium"
+        compact={phone}
+      />
+      {author === username ? (
+        <Button
+          variant="outlined"
+          startIcon={<EditOutlinedIcon />}
+          aria-label="Edit share"
+          onClick={() => dispatch(setEditFile(fileData))}
+        >
+          {phone ? "Edit" : "Edit share"}
+        </Button>
+      ) : (
+        <FollowButton followerName={author} compact={phone} />
+      )}
+    </>
+  ) : null;
 
   return (
-    <Box
-      sx={{
-        display: "flex",
-        alignItems: "center",
-        flexDirection: "column",
-        padding: "20px 10px",
-      }}
-    >
-      <FilePlayerContainer
-        sx={{
-          marginBottom: "30px",
-        }}
-      >
-        <Spacer height="15px" />
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-          }}
-        >
-          {icon ? (
-            <img
-              src={icon}
-              width="50px"
-              style={{
-                borderRadius: "5px",
-                marginRight: "10px",
-              }}
-            />
-          ) : (
-            <AttachFileIcon />
-          )}
-          <FileTitle
-            variant="h1"
-            color="textPrimary"
-            sx={{
-              textAlign: "center",
-            }}
-          >
-            {fileData?.title}
-          </FileTitle>
-        </div>
-        {fileData?.created && (
-          <Typography
-            variant="h6"
-            sx={{
-              fontSize: "12px",
-            }}
-            color={theme.palette.text.primary}
-          >
-            {formatDate(fileData.created)}
+    <Page>
+      {phone && (
+        <SubHeader>
+          <IconButton aria-label="Back" onClick={goBack} sx={{ minWidth: 44, minHeight: 44 }}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography component="h2" noWrap sx={{ flex: 1, minWidth: 0, fontSize: 16, fontWeight: 700, pr: 1 }}>
+            {title || "Share"}
           </Typography>
-        )}
+        </SubHeader>
+      )}
 
-        <Spacer height="15px" />
-        <Box
-          sx={{
-            cursor: "pointer",
-          }}
-          onClick={() => {
-            navigate(`/channel/${name}`);
-          }}
-        >
-          <StyledCardHeaderComment
-            sx={{
-              display: "flex",
-              gap: "20px",
-              "& .MuiCardHeader-content": {
-                overflow: "hidden",
-              },
-            }}
-          >
-            <Box>
-              <Avatar
-                src={`/arbitrary/THUMBNAIL/${name}/qortal_avatar`}
-                alt={`${name}'s avatar`}
-              />
+      {state === "fetching" && (
+        <Card role="status" aria-live="polite" aria-label="Fetching share">
+          <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start" }}>
+            <Box sx={{ color: "text.secondary", display: "flex", pt: 0.25 }}>
+              <CloudDownloadOutlinedIcon />
             </Box>
-            <StyledCardColComment>
-              <AuthorTextComment
-                color={
-                  theme.palette.mode === "light"
-                    ? theme.palette.text.secondary
-                    : "#d6e8ff"
-                }
-              >
-                {name}
-              </AuthorTextComment>
-            </StyledCardColComment>
-            <FollowButton
-              sx={{ minWidth: "96px" }}
-              followerName={fileData?.user}
-            />
-            <CopyLinkButton
-              link={`qortal://APP/Q-Share/share/${encodeURIComponent(fileData?.user)}/${encodeURIComponent(fileData?.id)}`}
-              tooltipTitle={`Copy page link`}
-            />
-          </StyledCardHeaderComment>
-        </Box>
-        <Spacer height="15px" />
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            fontWeight: "bold",
-            fontSize: fontSizeMedium,
-            userSelect: "none",
-          }}
-        >
-          {categoriesDisplay}
-        </Box>
-        <Spacer height="15px" />
-        <Box
-          sx={{
-            background: "#333333",
-            borderRadius: "5px",
-            padding: "5px",
-            width: "100%",
-            cursor: !descriptionHeight
-              ? "default"
-              : isExpandedDescription
-                ? "default"
-                : "pointer",
-            position: "relative",
-          }}
-          className={
-            !descriptionHeight ? "" : isExpandedDescription ? "" : "hover-click"
-          }
-        >
-          {descriptionHeight && !isExpandedDescription && (
-            <Box
-              sx={{
-                position: "absolute",
-                top: "0px",
-                right: "0px",
-                left: "0px",
-                bottom: "0px",
-                cursor: "pointer",
-              }}
-              onClick={() => {
-                if (isExpandedDescription) return;
-                setIsExpandedDescription(true);
-              }}
-            />
-          )}
-          <Box
-            ref={contentRef}
-            sx={{
-              height: !descriptionHeight
-                ? "auto"
-                : isExpandedDescription
-                  ? "auto"
-                  : "100px",
-              overflow: "hidden",
-            }}
-          >
-            {fileData?.htmlDescription ? (
-              <DisplayHtml html={fileData?.htmlDescription} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography sx={{ fontWeight: 700 }}>Not on your node yet</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Fetching it from peers…{fetchPercent ? ` ${Math.round(fetchPercent)}%` : ""}
+              </Typography>
+            </Box>
+          </Box>
+          <LinearProgress
+            variant={fetchPercent ? "determinate" : "indeterminate"}
+            value={fetchPercent ? Math.min(100, Math.round(fetchPercent)) : undefined}
+            aria-label="Share download progress"
+            sx={{ borderRadius: 1, height: 6 }}
+          />
+        </Card>
+      )}
+
+      {state === "loading" && (
+        <>
+          <Card aria-busy="true" aria-label="Loading share">
+            <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
+              <Skeleton variant="rounded" width={48} height={48} />
+              <Skeleton variant="text" sx={{ flex: 1, fontSize: 24 }} />
+            </Box>
+            <Skeleton variant="text" width="45%" />
+            <Skeleton variant="text" width="60%" />
+            <Box sx={{ display: "flex", flexDirection: { xs: "column", sm: "row" }, gap: 1 }}>
+              <Skeleton variant="rounded" height={48} sx={{ width: { xs: "100%", sm: 160 } }} />
+              <Skeleton variant="rounded" height={48} sx={{ width: { xs: "100%", sm: 130 } }} />
+            </Box>
+          </Card>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} variant="rounded" height={112} />
+            ))}
+          </Box>
+        </>
+      )}
+
+      {state === "notfound" && (
+        <EmptyState
+          title="Share not found"
+          description="It may have been removed, or the link points at a different name."
+          actionLabel="Back to all shares"
+          onAction={() => navigate("/")}
+        />
+      )}
+
+      {state === "deleted" && (
+        <EmptyState
+          icon={<DeleteOutlineOutlinedIcon />}
+          title="This share was deleted by its publisher"
+          actionLabel="Back to all shares"
+          onAction={() => navigate("/")}
+        />
+      )}
+
+      {state === "missing" && (
+        <EmptyState
+          icon={<CloudOffOutlinedIcon />}
+          title="This share isn't on your node yet"
+          description="Your node has asked its peers for it. Try again in a minute."
+          actionLabel="Retry"
+          onAction={retry}
+        />
+      )}
+
+      {state === "error" && (
+        <EmptyState
+          icon={<ErrorOutlineOutlinedIcon />}
+          title="This share could not be loaded"
+          description="Check that your node is running, then try again."
+          actionLabel="Retry"
+          onAction={retry}
+        />
+      )}
+
+      {state === "ready" && fileData && (
+        <>
+          <Card aria-labelledby="share-title">
+            <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", minWidth: 0 }}>
+              {icon ? (
+                <CategoryIcon src={icon} alt="" loading="lazy" />
+              ) : (
+                <Box sx={{ width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary" }}>
+                  <AttachFileIcon />
+                </Box>
+              )}
+              <FileTitle id="share-title" component="h1">
+                {title || "Untitled share"}
+              </FileTitle>
+            </Box>
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0 }}>
+              <AuthorLink type="button" onClick={() => navigate(profilePath(author))} aria-label={`Shares by ${author}`}>
+                <Avatar src={avatarUrl(author)} alt="" sx={{ width: 32, height: 32 }} slotProps={{ img: { loading: "lazy" } }} />
+                <span>
+                  by <strong>{author}</strong>
+                </span>
+              </AuthorLink>
+              {fileData.created && (
+                <Meta>
+                  Shared {formatDate(fileData.created)}
+                  {fileData.updated && fileData.updated !== fileData.created ? ` · updated ${formatDate(fileData.updated)}` : ""}
+                </Meta>
+              )}
+              {categories && <Meta>{categories}</Meta>}
+            </Box>
+
+            {phone ? (
+              <>
+                {primaryActions && <ActionRow>{primaryActions}</ActionRow>}
+                <CompactActionRow role="group" aria-label="Share actions">
+                  {secondaryActions}
+                </CompactActionRow>
+              </>
             ) : (
-              <FileDescription
-                variant="body1"
-                color="textPrimary"
+              <ActionRow>
+                {primaryActions}
+                {secondaryActions}
+              </ActionRow>
+            )}
+          </Card>
+
+          {(fileData.htmlDescription || fileData.fullDescription) && (
+            <Card aria-label="Description">
+              <Box
+                ref={measureDescription}
                 sx={{
-                  cursor: "default",
+                  position: "relative",
+                  maxHeight: collapsible && !expanded ? DESCRIPTION_COLLAPSE_PX : "none",
+                  overflow: "hidden",
+                  minWidth: 0,
                 }}
               >
-                {fileData?.fullDescription}
-              </FileDescription>
+                {fileData.htmlDescription ? (
+                  <DisplayHtml html={fileData.htmlDescription} />
+                ) : (
+                  <FileDescription>{fileData.fullDescription}</FileDescription>
+                )}
+                {collapsible && !expanded && <DescriptionFade aria-hidden />}
+              </Box>
+              {collapsible && (
+                <Button
+                  variant="text"
+                  onClick={() => setExpanded((e) => !e)}
+                  aria-expanded={expanded}
+                  sx={{ alignSelf: "flex-start", minHeight: 44 }}
+                >
+                  {expanded ? "Show less" : "Show more"}
+                </Button>
+              )}
+            </Card>
+          )}
+
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <SectionTitle component="h2">
+              {files.length === 1 ? "1 file" : `${files.length} files`}
+            </SectionTitle>
+            {files.length === 0 ? (
+              <EmptyState title="No files in this share" description="The publisher did not attach any files." />
+            ) : (
+              <FileList>
+                {files.map((file, index) => (
+                  <FileRow key={`${file.identifier || file.filename}-${index}`} file={file} jsonId={id} />
+                ))}
+              </FileList>
             )}
           </Box>
-          {descriptionHeight && (
-            <Typography
-              onClick={() => {
-                setIsExpandedDescription(prev => !prev);
-              }}
-              sx={{
-                fontWeight: "bold",
-                fontSize: "16px",
-                cursor: "pointer",
-                paddingLeft: "15px",
-                paddingTop: "15px",
-              }}
-            >
-              {isExpandedDescription ? "Show less" : "...more"}
-            </Typography>
-          )}
-        </Box>
-        <Box
-          sx={{
-            width: "100%",
-            display: "flex",
-            alignItems: "flex-start",
-            flexDirection: "column",
-            gap: "25px",
-            marginTop: "25px",
-          }}
-        >
-          {fileData?.files?.map((file, index) => {
-            return (
-              <FileAttachmentContainer
-                sx={{
-                  width: "100%",
-                  display: "flex",
-                  justifyContent: "space-between",
-                }}
-                key={file.toString() + index}
-              >
-                <FileAttachmentFont>{file.filename}</FileAttachmentFont>
-                <Box
-                  sx={{
-                    display: "flex",
-                    gap: "25px",
-                    alignItems: "center",
-                  }}
-                >
-                  <FileAttachmentFont>
-                    {formatBytes(file?.size || 0)}
-                  </FileAttachmentFont>
-                  <FileElement
-                    fileInfo={{
-                      ...file,
-                      filename: file?.filename,
-                      mimeType: file?.mimetype,
-                    }}
-                    jsonId={id}
-                    title={file?.filename}
-                    customStyles={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "flex-end",
-                    }}
-                  >
-                    <DownloadIcon />
-                  </FileElement>
-                </Box>
-              </FileAttachmentContainer>
-            );
-          })}
-        </Box>
-      </FilePlayerContainer>
 
-      <Box
-        sx={{
-          display: "flex",
-          gap: "20px",
-          width: "100%",
-          maxWidth: "1200px",
-        }}
-      >
-        <CommentSection postId={id || ""} postName={name || ""} />
-      </Box>
-    </Box>
+          <CommentSection
+            key={id}
+            postId={id}
+            postName={author}
+            commentsId={typeof fileData.commentsId === "string" ? fileData.commentsId : undefined}
+          />
+        </>
+      )}
+    </Page>
   );
 };

@@ -1,290 +1,336 @@
-import { styled } from "@mui/system";
-import {
-  Box,
-  Grid,
-  Typography,
-  Checkbox,
-  TextField,
-  InputLabel,
-  Autocomplete,
-} from "@mui/material";
+import { Box, Typography } from "@mui/material";
+import { styled, type Theme } from "@mui/material/styles";
+import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA } from "../../hooks/usePhoneLayout";
+import { primarySoft } from "../../hub-theme";
 
-export const FileContainer = styled(Box)(({ theme }) => ({
+const phone = `@media ${PHONE_MEDIA}`;
+// Also matches PHONE_MEDIA, so a rule under it must come after the phone one.
+const landscapePhone = `@media ${LANDSCAPE_PHONE_MEDIA}`;
+
+export const FileContainer = styled("ul")(({ theme }) => ({
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing(1),
+  width: "100%",
+}));
+
+export const FileRow = styled("li")(({ theme }) => ({
   position: "relative",
   display: "flex",
-  padding: "15px",
-  flexDirection: "row",
-  gap: "20px",
+  alignItems: "center",
   flexWrap: "wrap",
-  justifyContent: "flex-start",
+  gap: theme.spacing(1, 1.5),
   width: "100%",
-}));
-
-export const StoresRow = styled(Grid)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "flex-start",
-  gap: "15px",
-  width: "auto",
-  position: "relative",
-  "@media (max-width: 450px)": {
-    width: "100%",
+  minHeight: 64,
+  padding: theme.spacing(1, 1.5),
+  [phone]: {
+    padding: theme.spacing(1, 1),
+    // Two fixed lines on phones: the title, then publisher and actions.
+    "& > .row-main": { flexBasis: "100%" },
+  },
+  backgroundColor: theme.palette.background.paper,
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius,
+  transition: "background-color 150ms ease, border-color 150ms ease",
+  "&:hover": {
+    backgroundColor: theme.palette.action.hover,
+  },
+  "&:focus-within": {
+    borderColor: theme.palette.primary.main,
+  },
+  // Row actions stay visible on touch screens and appear on hover with a mouse.
+  "@media (hover: hover)": {
+    "& .row-actions": { opacity: 0 },
+    "&:hover .row-actions, &:focus-within .row-actions": { opacity: 1 },
   },
 }));
 
-export const VideoCard = styled(Grid)(({ theme }) => ({
-  position: "relative",
-  display: "flex",
-  flexDirection: "column",
-  height: "320px",
-  width: "300px",
-  backgroundColor: theme.palette.background.paper,
-  borderRadius: "8px",
-  padding: "10px 15px",
-  gap: "20px",
+export const RowMain = styled("button")(({ theme }) => ({
+  appearance: "none",
+  border: 0,
+  background: "transparent",
+  color: "inherit",
+  font: "inherit",
+  textAlign: "left",
   cursor: "pointer",
-  border:
-    theme.palette.mode === "dark"
-      ? "none"
-      : `1px solid ${theme.palette.primary.light}`,
-  boxShadow:
-    theme.palette.mode === "dark"
-      ? "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
-      : "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
-  transition: "all 0.3s ease-in-out",
-  "&:hover": {
-    boxShadow:
-      theme.palette.mode === "dark"
-        ? "0px 8px 10px 1px hsla(0,0%,0%,0.14), 0px 3px 14px 2px hsla(0,0%,0%,0.12), 0px 5px 5px -3px hsla(0,0%,0%,0.2)"
-        : "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;",
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(1.5),
+  flex: "1 1 200px",
+  minWidth: 0,
+  minHeight: 44,
+  padding: 0,
+  borderRadius: theme.shape.borderRadius,
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: 4,
   },
 }));
 
-export const StoreCardInfo = styled(Grid)(({ theme }) => ({
+/** RowMain's layout for a row with nothing to open (a deleted share in a collection). */
+export const RowMainStatic = styled("div")(({ theme }) => ({
   display: "flex",
-  flexDirection: "column",
-  gap: "10px",
-  padding: "5px",
-  marginTop: "15px",
+  alignItems: "center",
+  gap: theme.spacing(1.5),
+  flex: "1 1 200px",
+  minWidth: 0,
+  minHeight: 44,
 }));
 
-export const VideoImageContainer = styled(Grid)(({ theme }) => ({}));
-
-export const VideoCardImage = styled("img")(({ theme }) => ({
-  maxWidth: "300px",
-  minWidth: "150px",
-  borderRadius: "5px",
-  height: "150px",
-  objectFit: "fill",
-  width: "266px",
+export const RowIcon = styled("img")(({ theme }) => ({
+  width: 44,
+  height: 44,
+  borderRadius: theme.shape.borderRadius,
+  objectFit: "cover",
+  flexShrink: 0,
 }));
 
-const DoubleLine = styled(Typography)`
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-`;
-
-export const VideoCardTitle = styled(DoubleLine)(({ theme }) => ({
-  fontFamily: "Cairo",
-  fontSize: "16px",
-  letterSpacing: "0.4px",
+export const VideoCardTitle = styled(Typography)(({ theme }) => ({
+  fontSize: 15,
+  fontWeight: 600,
+  lineHeight: 1.3,
   color: theme.palette.text.primary,
-  userSelect: "none",
-}));
-export const VideoCardName = styled(Typography)(({ theme }) => ({
-  fontFamily: "Cairo",
-  fontSize: "14px",
-  letterSpacing: "0.4px",
-  color: theme.palette.text.primary,
-  userSelect: "none",
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
   overflow: "hidden",
-  whiteSpace: "nowrap",
-  textOverflow: "ellipsis",
-  width: "100%",
+  wordBreak: "break-word",
 }));
-export const VideoUploadDate = styled(Typography)(({ theme }) => ({
-  fontFamily: "Cairo",
-  fontSize: "12px",
-  letterSpacing: "0.4px",
-  color: theme.palette.text.primary,
-  userSelect: "none",
-}));
-export const BottomParent = styled(Box)(({ theme }) => ({
+
+export const RowMeta = styled("div")(({ theme }) => ({
   display: "flex",
-  alignItems: "flex-start",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: theme.spacing(0.5, 1),
+  marginTop: 2,
+  color: theme.palette.text.secondary,
+  fontSize: 13,
+  minWidth: 0,
+}));
+
+export const NameLink = styled("button")(({ theme }) => ({
+  appearance: "none",
+  border: 0,
+  background: "transparent",
+  padding: theme.spacing(0.5, 0),
+  minHeight: 36,
+  [phone]: { minHeight: 44 },
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 6,
+  color: theme.palette.text.secondary,
+  font: "inherit",
+  fontSize: 13,
+  maxWidth: 200,
+  "& span": { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  "&:hover span": { textDecoration: "underline", color: theme.palette.text.primary },
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: 2,
+    borderRadius: 4,
+  },
+}));
+
+export const RowActions = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(0.25),
+  flexShrink: 0,
+  marginLeft: "auto",
+  transition: "opacity 150ms ease",
+  [phone]: {
+    gap: theme.spacing(0.5),
+  },
+}));
+
+/*
+ * The grid layout (Settings → Layout, or the toggle on a list): one card per
+ * share, as many ~220 px columns as fit; two on portrait phones and narrow
+ * panes, one below 350 px. Phones in landscape keep the auto-fill columns
+ * and the 44 px targets. The cutoff is where a card stops holding three
+ * 44 px actions: two columns in 16 px page gutters are 155 px at 350 px wide.
+ */
+export const FileGrid = styled("ul")(({ theme }) => ({
+  listStyle: "none",
+  margin: 0,
+  padding: 0,
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+  gap: theme.spacing(1.5),
+  width: "100%",
+  "@media (max-width:599.95px)": {
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: theme.spacing(1),
+  },
+  "@media (max-width:349.95px)": {
+    gridTemplateColumns: "minmax(0, 1fr)",
+  },
+}));
+
+export const FileCard = styled("li")(({ theme }) => ({
+  position: "relative",
+  display: "flex",
   flexDirection: "column",
-}));
-export const VideoCardDescription = styled(Typography)(({ theme }) => ({
-  fontFamily: "Karla",
-  fontSize: "20px",
-  letterSpacing: "0px",
-  color: theme.palette.text.primary,
-  userSelect: "none",
-}));
-
-export const StoreCardOwner = styled(Typography)(({ theme }) => ({
-  fontFamily: "Livvic",
-  color: theme.palette.text.primary,
-  fontSize: "17px",
-  position: "absolute",
-  bottom: "5px",
-  right: "10px",
-  userSelect: "none",
-}));
-
-export const StoreCardYouOwn = styled(Box)(({ theme }) => ({
-  position: "absolute",
-  top: "5px",
-  right: "10px",
-  display: "flex",
-  alignItems: "center",
-  gap: "5px",
-  fontFamily: "Livvic",
-  fontSize: "15px",
-  color: theme.palette.text.primary,
-}));
-
-export const MyStoresRow = styled(Grid)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "row",
-  justifyContent: "flex-end",
-  padding: "5px",
-  width: "100%",
-}));
-
-export const NameContainer = styled(Box)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "row",
-  justifyContent: "flex-start",
-  alignItems: "center",
-  gap: "10px",
-  marginBottom: "10px",
-}));
-
-export const MyStoresCard = styled(Box)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "row",
-  alignItems: "center",
-  width: "auto",
-  borderRadius: "4px",
+  minWidth: 0,
+  // The art follows the card's corners.
+  overflow: "hidden",
   backgroundColor: theme.palette.background.paper,
-  padding: "5px 10px",
-  fontFamily: "Raleway",
-  fontSize: "18px",
-  color: theme.palette.text.primary,
-}));
-
-export const MyStoresCheckbox = styled(Checkbox)(({ theme }) => ({
-  color: "#c0d4ff",
-  "&.Mui-checked": {
-    color: "#6596ff",
-  },
-}));
-
-export const FiltersCol = styled(Grid)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  padding: "20px 15px",
-  backgroundColor: theme.palette.background.default,
-  borderTop: `1px solid ${theme.palette.background.paper}`,
-  borderRight: `1px solid ${theme.palette.background.paper}`,
-}));
-
-export const FiltersContainer = styled(Box)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "space-between",
-}));
-
-export const FiltersRow = styled(Box)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: "100%",
-  padding: "0 15px",
-  fontSize: "16px",
-  userSelect: "none",
-}));
-
-export const FiltersTitle = styled(Typography)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  gap: "5px",
-  margin: "20px 0",
-  fontFamily: "Raleway",
-  fontSize: "17px",
-  color: theme.palette.text.primary,
-  userSelect: "none",
-}));
-
-export const FiltersCheckbox = styled(Checkbox)(({ theme }) => ({
-  color: "#c0d4ff",
-  "&.Mui-checked": {
-    color: "#6596ff",
-  },
-}));
-
-export const FilterSelect = styled(Autocomplete)(({ theme }) => ({
-  "& #categories-select": {
-    padding: "7px",
-  },
-  "& .MuiSelect-placeholder": {
-    fontFamily: "Raleway",
-    fontSize: "17px",
-    color: theme.palette.text.primary,
-    userSelect: "none",
-  },
-  "& MuiFormLabel-root": {
-    fontFamily: "Raleway",
-    fontSize: "17px",
-    color: theme.palette.text.primary,
-    userSelect: "none",
-  },
-}));
-
-export const FilterSelectMenuItems = styled(TextField)(({ theme }) => ({
-  fontFamily: "Raleway",
-  fontSize: "17px",
-  color: theme.palette.text.primary,
-  userSelect: "none",
-}));
-
-export const FiltersSubContainer = styled(Box)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  flexDirection: "column",
-  gap: "5px",
-}));
-
-export const FilterDropdownLabel = styled(InputLabel)(({ theme }) => ({
-  fontFamily: "Raleway",
-  fontSize: "16px",
-  color: theme.palette.text.primary,
-}));
-
-export const IconsBox = styled(Box)({
-  display: "flex",
-  gap: "3px",
-  position: "absolute",
-  top: "-20px",
-  right: "-5px",
-  transition: "all 0.3s ease-in-out",
-});
-
-export const BlockIconContainer = styled(Box)({
-  display: "flex",
-  boxShadow: "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px;",
-  backgroundColor: "#fbfbfb",
-  color: "#c25252",
-  padding: "2px",
-  borderRadius: "3px",
-  transition: "all 0.3s ease-in-out",
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius,
+  transition: "background-color 150ms ease, border-color 150ms ease",
   "&:hover": {
-    cursor: "pointer",
-    transform: "scale(1.1)",
+    backgroundColor: theme.palette.action.hover,
   },
+  "&:focus-within": {
+    borderColor: theme.palette.primary.main,
+  },
+  // As on rows: actions stay visible on touch screens and appear on hover with a mouse.
+  "@media (hover: hover)": {
+    "& .row-actions": { opacity: 0 },
+    "&:hover .row-actions, &:focus-within .row-actions": { opacity: 1 },
+  },
+}));
+
+const cardMain = (theme: Theme) =>
+  ({
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    width: "100%",
+    minWidth: 0,
+    padding: 0,
+    textAlign: "left",
+    color: "inherit",
+    font: "inherit",
+    borderRadius: theme.shape.borderRadius,
+  }) as const;
+
+/** The card's open button: the art, title and meta line. */
+export const CardMain = styled("button")(({ theme }) => ({
+  ...cardMain(theme),
+  appearance: "none",
+  border: 0,
+  background: "transparent",
+  cursor: "pointer",
+  // Inset: the card clips anything outside it.
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: -2,
+  },
+}));
+
+/** CardMain's layout for a card with nothing to open (a deleted share in a collection). */
+export const CardMainStatic = styled("div")(({ theme }) => cardMain(theme));
+
+/**
+ * The tinted top of a card, with the category icon (bundled, so no download
+ * per card). Low on a phone in landscape, where Hub's app frame is about
+ * 266 px tall and a full-height card would fill the list.
+ */
+export const CardArt = styled("span")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: "100%",
+  height: 96,
+  flexShrink: 0,
+  backgroundColor: primarySoft(theme),
+  color: theme.palette.text.secondary,
+  [phone]: { height: 80 },
+  [landscapePhone]: { height: 48 },
+}));
+
+/**
+ * The whole icon, never cropped: Video and Book are wider than tall (about
+ * 5:3), so the box is 3:2 and each icon fits inside it. No rounding: on a
+ * fitted icon it would round the empty box, not the picture.
+ */
+export const CardIcon = styled("img")({
+  width: 96,
+  height: 64,
+  objectFit: "contain",
+  [phone]: { width: 80, height: 52 },
+  [landscapePhone]: { width: 54, height: 36 },
 });
+
+export const CardBody = styled("span")(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  minWidth: 0,
+  padding: theme.spacing(1, 1.25, 0.5),
+  [phone]: { padding: theme.spacing(1, 1, 0.5) },
+}));
+
+export const CardTitle = styled("span")(({ theme }) => ({
+  fontSize: 15,
+  fontWeight: 600,
+  lineHeight: 1.3,
+  color: theme.palette.text.primary,
+  display: "-webkit-box",
+  WebkitBoxOrient: "vertical",
+  WebkitLineClamp: 2,
+  overflow: "hidden",
+  wordBreak: "break-word",
+}));
+
+export const CardMeta = styled("span")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: theme.spacing(0, 0.75),
+  color: theme.palette.text.secondary,
+  fontSize: 13,
+  lineHeight: 1.4,
+  minWidth: 0,
+}));
+
+/**
+ * Publisher and actions, at the bottom of the card so cards in one row line
+ * up. The actions share the publisher's line when both fit and wrap below it
+ * when not (always on a two-column phone grid).
+ */
+export const CardFooter = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: theme.spacing(0, 0.5),
+  marginTop: "auto",
+  padding: theme.spacing(0, 1.25, 0.75),
+  minWidth: 0,
+  [phone]: { padding: theme.spacing(0, 0.5, 0.5, 1) },
+  // Never wider than the card: in a pane narrower than planned the last action wraps, not clips.
+  "& .row-actions": { maxWidth: "100%", flexWrap: "wrap", justifyContent: "flex-end" },
+}));
+
+export const CardPublisher = styled(NameLink)({
+  maxWidth: "100%",
+  minWidth: 0,
+});
+
+/** A card's corner action over the art: Remove, on a collection its owner opens. */
+export const CardCorner = styled("div")(({ theme }) => ({
+  position: "absolute",
+  top: theme.spacing(0.75),
+  right: theme.spacing(0.75),
+  zIndex: 1,
+  transition: "opacity 150ms ease",
+}));
+
+export const FiltersRail = styled(Box)(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  gap: theme.spacing(2),
+  width: "100%",
+  [theme.breakpoints.up("md")]: {
+    width: 280,
+    flexShrink: 0,
+    position: "sticky",
+    top: 72,
+    alignSelf: "flex-start",
+  },
+}));
