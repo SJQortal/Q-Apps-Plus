@@ -11,7 +11,9 @@ import {
   getAssetDeals,
   getAssetList,
   getAssetPrices,
+  getAssetSales,
   getHoldings,
+  getSellOffers,
   getTopHolders,
   HOLDERS_READ,
 } from './assets';
@@ -134,5 +136,33 @@ describe('an asset opened', () => {
         qort: 120n * U,
       }),
     ]);
+  });
+});
+
+describe('what buyers would pay now', () => {
+  it('reads each held asset’s open buy orders, the best first, and never counts its own', async () => {
+    installWorld('learner', { strict: true });
+    const ben = await getHoldings(ADDR.banTarget);
+    const sales = await getAssetSales(ADDR.banTarget, ben.rows);
+    const reads = fetchCallsFor('/assets/openorders/0/');
+    expect(reads).toHaveLength(5);
+    for (const read of reads.map(params)) {
+      expect(read.get('reverse')).toBe('true');
+      expect(read.get('limit')).toBe('100');
+    }
+    // GEMCOIN: Ben's own order at 20 skipped; 4 at 18 and 2 at 15.
+    expect(sales.get(77)).toMatchObject({ qort: 102n * U, unsold: 0n, bestBid: 18n * U });
+    // Bean Token: 25.5 at 0.45.
+    expect(sales.get(78)?.qort).toBe(1_147_500_000n);
+    // 🐉: no buyers at all.
+    expect(sales.get(79)).toMatchObject({ qort: 0n, sold: 0n, unsold: 2n * U });
+    // The fund: buyers for 5,000 of 12,345.678.
+    expect(sales.get(81)).toMatchObject({ qort: 50_000_000n, unsold: 734_567_800_000n });
+  });
+
+  it('an asset’s cheapest sell offers, by price', async () => {
+    installWorld('learner', { strict: true });
+    expect(await getSellOffers(77)).toEqual([{ price: 22n * U, units: 3n * U }]);
+    expect(params(fetchCallsFor('/assets/orderbook/77/0')[0]).get('limit')).toBe('5');
   });
 });

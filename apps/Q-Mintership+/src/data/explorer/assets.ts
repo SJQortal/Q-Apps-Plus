@@ -14,9 +14,13 @@
  *   assets a read (`xassetprices:<a>`);
  * - the asset avatars the Q-Assets app published: one search of IMAGE
  *   identifiers starting `asset`, 100 a page, up to 5 (`xassetavatars`);
+ * - what buyers would pay now: each held asset's open buy orders,
+ *   `/assets/openorders/0/<id>`, the best price first, the first 100
+ *   (`xbids:<id>`), 4 assets at a time (`xassetsales:<a>`);
  * - when an asset is opened: its biggest holders, the first 100
- *   (`xholders:<id>`), and its latest trades with QORT, both ways round,
- *   10 each (`xassetdeals:<id>`).
+ *   (`xholders:<id>`), its latest trades with QORT, both ways round, 10
+ *   each (`xassetdeals:<id>`), and its cheapest sell offers, by price, the
+ *   first 5 (`xasks:<id>`).
  *
  * Nothing here writes.
  */
@@ -26,17 +30,24 @@ import { parseAtomic } from '../../rules/explorer/money';
 import {
   assetMetaOf,
   avatarAssetId,
+  buyOrderOf,
   dealOf,
   holdingOf,
+  orderLevelOf,
   pricesFrom,
   QORT_ASSET_ID,
   recentTradeOf,
+  saleNow,
   type AssetDeal,
   type AssetMeta,
   type AssetPrice,
   type AvatarResource,
+  type BuyOrder,
   type Holding,
+  type OrderLevel,
+  type SaleNow,
 } from '../../rules/explorer/assets';
+import { runPool } from './sets';
 
 const PAGE = 100;
 const HOLDINGS_PAGES = 10;
@@ -48,6 +59,12 @@ const PRICE_CHUNK = 40;
 export const HOLDERS_READ = 100;
 /** An asset's latest trades read each way round when it is opened. */
 export const DEALS_READ = 10;
+/** An asset's open buy orders read, the best first; past these a sale says "at least". */
+export const BIDS_READ = 100;
+/** Sell offers shown when an asset is opened, by price level. */
+export const ASKS_READ = 5;
+const BOOKS_AT_ONCE = 4;
+const TWO_MINUTES = 2 * 60_000;
 
 const FIVE_MINUTES = 5 * 60_000;
 const HALF_HOUR = 30 * 60_000;
@@ -56,6 +73,9 @@ export const holdingsKey = (address: string) => `xholdings:${address}`;
 export const pricesKey = (address: string) => `xassetprices:${address}`;
 export const holdersKey = (assetId: number) => `xholders:${assetId}`;
 export const dealsKey = (assetId: number) => `xassetdeals:${assetId}`;
+export const bidsKey = (assetId: number) => `xbids:${assetId}`;
+export const asksKey = (assetId: number) => `xasks:${assetId}`;
+export const salesKey = (address: string) => `xassetsales:${address}`;
 export const ASSET_LIST_KEY = 'xassetlist';
 export const ASSET_AVATARS_KEY = 'xassetavatars';
 
@@ -234,5 +254,76 @@ export function getAssetDeals(
         .slice(0, DEALS_READ);
     },
     { ttlMs: FIVE_MINUTES, force: options.force }
+  );
+}
+
+export interface BuyOrders {
+  /** The best price first. */
+  orders: BuyOrder[];
+  /** Core has more than were read. */
+  truncated: boolean;
+}
+
+/** An asset's open buy orders (QORT offered for it), the best price first, the first BIDS_READ. */
+export function getBuyOrders(
+  assetId: number,
+  options: { force?: boolean } = {}
+): Promise<BuyOrders> {
+  return fetchQuery(
+    bidsKey(assetId),
+    async () => {
+      const body = await getJson<unknown>(
+        `/assets/openorders/${QORT_ASSET_ID}/${seg(assetId)}?${query({
+          limit: BIDS_READ,
+          reverse: true,
+        })}`
+      );
+      const rows = Array.isArray(body) ? body : [];
+      return {
+        orders: rows.map(buyOrderOf).filter((order): order is BuyOrder => order !== null),
+        truncated: rows.length >= BIDS_READ,
+      };
+    },
+    { ttlMs: TWO_MINUTES, force: options.force }
+  );
+}
+
+/** What buyers would pay now for each holding, by asset id; one book failing fails them all. */
+export function getAssetSales(
+  address: string,
+  holdings: readonly Holding[],
+  options: { force?: boolean } = {}
+): Promise<Map<number, SaleNow>> {
+  return fetchQuery(
+    salesKey(address),
+    async () => {
+      const sales = new Map<number, SaleNow>();
+      const held = holdings.filter((h) => h.assetId !== QORT_ASSET_ID);
+      await runPool(held, BOOKS_AT_ONCE, async (holding) => {
+        const book = await getBuyOrders(holding.assetId, { force: options.force });
+        sales.set(holding.assetId, saleNow(holding.balance, book.orders, address, book.truncated));
+      });
+      return sales;
+    },
+    { ttlMs: TWO_MINUTES, force: options.force }
+  );
+}
+
+/** An asset's cheapest sell offers (it offered for QORT), by price level, the first ASKS_READ. */
+export function getSellOffers(
+  assetId: number,
+  options: { force?: boolean } = {}
+): Promise<OrderLevel[]> {
+  return fetchQuery(
+    asksKey(assetId),
+    async () => {
+      const body = await getJson<unknown>(
+        `/assets/orderbook/${seg(assetId)}/${QORT_ASSET_ID}?${query({ limit: ASKS_READ })}`
+      );
+      return (Array.isArray(body) ? body : [])
+        .map(orderLevelOf)
+        .filter((level): level is OrderLevel => level !== null);
+    },
+    { ttlMs: TWO_MINUTES, force: options.force }
   );
 }
