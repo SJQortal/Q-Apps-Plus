@@ -226,6 +226,68 @@ export function extendExplorer(world) {
     pay(ADDR.kicked, ADDR.left, 2_100_000, '60.00000000'),
   ];
 
+  // ---- a Q-Asset trade (Simon, 2026-10-21): Pia sold 6 GEMCOIN to Ben for 120 QORT ------
+  // Pia's sell order waited; Ben's buy order came in later and matched it.
+  const orderOf = (who, h, have, want) =>
+    add('CREATE_ASSET_ORDER', h, who, {
+      creatorPublicKey: pk(world, who),
+      haveAssetId: have,
+      wantAssetId: want,
+      amount: '6.00000000',
+      price: '20.00000000',
+      haveAssetName: have ? 'GEMCOIN' : 'QORT',
+      wantAssetName: want ? 'GEMCOIN' : 'QORT',
+      amountAssetId: 77,
+      amountAssetName: 'GEMCOIN',
+      pricePair: 'QORT/GEMCOIN',
+    });
+  const sellOrder = orderOf(ADDR.promote, 2_150_000, 77, 0);
+  const buyOrder = orderOf(ADDR.banTarget, 2_150_400, 0, 77);
+  const orderRow = (tx, who, have, want, fulfilled, closed) => ({
+    orderId: tx.signature,
+    creatorPublicKey: pk(world, who),
+    creator: who,
+    haveAssetId: have,
+    wantAssetId: want,
+    haveAssetName: have ? 'GEMCOIN' : 'QORT',
+    wantAssetName: want ? 'GEMCOIN' : 'QORT',
+    amount: '6.00000000',
+    price: '20.00000000',
+    fulfilled,
+    timestamp: tx.timestamp,
+    isClosed: closed,
+    isFulfilled: closed,
+  });
+  const assetOrders = [
+    orderRow(sellOrder, ADDR.promote, 77, 0, '6.00000000', true),
+    orderRow(buyOrder, ADDR.banTarget, 0, 77, '6.00000000', true),
+    // Ben's second buy order, still open: nobody filled it.
+    {
+      ...orderRow(
+        { signature: sig('order:ben-open'), timestamp: blockTime(2_400_000) },
+        ADDR.banTarget,
+        0,
+        77,
+        '0.00000000',
+        false
+      ),
+    },
+  ];
+  const assetTrades = [
+    {
+      initiatingOrderId: buyOrder.signature,
+      targetOrderId: sellOrder.signature,
+      targetAmount: '6.00000000',
+      initiatorAmount: '120.00000000',
+      initiatorSaving: '0.00000000',
+      timestamp: buyOrder.timestamp,
+      targetAmountAssetId: 77,
+      targetAmountAssetName: 'GEMCOIN',
+      initiatorAmountAssetId: 0,
+      initiatorAmountAssetName: 'QORT',
+    },
+  ];
+
   // ---- other payments between personas ------------------------------------------------
   pay(ADDR.admin, ADDR.learner, 2_400_000, '5.00000000');
   pay(ADDR.nominator, ADDR.admin, 2_450_000, '1.50000000');
@@ -549,6 +611,8 @@ export function extendExplorer(world) {
   world.explorer = {
     rows,
     parties,
+    assetOrders,
+    assetTrades,
     bySig: new Map(rows.map((row) => [row.signature, row])),
     raw,
     nameInfo,
@@ -679,6 +743,28 @@ export function answerExplorer(world, p, sp) {
       ...(info.updated ? { updated: info.updated } : {}),
       isForSale: false,
     });
+  }
+
+  // ---- Q-Asset orders and trades (Core's two flags are exact filters, false by default) ----
+  if ((m = p.match(/^\/assets\/orders\/([QA]\w+)$/))) {
+    const closed = sp.get('includeClosed') === 'true';
+    const fulfilled = sp.get('includeFulfilled') === 'true';
+    const list = x.assetOrders
+      .filter((o) => o.creator === m[1])
+      .filter((o) => o.isClosed === closed && o.isFulfilled === fulfilled)
+      .sort((a, b) => a.timestamp - b.timestamp);
+    return json(page(list, sp));
+  }
+  if ((m = p.match(/^\/assets\/order\/(\w+)\/trades$/)))
+    return json(
+      page(
+        x.assetTrades.filter((t) => t.initiatingOrderId === m[1] || t.targetOrderId === m[1]),
+        sp
+      )
+    );
+  if ((m = p.match(/^\/assets\/order\/(\w+)$/))) {
+    const order = x.assetOrders.find((o) => o.orderId === m[1]);
+    return order ? json(order) : json({ error: 1201, message: 'unknown order' }, 404);
   }
 
   // ---- accounts ------------------------------------------------------------------------
