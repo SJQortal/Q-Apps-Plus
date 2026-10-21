@@ -1361,6 +1361,18 @@ export default {
         await page.waitForTimeout(400);
       },
     },
+    // What buyers would pay now, asset by asset (Simon, 2026-10-21: "realistic sale amount with
+    // its own window").
+    {
+      key: 'explorer-assets-sale',
+      path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('button', { name: 'How it adds up' }).click({ timeout: 8000 });
+        await page.getByRole('dialog', { name: 'What buyers would pay now' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // An asset's popup opened from the Overview's Q-Assets (Simon, 2026-10-21: "its own popup").
     {
       key: 'explorer-account-asset-open',
