@@ -36,7 +36,8 @@ export interface PaletteTokens {
   background: { default: string; paper: string; surface: string; elevated: string };
   text: { primary: string; secondary: string };
   divider: string;
-  action: { hover: string; selected: string };
+  /** `active` (inactive icons and toggles) is optional; MUI's default applies when absent. */
+  action: { hover: string; selected: string; active?: string };
 }
 
 /** Translucent header/rail fills and page backdrops that MUI's palette has no slot for. */
@@ -105,7 +106,9 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
       },
       secondary: HUB_BLUE.hover,
       success: 'rgb(94, 176, 73)',
-      error: 'rgb(177, 70, 70)',
+      // Readable as text (4.5:1 or more) on the page, paper and elevated
+      // surfaces; Torq's rgb(177, 70, 70) read at 3.5:1 and 3:1 there.
+      error: 'rgb(224, 108, 108)',
       background: { default: '#0E0F14', paper: '#1D1F27', surface: '#1B1D24', elevated: '#23262F' },
       text: { primary: 'rgb(244, 247, 251)', secondary: '#989BA7' },
       divider: '#23262F',
@@ -130,19 +133,25 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
   light: {
     fontFamily: INTER_STACK,
     palette: {
+      // Text, outlines and icons need a deeper blue on the warm light surfaces:
+      // the soft #84AFF0 read at 2:1 there (DESIGN.md asks for 4.5:1). Filled
+      // primary buttons keep the soft Hub gradient (componentOverrides).
       primary: {
-        main: HUB_BLUE.primary,
-        dark: HUB_BLUE.pressed,
-        light: HUB_BLUE.gradientTop,
-        contrastText: HUB_BLUE.contrast,
+        main: '#2A56A5',
+        dark: '#234A8F',
+        light: HUB_BLUE.primary,
+        contrastText: '#FFFFFF',
       },
-      secondary: HUB_BLUE.hover,
+      secondary: '#2A56A5',
       success: 'rgb(94, 176, 73)',
-      error: 'rgb(177, 70, 70)',
+      // One step deeper than Torq's rgb(177, 70, 70), which read at 3.8:1 as
+      // text on the warm page background.
+      error: 'rgb(158, 43, 43)',
       background: { default: '#DDD6CA', paper: '#F6F2EA', surface: '#EEE7DC', elevated: '#E2D9CB' },
-      text: { primary: 'rgba(21, 26, 35, 0.94)', secondary: 'rgba(88, 96, 110, 0.86)' },
+      text: { primary: 'rgba(21, 26, 35, 0.94)', secondary: '#4A525E' },
       divider: 'rgba(28, 36, 52, 0.12)',
-      action: { hover: 'rgba(28, 36, 52, 0.06)', selected: 'rgba(41, 121, 218, 0.12)' },
+      // MUI's default 54% black for inactive toggles and icons read below 4.5:1 here.
+      action: { hover: 'rgba(28, 36, 52, 0.06)', selected: 'rgba(41, 121, 218, 0.12)', active: 'rgba(21, 26, 35, 0.72)' },
     },
     chrome: {
       chrome: 'rgba(246, 242, 234, 0.88)',
@@ -167,12 +176,14 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
 const BLACK: Omit<ThemeTokens, 'id' | 'mode'> = {
   fontFamily: SYSTEM_STACK,
   palette: {
-    primary: { main: '#1d9bf0', dark: '#1a8cd8', light: '#8ecdf8', contrastText: '#ffffff' },
+    // Black text on the X blue: white read at 3.2:1 on it (DESIGN.md asks for 4.5:1).
+    primary: { main: '#1d9bf0', dark: '#1a8cd8', light: '#8ecdf8', contrastText: '#000000' },
     secondary: '#e7e9ea',
     success: '#00ba7c',
     error: '#f91880',
     background: { default: '#000000', paper: '#000000', surface: '#000000', elevated: '#16181c' },
-    text: { primary: '#e7e9ea', secondary: '#71767b' },
+    // #8b9096 instead of X's #71767b: the input labels read at 3.9:1 on the elevated surface.
+    text: { primary: '#e7e9ea', secondary: '#8b9096' },
     divider: '#2f3336',
     action: { hover: 'rgba(231, 233, 234, 0.1)', selected: 'rgba(29, 155, 240, 0.12)' },
   },
