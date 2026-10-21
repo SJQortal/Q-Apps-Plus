@@ -84,6 +84,15 @@ function noWrites(posts: string[]) {
 
 const region = (name: string) => screen.findByRole('region', { name }, T);
 
+/** Opens the Account report, makes it, and gives its text and dialog. */
+async function makeReport(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'Account report' }));
+  const dialog = await screen.findByRole('dialog', {}, T);
+  await user.click(within(dialog).getByRole('button', { name: 'Make the report' }));
+  const preview = await within(dialog).findByLabelText(/^account-report-.+\.md$/, {}, T);
+  return { dialog, text: preview.textContent ?? '' };
+}
+
 /**
  * The links search for `who` fills all 5 pages (its own rows first, then
  * account-flag rows that link nothing), so the read stops at its ceiling.
@@ -118,16 +127,11 @@ afterEach(() => vi.useRealTimers());
 describe('Connections: payments and first QORT', () => {
   it('Lou Left: payments with Kit each way, first QORT from a busy funder, and what was checked', async () => {
     const { container, posts, user } = await open(ADDR.left);
-    const note = screen.getByText(
-      /Nothing here shows who runs an account, as there is no KYC on Qortal\./,
-      { selector: '[role="note"]' }
-    );
     const recorded = await region('Recorded between them');
-    // The facts first; the note and Copy findings after them, at the bottom.
-    expect(recorded.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The facts first; the Account report after them, at the bottom (Simon, 2026-10-21).
+    const report = await region('Account report');
     expect(
-      note.compareDocumentPosition(screen.getByRole('button', { name: 'Copy findings' })) &
-        Node.DOCUMENT_POSITION_FOLLOWING
+      recorded.compareDocumentPosition(report) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
     const sent = await within(recorded).findByRole('list', { name: 'Sent to' }, T);
     await waitFor(
@@ -556,7 +560,7 @@ describe('Connections: minting and names', () => {
   });
 });
 
-describe('Connections: nothing found, Copy findings, Core’s report', () => {
+describe('Connections: nothing found, and the Account report', () => {
   it('an account with no links: only the line of what was checked', async () => {
     const { container, posts } = await open(ADDR.newcomer);
     expect(
@@ -572,31 +576,54 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     noWrites(posts);
   });
 
-  it('copies the findings: whose, at which block, what was read, each with block and signature', async () => {
+  it('the Account report: whose, when, at which block, what was read, each connection with its block and signature (Simon, 2026-10-21)', async () => {
     const { user } = await open(ADDR.kickTarget);
     // After userEvent.setup(), which puts its own clipboard in place.
     const writeText = vi.fn(async (text: string) => void text);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    mockQortalRequest('SAVE_FILE', true);
     const recorded = await region('Recorded between them');
     await waitFor(() => expect(recorded).toHaveTextContent('Olga Old is now level 0'), T);
     await screen.findByText(/^Also checked, nothing found/, {}, T);
-    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
-    const text = writeText.mock.calls[0][0] as string;
-    expect(text.split('\n')[0]).toBe(
-      `Explorer findings for Kai Target (${ADDR.kickTarget}), checked at block 2,757,500`
-    );
+    const { dialog, text } = await makeReport(user);
+    // It recommends reading the whole history first.
+    expect(within(dialog).getByRole('button', { name: 'Read it all' })).toBeInTheDocument();
+    expect(text.split('\n')[0]).toBe('# Account report: Kai Target');
+    expect(text).toContain(`| Address | \`${ADDR.kickTarget}\` |`);
+    expect(text).toMatch(/\| Made \| \d{4}-\d\d-\d\d \d\d:\d\d UTC, at block 2,757,500 \|/);
+    expect(text).toContain('> Public chain and QDN facts.');
+    for (const heading of [
+      '## Account',
+      '## QORT totals',
+      '## Activity by type',
+      '## Connections',
+      '## Core’s sponsorship report',
+      '## What was read',
+      '## Transactions behind the connections',
+    ])
+      expect(text).toContain(`\n${heading}\n`);
     expect(text).toMatch(
-      /- Got its minting level from Olga Old \(Q\w{5}…\w{4}\)\. Olga Old \(Q\w{5}…\w{4}\) is now level 0 \(block 2,000,000, \w{8}…\)/
+      /- Got its minting level from Olga Old \(Q\w{5}…\w{4}\)\. Olga Old \(Q\w{5}…\w{4}\) is now level 0 \(block 2,000,000, \d{4}-\d\d-\d\d, `\w{80,}`\)/
     );
-    expect(text).toContain('Reward shares, level moves and name sales: all ');
+    expect(text).toContain('- Reward shares, level moves and name sales: all ');
     expect(text).toContain('Also checked, nothing found:');
     expect(text).toContain(
       `qortal://APP/Q-Mintership+/explorer/account/${ADDR.kickTarget}/connections`
     );
     expect(text).not.toMatch(VERDICTS);
+    // Copy, and Save .md through Hub.
+    await user.click(within(dialog).getByRole('button', { name: 'Copy' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(text), T);
+    await user.click(within(dialog).getByRole('button', { name: 'Save .md' }));
+    await waitFor(() => expect(qortalCallsFor('SAVE_FILE')).toHaveLength(1), T);
+    const save = qortalCallsFor('SAVE_FILE')[0];
+    expect(save.filename).toMatch(/^account-report-Kai-Target-\d{4}-\d\d-\d\d\.md$/);
+    expect(save.mimeType).toBe('text/markdown');
+    expect(await (save.blob as Blob).text()).toBe(text);
     expect(
-      await screen.findByText('Findings copied', { selector: '[role="status"]' })
+      await within(dialog).findByText(/^Saved as account-report-Kai-Target-/, {
+        selector: '[role="status"]',
+      })
     ).toBeInTheDocument();
   });
 
@@ -627,11 +654,10 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
         T
       )
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
-    expect(writeText.mock.calls[0][0]).toContain(
-      '- Couldn’t read its asset transfers and multi-payments.'
-    );
+    const { text } = await makeReport(user);
+    expect(text).toContain('- Couldn’t be read: its asset transfers and multi-payments.');
+    // Payments: not claimed as none found in the report either.
+    expect(text).not.toMatch(/nothing found:[^\n]*payments/);
   });
 
   it('links read to their ceiling: said on the tab, and only level moves claimed as none', async () => {
@@ -650,9 +676,7 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
         'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
       )
     ).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Copy findings' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalled(), T);
-    const text = writeText.mock.calls[0][0] as string;
+    const { text } = await makeReport(user);
     expect(text).toContain('Reward shares, level moves and name sales: its newest 500');
     expect(text).toContain(
       'In its newest 500 reward shares, level moves and name sales, nothing found: a sponsor, accounts it sponsored, name sales.'
@@ -711,16 +735,14 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     }
   });
 
-  it('Core’s own report only on request, with what its numbers count', async () => {
+  it('Core’s sponsorship report only in the Account report, with what its numbers count', async () => {
     const { user } = await open(SPONSOR.address);
-    const report = await region('Core’s own report');
+    await region('Recorded between them');
+    expect(screen.queryByRole('region', { name: 'Core’s own report' })).toBeNull();
     expect(fetchCallsFor('/addresses/sponsorship/')).toEqual([]);
-    await user.click(within(report).getByRole('button', { name: 'Load Core’s report' }));
-    const lines = await within(report).findByRole('list', { name: 'Core’s report' }, T);
-    // The button went: what it loaded holds the focus.
-    expect(lines.parentElement).toHaveFocus();
-    expect(lines).toHaveTextContent('Accounts it ever made a reward share to: 5');
-    expect(lines).toHaveTextContent('Core counts names, not accounts');
+    const { text } = await makeReport(user);
+    expect(text).toContain('- Accounts it ever made a reward share to: 5');
+    expect(text).toContain('Core counts names, not accounts');
     expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);
   });
 });

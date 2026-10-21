@@ -281,14 +281,18 @@ describe('an account in the Explorer', () => {
       true
     );
     const sponsorship = (address: string) => fetchCallsFor(`/addresses/sponsorship/${address}`);
-    await screen.findByRole('button', { name: 'Load Core’s report' }, T);
-    // To Leo by an Explorer link, then his Connections, where his report is asked for.
+    await screen.findByRole('button', { name: 'Account report' }, T);
+    // To Leo by an Explorer link, then his Connections, where his report is made.
     await user.click(screen.getByRole('button', { name: 'hop to Leo' }));
     await screen.findByRole('heading', { level: 1, name: 'Leo Learner' }, T);
     const tabs = await screen.findByRole('tablist', { name: 'Account sections' }, T);
     await user.click(within(tabs).getByRole('tab', { name: 'Connections' }));
-    await user.click(await screen.findByRole('button', { name: 'Load Core’s report' }, T));
+    await user.click(await screen.findByRole('button', { name: 'Account report' }, T));
+    const dialog = await screen.findByRole('dialog', {}, T);
+    await user.click(within(dialog).getByRole('button', { name: 'Make the report' }));
     await waitFor(() => expect(sponsorship(ADDR.learner)).toHaveLength(1), T);
+    await within(dialog).findByRole('button', { name: 'Save .md' }, T);
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     // Back to Nora's Connections (already read, so the page stays): nothing asked on hers.
     await user.click(screen.getByRole('button', { name: 'go back' }));
     await waitFor(
@@ -296,9 +300,9 @@ describe('an account in the Explorer', () => {
       T
     );
     await screen.findByRole('heading', { level: 1, name: 'Nora Nominator' }, T);
-    expect(
-      await screen.findByRole('button', { name: 'Load Core’s report' }, T)
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Account report' }, T)).toBeInTheDocument();
+    // No report open there, and nothing asked on hers.
+    expect(screen.queryByRole('dialog')).toBeNull();
     expect(sponsorship(ADDR.nominator)).toEqual([]);
     noWrites(posts);
   });

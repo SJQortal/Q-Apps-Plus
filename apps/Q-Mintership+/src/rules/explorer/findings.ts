@@ -1,6 +1,8 @@
 /**
  * The Connections tab's findings, in the order the page lists them, and
- * "Copy findings": the same as plain text to paste into a chat or a note.
+ * the same as plain text: partsText for the Account report's sentences
+ * (accountReport.ts), and findingsText, the short plain-text form that
+ * "Copy findings" used before the Account report replaced it.
  *
  * "Recorded between them": level moves, sponsors, minting with another
  * account now, the accounts it sponsored, names bought or sold, Q-Asset
@@ -334,7 +336,7 @@ export function recordedFindings(input: RecordedInput): Finding[] {
   return out;
 }
 
-/** How much of its links was read, for Copy findings. */
+/** How much of its links was read, for the Account report. */
 export function linksCoverage(links: { rows: readonly unknown[]; truncated: boolean }): string {
   return links.truncated
     ? `Reward shares, level moves and name sales: its newest ${formatCount(links.rows.length)} (every level move read).`
