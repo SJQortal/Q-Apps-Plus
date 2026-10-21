@@ -80,10 +80,18 @@ const collections = {
   [HOLIDAY]: collectionBody,
   [COPY]: { ...collectionBody, created: now - 3600_000, updated: now - 3600_000, copiedFrom: { name: NAME, identifier: HOLIDAY, title: 'Holiday pack' } },
 };
+// Others' shares only, so the notification check finds nothing new in them.
+for (const [id, title, n] of [['qshare_collection_film-night-picks_fn1234', 'Film night picks', 3], ['qshare_collection_field-guides_fg1234', 'Field guides', 1], ['qshare_collection_live-sets_ls1234', 'Live sets', 2]]) {
+  collections[id] = { version: 1, title, description: '', created: now, updated: now, items: [{ name: 'Alice Wonder', identifier: ID(2) }, { name: 'bob+builder', identifier: ID(3) }, { name: 'Alice Wonder', identifier: ALBUM }].slice(0, n) };
+}
 const collectionRows = [
   { name: NAME, service: 'DOCUMENT', identifier: HOLIDAY, created: now, updated: now, metadata: { title: 'Holiday pack', description: 'Photos and notes' } },
   { name: 'bob+builder', service: 'DOCUMENT', identifier: COPY, created: now - 3600_000, updated: now - 3600_000, metadata: { title: 'Holiday pack', description: 'Photos and notes' } },
   { name: 'Alice Wonder', service: 'DOCUMENT', identifier: TOOLS, created: now - 86400000, updated: now - 86400000, metadata: { title: 'Tools', description: '' } },
+  // More by others, for Explore collections.
+  { name: 'bob+builder', service: 'DOCUMENT', identifier: 'qshare_collection_film-night-picks_fn1234', created: now - 2 * 86400000, updated: now - 2 * 86400000, metadata: { title: 'Film night picks', description: 'Old films worth an evening, with subtitles' } },
+  { name: 'Carol Ann', service: 'DOCUMENT', identifier: 'qshare_collection_field-guides_fg1234', created: now - 5 * 86400000, updated: now - 5 * 86400000, metadata: { title: 'Field guides with a long title that wraps on a phone', description: 'Birds, trees and mushrooms' } },
+  { name: 'Alice Wonder', service: 'DOCUMENT', identifier: 'qshare_collection_live-sets_ls1234', created: now - 9 * 86400000, updated: now - 9 * 86400000, metadata: { title: 'Live sets', description: 'Concert recordings' } },
 ];
 /** A silent mono 8-bit WAV of `seconds`, so the playlist really plays. */
 function silentWav(seconds) {
@@ -172,7 +180,9 @@ export default {
       const name = sp.get('name');
       const query = sp.get('query') || '';
       if (ident.startsWith('qshare_collection_')) {
-        list = collectionRows;
+        // Core's query: anywhere in the name, identifier, title or description, any case.
+        const q = query.toLowerCase();
+        list = q ? collectionRows.filter((r) => [r.name, r.identifier, r.metadata.title, r.metadata.description].some((f) => f.toLowerCase().includes(q))) : collectionRows;
       } else if (sp.get('service') === 'BLOG_COMMENT') {
         list = query.includes('_base_')
           ? [1, 2].map((n) => ({ name: n === 1 ? 'Alice Wonder' : NAME, service: 'BLOG_COMMENT', identifier: `qcomment_v1_qshare_${'id001_metadata'.slice(-12)}_base_c${n}0000`, created: now - n * 3600_000 }))
@@ -218,6 +228,9 @@ export default {
     // bob+builder's copy of Holiday pack: the "Copy of … by Tester" line, and Copy to my collections.
     { key: 'collection-copied', path: `/collection/${encodeURIComponent('bob+builder')}/${COPY}`, after: async (page) => page.waitForSelector('text=Copy of', { timeout: 8000 }).catch(() => {}) },
     { key: 'collection-copy', path: `/collection/${encodeURIComponent('Alice Wonder')}/${TOOLS}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Copy to my collections' }).first().click({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    // Under the filters (in the Filters sheet on phones): other people's collections, with their own search.
+    { key: 'explore', path: '/', overlay: true, after: async (page) => { if (await page.getByRole('button', { name: /^Filters/ }).first().isVisible().catch(() => false)) await page.getByRole('button', { name: /^Filters/ }).first().click({ timeout: 2500 }); await page.getByRole('button', { name: 'Explore collections' }).first().click({ timeout: 4000 }); await page.getByRole('button', { name: /^Open Film night picks/ }).waitFor({ timeout: 5000 }).catch(() => {}); await page.waitForTimeout(400); } },
+    { key: 'explore-search', path: '/', overlay: true, after: async (page) => { if (await page.getByRole('button', { name: /^Filters/ }).first().isVisible().catch(() => false)) await page.getByRole('button', { name: /^Filters/ }).first().click({ timeout: 2500 }); await page.getByRole('button', { name: 'Explore collections' }).first().click({ timeout: 4000 }); await page.getByRole('textbox', { name: 'Search collections' }).fill('live', { timeout: 4000 }); await page.getByRole('button', { name: /^Open Live sets/ }).waitFor({ timeout: 5000 }).catch(() => {}); await page.waitForTimeout(400); } },
     { key: 'share-many', path: `/share/${NAME}/${MANY}`, after: async (page) => page.waitForSelector('text=recording-050.zip', { timeout: 8000 }).catch(() => {}) },
     // Play all starts the player bar; the shot is taken with it playing.
     { key: 'playlist', path: `/share/${encodeURIComponent('Alice Wonder')}/${ALBUM}`, after: async (page) => { await page.getByRole('button', { name: 'Play all' }).first().click({ timeout: 4000 }); await page.getByRole('region', { name: 'Player' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(800); } },
