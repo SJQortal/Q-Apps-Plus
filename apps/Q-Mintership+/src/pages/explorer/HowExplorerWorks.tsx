@@ -54,13 +54,13 @@ function tabLines(full: boolean): Array<[string, string]> {
       ? ([
           [
             'Connections',
-            'How it is linked to other accounts, as a circle or a list: payments each way, sponsorships, minting levels and names moved between them, where its first QORT came from, QORT sent to or got from exchanges, and what they have in common. Each link opens to the transactions behind it; the circle puts the most transactions first, or the most QORT.',
+            'How it is linked to other accounts, as a circle or a list: payments each way, Q-Asset trades, sponsorships, minting levels and names moved between them, where its first QORT came from, QORT sent to or got from exchanges, and what they have in common. Each link opens to the transactions behind it; the circle puts the most transactions first, or the most QORT. Once Overview has read its whole history, all of it counts here.',
           ],
         ] as Array<[string, string]>)
       : []),
     [
       'Transactions',
-      'Everything it sent or took part in, in plain words: by kind, type, name, time or blocks, newest or oldest first. Each one opens to its fields and its raw API response.',
+      'Everything it sent or took part in, in plain words: by kind, type, name, time or blocks, newest or oldest first. An asset order says how it was filled and with whom. Each one opens to its fields and its raw API response.',
     ],
     [
       'Minter Profile',
