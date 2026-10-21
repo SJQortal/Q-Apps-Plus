@@ -441,7 +441,7 @@ Simon's request: "under the filters, I would like a new Explore Collections butt
 
 **Screenshot check:** new fixtures (three more collections by others, one with a title that wraps; the fixture search answers `query` the way Core does) and two new screens, explore (from the Filters sheet on phones) and explore-search ("live"). In all four themes at all five sizes with home-filters, collections and notifications (92 captures): 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations, no tap target under 44 px on phones. The placeholder "Title, description or name" was cut off in Q-Share Classic at 360 px; it is "Title or name" now.
 
-**Hub Dev Mode check:** not done; it joins the round above's (the test Hub from that session stalled, see there). In Hub: Explore collections from the Filters rail and, at 390×844 touch, from the Filters sheet; a search for a word in a real collection's title (Simon James's "My Grand Music Collection" is the only one on the node today, and it is his own, so Tester Hub sees it); the calls with `hub-cdp.mjs calls`.
+**Hub Dev Mode check:** not done; it joins the round above's (the test Hub from that session stalled, see there). In Hub: Explore collections from the Filters rail and, at 390×844 touch, from the Filters sheet; a search for a word in a real collection's title; the calls with `hub-cdp.mjs calls`. Today the node holds one collection, Simon James's "My Grand Music Collection", and it is empty, so Explore (like the All tab) leaves it out and shows "No collections by others yet" until a collection with shares exists.
 
 ## Follow-ups
 
