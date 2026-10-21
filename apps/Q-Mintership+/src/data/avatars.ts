@@ -53,27 +53,39 @@ export function groupAvatarIdentifier(groupId: number): string {
   return `qortal_group_avatar_${groupId}`;
 }
 
+/** The QDN service an avatar image is published under: THUMBNAIL, or IMAGE (Q-Assets' asset avatars). */
+export type AvatarService = 'THUMBNAIL' | 'IMAGE';
+
 /**
  * One avatar's key in this store: the name alone for a person's avatar (as
  * before), or the identifier and the name for another one, such as a
- * group's (`qortal_group_avatar_<id>`, published by its owner).
+ * group's (`qortal_group_avatar_<id>`, published by its owner), with the
+ * service in front when it isn't THUMBNAIL (an asset's IMAGE).
  */
-export function avatarKey(name: string, identifier: string = PERSON_AVATAR): string {
+export function avatarKey(
+  name: string,
+  identifier: string = PERSON_AVATAR,
+  service: AvatarService = 'THUMBNAIL'
+): string {
+  if (service !== 'THUMBNAIL') return `${service}\u0001${identifier}\u0000${name}`;
   return identifier === PERSON_AVATAR ? name : `${identifier}\u0000${name}`;
 }
 
-function refOf(key: string): { name: string; identifier: string } {
-  const cut = key.indexOf('\u0000');
+function refOf(key: string): { name: string; identifier: string; service: AvatarService } {
+  const mark = key.indexOf('\u0001');
+  const service: AvatarService = mark < 0 ? 'THUMBNAIL' : (key.slice(0, mark) as AvatarService);
+  const rest = mark < 0 ? key : key.slice(mark + 1);
+  const cut = rest.indexOf('\u0000');
   return cut < 0
-    ? { name: key, identifier: PERSON_AVATAR }
-    : { identifier: key.slice(0, cut), name: key.slice(cut + 1) };
+    ? { name: rest, identifier: PERSON_AVATAR, service }
+    : { identifier: rest.slice(0, cut), name: rest.slice(cut + 1), service };
 }
 
 function urlFor(key: string): string {
-  const { name, identifier } = refOf(key);
-  return identifier === PERSON_AVATAR
+  const { name, identifier, service } = refOf(key);
+  return identifier === PERSON_AVATAR && service === 'THUMBNAIL'
     ? avatarUrl(name)
-    : `/arbitrary/THUMBNAIL/${seg(name)}/${seg(identifier)}?async=true`;
+    : `/arbitrary/${service}/${seg(name)}/${seg(identifier)}?async=true`;
 }
 
 function srcFor(name: string, retries: number): string {
@@ -161,7 +173,7 @@ export function avatarFailed(name: string, src: string): void {
   set(entry, 'waiting', name);
   const ref = refOf(name);
   getJson<{ status?: string }>(
-    `/arbitrary/resource/status/THUMBNAIL/${seg(ref.name)}/${seg(ref.identifier)}`
+    `/arbitrary/resource/status/${ref.service}/${seg(ref.name)}/${seg(ref.identifier)}`
   )
     .then((body) => (typeof body?.status === 'string' ? body.status : null))
     .catch(() => null)
@@ -183,10 +195,15 @@ function subscribe(name: string, listener: () => void): () => void {
 
 /**
  * What an avatar for `name` shows now; null name → no image. `identifier`
- * picks another of the name's THUMBNAILs (a group's avatar).
+ * picks another of the name's THUMBNAILs (a group's avatar), or with
+ * `service` IMAGE one of its images (an asset's avatar).
  */
-export function useAvatar(name: string | null, identifier: string = PERSON_AVATAR): AvatarView {
-  const key = name ? avatarKey(name, identifier) : null;
+export function useAvatar(
+  name: string | null,
+  identifier: string = PERSON_AVATAR,
+  service: AvatarService = 'THUMBNAIL'
+): AvatarView {
+  const key = name ? avatarKey(name, identifier, service) : null;
   const subscribeName = useCallback(
     (listener: () => void) => (key ? subscribe(key, listener) : () => {}),
     [key]

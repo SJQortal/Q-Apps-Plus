@@ -253,6 +253,7 @@ describe('the Explorer’s landing page', () => {
       'Overview',
       'Connections',
       'Transactions',
+      'Assets',
       'Minter Profile',
       'Names',
       'Compare',
@@ -279,7 +280,14 @@ describe('the Explorer’s landing page', () => {
         'See what an account did on Qortal: its names, its place in MINTER and its transactions.'
       )
     ).toBeVisible();
-    for (const part of ['Overview', 'Transactions', 'Minter Profile', 'Names', 'Explorer Quiz'])
+    for (const part of [
+      'Overview',
+      'Transactions',
+      'Assets',
+      'Minter Profile',
+      'Names',
+      'Explorer Quiz',
+    ])
       expect(within(dialog).getByText(part)).toBeInTheDocument();
     // Nothing about what isn't there, nor that anything is.
     expect(dialog).not.toHaveTextContent(

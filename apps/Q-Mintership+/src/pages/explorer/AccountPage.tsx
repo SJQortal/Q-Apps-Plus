@@ -68,6 +68,7 @@ const TAB_PANELS: Record<ExplorerTab, ComponentType<{ address: string }>> = {
   overview: OverviewTab,
   connections: lazy(() => import('./account/ConnectionsTab')),
   transactions: lazy(() => import('./account/TransactionsTab')),
+  assets: lazy(() => import('./account/AssetsTab')),
   mintership: lazy(() => import('./account/MintershipTab')),
   names: lazy(() => import('./account/NamesTab')),
 };
