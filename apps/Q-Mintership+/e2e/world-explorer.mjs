@@ -391,6 +391,40 @@ export function extendExplorer(world) {
     // A dragon bought for 75 QORT.
     marketTrade(2_650_000, 0, 79, '75.00000000', '1.00000000', buyer, seller),
   ];
+  // Open orders that still wait (Simon, 2026-10-21: "realistic sale amount"): buyers offer
+  // less than GEMCOIN's last trade, 🐉 has no buyers at all, and Ben's own open order for
+  // GEMCOIN (above) must never count as a buyer of his own.
+  const nameOfAsset = (id) => assets.find((a) => a.assetId === id)?.name;
+  const openOrder = (seed, creator, have, want, amount, price, h) => {
+    const asset = have === 0 ? want : have;
+    return {
+      orderId: sig(`open:${seed}`),
+      creator,
+      creatorPublicKey: fakeKey(`pk:${creator}`, 32),
+      haveAssetId: have,
+      wantAssetId: want,
+      amount,
+      price,
+      fulfilled: '0.00000000',
+      timestamp: blockTime(h),
+      isClosed: false,
+      isFulfilled: false,
+      haveAssetName: nameOfAsset(have),
+      wantAssetName: nameOfAsset(want),
+      amountAssetId: asset,
+      amountAssetName: nameOfAsset(asset),
+      pricePair: `QORT/${nameOfAsset(asset)}`,
+    };
+  };
+  const marketOrders = [
+    openOrder('gem-bid-18', buyer, 0, 77, '4.00000000', '18.00000000', 2_700_100),
+    openOrder('gem-bid-15', buyer, 0, 77, '10.00000000', '15.00000000', 2_700_200),
+    openOrder('gem-ask-22', ADDR.promote, 77, 0, '3.00000000', '22.00000000', 2_700_300),
+    openOrder('bean-bid', buyer, 0, 78, '100.00000000', '0.45000000', 2_700_400),
+    openOrder('bean-ask', seller, 78, 0, '500.00000000', '0.60000000', 2_700_500),
+    openOrder('dragon-ask', SPONSOR.address, 79, 0, '2.00000000', '90.00000000', 2_700_600),
+    openOrder('fund-bid', buyer, 0, 81, '5000.00000000', '0.00010000', 2_700_700),
+  ];
   const assetAvatars = [
     { name: 'Pia Promote', identifier: 'asset77_GEMCOIN_aavatar', created: blockTime(2_100_000) },
     { name: 'Sid Sponsor', identifier: 'asset79_🐉_aavatar', created: blockTime(2_300_000) },
@@ -726,6 +760,7 @@ export function extendExplorer(world) {
     assets,
     holdings,
     marketTrades,
+    marketOrders,
     assetAvatars,
     bySig: new Map(rows.map((row) => [row.signature, row])),
     raw,
@@ -976,6 +1011,30 @@ export function answerExplorer(world, p, sp) {
         targetOrder: orderOf(t.targetOrderId, t.target, w, h, t.timestamp - MS_PER_BLOCK * 400),
       }));
     return json(page(list, sp));
+  }
+  // Open orders: each one (with who placed it), and aggregated by price; the cheapest first.
+  const openOf = (h, w) =>
+    [...x.assetOrders, ...x.marketOrders]
+      .filter((o) => o.haveAssetId === h && o.wantAssetId === w && !o.isClosed && !o.isFulfilled)
+      .sort((a, b) => Number(a.price) - Number(b.price) || a.timestamp - b.timestamp);
+  if ((m = p.match(/^\/assets\/openorders\/(\d+)\/(\d+)$/)))
+    return json(page(openOf(Number(m[1]), Number(m[2])), sp));
+  if ((m = p.match(/^\/assets\/orderbook\/(\d+)\/(\d+)$/))) {
+    const levels = new Map();
+    for (const o of openOf(Number(m[1]), Number(m[2]))) {
+      const left = Number(o.amount) - Number(o.fulfilled);
+      const level = levels.get(o.price) ?? {
+        price: o.price,
+        pricePair: o.pricePair,
+        unfulfilled: 0,
+        unfulfilledAssetId: o.amountAssetId,
+        unfulfilledAssetName: o.amountAssetName,
+      };
+      level.unfulfilled += left;
+      levels.set(o.price, level);
+    }
+    const rows = [...levels.values()].map((l) => ({ ...l, unfulfilled: l.unfulfilled.toFixed(8) }));
+    return json(page(rows, sp));
   }
   // Asset avatars, as the Q-Assets app publishes them (IMAGE, by the owner's name).
   if (p === '/arbitrary/resources/search' && sp.get('service') === 'IMAGE') {
