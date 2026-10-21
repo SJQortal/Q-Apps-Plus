@@ -65,6 +65,7 @@ import {
   type FindingLine,
 } from '../../../rules/explorer/findings';
 import { paymentsCoverage } from '../../../rules/explorer/money';
+import { tradesCoverage } from '../../../rules/explorer/trades';
 import { appLink, copyText } from '../../../utils/links';
 import { formatCount } from '../../../utils/format';
 import { EXPLORER_NEUTRAL_LINE } from '../explorerWords';
@@ -323,7 +324,9 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
     getCoreSponsor(address, { force })
   );
   const names = of('nameDeal');
-  const linkFindings = levelMoves.length + sponsors.length + mintingWith.length + names.length;
+  const trades = of('traded');
+  const linkFindings =
+    levelMoves.length + sponsors.length + mintingWith.length + names.length + trades.length;
   const sharesShown = sponsors.length + mintingWith.length > 0 || sponsees !== null;
 
   const paymentsPending =
@@ -380,6 +383,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const sharesFound = splitFound([...sponsors, ...mintingWith], findFinding);
   const sponseesFound: MatchStrength | null = sponsees ? findFinding(sponsees) : null;
   const namesFound = splitFound(names, findFinding);
+  const tradesFound = splitFound(trades, findFinding);
   const sentFound = splitFound(data.flowsSent ?? [], (flow) => findFlow(flow, 'sent'));
   const receivedFound = splitFound(data.flowsReceived ?? [], (flow) => findFlow(flow, 'received'));
   const sentAny = (data.sent.data?.rows.length ?? 0) > 0;
@@ -413,6 +417,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
     levelFound,
     sharesFound,
     namesFound,
+    tradesFound,
     sentFound,
     receivedFound,
     mintershipFound,
@@ -433,7 +438,10 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
   const paymentsFound = sentFound.all.length + receivedFound.all.length;
   const showPayments = showPaymentsAll && (!searching || paymentsFound > 0);
   const linkFindingsFound = searching
-    ? levelFound.all.length + sharesFound.all.length + namesFound.all.length
+    ? levelFound.all.length +
+      sharesFound.all.length +
+      namesFound.all.length +
+      tradesFound.all.length
     : linkFindings;
   const sponseesShown = sponsees !== null && (!searching || sponseesFound !== null);
   const showRecorded =
@@ -460,6 +468,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
         if (!pairedOnline) empty.push(check);
       } else cappedEmpty.push(check);
     }
+  if (data.trades.data && !trades.length) empty.push('assetTrades');
   if (
     data.flowsSent &&
     data.flowsReceived &&
@@ -486,6 +495,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
             : undefined
         )
       );
+    if (data.trades.data) coverage.push(tradesCoverage(data.trades.data));
     // What isn't above was not read: never "none found".
     if (data.failed.length) coverage.push(`Couldn’t read ${unreadWords(data.failed)}.`);
     const commonLines: FindingLine[] = [];
@@ -651,6 +661,16 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
                 render={row}
                 typed={typed}
               />
+            </Part>
+          ) : null}
+          {tradesFound.all.length ? (
+            <Part title="Asset trades">
+              <FoundRows label="Asset trades" found={tradesFound} render={row} typed={typed} />
+              {data.trades.data?.truncated ? (
+                <Typography variant="body2" color="text.secondary">
+                  From its newest {formatCount(data.trades.data.orders)} filled orders.
+                </Typography>
+              ) : null}
             </Part>
           ) : null}
           {showPayments ? (

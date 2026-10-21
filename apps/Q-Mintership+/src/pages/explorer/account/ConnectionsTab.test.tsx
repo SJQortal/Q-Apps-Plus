@@ -165,7 +165,7 @@ describe('Connections: payments and first QORT', () => {
 
     expect(
       await screen.findByText(
-        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales.',
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, asset trades.',
         {},
         T
       )
@@ -561,7 +561,7 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     const { container, posts } = await open(ADDR.newcomer);
     expect(
       await screen.findByText(
-        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, payments, where its first QORT came from.',
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, asset trades, payments, where its first QORT came from.',
         {},
         T
       )
@@ -622,7 +622,7 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     // Payments: not claimed as none found.
     expect(
       await screen.findByText(
-        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, where its first QORT came from.',
+        'Also checked, nothing found: level moves, a sponsor, accounts it sponsored, minting with another account now, name sales, asset trades, where its first QORT came from.',
         {},
         T
       )
@@ -640,7 +640,7 @@ describe('Connections: nothing found, Copy findings, Core’s report', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     expect(
       await screen.findByText(
-        'Also checked, nothing found: level moves, minting with another account now, payments, where its first QORT came from.',
+        'Also checked, nothing found: level moves, minting with another account now, asset trades, payments, where its first QORT came from.',
         {},
         T
       )
