@@ -1309,6 +1309,22 @@ export default {
         await page.getByRole('list', { name: 'Asset trades' }).waitFor({ timeout: 8000 });
       },
     },
+    // The Account report (Simon, 2026-10-21): its whole history read, then made, ready to save.
+    {
+      key: 'explorer-connections-report',
+      path: `/explorer/account/${ADDR.banTarget}/connections?as=admin`,
+      after: async (page) => {
+        await asList(page);
+        await page.getByRole('button', { name: 'Account report' }).click();
+        const dialog = page.getByRole('dialog');
+        const readAll = dialog.getByRole('button', { name: 'Read it all' });
+        if (await readAll.isVisible().catch(() => false)) await readAll.click();
+        await dialog.getByText(/whole on-chain history is read/).waitFor({ timeout: 8000 });
+        await dialog.getByRole('button', { name: 'Make the report' }).click();
+        await dialog.getByRole('button', { name: 'Save .md' }).waitFor({ timeout: 15000 });
+        await page.waitForTimeout(400);
+      },
+    },
     // A connection opened (Simon, 2026-10-20): its one transaction, straight to its details.
     {
       key: 'explorer-connections-open',
