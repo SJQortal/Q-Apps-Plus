@@ -1241,7 +1241,7 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
       - axe: one moderate `region` node on one capture (a connection opened, 390×844), in 2 of 5 runs of that screen, never on the others. It looks like something passing outside the landmarks while axe runs.
 
 142. **Q-Assets in the Explorer: an Assets tab and a quick list on the Overview** (Simon, 2026-10-21: "a new tab to Explorer called Assets, and it will be an overview of the Q-Assets the account is holding. In between transactions and minter profile, make it super nice visually, with asset avatars and so on, and in overview a quick list of Q-Assets as well, under At a glance"; then he pointed to the Q-Assets app, gitea.qortal.link/crowetic/Q-Assets, for the avatars). Version 1.0.2.
-    - **The tab** (`pages/explorer/account/AssetsTab.tsx`, `assets/`), between Transactions and Minter Profile, for every viewer (holdings are public on chain, like names; question 1 below):
+    - **The tab** (`pages/explorer/account/AssetsTab.tsx`, `assets/`), between Transactions and Minter Profile, for every viewer (holdings are public on chain, like names; Simon: "to everyone"):
       - a summary: how many it holds, what the ones that traded for QORT are worth together at their last trades ("7 of 8 have traded for QORT; the rest aren't counted"), how many assets it owns, and how that worth splits (a bar in each asset's colour, the biggest four and the rest, with a key);
       - each asset as a card (the default) or a row, kept on this device: avatar with the owner's on its edge, name, number and owner, how much it holds, its share of all there is (a bar), its last trade price and what the holding is worth at it, and marks (its own asset; Indivisible, only for an asset in whole units; can't be sent);
       - searched by name or number, sorted (worth most first, biggest share, name, oldest asset), 24 at a time; the search and an opened asset are in the URL (`?q=…&asset=<id>`), so Copy the link opens them;
@@ -1556,7 +1556,7 @@ Both answered by item 86.
 
 ### Open questions for Simon (item 142, 2026-10-21)
 
-1. **Who sees the Assets tab.** Built for every viewer, like Names: what an account holds is public on chain, and the tab only reads. Or only for viewers who see the Explorer's detailed parts (Minter Admins, Dev Admins, level 5+), like Connections?
+1. **Who sees the Assets tab:** answered (Simon, 2026-10-21: "to everyone"): every viewer, as built, like Names.
 2. **Worth at the last trade:** answered (Simon, 2026-10-21: "leave that amount at the last trade, but also add realistic sale amount with its own window next to it"): built, "Buyers would pay now" (item 142).
 
 ### Core: what an explorer needs that Core doesn't give (proposals)
