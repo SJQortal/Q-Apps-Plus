@@ -18,6 +18,23 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.2',
+    date: '2026-10-21',
+    title: 'Q-Assets in the Explorer',
+    summary:
+      'The Explorer shows the Q-Assets an account holds: a new Assets tab with each asset’s avatar, holding and last trade price, and a quick list on the Overview.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'The Explorer has an Assets tab, between Transactions and Minter Profile: every Q-Asset the account holds, as cards or a list, each with its avatar, how much it holds and its share of all there is, who owns the asset, and its last trade price in QORT with what the holding is worth at it. Search and sort them, and open one for its description, its biggest holders and its latest trades.',
+          'Assets the account owns are marked, and listed even when it holds none of them.',
+          'The Overview lists its Q-Assets under At a glance, the ones worth most first, with a link to the Assets tab.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.1',
     date: '2026-10-20',
     title: 'The original Admin Board, readable again; Q-Asset trades',
