@@ -4,7 +4,7 @@ Share files and documents on QDN, with categories, comments and lists.
 
 **Published:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
 
-**Version on the branch:** `1.0.1`, not published yet: notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists; and of 2026-10-18: collections as a grid, share thumbnails, and copies of other people's collections (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
+**Version on the branch:** `1.0.1`, not published yet: notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists; of 2026-10-18: collections as a grid, share thumbnails, and copies of other people's collections; and of 2026-10-21: Explore collections (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
 
 ## Baseline at import
 
@@ -91,6 +91,7 @@ Shares of more than 10 files (1.0.1) are the same FILE resources and the same sh
 | PUBLISH_QDN_RESOURCE | CommentEditor | comment | |
 | ADD_LIST_ITEMS / DELETE_LIST_ITEM | FileList, FollowButton, BlockedNamesModal | click | `DELETE_LIST_ITEM` in FollowButton passes `items` instead of `item` |
 | SAVE_FILE | FileElement:126 | click on a READY file | |
+| `/arbitrary/resources/search` collections, `query=` (fetch, 1.0.1) | pages/Collections/ExploreCollectionsDialog.tsx | Explore collections: its first opening, then once per query (as typing pauses for 400 ms, or Enter), and a page per scroll | `limit=20`, no `prefix` (Core would make `query` a prefix match); cached for the session like every search; then each row's body through the request queue, once |
 
 **First load of Home (signed in):** 2 searches (one of them unlimited), 4 account/avatar hops, up to 50 FETCH_QDN_RESOURCE, 50 avatar image requests. Nothing is cached between visits, and the same search is re-run whenever `LazyLoad` scrolls into view.
 
@@ -421,6 +422,27 @@ Round 5 continued, same branch and session. Simon asked for (1) copying other pe
 - *Accessibility:* the thumbnail picker's line is a status, so its changes are read out, and it says "Making a thumbnail…" while busy.
 - Checked and fine: identifiers stay within 64 characters (`qshare_thumb_` ≤50, copies ≤55); the original's searches never see THUMBNAILs; copied covers stay references; an edit keeps or removes the thumbnail correctly; object URLs are freed; restoring settings without `collectionView` gives the grid; `useMyCollections` on a collection page adds no searches (the bookmark buttons load the same cached list); every QDN name and identifier put in a URL is encoded; no hex colours; the copy dialog is full-screen on phones.
 
+### Explore collections (1.0.1, 2026-10-21)
+
+Simon's request: "under the filters, I would like a new Explore Collections button which will open a window with collections of other users, and the collections get their own search bar at the top".
+
+- **Explore collections** sits under Home's filters: at the foot of the Filters rail on desktop, and in the Filters sheet on phones, below Apply and Reset (tapping it closes the sheet). It opens a window (full-screen on phones; on desktop a tall dialog that keeps its size while results change) of other people's collections, newest first, as the Collections page's cards (cover, title, description, counts, "copied from", publisher).
+- **Its own search bar** stays at the top while the list scrolls. It sends Core's `query` (Core looks in the name, identifier, title and description, ignoring case) without `prefix`, which Core would otherwise apply to the query too (read in `HSQLDBArbitraryRepository.searchArbitraryResources` and `HSQLDBCacheUtils`). The search runs as typing pauses (400 ms) or on Enter, a page of 20 at a time as you scroll; "No collections match “…”" offers Clear search, which returns to the first list from the session's cache.
+- Left out: your own collections (every name of the account), hidden names (Settings), blocked names (`excludeblocked`, as every search), and deleted (emptied) collections once their body says so. Opening a collection or its publisher closes the window.
+- The window's code (3 kB) loads with its first opening, and Home makes no collection search until then. `ResponsiveDialog` gained a `header` slot (fixed above the scrolling content) and `tall`.
+
+| | Before | After |
+|---|---|---|
+| Collection searches on Home's first load | 0 | 0 |
+| Opening Explore collections | n/a | 1 paged search, then each row's body once (queued) |
+| Each search typed | n/a | 1 paged search per query (cached for the session) |
+| First load (JS + CSS) | 918 kB (gzip 303 kB) | 920 kB (gzip 304 kB): the button; the window is a 3 kB chunk of its own |
+| Tests | 662 | 668 |
+
+**Screenshot check:** new fixtures (three more collections by others, one with a title that wraps; the fixture search answers `query` the way Core does) and two new screens, explore (from the Filters sheet on phones) and explore-search ("live"). In all four themes at all five sizes with home-filters, collections and notifications (92 captures): 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations, no tap target under 44 px on phones. The placeholder "Title, description or name" was cut off in Q-Share Classic at 360 px; it is "Title or name" now.
+
+**Hub Dev Mode check:** not done; it joins the round above's (the test Hub from that session stalled, see there). In Hub: Explore collections from the Filters rail and, at 390×844 touch, from the Filters sheet; a search for a word in a real collection's title (Simon James's "My Grand Music Collection" is the only one on the node today, and it is his own, so Tester Hub sees it); the calls with `hub-cdp.mjs calls`.
+
 ## Follow-ups
 
 Questions for Simon (after pass 2):
@@ -461,6 +483,8 @@ Questions from the copies, thumbnails and grid round (2026-10-18):
 24. **Copies don't follow the original.** A copy keeps what it had when copied. Add "Update from the original" (one publish) later, or keep copies as snapshots?
 25. **Thumbnails for old shares:** shares published before 1.0.1 show their first image on cards only when it is ≤2 MB and already on your node. Offer owners "Add a thumbnail" on their share pages (one publish each)?
 26. **Grid by default** applies to collections and folders only; Home and profiles stay lists. Make Home a grid too?
+27. **Explore collections on phones** is in the Filters sheet, under the filters as asked. Put it on Home itself too (a chip beside Following and My shares), or on the Collections page?
+28. **The Collections page's All tab** lists the same collections without a search. Give it the same search bar, or let Explore replace the All tab?
 
 Next pass ideas:
 
