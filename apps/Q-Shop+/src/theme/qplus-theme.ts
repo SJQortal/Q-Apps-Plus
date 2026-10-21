@@ -1,8 +1,10 @@
 import type { AppThemeConfig } from "../hub-theme";
 import { darkThemeOptions, lightThemeOptions } from "../styles/theme";
 
-/** localStorage key for the chosen theme (JSON string, e.g. "hub30"). */
-export const THEME_STORAGE_KEY = "qshopplus-ui-theme";
+import { THEME_STORAGE_KEY } from "../constants/plus";
+
+/** localStorage key for the chosen theme (JSON string, e.g. "hub30"), from constants/plus. */
+export { THEME_STORAGE_KEY };
 
 export const themeConfig: AppThemeConfig = {
   hub20: {

@@ -1,10 +1,26 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
+import { APP_NAME, THEME_STORAGE_KEY } from './src/constants/plus'
+
+/** index.html's title and theme key come from src/constants/plus.ts, like the app's words. */
+function plusNames(): Plugin {
+  const values: Record<string, string> = {
+    QSP_APP_NAME: APP_NAME,
+    QSP_THEME_STORAGE_KEY: THEME_STORAGE_KEY,
+  }
+  return {
+    name: 'qsp-plus-names',
+    transformIndexHtml: {
+      order: 'pre',
+      handler: (html) => html.replace(/%(QSP_[A-Z_]+)%/g, (all, key: string) => values[key] ?? all),
+    },
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), plusNames()],
   base: '',
   test: {
     environment: 'jsdom',

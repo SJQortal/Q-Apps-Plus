@@ -2,7 +2,9 @@
  * Per-app settings kept in localStorage (the theme has its own key in the
  * hub-theme kit). Everything here is a convenience: the app works without it.
  */
-export const SETTINGS_STORAGE_KEY = "qshopplus-settings";
+import { SETTINGS_STORAGE_KEY } from "../constants/plus";
+
+export { SETTINGS_STORAGE_KEY };
 
 export interface StoredSettings {
   preferredCoin?: string;

@@ -20,6 +20,7 @@ import { CoinFilter } from "../../pages/Store/Store/Store";
 import { BlockedNamesModal } from "../../components/common/BlockedNamesModal/BlockedNamesModal";
 import { ChangelogDialog } from "../../components/common/ChangelogDialog";
 import { APP_VERSION } from "../../constants/changelog";
+import { APP_NAME, MAIL_APP_NAME, ORIGINAL_APP_LINK, ORIGINAL_APP_NAME } from "../../constants/plus";
 
 const Page = styled("main")(({ theme }) => ({
   width: "100%",
@@ -158,7 +159,7 @@ export function SettingsPage() {
         <Card aria-label="About">
           <Row>
             <Box>
-              <Typography>Q-Shop+ {APP_VERSION}</Typography>
+              <Typography>{APP_NAME} {APP_VERSION}</Typography>
               <Typography variant="body2" color="text.secondary">
                 A faster, Hub 3.0 styled Q-Shop that shares its data with the original.
               </Typography>
@@ -172,11 +173,11 @@ export function SettingsPage() {
             </Button>
           </Row>
           <Row sx={{ justifyContent: "flex-start" }}>
-            <Button component="a" href="qortal://APP/Q-Shop" size="small">
-              Open the original Q-Shop
+            <Button component="a" href={ORIGINAL_APP_LINK ?? undefined} size="small">
+              Open the original {ORIGINAL_APP_NAME}
             </Button>
-            <Button component="a" href="qortal://APP/Q-Mail+" size="small">
-              Open Q-Mail+
+            <Button component="a" href={`qortal://APP/${MAIL_APP_NAME}`} size="small">
+              Open {MAIL_APP_NAME}
             </Button>
           </Row>
           <Typography variant="body2" color="text.secondary">
