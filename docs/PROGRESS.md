@@ -17,7 +17,7 @@ Each app moves through the stages in docs/RELEASE.md: **build** (local, the roun
 | Q-Trade+ | build | `q-trade-plus/pass-1` (no PR) | 1 in progress (kit and shell, part 1) | – | – | finish round 1 |
 | Q-Support+ | build | `q-support-plus/pass-1` (no PR) | 1 in progress (upgrade) | – | – | finish round 1 |
 | Q-Fund+ | build | `q-fund-plus/pass-1` (no PR) | 1 in progress (upgrade) | – | – | finish round 1 |
-| Q-Mintership+ | community | merged ([#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23)) (`Desktop/Q-Apps+-QMintership`) | 2.0 rewrite: nights 1–3 (writes proven on a private testnet), the Explorer, feedback round 1 (items 1–137), Hub-checked read-only, release | **1.0.0** (2026-10-20, `8952279e`) | – | community feedback as 1.0.x; then the upstream PR to Qortal/Q-Mintership-Alpha when Simon calls it ready |
+| Q-Mintership+ | community | merged ([#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23)) (`Desktop/Q-Apps+-QMintership`) | 2.0 rewrite: nights 1–3 (writes proven on a private testnet), the Explorer, feedback round 1 (items 1–137), Hub-checked read-only, release | **1.0.1** (2026-10-21, `2c5f6ed2`) | – | community feedback as 1.0.x; then the upstream PR to Qortal/Q-Mintership-Alpha when Simon calls it ready |
 | Q-Apps+ | build | `q-apps-plus/first-version` (no PR) | brief and plan | – | n/a (new app) | after the others |
 
 Shared work:
