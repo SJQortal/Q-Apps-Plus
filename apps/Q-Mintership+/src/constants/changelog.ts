@@ -27,8 +27,9 @@ export const CHANGELOG: Release[] = [
       {
         title: 'For everyone',
         notes: [
-          'The Explorer has an Assets tab, between Transactions and Minter Profile: every Q-Asset the account holds, as cards or a list, each with its avatar, how much it holds and its share of all there is, who owns the asset, and its last trade price in QORT with what the holding is worth at it. Search and sort them.',
-          'Each asset opens its own window: its description, how much there is, its biggest holders and its latest trades, who bought from whom.',
+          'The Explorer has an Assets tab, between Transactions and Minter Profile: every Q-Asset the account holds, as cards or a list, each with its avatar, how much it holds and its share of all there is, who owns the asset, its last trade price in QORT with what the holding is worth at it, and right beside that what buyers would pay for it now. Search and sort them.',
+          'What buyers would pay now: each holding sold into the open buy orders on chain, the best price first, until it or the buyers run out; the account’s own buy orders don’t count. How it adds up shows it asset by asset. A last trade can be one tiny sale, so this is the realistic amount.',
+          'Each asset opens its own window: its description, how much there is, its last trade with its size, the open orders (what buyers offer and sellers ask), its biggest holders and its latest trades, who bought from whom.',
           'Assets the account owns are marked, and listed even when it holds none of them. An asset that comes in whole units only says Indivisible.',
           'The Overview lists its Q-Assets under At a glance, the ones worth most first; each opens its own window right there.',
         ],
