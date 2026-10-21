@@ -288,6 +288,116 @@ export function extendExplorer(world) {
     },
   ];
 
+  // ---- Q-Assets (Simon, 2026-10-21: the Explorer's Assets tab) ---------------------------
+  // Core's asset list, what each account holds, trades that price them, and avatars
+  // published as the Q-Assets app does: IMAGE `asset<id>_<name>_aavatar` by the owner's name.
+  const assetRow = (assetId, name, owner, units, extra = {}) => ({
+    assetId,
+    owner,
+    name,
+    description: '',
+    quantity: units * 1e8,
+    isDivisible: true,
+    isUnspendable: false,
+    creationGroupId: 0,
+    data: '',
+    ...extra,
+  });
+  const genesis = address('explorer-genesis');
+  const assets = [
+    assetRow(0, 'QORT', genesis, 0, { description: 'QORTAL coin', data: '{}' }),
+    assetRow(1, 'Legacy-QORA', genesis, 0, {
+      description: 'Representative legacy QORA',
+      isUnspendable: true,
+      data: '{}',
+    }),
+    assetRow(2, 'QORT-from-QORA', genesis, 0, {
+      description: 'QORT gained from holding legacy QORA',
+      isUnspendable: true,
+      data: '{}',
+    }),
+    assetRow(77, 'GEMCOIN', ADDR.promote, 1_000, {
+      description: 'Gems for Pia’s promotions: one GEMCOIN, one featured post on her board.',
+    }),
+    assetRow(78, 'Bean Token', ADDR.nominator, 1_000_000, {
+      description: 'Coffee beans from Nora’s roastery, one token a cup.',
+    }),
+    assetRow(79, '🐉', SPONSOR.address, 100, {
+      description: 'Dragons. Whole ones only.',
+      isDivisible: false,
+    }),
+    assetRow(80, 'Moonrise No. 1', ADDR.banTarget, 1, {
+      description: 'A one-of-a-kind photo of the moon rising over the harbour.',
+      isDivisible: false,
+    }),
+    assetRow(81, 'The Harbour Lighthouse Restoration Fund', FUNDER.address, 10_000_000_000, {
+      description:
+        'Shares in restoring the old harbour lighthouse.\n\nEach share is one vote on how the fund is spent, and the lighthouse keeper publishes the accounts on QDN every month. https://example.org/lighthouse',
+    }),
+    assetRow(82, 'Ben’s Tickets', ADDR.banTarget, 500, {
+      description: 'Tickets to Ben’s summer concert.',
+      isDivisible: false,
+    }),
+  ];
+  const holding = (address, assetId, balance) => ({ address, assetId, balance });
+  const holdings = [
+    holding(ADDR.admin, 77, '2.00000000'),
+    holding(ADDR.admin, 78, '10.00000000'),
+    holding(ADDR.admin, 1, '512.25000000'),
+    holding(ADDR.admin, 2, '3.50000000'),
+    holding(ADDR.banTarget, 77, '6.00000000'),
+    holding(ADDR.banTarget, 78, '25.50000000'),
+    holding(ADDR.banTarget, 79, '2.00000000'),
+    holding(ADDR.banTarget, 80, '1.00000000'),
+    holding(ADDR.banTarget, 81, '12345.67800000'),
+    holding(ADDR.promote, 77, '992.00000000'),
+    holding(ADDR.nominator, 78, '999914.50000000'),
+    holding(ADDR.learner, 78, '50.00000000'),
+    holding(ADDR.learner, 82, '200.00000000'),
+    holding(ADDR.kicked, 82, '300.00000000'),
+    holding(SPONSOR.address, 79, '98.00000000'),
+    holding(FUNDER.address, 81, '9999987654.32200000'),
+  ];
+  // Trades between accounts outside the personas, so no one's Connections change.
+  const seller = address('explorer-market-seller');
+  const buyer = address('explorer-market-buyer');
+  const marketTrade = (h, have, want, initiatorAmount, targetAmount, initiator, target) => ({
+    haveAssetId: have,
+    wantAssetId: want,
+    initiatorAmount,
+    targetAmount,
+    timestamp: blockTime(h),
+    initiator,
+    target,
+    initiatingOrderId: sig(`market:${h}:i`),
+    targetOrderId: sig(`market:${h}:t`),
+  });
+  const marketTrades = [
+    // Ben's buy order paid 120 QORT for Pia's 6 GEMCOIN: 20 QORT each.
+    {
+      haveAssetId: 0,
+      wantAssetId: 77,
+      initiatorAmount: '120.00000000',
+      targetAmount: '6.00000000',
+      timestamp: buyOrder.timestamp,
+      initiator: ADDR.banTarget,
+      target: ADDR.promote,
+      initiatingOrderId: buyOrder.signature,
+      targetOrderId: sellOrder.signature,
+    },
+    // Bean Token sold for QORT: 0.4, then 0.5 QORT each.
+    marketTrade(2_600_000, 78, 0, '100.00000000', '40.00000000', seller, buyer),
+    marketTrade(2_700_000, 78, 0, '40.00000000', '20.00000000', seller, buyer),
+    // A dragon bought for 75 QORT.
+    marketTrade(2_650_000, 0, 79, '75.00000000', '1.00000000', buyer, seller),
+  ];
+  const assetAvatars = [
+    { name: 'Pia Promote', identifier: 'asset77_GEMCOIN_aavatar', created: blockTime(2_100_000) },
+    { name: 'Sid Sponsor', identifier: 'asset79_🐉_aavatar', created: blockTime(2_300_000) },
+    // Someone else's image for Nora's asset: not the owner's, so never shown.
+    { name: 'Kit Kicked', identifier: 'asset78_Bean Token_aavatar', created: blockTime(2_310_000) },
+  ];
+
   // ---- other payments between personas ------------------------------------------------
   pay(ADDR.admin, ADDR.learner, 2_400_000, '5.00000000');
   pay(ADDR.nominator, ADDR.admin, 2_450_000, '1.50000000');
@@ -313,7 +423,7 @@ export function extendExplorer(world) {
       recipient: ADDR.learner,
       senderPublicKey: pk(world, ADDR.nominator),
       amount: '50.00000000',
-      assetId: 77,
+      assetId: 78,
       assetName: 'Bean Token',
     },
     [ADDR.learner]
@@ -613,6 +723,10 @@ export function extendExplorer(world) {
     parties,
     assetOrders,
     assetTrades,
+    assets,
+    holdings,
+    marketTrades,
+    assetAvatars,
     bySig: new Map(rows.map((row) => [row.signature, row])),
     raw,
     nameInfo,
@@ -743,6 +857,147 @@ export function answerExplorer(world, p, sp) {
       ...(info.updated ? { updated: info.updated } : {}),
       isForSale: false,
     });
+  }
+
+  // ---- Q-Assets: the list, one asset, balances and trades, as Core answers them ----------
+  if (p === '/assets') {
+    const withData = sp.get('includeData') === 'true';
+    const list = [...x.assets]
+      .sort((a, b) => a.assetId - b.assetId)
+      .map((a) => (withData ? a : { ...a, data: undefined }));
+    return json(page(list, sp));
+  }
+  if (p === '/assets/info') {
+    const id = sp.get('assetId');
+    const asked = sp.get('assetName');
+    const found = x.assets.find((a) =>
+      id !== null ? a.assetId === Number(id) : a.name.toLowerCase() === asked?.toLowerCase()
+    );
+    return found ? json(found) : json({ error: 601, message: 'invalid asset ID' }, 400);
+  }
+  if (p === '/assets/balances') {
+    const addresses = sp.getAll('address');
+    const ids = sp.getAll('assetid').map(Number);
+    if (!addresses.length && !ids.length)
+      return json({ error: 4, message: 'invalid criteria' }, 400);
+    if (ids.some((id) => !x.assets.some((a) => a.assetId === id)))
+      return json({ error: 601, message: 'invalid asset ID' }, 400);
+    const qort = [...world.accounts.values()]
+      .filter((a) => a.balance)
+      .map((a) => ({ address: a.address, assetId: 0, balance: Number(a.balance).toFixed(8) }));
+    const nameOf = (id) => x.assets.find((a) => a.assetId === id)?.name;
+    // With accounts asked for, a zero balance shows unless excludeZero; with assets only, never.
+    const excludeZero = !addresses.length || sp.get('excludeZero') === 'true';
+    let rows = [...x.holdings, ...qort]
+      .filter((h) => !addresses.length || addresses.includes(h.address))
+      .filter((h) => !ids.length || ids.includes(h.assetId))
+      .filter((h) => !excludeZero || Number(h.balance) !== 0)
+      .map((h) => ({ ...h, assetName: nameOf(h.assetId) }));
+    const ordering = sp.get('ordering') || 'ASSET_BALANCE_ACCOUNT';
+    const columns = {
+      ACCOUNT_ASSET: ['address', 'assetId'],
+      ASSET_ACCOUNT: ['assetId', 'address'],
+      ASSET_BALANCE_ACCOUNT: ['assetId', 'balance', 'address'],
+    }[ordering];
+    if (!columns) return json({ error: 4, message: 'invalid criteria' }, 400);
+    const compare = (a, b, column) =>
+      column === 'address'
+        ? a.address.localeCompare(b.address)
+        : Number(a[column]) - Number(b[column]);
+    rows = rows.sort((a, b) => {
+      for (const column of columns) {
+        const c = compare(a, b, column);
+        if (c) return c;
+      }
+      return 0;
+    });
+    return json(page(rows, sp));
+  }
+  // The newest two trades of each pair asked for, by the initiating order's have/want.
+  if (p === '/assets/trades/recent') {
+    const ids = sp.getAll('assetid').map(Number);
+    const others = sp.getAll('otherassetid').map(Number);
+    const have = ids.length ? ids : [0];
+    const want = others.length ? others : [0];
+    const pairs = new Map();
+    for (const t of x.marketTrades) {
+      if (!have.includes(t.haveAssetId) || !want.includes(t.wantAssetId)) continue;
+      const key = `${t.haveAssetId}:${t.wantAssetId}`;
+      pairs.set(key, [...(pairs.get(key) ?? []), t]);
+    }
+    const rows = [...pairs.values()]
+      .flatMap((list) => [...list].sort((a, b) => b.timestamp - a.timestamp).slice(0, 2))
+      .sort(
+        (a, b) =>
+          a.haveAssetId - b.haveAssetId ||
+          a.wantAssetId - b.wantAssetId ||
+          b.timestamp - a.timestamp
+      )
+      .map((t) => ({
+        assetId: t.haveAssetId,
+        otherAssetId: t.wantAssetId,
+        otherAmount: t.targetAmount,
+        amount: t.initiatorAmount,
+        timestamp: t.timestamp,
+      }));
+    return json(page(rows, sp));
+  }
+  if ((m = p.match(/^\/assets\/trades\/(\d+)\/(\d+)$/))) {
+    const [h, w] = [Number(m[1]), Number(m[2])];
+    const nameOf = (id) => x.assets.find((a) => a.assetId === id)?.name;
+    const orderOf = (id, creator, haveId, wantId, timestamp) => ({
+      orderId: id,
+      creator,
+      haveAssetId: haveId,
+      wantAssetId: wantId,
+      haveAssetName: nameOf(haveId),
+      wantAssetName: nameOf(wantId),
+      timestamp,
+      isClosed: true,
+      isFulfilled: true,
+    });
+    const list = x.marketTrades
+      .filter((t) => t.haveAssetId === h && t.wantAssetId === w)
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map((t) => ({
+        trade: {
+          initiatingOrderId: t.initiatingOrderId,
+          targetOrderId: t.targetOrderId,
+          targetAmount: t.targetAmount,
+          initiatorAmount: t.initiatorAmount,
+          initiatorSaving: '0.00000000',
+          timestamp: t.timestamp,
+          targetAmountAssetId: w,
+          targetAmountAssetName: nameOf(w),
+          initiatorAmountAssetId: h,
+          initiatorAmountAssetName: nameOf(h),
+        },
+        initiatingOrder: orderOf(t.initiatingOrderId, t.initiator, h, w, t.timestamp),
+        targetOrder: orderOf(t.targetOrderId, t.target, w, h, t.timestamp - MS_PER_BLOCK * 400),
+      }));
+    return json(page(list, sp));
+  }
+  // Asset avatars, as the Q-Assets app publishes them (IMAGE, by the owner's name).
+  if (p === '/arbitrary/resources/search' && sp.get('service') === 'IMAGE') {
+    const ident = (sp.get('identifier') || '').toLowerCase();
+    const prefix = sp.get('prefix') === 'true';
+    const names = sp.getAll('name');
+    const rows = x.assetAvatars
+      .filter((r) =>
+        prefix
+          ? r.identifier.toLowerCase().startsWith(ident)
+          : r.identifier.toLowerCase().includes(ident)
+      )
+      .filter((r) => !names.length || names.includes(r.name))
+      .map((r) => ({
+        name: r.name,
+        service: 'IMAGE',
+        identifier: r.identifier,
+        latestSignature: sig(`avatar:${r.name}:${r.identifier}`),
+        size: 4_200,
+        created: r.created,
+      }));
+    return json(page(rows, sp));
   }
 
   // ---- Q-Asset orders and trades (Core's two flags are exact filters, false by default) ----
