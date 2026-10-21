@@ -28,10 +28,12 @@ import {
   MAX_FOLDER_DEPTH,
   collectionKey,
   collectionPath,
+  deletedCollectionBody,
   editCollectionBody,
   fetchCollection,
   publishCollection,
   type Collection,
+  type CollectionBody,
 } from "../../utils/collections";
 import { avatarUrl, decodeParam, profilePath } from "../../utils/qortalLinks";
 import { isHubDecline } from "../../utils/hubErrors";
@@ -293,21 +295,38 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
   const parentPath = folderId ? collectionPath(name, id, parentId) : "/collections";
   const goBack = useSafeBack(parentPath);
 
-  const republish = async (next: Collection, successMessage: string): Promise<boolean> => {
+  /**
+   * Publishes the collection as `next`, showing it at once, as Add to
+   * collection does: Hub's confirmation and the publish take a while, and
+   * the page and every list show the change meanwhile. If Hub declines or
+   * the publish fails, what was there comes back (`declined` says so, for a
+   * change made from a page left behind). One at a time: the dialogs wait
+   * while `busy`.
+   */
+  const republish = async (
+    next: Collection,
+    successMessage: string,
+    options: { body?: CollectionBody; declined?: string } = {}
+  ): Promise<boolean> => {
+    const before = collection;
+    const body = options.body ?? editCollectionBody(next);
     setBusy(true);
+    dispatch(upsertCollection({ ...body, name: next.name, identifier: next.identifier, fetchedAt: Date.now() }));
     try {
       const saved = await publishCollection({
         name: next.name,
         identifier: next.identifier,
-        previous: collection ?? null,
-        body: editCollectionBody(next),
+        previous: before ?? null,
+        body,
       });
       dispatch(upsertCollection(saved));
       dispatch(setNotification({ msg: successMessage, alertType: "success" }));
       return true;
     } catch (error) {
+      if (before) dispatch(upsertCollection(before));
       // A "no" in Hub's dialog is the user's choice, not a failure.
       if (!isHubDecline(error)) dispatch(setNotification({ msg: `Could not update ${next.title}`, alertType: "error" }));
+      else if (options.declined) dispatch(setNotification({ msg: options.declined, alertType: "info" }));
       return false;
     } finally {
       setBusy(false);
@@ -317,32 +336,37 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
   const here = found?.folder ?? null;
   const placeTitle = here ? here.title || "Untitled folder" : collection?.title || "Untitled collection";
 
-  const confirmRemove = async () => {
-    if (!collection || !removeTarget) return;
+  // Each closes its dialog at once: the change shows while Hub asks.
+  const confirmRemove = () => {
+    if (!collection || !removeTarget || busy) return;
     const next = toggleItemIn(collection, folderId, { name: removeTarget.user, identifier: removeTarget.id });
-    if (await republish(next, `Removed from ${placeTitle}`)) setRemoveTarget(null);
+    setRemoveTarget(null);
+    void republish(next, `Removed from ${placeTitle}`);
   };
 
-  const confirmMove = async (to: string | null) => {
-    if (!collection || !moveTarget) return;
+  const confirmMove = (to: string | null) => {
+    if (!collection || !moveTarget || busy) return;
     const next = moveItem(collection, { name: moveTarget.user, identifier: moveTarget.id }, folderId, to);
     const target = to ? findFolder(collection, to)?.folder.title || "Untitled folder" : collection.title;
-    if (await republish(next, `Moved to ${target}`)) setMoveTarget(null);
+    setMoveTarget(null);
+    void republish(next, `Moved to ${target}`);
   };
 
-  const confirmDelete = async () => {
-    if (!collection) return;
+  const confirmDelete = () => {
+    if (!collection || busy) return;
+    setDeleteOpen(false);
     if (here) {
-      if (await republish(removeFolder(collection, here.id), "Folder deleted")) {
-        setDeleteOpen(false);
-        navigate(parentPath, { replace: true });
-      }
+      const title = here.title || "Untitled folder";
+      navigate(parentPath, { replace: true });
+      void republish(removeFolder(collection, here.id), "Folder deleted", { declined: `“${title}” wasn't deleted.` });
       return;
     }
-    if (await republish({ ...collection, items: [], folders: [] }, "Collection deleted")) {
-      setDeleteOpen(false);
-      navigate("/collections");
-    }
+    // Gone from your collections at once; back again if Hub says no.
+    navigate("/collections");
+    void republish(collection, "Collection deleted", {
+      body: deletedCollectionBody(collection),
+      declined: `“${collection.title || "Untitled collection"}” wasn't deleted.`,
+    });
   };
 
   // Only this row's name's body: another name's under the same identifier is a different share.
@@ -700,7 +724,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
               Cancel
             </Button>
             <Button variant="contained" color="error" onClick={confirmRemove} disabled={busy}>
-              {busy ? "Publishing…" : "Remove"}
+              {busy && removeTarget ? "Publishing…" : "Remove"}
             </Button>
           </>
         }
@@ -727,7 +751,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
               Cancel
             </Button>
             <Button variant="contained" color="error" onClick={confirmDelete} disabled={busy}>
-              {busy ? "Publishing…" : "Delete"}
+              {busy && deleteOpen ? "Publishing…" : "Delete"}
             </Button>
           </>
         }
