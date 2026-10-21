@@ -62,6 +62,11 @@ describe('the Assets tab', () => {
       screen.getByText('3 of 5 have traded for QORT; the rest aren’t counted.')
     ).toBeInTheDocument();
     expect(screen.getByText('2 assets')).toBeInTheDocument();
+    // Next to it, what buyers would pay now (Simon, 2026-10-21): 102 + 11.475 + 0.5.
+    expect(await screen.findByText('≈ 113.98 QORT', {}, T)).toBeInTheDocument();
+    expect(
+      screen.getByText('2 with buyers for all of it; 1 for part of it; 2 with no buyers now.')
+    ).toBeInTheDocument();
     await waitFor(
       () =>
         expect(cards()).toEqual([
@@ -84,6 +89,12 @@ describe('the Assets tab', () => {
     await assets(ADDR.banTarget);
     const gem = (await screen.findByRole('button', { name: 'GEMCOIN: details' }, T)).closest('li')!;
     await waitFor(() => expect(gem).toHaveTextContent('≈ 120 QORT'), T);
+    // Side by side: the last trade, and what buyers would pay now (Ben's own order at 20 aside).
+    await waitFor(
+      () => expect(gem).toHaveTextContent('Buyers would pay now≈ 102 QORTfor all of it'),
+      T
+    );
+    expect(gem).toHaveTextContent('At its last trade≈ 120 QORT');
     expect(gem).toHaveTextContent('Holds6');
     expect(gem).toHaveTextContent('0.6 % of 1,000');
     expect(gem).toHaveTextContent('20 QORT each');
@@ -99,6 +110,9 @@ describe('the Assets tab', () => {
       .getByRole('button', { name: 'The Harbour Lighthouse Restoration Fund: details' })
       .closest('li')!;
     expect(fund).toHaveTextContent('under 0.01 % of 10,000,000,000');
+    expect(fund).toHaveTextContent('≈ 0.5 QORTfor 5,000 of 12,345.678');
+    const dragon = screen.getByRole('button', { name: '🐉: details' }).closest('li')!;
+    expect(dragon).toHaveTextContent('Buyers would pay nowNo buyers now');
   });
 
   it('avatars: the owner’s own Q-Assets image, never anyone else’s; a coin otherwise', async () => {
@@ -158,6 +172,18 @@ describe('the Assets tab', () => {
     const dialog = await screen.findByRole('dialog', { name: 'GEMCOIN' }, T);
     expect(screen.getByTestId('search')).toHaveTextContent('?asset=77');
     expect(dialog).toHaveTextContent('Gems for Pia’s promotions');
+    // The last trade's size, the holding at it, and what buyers would pay now.
+    expect(dialog).toHaveTextContent('20 QORT each (6 GEMCOIN for 120 QORT, 18 May 2025)');
+    expect(dialog).toHaveTextContent('Buyers would pay now≈ 102 QORT for all of it');
+    // The open orders: Ben's own offer at 20 isn't among the buyers.
+    const buyers = await within(dialog).findByRole('list', { name: 'Buyers offer' }, T);
+    expect(
+      within(buyers)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent)
+    ).toEqual(['18 QORT each4', '15 QORT each10']);
+    const sellers = within(dialog).getByRole('list', { name: 'Sellers ask' });
+    expect(sellers).toHaveTextContent('22 QORT each3');
     // GEMCOIN divides: nothing said about it.
     expect(dialog).not.toHaveTextContent(/divisible/i);
     expect(
@@ -177,6 +203,29 @@ describe('the Assets tab', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), T);
     expect(screen.getByTestId('search')).toBeEmptyDOMElement();
+  });
+
+  it('How it adds up: what buyers would pay, asset by asset, each opening its own window', async () => {
+    const { user } = await assets(ADDR.banTarget);
+    await user.click(await screen.findByRole('button', { name: 'How it adds up' }, T));
+    const breakdown = await screen.findByRole('dialog', { name: 'What buyers would pay now' }, T);
+    expect(breakdown).toHaveTextContent('≈ 113.98 QORT');
+    expect(breakdown).toHaveTextContent('At their last trades ≈ 282.75 QORT');
+    const list = within(breakdown).getByRole('list', { name: 'What buyers would pay for each' });
+    const rows = within(list).getAllByRole('button');
+    const names = [
+      'GEMCOIN',
+      'Bean Token',
+      'The Harbour Lighthouse Restoration Fund',
+      '🐉',
+      'Moonrise No. 1',
+    ];
+    names.forEach((name, i) => expect(rows[i]).toHaveTextContent(name));
+    expect(rows[0]).toHaveTextContent('Best offer 18 QORT each');
+    expect(rows[3]).toHaveTextContent('No buyers now');
+    await user.click(rows[1]);
+    expect(await screen.findByRole('dialog', { name: 'Bean Token' }, T)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'What buyers would pay now' })).toBeNull();
   });
 
   it('assets it owns and holds none of, and a link straight to one', async () => {
@@ -247,8 +296,8 @@ describe('the Overview’s Q-Assets, under At a glance', () => {
             .getAllByRole('button')
             .map((tile) => tile.textContent)
         ).toEqual([
-          'GGEMCOIN2 · ≈ 40 QORT',
-          'BTBean Token10 · ≈ 5 QORT',
+          'GGEMCOIN2 · last trade ≈ 40 QORT',
+          'BTBean Token10 · last trade ≈ 5 QORT',
           'LQLegacy-QORA512.25',
           'QFQORT-from-QORA3.5',
         ]),
@@ -257,12 +306,19 @@ describe('the Overview’s Q-Assets, under At a glance', () => {
     expect(within(section).getByRole('link', { name: /Open Assets/ })).toBeInTheDocument();
     // A tile opens the asset's popup on the Overview itself.
     // Its name is its own words, as seen (WCAG 2.5.3).
-    await user.click(within(tiles).getByRole('button', { name: /^GEMCOIN 2 ?· ≈ 40 QORT$/ }));
+    await user.click(
+      within(tiles).getByRole('button', { name: /^GEMCOIN 2 ?· last trade ≈ 40 QORT$/ })
+    );
     const dialog = await screen.findByRole('dialog', { name: 'GEMCOIN' }, T);
     expect(screen.getByTestId('search')).toHaveTextContent('?asset=77');
     expect(
       await within(dialog).findByText('This account: #3 of 3 holders.', {}, T)
     ).toBeInTheDocument();
+    // Worked out in the popup itself: Ben's open order at 20 takes Avery's 2.
+    await waitFor(
+      () => expect(dialog).toHaveTextContent('Buyers would pay now≈ 40 QORT for all of it'),
+      T
+    );
     await user.click(within(dialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull(), T);
     expect(screen.getByTestId('search')).toBeEmptyDOMElement();

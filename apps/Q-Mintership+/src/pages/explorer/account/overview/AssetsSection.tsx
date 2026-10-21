@@ -2,7 +2,9 @@
  * The Overview's Q-Assets, under At a glance (Simon, 2026-10-21: "in
  * overview a quick list of Q-Assets as well, under At a glance"): the ones
  * it holds, worth most first, as small tiles (avatar, name, how much, what
- * it is worth at its last trade), the first QUICK_ASSETS. Each opens its
+ * it is worth at its last trade, said so: the Overview reads no order
+ * books, so what buyers would pay now is in each asset's popup and the
+ * tab), the first QUICK_ASSETS. Each opens its
  * own popup right here (Simon, 2026-10-21: "when clicking on each asset it
  * gets its own popup overview window"; `?asset=<id>`, as on the tab), and
  * "All N in Assets" opens the tab. The same reads as the tab
@@ -92,7 +94,7 @@ function Tile({ view, onOpen }: { view: AssetView; onOpen: () => void }) {
             {amountWords(view.balance)}
             {view.worth !== undefined ? (
               <Box component="span" sx={{ color: 'text.secondary' }}>
-                {' · '}
+                {' · last trade '}
                 {worthWords(view.worth)}
               </Box>
             ) : null}
@@ -104,7 +106,7 @@ function Tile({ view, onOpen }: { view: AssetView; onOpen: () => void }) {
 }
 
 export function AssetsSection({ address }: { address: string }) {
-  const { holdings, list, views } = useAssets(address);
+  const { holdings, list, views } = useAssets(address, { sales: false });
   const { open, setOpen } = useOpenAsset(address, views, list.data);
   let body: React.ReactNode;
   if (holdings.isError && !holdings.data)

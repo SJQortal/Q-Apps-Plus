@@ -35,7 +35,7 @@ import {
 import { appParam } from '../../../routes/hubLocation';
 import { formatCount } from '../../../utils/format';
 import { AssetDialog } from './assets/AssetDialog';
-import { AssetCard, AssetChips, AssetRow } from './assets/AssetItems';
+import { AssetCard, AssetChips, AssetRow, type SaleState } from './assets/AssetItems';
 import { AssetsSummary } from './assets/AssetsSummary';
 import { assetsTitle, NO_ASSETS, ownedTitle, showMoreWords } from './assets/assetsWords';
 import { useAssets } from './assets/useAssets';
@@ -81,7 +81,7 @@ function OwnedRow({ meta, onOpen }: { meta: AssetMeta; onOpen: () => void }) {
 }
 
 export default function AssetsTab({ address }: { address: string }) {
-  const { holdings, list, prices, views, owned } = useAssets(address);
+  const { holdings, list, prices, sales, views, owned } = useAssets(address);
   const [params, setParams] = useSearchParams();
   const [view, setView] = useListView('assets');
   const [sort, setSort] = useViewState<AssetSort>('assets:sort', 'worth');
@@ -124,13 +124,20 @@ export default function AssetsTab({ address }: { address: string }) {
   const ownedCount = owned ? owned.length + views.filter((v) => v.owned).length : undefined;
   const page = sorted.slice(0, shown);
   const listFailed = list.isError && !list.data;
+  const saleState: SaleState = sales.data ? 'read' : sales.isError ? 'failed' : 'reading';
 
   return (
     <>
       <Section title={assetsTitle(views.length)} id="assets-held">
         {views.length ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <AssetsSummary views={views} ownedCount={ownedCount} prices={prices} />
+            <AssetsSummary
+              views={views}
+              ownedCount={ownedCount}
+              prices={prices}
+              sales={sales}
+              onOpenAsset={setOpen}
+            />
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
               <RowSearchField
                 value={search}
@@ -191,9 +198,15 @@ export default function AssetsTab({ address }: { address: string }) {
                       key={item.assetId}
                       view={item}
                       onOpen={() => setOpen(item.assetId)}
+                      saleState={saleState}
                     />
                   ) : (
-                    <AssetRow key={item.assetId} view={item} onOpen={() => setOpen(item.assetId)} />
+                    <AssetRow
+                      key={item.assetId}
+                      view={item}
+                      onOpen={() => setOpen(item.assetId)}
+                      saleState={saleState}
+                    />
                   )
                 )}
               </Box>

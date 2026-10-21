@@ -6,6 +6,7 @@ import {
   shareWords,
   type AssetPrice,
   type AssetsTotals,
+  type SaleNow,
 } from '../../../../rules/explorer/assets';
 
 export const NO_ASSETS = 'Holds no Q-Assets.';
@@ -81,4 +82,51 @@ export function rankLine(rank: number | null, read: number, truncated: boolean):
 /** "Show the next 24". */
 export function showMoreWords(left: number, page: number): string {
   return `Show the next ${formatCount(Math.min(left, page))}`;
+}
+
+// ---- what buyers would pay now (Simon, 2026-10-21: "realistic sale amount") ----------
+
+export const LAST_TRADE_LABEL = 'At its last trade';
+export const SALE_LABEL = 'Buyers would pay now';
+export const NO_BUYERS = 'No buyers now';
+export const SALE_EXPLANATION =
+  'Each holding sold into the open buy orders on chain, the best price first, until it or the buyers run out. Its own buy orders don’t count. Nothing is sold: this only reads the orders.';
+
+/** "≈ 102 QORT", "at least ≈ 0.5 QORT", or "No buyers now". */
+export function saleWords(sale: SaleNow): string {
+  if (!sale.sold) return NO_BUYERS;
+  return `${sale.atLeast ? 'at least ' : ''}≈ ${qortWords(sale.qort)} QORT`;
+}
+
+/** "for all of it", "for 5,000 of 12,345.678", or '' when no buyer wants any. */
+export function saleDetail(sale: SaleNow, balance: bigint): string {
+  if (!sale.sold) return '';
+  if (!sale.unsold) return 'for all of it';
+  return `for ${amountWords(sale.sold)} of ${amountWords(balance)}`;
+}
+
+/** The summary's line under the sale: who would buy what. */
+export function salesLine(totals: AssetsTotals): string {
+  if (!totals.saleRead) return '';
+  const parts: string[] = [];
+  if (totals.saleAll) parts.push(`${formatCount(totals.saleAll)} with buyers for all of it`);
+  if (totals.salePart) parts.push(`${formatCount(totals.salePart)} for part of it`);
+  if (totals.saleNone)
+    parts.push(
+      totals.saleNone === totals.saleRead
+        ? 'No buyers for any of them now'
+        : `${formatCount(totals.saleNone)} with no buyers now`
+    );
+  const line = parts.join('; ');
+  return `${line.charAt(0).toUpperCase()}${line.slice(1)}.`;
+}
+
+/** "Best offer 18 QORT each", or ''. */
+export function bestOfferWords(sale: SaleNow): string {
+  return sale.bestBid ? `Best offer ${amountWords(sale.bestBid)} QORT each` : '';
+}
+
+/** The last trade with its size, so a thin one shows: "6 GEMCOIN for 120 QORT, 18 May 2025". */
+export function lastTradeSize(price: AssetPrice, name: string): string {
+  return `${amountWords(price.units)} ${name} for ${amountWords(price.qort)} QORT, ${formatDate(price.at)}`;
 }

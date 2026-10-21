@@ -4,10 +4,13 @@
  * Q-Assets or a link with `?asset=<id>`: its avatar, number, owner and
  * marks; its description as its owner wrote it; what this account holds of
  * it and its share; how much there is, and that it is indivisible when it
- * is; its last trade price and what the holding is worth at it; its biggest
- * holders, this account marked and where it stands; and its latest trades
- * with QORT, who bought from whom. The holders and the trades are read when it opens
- * (data/explorer/assets.ts); the rest is the tab's. Its transactions with
+ * is; its last trade (how many for how much, so a thin one shows) and the
+ * holding at that price, beside what buyers would pay for it now (Simon:
+ * "realistic sale amount"); the open orders, buyers' offers and sellers'
+ * asks; its biggest holders, this account marked and where it stands; and
+ * its latest trades with QORT, who bought from whom. The holders, the
+ * orders and the trades are read when it opens (data/explorer/assets.ts;
+ * the buy orders are the tab's when it has read them); the rest is the tab's. Its transactions with
  * this account are the Transactions tab, searched for the asset's name.
  */
 import { useId, useState } from 'react';
@@ -23,19 +26,26 @@ import { AssetAvatar } from '../../../../components/explorer/AssetAvatar';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
 import {
+  asksKey,
+  bidsKey,
   dealsKey,
   getAssetDeals,
+  getBuyOrders,
+  getSellOffers,
   getTopHolders,
   holdersKey,
 } from '../../../../data/explorer/assets';
 import { useQuery } from '../../../../hooks/useQuery';
 import {
   amountWords,
+  bidLevels,
   quantityWords,
+  saleNow,
   shareOf,
   shareWords,
   type AssetDeal,
   type AssetView,
+  type OrderLevel,
 } from '../../../../rules/explorer/assets';
 import { explorerAccountPath } from '../../../../routes/paths';
 import { formatDate } from '../../../../utils/format';
@@ -44,9 +54,13 @@ import { assetAccent } from './assetAccent';
 import {
   INDIVISIBLE_EXPLANATION,
   INDIVISIBLE_WORDS,
+  lastTradeSize,
   NEVER_TRADED,
   priceWords,
   rankLine,
+  SALE_LABEL,
+  saleDetail,
+  saleWords,
   worthWords,
 } from './assetsWords';
 
@@ -198,6 +212,128 @@ function DealLine({ deal, name }: { deal: AssetDeal; name: string }) {
   );
 }
 
+/** One side of the book: "18 QORT each · 4", the best first; or a line when it's empty. */
+function Side({
+  title,
+  levels,
+  empty,
+}: {
+  title: string;
+  levels: readonly OrderLevel[];
+  empty: string;
+}) {
+  const id = useId();
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography id={id} variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+        {title}
+      </Typography>
+      {levels.length ? (
+        <Box component="ul" aria-labelledby={id} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          {levels.map((level) => (
+            <Box
+              component="li"
+              key={String(level.price)}
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: 1,
+                py: 0.25,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              <Typography component="span">{amountWords(level.price)} QORT each</Typography>
+              <Typography component="span" color="text.secondary">
+                {amountWords(level.units)}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        <Typography variant="body2" color="text.secondary">
+          {empty}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/** The open orders: what buyers offer (its own orders aside) and what sellers ask, 5 a side. */
+function Orders({ address, asset }: { address: string; asset: AssetView }) {
+  const bids = useQuery(bidsKey(asset.assetId), (force) => getBuyOrders(asset.assetId, { force }));
+  const asks = useQuery(asksKey(asset.assetId), (force) => getSellOffers(asset.assetId, { force }));
+  const headingId = useId();
+  let body: React.ReactNode;
+  const failed = (bids.isError && !bids.data) || (asks.isError && !asks.data);
+  if (failed)
+    body = (
+      <ErrorState
+        compact
+        title="Couldn’t read its open orders."
+        error={bids.error ?? asks.error}
+        onRetry={() => {
+          void bids.refetch();
+          void asks.refetch();
+        }}
+      />
+    );
+  else if (!bids.data || !asks.data) body = <Loading words="Reading its open orders" />;
+  else
+    body = (
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 1.5,
+          gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))' },
+        }}
+      >
+        <Side
+          title="Buyers offer"
+          levels={bidLevels(bids.data.orders.filter((order) => order.creator !== address))}
+          empty="No buyers now."
+        />
+        <Side title="Sellers ask" levels={asks.data} empty="No sellers now." />
+      </Box>
+    );
+  return (
+    <Box component="section" aria-labelledby={headingId}>
+      <Heading id={headingId}>Open orders</Heading>
+      {body}
+    </Box>
+  );
+}
+
+/** What buyers would pay for the holding now: the tab's, or worked out here from the book. */
+function SaleFact({ address, asset }: { address: string; asset: AssetView }) {
+  const bids = useQuery(
+    asset.sale || asset.balance <= 0n ? null : bidsKey(asset.assetId),
+    (force) => getBuyOrders(asset.assetId, { force })
+  );
+  if (asset.balance <= 0n) return null;
+  const sale =
+    asset.sale ??
+    (bids.data ? saleNow(asset.balance, bids.data.orders, address, bids.data.truncated) : null);
+  return (
+    <Fact label={SALE_LABEL}>
+      {sale ? (
+        <>
+          {saleWords(sale)}
+          {saleDetail(sale, asset.balance) ? (
+            <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+              {' '}
+              {saleDetail(sale, asset.balance)}
+            </Box>
+          ) : null}
+        </>
+      ) : bids.isError ? (
+        '–'
+      ) : (
+        <Skeleton variant="text" width="50%" />
+      )}
+    </Fact>
+  );
+}
+
 function Deals({ asset }: { asset: AssetView }) {
   const deals = useQuery(dealsKey(asset.assetId), (force) =>
     getAssetDeals(asset.assetId, { force })
@@ -328,14 +464,24 @@ export function AssetDialog({
             <Fact label={INDIVISIBLE_WORDS}>{INDIVISIBLE_EXPLANATION}</Fact>
           ) : null}
           <Fact label="Last trade">
-            {asset.price
-              ? `${priceWords(asset.price)}, ${formatDate(asset.price.at)}`
-              : NEVER_TRADED}
+            {asset.price ? (
+              <>
+                {priceWords(asset.price)}
+                <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
+                  {' '}
+                  ({lastTradeSize(asset.price, asset.name)})
+                </Box>
+              </>
+            ) : (
+              NEVER_TRADED
+            )}
           </Fact>
           {asset.worth !== undefined ? (
             <Fact label="Its holding at that price">{worthWords(asset.worth)}</Fact>
           ) : null}
+          <SaleFact address={address} asset={asset} />
         </Box>
+        <Orders address={address} asset={asset} />
         <Holders address={address} asset={asset} />
         <Deals asset={asset} />
       </Box>

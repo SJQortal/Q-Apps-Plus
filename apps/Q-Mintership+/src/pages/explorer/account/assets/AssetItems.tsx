@@ -1,16 +1,21 @@
 /**
  * One held asset, as a card (the grid) or a row (the list): its avatar with
  * its owner's on the edge, its name and number, how much the account holds
- * and its share of all there is (a bar in the asset's own colour), and its
- * last trade price with what the holding is worth at it. Its name is the
+ * and its share of all there is (a bar in the asset's own colour), and two
+ * values side by side: the holding at its last trade price, and what
+ * buyers would pay for it now (Simon, 2026-10-21: "leave that amount at the
+ * last trade, but also add realistic sale amount with its own window next
+ * to it"). Its name is the
  * button that opens it (AssetDialog); the button stretches over the whole
  * card or row, so anywhere on it opens it, while the rest reads as text.
  */
 import type { ReactNode } from 'react';
-import { Box, ButtonBase, Typography } from '@mui/material';
+import { Box, ButtonBase, Skeleton, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
+import { visuallyHidden } from '@mui/utils';
 import ChevronRightOutlinedIcon from '@mui/icons-material/ChevronRightOutlined';
 import { AssetAvatar } from '../../../../components/explorer/AssetAvatar';
+import { fieldBlockFill } from '../../../../components/explorer/fieldBlock';
 import { StatusChip } from '../../../../components/explorer/StatusChip';
 import { usePrimaryName } from '../../../../hooks/useData';
 import {
@@ -24,11 +29,15 @@ import { formatDate, shortAddress } from '../../../../utils/format';
 import { assetAccent } from './assetAccent';
 import {
   INDIVISIBLE_EXPLANATION,
+  LAST_TRADE_LABEL,
   INDIVISIBLE_WORDS,
   NEVER_TRADED,
   OWNS_EXPLANATION,
   OWNS_WORDS,
   priceWords,
+  SALE_LABEL,
+  saleDetail,
+  saleWords,
   UNSPENDABLE_EXPLANATION,
   UNSPENDABLE_WORDS,
   worthWords,
@@ -198,34 +207,96 @@ function ShareLine({ view, accent }: { view: AssetView; accent: string }) {
   );
 }
 
-function PriceLine({ view }: { view: AssetView }) {
-  if (!view.price || view.worth === undefined)
-    return (
-      <Typography variant="body2" color="text.secondary">
-        {NEVER_TRADED}
-      </Typography>
-    );
+/** Whether the open buy orders are still being read, or couldn't be read. */
+export type SaleState = 'reading' | 'failed' | 'read';
+
+/** One small value panel: a label, the value, and a line under it. */
+function MiniPanel({
+  label,
+  value,
+  detail,
+  quiet = false,
+}: {
+  label: string;
+  value: ReactNode;
+  detail?: string;
+  /** The value is words, not an amount (no trade, no buyers). */
+  quiet?: boolean;
+}) {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'baseline',
-        justifyContent: 'space-between',
-        columnGap: 1,
-      }}
-    >
-      <Typography sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-        {worthWords(view.worth)}
+    <Box sx={{ bgcolor: fieldBlockFill, borderRadius: 1, px: 1, py: 0.75, minWidth: 0 }}>
+      <Typography variant="caption" component="p" color="text.secondary" sx={{ lineHeight: 1.3 }}>
+        {label}
       </Typography>
-      <Typography variant="body2" color="text.secondary">
-        {priceWords(view.price)} · {formatDate(view.price.at)}
+      <Typography
+        component="p"
+        sx={{
+          fontWeight: quiet ? 400 : 700,
+          color: quiet ? 'text.secondary' : 'text.primary',
+          fontSize: quiet ? 14 : 16,
+          fontVariantNumeric: 'tabular-nums',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {value}
       </Typography>
+      {detail ? (
+        <Typography
+          variant="caption"
+          component="p"
+          color="text.secondary"
+          sx={{ lineHeight: 1.3, overflowWrap: 'anywhere' }}
+        >
+          {detail}
+        </Typography>
+      ) : null}
     </Box>
   );
 }
 
-export function AssetCard({ view, onOpen }: { view: AssetView; onOpen: () => void }) {
+/** What buyers would pay now, as words, or a placeholder while the books are read. */
+export function SaleValue({ view, state }: { view: AssetView; state: SaleState }) {
+  if (view.sale) return <>{saleWords(view.sale)}</>;
+  if (state === 'failed') return <>–</>;
+  return (
+    <>
+      <Skeleton variant="text" width="70%" aria-hidden />
+      <Box component="span" sx={visuallyHidden}>
+        Reading its buy orders
+      </Box>
+    </>
+  );
+}
+
+/** The holding at its last trade, and what buyers would pay now: side by side. */
+function Values({ view, saleState }: { view: AssetView; saleState: SaleState }) {
+  return (
+    <Box sx={{ display: 'grid', gap: 0.75, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+      <MiniPanel
+        label={LAST_TRADE_LABEL}
+        value={view.worth !== undefined ? worthWords(view.worth) : NEVER_TRADED}
+        detail={view.price ? `${priceWords(view.price)} · ${formatDate(view.price.at)}` : undefined}
+        quiet={view.worth === undefined}
+      />
+      <MiniPanel
+        label={SALE_LABEL}
+        value={<SaleValue view={view} state={saleState} />}
+        detail={view.sale ? saleDetail(view.sale, view.balance) : undefined}
+        quiet={view.sale?.sold === 0n || (view.sale === undefined && saleState === 'failed')}
+      />
+    </Box>
+  );
+}
+
+export function AssetCard({
+  view,
+  onOpen,
+  saleState,
+}: {
+  view: AssetView;
+  onOpen: () => void;
+  saleState: SaleState;
+}) {
   const theme = useTheme();
   const accent = assetAccent(theme, view.assetId);
   return (
@@ -276,13 +347,21 @@ export function AssetCard({ view, onOpen }: { view: AssetView; onOpen: () => voi
         </Typography>
       </Box>
       <ShareLine view={view} accent={accent} />
-      <PriceLine view={view} />
+      <Values view={view} saleState={saleState} />
       <AssetChips meta={view.meta} owned={view.owned} />
     </Box>
   );
 }
 
-export function AssetRow({ view, onOpen }: { view: AssetView; onOpen: () => void }) {
+export function AssetRow({
+  view,
+  onOpen,
+  saleState,
+}: {
+  view: AssetView;
+  onOpen: () => void;
+  saleState: SaleState;
+}) {
   const theme = useTheme();
   const accent = assetAccent(theme, view.assetId);
   return (
@@ -293,7 +372,7 @@ export function AssetRow({ view, onOpen }: { view: AssetView; onOpen: () => void
         display: 'grid',
         gridTemplateColumns: {
           xs: 'auto minmax(0, 1fr) auto',
-          md: 'auto minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto',
+          md: 'auto minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto',
         },
         alignItems: 'center',
         columnGap: 1.5,
@@ -337,6 +416,9 @@ export function AssetRow({ view, onOpen }: { view: AssetView; onOpen: () => void
           gridRow: { xs: 3, md: 'auto' },
         }}
       >
+        <Typography variant="caption" component="p" color="text.secondary">
+          {LAST_TRADE_LABEL}
+        </Typography>
         {view.worth !== undefined && view.price ? (
           <>
             <Typography sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
@@ -351,6 +433,32 @@ export function AssetRow({ view, onOpen }: { view: AssetView; onOpen: () => void
             {NEVER_TRADED}
           </Typography>
         )}
+      </Box>
+      <Box
+        sx={{
+          minWidth: 0,
+          gridColumn: { xs: '2 / 3', md: 'auto' },
+          gridRow: { xs: 4, md: 'auto' },
+        }}
+      >
+        <Typography variant="caption" component="p" color="text.secondary">
+          {SALE_LABEL}
+        </Typography>
+        <Typography
+          component="div"
+          sx={{
+            fontWeight: view.sale?.sold ? 600 : 400,
+            color: view.sale?.sold ? 'text.primary' : 'text.secondary',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          <SaleValue view={view} state={saleState} />
+        </Typography>
+        {view.sale && view.sale.sold ? (
+          <Typography variant="body2" color="text.secondary">
+            {saleDetail(view.sale, view.balance)}
+          </Typography>
+        ) : null}
       </Box>
       <ChevronRightOutlinedIcon
         aria-hidden
