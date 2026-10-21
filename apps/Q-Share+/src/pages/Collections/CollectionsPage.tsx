@@ -35,7 +35,8 @@ type TabId = "mine" | "all";
 
 const countLabel = (n: number) => `${n} ${n === 1 ? "share" : "shares"}`;
 
-export function CollectionCard({ row }: { row: CollectionSummary }) {
+/** `onOpen` runs as the card or its publisher is opened (a window holding it closes). */
+export function CollectionCard({ row, onOpen }: { row: CollectionSummary; onOpen?: () => void }) {
   const navigate = useNavigate();
   const phone = usePhoneLayout();
   const collection = useSelector((state: RootState) => state.collections.byKey[collectionKey(row.name, row.identifier)]);
@@ -45,7 +46,10 @@ export function CollectionCard({ row }: { row: CollectionSummary }) {
   return (
     <CardItem>
       <CardButton
-        onClick={() => navigate(collectionPath(row.name, row.identifier))}
+        onClick={() => {
+          onOpen?.();
+          navigate(collectionPath(row.name, row.identifier));
+        }}
         aria-label={`Open ${title}`}
         sx={{ flexDirection: "row", alignItems: "center", gap: 1.5 }}
       >
@@ -65,7 +69,13 @@ export function CollectionCard({ row }: { row: CollectionSummary }) {
           </CardMeta>
         </Box>
       </CardButton>
-      <PublisherLink onClick={() => navigate(profilePath(row.name))} aria-label={`Shares by ${row.name}`}>
+      <PublisherLink
+        onClick={() => {
+          onOpen?.();
+          navigate(profilePath(row.name));
+        }}
+        aria-label={`Shares by ${row.name}`}
+      >
         <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(row.name)} alt="" slotProps={{ img: { loading: "lazy" } }} />
         <span>{row.name}</span>
       </PublisherLink>
