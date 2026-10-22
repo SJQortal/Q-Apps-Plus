@@ -106,8 +106,21 @@ export function isPlainHtml(html: string | null | undefined): boolean {
   return true;
 }
 
-/** The editor's starting HTML for a product: its `htmlDescription`, else its plain description. */
+function sameText(a: string, b: string): boolean {
+  const norm = (text: string) => text.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ").replace(/\s+$/, "");
+  return norm(a) === norm(b);
+}
+
+/**
+ * A product's description as HTML (the editor's start, and what its page
+ * shows): its `htmlDescription` while that still says what `description`
+ * says, else its plain description. The original's edit keeps unknown
+ * fields and rewrites only `description`, so a formatted description that no
+ * longer matches is older than the seller's last edit there.
+ */
 export function descriptionHtmlOf(product: { description?: unknown; htmlDescription?: unknown } | null | undefined): string {
-  if (typeof product?.htmlDescription === "string" && product.htmlDescription.trim()) return product.htmlDescription;
-  return plainToHtml(typeof product?.description === "string" ? product.description : "");
+  const plain = typeof product?.description === "string" ? product.description : "";
+  const html = product?.htmlDescription;
+  if (typeof html === "string" && html.trim() && sameText(htmlToPlainText(html), plain)) return html;
+  return plainToHtml(plain);
 }

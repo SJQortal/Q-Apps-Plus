@@ -4,6 +4,10 @@ import { renderWithProviders } from "../test/renderWithProviders";
 import { installVisibleIntersectionObserver } from "../test/mockNode";
 import { resetQdnCaches } from "../qdn/search";
 import { ProductDescription } from "./ProductDescription";
+import { htmlToPlainText } from "./plainText";
+
+/** A product as Q-Shop+ writes one: the plain description says what the formatted one says. */
+const rich = (html: string) => ({ description: htmlToPlainText(html), htmlDescription: html });
 
 const copyText = vi.fn(async (_text: string) => true);
 vi.mock("../utils/clipboard", () => ({ copyText: (text: string) => copyText(text) }));
@@ -49,7 +53,7 @@ const VIDEO_EMBED =
 describe("a product's description", { timeout: 20_000 }, () => {
   it("shows the seller's formatting, and a plain one as it was written", () => {
     const { unmount } = renderWithProviders(
-      <ProductDescription product={{ description: "x", htmlDescription: "<h2>Ghee</h2><p>Slow-cooked <strong>Icelandic</strong> ghee.</p><ul><li>Grass-fed</li></ul>" }} />
+      <ProductDescription product={rich("<h2>Ghee</h2><p>Slow-cooked <strong>Icelandic</strong> ghee.</p><ul><li>Grass-fed</li></ul>")} />
     );
     expect(screen.getByRole("heading", { level: 2, name: "Ghee" })).toBeInTheDocument();
     expect(screen.getByText("Icelandic").tagName).toBe("STRONG");
@@ -62,7 +66,7 @@ describe("a product's description", { timeout: 20_000 }, () => {
 
   it("plays a video only when asked, once the node has it", async () => {
     routes["/arbitrary/resource/status/VIDEO/Seller%20Name/q-store-video-AbCdEf1234"] = { body: { status: "READY" } };
-    renderWithProviders(<ProductDescription product={{ description: "x", htmlDescription: `<p>Watch:</p>${VIDEO_EMBED}` }} />);
+    renderWithProviders(<ProductDescription product={rich(`<p>Watch:</p>${VIDEO_EMBED}`)} />);
     expect(calls).toEqual([]);
     fireEvent.click(screen.getByRole("button", { name: "Play video: Making ghee" }));
     const video = await screen.findByLabelText("Making ghee", { selector: "video" });
@@ -72,7 +76,7 @@ describe("a product's description", { timeout: 20_000 }, () => {
 
   it("says when a video isn't on QDN, and offers to try again", async () => {
     routes["/arbitrary/resource/status/VIDEO/Seller%20Name/q-store-video-AbCdEf1234"] = { body: { status: "NOT_PUBLISHED" } };
-    renderWithProviders(<ProductDescription product={{ description: "x", htmlDescription: VIDEO_EMBED }} />);
+    renderWithProviders(<ProductDescription product={rich(VIDEO_EMBED)} />);
     fireEvent.click(screen.getByRole("button", { name: "Play video: Making ghee" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("It isn't on QDN");
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -110,7 +114,7 @@ describe("a product's description", { timeout: 20_000 }, () => {
   });
 
   it("copies a web link instead of opening it (Hub can't)", async () => {
-    renderWithProviders(<ProductDescription product={{ description: "x", htmlDescription: '<p><a href="https://example.com/ghee">our site</a></p>' }} />);
+    renderWithProviders(<ProductDescription product={rich('<p><a href="https://example.com/ghee">our site</a></p>')} />);
     fireEvent.click(screen.getByRole("link", { name: "our site" }));
     await waitFor(() => expect(copyText).toHaveBeenCalledWith("https://example.com/ghee"));
   });

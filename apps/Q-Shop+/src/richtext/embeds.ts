@@ -52,13 +52,15 @@ export type QortalTarget =
 
 /** QDN identifiers as Core takes them: letters, digits, `_`, `-` and `.`, at most 64. */
 export function isSafeIdentifier(value: unknown): value is string {
-  return typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value);
+  // Not only dots: "." and ".." would walk the node's URL paths.
+  return typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value) && !/^\.+$/.test(value);
 }
 
 /** A Qortal name: at most 40 characters, no control characters. */
 export function isSafeName(value: unknown): value is string {
+  if (typeof value !== "string" || value.length === 0 || value.length > 40 || value.trim() !== value || /^\.+$/.test(value)) return false;
   // eslint-disable-next-line no-control-regex
-  return typeof value === "string" && value.length > 0 && value.length <= 40 && !/[\u0000-\u001f\u007f]/.test(value) && value.trim() === value;
+  return !/[\u0000-\u001f\u007f]/.test(value);
 }
 
 const seg = encodeURIComponent;

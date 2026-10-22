@@ -160,7 +160,10 @@ export function validateProductForm(
   if (values.images.length === 0) return "Add at least one image";
   if (values.images.length > MAX_PRODUCT_IMAGES) return `Use at most ${MAX_PRODUCT_IMAGES} images`;
   if (!values.title.trim()) return "Add a title";
-  if (values.description.length > MAX_DESCRIPTION_HTML) return "Shorten the description: it is too long to publish";
+  // Only formatted HTML is stored as such (plain text is the original's description, which has no limit).
+  if (!isPlainHtml(values.description) && normalizeQuillHtml(values.description).length > MAX_DESCRIPTION_HTML) {
+    return "Shorten the description: it is too long to publish with its formatting";
+  }
   if (!values.category.trim()) return "Pick a category";
   if (!isListedCategory(values.category) && values.category !== options.oldCategory) return "Pick a category from the list";
   const fiatText = options.pricing ? (values.fiat ?? "").trim() : "";

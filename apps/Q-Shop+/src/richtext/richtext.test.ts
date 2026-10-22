@@ -92,19 +92,21 @@ describe("a description as plain text and HTML", () => {
   });
 
   it("starts the editor from the formatted description, else the plain one", () => {
-    expect(descriptionHtmlOf({ description: "Plain", htmlDescription: "<p><em>Rich</em></p>" })).toBe("<p><em>Rich</em></p>");
+    expect(descriptionHtmlOf({ description: "Rich", htmlDescription: "<p><em>Rich</em></p>" })).toBe("<p><em>Rich</em></p>");
+    // Edited in the original since (it rewrites description, keeps htmlDescription): the plain one is newer.
+    expect(descriptionHtmlOf({ description: "Plain", htmlDescription: "<p><em>Rich</em></p>" })).toBe("<p>Plain</p>");
     expect(descriptionHtmlOf({ description: "Plain" })).toBe("<p>Plain</p>");
     expect(descriptionHtmlOf({ description: 5 })).toBe("");
   });
 });
 
 describe("a description made safe to show", () => {
-  it("drops scripts, handlers, forms, pictures, styles and colours", () => {
+  it("drops scripts, handlers, forms, pictures and inline styles", () => {
     const clean = sanitizeDescription(
       '<p style="color: red; text-align: center" onclick="alert(1)">Hi<script>alert(1)</script><img src="https://x/y.png" onerror="alert(1)"></p>' +
         '<style>body{display:none}</style><form action="/x"><input name="a"></form><iframe src="/arbitrary/APP/x"></iframe><p id="root">x</p>'
     );
-    expect(clean).toBe('<p style="text-align: center;">Hi</p><p>x</p>');
+    expect(clean).toBe("<p>Hi</p><p>x</p>");
   });
 
   it("keeps qortal:// links, turns typed ones into links, makes web links copy themselves, and drops the rest", () => {

@@ -3,8 +3,9 @@
  * anyone can publish a product, so its HTML goes through DOMPurify, and every
  * later change is made on DOM nodes, never by pasting text into HTML.
  *
- * - Colours go (a description is read in four themes, light and dark), and
- *   so do forms, styles and image maps.
+ * - Inline styles go (colours break in half the themes, and a style can load
+ *   an image from outside Qortal; Quill formats with classes), and so do
+ *   forms, style sheets and image maps.
  * - qortal:// links stay: Hub's q-apps.js opens them. Web, mail and phone
  *   links copy themselves instead (Hub can't open them; see `copyTarget`).
  *   Any other link becomes its text.
@@ -21,18 +22,6 @@ import { normalizeQuillHtml } from "./quillHtml";
 const ALLOWED_URI = /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|sms|cid|xmpp|qortal):|[^a-z]|[a-z+.-]+(?:[^a-z+.:-]|$))/i;
 
 const FORBIDDEN_TAGS = ["style", "form", "input", "button", "select", "option", "optgroup", "textarea", "datalist", "map", "area", "img", "picture", "video", "audio", "iframe", "svg"];
-
-const THEME_OWNED_STYLE = /^(?:color|-webkit-text-fill-color|background(?:-.+)?)$/;
-
-function dropInlineColours(root: ParentNode): void {
-  root.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
-    for (let i = el.style.length - 1; i >= 0; i--) {
-      const name = el.style[i];
-      if (THEME_OWNED_STYLE.test(name)) el.style.removeProperty(name);
-    }
-    if (el.style.length === 0) el.removeAttribute("style");
-  });
-}
 
 export type CopyKind = "web" | "mail" | "phone";
 
@@ -164,11 +153,10 @@ export function sanitizeDescription(html: string | null | undefined): string {
   const fragment: DocumentFragment = DOMPurify.sanitize(source, {
     USE_PROFILES: { html: true },
     ALLOWED_URI_REGEXP: ALLOWED_URI,
-    FORBID_ATTR: ["color", "bgcolor", "data-copy-link", "id"],
+    FORBID_ATTR: ["style", "color", "bgcolor", "data-copy-link", "id"],
     FORBID_TAGS: FORBIDDEN_TAGS,
     RETURN_DOM_FRAGMENT: true,
   });
-  dropInlineColours(fragment);
   settleEmbeds(fragment);
   settleLinks(fragment);
   linkifyQortalText(fragment);

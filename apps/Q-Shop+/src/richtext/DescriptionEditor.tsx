@@ -16,7 +16,10 @@
  * The value handed back is the editor's own HTML (Quill's raw markup); the
  * draft builders turn it into the stored forms (richtext/plainText.ts).
  * Only the seller's own edits count as changes, not Quill tidying the HTML
- * it was given.
+ * it was given. The editor keeps its own content (uncontrolled): fed the
+ * stored HTML on every render, Quill would load it again each time it
+ * writes it differently (lists, blocks), on every key typed elsewhere in the
+ * form. `value` is read when the editor mounts (again when a phone turns).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box } from "@mui/material";
@@ -172,7 +175,7 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
       sx={(theme) => ({
         width: "100%",
         ...(phone && {
-          "& .ql-toolbar.ql-snow button": { width: 40, height: 40, padding: "8px" },
+          "& .ql-toolbar.ql-snow button": { width: 44, height: 44, padding: "10px" },
           "& .ql-toolbar.ql-snow .ql-formats": { marginRight: "4px" },
         }),
         "& .ql-toolbar.ql-snow": {
@@ -233,7 +236,7 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
         ref={quillRef}
         key={phone ? "phone" : "desktop"}
         theme="snow"
-        value={value}
+        defaultValue={value}
         // Quill tidying the HTML it was given isn't the seller's change.
         onChange={(html, _delta, source) => source === "user" && onChange(html)}
         useSemanticHTML={false}

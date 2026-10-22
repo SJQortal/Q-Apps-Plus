@@ -311,7 +311,9 @@ describe("a formatted description (richtext/plainText.ts)", () => {
     expect(kept.htmlDescription).toBe(rich);
   });
 
-  it("is refused when it is too long to publish", () => {
-    expect(validateProductForm(values({ description: `<p>${"x".repeat(20_001)}</p>`, images: ["data:image/webp;base64,SU1H"], title: "T", category: "Baby" }), coins)).toMatch(/Shorten the description/);
+  it("is refused when its formatting makes it too long to publish; plain text, the original's, isn't limited", () => {
+    const base = { images: ["data:image/webp;base64,SU1H"], title: "T", category: "Baby" };
+    expect(validateProductForm(values({ ...base, description: `<p><strong>${"x".repeat(20_001)}</strong></p>` }), coins)).toMatch(/Shorten the description/);
+    expect(validateProductForm(values({ ...base, description: `<p>${"x".repeat(20_001)}</p>` }), coins)).toBeNull();
   });
 });
