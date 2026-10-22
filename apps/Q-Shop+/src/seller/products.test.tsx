@@ -32,8 +32,10 @@ import {
 } from "../test/fixtures/shop";
 import { ProductManager } from "../pages/ProductManager/ProductManager";
 import { useOwnShops } from "../hooks/useOwnShops";
+import { useShopPublish } from "../hooks/useShopPublish";
 import { roomTiming } from "../qdn/publishBatches";
 import { isDraftOfShop } from "./shopDrafts";
+import { resetPublishedIndexes } from "./productIndex";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
 
 vi.mock("../components/common/ImageUploader", () => ({
@@ -48,9 +50,15 @@ type ShopRow = { identifier: string; title: string };
 
 /**
  * Core answers: room on the account (or the counts given), the unit fee,
- * published resources by content, and the seller's shops for a search.
+ * published resources by content, and the seller's shops for a search. The
+ * shop's product list is served as the fixture's unless `served` has one or
+ * `index` says otherwise (null: not on the node).
  */
-function stubNode(opts: { unconfirmed?: number[]; served?: Map<string, unknown>; shops?: ShopRow[] } = {}) {
+function stubNode(
+  opts: { unconfirmed?: number[]; served?: Map<string, unknown>; shops?: ShopRow[]; index?: unknown } = {}
+) {
+  const served = opts.served ?? new Map<string, unknown>();
+  const index = opts.index === undefined ? dataContainer : opts.index;
   const calls: string[] = [];
   const counts = [...(opts.unconfirmed ?? [])];
   vi.stubGlobal(
@@ -66,7 +74,9 @@ function stubNode(opts: { unconfirmed?: number[]; served?: Map<string, unknown>;
       if (url.startsWith("/transactions/unconfirmed")) return ok(Array.from({ length: counts.shift() ?? 0 }, () => ({ type: "ARBITRARY" })));
       if (url.startsWith("/transactions/unitfee")) return ok("1000000");
       const m = url.match(/^\/arbitrary\/DOCUMENT\/([^/]+)\/([^/?]+)$/);
-      if (m && opts.served?.has(decodeURIComponent(m[2]))) return ok(opts.served.get(decodeURIComponent(m[2])));
+      const id = m ? decodeURIComponent(m[2]) : "";
+      if (m && served.has(id)) return ok(served.get(id));
+      if (m && id === DATA_CONTAINER_ID && index !== null) return ok(index);
       return { ok: false, status: 404, text: async () => '{"error":1401}', json: async () => ({ error: 1401 }) };
     })
   );
@@ -119,6 +129,7 @@ function setup(handlers: Record<string, QortalHandler> = {}, path = `/product-ma
 
 beforeEach(() => {
   roomTiming.visibleMs = 5;
+  resetPublishedIndexes();
 });
 
 afterEach(() => {
@@ -314,6 +325,133 @@ describe("the page's states", () => {
     expect(screen.getByRole("button", { name: "Create product list" })).toBeInTheDocument();
     expect(screen.getByText("Your products show here once your product list loads")).toBeInTheDocument();
     expect(screen.queryByLabelText("Loading products")).toBeNull();
+  });
+});
+
+describe("publishing on the product list as QDN has it now", () => {
+  const C2 = `q-store-catalogue-${SHORT_STORE_ID}-CAT2xxxxx2`;
+  const vase = { ...mug, id: `q-store-product-${SHORT_STORE_ID}-VASExxxxx5`, title: "Vase", catalogueId: C2, created: 1700000000000 };
+  /** The index after another device added a vase (in a new catalogue) and marked the mug out of stock. */
+  const newer = {
+    ...dataContainer,
+    products: {
+      ...dataContainer.products,
+      [mug.id]: { ...dataContainer.products[mug.id], status: "OUT_OF_STOCK" },
+      [vase.id]: { created: vase.created, priceQort: 4, category: "Kitchen", catalogueId: C2, status: "AVAILABLE" },
+    },
+    catalogues: [...dataContainer.catalogues, { id: C2, products: { [vase.id]: true } }],
+  };
+  const catalogues = {
+    FETCH_QDN_RESOURCE: async (p: any) =>
+      p.identifier === C2 ? { id: C2, products: { [vase.id]: vase } } : structuredClone(catalogue),
+  };
+
+  it("shows products published elsewhere since the page loaded, instead of dropping them, and publishes on them", async () => {
+    // The page loaded the older index; the node now serves the newer one.
+    stubNode({ index: newer });
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true, ...catalogues });
+    store.dispatch(setProductsToSave(draft(1)));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+
+    // Nothing is published yet: the page shows the newer list and says so.
+    expect(await screen.findByText(/Your product list on QDN changed since this page loaded/)).toBeInTheDocument();
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+    const state = store.getState().global;
+    expect(state.dataContainer?.products[vase.id]).toBeDefined();
+    expect(state.dataContainer?.products[mug.id].status).toBe("OUT_OF_STOCK");
+    expect(state.listProducts.products).toHaveLength(4);
+    expect(Object.keys(state.productsToSave)).toEqual([draft(1).id]);
+
+    // Publish again: built on the newer list, which keeps the vase and the mug's status.
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    const dc = decodeData64(call.resources.at(-1).data64);
+    expect(call.resources.at(-1).identifier).toBe(DATA_CONTAINER_ID);
+    expect(Object.keys(dc.products).sort()).toEqual([mug.id, poster.id, chair.id, vase.id, draft(1).id].sort());
+    expect(dc.products[mug.id].status).toBe("OUT_OF_STOCK");
+    expect(dc.catalogues.map((c: any) => c.id)).toEqual([CATALOGUE_ID, C2]);
+    // The new product topped up the last catalogue, the vase's.
+    expect(dc.catalogues[1].products).toEqual({ [vase.id]: true, [draft(1).id]: true });
+    await waitFor(() => expect(store.getState().global.productsToSave).toEqual({}));
+    expect(screen.queryByText(/Your product list on QDN changed/)).toBeNull();
+  });
+
+  it("publishes nothing when the node can't serve the product list, and says why", async () => {
+    stubNode({ index: null });
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    store.dispatch(setProductsToSave(draft(1)));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    expect(await screen.findByText(/Couldn't read your product list from your node, so nothing was published/)).toBeInTheDocument();
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+    expect(Object.keys(store.getState().global.productsToSave)).toEqual([draft(1).id]);
+  });
+
+  it("right after its own publish, a node still serving the list from before doesn't undo it", async () => {
+    // The node keeps serving the original list: it hasn't caught up with this tab's publish.
+    stubNode();
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    store.dispatch(setProductsToSave(draft(1)));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(store.getState().global.productsToSave).toEqual({}));
+    store.dispatch(setProductsToSave(draft(2)));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
+    const second = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[])[1];
+    const dc = decodeData64(second.resources.at(-1).data64);
+    expect(Object.keys(dc.products)).toEqual(expect.arrayContaining([draft(1).id, draft(2).id]));
+    expect(screen.queryByText(/Your product list on QDN changed/)).toBeNull();
+  });
+
+  it("after Recreate shop data, a node still serving the old list doesn't bring the old products back", async () => {
+    stubNode();
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
+    store.dispatch(setDataContainer(dataContainer));
+    const q = installQortalMock({
+      PUBLISH_QDN_RESOURCE: async () => true,
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true,
+    });
+    function Recreate() {
+      const { recreateProductList } = useShopPublish();
+      return (
+        <button type="button" onClick={() => void recreateProductList()}>
+          Recreate now
+        </button>
+      );
+    }
+    renderWithProviders(
+      <>
+        <Recreate />
+        <Routes>
+          <Route path="/product-manager/:store" element={<ProductManager />} />
+        </Routes>
+      </>,
+      { store, initialEntries: [`/product-manager/${STORE_ID}`] }
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Recreate now" }));
+    await waitFor(() => expect(store.getState().global.dataContainer?.products).toEqual({}));
+    store.dispatch(setProductsToSave(draft(1)));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    expect(Object.keys(decodeData64(call.resources.at(-1).data64).products)).toEqual([draft(1).id]);
+    expect(screen.queryByText(/Your product list on QDN changed/)).toBeNull();
+  });
+
+  it("when the node can't be asked at all, builds on the page's copy, as the original did", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) => {
+        if (String(input).includes("-datacontainer")) throw new TypeError("Failed to fetch");
+        return { ok: false, status: 404, text: async () => '{"error":1401}', json: async () => ({ error: 1401 }) };
+      })
+    );
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    store.dispatch(setProductsToSave(draft(1)));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
   });
 });
 

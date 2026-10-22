@@ -242,7 +242,13 @@ export const ProductManager = () => {
       <PageHeader title={currentStore.title || "Your shop"} subtitle="Your shop" back backTo={shopUrl} actions={actions} />
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {!ready && <ProductListStatus status={ownShopStatus} onReload={onReload} />}
-        <DraftsCard onEdit={openEdit} onPublish={() => void publish.prepare()} preparing={publish.preparing} error={publish.error} />
+        <DraftsCard
+          onEdit={openEdit}
+          onPublish={() => void publish.prepare()}
+          preparing={publish.preparing}
+          error={publish.error}
+          notice={publish.notice}
+        />
         <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tabs
             value={tab}
