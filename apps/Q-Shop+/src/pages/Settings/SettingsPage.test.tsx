@@ -100,11 +100,13 @@ describe("SettingsPage", () => {
 
     it("shows the whole address when copying isn't possible", async () => {
       Object.defineProperty(document, "execCommand", { value: () => false, configurable: true, writable: true });
-      renderSettings({ store: signedInStore() });
+      const store = signedInStore();
+      renderSettings({ store });
       await act(async () => {
         fireEvent.click(screen.getByRole("button", { name: "Copy address" }));
       });
       expect(screen.getByText(ADDRESS)).toBeInTheDocument();
+      expect(store.getState().notifications.alertTypes.alertInfo).toMatch(/Select the text and copy it yourself/);
     });
 
     it("switches to another of the account's names, remembers it, and drops the old name's shop", async () => {

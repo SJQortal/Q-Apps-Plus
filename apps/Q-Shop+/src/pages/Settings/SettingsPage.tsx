@@ -133,8 +133,9 @@ export function SettingsPage() {
       setCopyFailed(null);
       dispatch(setNotification({ msg: `${what} copied`, alertType: "success" }));
     } else {
-      // Show the whole text, selectable, for a manual copy.
+      // Show the whole text, selectable, for a manual copy (the links are shown whole already).
       setCopyFailed(text);
+      dispatch(setNotification({ msg: "Couldn't copy here. Select the text and copy it yourself.", alertType: "info" }));
     }
   };
 
@@ -358,14 +359,11 @@ export function SettingsPage() {
               {syncBusy === "save" ? "Saving…" : "Save to QDN"}
             </Button>
           </Buttons>
-          <Typography
-            variant="body2"
-            role="status"
-            sx={{ flexBasis: "100%", fontSize: 14, "&:empty": { display: "none" } }}
-          >
-            {syncNote ?? ""}
-          </Typography>
         </Row>
+        {/* Always in the page, so screen readers hear each new line. */}
+        <Typography variant="body2" role="status" sx={{ fontSize: 14, pb: syncNote ? 1.5 : 0 }}>
+          {syncNote ?? ""}
+        </Typography>
       </Section>
 
       <Section title="About">
