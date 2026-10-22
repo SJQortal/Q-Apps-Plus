@@ -80,6 +80,16 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toHaveLength(1);
   });
 
+  it("reads the collections only once the product itself has loaded", async () => {
+    const world = makeWorld();
+    world.shops[0].collections = [{ id: "GIFTSxxxx1", title: "Gifts for friends", products: [P11] }];
+    // A catalogue that doesn't exist: the product never loads.
+    const { node } = renderProduct(world, pathOf(P11, "q-store-catalogue-my-shop-NOPExxxxx1"));
+    expect(await screen.findByText("This product isn't in the shop any more")).toBeInTheDocument();
+    await waitFor(() => expect(node.fetchCalls.filter((u) => u.endsWith("-datacontainer"))).toHaveLength(1));
+    expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toEqual([]);
+  });
+
   it("uses a catalogue a list already read, without fetching it", async () => {
     const world = makeWorld();
     const store = createAppStore();

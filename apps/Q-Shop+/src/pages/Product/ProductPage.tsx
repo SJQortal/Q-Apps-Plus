@@ -10,7 +10,8 @@
  * The collections the product is in are named under its price, each a link
  * to that collection on the shop page (Follow-up 15): the shop's product
  * list (cached from the shop page) says whether it has collections, and only
- * then is its collections document read, once per session.
+ * then, once the product has loaded, is its collections document read (once
+ * per session; it holds a picture per collection).
  */
 import { useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
@@ -146,7 +147,9 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const navigate = useNavigate();
   const { shop, shopStatus, isOwner, index } = useViewedShop(owner, storeId);
   const { catalogue, status, retry } = useCatalogue(owner, catalogueId);
-  const shopCollections = useShopCollections(owner, storeId, index);
+  // Read after the product itself (its catalogue), never competing with it: a collections
+  // document holds a picture per collection.
+  const shopCollections = useShopCollections(owner, storeId, status === "ready" ? index : null);
   const inCollections = shopCollections.collections.filter((c) => c.products.includes(productId));
   const shopCoin = useShopCoin(shop);
   const [quantityText, setQuantityText] = useState("1");
