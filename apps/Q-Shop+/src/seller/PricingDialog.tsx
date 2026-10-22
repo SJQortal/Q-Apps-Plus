@@ -154,7 +154,8 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
             <Button color="inherit" onClick={requestClose} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="contained" onClick={() => void publish()} disabled={busy || loading || !changed}>
+            {/* Every product must be read: a new rate reprices those it can't show too. */}
+            <Button variant="contained" onClick={() => void publish()} disabled={busy || loading || failed.length > 0 || !changed}>
               Publish prices
             </Button>
           </>
@@ -264,7 +265,8 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                   </Button>
                 }
               >
-                Some products couldn&apos;t be read from your node yet, so their prices can&apos;t be shown.
+                Some products couldn&apos;t be read from your node yet, so their prices can&apos;t be shown, and nothing can be
+                published until they are.
               </Alert>
             )}
             <Box component="ul" aria-label="Product prices" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 0.75 }}>

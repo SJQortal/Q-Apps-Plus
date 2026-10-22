@@ -223,3 +223,21 @@ describe("the product form with prices in a currency", () => {
     expect(added.fiatPrice).toEqual({ currency: "USD", value: 10, qort: 55.56 });
   });
 });
+
+describe("prices with a product that can't be read", () => {
+  it("publishes nothing until every product is read, and says why", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      setup({}, { FETCH_QDN_RESOURCE: async () => ({ error: 1401 }) });
+      fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
+      const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
+      fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "0.18" } });
+      // The catalogue is asked for again after 2, 4 and 8 s, then counts as failed.
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await within(dialog).findByText(/nothing can be\s+published until they are/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Publish prices" })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
