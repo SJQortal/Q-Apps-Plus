@@ -1,368 +1,259 @@
-/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
-import React, { useEffect, useState } from "react";
-import { Box, FormControl, SelectChangeEvent, useTheme } from "@mui/material";
+/**
+ * The product form's fields: images (up to 3, the first is the main one),
+ * title, description, the QORT price and an optional own price for every
+ * other coin the shop takes, type, category and (when editing) status. It is
+ * controlled: NewProduct.tsx holds the values and turns them into a draft.
+ */
+import type { Dispatch, SetStateAction } from "react";
+import {
+  Autocomplete,
+  Box,
+  IconButton,
+  InputAdornment,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
-import { PublishProductParams } from "../NewProduct/NewProduct";
-import { Price, Product } from "../../../state/features/storeSlice";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../../state/store";
+import { CoinIcon } from "../../../components/money/CoinIcon";
+import { COINS, assetIdOf, coinLabel, isCoinTicker, type ShopCoinSettings } from "../../../money/coins";
 import {
-  ButtonRow,
-  CancelButton,
-  CreateButton,
-  CustomInputField,
-  CustomNumberField,
-  LogoPreviewRow,
-  StoreLogoPreview,
-} from "../../../components/modals/CreateStoreModal-styles";
-import {
-  AddButton,
-  CategoryRow,
-  CloseIcon,
-  CustomMenuItem,
-  CustomSelect,
-  InputFieldCustomLabel,
-  MaximumImagesRow,
-  ProductImagesRow,
-} from "../NewProduct/NewProduct-styles";
-import { setNotification } from "../../../state/features/notificationsSlice";
-import { addProductsToSaveCategory } from "../../../state/features/globalSlice";
-import { Variant } from "../../../components/common/NumericTextFieldQshop";
-import { CoinFilter } from "../../Store/Store/Store";
+  MAX_PRODUCT_IMAGES,
+  MAX_TITLE_LENGTH,
+  PRODUCT_STATUSES,
+  PRODUCT_TYPES,
+  STATUS_LABEL,
+  TYPE_LABEL,
+  sanitizeAmountInput,
+  type ProductFormValues,
+} from "../../../seller/productDraft";
 
 interface ProductFormProps {
-  onSubmit: (product: PublishProductParams) => void;
-  onClose?: () => void;
-  editProduct?: Product | null;
-}
-interface ProductObj {
-  title?: string;
-  description?: string;
-  price: number;
-  images: string[];
-  category?: string;
-  priceARRR?: number;
-  priceQORT?: number;
+  values: ProductFormValues;
+  /** A state setter: several images picked at once each add to the latest values. */
+  onChange: Dispatch<SetStateAction<ProductFormValues>>;
+  /** The coins the shop takes, QORT first (money/coins.ts shopCoins). */
+  coins: string[];
+  shop: ShopCoinSettings | null | undefined;
+  categories: string[];
+  /** Editing a published product: the status can change. */
+  editing: boolean;
+  onImageError: (message: string) => void;
 }
 
-export const ProductForm: React.FC<ProductFormProps> = ({
-  onClose,
-  onSubmit,
-  editProduct,
-}) => {
-  const theme = useTheme();
-  const dispatch = useDispatch();
-  const categories = useSelector(
-    (state: RootState) => state.global.listProducts.categories
-  );
-  const productsToSaveCategories = useSelector(
-    (state: RootState) => state.global.productsToSaveCategories
-  );
+const SectionTitle = ({ children }: { children: string }) => (
+  <Typography component="h3" sx={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "text.secondary" }}>
+    {children}
+  </Typography>
+);
 
-  const [product, setProduct] = useState<ProductObj>({
-    title: "",
-    description: "",
-    price: 0,
-    images: [],
-  });
-  const currentStore = useSelector(
-    (state: RootState) => state.global.currentStore
-  );
-  const [categoryList, setCategoryList] = useState<string[]>([]);
-  const [selectedType, setSelectedType] = useState<string>("digital");
-  const [images, setImages] = useState<string[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<string>("AVAILABLE");
-  const [newCategory, setNewCategory] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>("");
+function coinName(coin: string, shop: ShopCoinSettings | null | undefined): string {
+  return isCoinTicker(coin) ? COINS[coin].label : coinLabel(coin, shop);
+}
 
-  const editProductQortPrice =
-    editProduct?.price?.find((item: Price) => item?.currency === "qort")
-      ?.value || product.price;
-      const editProductARRRPrice =
-      editProduct?.price?.find((item: Price) => item?.currency === CoinFilter.arrr)
-        ?.value || "";
+export const ProductForm = ({ values, onChange, coins, shop, categories, editing, onImageError }: ProductFormProps) => {
+  const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
+    onChange((prev) => ({ ...prev, [key]: value }));
+  const setPrice = (coin: string, text: string) =>
+    onChange((prev) => ({ ...prev, prices: { ...prev.prices, [coin]: sanitizeAmountInput(text) } }));
+  const title = values.title.trim() || "Product";
+  const otherCoins = coins.filter((c) => c !== "QORT");
 
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setProduct({
-      ...product,
-      [event.target.name]: event.target.value as string | number,
+  const removeImage = (index: number) => onChange((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
+  const makeMain = (index: number) =>
+    onChange((prev) => {
+      const next = prev.images.slice();
+      const [img] = next.splice(index, 1);
+      return { ...prev, images: [img, ...next] };
     });
-  };
-
-  const handleProductPriceChange = (value: string) => {
-    const price = Number(value);
-    setProduct({ ...product, price: price });
-  };
-  const handleProductPriceChangeForeign = (value: string, coin:string) => {
-    const price = Number(value);
-    setProduct({ ...product, [`price${coin}`]: price });
-  };
-
-  const handleSelectChange = (event: SelectChangeEvent<string | null>) => {
-    const optionId = event.target.value;
-    const selectedOption = categoryList.find(option => option === optionId);
-    setSelectedCategory(selectedOption || null);
-  };
-
-  const handleNewCategory = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setNewCategory(event.target.value);
-  };
-
-  const handleSubmit = () => {
-    if (!selectedType || !selectedCategory) {
-      dispatch(
-        setNotification({
-          msg: "Please select type and category",
-          alertType: "error",
-        })
-      );
-      return;
-    }
-
-    if (isNaN(product.price)) {
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Price must be a number!",
-        })
-      );
-      return;
-    }
-
-    const price = []
-    price.push({
-      currency: "qort",
-      value: product.price,
-    })
-
-    for (const value of Object.values(CoinFilter)) {
-      if(product[`price${value}`]){
-        price.push(
-          {
-            currency: value,
-            value: +(product[`price${value}`] || 0),
-          },
-        )
-      }
-    }
-
-    onSubmit({
-      title: product.title,
-      description: product.description,
-      type: selectedType,
-      images,
-      category: selectedCategory,
-      status: selectedStatus,
-      price: price,
-      mainImageIndex: 0,
-    });
-  };
-
-  const addNewCategoryToList = () => {
-    if (!newCategory) return;
-    setSelectedCategory(newCategory);
-    setCategoryList(prev => [...prev, newCategory]);
-    setNewCategory("");
-    dispatch(addProductsToSaveCategory(newCategory));
-  };
-
-  useEffect(() => {
-    if (categories || productsToSaveCategories) {
-      const existingCategories = [...categories, ...productsToSaveCategories];
-      setCategoryList(existingCategories);
-    }
-  }, [categories, productsToSaveCategories]);
-
-  useEffect(() => {
-    if (editProduct) {
-      try {
-        const { title, description, images, type, category, status } =
-          editProduct;
-
-        setProduct({
-          title,
-          description,
-          images: [],
-          price: editProductQortPrice,
-        });
-        if (images) {
-          setImages(images);
-        }
-        if (type) {
-          setSelectedType(type);
-        }
-        if (category) {
-          setSelectedCategory(category);
-        }
-        if (status) {
-          setSelectedStatus(status);
-        }
-      } catch (error) {
-        console.log({ error });
-      }
-    }
-  }, [editProduct]);
 
   return (
-    <>
-      {images.length > 0 && (
-        <ProductImagesRow>
-          {images.map((img, index) => (
-            <LogoPreviewRow>
-              <Box style={{ position: "relative" }}>
-                <StoreLogoPreview src={img} alt={`product-img-${index}`} />
-                <CloseIcon
-                  color={theme.palette.text.primary}
-                  onClickFunc={() => {
-                    setImages(prev => prev.filter(item => item !== img));
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <Box component="section" aria-label="Images" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+        <SectionTitle>Images</SectionTitle>
+        {values.images.length > 0 && (
+          <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1 }}>
+            {values.images.map((img, index) => (
+              <Box component="li" key={`${index}-${img.slice(-24)}`} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <Box
+                  component="img"
+                  src={img}
+                  alt={`${title}, image ${index + 1}${index === 0 ? " (main)" : ""}`}
+                  sx={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    objectFit: "cover",
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: index === 0 ? "primary.main" : "divider",
+                    bgcolor: "action.hover",
                   }}
-                  height={"22"}
-                  width={"22"}
-                ></CloseIcon>
+                />
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 0.5 }}>
+                  {index > 0 && (
+                    <Tooltip title="Make main image">
+                      <IconButton aria-label={`Make image ${index + 1} the main image`} onClick={() => makeMain(index)} sx={{ width: 44, height: 44 }}>
+                        <StarOutlineOutlinedIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  <Tooltip title="Remove image">
+                    <IconButton aria-label={`Remove image ${index + 1}`} onClick={() => removeImage(index)} sx={{ width: 44, height: 44 }}>
+                      <DeleteOutlineOutlinedIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
               </Box>
-            </LogoPreviewRow>
-          ))}
-        </ProductImagesRow>
-      )}
-      {(images.length === 0 || images.length < 3) && (
-        <ImageUploader label="Add product image" max={3 - images.length} onPick={(img: string) => setImages(prev => [...prev, img])} />
-      )}
-      {images.length > 0 && (
-        <MaximumImagesRow>*Maximum 3 images</MaximumImagesRow>
-      )}
-      <CustomInputField
-        name="title"
-        label="Title"
-        variant="filled"
-        value={product.title}
-        onChange={handleInputChange}
-        slotProps={{ htmlInput: { maxLength: 180 } }}
-        required
-      />
-      <CustomInputField
-        name="description"
-        label="Description"
-        value={product.description}
-        variant="filled"
-        onChange={handleInputChange}
-        required
-      />
-      <CustomNumberField
-        name="price"
-        label="Price in QORT"
-        variant={Variant.filled}
-        initialValue={editProductQortPrice.toString()}
-        addIconButtons={false}
-        minValue={0}
-        maxValue={Number.MAX_SAFE_INTEGER}
-        allowDecimals={true}
-        onChangeFunc={handleProductPriceChange}
-        required={true}
-      />
-      {currentStore?.supportedCoins?.includes(CoinFilter.arrr) && (
-         <CustomNumberField
-         name="arrr-price"
-         label="Price in ARRR"
-         variant={Variant.filled}
-         initialValue={editProductARRRPrice.toString()}
-         addIconButtons={false}
-         minValue={0}
-         maxValue={Number.MAX_SAFE_INTEGER}
-         allowDecimals={true}
-         onChangeFunc={(val)=>handleProductPriceChangeForeign(val, CoinFilter.arrr)}
-         required={false}
-       />
-      )}
-     
-      <Box>
-        <FormControl fullWidth>
-          <InputFieldCustomLabel id="product-type-label">
-            Product Type
-          </InputFieldCustomLabel>
-          <CustomSelect
-            labelId="product-type-label"
-            label="Product Type"
-            variant="filled"
-            value={selectedType}
-            onChange={event => {
-              setSelectedType(event.target.value as string);
-            }}
-            required
-            fullWidth
-          >
-            <CustomMenuItem value="digital">Digital</CustomMenuItem>
-            <CustomMenuItem value="physical">Physical</CustomMenuItem>
-          </CustomSelect>
-        </FormControl>
-      </Box>
-      <CategoryRow style={{ marginBottom: "10px" }}>
-        <FormControl style={{ width: "60%" }}>
-          <InputFieldCustomLabel shrink={true} id="product-category-label">
-            Category
-          </InputFieldCustomLabel>
-          <CustomSelect
-            notched={true}
-            labelId="product-category-label"
-            label="Category"
-            value={selectedCategory}
-            displayEmpty={true}
-            onChange={event => {
-              handleSelectChange(event as SelectChangeEvent<string | null>);
-            }}
-            required
-            fullWidth
-          >
-            <CustomMenuItem value="">
-              <em>Add a Category</em>
-            </CustomMenuItem>
-            {categoryList.map(category => (
-              <CustomMenuItem value={category}>{category}</CustomMenuItem>
             ))}
-          </CustomSelect>
-        </FormControl>
-        <CategoryRow style={{ gap: "20px" }}>
-          <CustomInputField
-            style={{ flexGrow: 1 }}
-            name="newCategory"
-            label="New Category"
-            variant="filled"
-            value={newCategory}
-            onChange={handleNewCategory}
+          </Box>
+        )}
+        {values.images.length < MAX_PRODUCT_IMAGES && (
+          <ImageUploader
+            label={values.images.length === 0 ? "Add images" : "Add another image"}
+            max={MAX_PRODUCT_IMAGES - values.images.length}
+            onPick={(img) => onChange((prev) => ({ ...prev, images: [...prev.images, img].slice(0, MAX_PRODUCT_IMAGES) }))}
+            onError={onImageError}
           />
-          <AddButton variant="contained" onClick={addNewCategoryToList}>
-            Add
-          </AddButton>
-        </CategoryRow>
-      </CategoryRow>
-      {editProduct && (
-        <FormControl style={{ width: "60%" }}>
-          <InputFieldCustomLabel shrink={true} id="product-status">
-            Product Status
-          </InputFieldCustomLabel>
-          <CustomSelect
-            notched={true}
-            labelId="product-status"
-            name="status"
-            label="Product Status"
-            value={selectedStatus}
-            onChange={event => setSelectedStatus(event.target.value as string)}
-            required
-            fullWidth
+        )}
+        <Typography variant="body2" color="text.secondary">
+          Up to {MAX_PRODUCT_IMAGES} images. The first is the one buyers see in lists.
+        </Typography>
+      </Box>
+
+      <Box component="section" aria-label="Details" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <SectionTitle>Details</SectionTitle>
+        <TextField
+          label="Title"
+          value={values.title}
+          onChange={(e) => set("title", e.target.value)}
+          required
+          fullWidth
+          slotProps={{ htmlInput: { maxLength: MAX_TITLE_LENGTH } }}
+          helperText={`${values.title.length}/${MAX_TITLE_LENGTH}`}
+        />
+        <TextField
+          label="Description"
+          value={values.description}
+          onChange={(e) => set("description", e.target.value)}
+          fullWidth
+          multiline
+          minRows={3}
+          maxRows={10}
+        />
+        <Box>
+          <Typography id="product-type-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+            Type
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            value={values.type}
+            onChange={(_, value) => value && set("type", value)}
+            aria-labelledby="product-type-label"
+            sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 2.5, textTransform: "none" } }}
           >
-            <CustomMenuItem value="AVAILABLE">Available</CustomMenuItem>
-            <CustomMenuItem value="RETIRED">Retired</CustomMenuItem>
-            <CustomMenuItem value="OUT_OF_STOCK">Out of stock</CustomMenuItem>
-          </CustomSelect>
-        </FormControl>
-      )}
-      <ButtonRow>
-        <CancelButton variant="outlined" color="error" onClick={onClose}>
-          Cancel
-        </CancelButton>
-        <CreateButton onClick={handleSubmit} variant="contained">
-          {editProduct ? "Edit Product" : "Add Product"}
-        </CreateButton>
-      </ButtonRow>
-    </>
+            {PRODUCT_TYPES.map((type) => (
+              <ToggleButton key={type} value={type}>
+                {TYPE_LABEL[type]}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            {values.type === "physical" ? "Buyers give a delivery address at checkout." : "No delivery address is asked for."}
+          </Typography>
+        </Box>
+        <Autocomplete
+          freeSolo
+          options={categories}
+          inputValue={values.category}
+          onInputChange={(_, value) => set("category", value)}
+          renderInput={(params) => (
+            <TextField {...params} label="Category" required helperText="Pick one or type a new one" />
+          )}
+        />
+        {editing && (
+          <Box>
+            <Typography id="product-status-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              Status
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              value={values.status}
+              onChange={(_, value) => value && set("status", value)}
+              aria-labelledby="product-status-label"
+              sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
+            >
+              {PRODUCT_STATUSES.map((status) => (
+                <ToggleButton key={status} value={status}>
+                  {STATUS_LABEL[status]}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
+        )}
+      </Box>
+
+      <Box component="section" aria-label="Price" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <SectionTitle>Price</SectionTitle>
+        <TextField
+          label="Price in QORT"
+          value={values.prices.QORT ?? ""}
+          onChange={(e) => setPrice("QORT", e.target.value)}
+          required
+          fullWidth
+          slotProps={{
+            htmlInput: { inputMode: "decimal", autoComplete: "off" },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <CoinIcon coin="QORT" size={20} />
+                </InputAdornment>
+              ),
+              endAdornment: <InputAdornment position="end">QORT</InputAdornment>,
+            },
+          }}
+        />
+        {otherCoins.length > 0 && (
+          <>
+            <Typography variant="body2" color="text.secondary">
+              Your shop also takes {otherCoins.map((c) => coinLabel(c, shop)).join(", ")}. Set your own price in a coin, or
+              leave it empty to convert the QORT price at your node&apos;s rate when the buyer pays.
+            </Typography>
+            {otherCoins.map((coin) => {
+              const isAsset = assetIdOf(coin) !== null;
+              const label = coinLabel(coin, shop);
+              return (
+                <TextField
+                  key={coin}
+                  label={`Price in ${coinName(coin, shop)}`}
+                  value={values.prices[coin] ?? ""}
+                  onChange={(e) => setPrice(coin, e.target.value)}
+                  fullWidth
+                  helperText={
+                    isAsset
+                      ? `Buyers can pay in ${label} only when you set a price here.`
+                      : "Optional. Empty: converted from the QORT price."
+                  }
+                  slotProps={{
+                    htmlInput: { inputMode: "decimal", autoComplete: "off" },
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <CoinIcon coin={coin} size={20} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: <InputAdornment position="end">{label}</InputAdornment>,
+                    },
+                  }}
+                />
+              );
+            })}
+          </>
+        )}
+      </Box>
+    </Box>
   );
 };
