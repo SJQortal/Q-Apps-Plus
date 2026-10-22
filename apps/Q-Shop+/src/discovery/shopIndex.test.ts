@@ -82,14 +82,15 @@ describe("shop entries from search rows", () => {
     expect(acceptsArrrFromDescription(undefined)).toBe(false);
   });
 
-  it("matches a search in the owner, id, title or plain description, case-insensitively", () => {
+  it("matches a search in the owner, short id, title or plain description, case-insensitively", () => {
     const entry = shopEntryFromRow(storeRow("Seller Name", "my-shop"))!;
     expect(matchesShopQuery(entry, "seller")).toBe(true);
     expect(matchesShopQuery(entry, "MY-SHOP")).toBe(true);
     expect(matchesShopQuery(entry, "about")).toBe(true);
-    // Only in the marker Core also matched.
+    // Only in the parts every shop has, which Core also matched.
     expect(matchesShopQuery(entry, "arrrfalse")).toBe(false);
     expect(matchesShopQuery(entry, "coins")).toBe(false);
+    expect(matchesShopQuery(entry, "store-general")).toBe(false);
   });
 });
 

@@ -121,14 +121,17 @@ export async function loadShopIndex(options: { fresh?: boolean } = {}): Promise<
 }
 
 /**
- * Does the text appear in the shop's owner, id, title or description?
- * Core matched the raw metadata, whose description starts with the coins
- * marker, so "arrr" or "true" would otherwise match every shop.
+ * Does the text appear in the shop's owner, short id, title or description?
+ * Core matched the raw fields: every identifier starts with
+ * `q-store-general-` and every metadata description with the coins marker,
+ * so "store", "arrr" or "true" would otherwise match every shop.
  */
 export function matchesShopQuery(shop: ShopEntry, text: string): boolean {
   const needle = text.trim().toLowerCase();
   if (!needle) return true;
-  return [shop.owner, shop.id, shop.title, shop.description].some((field) => field.toLowerCase().includes(needle));
+  return [shop.owner, shop.shortStoreId, shop.title, shop.description].some((field) =>
+    field.toLowerCase().includes(needle)
+  );
 }
 
 export interface ShopSearchPage {
