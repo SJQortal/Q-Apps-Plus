@@ -154,9 +154,11 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   const details = useShopDetails(shop.key);
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
 
+  // Not read yet, forgotten by a pull to refresh, or only tried once by a "Pays in" check.
+  const wanted = !details || (details.status === "failed" && !details.final);
   useEffect(() => {
-    if (inView) void requestShopDetails(shop.owner, shop.id);
-  }, [inView, shop.owner, shop.id]);
+    if (inView && wanted) void requestShopDetails(shop.owner, shop.id);
+  }, [inView, wanted, shop.owner, shop.id]);
 
   const json = details?.status === "ready" && details.valid ? details.shop : null;
 
