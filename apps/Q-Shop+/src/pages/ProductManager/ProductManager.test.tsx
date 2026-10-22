@@ -18,6 +18,7 @@ import { installMockNode, makeWorld, type World } from "../../test/mockNode";
 import { SELLER, SELLER_ADDRESS, SELLER_PK } from "../../test/fixtures/shop";
 import { useOwnShops } from "../../hooks/useOwnShops";
 import { ShopDialogs } from "../../components/modals/ShopDialogs";
+import { ShellContext } from "../../components/layout/shellState";
 import { ProductManager } from "./ProductManager";
 
 vi.mock("../../components/common/ImageUploader", () => ({
@@ -173,5 +174,42 @@ describe("which of the seller's shops the seller page shows", () => {
     // Back on the first shop's seller page, it becomes current again.
     act(() => navigate(`/product-manager/${SHOP_A}`));
     await expectSellerPage(store, SHOP_A, TITLE_A);
+  });
+});
+
+describe("before the seller page has a name to work with", () => {
+  function renderWithoutName(opts: { user?: { address: string; publicKey: string; name: string }; authenticating: boolean }) {
+    const store = createAppStore();
+    if (opts.user) store.dispatch(addUser(opts.user));
+    const signIn = vi.fn();
+    renderWithProviders(
+      <ShellContext.Provider value={{ signIn, reloadOwnShops: () => {}, authenticating: opts.authenticating }}>
+        <Routes>
+          <Route path="/product-manager/:store" element={<ProductManager />} />
+        </Routes>
+      </ShellContext.Provider>,
+      { store, initialEntries: [`/product-manager/${SHOP_A}`] }
+    );
+    return { signIn };
+  }
+
+  it("while the account loads, shows that it is loading (the header has no Sign in then)", () => {
+    renderWithoutName({ authenticating: true });
+    expect(screen.getByLabelText("Loading your account")).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByText(/Sign in/)).toBeNull();
+  });
+
+  it("an account without a name is told to register one in Hub, not to sign in", () => {
+    renderWithoutName({ user: { address: SELLER_ADDRESS, publicKey: SELLER_PK, name: "" }, authenticating: false });
+    expect(screen.getByText("Register a Qortal name in Hub to sell")).toBeInTheDocument();
+    expect(screen.queryByText(/Sign in/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
+  });
+
+  it("signed out, offers the shell's Sign in on the page", () => {
+    const { signIn } = renderWithoutName({ authenticating: false });
+    expect(screen.getByText("Sign in to manage your shop")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(signIn).toHaveBeenCalledTimes(1);
   });
 });

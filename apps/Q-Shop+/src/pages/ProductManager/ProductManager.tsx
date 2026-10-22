@@ -21,6 +21,7 @@ import { setNotification } from "../../state/features/notificationsSlice";
 import { resetOrders } from "../../state/features/orderSlice";
 import { Page, PageHeader } from "../../components/layout/Page";
 import { EmptyState } from "../../components/common/EmptyState";
+import { useShellActions } from "../../components/layout/shellState";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { findOwnShops, loadOwnShop } from "../../hooks/useOwnShops";
 import { decodeParam, storeLink, storePath } from "../../qdn/links";
@@ -63,6 +64,7 @@ export const ProductManager = () => {
   const tab: SellerTab = isSellerTab(tabParam) ? tabParam : "overview";
 
   const user = useSelector((state: RootState) => state.auth.user);
+  const { signIn, authenticating } = useShellActions();
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
@@ -139,10 +141,29 @@ export const ProductManager = () => {
   };
 
   if (!user?.name) {
+    // The header shows no Sign in while the account request is out, nor for an
+    // account without a name, so the page says what applies and offers its own.
     return (
       <Page width="list">
         <PageHeader title="Your shop" back />
-        <EmptyState title="Sign in to manage your shop" description="Use Sign in at the top to load your Qortal name." />
+        {authenticating ? (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }} aria-busy="true" aria-label="Loading your account">
+            <Skeleton variant="rounded" height={48} />
+            <Skeleton variant="rounded" height={72} />
+          </Box>
+        ) : user ? (
+          <EmptyState
+            title="Register a Qortal name in Hub to sell"
+            description="A shop is published under a Qortal name. Once your account has one, your shop is managed here."
+          />
+        ) : (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <EmptyState title="Sign in to manage your shop" description="Your shop is published under your Qortal name." />
+            <Button variant="contained" onClick={signIn} sx={{ alignSelf: "center", minHeight: 44 }}>
+              Sign in
+            </Button>
+          </Box>
+        )}
       </Page>
     );
   }
