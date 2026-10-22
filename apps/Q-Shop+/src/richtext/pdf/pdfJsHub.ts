@@ -10,6 +10,8 @@
  */
 export type PdfJsLib = {
   GlobalWorkerOptions: { workerPort: Worker | null };
+  /** Operator codes, for reading a page's drawing commands (the Smart view). */
+  OPS: Record<string, number>;
   getDocument: (src: { data: Uint8Array; disableStream?: boolean; disableAutoFetch?: boolean; isOffscreenCanvasSupported?: boolean }) => PdfJsLoadingTask;
 };
 
@@ -26,7 +28,8 @@ export type PdfJsDocument = {
 };
 
 export type PdfJsPage = {
-  getViewport: (opts: { scale: number }) => { width: number; height: number };
+  getViewport: (opts: { scale: number }) => { width: number; height: number; transform: number[] };
+  getOperatorList: () => Promise<{ fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }>;
   render: (opts: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => {
     promise: Promise<void>;
     cancel?: () => void;

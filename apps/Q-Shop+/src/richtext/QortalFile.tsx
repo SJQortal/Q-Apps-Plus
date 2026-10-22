@@ -13,6 +13,7 @@ import { ResponsiveDialog } from "../components/common/mobile";
 import { ResourceUnavailableError, resourceUrl, waitForResource } from "../qdn/resourceStatus";
 import { isPdf, type FileEmbed } from "./embeds";
 import { MAX_PDF_BYTES } from "./qortalSources";
+import { useReadingMode } from "./pdf/useReadingMode";
 
 const PdfViewer = lazy(() => import("./pdf/PdfViewer"));
 
@@ -29,6 +30,7 @@ function PdfPreview({ embed, onClose }: { embed: FileEmbed; onClose: () => void 
   const [phase, setPhase] = useState<Phase>({ kind: "fetching", percent: null });
   const [attempt, setAttempt] = useState(0);
   const title = embed.filename || embed.title || "PDF";
+  const { reading, toggleReading } = useReadingMode();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -66,8 +68,8 @@ function PdfPreview({ embed, onClose }: { embed: FileEmbed; onClose: () => void 
   }, [embed.name, embed.identifier, embed.size, attempt]);
 
   return (
-    <ResponsiveDialog open onClose={onClose} title={title} maxWidth="lg">
-      <Box sx={{ display: "flex", flexDirection: "column", minHeight: "min(70dvh, 900px)" }}>
+    <ResponsiveDialog open onClose={onClose} title={title} maxWidth="lg" fullScreen={reading}>
+      <Box sx={{ display: "flex", flexDirection: "column", minHeight: reading ? "100%" : "min(70dvh, 900px)", height: reading ? "100%" : undefined }}>
         {phase.kind === "ready" ? (
           <Suspense
             fallback={
@@ -77,7 +79,7 @@ function PdfPreview({ embed, onClose }: { embed: FileEmbed; onClose: () => void 
               </Box>
             }
           >
-            <PdfViewer data={phase.data} title={title} />
+            <PdfViewer data={phase.data} title={title} reading={reading} onToggleReading={toggleReading} />
           </Suspense>
         ) : phase.kind === "fetching" ? (
           <Box role="status" sx={{ m: "auto", display: "flex", gap: 1.5, alignItems: "center" }}>

@@ -22,6 +22,8 @@ export interface ResponsiveDialogProps {
    * publish): Back/Close are hidden, and outside clicks and Escape do nothing.
    */
   busy?: boolean;
+  /** Fill the app on any screen, as on phones (the PDF preview's full screen). */
+  fullScreen?: boolean;
 }
 
 /**
@@ -40,8 +42,9 @@ export function ResponsiveDialog({
   keepMounted,
   dismissible = true,
   busy = false,
+  fullScreen = false,
 }: ResponsiveDialogProps) {
-  const phone = usePhoneLayout();
+  const phone = usePhoneLayout() || fullScreen;
   // Listeners only while a phone dialog is open: closed dialogs cost nothing.
   const viewport = useVisualViewport(open && phone);
   const titleId = useId();

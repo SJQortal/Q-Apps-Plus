@@ -7,10 +7,18 @@
  * and − + 0; a zoomed page scrolls. The page is drawn off screen first, so
  * the one shown stays until the next is ready.
  *
+ * Page colours, as in Torq: Light (a light frame), Dim (a dark frame, the
+ * page as it is) and Smart (pages of text turn dark, photos stay as they
+ * are: pdfSmartDark.ts, copied from Torq); the choice is kept in this
+ * browser. Full screen (useReadingMode.ts) fills the app, and on a computer
+ * the screen.
+ *
  * Loaded on its own (with pdf.js) when a buyer first opens a PDF preview.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Button, CircularProgress, IconButton, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, IconButton, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
+import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ZoomInOutlinedIcon from "@mui/icons-material/ZoomInOutlined";
@@ -18,6 +26,24 @@ import ZoomOutOutlinedIcon from "@mui/icons-material/ZoomOutOutlined";
 import FitScreenOutlinedIcon from "@mui/icons-material/FitScreenOutlined";
 import { visuallyHiddenSx } from "../../pages/Store/a11y";
 import { canvasPixelRatio, copyPdfBytes, loadPdfJs, type PdfJsDocument, type PdfJsLoadingTask } from "./pdfJsHub";
+import { applySmartDark, pageImageRects, type Matrix, type PixelRect } from "./pdfSmartDark";
+
+export type PdfTheme = "light" | "dim" | "smart";
+const THEMES: { id: PdfTheme; label: string; hint: string }[] = [
+  { id: "light", label: "Light", hint: "Light frame, white page" },
+  { id: "dim", label: "Dim", hint: "Dark frame, page as it is" },
+  { id: "smart", label: "Smart", hint: "Dark pages for text, photos as they are" },
+];
+const THEME_KEY = "qshopplus-pdf-theme";
+
+function storedTheme(): PdfTheme {
+  try {
+    const value = localStorage.getItem(THEME_KEY);
+    return value === "light" || value === "dim" || value === "smart" ? value : "dim";
+  } catch {
+    return "dim";
+  }
+}
 
 const ZOOM_STEPS = [50, 75, 100, 125, 150, 200, 300, 400];
 const FIT_MAX_WIDTH = 1000;
@@ -28,10 +54,31 @@ function stepZoom(zoom: number, direction: 1 | -1): number {
   return [...ZOOM_STEPS].reverse().find((z) => z < zoom) ?? zoom;
 }
 
-export default function PdfViewer({ data, title }: { data: ArrayBuffer; title: string }) {
+export default function PdfViewer({
+  data,
+  title,
+  reading = false,
+  onToggleReading,
+}: {
+  data: ArrayBuffer;
+  title: string;
+  /** Full screen is on (the dialog fills the app). */
+  reading?: boolean;
+  onToggleReading?: () => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const docRef = useRef<PdfJsDocument | null>(null);
+  const opsRef = useRef<Record<string, number> | null>(null);
+  const [theme, setThemeState] = useState<PdfTheme>(storedTheme);
+  const setTheme = (next: PdfTheme) => {
+    setThemeState(next);
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {
+      // Not kept: it still applies now.
+    }
+  };
   const renderId = useRef(0);
   const task = useRef<{ cancel?: () => void } | null>(null);
   const [numPages, setNumPages] = useState(0);
@@ -49,6 +96,7 @@ export default function PdfViewer({ data, title }: { data: ArrayBuffer; title: s
     void (async () => {
       try {
         const pdfjs = await loadPdfJs();
+        opsRef.current = pdfjs.OPS ?? null;
         loadingTask = pdfjs.getDocument({ data: copyPdfBytes(data), disableStream: true, disableAutoFetch: true, isOffscreenCanvasSupported: false });
         const doc = await loadingTask.promise;
         if (!alive) return doc.destroy();
@@ -116,12 +164,27 @@ export default function PdfViewer({ data, title }: { data: ArrayBuffer; title: s
       throw e;
     }
     if (id !== renderId.current) return;
+    if (theme === "smart") {
+      let pictures: PixelRect[] = [];
+      const ops = opsRef.current;
+      if (ops) {
+        try {
+          pictures = pageImageRects(await pdfPage.getOperatorList(), ops, viewport.transform as Matrix, scratch.width, scratch.height);
+        } catch {
+          // Without the pictures' boxes the whole page is judged as paper.
+        }
+      }
+      if (id !== renderId.current) return;
+      const image = ctx.getImageData(0, 0, scratch.width, scratch.height);
+      applySmartDark(image.data, scratch.width, scratch.height, pictures);
+      ctx.putImageData(image, 0, 0);
+    }
     canvas.width = scratch.width;
     canvas.height = scratch.height;
     canvas.style.width = `${cssWidth}px`;
     canvas.style.height = `${cssHeight}px`;
     canvas.getContext("2d")?.drawImage(scratch, 0, 0);
-  }, [page, zoom, width]);
+  }, [page, zoom, width, theme]);
 
   useEffect(() => {
     if (loading || error) return;
@@ -149,8 +212,8 @@ export default function PdfViewer({ data, title }: { data: ArrayBuffer; title: s
         sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 0.5 }}
       >
         <IconButton title="Previous page (←)" aria-label="Previous page" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading} sx={{ width: 44, height: 44 }}>
-              <ChevronLeftIcon />
-            </IconButton>
+          <ChevronLeftIcon />
+        </IconButton>
         <Typography variant="body2" aria-live="polite" sx={{ minWidth: 48, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
           <Box component="span" aria-hidden>
             {numPages ? `${page} / ${numPages}` : "…"}
@@ -158,32 +221,51 @@ export default function PdfViewer({ data, title }: { data: ArrayBuffer; title: s
           {numPages > 0 && <Box component="span" sx={visuallyHiddenSx}>{`Page ${page} of ${numPages}`}</Box>}
         </Typography>
         <IconButton title="Next page (→)" aria-label="Next page" onClick={() => setPage((p) => Math.min(numPages || 1, p + 1))} disabled={page >= numPages || loading} sx={{ width: 44, height: 44 }}>
-              <ChevronRightIcon />
-            </IconButton>
+          <ChevronRightIcon />
+        </IconButton>
         <IconButton title="Zoom out (−)" aria-label="Zoom out" onClick={() => setZoom((z) => stepZoom(z, -1))} disabled={zoom <= ZOOM_STEPS[0] || loading} sx={{ width: 44, height: 44 }}>
-              <ZoomOutOutlinedIcon />
-            </IconButton>
+          <ZoomOutOutlinedIcon />
+        </IconButton>
         <Typography variant="body2" sx={{ minWidth: 48, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
           {zoom} %
         </Typography>
         <IconButton title="Zoom in (+)" aria-label="Zoom in" onClick={() => setZoom((z) => stepZoom(z, 1))} disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1] || loading} sx={{ width: 44, height: 44 }}>
-              <ZoomInOutlinedIcon />
-            </IconButton>
+          <ZoomInOutlinedIcon />
+        </IconButton>
         <IconButton title="Fit the width (0)" aria-label="Fit the width" onClick={() => setZoom(100)} disabled={zoom === 100 || loading} sx={{ width: 44, height: 44 }}>
-              <FitScreenOutlinedIcon />
-            </IconButton>
+          <FitScreenOutlinedIcon />
+        </IconButton>
+        {onToggleReading && (
+          <IconButton title={reading ? "Exit full screen" : "Full screen"} aria-label={reading ? "Exit full screen" : "Full screen"} onClick={onToggleReading} sx={{ width: 44, height: 44 }}>
+            {reading ? <FullscreenExitIcon /> : <FullscreenIcon />}
+          </IconButton>
+        )}
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={theme}
+          onChange={(_, value: PdfTheme | null) => value && setTheme(value)}
+          aria-label="Page colours"
+          sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 1.5, textTransform: "none" } }}
+        >
+          {THEMES.map((t) => (
+            <ToggleButton key={t.id} value={t.id} title={t.hint}>
+              {t.label}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
       </Box>
       <Box
         ref={stageRef}
-        // A dim frame around the white page, in every theme.
+        // Light: a light frame; Dim and Smart: a dark one, in every app theme.
         sx={{
           position: "relative",
           flex: 1,
           minHeight: 240,
           overflow: "auto",
           p: `${STAGE_PAD}px`,
-          borderRadius: 2,
-          bgcolor: "action.selected",
+          borderRadius: reading ? 0 : 2,
+          bgcolor: theme === "light" ? "grey.200" : "grey.900",
           display: "flex",
           justifyContent: zoom > 100 ? "flex-start" : "center",
           alignItems: "flex-start",
