@@ -75,7 +75,8 @@ describe("a shop card", () => {
     const { store } = renderCard();
     expect(await screen.findByRole("img", { name: "Seller's Shop" })).toHaveAttribute("src", SHOP_JSON.logo);
     expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAccessibleDescription(/Pays in QORT, ARRR, Gold\./);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The shop is read once (the Gold asset's icon may look up its avatar: qdn/assetAvatar.ts).
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/arbitrary/STORE/"))).toHaveLength(1);
     await waitFor(() => expect(store.getState().store.hashMapStores["q-store-general-my-shop"]).toMatchObject({ isValid: true, owner: "Seller Name", title: "Seller's Shop" }));
   });
 
