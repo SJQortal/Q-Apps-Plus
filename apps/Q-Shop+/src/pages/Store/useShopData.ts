@@ -123,7 +123,8 @@ export function useViewedShop(owner: string, storeId: string, options: { product
   const ownShopIndex =
     ownShop && ownIndex && ((ownIndex as { id?: string }).id === containerId || ownIndex.storeId === storeId) ? (ownIndex as unknown as ShopIndex) : null;
   const servedFromRedux = !!ownShop && (!withProducts || !!ownShopIndex);
-  const key = `${owner}\n${storeId}\n${attempt}\n${withProducts}`;
+  const shopKey = `${owner}\n${storeId}\n`;
+  const key = `${shopKey}${attempt}\n${withProducts}`;
 
   useEffect(() => {
     if (!owner || !storeId) return;
@@ -139,8 +140,11 @@ export function useViewedShop(owner: string, storeId: string, options: { product
     const fresh = attempt > 0;
     const patch = (next: Partial<ShopLoad>) =>
       setLoad((prev) => {
-        const base: ShopLoad =
-          prev?.key === key ? prev : { key, shopStatus: "loading", shop: null, productsStatus: withProducts ? "loading" : "ready", index: null };
+        let base: ShopLoad;
+        if (prev?.key === key) base = prev;
+        // Retrying the same shop: keep what was already shown.
+        else if (prev && prev.key.startsWith(shopKey) && prev.shop) base = { ...prev, key, productsStatus: withProducts ? "loading" : "ready" };
+        else base = { key, shopStatus: "loading", shop: null, productsStatus: withProducts ? "loading" : "ready", index: null };
         return { ...base, ...next };
       });
 
@@ -187,7 +191,7 @@ export function useViewedShop(owner: string, storeId: string, options: { product
     return () => {
       alive = false;
     };
-  }, [attempt, containerId, dispatch, isOwner, key, owner, servedFromRedux, storeId, withProducts]);
+  }, [attempt, containerId, dispatch, isOwner, key, owner, servedFromRedux, shopKey, storeId, withProducts]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
@@ -196,6 +200,10 @@ export function useViewedShop(owner: string, storeId: string, options: { product
   }
   if (load?.key === key) {
     return { shop: load.shop, shopStatus: load.shopStatus, index: load.index, productsStatus: load.productsStatus, isOwner, retry };
+  }
+  if (load?.shop && load.key.startsWith(shopKey)) {
+    // A retry has started: the shop stays while its products load again.
+    return { shop: load.shop, shopStatus: "ready", index: null, productsStatus: withProducts ? "loading" : "ready", isOwner, retry };
   }
   // Coming back to the shop viewed last: show it at once while the cache answers.
   const cachedShop = attempt === 0 && viewed?.id === storeId && viewed.owner === owner ? viewed : null;

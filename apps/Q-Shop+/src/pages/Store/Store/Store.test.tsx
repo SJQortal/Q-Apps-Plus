@@ -255,6 +255,8 @@ describe("shop page", { timeout: 20_000 }, () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     });
+    // The shop stays on screen while its products load again.
+    expect(screen.getByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
   });
 
