@@ -26,7 +26,7 @@ describe('SettingsPage', () => {
     for (const name of ['Account', 'Appearance', 'Shop', 'About']) {
       expect(screen.getByRole('heading', { name })).toBeInTheDocument();
     }
-    expect(screen.getByText(/Q-Shop\+ 1\.0\.0-plus\.1/)).toBeInTheDocument();
+    expect(screen.getByText(/Q-Shop\+ 1\.0\.0$/)).toBeInTheDocument();
   });
 
   it('switches theme from the picker and saves it', () => {
@@ -41,7 +41,7 @@ describe('SettingsPage', () => {
   it('opens the changelog dialog', () => {
     renderSettings();
     fireEvent.click(screen.getByRole('button', { name: /What's new/ }));
-    expect(screen.getByRole('dialog')).toHaveTextContent('Q-Shop+ first release');
+    expect(screen.getByRole('dialog')).toHaveTextContent('Q-Shop+ 1.0');
   });
 
   it('persists the preferred coin', () => {
