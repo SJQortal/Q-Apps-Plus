@@ -69,8 +69,9 @@ export interface StoreFields {
 /**
  * QDN metadata description of a shop as the original writes it: its coins
  * marker and the first 180 characters of the description, or of the meta
- * description when the seller wrote one. Every shop list (the original's
- * too) shows this text under the shop.
+ * description when the seller wrote one. Q-Shop+'s Shops list shows this
+ * text under the shop and searches it; the original's list reads each
+ * shop's JSON and shows its `description`.
  */
 export function storeMetaDescription(description: string, supportedCoins: string[], metaDescription?: string): string {
   const text = metaDescription?.trim() || description;
