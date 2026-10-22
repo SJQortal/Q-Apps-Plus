@@ -145,6 +145,8 @@ export function AssetPicker({ assets, onChange }: AssetPickerProps) {
       <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
         <Autocomplete<CoreAsset, false, false, true>
           freeSolo
+          // The suggestions stay inside the dialog (its landmark), not at the end of the page.
+          disablePortal
           sx={{ flex: "1 1 200px", minWidth: 0 }}
           options={suggestions}
           // The suggestions are already ranked (qdn/assets.ts suggestAssets).
