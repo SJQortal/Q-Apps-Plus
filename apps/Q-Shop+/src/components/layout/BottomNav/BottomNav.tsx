@@ -133,9 +133,17 @@ export function CartBadgeIcon({ items, pending }: { items: number; pending: numb
       anchorOrigin={{ vertical: "top", horizontal: "left" }}
       slotProps={{ badge: { "aria-hidden": true } }}
     >
-      <Badge color="primary" badgeContent={items} max={99} overlap="circular" slotProps={{ badge: { "aria-hidden": true } }}>
+      {/*
+        No count badge at 0: a hidden MUI badge keeps its last number (a "0") as text, which axe
+        counts as visible text missing from the button's name (WCAG 2.5.3).
+      */}
+      {items > 0 ? (
+        <Badge color="primary" badgeContent={items} max={99} overlap="circular" slotProps={{ badge: { "aria-hidden": true } }}>
+          <ShoppingCartOutlinedIcon />
+        </Badge>
+      ) : (
         <ShoppingCartOutlinedIcon />
-      </Badge>
+      )}
     </Badge>
   );
 }

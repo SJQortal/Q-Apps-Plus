@@ -17,9 +17,17 @@ export function CartButton() {
   return (
     <Tooltip title="Cart">
       <IconButton aria-label={label} onClick={() => navigate("/cart")} sx={{ width: 44, height: 44 }}>
-        <Badge badgeContent={count} color="primary" max={99}>
+        {/*
+          No badge at 0: a hidden MUI badge keeps its last number (a "0") as text, which axe
+          counts as visible text missing from the name "Cart" (WCAG 2.5.3).
+        */}
+        {count > 0 ? (
+          <Badge badgeContent={count} color="primary" max={99}>
+            <ShoppingCartOutlinedIcon />
+          </Badge>
+        ) : (
           <ShoppingCartOutlinedIcon />
-        </Badge>
+        )}
       </IconButton>
     </Tooltip>
   );
