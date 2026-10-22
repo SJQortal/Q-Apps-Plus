@@ -6,7 +6,7 @@ Encrypted mail between Qortal names, with threads, attachments and group mail.
 
 **Upstream PR:** [Qortal/q-mail#7](https://github.com/Qortal/q-mail/pull/7), Q-Mail 4.0.0, opened 2026-10-12 from `SJQortal:q-mail-4.0.0` (`a55ac553`, 291 commits, a fast-forward of Qortal's `main` at `ddf3aa9`).
 
-**Version on the branch:** `1.0.2`, published and merged into `main` (PR #21, `bd5e7d25`). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) stops at 1.0.0; the upstream PR replaces it.
+**Version on the branch:** `1.0.3`, not published yet: in a dark Hub, a refresh on any page but the first showed the light colours (Core injects `_qdnTheme = "light"` when the reloaded URL has no `?theme=`, which in-app navigation drops); the theme kit now remembers Hub's mode, and `index.html`'s boot snippet reads it in the same order (branch `repo/hub-mode-after-reload`, 2026-10-15). Kept here with Simon's OK until more fixes gather; no upstream PR for it yet. Before that: `1.0.2`, published and merged into `main` (PR #21, `bd5e7d25`). The branch [`q-mail-plus/for-upstream`](https://github.com/SJQortal/Q-Apps-Plus/tree/q-mail-plus/for-upstream) stops at 1.0.0; the upstream PR replaces it.
 
 ## Baseline at import
 
