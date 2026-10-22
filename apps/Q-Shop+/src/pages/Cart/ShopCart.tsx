@@ -22,7 +22,7 @@ export interface CheckoutGate {
 }
 
 function ShopLogo({ src, title }: { src?: string; title: string }) {
-  return <Picture src={src} alt={`${title} logo`} size={44} fallback={<StorefrontOutlinedIcon aria-hidden />} />;
+  return <Picture src={src} alt={`${title} logo`} size={44} fit="contain" fallback={<StorefrontOutlinedIcon aria-hidden />} />;
 }
 
 /**

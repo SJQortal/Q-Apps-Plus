@@ -104,11 +104,14 @@ export function ShopHeader({
             component="img"
             src={shop.logo}
             alt={`${title} logo`}
+            // The whole logo, never cropped to a square: as wide as it is (a wide logo up to the max), square while it loads.
             sx={{
-              width: { xs: 64, sm: 88 },
               height: { xs: 64, sm: 88 },
+              width: "auto",
+              minWidth: { xs: 64, sm: 88 },
+              maxWidth: { xs: 96, sm: 200 },
               borderRadius: 2,
-              objectFit: "cover",
+              objectFit: "contain",
               flexShrink: 0,
               bgcolor: "action.hover",
             }}

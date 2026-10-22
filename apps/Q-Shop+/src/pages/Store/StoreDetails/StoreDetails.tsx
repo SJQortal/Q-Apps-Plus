@@ -72,7 +72,17 @@ export function StoreDetails({
             component="img"
             src={shop.logo}
             alt={`${title} logo`}
-            sx={{ width: 64, height: 64, borderRadius: 2, objectFit: "cover", flexShrink: 0, bgcolor: "action.hover" }}
+            // The whole logo, never cropped to a square.
+            sx={{
+              height: 64,
+              width: "auto",
+              minWidth: 64,
+              maxWidth: 160,
+              borderRadius: 2,
+              objectFit: "contain",
+              flexShrink: 0,
+              bgcolor: "action.hover",
+            }}
           />
         ) : null}
         <Typography component="p" sx={{ fontWeight: 700, fontSize: 20, overflowWrap: "anywhere" }}>
