@@ -55,7 +55,6 @@ import {
   searchCatalogueIds,
   searchProducts,
   searchTerms,
-  SEARCH_CATALOGUE_CAP,
   type ProductQuery,
   type ProductRow,
   type ProductSort,
@@ -230,6 +229,14 @@ function ShopProducts({
 
   const failedCount = Object.values(statuses).filter((s) => s === "failed").length;
   const searchPending = scope ? scope.ids.filter((id) => !catalogues[id] && statuses[id] !== "failed").length : 0;
+  // The products a search covers (at most 30 catalogues' worth), and how many of them it has read.
+  const searchScope = useMemo(() => {
+    if (!scope) return { total: 0, read: 0 };
+    const ids = new Set(scope.ids);
+    const inScope = filtered.filter((row) => ids.has(row.catalogueId));
+    return { total: inScope.length, read: inScope.filter((row) => !!catalogues[row.catalogueId]).length };
+  }, [scope, filtered, catalogues]);
+  const cappedNote = `Only the first ${searchScope.total} products were searched; pick a category to narrow it down.`;
   const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0);
 
   const toggleCategory = (category: string) =>
@@ -277,7 +284,7 @@ function ShopProducts({
 
   let status: string;
   if (productsStatus !== "ready") status = "";
-  else if (searching && searchPending > 0) status = `Searching… ${scope!.ids.length - searchPending} of ${scope!.ids.length} catalogues read`;
+  else if (searching && searchPending > 0) status = `Searching… ${searchScope.read} of ${searchScope.total} products read`;
   else if (searching) status = `${results.length} result${results.length === 1 ? "" : "s"} for “${terms.join(" ")}”`;
   else status = `${filtered.length} product${filtered.length === 1 ? "" : "s"}`;
 
@@ -325,7 +332,7 @@ function ShopProducts({
       <EmptyState
         icon={<SearchOffOutlinedIcon />}
         title={`No products match “${terms.join(" ")}”`}
-        description={scope?.capped ? `Only the first ${SEARCH_CATALOGUE_CAP * 10} products were searched; pick a category to narrow it down.` : undefined}
+        description={scope?.capped ? cappedNote : undefined}
         actionLabel="Show all products"
         onAction={() => setSearchText("")}
       />
@@ -444,7 +451,7 @@ function ShopProducts({
           <RateNote shopCoin={shopCoin} />
           {scope?.capped && results.length > 0 && (
             <Typography variant="body2" color="text.secondary">
-              Only the first {SEARCH_CATALOGUE_CAP * 10} products were searched; pick a category to narrow it down.
+              {cappedNote}
             </Typography>
           )}
           {failedCount > 0 && (
