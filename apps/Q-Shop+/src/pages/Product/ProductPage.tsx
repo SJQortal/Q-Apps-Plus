@@ -21,7 +21,8 @@ import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
 import { setProductToCart, MAX_QUANTITY } from "../../state/features/cartSlice";
 import { Page, PageHeader } from "../../components/layout/Page";
 import { EmptyState } from "../../components/common/EmptyState";
-import { ImageGallery } from "../../components/common/TabImageList/ImageGallery";
+import { GALLERY_LANDSCAPE_WIDTH, ImageGallery } from "../../components/common/TabImageList/ImageGallery";
+import { LANDSCAPE_PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { PriceTag } from "../../components/money/PriceTag";
 import { useShopCoin } from "../../money/useShopCoin";
 import { decodeParam, productLink, storePath } from "../../qdn/links";
@@ -77,10 +78,33 @@ function QuantityStepper({ value, onChange }: { value: string; onChange: (value:
   );
 }
 
+/**
+ * Pictures beside the details from md up; one column below. A phone held
+ * sideways (the Hub frame is about 266 px tall) gets two columns too, the
+ * gallery sized by the frame's height (GALLERY_LANDSCAPE_WIDTH), so the
+ * price and Add to cart sit beside the picture instead of about three
+ * frames below an 800 px square. Last, so it wins over the width rules.
+ */
+const productLayoutSx = {
+  display: "grid",
+  gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" },
+  gap: { xs: 2, md: 4 },
+  alignItems: "start",
+  [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { gridTemplateColumns: "auto minmax(0, 1fr)", gap: 2 },
+} as const;
+
 function ProductSkeleton({ note }: { note?: string }) {
   return (
-    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: { xs: 2, md: 4 } }}>
-      <Skeleton variant="rounded" sx={{ width: "100%", height: "auto", aspectRatio: "1 / 1" }} />
+    <Box sx={productLayoutSx}>
+      <Skeleton
+        variant="rounded"
+        sx={{
+          width: "100%",
+          height: "auto",
+          aspectRatio: "1 / 1",
+          [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { width: GALLERY_LANDSCAPE_WIDTH },
+        }}
+      />
       <Box>
         <Skeleton width="40%" />
         <Skeleton width="30%" height={48} />
@@ -168,14 +192,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
       setAdded((prev) => ({ at: (prev?.at ?? 0) + 1, title: name, quantity }));
     };
     content = (
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" },
-          gap: { xs: 2, md: 4 },
-          alignItems: "start",
-        }}
-      >
+      <Box data-product-layout sx={productLayoutSx}>
         <ImageGallery images={product.images} title={name} initialIndex={mainIndex} />
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>

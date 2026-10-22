@@ -88,6 +88,25 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toEqual([`/arbitrary/DOCUMENT/Seller%20Name/${CAT1}`]);
   });
 
+  it("puts the price and Add to cart beside a frame-high picture on a phone held sideways", async () => {
+    renderProduct(makeWorld(), pathOf(P11));
+    await screen.findByRole("heading", { level: 1, name: "Product 11" });
+    // jsdom applies no media queries: read the rules the page's elements get on a landscape phone.
+    const css = [...document.querySelectorAll("style")].map((style) => style.textContent ?? "").join("\n");
+    const landscape = /@media\s*\(pointer:\s*coarse\)\s*and\s*\(max-height:\s*500px\)\s*\{((?:[^{}]*\{[^{}]*\})*)\s*\}/g;
+    const blocks = [...css.matchAll(landscape)].map((m) => m[1]);
+    const rulesFor = (el: Element) => {
+      const classes = [...el.classList].filter((c) => c.startsWith("css-"));
+      return blocks.filter((block) => classes.some((c) => block.includes(`.${c}`))).join("\n");
+    };
+    const layout = document.querySelector("[data-product-layout]")!;
+    expect(rulesFor(layout)).toMatch(/grid-template-columns:\s*auto minmax\(0, 1fr\)/);
+    const gallery = screen.getByRole("region", { name: "Product 11: pictures" });
+    expect(rulesFor(gallery)).toContain("width:min(42vw, max(148px, calc(var(--qshare-app-height, 100dvh) - 120px)))");
+    // The price and Add to cart are in the column beside the gallery.
+    expect(layout.children[1]).toContainElement(screen.getByRole("button", { name: "Add to cart" }));
+  });
+
   it("adds the chosen quantity to the cart, 1 to 99", async () => {
     const { store } = renderProduct(makeWorld(), pathOf(P11));
     await screen.findByRole("heading", { level: 1, name: "Product 11" });
