@@ -63,7 +63,7 @@ Every shape below is what the original app writes; the + app writes the same, an
 | DOCUMENT | `q-store-review-<shortStoreId>-<uid10>-<rating×10>` | buyer with an order | R/W | JSON `{title, description, rating (0.5 steps), created}`, `filename: "review.json"`, metadata `title.slice(0,60)`, `description.slice(0,150)`. Lists read the rating from the identifier and the text from the metadata | AddReview.pin |
 | THUMBNAIL | `qortal_avatar` | any name | R | avatar image | |
 | Hub list | `blockedNames_q-blog` | user | R/W | names, shared with the original (Simon, night 1) | |
-| localStorage | `qshopplus-ui-theme`, `qshopplus-settings` (session 1); `qshopplus-cart`, `qshopplus-pending-orders` (night 1, additive) | | R/W | browser only | |
+| localStorage | `qshopplus-ui-theme`, `qshopplus-settings` (session 1); `qshopplus-cart` (carts per owner and shop: the first cart for a shop id keeps the plain id as its key, another owner's cart for that id is keyed `owner\nshopId`), `qshopplus-pending-orders` (paid orders not yet recorded, without the delivery address; optional `published`, `imagesStripped`), `qshopplus-used-payments` (payment signatures of orders recorded from this device), `qshopplus-active-name` (night 1, all additive) | | R/W | browser only | |
 | localforage | `general-consent` | | R/W | welcome notice | |
 
 **Searches the original makes** (what the + app must keep finding): shops `service=STORE&query=q-store-general&prefix=true` (home), own shops by `name=` + `exactmatchnames`; a shop's orders `service=DOCUMENT_PRIVATE&query=q-store-order-<shortStoreId>` (all names); a buyer's orders `query=q-store-order-&name=<buyer>`; reviews `service=DOCUMENT&query=q-store-review-<shortStoreId>` with the exact prefix re-checked in code (Core's `query` is a case-insensitive substring).
@@ -177,16 +177,16 @@ Night 1 (2026-10-21/22), in commit order. Money and data code first, alone; then
 **Round 1 (lead):**
 1. ✅ Main merged, ESLint 9, dead code, `constants/plus.ts`.
 2. ✅ Pin today's writes with tests (checkout, order read, status, products, reviews).
-3. Data layer `src/qdn/`: identifiers, pure payload builders (pinned by the same expectations), a paged/deduped/cached search helper (Q-Share+'s `qdnSearch.ts`), one shared coin-rate cache, Q-Share+'s `hubErrors`/`qortalLinks`.
-4. Money layer `src/money/`: pricing per coin (today's float behaviour kept, pinned), the order payload, a checkout service; **fix bug 1** (a paid order is kept locally and finished without paying again; Hub's 30-minute budget; QDN checked before a retry), bugs 3, 4, 5, 7, 8.
-5. Efficiency: no `limit: 0`; `identifier`+`prefix`+`name` instead of `query=`; parallel catalogue and order fetches (5 at a time); one rate fetch per coin per few minutes; **fix bug 2** (never publish a data container at boot).
-6. Shell: the phone shell parts from Q-Share+ (bottom nav, sheets, full-screen dialogs, hooks, frame height), header, routes code-split.
+3. ✅ Data layer `src/qdn/`: identifiers, pure payload builders (pinned by the same expectations), a paged/deduped/cached search helper (Q-Share+'s `qdnSearch.ts`), one shared coin-rate cache, Q-Share+'s `hubErrors`/`qortalLinks`.
+4. ✅ Money layer `src/money/`: pricing per coin (today's float behaviour kept, pinned), the order payload, a checkout service; **fix bug 1** (a paid order is kept locally and finished without paying again; Hub's 30-minute budget; QDN checked before a retry), bugs 3, 4, 5, 7, 8.
+5. ✅ Efficiency: no `limit: 0`; `identifier`+`prefix`+`name` instead of `query=`; parallel catalogue and order fetches (5 at a time); one rate fetch per coin per few minutes; **fix bug 2** (never publish a data container at boot).
+6. ✅ Shell: the phone shell parts from Q-Share+ (bottom nav, sheets, full-screen dialogs, hooks, frame height), header, routes code-split.
 
-**Round 2 (agents in worktrees, disjoint files, integrated one at a time):** discovery (home: search, sort, filters, shop cards); shop and product pages (filters, sort, gallery, share links, reviews); cart and checkout UI (persistent cart, coins, keyboard-safe, full-screen); orders (buyer orders, seller dashboard, status counts); seller tools (product manager, shop create/edit, coins and assets, batched publish); theme colours in each area; screenshot config.
+**Round 2 ✅ (agents in worktrees, disjoint files, integrated one at a time):** discovery (home: search, sort, filters, shop cards); shop and product pages (filters, sort, gallery, share links, reviews); cart and checkout UI (persistent cart, coins, keyboard-safe, full-screen); orders (buyer orders, seller dashboard, status counts); seller tools (product manager, shop create/edit, coins and assets, batched publish); theme colours in each area; screenshot config.
 
-**Round 3:** axe and contrast in four themes, Settings sync, changelog, README, a review workflow over the whole diff with adversarial verification.
+**Round 3 ✅:** axe and contrast in four themes, Settings sync, changelog, README, a review workflow over the whole diff with adversarial verification.
 
-**Round 4 (if time allows):** read-only Hub check on the test Hub (port 9223, dev server 5174).
+**Round 4 (not possible: the test Hub was locked; real data checked read-only instead):** read-only Hub check on the test Hub (port 9223, dev server 5174).
 
 Deferred, with reasons: qapp-core (not needed for this app's data), react-router 7, i18n (upstream has none), per-product QDN resources or thumbnails (would change the data model; images stay inside catalogues).
 
@@ -201,7 +201,19 @@ Deferred, with reasons: qapp-core (not needed for this app's data), react-router
 
 ### Night 1 (2026-10-21/22), branch `q-shop-plus/1.0.0`, PR #32
 
-_In progress._
+Every commit builds, lints and passes its tests, with one exception: the three round-3 merge commits after the shop-pages fixes carry one failing assertion (a test that documented the old `shopCoins` crash, which the money-cart fixes removed), fixed in the next commit (`544bd743`). 559 tests at the end (24 at the start of the night). `release/Q-Shop+.zip` 1.2 MB.
+
+| | Start of night 1 | End of night 1 |
+|---|---|---|
+| Tests | 24 | 559 (pins of every money and data write, a mock node, first-load counts) |
+| Lint | no script (ESLint 9: 278 problems) | 0 problems, no disable headers left |
+| Biggest JS chunk | 1,030 kB (gzip 319 kB), one chunk | 341 kB (gzip 108 kB); every screen code-split |
+| Home, first load (mock node, buyer) | 3 searches + 20 shop JSONs (logos inside) + a names fetch | 2 searches + the shop JSONs of the cards on screen (6) |
+| Home, shop owner | 3 searches + 22 shop JSONs (own shop twice) + 1 product index | 2 searches + 7 shop JSONs + 1 product index |
+| A shop page | 5 searches, 2 of them unlimited (`limit 0`, no limit) + shop + index + catalogues | 2 searches, 0 unlimited + shop + index + one fetch per catalogue on screen |
+| My orders (25 orders) | 1 search + every order opened one after another, the first broken one stopping the rest; statuses only when an order was opened (1 search + 4 calls each) | 3 searches (own shops, orders, statuses) + 20 orders opened 5 at a time + the 3 statuses that exist |
+| Unlimited searches in the code | 3 (plus 1 search without a limit) | 0 |
+| Start-up publishes | an empty product index whenever the shop's couldn't be read | none |
 
 - `main` merged (the branch now carries #8's commits plus the current kit); ESLint 9 with the Q-Share+ config: 278 → 0 problems, with the hooks findings of 22 upstream files listed in a per-file header that each rewrite removes; 19 dead files removed; `constants/plus.ts`.
 - Money and data writes pinned before any change: 10 tests over the untouched upstream components (34 tests in all).
@@ -242,8 +254,46 @@ Six agents built disjoint areas in their own worktrees on local branches `q-shop
 - Catalogues on the shop and product pages are read with a direct, cached `/arbitrary/DOCUMENT/…` fetch instead of Hub's `FETCH_QDN_RESOURCE` (same JSON), keyed by the publisher's name.
 - `resourceExists` now asks Core for the identifier as a prefix and compares exactly, because Core matches a non-prefix identifier anywhere in the id (`HSQLDBCacheUtils.filterTerm`).
 
+#### Round 3: quality
+
+- **Review of the whole diff** (a workflow: one reviewer per dimension — money safety, data compatibility, efficiency, phone/UX and accessibility, security — each followed by an independent verifier told to refute every finding): 43 findings, **41 confirmed**, 2 refuted. Four agents fixed them in worktrees (`q-shop-plus/fix-*`, one commit and one test per finding, the pins unchanged), merged one at a time; the lead fixed the cross-area remainder. The ones that mattered most:
+  - *Money/security:* a buyer could transfer a worthless asset named "QORT" and the seller's screens showed "100 QORT" with no warning — asset names now come from the shop's accepted assets or Core's `/assets/info`, and a coin the shop doesn't take is flagged; "Check again" could attach a payment that belonged to another order — only payments signed after the checkout started, never one another order uses, and the buyer picks when several fit; one pending order could be recorded twice at once — one recording per order; a partly recorded order never sent the seller's mail — Finish sends only the missing part; carts of two owners with the same shop id merged (and paid the wrong owner) — carts are per owner and shop; a second tab wrote paid items back into the cart — carts follow other tabs; a missing rate silently switched the buyer to QORT — the coin stays, converted prices say there's no rate.
+  - *Crashes:* one shop JSON with mistyped coin fields, or one catalogue product with a non-string title, crashed the home page for every visitor — shop JSON is normalised where it is read, `shopCoins`/`coinLabel` are defensive, and cards and the strip have their own error boundaries.
+  - *Data:* the shop and product pages trusted a catalogue another name published under the same id (pitfall 15) — they check the publisher; publishing products rebuilt the product index from the copy loaded with the page, dropping products added from another device — it is read fresh first; in a batched publish the index could land with a missing catalogue — it is its own final batch; the seller's lists counted orders of another owner's shop with the same short id — shown apart as "Orders not counted"; an unreadable status pre-selected "Received" and let one tap overwrite a real "Shipped".
+  - *UX:* "Verified buyer" is "Ordered here" (anyone can publish an order id for a fee); Hub's Back and `qortal://` links into an open tab now navigate (`useIframe`); a `Q-Shop%2B` link opens the app (`routerBase`); My orders re-reads after a checkout; dialogs can't be walked away from while publishing; the seller page follows shop switches.
+- **Accessibility:** axe in `scripts/screens.mjs` (axe-core as a dev dependency). Fixed from its findings: shop cards are now a stretched title link (their name was only the title while they showed more), "Add to cart: <title>", product status chips readable in the light themes, focusable scroll regions in dialogs, a `<main>` landmark (shell). Results in the screenshot matrix below.
+- **Settings sync** (Save to QDN / Restore, DOCUMENT `qshopplus_settings`), the changelog dialog and the README's + section are done.
+
+#### Screenshot matrix (round 3, final code)
+
+SCREENS_PLACEHOLDER
+
+#### Round 4: the Hub check — not possible tonight; real data checked instead
+
+A test Hub was started next to Simon's normal Hub (`--remote-debugging-port=9223`): it opened on the **WALLET PASSWORD** lock screen for "Tester Hub". Agents never type passwords, so it was closed again (only its own processes) and the in-Hub check is left for a session with Simon (Follow-ups).
+
+Instead, `e2e/screens.realnode.config.mjs` ran the app against **real data from the local node, read-only**: every Core GET answered by the node, Hub's reads emulated over the same GETs, every write, payment and decrypt refused. Screens: home, search ("gold"), Top rated, the largest shop (2r0y's Qortal Goldback Store, 45 products in 6 catalogues), a shop whose owner has a space and whose short id (`store`) other shops share, a real product, its reviews, the cart and Settings, at 1280, 700, 390×844, 360×740 and 844×390 (45 captures): **0 sideways overflow, 0 unlabelled buttons**, the only console errors 404s for reviewers without an avatar; a shop page made 1 search + 7 fetches, a product page 0 searches + 2 fetches, home 2 searches + the logos on screen. Checked by eye: real logos and product pictures, prices, a long plain-text description with line breaks, the gallery.
+
 ## Follow-ups
 
-**Questions for Simon**
+**Questions for Simon** (each is a one-line change either way)
 
-1. Q-Shop Classic uses Raleway as its base font (most original components forced Raleway; un-styled text used Cambon Light). Check the Classic theme in Hub looks right to you.
+1. **Q-Shop Classic** keeps the original's look: Raleway, 23 px body text, upper-case buttons, with its blue as the primary colour (the original used white and navy, its surfaces, as "primary", which hid every primary control). Smaller body text on phones?
+2. **Shop edits** now trim payout addresses and text fields and save `supportedCoins` in a fixed order (QORT, ARRR, BTC, LTC, DOGE, DGB, RVN); the original saved them as typed. OK?
+3. **Review badge:** "Ordered here" (anyone can publish an order id for one fee, so "Verified buyer" overclaimed). Keep, drop, or show it only when the seller has posted a status for that order?
+4. **Home ratings** load only with the Top rated sort (one more search of up to 100 review ids). Show stars on every visit? Top rated uses the plain average with the count breaking ties: weight it by count?
+5. **Blocked names on the home page:** searches use the node's `excludeblocked`, so names your node blocks are hidden (the original showed them). OK?
+6. **Preferred coin** is one choice for the whole app: picking ARRR in one shop's cart switches every shop that takes ARRR. Keep, or one per shop?
+7. **Unconfirmed payments:** "Check again" accepts payments signed up to 30 minutes after the checkout started, never one used by an order recorded on this device. Is 30 minutes right, and is a per-device memory enough?
+8. **A paid order that keeps failing to record** can't be dismissed (only unconfirmed ones can). Add a "hide" with a strong warning?
+9. **Seller payment checks** warn when a QORT payment's sender isn't the address that owns the buyer's name now (a false alarm after a name sale), and when a foreign-coin order paid an address that isn't the shop's current one. Keep both?
+10. **Seller's Orders tab** opens on All with orders to handle first. Open on "To handle"? Orders of another owner's same-id shop are listed apart as "Orders not counted" and can't be opened: allow read-only?
+11. **Publishing products** reads the product index fresh first; if the node answers but can't serve it, nothing is published ("try again in a minute") — also on a GO public node that may lag. When the node has products the page didn't show, the page updates and the seller presses Publish again. OK?
+12. **Q-Assets:** `TRANSFER_ASSET` is in your Hub fork (qortal-requests.ts); check the official Hub has it, or asset payments fail (with a Hub error, before anything is paid). Also check that "Use my wallet address" returns an address for BTC, LTC, DOGE, DGB and RVN as it does for ARRR.
+13. **Order lists** re-read when shown again after 2 minutes. Interval OK?
+
+**Round 4 still needs a signed-in test Hub** (docs/HUB-TESTING.md; quit the normal Hub first or the test Hub can stall, and unlock it): every main screen with Tester GO's real orders (decrypting), Hub's light/dark switch, the pitfalls in docs/QORTAL.md (frame height in landscape, sticky header, toasts over the bottom bar, deep links with `+` from a chat message, Back), call counts with `hub-cdp.mjs requests`/`calls` against the original Q-Shop in a second tab, the publish and payment dialogs reached and **declined** (never confirmed), and the "Copy link" fallback on a LAN node.
+
+**Needs a phone (GO):** the delivery form above the on-screen keyboard, gallery swipe, pull to refresh, safe areas, the 844×390 landscape layout with touch, GO's own Hub dialogs for payment and publish.
+
+**Next pass ideas:** drafts that survive a reload (images are data URLs, so IndexedDB rather than localStorage); Hub's `SESSION_PERMISSIONS` for batched product publishing; reading orders only when they scroll into view (they are 90 kB each with pictures); a cross-shop product index (catalogues have no QDN metadata to search today).
