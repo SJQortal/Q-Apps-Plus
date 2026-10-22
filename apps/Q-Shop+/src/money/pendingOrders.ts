@@ -47,9 +47,17 @@ export interface PendingOrder {
   details: OrderDetails;
   /** Filled once Hub confirms the payment. */
   payment: PaymentRecord | null;
+  /**
+   * The parts Hub reported published when it published only some of them
+   * (it names the ones that failed): Finish sends only the rest.
+   */
+  published?: OrderPart[];
   /** The last thing that went wrong, in plain words. */
   lastError?: string;
 }
+
+/** The two resources an order is recorded as: the order itself and the seller's Q-Mail. */
+export type OrderPart = "order" | "mail";
 
 type Store = Record<string, PendingOrder[]>;
 

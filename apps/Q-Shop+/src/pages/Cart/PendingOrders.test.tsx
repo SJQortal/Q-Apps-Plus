@@ -27,12 +27,14 @@ import {
   poster,
 } from "../../test/fixtures/shop";
 import { buildOrderDetails } from "../../money/order";
+import { orderMailIdentifier } from "../../qdn/identifiers";
 import { listPendingOrders, resetPendingOrders, savePendingOrder, type PendingOrder } from "../../money/pendingOrders";
 import { CartPage } from "./CartPage";
 import { PendingOrderCard } from "./PendingOrders";
 
 const NOW = 1761000000000;
 const ORDER_ID = `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`;
+const MAIL_ID = orderMailIdentifier(SELLER, SELLER_ADDRESS, "MAILx1");
 
 function pendingOrder(over: Partial<PendingOrder> = {}): PendingOrder {
   const lines = over.isDigital === false
@@ -92,7 +94,12 @@ beforeEach(() => {
     vi.fn(async (url: string) => {
       const u = String(url);
       if (u.startsWith("/arbitrary/resources/search")) {
-        const rows = orderOnQdn ? [{ name: BUYER, service: "DOCUMENT_PRIVATE", identifier: ORDER_ID }] : [];
+        const rows = orderOnQdn
+          ? [
+              { name: BUYER, service: "DOCUMENT_PRIVATE", identifier: ORDER_ID },
+              { name: BUYER, service: "MAIL_PRIVATE", identifier: MAIL_ID },
+            ]
+          : [];
         return { ok: true, status: 200, json: async () => rows, text: async () => JSON.stringify(rows) };
       }
       if (u.startsWith("/transactions/search")) {
@@ -142,6 +149,24 @@ describe("orders to finish", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Finish order" }));
     expect(await screen.findByText(`Order recorded for ${STORE_TITLE}.`)).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+    expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
+  it("sends only the seller's Q-Mail when the order itself was recorded", async () => {
+    savePendingOrder(
+      pendingOrder({
+        published: ["order"],
+        lastError: "Your order was recorded, but the seller's Q-Mail about it wasn't sent. Finish the order to send it; you won't pay again.",
+      })
+    );
+    render();
+    expect(await screen.findByText(/the seller's Q-Mail about it wasn't sent/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Finish order" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const call = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
+    expect(call.resources.map((r: any) => [r.service, r.identifier])).toEqual([["MAIL_PRIVATE", MAIL_ID]]);
+    expect(decodeData64(call.resources[0].data64).recipient).toBe(SELLER);
+    expect(await screen.findByText(`Order recorded for ${STORE_TITLE}.`)).toBeInTheDocument();
     expect(listPendingOrders(BUYER)).toEqual([]);
   });
 

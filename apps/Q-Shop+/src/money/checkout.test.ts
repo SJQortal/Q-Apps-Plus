@@ -35,8 +35,11 @@ import {
 import { getPendingOrder, isRecordingOrder, listPendingOrders, pendingDelivery, resetPendingOrders } from "./pendingOrders";
 import { digitalDelivery } from "./order";
 import { PENDING_ORDERS_STORAGE_KEY } from "../constants/plus";
+import { orderMailIdentifier } from "../qdn/identifiers";
 
 const NOW = 1761000000000;
+const ORDER_ID = `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`;
+const MAIL_ID = orderMailIdentifier(SELLER, SELLER_ADDRESS, "MAILx1");
 const shop = {
   id: STORE_ID,
   title: STORE_TITLE,
@@ -206,13 +209,80 @@ describe("startCheckout", () => {
       vi.fn(async () => ({
         ok: true,
         status: 200,
-        json: async () => [{ name: BUYER, identifier: `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`, service: "DOCUMENT_PRIVATE" }],
+        json: async () => [
+          { name: BUYER, identifier: ORDER_ID, service: "DOCUMENT_PRIVATE" },
+          { name: BUYER, identifier: MAIL_ID, service: "MAIL_PRIVATE" },
+        ],
       }))
     );
     q.reset();
     expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
     expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
+  it("sends the seller's Q-Mail on Finish when Hub published the order but not the mail", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw { error: { unsuccessfulPublishes: [{ identifier: MAIL_ID, reason: "upload failed" }] }, message: "Failed to publish" };
+      },
+    });
+    const first = await startCheckout(args());
+    expect(first).toEqual({
+      kind: "not-recorded",
+      orderUid: "ORDERxxxx1",
+      message: "Your order was recorded, but the seller's Q-Mail about it wasn't sent (upload failed). Finish the order to send it; you won't pay again.",
+    });
+    const firstPublish = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
+    const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    expect(pending.published).toEqual(["order"]);
+
+    // Finish: QDN may not list the order yet, but Hub said it landed; only the mail goes, exactly as before.
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => [{ signature: "x" }]);
+    q.reset();
+    expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    const mailOnly = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    expect(mailOnly).toHaveLength(1);
+    expect(mailOnly[0]).toEqual({ ...firstPublish, resources: [firstPublish.resources[1]] });
+    expect(mailOnly[0].resources[0]).toMatchObject({ service: "MAIL_PRIVATE", identifier: MAIL_ID, name: BUYER });
+    expect(mailOnly[0].encrypt).toBe(true);
+    expect(mailOnly[0].publicKeys).toEqual([SELLER_PK, BUYER_PK]);
+    expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
+  it("on Finish, publishes only the part QDN doesn't have yet", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw "The request timed out";
+      },
+    });
+    await startCheckout(args());
+    const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    // The timed-out publish landed the order; the mail never arrived.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        status: 200,
+        json: async () =>
+          String(url).includes("DOCUMENT_PRIVATE") ? [{ name: BUYER, identifier: ORDER_ID, service: "DOCUMENT_PRIVATE" }] : [],
+      }))
+    );
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => [{ signature: "x" }]);
+    q.reset();
+    expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    expect(pub).toHaveLength(1);
+    expect(pub[0].resources.map((r: any) => r.identifier)).toEqual([MAIL_ID]);
+  });
+
+  it("treats a failure Hub answers instead of throwing as a failure", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => ({ message: "Publish cancelled", error: { cancelled: true, unsuccessfulPublishes: [] } }),
+    });
+    const result = await startCheckout(args());
+    expect(result.kind).toBe("not-recorded");
+    expect(getPendingOrder(BUYER, "ORDERxxxx1")?.state).toBe("paid");
   });
 
   it("marks a payment Hub didn't answer as unconfirmed and finds it among the buyer's payments", async () => {

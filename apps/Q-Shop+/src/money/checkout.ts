@@ -22,7 +22,7 @@
  * TRANSFER_ASSET.
  */
 import { isHubDecline, isHubTimeout, errorMessage } from "../qdn/hubErrors";
-import { orderIdentifier, shortStoreIdOf } from "../qdn/identifiers";
+import { orderIdentifier, orderMailIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { resourceExists, invalidateQdnSearches } from "../qdn/search";
 import { assetIdOf, coinLabel, isForeignTicker, payoutAddress, type ShopCoinSettings } from "./coins";
 import {
@@ -45,6 +45,7 @@ import {
   runningRecording,
   savePendingOrder,
   trackRecording,
+  type OrderPart,
   type PendingOrder,
 } from "./pendingOrders";
 
@@ -199,6 +200,31 @@ export async function isOrderRecorded(pending: PendingOrder): Promise<boolean> {
   );
 }
 
+/** Is the seller's Q-Mail about this pending order already on QDN? */
+export async function isOrderMailSent(pending: PendingOrder): Promise<boolean> {
+  return resourceExists(
+    "MAIL_PRIVATE",
+    pending.buyer.name,
+    orderMailIdentifier(pending.store.owner, pending.seller.address, pending.mailUid),
+    { fresh: true }
+  );
+}
+
+/** The two resources of an order's publish, in the order they are sent. */
+const ORDER_PARTS: OrderPart[] = ["order", "mail"];
+
+/**
+ * What Hub says didn't publish: `{error: {unsuccessfulPublishes: [{identifier,
+ * reason}]}}`, as a rejection (or, defensively, as an answer).
+ */
+function unsuccessfulPublishes(value: unknown): { identifier: string; reason: string }[] {
+  const list = (value as { error?: { unsuccessfulPublishes?: unknown } } | null)?.error?.unsuccessfulPublishes;
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((item) => typeof item?.identifier === "string")
+    .map((item) => ({ identifier: item.identifier as string, reason: typeof item?.reason === "string" ? item.reason : "" }));
+}
+
 /**
  * The order is on QDN: it leaves the pending list, and its payment is
  * remembered as used, so "Check again" never gives it to another order.
@@ -209,8 +235,12 @@ function orderRecorded(pending: PendingOrder): void {
 }
 
 /**
- * Publishes a paid order. Checks QDN first unless `skipCheck` (a first
- * attempt right after paying). Removes the pending order once it's there.
+ * Publishes a paid order: the order and the seller's Q-Mail. Checks QDN
+ * first unless `skipCheck` (a first attempt right after paying), and sends
+ * only the part that isn't there yet: when Hub published one of the two and
+ * not the other, Finish sends the missing one (the same identifier and JSON
+ * as before), so the seller always gets the mail as well as the order.
+ * Removes the pending order once both are there.
  *
  * One recording per order at a time: while one runs (until Hub answers, up
  * to its 30 minutes), another call for the same order gets the running one's
@@ -231,27 +261,48 @@ async function recordOrderNow(
   delivery: DeliveryInput,
   options: { skipCheck?: boolean; onStep?: (step: CheckoutStep) => void }
 ): Promise<CheckoutResult> {
+  const done = (): CheckoutResult => {
+    orderRecorded(pending);
+    return { kind: "done", orderUid: pending.orderUid };
+  };
+  // What Hub already reported published (a partial publish) needn't go again.
+  let parts = ORDER_PARTS.filter((part) => !pending.published?.includes(part));
+  let sent: { part: OrderPart; identifier: string }[] = [];
   try {
+    if (parts.length === 0) return done();
     if (!options.skipCheck) {
       options.onStep?.("checking");
-      if (await isOrderRecorded(pending).catch(() => false)) {
-        orderRecorded(pending);
-        return { kind: "done", orderUid: pending.orderUid };
-      }
+      const onQdn = await Promise.all(
+        parts.map((part) => (part === "order" ? isOrderRecorded(pending) : isOrderMailSent(pending)).catch(() => false))
+      );
+      parts = parts.filter((_, i) => !onQdn[i]);
+      if (parts.length === 0) return done();
     }
     options.onStep?.("recording");
     const request = publishOrderRequest(pending, delivery);
-    await qortalRequestWithTimeout(request, PUBLISH_TIMEOUT_MS);
-    orderRecorded(pending);
-    invalidateQdnSearches((url) => url.includes("DOCUMENT_PRIVATE"));
-    return { kind: "done", orderUid: pending.orderUid };
+    const resources = request.resources.filter((_, i) => parts.includes(ORDER_PARTS[i]));
+    sent = resources.map((resource) => ({ part: ORDER_PARTS[request.resources.indexOf(resource)], identifier: resource.identifier }));
+    const answer = await qortalRequestWithTimeout({ ...request, resources }, PUBLISH_TIMEOUT_MS);
+    // A failure Hub answers instead of rejecting is still a failure.
+    if (answer && typeof answer === "object" && !Array.isArray(answer) && (answer as { error?: unknown }).error) throw answer;
+    invalidateQdnSearches((url) => url.includes("DOCUMENT_PRIVATE") || url.includes("MAIL_PRIVATE"));
+    return done();
   } catch (error) {
-    const message = isHubDecline(error)
-      ? "You declined recording the order. Your payment went through: finish the order to send it to the seller."
-      : isHubTimeout(error)
-        ? "Hub didn't confirm the order in time. It may still arrive; check again before publishing it again."
-        : `The order couldn't be recorded: ${errorMessage(error, "unknown error")}. Your payment went through; try again.`;
-    savePendingOrder({ ...pending, lastError: message }, delivery);
+    // Hub names what it couldn't publish; the rest of what was sent is on QDN
+    // (unless the buyer cancelled: Hub then removes what it had published).
+    const failed = isHubDecline(error) ? [] : unsuccessfulPublishes(error);
+    const landed = failed.length > 0 ? sent.filter((s) => !failed.some((f) => f.identifier === s.identifier)).map((s) => s.part) : [];
+    const published = [...new Set([...(pending.published ?? []), ...landed])];
+    const mailReason = failed.find((f) => sent.some((s) => s.part === "mail" && s.identifier === f.identifier))?.reason;
+    const message =
+      published.includes("order") && !published.includes("mail")
+        ? `Your order was recorded, but the seller's Q-Mail about it wasn't sent${mailReason ? ` (${mailReason})` : ""}. Finish the order to send it; you won't pay again.`
+        : isHubDecline(error)
+          ? "You declined recording the order. Your payment went through: finish the order to send it to the seller."
+          : isHubTimeout(error)
+            ? "Hub didn't confirm the order in time. It may still arrive; check again before publishing it again."
+            : `The order couldn't be recorded: ${errorMessage(error, "unknown error")}. Your payment went through; try again.`;
+    savePendingOrder({ ...pending, ...(published.length > 0 ? { published } : {}), lastError: message }, delivery);
     return { kind: "not-recorded", orderUid: pending.orderUid, message };
   }
 }
