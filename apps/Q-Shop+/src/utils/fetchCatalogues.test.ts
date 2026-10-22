@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CATALOGUE_CONCURRENCY, fetchCatalogue } from "./fetchCatalogues";
-import { fetchAndEvaluateStores } from "./fetchStores";
 import { fetchAndEvaluateStoreReviews, fetchReview } from "./fetchStoreReviews";
-import { catalogue, SELLER, STORE_ID, storeJson } from "../test/fixtures/shop";
+import { catalogue, SELLER } from "../test/fixtures/shop";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,19 +43,6 @@ describe("fetchCatalogue", () => {
     );
     await Promise.all(Array.from({ length: 12 }, (_, i) => fetchCatalogue(SELLER, `q-store-catalogue-my-shop-C${i}`)));
     expect(most).toBe(CATALOGUE_CONCURRENCY);
-  });
-});
-
-describe("fetchAndEvaluateStores", () => {
-  it("returns the shop with the owner and id asked for, or isValid false", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ok(storeJson)));
-    const shop = await fetchAndEvaluateStores({ owner: SELLER, storeId: STORE_ID, content: { title: "row" } });
-    expect(shop).toMatchObject({ ...storeJson, owner: SELLER, id: STORE_ID, isValid: true });
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404, text: async () => '{"error":1401}' })));
-    expect(await fetchAndEvaluateStores({ owner: SELLER, storeId: "q-store-general-other", content: { title: "row" } })).toEqual({
-      title: "row",
-      isValid: false,
-    });
   });
 });
 

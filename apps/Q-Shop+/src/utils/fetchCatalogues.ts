@@ -50,7 +50,7 @@ export async function fetchCatalogue(owner: string, catalogueId: string, options
 }
 
 /**
- * The original's helper, still used by the orders screens (useFetchOrders):
+ * The original's helper:
  * FETCH_QDN_RESOURCE through Hub, `{ isValid: false }` when there is nothing.
  */
 export const fetchAndEvaluateCatalogues = async (data: any) => {

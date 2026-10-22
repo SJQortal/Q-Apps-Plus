@@ -14,6 +14,25 @@ import { setNotification } from "../state/features/notificationsSlice";
 import { isForeignTicker, shopCoins, type CoinId, type ShopCoinSettings } from "./coins";
 import { cachedRate, getRate } from "./rates";
 
+/**
+ * Every price on screen uses this hook, so a failed rate would raise the same
+ * message once per price: say it once per coin per minute.
+ */
+const lastRateNotice = new Map<string, number>();
+const RATE_NOTICE_GAP_MS = 60_000;
+
+function shouldNotify(coin: string): boolean {
+  const last = lastRateNotice.get(coin) ?? 0;
+  if (Date.now() - last < RATE_NOTICE_GAP_MS) return false;
+  lastRateNotice.set(coin, Date.now());
+  return true;
+}
+
+/** For tests. */
+export function resetRateNotices(): void {
+  lastRateNotice.clear();
+}
+
 export interface ShopCoin {
   /** Coins this shop takes, QORT first. */
   coins: CoinId[];
@@ -47,7 +66,9 @@ export function useShopCoin(shop: ShopCoinSettings | null | undefined): ShopCoin
       () => {
         if (!alive) return;
         dispatch(setPreferredCoin("QORT"));
-        dispatch(setNotification({ alertType: "error", msg: `Cannot get the ${coin} exchange rate from your node; showing QORT` }));
+        if (shouldNotify(coin)) {
+          dispatch(setNotification({ alertType: "error", msg: `Cannot get the ${coin} exchange rate from your node; showing QORT` }));
+        }
       }
     );
     return () => {

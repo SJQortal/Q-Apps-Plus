@@ -4,6 +4,7 @@ import { cleanup } from '@testing-library/react';
 import { installQortalMock } from './qortalMock';
 import { resetQdnCaches } from '../qdn/search';
 import { resetRates } from '../money/rates';
+import { resetRateNotices } from '../money/useShopCoin';
 import { resetPendingOrders } from '../money/pendingOrders';
 import { resetOrderReadCaches } from '../orders/reads';
 
@@ -91,6 +92,7 @@ beforeEach(() => {
   localStorageMock.clear();
   resetQdnCaches();
   resetRates();
+  resetRateNotices();
   resetPendingOrders();
   resetOrderReadCaches();
 });
