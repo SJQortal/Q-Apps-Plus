@@ -162,10 +162,9 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
       >
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
           <Typography variant="body2" color="text.secondary">
-            Price your products in a currency, at exchange rates you choose. The app works out each product&apos;s QORT
-            {takesArrr ? " and ARRR" : ""} price, and when you change a rate, every product priced this way follows. Buyers
-            still pay those QORT{takesArrr ? " and ARRR" : ""} prices. Nothing is fetched from outside Qortal: the rates
-            are yours.
+            Price your products in a currency at exchange rates you choose: each product&apos;s QORT
+            {takesArrr ? " and ARRR" : ""} price is worked out from them, and follows when you change a rate. Buyers pay
+            those prices. The rates are yours: nothing is fetched from outside Qortal.
           </Typography>
 
           <Box component="section" aria-labelledby="pricing-rates-heading" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -218,11 +217,11 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
           </Box>
 
           <Box component="section" aria-labelledby="pricing-products-heading" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            <Typography id="pricing-products-heading" component="h3" sx={{ fontWeight: 700 }}>
+              Products
+            </Typography>
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
-              <Typography id="pricing-products-heading" component="h3" sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}>
-                Products
-              </Typography>
-              <Typography variant="body2" color="text.secondary" role="status">
+              <Typography variant="body2" color="text.secondary" role="status" sx={{ flex: "1 1 auto" }}>
                 {`${priced} of ${rows.length} priced in ${currency}`}
               </Typography>
               <Button variant="outlined" onClick={fillFromQort} disabled={!rates || busy || loading} sx={{ minHeight: 44 }}>
