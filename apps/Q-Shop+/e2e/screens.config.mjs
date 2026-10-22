@@ -1,0 +1,304 @@
+/**
+ * Q-Shop+ for the shared screenshot check (scripts/screens.mjs):
+ *
+ *   scripts/screens.mjs Q-Shop+ [--only home,shop] [--themes hub30] [--mode light]
+ *
+ * One small marketplace, served from mocks (nothing reaches a node, every
+ * write is declined): 14 shops (owners with a space, a "+" and non-ASCII
+ * letters; long titles), the signed-in name "Seller Name" owns "my-shop"
+ * (12 products in two catalogues, one out of stock, one physical) and has
+ * bought from two other shops; buyers' orders to "my-shop" with statuses;
+ * reviews; a cart with items from two shops; a paid order still to record.
+ */
+const ME = 'Seller Name';
+const ME_ADDRESS = 'QSeLLeRNameAddressxxxxxxxxxxxx9f3c2a';
+const now = Date.now();
+const DAY = 86_400_000;
+
+const OWNERS = [ME, 'Shop+Plus', 'Zoë Ålund', 'Seller 3', 'A very long publisher name that wraps', 'Seller 5', 'Seller 6', 'Seller 7', 'Seller 8', 'Seller 9', 'Seller 10', 'Seller 11', 'Seller 12', 'Seller 13'];
+const TITLES = [
+  "Seller's Shop",
+  'Plus Gadgets',
+  'Ålund Ceramics',
+  'Pirate Supplies',
+  'A shop with an unusually long title that has to wrap on small phones',
+  'Digital Art Corner',
+  'Books & Zines',
+  'Retro Games',
+  'Tea House',
+  'Bike Parts',
+  'Handmade Soap',
+  'Vinyl Records',
+  'Garden Seeds',
+  'Knitting Club',
+];
+const shops = OWNERS.map((owner, i) => {
+  const short = i === 0 ? 'my-shop' : `shop-${i}`;
+  return {
+    owner,
+    short,
+    id: `q-store-general-${short}`,
+    title: TITLES[i],
+    description: i === 4 ? 'A description long enough to need two lines on a phone and a fold on the card, with a few more words.' : `Everything ${TITLES[i]} sells, made with care.`,
+    created: now - i * DAY * 3,
+    updated: now - i * DAY * 2,
+    arrr: i % 3 === 0,
+    products: i < 6 ? 12 : 4,
+  };
+});
+
+// Images are generated in setup() (data URLs, as the shops publish them).
+let IMG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+let IMG2 = IMG;
+let PNG = Buffer.from(IMG.split(',')[1], 'base64');
+
+const productId = (s, p) => `q-store-product-${s.short}-P${String(p).padStart(9, '0')}`;
+const catalogueId = (s, c) => `q-store-catalogue-${s.short}-CAT${String(c).padStart(7, '0')}`;
+function product(s, p) {
+  return {
+    title: p === 0 ? 'Hand-thrown mug with a long product title that wraps over two lines' : ['Poster', 'Notebook', 'Scarf', 'Ebook', 'Sticker pack', 'Lamp'][p % 6] + ` ${p}`,
+    description: p === 0 ? 'A mug.\nGlazed by hand, so every one is different.\n\nHolds 350 ml.' : `Description of product ${p}.`,
+    created: s.created + p * 60_000,
+    version: 1,
+    images: p % 4 === 0 ? [IMG, IMG2, IMG] : [p % 2 ? IMG2 : IMG],
+    mainImageIndex: 0,
+    type: p % 3 === 0 ? 'physical' : 'digital',
+    price: s.arrr && p % 2 === 0 ? [{ currency: 'qort', value: 1.5 + p }, { currency: 'ARRR', value: 0.25 + p / 10 }] : [{ currency: 'qort', value: 1.5 + p }],
+    storeId: s.id,
+    shortStoreId: s.short,
+    category: ['Kitchen', 'Art', 'Paper'][p % 3],
+    id: productId(s, p),
+    status: p === 5 ? 'OUT_OF_STOCK' : 'AVAILABLE',
+    user: s.owner,
+  };
+}
+function catalogue(s, c) {
+  const products = {};
+  for (let p = c * 10; p < Math.min(s.products, c * 10 + 10); p++) products[productId(s, p)] = { ...product(s, p), catalogueId: catalogueId(s, c) };
+  return { id: catalogueId(s, c), products };
+}
+function dataContainer(s) {
+  const products = {};
+  const catalogues = [];
+  for (let p = 0; p < s.products; p++) {
+    const c = Math.floor(p / 10);
+    const pr = product(s, p);
+    products[pr.id] = { created: pr.created, priceQort: pr.price[0].value, category: pr.category, catalogueId: catalogueId(s, c), status: pr.status };
+    if (!catalogues[c]) catalogues[c] = { id: catalogueId(s, c), products: {} };
+    catalogues[c].products[pr.id] = true;
+  }
+  return { storeId: s.id, shortStoreId: s.short, owner: s.owner, products, catalogues, id: `${s.id}-datacontainer` };
+}
+const storeJson = (s) => ({
+  title: s.title,
+  description: s.description,
+  location: 'Lisbon',
+  shipsTo: 'Europe and the UK',
+  created: s.created,
+  shortStoreId: s.short,
+  logo: IMG,
+  foreignCoins: s.arrr ? { ARRR: 'zs1arrrpayoutaddressxxxxxxxxxxxxxxxxxxxxxxxx' } : { ARRR: '' },
+  supportedCoins: s.arrr ? ['QORT', 'ARRR'] : ['QORT'],
+});
+
+const reviews = [
+  { name: 'Ann Buyer', short: 'my-shop', uid: 'REVIEWAAA1', rating: 5, title: 'Lovely mug', description: 'Arrived well packed. Would buy again.' },
+  { name: 'bob+builder', short: 'my-shop', uid: 'REVIEWBBB2', rating: 3.5, title: 'Good, slow shipping', description: 'Nice product but it took three weeks.' },
+  { name: 'Zoë Ålund', short: 'my-shop', uid: 'REVIEWCCC3', rating: 4, title: 'Nice', description: 'As described.' },
+  { name: ME, short: 'shop-1', uid: 'REVIEWDDD4', rating: 4.5, title: 'Great gadgets', description: 'Quick delivery.' },
+];
+
+const orderJson = (shop, buyer, lines, extra = {}) => {
+  const details = { totalPrice: 0 };
+  let total = 0;
+  for (const [p, qty] of lines) {
+    const pr = { ...product(shop, p), catalogueId: catalogueId(shop, Math.floor(p / 10)) };
+    const unit = pr.price[0].value;
+    details[pr.id] = { product: pr, catalogueId: pr.catalogueId, quantity: qty, pricePerUnit: unit, totalProductPrice: unit * qty };
+    total += unit * qty;
+  }
+  details.totalPrice = total.toFixed(8);
+  return {
+    created: now - DAY,
+    version: 1,
+    details,
+    storeName: shop.title,
+    sellerName: shop.owner,
+    delivery: {
+      customerName: buyer,
+      shippingAddress: { streetAddress: '1 Long Street', city: 'Porto', region: 'Norte', country: 'Portugal', zipCode: '4000-001', deliveryNote: 'Ring twice' },
+    },
+    payment: { total: total.toFixed(8), currency: 'QORT', transactionSignature: 'SIGxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', arrrAddressUsed: '' },
+    communicationMethod: ['Q-Mail'],
+    ...extra,
+  };
+};
+// Orders: [identifier, buyer (publisher), json, created]
+const orders = [
+  [`q-store-order-shop-1-ORDERBUY01`, ME, orderJson(shops[1], ME, [[1, 2], [2, 1]]), now - DAY],
+  [`q-store-order-shop-2-ORDERBUY02`, ME, orderJson(shops[2], ME, [[0, 1]]), now - 4 * DAY],
+  [`q-store-order-my-shop-ORDERSEL01`, 'Ann Buyer', orderJson(shops[0], 'Ann Buyer', [[0, 1], [3, 2]]), now - 2 * 3600_000],
+  [`q-store-order-my-shop-ORDERSEL02`, 'bob+builder', orderJson(shops[0], 'bob+builder', [[4, 1]]), now - 2 * DAY],
+  [`q-store-order-my-shop-ORDERSEL03`, 'Zoë Ålund', orderJson(shops[0], 'Zoë Ålund', [[6, 3]]), now - 9 * DAY],
+];
+const statuses = [
+  [`q-store-status-order-shop-1-ORDERBUY01`, 'Shop+Plus', { status: 'Shipped', note: 'Tracking number 123 456' }],
+  [`q-store-status-order-my-shop-ORDERSEL02`, ME, { status: 'Shipped', note: '' }],
+  [`q-store-status-order-my-shop-ORDERSEL03`, ME, { status: 'Refunded', note: 'Out of stock, refunded' }],
+];
+
+function rows() {
+  const out = [];
+  for (const s of shops) {
+    out.push({ name: s.owner, service: 'STORE', identifier: s.id, created: s.created, updated: s.updated, size: 3000, metadata: { title: s.title, description: `**coins:QORTtrue,ARRR${s.arrr}**${s.description}` } });
+    out.push({ name: s.owner, service: 'DOCUMENT', identifier: `${s.id}-datacontainer`, created: s.created, updated: s.updated + 1000, size: 150 + 120 * s.products });
+    for (let c = 0; c * 10 < s.products; c++) out.push({ name: s.owner, service: 'DOCUMENT', identifier: catalogueId(s, c), created: s.created, updated: s.updated, size: 40000 });
+  }
+  reviews.forEach((r, i) => out.push({ name: r.name, service: 'DOCUMENT', identifier: `q-store-review-${r.short}-${r.uid}-${r.rating * 10}`, created: now - i * DAY, updated: now - i * DAY, size: 200, metadata: { title: r.title, description: r.description } }));
+  for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
+  statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
+  return out;
+}
+
+function search(sp) {
+  const service = sp.get('service');
+  const identifier = sp.get('identifier');
+  const query = (sp.get('query') || '').toLowerCase();
+  const names = sp.getAll('name');
+  const prefix = sp.get('prefix') === 'true';
+  const withMeta = sp.get('includemetadata') === 'true';
+  let list = rows().filter((r) => !service || r.service === service);
+  if (identifier) list = list.filter((r) => (prefix ? r.identifier.startsWith(identifier) : r.identifier === identifier));
+  if (query) list = list.filter((r) => [r.identifier, r.name, r.metadata?.title, r.metadata?.description].some((v) => String(v || '').toLowerCase().includes(query)));
+  if (names.length) list = list.filter((r) => names.includes(r.name));
+  list.sort((a, b) => a.created - b.created);
+  if (sp.get('reverse') === 'true') list.reverse();
+  const offset = Number(sp.get('offset') || 0);
+  const limit = Number(sp.get('limit') || 20) || 20;
+  return list.slice(offset, offset + limit).map((r) => (withMeta ? r : { ...r, metadata: undefined }));
+}
+
+const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64');
+const json = (route, data, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+
+export default {
+  name: 'Q-Shop+',
+  themeKey: 'qshopplus-ui-theme',
+  dismiss: ['I understand'],
+
+  async setup({ browser }) {
+    const gen = await browser.newPage({ viewport: { width: 160, height: 160 } });
+    await gen.setContent('<div style="width:160px;height:160px;background:linear-gradient(135deg,#f59e0b,#3b82f6)"></div>');
+    PNG = await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 } });
+    IMG = `data:image/png;base64,${PNG.toString('base64')}`;
+    await gen.setContent('<div style="width:160px;height:160px;background:linear-gradient(45deg,#10b981,#6366f1)"></div>');
+    IMG2 = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 } })).toString('base64')}`;
+    await gen.close();
+  },
+
+  // The welcome notice accepted (localforage db "q-blog-general", key general-consent), a
+  // cart with items from two shops, and a paid order still to record.
+  initScripts: () => [
+    `try {
+      ['q-blog-general'].forEach(function (dbName) {
+        var req = indexedDB.open(dbName, 2);
+        req.onupgradeneeded = function () {
+          var db = req.result;
+          if (!db.objectStoreNames.contains('keyvaluepairs')) db.createObjectStore('keyvaluepairs');
+          if (!db.objectStoreNames.contains('local-forage-detect-blob-support')) db.createObjectStore('local-forage-detect-blob-support');
+        };
+        req.onsuccess = function () {
+          var db = req.result;
+          try { db.transaction('keyvaluepairs', 'readwrite').objectStore('keyvaluepairs').put(true, 'general-consent'); } catch (e) {}
+          db.close();
+        };
+      });
+    } catch (e) {}`,
+    `try {
+      if (!sessionStorage.getItem('qsp-seeded')) {
+        sessionStorage.setItem('qsp-seeded', '1');
+        localStorage.setItem('qshopplus-cart', JSON.stringify(${JSON.stringify({
+          'q-store-general-shop-1': { orders: { [productId(shops[1], 1)]: { productId: productId(shops[1], 1), catalogueId: catalogueId(shops[1], 0), quantity: 2 }, [productId(shops[1], 3)]: { productId: productId(shops[1], 3), catalogueId: catalogueId(shops[1], 0), quantity: 1 } }, lastUpdated: now, storeId: 'q-store-general-shop-1', storeOwner: 'Shop+Plus' },
+          'q-store-general-shop-3': { orders: { [productId(shops[3], 2)]: { productId: productId(shops[3], 2), catalogueId: catalogueId(shops[3], 0), quantity: 1 } }, lastUpdated: now - 1000, storeId: 'q-store-general-shop-3', storeOwner: 'Seller 3' },
+        })}));
+      }
+    } catch (e) {}`,
+  ],
+
+  // Runs in the page: defines window.__qplusAnswer(request). Every write is declined.
+  qortal: () => `
+    const catalogues = ${JSON.stringify(Object.fromEntries(shops.flatMap((s) => Array.from({ length: Math.ceil(s.products / 10) }, (_, c) => [`${s.owner}|${catalogueId(s, c)}`, catalogue(s, c)]))))};
+    const encrypted = ${JSON.stringify(Object.fromEntries([...orders.map(([id, name, j]) => [`${name}|${id}`, b64(j)]), ...statuses.map(([id, name, j]) => [`${name}|${id}`, b64(j)])]))};
+    window.__qplusAnswer = async (p) => {
+      switch (p.action) {
+        case 'GET_USER_ACCOUNT': return { address: '${ME_ADDRESS}', publicKey: 'SellerPublicKey' };
+        case 'GET_ACCOUNT_NAMES': return [{ name: '${ME}', owner: '${ME_ADDRESS}' }];
+        case 'GET_PRIMARY_NAME': return '${ME}';
+        case 'GET_QDN_RESOURCE_URL': return '/arbitrary/' + p.service + '/' + encodeURIComponent(p.name) + '/' + p.identifier;
+        case 'FETCH_QDN_RESOURCE': {
+          const key = p.name + '|' + p.identifier;
+          if (catalogues[key]) return catalogues[key];
+          if (encrypted[key]) return 'ENC|' + key;
+          throw { error: 1401, message: 'Data unavailable' };
+        }
+        case 'DECRYPT_DATA': {
+          const key = String(p.encryptedData).replace(/^ENC\\|/, '');
+          if (encrypted[key]) return encrypted[key];
+          throw { error: 'Unable to decrypt' };
+        }
+        case 'GET_NAME_DATA': return { name: p.name, owner: 'Q' + String(p.name).replace(/[^A-Za-z0-9]/g, '') + 'Address' };
+        case 'GET_ACCOUNT_DATA': return { address: p.address, publicKey: String(p.address) + 'PublicKey' };
+        case 'GET_LIST_ITEMS': return ['spammer'];
+        case 'LIST_QDN_RESOURCES': return { resources: [] };
+        case 'GET_USER_WALLET': return { address: 'zs1mywalletaddressxxxxxxxxxxxxxxxxxxxxxxxxxxxx' };
+        case 'PUBLISH_QDN_RESOURCE': case 'PUBLISH_MULTIPLE_QDN_RESOURCES': case 'SEND_COIN': case 'TRANSFER_ASSET': case 'ADD_LIST_ITEMS': case 'DELETE_LIST_ITEM':
+          throw { error: 'User declined request' };
+        default: return null;
+      }
+    };
+  `,
+
+  async route(route, url) {
+    const p = decodeURIComponent(url.pathname);
+    const sp = url.searchParams;
+    if (p.endsWith('/arbitrary/resources/search')) return json(route, search(sp)).then(() => true);
+    if (p.startsWith('/crosschain/price/')) return route.fulfill({ status: 200, contentType: 'text/plain', body: '25000000' }).then(() => true);
+    if (p.startsWith('/transactions/')) return json(route, []).then(() => true);
+    if (p.startsWith('/assets')) return json(route, p.includes('/info') ? { assetId: 81, name: 'Gold Bar', owner: 'QOwner', quantity: 1000 } : [{ assetId: 81, name: 'Gold Bar', description: 'A test asset' }, { assetId: 82, name: 'Silver', description: '' }]).then(() => true);
+    const m = p.match(/^\/arbitrary\/([A-Z_]+)\/([^/]+)\/([^/]+)$/);
+    if (m) {
+      const [, service, name, id] = m;
+      if (service === 'THUMBNAIL') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
+      const shop = shops.find((s) => s.owner === name && (id === s.id || id === `${s.id}-datacontainer` || id.startsWith(`q-store-catalogue-${s.short}-`)));
+      if (service === 'STORE' && shop) return json(route, storeJson(shop)).then(() => true);
+      if (service === 'DOCUMENT' && shop && id.endsWith('-datacontainer')) return json(route, dataContainer(shop)).then(() => true);
+      if (service === 'DOCUMENT' && shop && id.startsWith('q-store-catalogue-')) {
+        const c = Number(id.slice(-7));
+        return json(route, catalogue(shop, c)).then(() => true);
+      }
+      const review = reviews.find((r) => r.name === name && id.startsWith(`q-store-review-${r.short}-${r.uid}`));
+      if (review) return json(route, { title: review.title, description: review.description, rating: review.rating, created: now }).then(() => true);
+      return json(route, { error: 1401, message: 'Data unavailable' }, 404).then(() => true);
+    }
+    return false;
+  },
+
+  // overlay: a sheet, dialog or menu is open, so capture the viewport, not the full page.
+  screens: [
+    { key: 'home', path: '/', after: async (page) => page.waitForSelector('a[href*="q-store-general-"]', { timeout: 8000 }).catch(() => {}) },
+    { key: 'home-search', path: '/?q=shop', after: async (page) => page.waitForTimeout(800) },
+    { key: 'home-filters', path: '/', mobileOnly: true, overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /filter|sort/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
+    { key: 'shop', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'shop-own', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'product', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'cart', path: '/cart', after: async (page) => page.waitForTimeout(900) },
+    { key: 'checkout', path: '/cart', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /check ?out/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+    { key: 'orders', path: '/my-orders', after: async (page) => page.waitForTimeout(900) },
+    { key: 'seller', path: `/product-manager/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'seller-orders', path: `/product-manager/q-store-general-my-shop`, optional: true, after: async (page) => { await page.waitForTimeout(600); await page.getByRole('tab', { name: /orders/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(700); } },
+    { key: 'seller-products', path: `/product-manager/q-store-general-my-shop`, optional: true, after: async (page) => { await page.waitForTimeout(600); await page.getByRole('tab', { name: /products/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(700); } },
+    { key: 'settings', path: '/settings' },
+    { key: 'account-menu', path: '/', overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /account/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
+    { key: 'not-found', path: `/${encodeURIComponent('Nobody')}/q-store-general-missing`, after: async (page) => page.waitForTimeout(900), expectErrors: /404|Failed to load resource/ },
+  ],
+};
