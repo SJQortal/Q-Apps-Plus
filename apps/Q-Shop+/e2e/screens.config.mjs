@@ -77,6 +77,18 @@ function catalogue(s, c) {
   for (let p = c * 10; p < Math.min(s.products, c * 10 + 10); p++) products[productId(s, p)] = { ...product(s, p), catalogueId: catalogueId(s, c) };
   return { id: catalogueId(s, c), products };
 }
+// Collections (qdn/collections.ts) for the signed-in name's shop and Shop+Plus's.
+function collectionsOf(s) {
+  if (s.short !== 'my-shop' && s.short !== 'shop-1') return null;
+  return {
+    storeId: s.id,
+    collections: [
+      { id: 'GIFTSxxxx1', title: 'Gifts for friends', description: 'Small things that travel well.\nWrapped on request.', image: IMG2, products: [productId(s, 1), productId(s, 2), productId(s, 4)], created: now - DAY, updated: now - DAY },
+      { id: 'KITCHENxx2', title: 'For the kitchen: a long collection title that wraps', description: '', image: IMG, products: [productId(s, 0), productId(s, 3), productId(s, 6), productId(s, 9)], created: now - 2 * DAY, updated: now - 2 * DAY },
+      { id: 'PAPERxxxx3', title: 'Paper', description: 'Notebooks, posters and cards.', products: [productId(s, 2), productId(s, 5), productId(s, 8)], created: now - 3 * DAY, updated: now - 3 * DAY },
+    ],
+  };
+}
 function dataContainer(s) {
   const products = {};
   const catalogues = [];
@@ -87,7 +99,15 @@ function dataContainer(s) {
     if (!catalogues[c]) catalogues[c] = { id: catalogueId(s, c), products: {} };
     catalogues[c].products[pr.id] = true;
   }
-  return { storeId: s.id, shortStoreId: s.short, owner: s.owner, products, catalogues, id: `${s.id}-datacontainer` };
+  return {
+    storeId: s.id,
+    shortStoreId: s.short,
+    owner: s.owner,
+    products,
+    catalogues,
+    id: `${s.id}-datacontainer`,
+    ...(collectionsOf(s) && { collectionsId: `q-store-collections-${s.short}` }),
+  };
 }
 const storeJson = (s) => ({
   title: s.title,
@@ -269,6 +289,11 @@ export default {
     if (m) {
       const [, service, name, id] = m;
       if (service === 'THUMBNAIL') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
+      if (service === 'DOCUMENT' && id.startsWith('q-store-collections-')) {
+        const owned = shops.find((s) => s.owner === name && id === `q-store-collections-${s.short}`);
+        const doc = owned && collectionsOf(owned);
+        if (doc) return json(route, doc).then(() => true);
+      }
       const shop = shops.find((s) => s.owner === name && (id === s.id || id === `${s.id}-datacontainer` || id.startsWith(`q-store-catalogue-${s.short}-`)));
       if (service === 'STORE' && shop) return json(route, storeJson(shop)).then(() => true);
       if (service === 'DOCUMENT' && shop && id.endsWith('-datacontainer')) return json(route, dataContainer(shop)).then(() => true);
@@ -300,6 +325,11 @@ export default {
     { key: 'seller-select', path: `/product-manager/q-store-general-my-shop?tab=products`, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Select', exact: true }).click({ timeout: 2500 }); await page.getByRole('checkbox').first().click({ timeout: 2500 }); await page.waitForTimeout(300); } },
     { key: 'seller-delete-products', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Select', exact: true }).click({ timeout: 2500 }); await page.getByRole('button', { name: 'Select all' }).click({ timeout: 2500 }); await page.getByRole('button', { name: 'Delete', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'seller-delete-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Delete shop' }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+    { key: 'shop-collection', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1?collection=GIFTSxxxx1`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'shop-grid', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Grid', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+    { key: 'shop-list', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'List', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+    { key: 'seller-collections', path: `/product-manager/q-store-general-my-shop?tab=collections`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'seller-collection-editor', path: `/product-manager/q-store-general-my-shop?tab=collections`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit Gifts for friends' }).click({ timeout: 2500 }); await page.waitForTimeout(700); } },
     { key: 'settings', path: '/settings' },
     { key: 'account-menu', path: '/', overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /account/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'not-found', path: `/${encodeURIComponent('Nobody')}/q-store-general-missing`, after: async (page) => page.waitForTimeout(900), expectErrors: /404|Failed to load resource/ },
