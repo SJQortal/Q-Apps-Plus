@@ -7,12 +7,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within, configure } from "@testing-library/react";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { installQortalMock } from "../../../test/qortalMock";
+import { installMockNode, makeWorld } from "../../../test/mockNode";
 import { createAppStore } from "../../../state/store";
 import { addUser } from "../../../state/features/authSlice";
+import { setCurrentStore } from "../../../state/features/globalSlice";
 import { statusesLoaded } from "../../../state/features/orderSlice";
+import { resetAssetCache } from "../../../seller/assets";
+import { resetAssetNamesFromNode } from "../../../orders/useOrderCoin";
 import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, poster } from "../../../test/fixtures/shop";
-import { resetOrderReadCaches } from "../../../orders/reads";
-import { orderId, orderJson } from "../../../orders/testing";
+import { fetchRetry, resetOrderReadCaches } from "../../../orders/reads";
+import { addStatus, orderId, orderJson } from "../../../orders/testing";
 import { ShowOrder } from "./ShowOrder";
 
 const ID = orderId("ORDERxxxx1");
@@ -37,10 +41,14 @@ configure({ asyncUtilTimeout: 5_000 });
 
 beforeEach(() => {
   resetOrderReadCaches();
+  resetAssetCache();
+  resetAssetNamesFromNode();
+  fetchRetry.delaysMs = [0, 0, 0];
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  fetchRetry.delaysMs = [2000, 4000, 8000];
 });
 
 describe("payment details", () => {
@@ -154,6 +162,108 @@ describe("payment details", () => {
   });
 });
 
+describe("the seller's view of the coin an order names", () => {
+  /** The seller's own shop (QORT only unless `shop` says more) and an order placed there. */
+  function sellerView(json: any, shop: Record<string, unknown> = {}) {
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(
+      setCurrentStore({
+        id: "q-store-general-my-shop",
+        owner: SELLER,
+        title: "Seller's Shop",
+        description: "",
+        shortStoreId: "my-shop",
+        created: 1,
+        foreignCoins: {},
+        supportedCoins: ["QORT"],
+        ...shop,
+      })
+    );
+    store.dispatch(statusesLoaded([{ orderId: ID, info: { state: "known", status: "Received", note: "", updated: 5 } }]));
+    const order: any = { ...json, user: BUYER, id: ID, created: 1761000000000, updated: 2, isValid: true };
+    renderWithProviders(<ShowOrder open onClose={() => {}} order={order} role="seller" />, { store });
+  }
+
+  /** The node: a transaction by signature, and assets by id (others unknown). */
+  function stubNode(tx: object | null, assets: Record<number, string> = {}) {
+    const reply = (status: number, body: unknown) => ({
+      ok: status === 200,
+      status,
+      json: async () => body,
+      text: async () => JSON.stringify(body),
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.startsWith("/transactions/signature/")) return tx ? reply(200, tx) : reply(404, { error: 135 });
+      const asset = url.match(/^\/assets\/info\?assetId=(\d+)$/);
+      if (asset) {
+        const name = assets[Number(asset[1])];
+        return name ? reply(200, { assetId: Number(asset[1]), assetName: name }) : reply(400, { error: 601 });
+      }
+      return reply(200, []);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    installQortalMock({ GET_NAME_DATA: async () => ({ owner: BUYER_ADDRESS }) });
+    return fetchMock;
+  }
+
+  it("names a worthless asset the buyer called “QORT” by its id and the node's name, and warns", async () => {
+    stubNode(
+      {
+        type: "TRANSFER_ASSET",
+        amount: "3.00000000",
+        assetId: 9999,
+        assetName: "FAKEQ",
+        recipient: SELLER_ADDRESS,
+        creatorAddress: BUYER_ADDRESS,
+        blockHeight: 5,
+      },
+      { 9999: "FAKEQ" }
+    );
+    sellerView(orderJson({ currency: "ASSET:9999", payment: { assetId: 9999, assetName: "QORT" } }));
+    // Until the node answers: its id only ("Paid in", and each amount).
+    expect(screen.getAllByText("Asset #9999").length).toBeGreaterThan(1);
+    expect(await screen.findByText("FAKEQ (asset #9999)")).toBeInTheDocument();
+    expect(screen.queryByText(/QORT/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "This order was paid in asset #9999, which your shop doesn't accept. Make sure you received what the order is worth before you ship."
+      )
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Transaction details" }));
+    expect(await screen.findByText("Confirmed in block 5")).toBeInTheDocument();
+    expect(screen.queryByText(/QORT/)).not.toBeInTheDocument();
+  });
+
+  it("names an asset the shop accepts as the shop lists it, whatever the order calls it", async () => {
+    const fetchMock = stubNode(null);
+    sellerView(orderJson({ currency: "ASSET:42", payment: { assetId: 42, assetName: "Platinum" } }), {
+      acceptedAssets: [{ id: 42, name: "Gold" }],
+    });
+    expect(screen.getByText("Gold (asset #42)")).toBeInTheDocument();
+    expect(screen.queryByText(/Platinum/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith("/assets/"))).toBe(false);
+  });
+
+  it("another coin: always says it can't be checked here, and flags a coin the shop doesn't take", () => {
+    stubNode(null);
+    sellerView(orderJson({ currency: "BTC", signature: null, payment: { foreignAddressUsed: "bc1shop", foreignTxid: "TX1" } }));
+    expect(screen.getByText("TX1")).toBeInTheDocument();
+    expect(screen.getByText(/BTC payments can't be checked here/)).toBeInTheDocument();
+    expect(screen.getByText(/This order was paid in BTC, which your shop doesn't accept/)).toBeInTheDocument();
+  });
+
+  it("a coin the app doesn't know is shown as such, never in the buyer's words", () => {
+    stubNode(null);
+    sellerView(orderJson({ currency: "QORT2", signature: null, payment: { foreignTxid: "TX2" } }));
+    expect(screen.getAllByText("Unknown coin").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/QORT2/)).not.toBeInTheDocument();
+    expect(screen.getByText(/names a coin Q-Shop\+ doesn't know/)).toBeInTheDocument();
+    expect(screen.getByText("This payment can't be checked here.")).toBeInTheDocument();
+  });
+});
+
 describe("the rest of the order", () => {
   it("shows a physical order's delivery address to the seller, with a message link to the buyer", () => {
     vi.stubGlobal(
@@ -180,6 +290,36 @@ describe("the rest of the order", () => {
     expect(chip).toBeInTheDocument();
     expect(chip?.textContent).toBe("Refunded");
     expect(screen.getByText("Out of stock, refunded")).toBeInTheDocument();
+  });
+
+  it("doesn't offer Received over a status it couldn't read: Retry, or an explicit choice", async () => {
+    const world = makeWorld({ shops: 1, me: { name: SELLER, address: SELLER_ADDRESS, publicKey: SELLER_PK } });
+    addStatus(world, "ORDERxxxx1", "Shipped", "Tracking 7");
+    const node = installMockNode(world);
+    // The list's status read failed (not on the node after the retries, or not decryptable).
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(statusesLoaded([{ orderId: ID, info: { state: "error", status: "", note: "", updated: 0 } }]));
+    const order: any = { ...orderJson(), user: BUYER, id: ID, created: 1761000000000, updated: 2, isValid: true };
+    renderWithProviders(<ShowOrder open onClose={() => {}} order={order} role="seller" />, { store });
+
+    expect(await screen.findByText(/Couldn't read this order's current status/)).toBeInTheDocument();
+    const group = screen.getByRole("group", { name: "Order status" });
+    for (const button of within(group).getAllByRole("button")) expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
+    // A note alone doesn't make an update: the seller has to choose a status.
+    fireEvent.change(screen.getByLabelText("Note for the buyer"), { target: { value: "Posted" } });
+    expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
+    fireEvent.click(within(group).getByRole("button", { name: "Refunded" }));
+    expect(screen.getByRole("button", { name: "Update status" })).toBeEnabled();
+
+    // Retry reads it again from the node, and the form starts from what it says.
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(within(group).getByRole("button", { name: "Shipped" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByLabelText("Note for the buyer")).toHaveValue("Tracking 7");
+    expect(screen.queryByText(/Couldn't read this order's current status/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
+    expect(node.q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(0);
   });
 
   it("stays quiet and keeps the old status when the seller declines in Hub", async () => {

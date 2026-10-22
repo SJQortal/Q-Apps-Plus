@@ -15,7 +15,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import { Link as RouterLink } from "react-router-dom";
-import { Box, Button, Divider, Link, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, Divider, Link, Skeleton, Typography } from "@mui/material";
 import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { RootState } from "../../../state/store";
@@ -28,16 +28,9 @@ import { mailToLink, productPath, storePath } from "../../../qdn/links";
 import { ensureOrderStatus, type OrderStore } from "../../../orders/loader";
 import { sendOrderStatus } from "../../../orders/statusUpdate";
 import { normalizeStatus } from "../../../orders/status";
-import {
-  deliveryLines,
-  formatOrderDate,
-  isDigitalOrder,
-  orderCoin,
-  orderCoinSettings,
-  orderItems,
-  orderTotal,
-  type OrderItem,
-} from "../../../orders/format";
+import { deliveryLines, formatOrderDate, isDigitalOrder, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
+import { useOrderCoinView } from "../../../orders/useOrderCoin";
+import type { ShopCoinSettings } from "../../../money/coins";
 import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
 import { PaymentDetails } from "./PaymentDetails";
 import { StatusEditor, type StatusDraft } from "./StatusEditor";
@@ -64,9 +57,17 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function ItemRow({ item, order, sellerName }: { item: OrderItem; order: Order; sellerName: string }) {
-  const coin = orderCoin(order);
-  const coinSettings = orderCoinSettings(order);
+function ItemRow({
+  item,
+  coin,
+  coinSettings,
+  sellerName,
+}: {
+  item: OrderItem;
+  coin: string;
+  coinSettings: ShopCoinSettings | null;
+  sellerName: string;
+}) {
   const owner = item.product?.user || sellerName;
   const storeId = item.product?.storeId;
   const to =
@@ -128,6 +129,8 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const store: OrderStore = useStore<RootState>();
   const me = useSelector((state: RootState) => state.auth.user);
   const status = useSelector((state: RootState) => (order ? state.order.statuses[order.id] ?? null : null));
+  // The seller's view never names the coin from the buyer's own text (orders/useOrderCoin.ts).
+  const coinView = useOrderCoinView(order, role);
   const sellerName = role === "seller" ? me?.name || order?.sellerName || "" : order?.sellerName || "";
 
   // The status, when the list hasn't read it (pinned read: ShowOrder.pin.test.tsx).
@@ -135,23 +138,24 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
     if (open && order && sellerName) void ensureOrderStatus(store, order, sellerName);
   }, [open, order, sellerName, store]);
 
-  // The seller's draft starts from the status as read, and again whenever it is read anew.
+  // The seller's draft starts from the status as read, and again whenever it is read anew. A status
+  // that couldn't be read pre-selects nothing: "Received" there would put a real Shipped or Refunded
+  // (and its note) back to Received with one tap, so the seller retries or chooses explicitly.
   const draftKey = status ? `${status.state}:${status.updated}` : "loading";
   const [draftState, setDraftState] = useState<{ key: string; orderId: string; draft: StatusDraft } | null>(null);
   const draft: StatusDraft =
     draftState && draftState.key === draftKey && draftState.orderId === order?.id
       ? draftState.draft
-      : {
-          status: status?.state === "known" ? normalizeStatus(status.status) ?? "Received" : "Received",
-          note: status?.note ?? "",
-        };
+      : status?.state === "known"
+        ? { status: normalizeStatus(status.status) ?? "Received", note: status.note }
+        : { status: "", note: "" };
   const setDraft = (next: StatusDraft) => setDraftState({ key: draftKey, orderId: order?.id ?? "", draft: next });
+  const [retrying, setRetrying] = useState(false);
 
   if (!order) return null;
 
   const items = orderItems(order);
-  const coin = orderCoin(order);
-  const coinSettings = orderCoinSettings(order);
+  const { coin, settings: coinSettings } = coinView;
   const digital = isDigitalOrder(order);
   const address = deliveryLines(order);
   const other = role === "seller" ? order.user : order.sellerName || "";
@@ -159,7 +163,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const sending = !!status?.sending;
 
   const update = async () => {
-    if (sending || !me?.name || !me.publicKey) return;
+    if (sending || !me?.name || !me.publicKey || normalizeStatus(draft.status) === null) return;
     const result = await sendOrderStatus(store, {
       order,
       seller: me.name,
@@ -179,8 +183,21 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
       dispatch(setNotification({ alertType: "error", msg: "Couldn't update the status. Try again." }));
   };
 
+  // Reads the status document again from the node (the list's read, or the dialog's, failed).
+  const retryStatus = async () => {
+    if (retrying || !sellerName) return;
+    setRetrying(true);
+    try {
+      await ensureOrderStatus(store, order, sellerName, true);
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const title = role === "seller" ? `Order from ${order.user}` : `Order at ${order.storeName || order.sellerName || "a shop"}`;
-  const canUpdate = role === "seller" && !!status && !sending && !sameDraft(draft, status);
+  const statusUnreadable = role === "seller" && status?.state === "error";
+  const canUpdate =
+    role === "seller" && !!status && !sending && normalizeStatus(draft.status) !== null && !sameDraft(draft, status);
 
   return (
     <ResponsiveDialog
@@ -239,7 +256,27 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         <Section title="Status">
           {role === "seller" ? (
             status ? (
-              <StatusEditor draft={draft} onChange={setDraft} disabled={sending} />
+              <>
+                {statusUnreadable && (
+                  <Alert
+                    severity="warning"
+                    action={
+                      <Button
+                        color="inherit"
+                        onClick={() => void retryStatus()}
+                        aria-disabled={retrying || undefined}
+                        sx={{ minHeight: 44, fontWeight: 700 }}
+                      >
+                        {retrying ? "Retrying…" : "Retry"}
+                      </Button>
+                    }
+                  >
+                    Couldn't read this order's current status. Retry, or choose a status below: updating replaces what
+                    the buyer sees now.
+                  </Alert>
+                )}
+                <StatusEditor draft={draft} onChange={setDraft} disabled={sending} />
+              </>
             ) : (
               <Box role="status" aria-label="Loading the status">
                 <Skeleton variant="rounded" height={44} />
@@ -271,7 +308,13 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         <Section title={`Items (${items.length})`}>
           <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
             {items.map((item) => (
-              <ItemRow key={item.productId} item={item} order={order} sellerName={order.sellerName || ""} />
+              <ItemRow
+                key={item.productId}
+                item={item}
+                coin={coin}
+                coinSettings={coinSettings}
+                sellerName={order.sellerName || ""}
+              />
             ))}
           </Box>
           <Divider />
@@ -282,7 +325,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         </Section>
 
         <Section title="Payment">
-          <PaymentDetails order={order} role={role} />
+          <PaymentDetails order={order} role={role} coin={coinView} />
         </Section>
 
         <Section title="Delivery">

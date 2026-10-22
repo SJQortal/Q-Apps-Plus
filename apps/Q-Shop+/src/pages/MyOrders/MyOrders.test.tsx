@@ -6,7 +6,7 @@ import { installMockNode, installVisibleIntersectionObserver, makeWorld, type Wo
 import { BUYER, BUYER_ADDRESS, SELLER } from "../../test/fixtures/shop";
 import { addUser } from "../../state/features/authSlice";
 import { createAppStore } from "../../state/store";
-import { savePendingOrder, type PendingOrder } from "../../money/pendingOrders";
+import { removePendingOrder, savePendingOrder, type PendingOrder } from "../../money/pendingOrders";
 import { fetchRetry, resetOrderReadCaches } from "../../orders/reads";
 import { addOrder, addStatus, orderId, OTHER_SELLER, OTHER_SHORT } from "../../orders/testing";
 import { ShellContext } from "../../components/layout/shellState";
@@ -186,6 +186,65 @@ describe("My orders", () => {
     expect(await screen.findByText(/You paid for an order that isn't recorded yet/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Finish" }));
     expect(await screen.findByText("Cart page")).toBeInTheDocument();
+  });
+
+  it("shows an order recorded at checkout, even when My orders was read earlier in the visit", async () => {
+    const w = world(1);
+    installMockNode(w);
+    const store = signedIn();
+    const first = renderPage(store);
+    const list = await screen.findByRole("list", { name: "Your orders" });
+    await waitFor(() => expect(within(list).getAllByRole("button")).toHaveLength(1));
+    first.unmount();
+
+    // The buyer shops and pays; the checkout records the order and drops it from the pending list.
+    addOrder(w, "NEW0000001", 5000, { storeName: "Seller's Shop" });
+    const pending = {
+      version: 1,
+      orderUid: "NEW0000001",
+      mailUid: "MAIL02",
+      state: "paid",
+      created: 2,
+      updated: 2,
+      buyer: { name: BUYER, address: BUYER_ADDRESS, publicKey: "BuyerPK" },
+      store: { id: "q-store-general-my-shop", shortStoreId: "my-shop", title: "Seller's Shop", owner: SELLER },
+      seller: { address: "QSeller", publicKey: "SellerPK" },
+      coin: "QORT",
+      currencyLabel: "QORT",
+      recipient: "QSeller",
+      amount: "3.00000000",
+      isDigital: true,
+      details: { totalPrice: "3.00000000" } as any,
+      payment: { total: "3.00000000", currency: "QORT", transactionSignature: "SIG2", arrrAddressUsed: "" },
+    } as PendingOrder;
+    savePendingOrder(pending);
+    removePendingOrder(BUYER, "NEW0000001");
+
+    // "View my orders".
+    renderPage(store);
+    await waitFor(() =>
+      expect(within(screen.getByRole("list", { name: "Your orders" })).getAllByRole("button")).toHaveLength(2)
+    );
+    expect(store.getState().order.myOrders[0].id).toBe(orderId("NEW0000001"));
+  });
+
+  it("reads the list again when it shows after the search cache has expired (new statuses)", async () => {
+    const w = world(1);
+    installMockNode(w);
+    const store = signedIn();
+    const first = renderPage(store);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Received · 1" })).toBeInTheDocument());
+    first.unmount();
+
+    addStatus(w, "O00", "Shipped", "Posted today");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.now() + 3 * 60_000);
+      renderPage(store);
+      await waitFor(() => expect(screen.getByRole("button", { name: "Shipped · 1" })).toBeInTheDocument());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("marks an order it can't open and keeps the others", async () => {

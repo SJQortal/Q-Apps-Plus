@@ -4,7 +4,7 @@
  * so far, "+" while more pages exist), the products in the shop, the five
  * latest orders, and links to the other tabs.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, ButtonBase, Skeleton, Typography } from "@mui/material";
 import HourglassEmptyOutlinedIcon from "@mui/icons-material/HourglassEmptyOutlined";
@@ -17,7 +17,8 @@ import type { RootState } from "../../state/store";
 import type { Order } from "../../state/features/orderSlice";
 import { EmptyState } from "../../components/common/EmptyState";
 import { useShopOrders } from "../../orders/hooks";
-import { countLabel, countStatuses } from "../../orders/status";
+import { countLabel } from "../../orders/status";
+import { sellerStatusCounts, splitSellerItems } from "../../orders/listView";
 import { OrderCard } from "../../orders/components/OrderCard";
 import { OrderListSkeleton } from "../../orders/components/OrderListView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
@@ -89,19 +90,25 @@ function Tile({
 }
 
 export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpenTab?: (tab: SellerTab) => void }) {
-  const list = useShopOrders(storeId);
+  // Only the latest few orders are opened up front, plus the ones the counts need (orders/loader.ts).
+  const list = useShopOrders(storeId, { openLimit: LATEST });
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const ids = list.items.map((i) => i.row.id);
-  const counts = countStatuses(ids, Object.fromEntries(list.items.map((i) => [i.row.id, i.status ?? undefined])));
+  // Rows that couldn't be opened, or that name another seller (a shop with the same id), aren't counted.
+  const { main, others } = useMemo(() => splitSellerItems(list.items, list.seller), [list.items, list.seller]);
+  const { counts, loading: statusesLoading } = useMemo(() => sellerStatusCounts(main, list.seller), [main, list.seller]);
   const more = list.meta.hasMore;
   const ordersLoading = list.meta.phase === "loading" || list.meta.phase === "idle";
-  const statusesLoading = list.items.some((i) => !i.status);
   const productCount =
     dataContainer && dataContainer.storeId === storeId ? Object.keys(dataContainer.products ?? {}).length : null;
-  const latest = list.items.slice(0, LATEST);
+  const latest = useMemo(() => main.slice(0, LATEST), [main]);
+  // When rows above didn't count (another seller's, or unreadable), the ones that move up get opened now.
+  const { open } = list;
+  useEffect(() => {
+    open(latest.map((item) => item.row));
+  }, [open, latest]);
   const opened: Order | null = list.items.find((i) => i.row.id === openId)?.order ?? null;
   const openOrders = onOpenTab ? () => onOpenTab("orders") : undefined;
 
@@ -145,9 +152,16 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
             onClick={onOpenTab ? () => onOpenTab("products") : undefined}
           />
         </Box>
-        {more && !ordersLoading && (
+        {more && !ordersLoading && main.length > 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Counted over your {list.items.length} latest orders.
+            Counted over your {main.length} latest orders.
+          </Typography>
+        )}
+        {others.length > 0 && !ordersLoading && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {others.length === 1
+              ? "1 order under your shop's id couldn't be opened or names another seller. It isn't counted."
+              : `${others.length} orders under your shop's id couldn't be opened or name another seller. They aren't counted.`}
           </Typography>
         )}
       </Box>
@@ -172,6 +186,14 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
           />
         ) : ordersLoading && list.items.length === 0 ? (
           <OrderListSkeleton rows={3} />
+        ) : latest.length === 0 && more ? (
+          <EmptyState
+            icon={<ReceiptLongOutlinedIcon />}
+            title="No orders found yet"
+            description={`None of the first ${list.meta.offset} results is an order of your shop. Open Orders to look further.`}
+            actionLabel={onOpenTab ? "Open orders" : undefined}
+            onAction={onOpenTab ? () => onOpenTab("orders") : undefined}
+          />
         ) : latest.length === 0 ? (
           <EmptyState
             icon={<ReceiptLongOutlinedIcon />}

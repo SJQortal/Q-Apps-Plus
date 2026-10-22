@@ -4,6 +4,7 @@ import reducer, {
   listFailed,
   listLoading,
   listPage,
+  listStale,
   mergeOrderRows,
   resetOrders,
   statusRestored,
@@ -117,6 +118,26 @@ describe("list pages", () => {
     s = reducer(s, listLoading({ kind: "buyer", owner: "Me", reset: false }));
     s = reducer(s, listFailed({ kind: "buyer", owner: "Me", generation: s.buyer.generation, first: false }));
     expect(s.buyer).toMatchObject({ phase: "ready", moreError: true, loadingMore: false });
+  });
+
+  it("a stale list keeps its rows, is read again, and drops answers to older loads", () => {
+    let s = reducer(init(), listLoading({ kind: "buyer", owner: "Me", reset: false }));
+    const old = s.buyer.generation;
+    s = reducer(
+      s,
+      listPage({ kind: "buyer", owner: "Me", generation: old, rows: [row("a")], read: 1, hasMore: false, first: true, at: 1234 })
+    );
+    expect(s.buyer.loadedAt).toBe(1234);
+    s = reducer(s, listStale({ kind: "buyer", owner: "Someone else" }));
+    expect(s.buyer.phase).toBe("ready");
+    s = reducer(s, listStale({ kind: "buyer", owner: "Me" }));
+    expect(s.buyer).toMatchObject({ phase: "idle", generation: old + 1 });
+    expect(s.myOrders.map((r) => r.id)).toEqual(["a"]);
+    s = reducer(
+      s,
+      listPage({ kind: "buyer", owner: "Me", generation: old, rows: [row("z")], read: 1, hasMore: false, first: true, at: 9 })
+    );
+    expect(s.myOrders.map((r) => r.id)).toEqual(["a"]);
   });
 
   it("resetOrders forgets the seller's list but keeps opened orders", () => {

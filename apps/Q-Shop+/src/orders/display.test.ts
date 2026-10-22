@@ -10,8 +10,8 @@ import {
   orderItems,
   orderTotal,
 } from "./format";
-import { paymentSummary, paymentWarnings } from "./payment";
-import { visibleItems } from "./listView";
+import { orderCoinOf, paymentSummary, paymentWarnings, shopPaymentWarnings, transactionCoin } from "./payment";
+import { sellerRowKind, sellerStatusCounts, splitSellerItems, visibleItems } from "./listView";
 import { orderJson } from "./testing";
 import type { OrderListItem } from "./selectors";
 
@@ -169,6 +169,61 @@ describe("payments", () => {
   });
 });
 
+describe("payments checked against the seller's shop", () => {
+  const qortOnly = { supportedCoins: ["QORT"], foreignCoins: { ARRR: "" } };
+  const withGold = { ...qortOnly, acceptedAssets: [{ id: 42, name: "Gold" }] };
+  const withBtc = { supportedCoins: ["QORT", "BTC"], foreignCoins: { BTC: "bc1shop" } };
+
+  it("reads the coin strictly", () => {
+    expect(orderCoinOf({ currency: "QORT" } as any)).toEqual({ coin: "QORT", known: true });
+    expect(orderCoinOf({ currency: " qort " } as any)).toEqual({ coin: "QORT", known: true });
+    expect(orderCoinOf({ currency: "" } as any)).toEqual({ coin: "QORT", known: true });
+    expect(orderCoinOf({ currency: "asset:42" } as any)).toEqual({ coin: "ASSET:42", known: true });
+    expect(orderCoinOf({ currency: "btc" } as any)).toEqual({ coin: "BTC", known: true });
+    expect(orderCoinOf({ currency: "QORT2" } as any)).toEqual({ coin: "QORT2", known: false });
+    // The currency decides, not a stray asset id.
+    expect(paymentSummary({ currency: "QORT", assetId: 5 } as any).kind).toBe("qort");
+    expect(paymentSummary({ currency: "QORT2" } as any)).toMatchObject({ kind: "foreign", known: false });
+  });
+
+  it("warns when the shop doesn't accept the asset or coin the order names", () => {
+    // A worthless asset the buyer issued, called "QORT" in the order.
+    const spoof = { currency: "ASSET:9999", assetId: 9999, assetName: "QORT", total: "50.00000000" } as any;
+    expect(shopPaymentWarnings(spoof, qortOnly)).toEqual([
+      "This order was paid in asset #9999, which your shop doesn't accept.",
+    ]);
+    expect(shopPaymentWarnings({ currency: "ASSET:42", assetId: 42, assetName: "Fake" } as any, withGold)).toEqual([]);
+    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1shop" } as any, qortOnly)).toEqual([
+      "This order was paid in BTC, which your shop doesn't accept.",
+    ]);
+    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1shop", foreignTxid: "T" } as any, withBtc)).toEqual([]);
+    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1other" } as any, withBtc)).toEqual([
+      "The BTC address in this order isn't your shop's current BTC address.",
+    ]);
+    expect(shopPaymentWarnings({ currency: "QORT" } as any, qortOnly)).toEqual([]);
+    // A coin the app doesn't know is flagged even when the shop isn't known.
+    expect(shopPaymentWarnings({ currency: "QORT2" } as any, null)).toHaveLength(1);
+    expect(shopPaymentWarnings(spoof, null)).toEqual([]);
+  });
+
+  it("checks the node's name for the asset against the shop's, and names the coin a transaction moved", () => {
+    const gold = { total: "2", currency: "ASSET:42", assetId: 42, transactionSignature: "S" } as any;
+    const tx = { type: "TRANSFER_ASSET", amount: "2", assetId: 42, assetName: "Gold" };
+    expect(paymentWarnings(tx, gold, { shop: withGold })).toEqual([]);
+    expect(paymentWarnings({ ...tx, assetName: "Lead" }, gold, { shop: withGold })).toEqual([
+      "The node calls asset #42 “Lead”, not “Gold” as your shop lists it.",
+    ]);
+    expect(transactionCoin(tx)).toEqual({ coin: "ASSET:42", settings: { acceptedAssets: [{ id: 42, name: "Gold" }] } });
+    expect(transactionCoin({ type: "TRANSFER_ASSET", assetId: 7 })).toEqual({
+      coin: "ASSET:7",
+      settings: { acceptedAssets: [{ id: 7, name: "Asset #7" }] },
+    });
+    expect(transactionCoin({ type: "TRANSFER_ASSET", assetId: 0 })).toEqual({ coin: "QORT", settings: null });
+    expect(transactionCoin({ type: "PAYMENT", amount: "1" })).toEqual({ coin: "QORT", settings: null });
+    expect(transactionCoin({ amount: "1" })).toBeNull();
+  });
+});
+
 describe("list filters", () => {
   const item = (id: string, user: string, status: string | null): OrderListItem => ({
     row: { id, user, created: 1, updated: 1 },
@@ -183,5 +238,49 @@ describe("list filters", () => {
     expect(visibleItems(items, { filter: "all", role: "buyer" }).map((i) => i.row.id)).toEqual(["1", "2", "3", "4"]);
     expect(visibleItems(items, { filter: "Received", role: "seller" }).map((i) => i.row.id)).toEqual(["2"]);
     expect(visibleItems(items, { filter: "all", role: "seller", search: " d" }).map((i) => i.row.id)).toEqual(["4"]);
+  });
+
+  it("counts as To handle only opened orders naming the seller; rows it can't open or another seller's stay apart", () => {
+    const SELLER = "Seller Name";
+    const opened = (id: string, status: string | null, sellerName: string | undefined = SELLER): OrderListItem => ({
+      ...item(id, "Buyer", status),
+      order: { id, user: "Buyer", created: 1, updated: 1, sellerName },
+    });
+    const rows: OrderListItem[] = [
+      opened("mine-received", "Received"),
+      opened("mine-shipped", "Shipped"),
+      // Same short id under another owner: the order opens but names them (status "Received": no document).
+      opened("foreign", "Received", "Other Owner"),
+      { ...opened("nameless", "Received"), order: { id: "nameless", user: "Buyer", created: 1, updated: 1 } },
+      // Not decryptable or not on the node.
+      { ...item("unreadable", "X", "Received"), openState: "unreadable" },
+      { ...item("unavailable", "Y", "Received"), openState: "unavailable" },
+      // Not opened yet: the seller's own Refunded settles it; a bare "Received" waits for the order.
+      item("pending-refunded", "Z", "Refunded"),
+      item("pending-received", "W", "Received"),
+      opened("mine-other-case", "Received", "seller name"),
+    ];
+    expect(sellerRowKind(rows[0], SELLER)).toBe("mine");
+    expect(sellerRowKind(rows[2], SELLER)).toBe("other");
+    expect(sellerRowKind(rows[7], SELLER)).toBe("pending");
+    const { main, others } = splitSellerItems(rows, SELLER);
+    expect(others.map((i) => i.row.id)).toEqual(["foreign", "nameless", "unreadable", "unavailable"]);
+    expect(sellerStatusCounts(main, SELLER)).toEqual({
+      counts: { Received: 2, Shipped: 1, Refunded: 1, unknown: 1 },
+      loading: true,
+    });
+    expect(visibleItems(main, { filter: "Received", role: "seller", seller: SELLER }).map((i) => i.row.id)).toEqual([
+      "mine-received",
+      "mine-other-case",
+    ]);
+    expect(visibleItems(main, { filter: "Refunded", role: "seller", seller: SELLER }).map((i) => i.row.id)).toEqual([
+      "pending-refunded",
+    ]);
+    // Once the last pending order opens, nothing is left undecided.
+    const settled = main.map((i) => (i.row.id === "pending-received" ? opened("pending-received", "Received") : i));
+    expect(sellerStatusCounts(settled, SELLER)).toEqual({
+      counts: { Received: 3, Shipped: 1, Refunded: 1, unknown: 0 },
+      loading: false,
+    });
   });
 });
