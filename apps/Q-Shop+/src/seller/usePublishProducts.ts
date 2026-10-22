@@ -21,6 +21,7 @@ import ShortUniqueId from "short-unique-id";
 import type { AppDispatch, RootState } from "../state/store";
 import {
   clearAllProductsToSave,
+  setProductsToSave,
   removeManyFromProductsToSave,
   setDataContainer,
   setProducts,
@@ -37,7 +38,7 @@ import {
   type PublishResource,
 } from "../qdn/payloads";
 import { invalidateQdnJson, invalidateQdnSearches, isDeletedBody } from "../qdn/search";
-import { splitProductPictures } from "../qdn/productPictures";
+import { primePicturesDocs, splitProductPictures, withPicturesLanded } from "../qdn/productPictures";
 import { errorMessage } from "../qdn/hubErrors";
 import { draftsOfShop } from "./shopDrafts";
 import { indexKey, notePublishedIndex } from "./productIndex";
@@ -63,6 +64,8 @@ export interface PublishJob {
   draftIds: string[];
   /** What the index this publish built on named (productIndex.indexKey). */
   baseKey: string;
+  /** The pictures documents it sends: their draft and what they publish (qdn/productPictures.ts). */
+  picturesSent: Record<string, { draftKey: string; sig: string | null }>;
 }
 
 export function usePublishProducts() {
@@ -173,6 +176,7 @@ export function usePublishProducts() {
         name,
         draftIds: Object.keys(productsToSave),
         baseKey: indexKey(base),
+        picturesSent: pictures.sent,
       });
       handedOver = true;
     } catch (e) {
@@ -200,6 +204,8 @@ export function usePublishProducts() {
     }
     dispatch(updateCatalogueHashMap(map));
     for (const r of resources) invalidateQdnJson(r.service, name, r.identifier);
+    // The edit form reads the pictures as just sent, not the node's copy from before.
+    primePicturesDocs(name, resources);
     invalidateQdnSearches((url) => url.includes("service=DOCUMENT"));
     dispatch(setNotification({ msg: "Products published", alertType: "success" }));
     setJob(null);
@@ -209,6 +215,16 @@ export function usePublishProducts() {
   /** Closed before everything landed: the drafts stay, so publishing again finishes it. */
   const closed = useCallback(
     (published: string[]) => {
+      // Pictures documents that landed are noted on their drafts, so publishing again doesn't send them twice.
+      if (job) {
+        const landed = job.resources.filter((r) => published.includes(r.identifier) && job.picturesSent[r.identifier]);
+        primePicturesDocs(job.name, landed);
+        for (const r of landed) {
+          const { draftKey, sig } = job.picturesSent[r.identifier];
+          const draft = allDrafts[draftKey];
+          if (draft) dispatch(setProductsToSave(withPicturesLanded(draft, sig)));
+        }
+      }
       if (published.length > 0) {
         dispatch(
           setNotification({
@@ -220,7 +236,7 @@ export function usePublishProducts() {
       setJob(null);
       releaseListWrite(lock);
     },
-    [dispatch, lock]
+    [dispatch, lock, job, allDrafts]
   );
 
   return { prepare, preparing, error, notice, clearError: () => setError(null), job, done, closed };

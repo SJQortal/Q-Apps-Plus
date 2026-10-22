@@ -11,6 +11,7 @@ import { Alert, Button, CircularProgress } from "@mui/material";
 import type { AppDispatch, RootState } from "../state/store";
 import { updateCatalogueHashMap, type Catalogue } from "../state/features/globalSlice";
 import { setNotification } from "../state/features/notificationsSlice";
+import { emptiedPicturesOf } from "../qdn/productPictures";
 import { buildRemoveFromCataloguesPublish, type CatalogueDoc, type PublishResource } from "../qdn/payloads";
 import { invalidateQdnJson } from "../qdn/search";
 import { errorMessage } from "../qdn/hubErrors";
@@ -51,6 +52,11 @@ export function FinishDeletesCard() {
       if (fresh.behind) return setError(DELETE_NODE_BEHIND_TEXT);
       if (fresh.failed) return setError(DELETE_CATALOGUES_UNREADABLE_TEXT);
       const built = buildRemoveFromCataloguesPublish({ name, productIds: pending.productIds, catalogues: fresh.read });
+      // The products' pictures past the third go empty with them (qdn/productPictures.ts).
+      const gone = Object.values(fresh.read).flatMap((cat) =>
+        pending.productIds.map((id) => cat?.products?.[id] as { id: string; title?: unknown } | undefined).filter((p): p is { id: string; title?: unknown } => !!p && typeof p.id === "string")
+      );
+      const pictures = emptiedPicturesOf(name, gone);
       if (built.resources.length === 0) {
         // Already clean (another device, or a late answer from Hub).
         clearPendingCatalogues(name, storeId, pending.catalogueIds);
@@ -61,7 +67,10 @@ export function FinishDeletesCard() {
       built.catalogues.forEach((cat, i) => {
         labels[cat.id] = `Catalogue ${i + 1}`;
       });
-      setJob({ ...built, labels, name, storeId, pendingIds: pending.catalogueIds });
+      pictures.forEach((r, i) => {
+        labels[r.identifier] = `More pictures ${i + 1}`;
+      });
+      setJob({ ...built, resources: [...built.resources, ...pictures], labels, name, storeId, pendingIds: pending.catalogueIds });
     } catch (e) {
       setError(errorMessage(e, "Couldn't prepare it. Try again."));
     } finally {

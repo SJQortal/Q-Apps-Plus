@@ -158,7 +158,8 @@ export function useDeleteProducts() {
         const catalogues = fresh.read;
         const built = buildDeleteProductsPublish({ name, dataContainer: seen, productIds: listed, catalogues, deletedAt: Date.now() });
         const labels: Record<string, string> = { [dataContainerIdentifier(storeId)]: "Product list" };
-        // Their pictures past the third (qdn/productPictures.ts) are emptied first.
+        // Their pictures past the third (qdn/productPictures.ts) are emptied once the catalogues no longer
+        // hold them (a delete that stops part-way leaves a listed product's pictures alone), before the list.
         const gone = built.removed
           .map((id) => Object.values(catalogues).find((cat) => cat?.products?.[id])?.products?.[id] as { id: string; title?: unknown } | undefined)
           .filter((p): p is { id: string; title?: unknown } => !!p && typeof p.id === "string");
@@ -172,7 +173,8 @@ export function useDeleteProducts() {
           labels[cat.id] = `Catalogue ${i + 1} · ${left === 0 ? "now empty" : left === 1 ? "1 product left" : `${left} products left`}`;
         });
         if (store.getState().global.dataContainer !== dataContainer) throw new PrepareError(LIST_CHANGED_TEXT);
-        setJob({ ...built, resources: [...pictures, ...built.resources], labels, storeId, name, baseKey: indexKey(seen) });
+        const list = built.resources[built.resources.length - 1];
+        setJob({ ...built, resources: [...built.resources.slice(0, -1), ...pictures, list], labels, storeId, name, baseKey: indexKey(seen) });
         handedOver = true;
         return true;
       } catch (e) {

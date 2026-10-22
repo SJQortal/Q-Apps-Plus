@@ -222,7 +222,8 @@ export const ProductForm = ({
           <Box role="alert" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
             <Typography variant="body2" sx={{ flex: "1 1 220px" }}>
               {picturesLoad.count === 1 ? "1 more picture" : `${picturesLoad.count} more pictures`} of this product couldn't be read from
-              your node. The pictures can change once they are in, so none get lost.
+              your node (or not as last published yet). Its pictures can change once they are in; anything else you change saves, and the
+              pictures stay as they are.
             </Typography>
             <Button variant="outlined" color="inherit" onClick={picturesLoad.onRetry} sx={{ minHeight: 44 }}>
               Try again

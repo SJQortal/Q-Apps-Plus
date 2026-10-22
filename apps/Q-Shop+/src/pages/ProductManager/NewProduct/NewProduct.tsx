@@ -83,13 +83,14 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
   // A published product's pictures past the third are in a document of their own (qdn/productPictures.ts):
   // read first, and added after the catalogue's, before its pictures can change.
   const [loadMore] = useState(() => needsMorePictures(product));
-  const more = useMorePictures(loadMore ? currentStore?.owner || name : null, loadMore ? product : null);
+  const more = useMorePictures(loadMore ? currentStore?.owner || name : null, loadMore ? product : null, { exact: true });
   const [addedMore, setAddedMore] = useState("");
   if (more.status === "ready" && more.key !== addedMore) {
     setAddedMore(more.key);
     setInitial((v) => ({ ...v, images: [...v.images, ...more.images] }));
     setValues((v) => ({ ...v, images: [...v.images, ...more.images] }));
   }
+  // Not in (yet): the pictures can't change, and saving keeps them as they are.
   const picturesPending = loadMore && (more.status === "loading" || more.status === "failed");
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -108,14 +109,11 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     if (!currentStore?.id || !dataContainer || dataContainer.storeId !== currentStore.id) {
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
-    if (picturesPending) {
-      return setError("This product's other pictures aren't in yet. Saving now would drop them, so wait for them or try again.");
-    }
     const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly });
     if (invalid) return setError(invalid);
     const trimmed = { ...values, title: values.title.trim(), category: values.category.trim() };
     const draft = product
-      ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing })
+      ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing, picturesKept: picturesPending })
       : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now: Date.now(), pricing });
     dispatch(setProductsToSave(draft));
     onClose();

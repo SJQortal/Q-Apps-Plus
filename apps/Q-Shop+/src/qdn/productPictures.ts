@@ -19,10 +19,16 @@
  * builder, which stays as it is. A product whose extra pictures go (an edit
  * down to 3, or a delete) has its document republished empty, as nothing on
  * QDN can be erased.
+ *
+ * The edit form takes a document only when its pictures match the product's
+ * fingerprint (`sig`): right after a publish the node may still serve the
+ * version before, and saving that would put old pictures back. Until they
+ * match, or when they can't be read, the product's pictures stay as they are
+ * (a draft with 3 pictures and a pointer counting more keeps both).
  */
 import { picturesIdentifier } from "./identifiers";
-import { jsonToBase64, type ProductDraft, type PublishResource } from "./payloads";
-import { fetchQdnJson } from "./search";
+import { base64ToJson, jsonToBase64, type ProductDraft, type PublishResource } from "./payloads";
+import { fetchQdnJson, primeQdnJson } from "./search";
 
 /** Pictures kept in the catalogue, as the original allows. */
 export const CATALOGUE_PICTURES = 3;
@@ -107,6 +113,8 @@ export function splitProductPictures(name: string, drafts: Record<string, Produc
   const out: Record<string, ProductDraft> = {};
   const resources: PublishResource[] = [];
   const labels: Record<string, string> = {};
+  /** Each document sent: the draft it belongs to and the fingerprint it publishes (null: emptied). */
+  const sent: Record<string, { draftKey: string; sig: string | null }> = {};
   for (const [key, draft] of Object.entries(drafts)) {
     const images = picturesOf(draft);
     const old = morePicturesOf(draft);
@@ -119,7 +127,11 @@ export function splitProductPictures(name: string, drafts: Record<string, Produc
       if (old?.sig !== sig) {
         resources.push(picturesResource(name, id, { productId: draft.id, images: extra }));
         labels[id] = `More pictures · ${title}`;
+        sent[id] = { draftKey: key, sig };
       }
+    } else if (old && old.count > 0) {
+      // Its extra pictures weren't read (the edit form couldn't): they stay as they are.
+      out[key] = draft;
     } else if (old) {
       const rest = { ...draft };
       delete rest.morePictures;
@@ -128,10 +140,38 @@ export function splitProductPictures(name: string, drafts: Record<string, Produc
       if (old.sig) {
         resources.push(picturesResource(name, old.id, { productId: draft.id, images: [] }));
         labels[old.id] = `More pictures · ${title}`;
+        sent[old.id] = { draftKey: key, sig: null };
       }
     } else out[key] = draft;
   }
-  return { drafts: out, resources, labels };
+  return { drafts: out, resources, labels, sent };
+}
+
+/**
+ * A draft once its pictures document landed (a publish closed before the
+ * rest did): its pointer says what is on QDN now, so publishing again
+ * doesn't send the document a second time.
+ */
+export function withPicturesLanded<T extends object>(draft: T, sig: string | null): T {
+  const ref = morePicturesOf(draft);
+  if (!ref) return draft;
+  if (sig) return { ...draft, morePictures: { ...ref, sig } };
+  return { ...draft, morePictures: { id: ref.id, count: ref.count } };
+}
+
+/** What this session just published, as the next reads should see it (the node may still serve the version before). */
+export function primePicturesDocs(name: string, resources: PublishResource[]): void {
+  for (const r of resources) {
+    if (r.service === "DOCUMENT" && r.filename === "pictures.json" && r.data64) primeQdnJson("DOCUMENT", name, r.identifier, base64ToJson(r.data64));
+  }
+}
+
+/** The document doesn't hold the pictures the product says (not reached the node yet, or another copy). */
+export class StalePicturesError extends Error {
+  constructor() {
+    super("The node doesn't have this product's pictures as published yet.");
+    this.name = "StalePicturesError";
+  }
 }
 
 /** The emptied pictures documents of products being deleted (those that point at one). */
@@ -155,8 +195,19 @@ export function picturesFromDoc(doc: unknown, productId: string): string[] {
   return body.images.filter((i): i is string => typeof i === "string" && i.startsWith("data:image/")).slice(0, MAX_MORE_PICTURES);
 }
 
-/** Read a product's extra pictures (cached for the session). */
-export async function fetchMorePictures(owner: string, productId: string, picturesId: string, options: { fresh?: boolean } = {}): Promise<string[]> {
-  const doc = await fetchQdnJson("DOCUMENT", owner, picturesId, options);
-  return picturesFromDoc(doc, productId);
+/**
+ * Read a product's extra pictures (cached for the session). With `sig`
+ * (the edit form), only the pictures the product says it has: others reject
+ * with StalePicturesError.
+ */
+export async function fetchMorePictures(
+  owner: string,
+  productId: string,
+  picturesId: string,
+  options: { fresh?: boolean; sig?: string } = {}
+): Promise<string[]> {
+  const doc = await fetchQdnJson("DOCUMENT", owner, picturesId, { fresh: options.fresh });
+  const images = picturesFromDoc(doc, productId);
+  if (options.sig && picturesSig(images) !== options.sig) throw new StalePicturesError();
+  return images;
 }

@@ -1,16 +1,25 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { base64ToJson, type ProductDraft } from "./payloads";
 import { isPicturesOfShop, picturesIdentifier } from "./identifiers";
 import {
   CATALOGUE_PICTURES,
+  StalePicturesError,
   emptiedPicturesOf,
+  fetchMorePictures,
   morePicturesOf,
   needsMorePictures,
   picturesFromDoc,
   picturesSig,
   splitProductPictures,
+  withPicturesLanded,
   withPicturesRef,
 } from "./productPictures";
+import { resetQdnCaches } from "./search";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  resetQdnCaches();
+});
 
 const PRODUCT_ID = "q-store-product-my-shop-AbCdEf1234";
 const PICTURES_ID = "q-store-pictures-my-shop-AbCdEf1234";
@@ -105,5 +114,34 @@ describe("a product's pictures past the third", () => {
       { id: "q-store-product-my-shop-Plain00000" },
     ]);
     expect(resources.map((r) => [r.identifier, base64ToJson(r.data64!)])).toEqual([[PICTURES_ID, { productId: PRODUCT_ID, images: [] }]]);
+  });
+
+  it("stay as they are when the edit form couldn't read them (3 pictures and a pointer counting more)", () => {
+    const kept = draft(pics(3), { morePictures: { id: PICTURES_ID, count: 4, sig: "4-a-b" } });
+    const split = splitProductPictures("Seller", { [PRODUCT_ID]: kept });
+    expect(split.drafts[PRODUCT_ID]).toBe(kept);
+    expect(split.resources).toEqual([]);
+  });
+
+  it("note what landed on the draft, so publishing again doesn't send them twice", () => {
+    const images = pics(5);
+    const split = splitProductPictures("Seller", { [PRODUCT_ID]: withPicturesRef(draft(images)) });
+    expect(split.sent[PICTURES_ID]).toEqual({ draftKey: PRODUCT_ID, sig: picturesSig(images.slice(3)) });
+    const landed = withPicturesLanded(withPicturesRef(draft(images)), split.sent[PICTURES_ID].sig);
+    expect(splitProductPictures("Seller", { [PRODUCT_ID]: landed }).resources).toEqual([]);
+    // An emptied one that landed: the pointer forgets its fingerprint, and the next publish just drops it.
+    const emptied = withPicturesLanded(draft(pics(3), { morePictures: { id: PICTURES_ID, count: 0, sig: "s" } }), null);
+    const again = splitProductPictures("Seller", { [PRODUCT_ID]: emptied });
+    expect(again.resources).toEqual([]);
+    expect("morePictures" in again.drafts[PRODUCT_ID]).toBe(false);
+  });
+
+  it("are taken by the edit form only as published (their fingerprint)", async () => {
+    const images = pics(2);
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ productId: PRODUCT_ID, images }) }));
+    expect(await fetchMorePictures("Seller", PRODUCT_ID, PICTURES_ID, { sig: picturesSig(images) })).toEqual(images);
+    await expect(fetchMorePictures("Seller", PRODUCT_ID, PICTURES_ID, { sig: "2-other-x", fresh: true })).rejects.toBeInstanceOf(StalePicturesError);
+    // The product page takes them as they are.
+    expect(await fetchMorePictures("Seller", PRODUCT_ID, PICTURES_ID)).toEqual(images);
   });
 });

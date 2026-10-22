@@ -221,7 +221,22 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
     };
     content = (
       <Box data-product-layout sx={productLayoutSx}>
-        <ImageGallery images={[...(product.images ?? []), ...morePictures.images]} title={name} initialIndex={mainIndex} />
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+          <ImageGallery images={[...(product.images ?? []), ...morePictures.images]} title={name} initialIndex={mainIndex} />
+          {morePictures.status === "failed" && (
+            <Box
+              role="status"
+              sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { maxWidth: GALLERY_LANDSCAPE_WIDTH } }}
+            >
+              <Typography variant="body2" color="text.secondary" sx={{ flex: "1 1 160px" }}>
+                {morePictures.count === 1 ? "1 more picture" : `${morePictures.count} more pictures`} couldn't be loaded from your node.
+              </Typography>
+              <Button variant="outlined" color="inherit" size="small" onClick={morePictures.retry} sx={{ minHeight: 44 }}>
+                Try again
+              </Button>
+            </Box>
+          )}
+        </Box>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             {product.type && <Chip size="small" variant="outlined" label={product.type === "physical" ? "Physical" : "Digital"} />}

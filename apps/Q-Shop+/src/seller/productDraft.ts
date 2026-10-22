@@ -266,11 +266,17 @@ export function editedProductDraft(args: {
   coins: string[];
   name: string;
   pricing?: FiatPricing | null;
+  /**
+   * The product's pictures past the third couldn't be read: its pictures
+   * (the form's 3 and the pointer) stay exactly as they are.
+   */
+  picturesKept?: boolean;
 }) {
   const { base, values, coins, name } = args;
+  const pictures = args.picturesKept ? <T,>(draft: T) => draft : withPicturesRef;
   // Without the shop's pricing the form shows no price in a currency: the product keeps what it has.
-  if (!args.pricing) return withPicturesRef(editedWithoutFiat(base, values, coins, name));
-  return withPicturesRef(withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing));
+  if (!args.pricing) return pictures(editedWithoutFiat(base, values, coins, name));
+  return pictures(withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing));
 }
 
 function editedWithoutFiat(base: Record<string, any> & { id: string }, values: ProductFormValues, coins: string[], name: string) {

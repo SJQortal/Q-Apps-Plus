@@ -154,7 +154,7 @@ describe("deleting products", () => {
     expect(store.getState().notifications.alertTypes.alertSuccess).toBe("2 products deleted");
   });
 
-  it("empties a deleted product's pictures past the third, before its catalogue", async () => {
+  it("empties a deleted product's pictures past the third once its catalogue no longer holds it, before the product list", async () => {
     const picturesId = "q-store-pictures-my-shop-POSTERxxx2";
     const withMore = structuredClone(catalogue) as any;
     withMore.products[poster.id] = { ...poster, morePictures: { id: picturesId, count: 4, sig: "4-a-b" } };
@@ -163,9 +163,9 @@ describe("deleting products", () => {
     await selectAndDelete(["Poster"]);
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
-    expect(sent.map((r: any) => r.identifier)).toEqual([picturesId, CATALOGUE_ID, DATA_CONTAINER_ID]);
-    expect(sent[0]).toMatchObject({ service: "DOCUMENT", filename: "pictures.json" });
-    expect(decodeData64(sent[0].data64)).toEqual({ productId: poster.id, images: [] });
+    expect(sent.map((r: any) => r.identifier)).toEqual([CATALOGUE_ID, picturesId, DATA_CONTAINER_ID]);
+    expect(sent[1]).toMatchObject({ service: "DOCUMENT", filename: "pictures.json" });
+    expect(decodeData64(sent[1].data64)).toEqual({ productId: poster.id, images: [] });
   });
 
   it("Select all picks what the filters show; Cancel leaves select mode with nothing deleted", async () => {
