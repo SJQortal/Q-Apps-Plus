@@ -6,8 +6,12 @@
  *   a shop deleted by another tool shows as deleted once it is read
  *   (qdn/search.ts QdnDeletedError);
  * - right after a delete, the node can go on listing the shop with its old
- *   metadata until a block confirms it, so the shops this browser deleted are
- *   remembered for an hour (noteDeletedShop), per owner and shop id.
+ *   metadata (and serving its old JSON) until a block confirms it, so the
+ *   shops this browser deleted are remembered for an hour, with when
+ *   (noteDeletedShop). The memory only explains what is older than the
+ *   delete: a search row updated after it, or a shop JSON created after it,
+ *   is a shop created again under the id (perhaps on another device), and
+ *   shows as such.
  */
 import { DELETED_SHOPS_STORAGE_KEY } from "../constants/plus";
 import { QdnDeletedError, fetchQdnJson, type QdnResourceSummary } from "./search";
@@ -79,24 +83,44 @@ export function forgetDeletedShop(owner: string, storeId: string): void {
   save();
 }
 
+/** When this browser deleted the shop, within the last hour; else null. */
+export function deletedShopAt(owner: string, storeId: string, now = Date.now()): number | null {
+  const at = load()[keyOf(owner, storeId)];
+  return typeof at === "number" && now - at <= DELETED_SHOP_MEMORY_MS ? at : null;
+}
+
 /** This browser deleted the shop within the last hour. */
 export function isRecentlyDeletedShop(owner: string, storeId: string, now = Date.now()): boolean {
-  const at = load()[keyOf(owner, storeId)];
-  return typeof at === "number" && now - at <= DELETED_SHOP_MEMORY_MS;
+  return deletedShopAt(owner, storeId, now) !== null;
+}
+
+/** A search row from before this browser deleted the shop (the node hasn't caught up yet). */
+export function isRowFromBeforeDelete(row: Pick<QdnResourceSummary, "name" | "identifier" | "created" | "updated">): boolean {
+  const at = deletedShopAt(row.name, row.identifier);
+  return at !== null && (row.updated ?? row.created ?? 0) <= at;
+}
+
+/** The shop's JSON is from before this browser deleted it: a shop created again would be newer. */
+export function isJsonFromBeforeDelete(owner: string, storeId: string, json: unknown): boolean {
+  const at = deletedShopAt(owner, storeId);
+  if (at === null) return false;
+  const created = (json as { created?: unknown } | null)?.created;
+  return !(typeof created === "number" && created > at);
 }
 
 /**
- * Was this shop deleted? This browser's memory first, else one fresh read
- * (the delete marker). Anything else, a read that fails included, counts as
- * a shop: creating a shop over it is then refused, as it always was.
+ * Was this shop deleted? One fresh read: a delete marker or tombstone is
+ * deleted; the JSON of a shop is deleted only when this browser deleted it
+ * after that shop was created (the node lagging); a read that fails counts
+ * as this browser's memory says. Anything else is a live shop, which
+ * creating a shop over is then refused, as it always was.
  */
 export async function isShopDeleted(owner: string, storeId: string): Promise<boolean> {
-  if (isRecentlyDeletedShop(owner, storeId)) return true;
   try {
-    await fetchQdnJson("STORE", owner, storeId, { fresh: true });
-    return false;
+    const json = await fetchQdnJson("STORE", owner, storeId, { fresh: true });
+    return isJsonFromBeforeDelete(owner, storeId, json);
   } catch (error) {
-    return error instanceof QdnDeletedError;
+    return error instanceof QdnDeletedError || isRecentlyDeletedShop(owner, storeId);
   }
 }
 

@@ -308,11 +308,19 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(await screen.findByText("This shop was deleted")).toBeInTheDocument();
   });
 
-  it("says a shop this browser just deleted is deleted, while the node may still serve it", async () => {
+  it("says a shop this browser just deleted is deleted, while the node still serves the shop from before", async () => {
     noteDeletedShop("Seller Name", STORE_ID);
-    const { node } = renderShop(makeWorld());
+    renderShop(makeWorld());
     expect(await screen.findByText("This shop was deleted")).toBeInTheDocument();
-    expect(node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/") || u.endsWith("-datacontainer"))).toEqual([]);
+  });
+
+  it("shows a shop created again under the id after this browser deleted it (say, on another device)", async () => {
+    noteDeletedShop("Seller Name", STORE_ID, Date.now() - 60_000);
+    const world = makeWorld();
+    world.shops[0].created = Date.now();
+    renderShop(world);
+    expect(await screen.findByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
+    expect(screen.queryByText("This shop was deleted")).toBeNull();
   });
 
   it("says Fetching from peers while the node gets the shop, then shows it", async () => {

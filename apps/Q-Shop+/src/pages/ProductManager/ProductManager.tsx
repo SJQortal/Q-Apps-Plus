@@ -139,15 +139,20 @@ export const ProductManager = () => {
         const shops = await findOwnShops(userName, true);
         dispatch(setAllMyStores(shops));
         const shop = shops.find((s) => s.id === storeId) ?? shops[0];
-        if (shop) await loadOwnShop(dispatch, shop, { fresh: true });
-        else dispatch(setOwnShopStatus("none"));
+        if (!shop || (await loadOwnShop(dispatch, shop, { fresh: true })) === "deleted") {
+          if (shop) dispatch(setAllMyStores(shops.filter((s) => s.id !== shop.id)));
+          dispatch(setOwnShopStatus("none"));
+        }
       } catch {
         dispatch(setOwnShopStatus("error"));
       }
       return;
     }
-    await loadOwnShop(dispatch, routedShop as Store, { fresh: true });
-  }, [userName, ownShopStatus, routedShop, storeId, dispatch]);
+    if ((await loadOwnShop(dispatch, routedShop as Store, { fresh: true })) === "deleted") {
+      dispatch(setAllMyStores(myStores.filter((s) => s.id !== routedShop.id)));
+      dispatch(setOwnShopStatus("none"));
+    }
+  }, [userName, ownShopStatus, routedShop, myStores, storeId, dispatch]);
 
   const onReload = useCallback(() => void reload(), [reload]);
 

@@ -257,7 +257,7 @@ describe("cart page", () => {
     expect(cartFor(store.getState().cart.carts, shop.owner, storeId)).toBeUndefined();
   });
 
-  it("knows a shop this browser just deleted is gone without reading it", async () => {
+  it("knows a shop this browser just deleted is gone while the node still serves the old one", async () => {
     resetDeletedShops();
     const world = makeWorld({ shops: 3 });
     const node = installMockNode(world);
@@ -270,7 +270,7 @@ describe("cart page", () => {
     );
     renderCart(store);
     expect(await screen.findByText("Its owner deleted this shop, so these items can't be bought.")).toBeInTheDocument();
-    expect(node.summary().resources).toEqual({});
+    expect(node.summary().resources).toEqual({ STORE: 1 });
     resetDeletedShops();
   });
 

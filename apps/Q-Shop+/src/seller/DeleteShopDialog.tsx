@@ -7,7 +7,7 @@
  * shop first, in batches past 20). Once the shop is gone, the seller goes
  * home.
  */
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { Alert, Box, Button, CircularProgress, TextField, Typography } from "@mui/material";
@@ -15,6 +15,7 @@ import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined
 import type { RootState } from "../state/store";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { shortStoreIdOf } from "../qdn/identifiers";
+import { collectionsPointer } from "../qdn/collections";
 import { FormError } from "./FormError";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import { useDeleteShop } from "./useDeleteShop";
@@ -27,10 +28,17 @@ export function DeleteShopDialog({ onClose }: { onClose: () => void }) {
   const del = useDeleteShop();
   const [typed, setTyped] = useState("");
   const [sending, setSending] = useState(false);
-  const shortId = currentStore?.shortStoreId || (currentStore?.id ? shortStoreIdOf(currentStore.id) : "");
+  const shortId = currentStore?.id ? shortStoreIdOf(currentStore.id) : "";
+  const instructionId = useId();
   const title = currentStore?.title || "your shop";
-  const products =
-    dataContainer && currentStore && dataContainer.storeId === currentStore.id ? Object.keys(dataContainer.products ?? {}).length : null;
+  const ownList = dataContainer && currentStore && dataContainer.storeId === currentStore.id ? dataContainer : null;
+  const products = ownList ? Object.keys(ownList.products ?? {}).length : null;
+  const hasCollections = !!ownList && !!currentStore && !!collectionsPointer(ownList, currentStore.id);
+  const parts = [
+    products === null ? "all its products" : products === 1 ? "its product" : products > 1 ? `its ${products} products` : null,
+    hasCollections ? "its collections" : null,
+  ].filter(Boolean) as string[];
+  const what = parts.length > 0 ? ` and ${parts.join(" and ")}` : "";
   const confirmed = shortId !== "" && typed.trim() === shortId;
 
   const run = async () => {
@@ -50,12 +58,13 @@ export function DeleteShopDialog({ onClose }: { onClose: () => void }) {
         onDone={() => {
           del.done();
           onClose();
-          navigate("/");
+          // Back mustn't lead to the deleted shop's seller page.
+          navigate("/", { replace: true });
         }}
         onClose={(sent) => {
           const gone = del.closed(sent);
           onClose();
-          if (gone) navigate("/");
+          if (gone) navigate("/", { replace: true });
         }}
       />
     );
@@ -90,8 +99,7 @@ export function DeleteShopDialog({ onClose }: { onClose: () => void }) {
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <Alert severity="warning">
           This deletes {title}
-          {products === null ? " and all its products" : products === 1 ? " and its product" : ` and its ${products} products`}: buyers can no
-          longer find, open or order anything from it, here or in Q-Shop. It can&apos;t be undone.
+          {what}: buyers can no longer find, open or order anything from it, here or in Q-Shop. It can&apos;t be undone.
         </Alert>
         <Typography variant="body2" color="text.secondary">
           Orders and reviews stay: buyers keep their orders in My orders, and you keep the order mails in Q-Mail. This shop&apos;s orders
@@ -100,7 +108,7 @@ export function DeleteShopDialog({ onClose }: { onClose: () => void }) {
         <Typography variant="body2" color="text.secondary">
           If you open a shop with the same id later, it starts empty, and this shop&apos;s orders and reviews show there again.
         </Typography>
-        <Typography>
+        <Typography id={instructionId}>
           To go ahead, type your shop id,{" "}
           <Box component="strong" sx={{ fontFamily: "monospace", overflowWrap: "anywhere" }}>
             {shortId}
@@ -113,10 +121,20 @@ export function DeleteShopDialog({ onClose }: { onClose: () => void }) {
           onChange={(e) => setTyped(e.target.value)}
           fullWidth
           disabled={working}
-          slotProps={{ htmlInput: { autoComplete: "off", autoCapitalize: "off", spellCheck: false } }}
+          helperText={`Type ${shortId} to confirm.`}
+          slotProps={{
+            htmlInput: {
+              autoComplete: "off",
+              autoCapitalize: "off",
+              spellCheck: false,
+              "aria-describedby": `${instructionId} ${instructionId}-help`,
+            },
+            formHelperText: { id: `${instructionId}-help` },
+          }}
         />
         <Typography variant="body2" color="text.secondary">
-          Hub asks you to confirm: one publish for the shop, its product list and each catalogue, with a small fee each.
+          Hub asks you to confirm: one publish for the shop, its product list{hasCollections ? ", its collections" : ""} and each
+          catalogue, with a small fee each.
         </Typography>
         <FormError message={del.error} />
       </Box>

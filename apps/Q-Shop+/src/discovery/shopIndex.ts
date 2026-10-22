@@ -12,7 +12,7 @@
  * resources under `q-store-general-`); nothing here writes.
  */
 import { isStoreIdentifier, shortStoreIdOf, STORE_BASE } from "../qdn/identifiers";
-import { isDeletedRow, isRecentlyDeletedShop } from "../qdn/deleted";
+import { isDeletedRow, isRowFromBeforeDelete } from "../qdn/deleted";
 import { searchQdn, searchQdnAll, type QdnResourceSummary } from "../qdn/search";
 import { plainStoreDescription } from "../hooks/useOwnShops";
 
@@ -65,12 +65,12 @@ export function acceptsArrrFromDescription(description: string | undefined): boo
 /**
  * A search row as a shop, or null when it isn't one the home page lists:
  * not a shop id, the original's hidden test shop, or a deleted shop (its
- * metadata says so, or this browser deleted it within the hour).
+ * metadata says so, or this browser deleted it after this row's version).
  */
 export function shopEntryFromRow(row: QdnResourceSummary): ShopEntry | null {
   if (!row?.name || !isStoreIdentifier(row.identifier ?? "")) return null;
   if (row.name === HIDDEN_TEST_SHOP_OWNER) return null;
-  if (isDeletedRow(row) || isRecentlyDeletedShop(row.name, row.identifier)) return null;
+  if (isDeletedRow(row) || isRowFromBeforeDelete(row)) return null;
   const shortStoreId = shortStoreIdOf(row.identifier);
   const created = row.created ?? 0;
   return {

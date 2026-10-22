@@ -24,7 +24,7 @@ import type { Cart } from "../../state/features/cartSlice";
 import { setCatalogueHashMap, type Catalogue } from "../../state/features/globalSlice";
 import { addToHashMapStores, type Store } from "../../state/features/storeSlice";
 import { QdnDeletedError, fetchQdnJson } from "../../qdn/search";
-import { isRecentlyDeletedShop } from "../../qdn/deleted";
+import { isJsonFromBeforeDelete } from "../../qdn/deleted";
 import { fetchAndEvaluateCatalogues } from "../../utils/fetchCatalogues";
 import { checkStructureStore } from "../../utils/checkStructure";
 import { useRetryingLoads, type LoadJob, type LoadPhase } from "./useRetryingLoads";
@@ -102,7 +102,6 @@ export function useCartData(carts: Record<string, Cart>): {
 
   const loadShop = useCallback(
     async ({ storeId, owner }: ShopJob): Promise<boolean | "gone"> => {
-      if (isRecentlyDeletedShop(owner, storeId)) return "gone";
       let json: unknown;
       try {
         json = await fetchQdnJson("STORE", owner, storeId);
@@ -112,6 +111,8 @@ export function useCartData(carts: Record<string, Cart>): {
         throw error;
       }
       if (!json || typeof json !== "object" || Array.isArray(json)) return false;
+      // Deleted from this browser: the node may still serve the old shop until a block confirms it.
+      if (isJsonFromBeforeDelete(owner, storeId, json)) return "gone";
       const shop = cartShopFrom(storeId, owner, json);
       setReadShops((current) => ({ ...current, [shopKey(owner, storeId)]: shop }));
       if (checkStructureStore(json)) {

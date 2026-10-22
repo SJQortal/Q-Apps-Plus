@@ -36,8 +36,8 @@ import {
 } from "../state/features/globalSlice";
 import { addToHashMapStores, setAllMyStores, type Store } from "../state/features/storeSlice";
 import { dataContainerIdentifier, isStoreIdentifier, STORE_BASE, shortStoreIdOf } from "../qdn/identifiers";
-import { fetchQdnJson, resourceExists, searchQdn, type QdnResourceSummary } from "../qdn/search";
-import { isDeletedRow, isRecentlyDeletedShop } from "../qdn/deleted";
+import { QdnDeletedError, fetchQdnJson, resourceExists, searchQdn, type QdnResourceSummary } from "../qdn/search";
+import { isDeletedRow, isJsonFromBeforeDelete, isRowFromBeforeDelete } from "../qdn/deleted";
 import { checkStructureStore } from "../utils/checkStructure";
 
 /** The shop's QDN description without the original's `**coins:…**` marker. */
@@ -96,7 +96,7 @@ export async function findOwnShops(name: string, fresh = false): Promise<Store[]
   // A deleted shop isn't one of the name's shops (its metadata says so, or this browser just deleted it).
   return rows
     .filter((row) => isStoreIdentifier(row.identifier) && row.name === name)
-    .filter((row) => !isDeletedRow(row) && !isRecentlyDeletedShop(name, row.identifier))
+    .filter((row) => !isDeletedRow(row) && !isRowFromBeforeDelete(row))
     .map(storeFromRow);
 }
 
@@ -104,21 +104,26 @@ export async function findOwnShops(name: string, fresh = false): Promise<Store[]
  * Loads one of the user's shops as the current one: its JSON and its product
  * index. Both are read first and land together, and only while `isCurrent`
  * holds, so a load overtaken by another (or by a name switch) changes nothing.
+ * Resolves "deleted" for a shop that turns out deleted (another tool's "D",
+ * a tombstone, or this browser's own delete the node hasn't caught up with):
+ * nothing lands, and the caller drops it from the name's shops.
  */
 export async function loadOwnShop(
   dispatch: AppDispatch,
   shop: Store,
   options: { fresh?: boolean; isCurrent?: () => boolean } = {}
-) {
+): Promise<"ready" | "deleted" | "failed"> {
   const current = options.isCurrent ?? (() => true);
   dispatch(setOwnShopStatus("loading"));
   let json: any;
   try {
     json = await fetchQdnJson("STORE", shop.owner, shop.id, options);
-  } catch {
+  } catch (error) {
+    if (error instanceof QdnDeletedError) return "deleted";
     if (current()) dispatch(setOwnShopStatus("unavailable"));
-    return;
+    return "failed";
   }
+  if (isJsonFromBeforeDelete(shop.owner, shop.id, json)) return "deleted";
   const containerId = dataContainerIdentifier(shop.id);
   let container: object | null = null;
   let status: OwnShopStatus = "ready";
@@ -130,13 +135,14 @@ export async function loadOwnShop(
     const exists = await resourceExists("DOCUMENT", shop.owner, containerId, { fresh: true }).catch(() => true);
     status = exists ? "unavailable" : "container-missing";
   }
-  if (!current()) return;
+  if (!current()) return "failed";
   if (checkStructureStore(json)) {
     dispatch(addToHashMapStores({ ...shop, ...json, owner: shop.owner, id: shop.id, isValid: true }));
   }
   dispatch(setCurrentStore(currentStoreFrom(shop.id, shop.owner, json, shop)));
   if (container) dispatch(setDataContainer({ ...container, id: containerId }));
   dispatch(setOwnShopStatus(status));
+  return "ready";
 }
 
 /** Mount once (GlobalWrapper): loads the signed-in name's shops and its current shop. */
@@ -150,6 +156,7 @@ export function useOwnShops(): { reload: () => void } {
   const activeName = useRef(name);
   const visited = useRef(recentlyVisitedStoreId);
   const current = useRef(currentStoreId);
+  const stores = useRef(myStores);
   // The last recently visited id acted on; the shop asked for last; the shop being loaded.
   const handled = useRef("");
   const wanted = useRef<string | null>(null);
@@ -158,18 +165,34 @@ export function useOwnShops(): { reload: () => void } {
     activeName.current = name;
     visited.current = recentlyVisitedStoreId;
     current.current = currentStoreId;
-  }, [name, recentlyVisitedStoreId, currentStoreId]);
+    stores.current = myStores;
+  }, [name, recentlyVisitedStoreId, currentStoreId, myStores]);
 
-  /** Makes one of the name's shops current, unless another is asked for before it lands. */
+  /**
+   * Makes one of the name's shops current, unless another is asked for before
+   * it lands. A shop that turns out deleted leaves the name's shops, and the
+   * next one is loaded instead (or there is none).
+   */
   const loadShop = useCallback(
-    async (shop: Store, fresh = false) => {
-      wanted.current = shop.id;
-      loading.current = shop.id;
-      const isCurrent = () => activeName.current === shop.owner && wanted.current === shop.id;
-      try {
-        await loadOwnShop(dispatch, shop, { fresh, isCurrent });
-      } finally {
-        if (loading.current === shop.id) loading.current = null;
+    async (first: Store, fresh = false): Promise<void> => {
+      let shop: Store | undefined = first;
+      while (shop) {
+        const target: Store = shop;
+        wanted.current = target.id;
+        loading.current = target.id;
+        const isCurrent = () => activeName.current === target.owner && wanted.current === target.id;
+        let result: "ready" | "deleted" | "failed";
+        try {
+          result = await loadOwnShop(dispatch, target, { fresh, isCurrent });
+        } finally {
+          if (loading.current === target.id) loading.current = null;
+        }
+        if (result !== "deleted" || !isCurrent()) return;
+        const remaining = stores.current.filter((s) => s.id !== target.id);
+        stores.current = remaining;
+        dispatch(setAllMyStores(remaining));
+        shop = remaining[0];
+        if (!shop) dispatch(setOwnShopStatus("none"));
       }
     },
     [dispatch]
@@ -187,6 +210,7 @@ export function useOwnShops(): { reload: () => void } {
         const shop =
           shops.find((s) => s.id === visited.current) ?? shops.find((s) => s.id === current.current) ?? shops[0];
         if (shop && shop.id === visited.current) handled.current = shop.id;
+        stores.current = shops;
         dispatch(setAllMyStores(shops));
         if (!shop) {
           dispatch(setOwnShopStatus("none"));

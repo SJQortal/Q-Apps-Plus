@@ -32,7 +32,8 @@ import { roomTiming } from "../qdn/publishBatches";
 import { isRecentlyDeletedShop, noteDeletedShop, resetDeletedShops } from "../qdn/deleted";
 import { getShopDetails, resetShopDetails } from "../discovery/shopDetails";
 import { shopEntryFromRow, shopKey } from "../discovery/shopIndex";
-import { findOwnShops } from "../hooks/useOwnShops";
+import { findOwnShops, useOwnShops } from "../hooks/useOwnShops";
+import { installMockNode, makeWorld } from "../test/mockNode";
 import { DELETE_SHOP_SEARCH_FAILED_TEXT } from "./useDeleteShop";
 
 const OTHER_ID = "q-store-general-other";
@@ -236,5 +237,22 @@ describe("lists and a deleted shop", () => {
       }))
     );
     expect((await findOwnShops(SELLER)).map((s) => s.id)).toEqual([OTHER_ID]);
+  });
+
+  it("drops one of the seller's shops that turns out deleted (another tool's \"D\"), and loads the next", async () => {
+    const world = makeWorld({ shops: 3, me: { name: "Seller Name", address: "QSellerAddr", publicKey: "pk" } });
+    world.shops[1].owner = "Seller Name";
+    world.shops[0].deleted = "plain";
+    installMockNode(world);
+    const store = createAppStore();
+    store.dispatch(addUser({ address: "QSellerAddr", publicKey: "pk", name: "Seller Name" }));
+    function OwnShops() {
+      useOwnShops();
+      return null;
+    }
+    renderWithProviders(<OwnShops />, { store });
+    await waitFor(() => expect(store.getState().global.currentStore?.id).toBe("q-store-general-shop-1"));
+    expect(store.getState().store.myStores.map((s) => s.id)).toEqual(["q-store-general-shop-1"]);
+    expect(store.getState().global.ownShopStatus).toBe("ready");
   });
 });

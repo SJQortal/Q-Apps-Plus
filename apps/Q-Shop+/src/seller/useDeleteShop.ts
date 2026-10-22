@@ -84,7 +84,8 @@ export function useDeleteShop() {
       return false;
     }
     const storeId = currentStore.id;
-    const short = currentStore.shortStoreId || shortStoreIdOf(storeId);
+    // The id's short id, as both apps build catalogue ids from it (never the shop JSON's own field).
+    const short = shortStoreIdOf(storeId);
     if (!takeListWrite(lock)) {
       setError(LIST_BUSY_TEXT);
       return false;
