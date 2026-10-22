@@ -1,10 +1,17 @@
 /**
  * Pins how the original app reads an order and the seller's status note, and
  * how the seller publishes a status update (docs/apps/Q-Shop+.md → Money
- * code). Written against the upstream code before any change.
+ * code). Written against the upstream code before any change, then ported to
+ * the redesigned dialog with the same Hub requests and payloads.
+ *
+ * One expectation changed, on purpose: the status search. The original
+ * searched `query=<status id>` with no name, so any name publishing that
+ * identifier answered "exists" (Bugs 11); the + app searches the exact
+ * identifier under the seller's name. The FETCH, the key lookup, the
+ * DECRYPT_DATA and the publish are unchanged.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, configure } from "@testing-library/react";
 import { Provider } from "react-redux";
 import { MemoryRouter } from "react-router-dom";
 import { createAppStore } from "../../../state/store";
@@ -28,6 +35,7 @@ import {
   mug,
 } from "../../../test/fixtures/shop";
 import { ShowOrder } from "./ShowOrder";
+import { resetOrderReadCaches } from "../../../orders/reads";
 
 const ORDER_ID = `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`;
 const STATUS_ID = `q-store-status-order-${SHORT_STORE_ID}-ORDERxxxx1`;
@@ -48,6 +56,14 @@ const orderJson = {
   payment: { total: "3.00000000", currency: "QORT", transactionSignature: "PAYMENTSIG", arrrAddressUsed: "" },
   communicationMethod: ["Q-Mail"],
 };
+
+// Rendering MUI in jsdom is slow when the machine is busy; 5 s was too tight.
+vi.setConfig({ testTimeout: 20_000 });
+configure({ asyncUtilTimeout: 5_000 });
+
+beforeEach(() => {
+  resetOrderReadCaches();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -78,7 +94,7 @@ describe("reading an order (pinned)", () => {
   });
 });
 
-function renderShowOrder(from: "ProductManager" | "myOrders", me: { name: string; address: string; pk: string }) {
+function renderShowOrder(role: "seller" | "buyer", me: { name: string; address: string; pk: string }) {
   const store = createAppStore();
   store.dispatch(addUser({ address: me.address, publicKey: me.pk, name: me.name }));
   const order = { ...orderJson, user: BUYER, id: ORDER_ID, updated: 2, isValid: true, status: "Received", note: "" };
@@ -86,7 +102,7 @@ function renderShowOrder(from: "ProductManager" | "myOrders", me: { name: string
     <Provider store={store}>
       <MemoryRouter>
         <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
-          <ShowOrder isOpen setIsOpen={() => {}} order={order as any} from={from} />
+          <ShowOrder open onClose={() => {}} order={order as any} role={role} />
         </HubThemeProvider>
       </MemoryRouter>
     </Provider>
@@ -104,20 +120,25 @@ describe("order status (pinned)", () => {
       GET_ACCOUNT_DATA: async () => ({ address: BUYER_ADDRESS, publicKey: BUYER_PK }),
       DECRYPT_DATA: async () => encodeData64({ status: "Shipped", note: "Tracking 123" }),
     });
-    const store = renderShowOrder("myOrders", { name: BUYER, address: BUYER_ADDRESS, pk: BUYER_PK });
+    const store = renderShowOrder("buyer", { name: BUYER, address: BUYER_ADDRESS, pk: BUYER_PK });
 
     await waitFor(() => expect(q.callsFor("DECRYPT_DATA")).toHaveLength(1));
+    // Was `/arbitrary/resources/search?service=DOCUMENT_PRIVATE&query=${STATUS_ID}&limit=1&includemetadata=false&mode=ALL&reverse=true`:
+    // now the exact identifier, published by the seller (Bugs 11).
     expect(fetchMock.mock.calls[0][0]).toBe(
-      `/arbitrary/resources/search?service=DOCUMENT_PRIVATE&query=${STATUS_ID}&limit=1&includemetadata=false&mode=ALL&reverse=true`
+      `/arbitrary/resources/search?mode=ALL&service=DOCUMENT_PRIVATE&identifier=${STATUS_ID}&name=Seller+Name&limit=1&offset=0&includemetadata=false&reverse=true&exactmatchnames=true`
     );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(q.calls).toEqual([
       { action: "FETCH_QDN_RESOURCE", name: SELLER, service: "DOCUMENT_PRIVATE", identifier: STATUS_ID, encoding: "base64" },
       { action: "GET_NAME_DATA", name: BUYER },
       { action: "GET_ACCOUNT_DATA", address: BUYER_ADDRESS },
       { action: "DECRYPT_DATA", encryptedData: "ENCSTATUS", publicKey: BUYER_PK },
     ]);
-    await waitFor(() => expect(store.getState().order.hashMapOrders[ORDER_ID]?.status).toBe("Shipped"));
-    expect(store.getState().order.hashMapOrders[ORDER_ID]?.note).toBe("Tracking 123");
+    // The status lives beside the order now (state.order.statuses), so a list can read it before the order opens.
+    await waitFor(() => expect(store.getState().order.statuses[ORDER_ID]?.status).toBe("Shipped"));
+    expect(store.getState().order.statuses[ORDER_ID]?.note).toBe("Tracking 123");
+    expect(await screen.findByText("Tracking 123")).toBeInTheDocument();
   });
 
   it("publishes the seller's status encrypted to the buyer and the seller, under q-store-status-order-…", async () => {
@@ -127,12 +148,11 @@ describe("order status (pinned)", () => {
       GET_ACCOUNT_DATA: async () => ({ address: BUYER_ADDRESS, publicKey: BUYER_PK }),
       PUBLISH_QDN_RESOURCE: async () => ({ signature: "x" }),
     });
-    renderShowOrder("ProductManager", { name: SELLER, address: SELLER_ADDRESS, pk: SELLER_PK });
+    renderShowOrder("seller", { name: SELLER, address: SELLER_ADDRESS, pk: SELLER_PK });
 
     fireEvent.change(await screen.findByLabelText(/Note/), { target: { value: "Sent today" } });
-    fireEvent.mouseDown(screen.getByRole("combobox"));
-    fireEvent.click(await screen.findByRole("option", { name: "Shipped" }));
-    fireEvent.click(screen.getByRole("button", { name: "Update Status" }));
+    fireEvent.click(screen.getByRole("button", { name: "Shipped" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update status" }));
 
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     const pub = q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any;
@@ -147,5 +167,9 @@ describe("order status (pinned)", () => {
       publicKeys: [BUYER_PK, SELLER_PK],
     });
     expect(decodeData64(pub.data64)).toEqual({ status: "Shipped", note: "Sent today" });
+    // The buyer's key is looked up for the publish, as the original does.
+    expect(q.calls.map((c) => c.action)).toEqual(["GET_NAME_DATA", "GET_ACCOUNT_DATA", "PUBLISH_QDN_RESOURCE"]);
+    expect(q.callsFor("GET_NAME_DATA")[0]).toEqual({ action: "GET_NAME_DATA", name: BUYER });
+    expect(q.callsFor("GET_ACCOUNT_DATA")[0]).toEqual({ action: "GET_ACCOUNT_DATA", address: BUYER_ADDRESS });
   });
 });
