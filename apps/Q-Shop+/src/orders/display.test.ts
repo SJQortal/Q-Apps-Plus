@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { chair, mug, poster } from "../test/fixtures/shop";
 import { countLabel, countStatuses, normalizeStatus, statusColor, statusLabel } from "./status";
-import { deliveryLines, isDigitalOrder, itemSummary, orderCoinSettings, orderItems, orderTotal } from "./format";
+import {
+  deliveryLines,
+  displaySafeOrder,
+  isDigitalOrder,
+  itemSummary,
+  orderCoinSettings,
+  orderItems,
+  orderTotal,
+} from "./format";
 import { paymentSummary, paymentWarnings } from "./payment";
 import { visibleItems } from "./listView";
 import { orderJson } from "./testing";
@@ -81,6 +89,39 @@ describe("order display", () => {
       deliveryNote: "",
     };
     expect(deliveryLines(physical).find((l) => l.label === "State")?.value).toBe("Texas");
+  });
+
+  it("keeps text fields as text, so a malformed order can't break a render", () => {
+    const safe = displaySafeOrder({
+      id: "x",
+      user: "B",
+      created: 1,
+      updated: 1,
+      storeName: { evil: 1 },
+      sellerName: 5,
+      details: "nope",
+      payment: { total: {}, currency: 3, transactionSignature: [], arrrAddressUsed: 9, assetId: "7", assetName: {} },
+    } as any);
+    expect(safe).toMatchObject({ storeName: undefined, sellerName: undefined, details: undefined });
+    expect(safe.payment).toMatchObject({
+      total: undefined,
+      currency: "",
+      transactionSignature: null,
+      arrrAddressUsed: undefined,
+      assetId: undefined,
+      assetName: undefined,
+    });
+    const good = { ...orderJson(), user: "B", id: "y", created: 1, updated: 1 } as any;
+    expect(displaySafeOrder(good)).toEqual({
+      ...good,
+      payment: {
+        ...good.payment,
+        foreignAddressUsed: undefined,
+        foreignTxid: undefined,
+        assetId: undefined,
+        assetName: undefined,
+      },
+    });
   });
 
   it("names an asset the order was paid in", () => {

@@ -7,6 +7,37 @@ import type { Order } from "../state/features/orderSlice";
 import { assetIdOf, type ShopCoinSettings } from "../money/coins";
 import { isDigitalOnly, type CartLine } from "../money/order";
 
+const asText = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
+
+/**
+ * An order as the screens use it: the fields that should be text are text
+ * (or missing), so an order written wrongly, or on purpose to break the
+ * seller's list (anyone can encrypt an order to a seller), can't crash a
+ * render. Display only: orders are never republished.
+ */
+export function displaySafeOrder(order: Order): Order {
+  const raw = order as any;
+  const payment = raw.payment && typeof raw.payment === "object" ? raw.payment : {};
+  return {
+    ...order,
+    storeName: asText(raw.storeName),
+    sellerName: asText(raw.sellerName),
+    details: raw.details && typeof raw.details === "object" ? raw.details : undefined,
+    delivery: raw.delivery && typeof raw.delivery === "object" ? raw.delivery : undefined,
+    payment: {
+      ...payment,
+      total: typeof payment.total === "string" || typeof payment.total === "number" ? payment.total : undefined,
+      currency: asText(payment.currency) ?? "",
+      transactionSignature: asText(payment.transactionSignature) ?? null,
+      arrrAddressUsed: asText(payment.arrrAddressUsed),
+      foreignAddressUsed: asText(payment.foreignAddressUsed),
+      foreignTxid: asText(payment.foreignTxid),
+      assetId: typeof payment.assetId === "number" ? payment.assetId : undefined,
+      assetName: asText(payment.assetName),
+    },
+  };
+}
+
 export interface OrderItem {
   productId: string;
   title: string;

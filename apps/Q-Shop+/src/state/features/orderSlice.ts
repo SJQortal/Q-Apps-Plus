@@ -46,7 +46,7 @@ export interface Delivery {
 
 export interface Payment {
   /** `toFixed(8)` text as written; older code typed it as a number. */
-  total: number | string;
+  total?: number | string;
   currency: string;
   transactionSignature?: string | null;
   arrrAddressUsed?: string;

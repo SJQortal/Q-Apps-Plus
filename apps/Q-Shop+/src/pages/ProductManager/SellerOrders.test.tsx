@@ -90,6 +90,30 @@ describe("the seller's Orders tab", () => {
     expect(within(list).getAllByText("To handle")).toHaveLength(3);
   });
 
+  it("survives an order written to break the list, and opens it", async () => {
+    const w = world();
+    const hostile = w.orders.find((o) => o.identifier === "q-store-order-my-shop-S3")!;
+    hostile.json = {
+      ...hostile.json,
+      storeName: { evil: true },
+      sellerName: 42,
+      payment: { total: { x: 1 }, currency: 7, transactionSignature: ["s"], arrrAddressUsed: 9, foreignTxid: {} },
+      details: { totalPrice: [], junk: "text", [`p`]: { product: { title: { t: 1 }, images: [{}] }, quantity: "2", pricePerUnit: "x" } },
+    };
+    installMockNode(w);
+    renderWithProviders(<OrdersTab />, { store: sellerStore() });
+    const list = await screen.findByRole("list", { name: "Orders received" });
+    await waitFor(() => expect(names(list)).toContain("Dave"));
+    const dave = within(list)
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("Dave"))!;
+    expect(dave.textContent).toContain("Product × 2");
+    fireEvent.click(dave);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Order from Dave")).toBeInTheDocument();
+    expect(within(dialog).getByText("Not recorded in this order.")).toBeInTheDocument();
+  });
+
   it("finds orders by buyer among the loaded ones", async () => {
     installMockNode(world());
     renderWithProviders(<OrdersTab />, { store: sellerStore() });

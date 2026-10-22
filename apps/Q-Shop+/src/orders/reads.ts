@@ -28,6 +28,7 @@ import { base64ToJson } from "../qdn/payloads";
 import { OrderReadError, readOrderJson, type OrderReadStage } from "../utils/fetchOrders";
 import type { Order, OrderStatusInfo } from "../state/features/orderSlice";
 import { NO_STATUS_DOCUMENT, statusInfoFrom } from "./status";
+import { displaySafeOrder } from "./format";
 
 export const ORDER_PAGE = 20;
 /** Status searches page by 100, at most 5 pages (500 rows), never unlimited. */
@@ -132,7 +133,7 @@ export async function openOrderOnce(row: Order, fresh = false): Promise<OpenOutc
     const order = await json;
     return {
       ok: true,
-      order: { ...order, created: row.created, updated: row.updated, user: row.user, id: row.id, isValid: true },
+      order: displaySafeOrder({ ...order, created: row.created, updated: row.updated, user: row.user, id: row.id, isValid: true }),
     };
   } catch (error) {
     return { ok: false, stage: error instanceof OrderReadError ? error.stage : "fetch" };
