@@ -28,8 +28,14 @@ export interface ShopFormValues {
 export const MAX_SHOP_TITLE = 50;
 /** The original's limit for a shop id. */
 export const MAX_SHOP_ID = 25;
-/** What the original puts of a description into the shop's QDN metadata, and so the most a list shows. */
-export const MAX_META_DESCRIPTION = 180;
+/**
+ * A meta description's length: what two lines of a shop card hold at its
+ * narrowest (Simon, 2026-10-22: "way less than 180 characters, only these fit
+ * there"). The metadata itself takes up to 180, as the original writes it.
+ */
+export const MAX_META_DESCRIPTION = 70;
+/** The narrowest a shop card's text is (four cards a row on a wide screen). */
+export const SHOP_CARD_TEXT_WIDTH = 270;
 
 function perTicker<T>(make: (t: ForeignTicker) => T): Record<ForeignTicker, T> {
   return Object.fromEntries(FOREIGN_TICKERS.map((t) => [t, make(t)])) as Record<ForeignTicker, T>;
@@ -85,6 +91,7 @@ export function validateShopForm(values: ShopFormValues): string | null {
   if (!values.logo) return "Add a shop logo";
   if (!values.title.trim()) return "Add a title";
   if (!values.description.trim()) return "Add a description";
+  if (values.metaDescription.trim().length > MAX_META_DESCRIPTION) return `Shorten the meta description to ${MAX_META_DESCRIPTION} characters: more doesn't fit under a shop`;
   if (!values.location.trim()) return "Add a location";
   if (!values.shipsTo.trim()) return "Say where the shop ships to";
   for (const t of FOREIGN_TICKERS) {

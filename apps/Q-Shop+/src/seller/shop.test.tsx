@@ -315,6 +315,14 @@ describe("edit shop", () => {
     expect(req.description.startsWith("**coins:QORTtrue,ARRRtrue**")).toBe(true);
   });
 
+  it("asks for a meta description short enough for a shop card, and shows how the card reads", async () => {
+    const { q } = setup({}, { metaDescription: "x".repeat(90) });
+    expect(screen.getByText("In the Shops list")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText(/Shorten the meta description to 70 characters/)).toBeInTheDocument();
+    expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(0);
+  });
+
   it("keeps the shop's meta description and publishes a new one as the text under the shop in lists", async () => {
     const { q, onClose } = setup({}, { metaDescription: "Old short text" });
     expect(field(/^Meta description/)).toHaveValue("Old short text");

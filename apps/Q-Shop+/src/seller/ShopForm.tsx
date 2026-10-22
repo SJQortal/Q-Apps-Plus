@@ -23,7 +23,7 @@ import { CoinIcon } from "../components/money/CoinIcon";
 import { COINS, FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
 import { isHubDecline } from "../qdn/hubErrors";
 import { AssetPicker } from "./AssetPicker";
-import { MAX_META_DESCRIPTION, MAX_SHOP_TITLE, addressWarning, type ShopFormValues } from "./shopFields";
+import { MAX_META_DESCRIPTION, MAX_SHOP_TITLE, SHOP_CARD_TEXT_WIDTH, addressWarning, type ShopFormValues } from "./shopFields";
 
 export const SectionTitle = ({ children, as = "h3" }: { children: string; as?: "h2" | "h3" }) => (
   <Typography
@@ -88,17 +88,35 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           minRows={3}
           maxRows={10}
         />
-        <TextField
-          label="Meta description"
-          value={values.metaDescription}
-          onChange={(e) => set("metaDescription", e.target.value)}
-          fullWidth
-          multiline
-          minRows={2}
-          maxRows={4}
-          slotProps={{ htmlInput: { maxLength: MAX_META_DESCRIPTION } }}
-          helperText={`Shown under your shop in the Shops list, and found by its search. Left empty, the list shows the start of the description. ${values.metaDescription.length}/${MAX_META_DESCRIPTION}`}
-        />
+        <Box>
+          <TextField
+            label="Meta description"
+            value={values.metaDescription}
+            onChange={(e) => set("metaDescription", e.target.value.replace(/\s*\n\s*/g, " "))}
+            fullWidth
+            multiline
+            minRows={2}
+            maxRows={3}
+            slotProps={{ htmlInput: { maxLength: MAX_META_DESCRIPTION } }}
+            helperText={`The two lines under your shop in the Shops list, also found by its search. Left empty, the list shows the start of the description. ${values.metaDescription.length}/${MAX_META_DESCRIPTION}`}
+          />
+          {(values.metaDescription.trim() || values.description.trim()) && (
+            <Box sx={{ mt: 1, p: 1.5, border: 1, borderColor: "divider", borderRadius: 2, maxWidth: SHOP_CARD_TEXT_WIDTH + 24 }}>
+              <Typography variant="caption" color="text.secondary" component="p" sx={{ mb: 0.5 }}>
+                In the Shops list
+              </Typography>
+              <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{values.title.trim() || "Your shop"}</Typography>
+              {/* As the shop card shows it: two lines at its narrowest. */}
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ lineHeight: 1.45, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", overflowWrap: "anywhere" }}
+              >
+                {(values.metaDescription.trim() || values.description.trim()).slice(0, 180)}
+              </Typography>
+            </Box>
+          )}
+        </Box>
         <TextField label="Location" value={values.location} onChange={(e) => set("location", e.target.value)} required fullWidth />
         <TextField
           label="Ships to"
