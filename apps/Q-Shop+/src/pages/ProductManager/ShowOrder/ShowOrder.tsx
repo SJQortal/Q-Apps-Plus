@@ -120,7 +120,7 @@ function sameDraft(draft: StatusDraft, status: OrderStatusInfo | null): boolean 
 
 export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const dispatch = useDispatch();
-  const store = useStore<RootState>() as unknown as OrderStore;
+  const store: OrderStore = useStore<RootState>();
   const me = useSelector((state: RootState) => state.auth.user);
   const status = useSelector((state: RootState) => (order ? state.order.statuses[order.id] ?? null : null));
   const sellerName = role === "seller" ? me?.name || order?.sellerName || "" : order?.sellerName || "";

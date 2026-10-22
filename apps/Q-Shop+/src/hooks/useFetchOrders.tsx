@@ -30,7 +30,7 @@ interface Resource {
 
 export const useFetchOrders = () => {
   const dispatch = useDispatch();
-  const store = useStore<RootState>() as unknown as OrderStore;
+  const store: OrderStore = useStore<RootState>();
   const hashMapOrders = useSelector((state: RootState) => state.order.hashMapOrders);
   const currentStore = useSelector((state: RootState) => state.global?.currentStore);
   const userName = useSelector((state: RootState) => state.auth.user?.name);
