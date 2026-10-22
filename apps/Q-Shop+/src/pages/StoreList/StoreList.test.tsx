@@ -173,6 +173,28 @@ describe("home page", () => {
       await waitFor(() => expect(cardTitles()).toEqual(["Shop number 23", "Shop number 22", "Shop number 21", "Shop number 20", "Shop number 2"]));
     });
 
+    it("keeps the last results on screen while the next search loads", async () => {
+      renderHome({ path: "/?q=number%201" });
+      await waitFor(() => expect(cards()).toHaveLength(11));
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const shimFetch = globalThis.fetch;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => {
+          if (url.includes("query=number+2")) await gate;
+          return shimFetch(url);
+        })
+      );
+      fireEvent.change(screen.getByRole("textbox", { name: "Search shops" }), { target: { value: "number 2" } });
+      await waitFor(() => expect(location()).toBe("/?q=number+2"));
+      expect(screen.getByText("Searching…")).toBeInTheDocument();
+      expect(cards()).toHaveLength(11);
+      release();
+      await waitFor(() => expect(cards()).toHaveLength(5));
+      expect(screen.getByText("5 shops match")).toBeInTheDocument();
+    });
+
     it("says when nothing matches, and offers every shop again", async () => {
       renderHome({ path: "/?q=zzz" });
       expect(await screen.findByText('No shops match "zzz"')).toBeInTheDocument();

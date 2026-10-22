@@ -127,6 +127,7 @@ describe("filtering shops", () => {
     expect(result.shops).toEqual([arrr]);
     expect(result.unknown).toEqual([other]);
     expect(result.unreadable).toBe(1);
+    expect(result.considered).toBe(3);
   });
 
   it("drops shops whose JSON isn't a valid shop, whatever the filter", () => {
@@ -138,5 +139,6 @@ describe("filtering shops", () => {
   it("My shops keeps only the signed-in name's shops", () => {
     const result = filterShops([arrr, plain, other], { pay: "", mine: new Set([plain.key]) }, () => undefined);
     expect(result.shops).toEqual([plain]);
+    expect(result.considered).toBe(1);
   });
 });

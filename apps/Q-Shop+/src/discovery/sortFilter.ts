@@ -78,6 +78,8 @@ export interface FilteredShops {
   unknown: ShopEntry[];
   /** Shops whose JSON couldn't be read for the "Pays in" check. */
   unreadable: number;
+  /** Shops the "Pays in" filter looked at: the ones My shops (if on) kept, valid as far as known. */
+  considered: number;
 }
 
 /**
@@ -92,16 +94,18 @@ export function filterShops(
   const kept: ShopEntry[] = [];
   const unknown: ShopEntry[] = [];
   let unreadable = 0;
+  let considered = 0;
   for (const shop of shops) {
     if (filters.mine && !filters.mine.has(shop.key)) continue;
     const state = details(shop.key);
     if (state?.status === "ready" && !state.valid) continue;
+    considered += 1;
     const match = payMatch(shop, filters.pay, state);
     if (match === "yes") kept.push(shop);
     else if (match === "unknown") unknown.push(shop);
     else if (state?.status === "failed" && payNeedsDetails(filters.pay)) unreadable += 1;
   }
-  return { shops: kept, unknown, unreadable };
+  return { shops: kept, unknown, unreadable, considered };
 }
 
 export interface SortContext {

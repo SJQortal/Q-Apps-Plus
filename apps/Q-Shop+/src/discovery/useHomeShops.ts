@@ -71,6 +71,8 @@ function mergeShops(a: ShopEntry[], b: ShopEntry[]): ShopEntry[] {
 export interface HomeShops {
   /** loading: nothing to show yet (or a sort's index is loading); error: the list failed. */
   phase: "loading" | "ready" | "error";
+  /** A new search is on its way; the last one's results are on screen meanwhile. */
+  searching: boolean;
   /** The list failed because the search did (not the index). */
   searchFailed: boolean;
   /** The cards to show, in order. */
@@ -162,6 +164,10 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     };
   }, [q, searchRun]);
   const results = search && search.key === searchKey ? search : null;
+  // While a new search's first page loads, the last one's results stay on screen (no skeleton flash per keystroke).
+  const searching = Boolean(q) && !results;
+  // (Not an empty one: "No shops match" must wait for the new answer.)
+  const shownResults = results ?? (searching && search?.status === "ready" && search.shops.length > 0 ? search : null);
 
   const loadMoreResults = useCallback(() => {
     if (!results || results.status !== "ready" || !results.hasMore || results.loadingMore) return;
@@ -226,7 +232,13 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
 
   // ---- filter, sort, cut
   const details = useShopDetailsSnapshot();
-  const base = q ? (results?.status === "ready" ? results.shops : EMPTY) : index.status === "ready" ? index.data.shops : EMPTY;
+  const base = q
+    ? shownResults?.status === "ready"
+      ? shownResults.shops
+      : EMPTY
+    : index.status === "ready"
+      ? index.data.shops
+      : EMPTY;
   const filters = useMemo(() => ({ pay, mine: mineKeys }), [pay, mineKeys]);
   const filtered = useMemo(() => filterShops(base, filters, details.get), [base, filters, details]);
   const sorted = useMemo(
@@ -243,8 +255,9 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
 
   const [checking, setChecking] = useState(false);
   const needsDetails = payNeedsDetails(pay);
-  const more: MoreKind =
-    count < sorted.length
+  const more: MoreKind = searching
+    ? null
+    : count < sorted.length
       ? "reveal"
       : needsDetails && filtered.unknown.length > 0
         ? "check"
@@ -323,9 +336,9 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
 
   const searchFailed = Boolean(q) && results?.status === "error";
   const phase: HomeShops["phase"] = q
-    ? !results
+    ? !shownResults
       ? "loading"
-      : results.status === "error"
+      : shownResults.status === "error"
         ? "error"
         : sortLoading
           ? "loading"
@@ -336,10 +349,13 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
         ? "error"
         : "ready";
 
-  const checked = needsDetails ? { done: base.length - filtered.unknown.length, of: base.length } : null;
+  const checked = needsDetails
+    ? { done: filtered.considered - filtered.unknown.length, of: filtered.considered }
+    : null;
 
   return {
     phase,
+    searching: searching && phase === "ready",
     searchFailed,
     shops: visible,
     total: sorted.length,

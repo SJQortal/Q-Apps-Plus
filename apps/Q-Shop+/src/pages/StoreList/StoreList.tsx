@@ -7,7 +7,7 @@
  * shop comes back to the same list.
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { Box, Button, CircularProgress, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, LinearProgress, Typography } from "@mui/material";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import SearchOffIcon from "@mui/icons-material/SearchOff";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
@@ -40,6 +40,7 @@ function plural(n: number, one: string, many: string): string {
 function statusText(home: HomeShops, q: string): string {
   if (home.phase === "loading") return "Loading shops…";
   if (home.phase === "error") return "";
+  if (home.searching) return "Searching…";
   if (home.checked && home.checked.done < home.checked.of) {
     return `${home.total} found · checked ${home.checked.done} of ${home.checked.of}`;
   }
@@ -143,7 +144,6 @@ export const StoreList = () => {
     [prepareOpen, navigate]
   );
   const onMenu = useCallback((shop: ShopEntry, anchor: HTMLElement) => setMenu({ shop, anchor }), []);
-
   const { pull, refreshing } = usePullToRefresh(home.refresh, phone);
 
   // Back from a shop: once the list is there again, scroll to where it was.
@@ -186,8 +186,10 @@ export const StoreList = () => {
         ? {
             title: "No shops match these filters",
             description: pay
-              ? `None of the shops ${q ? "found" : "listed"} take ${payLabel(pay)}${mine ? " among yours" : ""}.`
-              : "None of your shops match.",
+              ? `None of ${mine ? "your shops" : q ? "the shops found" : "the shops listed"} take ${payLabel(pay)}.`
+              : q
+                ? "None of your shops match this search."
+                : "None of your shops match.",
             actionLabel: "Reset filters",
             onAction: resetFilters,
           }
@@ -220,8 +222,11 @@ export const StoreList = () => {
   const sortLabel = SHOP_SORTS.find((s) => s.value === sort)?.label ?? "Newest";
   const showList = home.shops.length > 0 || home.more !== null || home.busy;
 
+  // My shops before the signed-in name's shops are known: wait, rather than say there are none.
+  const mineLoading = mine && myStores.length === 0 && (ownShopStatus === "idle" || ownShopStatus === "loading");
+
   let content;
-  if (phase === "loading") {
+  if (phase === "loading" || mineLoading) {
     content = <ShopGridSkeleton count={phone ? 3 : 8} label={sort === "newest" ? "Loading shops" : `Sorting by ${sortLabel}`} />;
   } else if (phase === "error") {
     content = (
@@ -236,20 +241,22 @@ export const StoreList = () => {
   } else if (!showList) {
     content = <EmptyState {...empty} />;
   } else {
+    const card = (shop: ShopEntry) => (
+      <StoreCard
+        key={shop.key}
+        shop={shop}
+        mine={shop.owner === userName}
+        rating={home.ratings ? home.ratings.get(shop.owner, shop.shortStoreId) : undefined}
+        onOpen={prepareOpen}
+        onMenu={onMenu}
+      />
+    );
     content = (
       <>
+        {home.searching && <LinearProgress aria-label="Searching" />}
         {home.shops.length > 0 && (
-          <ShopGridList aria-label={q ? `Shops matching ${q}` : "Shops"}>
-            {home.shops.map((shop) => (
-              <StoreCard
-                key={shop.key}
-                shop={shop}
-                mine={shop.owner === userName}
-                rating={home.ratings ? home.ratings.get(shop.owner, shop.shortStoreId) : undefined}
-                onOpen={prepareOpen}
-                onMenu={onMenu}
-              />
-            ))}
+          <ShopGridList aria-label={q ? `Shops matching ${q}` : "Shops"} aria-busy={home.searching || undefined}>
+            {home.shops.map(card)}
           </ShopGridList>
         )}
         {home.more && !home.busy && (
