@@ -115,6 +115,8 @@ Every shape below is what the original app writes; the + app writes the same, an
 
 **First load (by reading the code; measured counts for the harness are under Done):** home, signed in with one shop: 1 account request, 1 names fetch, 1 avatar URL, 3 STORE searches, the own shop's JSON twice and its data container once, then 20 shop JSONs (with their logos) for the list. A shop page: 2 searches (one unlimited) + 1 review search of 100 + shop JSON + data container + one sequential catalogue fetch per 10 products shown; with ARRR chosen, 2–3 price fetches.
 
+**Real data on the local node (read-only GETs, 2026-10-22):** 115 shops by 101 names (57 accept ARRR; owners with spaces are common), shop JSON median 25 kB and up to 257 kB (the logo is inside); 131 catalogues, median 133 kB and up to 1.8 MB (product images are inside); 360 orders, median 90 kB (each order embeds its products' images) and up to 1.3 MB; 56 seller status notes; 44 reviews. So: a list must never fetch shop JSON it doesn't show, orders are opened only when needed, and one paged search of 100 covers today's whole shop index.
+
 ### Performance
 
 - **Chunk:** one 1,030 kB JS file (gzip 319 kB): MUI 9, react-redux/RTK, react-router, `moment` (only `format("llll")` is used), react-dropzone + compressorjs (needed only by sellers), react-toastify, countries/states JSON (needed only at checkout), ua-parser-js (only for the "download Qortal" modal on gateways), react-copy-to-clipboard.
