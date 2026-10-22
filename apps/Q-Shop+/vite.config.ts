@@ -27,5 +27,8 @@ export default defineConfig({
     setupFiles: ['src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
     css: false,
+    // Whole-app renders (first-load counts, pinned checkout flows) take 1–2 s
+    // alone and timed out at vitest's 5 s default on a busy machine.
+    testTimeout: 20_000,
   },
 })

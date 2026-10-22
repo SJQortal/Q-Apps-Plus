@@ -5,6 +5,7 @@ import { installQortalMock } from './qortalMock';
 import { resetQdnCaches } from '../qdn/search';
 import { resetRates } from '../money/rates';
 import { resetPendingOrders } from '../money/pendingOrders';
+import { resetOrderReadCaches } from '../orders/reads';
 
 // localStorage: jsdom has one, but a plain object store is easier to inspect.
 const localStorageStore: Record<string, string> = {};
@@ -91,6 +92,7 @@ beforeEach(() => {
   resetQdnCaches();
   resetRates();
   resetPendingOrders();
+  resetOrderReadCaches();
 });
 
 afterEach(() => {

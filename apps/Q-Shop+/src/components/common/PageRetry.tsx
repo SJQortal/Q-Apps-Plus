@@ -14,7 +14,7 @@ interface PageRetryProps {
 const ROW_SELECTOR = "button.row-main";
 
 /**
- * "Could not load more shares." and a Retry for the page that failed, under a
+ * "Could not load more." and a Retry for the page that failed, under a
  * list that keeps its rows. Always render it: it shows while the page has
  * failed or is loading again. The button stays mounted while that page loads
  * (as LazyLoad's Load more does), so a retry that fails again keeps focus on
@@ -61,7 +61,7 @@ export function PageRetry({ failed, onRetry, rows }: PageRetryProps) {
   return (
     <Box role="status" sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 1 }}>
       <Typography variant="body2" color="text.secondary">
-        Could not load more shares.
+        Could not load more.
       </Typography>
       {/* aria-disabled, not disabled, which would drop focus while the page loads. */}
       <Button
