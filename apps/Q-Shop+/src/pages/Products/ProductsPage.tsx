@@ -454,6 +454,10 @@ export function ProductsPage() {
     const loadingMore = reading && shown.length < wanted;
     body = (
       <>
+        {/* The cards' titles are h3: a heading of their own between them and the page's h1. */}
+        <Typography component="h2" sx={visuallyHiddenSx}>
+          Every shop&apos;s products
+        </Typography>
         <Box onClickCapture={remember}>
           <ProductGrid layout={layout}>
             {shown.map((row) => {

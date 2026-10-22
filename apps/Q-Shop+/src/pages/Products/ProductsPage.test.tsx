@@ -107,6 +107,13 @@ describe("Products", () => {
     expect(location()).toBe("/products?category=art");
   });
 
+  it("puts a heading between the page's and the cards' (axe heading-order)", async () => {
+    renderProducts({ world: makeWorld({ shops: 2, productsPerShop: 2 }) });
+    await waitFor(() => expect(cards()).toHaveLength(4));
+    const levels = screen.getAllByRole("heading").map((h) => Number(h.tagName.slice(1)));
+    expect(levels.slice(0, 3)).toEqual([1, 2, 3]);
+  });
+
   it("lists the categories every shop picks from first, and the sellers' own words under Other categories", async () => {
     const world = makeWorld({ shops: 2, productsPerShop: 3 });
     world.shops[0].products.forEach((p) => (p.category = "toys & hobbies"));
