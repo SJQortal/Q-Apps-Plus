@@ -283,12 +283,12 @@ describe("SettingsPage", () => {
   });
 });
 
-describe("Settings: products in a shop", () => {
-  it("chooses how shops show products, Automatic until changed", () => {
+describe("Settings: product lists", () => {
+  it("chooses, under Appearance, how shop pages and Products show products, Automatic until changed", () => {
     localStorage.removeItem(SETTINGS_STORAGE_KEY);
     resetProductView();
     renderWithProviders(<SettingsPage />, { store: createAppStore() });
-    const select = screen.getByRole("combobox", { name: "Show as" });
+    const select = within(screen.getByRole("region", { name: "Appearance" })).getByRole("combobox", { name: "Show as" });
     expect(select).toHaveValue("auto");
     fireEvent.change(select, { target: { value: "list" } });
     expect(getProductView()).toBe("list");

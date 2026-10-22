@@ -302,12 +302,32 @@ export function SettingsPage() {
           </RowLabel>
           <ThemePicker />
         </Box>
+        <Row>
+          <RowLabel title="Product lists" id={`${viewFieldId}-title`}>
+            Shop pages and Products as a grid of pictures, or a list with more of each product. Automatic shows a list on phones
+            and a grid elsewhere.
+          </RowLabel>
+          <TextField
+            select
+            size="small"
+            id={viewFieldId}
+            label="Show as"
+            value={productView}
+            onChange={(event) => isProductView(event.target.value) && setProductView(event.target.value)}
+            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+            sx={{ minWidth: 200, [`@media ${PHONE_MEDIA}`]: { "& select": { minHeight: 27, py: "8.5px" } } }}
+          >
+            <option value="auto">Automatic</option>
+            <option value="grid">Grid</option>
+            <option value="list">List</option>
+          </TextField>
+        </Row>
       </Section>
 
       <Section title="Shopping">
         <Row>
           <RowLabel title="Preferred coin" id={`${coinFieldId}-title`}>
-            Prices show and you pay in this coin when a shop accepts it; otherwise in QORT.
+            Prices on shop pages show, and you pay, in this coin when the shop accepts it; otherwise in QORT.
           </RowLabel>
           <TextField
             select
@@ -324,25 +344,6 @@ export function SettingsPage() {
                 {COINS[coin as CoinTicker]?.label ?? coinLabel(coin)}
               </option>
             ))}
-          </TextField>
-        </Row>
-        <Row>
-          <RowLabel title="Products in a shop" id={`${viewFieldId}-title`}>
-            A grid of pictures, or a list with more of each product. Automatic shows a list on phones and a grid elsewhere.
-          </RowLabel>
-          <TextField
-            select
-            size="small"
-            id={viewFieldId}
-            label="Show as"
-            value={productView}
-            onChange={(event) => isProductView(event.target.value) && setProductView(event.target.value)}
-            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-            sx={{ minWidth: 200, [`@media ${PHONE_MEDIA}`]: { "& select": { minHeight: 27, py: "8.5px" } } }}
-          >
-            <option value="auto">Automatic</option>
-            <option value="grid">Grid</option>
-            <option value="list">List</option>
           </TextField>
         </Row>
         <Row>
