@@ -4,7 +4,8 @@ import type { Order } from "../../state/features/orderSlice";
 import { NameAvatar } from "../../components/common/NameAvatar";
 import { AmountTag } from "../../components/money/PriceTag";
 import type { OrderListItem } from "../selectors";
-import { formatOrderDate, itemCount, itemSummary, orderCoin, orderCoinSettings, orderItems, orderTotal } from "../format";
+import { formatOrderDate, itemCount, itemSummary, orderItems, orderTotal } from "../format";
+import { useOrderCoinView } from "../useOrderCoin";
 import { OrderStatusChip } from "./OrderStatusChip";
 
 export type OrderRole = "buyer" | "seller";
@@ -70,6 +71,8 @@ export function OrderCard({
   onRetry: (row: Order) => void;
 }) {
   const { row, order, openState, status } = item;
+  // The seller's cards never name the coin from the buyer's own text (orders/useOrderCoin.ts).
+  const coin = useOrderCoinView(order, role);
   const date = formatOrderDate(row.created);
 
   if (!order) {
@@ -157,7 +160,7 @@ export function OrderCard({
           {itemSummary(items)}
         </Typography>
         <Box component="span" sx={{ mt: 0.5 }}>
-          <AmountTag value={orderTotal(order)} coin={orderCoin(order)} shop={orderCoinSettings(order)} size="small" />
+          <AmountTag value={orderTotal(order)} coin={coin.coin} shop={coin.settings} size="small" />
         </Box>
       </Box>
     </ButtonBase>

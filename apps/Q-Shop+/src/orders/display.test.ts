@@ -10,7 +10,7 @@ import {
   orderItems,
   orderTotal,
 } from "./format";
-import { paymentSummary, paymentWarnings } from "./payment";
+import { orderCoinOf, paymentSummary, paymentWarnings, shopPaymentWarnings, transactionCoin } from "./payment";
 import { sellerRowKind, sellerStatusCounts, splitSellerItems, visibleItems } from "./listView";
 import { orderJson } from "./testing";
 import type { OrderListItem } from "./selectors";
@@ -166,6 +166,61 @@ describe("payments", () => {
     expect(paymentWarnings({ type: "TRANSFER_ASSET", amount: "2", assetId: 6 }, asset)).toEqual([
       "This transfer is of another asset.",
     ]);
+  });
+});
+
+describe("payments checked against the seller's shop", () => {
+  const qortOnly = { supportedCoins: ["QORT"], foreignCoins: { ARRR: "" } };
+  const withGold = { ...qortOnly, acceptedAssets: [{ id: 42, name: "Gold" }] };
+  const withBtc = { supportedCoins: ["QORT", "BTC"], foreignCoins: { BTC: "bc1shop" } };
+
+  it("reads the coin strictly", () => {
+    expect(orderCoinOf({ currency: "QORT" } as any)).toEqual({ coin: "QORT", known: true });
+    expect(orderCoinOf({ currency: " qort " } as any)).toEqual({ coin: "QORT", known: true });
+    expect(orderCoinOf({ currency: "" } as any)).toEqual({ coin: "QORT", known: true });
+    expect(orderCoinOf({ currency: "asset:42" } as any)).toEqual({ coin: "ASSET:42", known: true });
+    expect(orderCoinOf({ currency: "btc" } as any)).toEqual({ coin: "BTC", known: true });
+    expect(orderCoinOf({ currency: "QORT2" } as any)).toEqual({ coin: "QORT2", known: false });
+    // The currency decides, not a stray asset id.
+    expect(paymentSummary({ currency: "QORT", assetId: 5 } as any).kind).toBe("qort");
+    expect(paymentSummary({ currency: "QORT2" } as any)).toMatchObject({ kind: "foreign", known: false });
+  });
+
+  it("warns when the shop doesn't accept the asset or coin the order names", () => {
+    // A worthless asset the buyer issued, called "QORT" in the order.
+    const spoof = { currency: "ASSET:9999", assetId: 9999, assetName: "QORT", total: "50.00000000" } as any;
+    expect(shopPaymentWarnings(spoof, qortOnly)).toEqual([
+      "This order was paid in asset #9999, which your shop doesn't accept.",
+    ]);
+    expect(shopPaymentWarnings({ currency: "ASSET:42", assetId: 42, assetName: "Fake" } as any, withGold)).toEqual([]);
+    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1shop" } as any, qortOnly)).toEqual([
+      "This order was paid in BTC, which your shop doesn't accept.",
+    ]);
+    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1shop", foreignTxid: "T" } as any, withBtc)).toEqual([]);
+    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1other" } as any, withBtc)).toEqual([
+      "The BTC address in this order isn't your shop's current BTC address.",
+    ]);
+    expect(shopPaymentWarnings({ currency: "QORT" } as any, qortOnly)).toEqual([]);
+    // A coin the app doesn't know is flagged even when the shop isn't known.
+    expect(shopPaymentWarnings({ currency: "QORT2" } as any, null)).toHaveLength(1);
+    expect(shopPaymentWarnings(spoof, null)).toEqual([]);
+  });
+
+  it("checks the node's name for the asset against the shop's, and names the coin a transaction moved", () => {
+    const gold = { total: "2", currency: "ASSET:42", assetId: 42, transactionSignature: "S" } as any;
+    const tx = { type: "TRANSFER_ASSET", amount: "2", assetId: 42, assetName: "Gold" };
+    expect(paymentWarnings(tx, gold, { shop: withGold })).toEqual([]);
+    expect(paymentWarnings({ ...tx, assetName: "Lead" }, gold, { shop: withGold })).toEqual([
+      "The node calls asset #42 “Lead”, not “Gold” as your shop lists it.",
+    ]);
+    expect(transactionCoin(tx)).toEqual({ coin: "ASSET:42", settings: { acceptedAssets: [{ id: 42, name: "Gold" }] } });
+    expect(transactionCoin({ type: "TRANSFER_ASSET", assetId: 7 })).toEqual({
+      coin: "ASSET:7",
+      settings: { acceptedAssets: [{ id: 7, name: "Asset #7" }] },
+    });
+    expect(transactionCoin({ type: "TRANSFER_ASSET", assetId: 0 })).toEqual({ coin: "QORT", settings: null });
+    expect(transactionCoin({ type: "PAYMENT", amount: "1" })).toEqual({ coin: "QORT", settings: null });
+    expect(transactionCoin({ amount: "1" })).toBeNull();
   });
 });
 

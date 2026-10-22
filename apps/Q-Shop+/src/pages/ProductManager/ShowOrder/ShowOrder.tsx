@@ -28,16 +28,9 @@ import { mailToLink, productPath, storePath } from "../../../qdn/links";
 import { ensureOrderStatus, type OrderStore } from "../../../orders/loader";
 import { sendOrderStatus } from "../../../orders/statusUpdate";
 import { normalizeStatus } from "../../../orders/status";
-import {
-  deliveryLines,
-  formatOrderDate,
-  isDigitalOrder,
-  orderCoin,
-  orderCoinSettings,
-  orderItems,
-  orderTotal,
-  type OrderItem,
-} from "../../../orders/format";
+import { deliveryLines, formatOrderDate, isDigitalOrder, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
+import { useOrderCoinView } from "../../../orders/useOrderCoin";
+import type { ShopCoinSettings } from "../../../money/coins";
 import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
 import { PaymentDetails } from "./PaymentDetails";
 import { StatusEditor, type StatusDraft } from "./StatusEditor";
@@ -64,9 +57,17 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function ItemRow({ item, order, sellerName }: { item: OrderItem; order: Order; sellerName: string }) {
-  const coin = orderCoin(order);
-  const coinSettings = orderCoinSettings(order);
+function ItemRow({
+  item,
+  coin,
+  coinSettings,
+  sellerName,
+}: {
+  item: OrderItem;
+  coin: string;
+  coinSettings: ShopCoinSettings | null;
+  sellerName: string;
+}) {
   const owner = item.product?.user || sellerName;
   const storeId = item.product?.storeId;
   const to =
@@ -128,6 +129,8 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const store: OrderStore = useStore<RootState>();
   const me = useSelector((state: RootState) => state.auth.user);
   const status = useSelector((state: RootState) => (order ? state.order.statuses[order.id] ?? null : null));
+  // The seller's view never names the coin from the buyer's own text (orders/useOrderCoin.ts).
+  const coinView = useOrderCoinView(order, role);
   const sellerName = role === "seller" ? me?.name || order?.sellerName || "" : order?.sellerName || "";
 
   // The status, when the list hasn't read it (pinned read: ShowOrder.pin.test.tsx).
@@ -152,8 +155,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   if (!order) return null;
 
   const items = orderItems(order);
-  const coin = orderCoin(order);
-  const coinSettings = orderCoinSettings(order);
+  const { coin, settings: coinSettings } = coinView;
   const digital = isDigitalOrder(order);
   const address = deliveryLines(order);
   const other = role === "seller" ? order.user : order.sellerName || "";
@@ -306,7 +308,13 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         <Section title={`Items (${items.length})`}>
           <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
             {items.map((item) => (
-              <ItemRow key={item.productId} item={item} order={order} sellerName={order.sellerName || ""} />
+              <ItemRow
+                key={item.productId}
+                item={item}
+                coin={coin}
+                coinSettings={coinSettings}
+                sellerName={order.sellerName || ""}
+              />
             ))}
           </Box>
           <Divider />
@@ -317,7 +325,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         </Section>
 
         <Section title="Payment">
-          <PaymentDetails order={order} role={role} />
+          <PaymentDetails order={order} role={role} coin={coinView} />
         </Section>
 
         <Section title="Delivery">

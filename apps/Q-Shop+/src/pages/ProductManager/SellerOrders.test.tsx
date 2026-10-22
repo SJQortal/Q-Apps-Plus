@@ -152,6 +152,21 @@ describe("the seller's Orders tab", () => {
     expect(within(apart).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
+  it("never names an asset payment from the buyer's own text on the order cards", async () => {
+    const w = world();
+    // A worthless asset the buyer issued, called "QORT" in the order; the node doesn't know it here.
+    addOrder(w, "A0", 2010, { buyer: "Ivy", currency: "ASSET:9999", payment: { assetId: 9999, assetName: "QORT" } });
+    installMockNode(w);
+    renderWithProviders(<OrdersTab />, { store: sellerStore() });
+    const list = await screen.findByRole("list", { name: "Orders received" });
+    await waitFor(() => expect(within(list).getAllByRole("button").some((b) => b.textContent?.includes("Ivy"))).toBe(true));
+    const ivy = within(list)
+      .getAllByRole("button")
+      .find((b) => b.textContent?.includes("Ivy"))!;
+    expect(ivy.textContent).toContain("Asset #9999");
+    expect(ivy.textContent).not.toContain("QORT");
+  });
+
   it("loads again when the list is reset while it shows (another shop picked)", async () => {
     const node = installMockNode(world());
     const store = sellerStore();

@@ -3,7 +3,13 @@
  * with Copy, and "Transaction details" read from the node on demand
  * (`/transactions/signature/<sig>`): amount, recipient, sender, time and
  * block, plus anything that doesn't match the order. Other coins: the
- * address paid and the transaction id when Hub gave one. Display only.
+ * address paid and the transaction id when Hub gave one, and always the
+ * caveat that they can't be checked here. Display only.
+ *
+ * For the seller, the coin comes from orders/useOrderCoin.ts (never the
+ * buyer's own name for an asset), and what the seller's shop accepts is
+ * checked first: an asset or coin the shop doesn't take, a coin the app
+ * doesn't know, an address that isn't the shop's.
  */
 import { useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
@@ -13,10 +19,10 @@ import type { RootState } from "../../../state/store";
 import type { Order } from "../../../state/features/orderSlice";
 import { AmountTag } from "../../../components/money/PriceTag";
 import { copyText } from "../../../utils/clipboard";
-import { coinLabel } from "../../../money/coins";
 import { fetchPaymentTransaction, nameOwner, type PaymentTransaction } from "../../../orders/reads";
-import { paymentSummary, paymentWarnings } from "../../../orders/payment";
-import { formatOrderDate, orderCoin, orderCoinSettings } from "../../../orders/format";
+import { paymentWarnings, shopPaymentWarnings, transactionCoin } from "../../../orders/payment";
+import { formatOrderDate } from "../../../orders/format";
+import type { OrderCoinView } from "../../../orders/useOrderCoin";
 
 function CopyButton({ text, label }: { text: string; label: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
@@ -60,7 +66,21 @@ type TxState =
   | { kind: "error" }
   | { kind: "ready"; tx: PaymentTransaction; warnings: string[] };
 
-export function PaymentDetails({ order, role }: { order: Order; role: "buyer" | "seller" }) {
+/** "Gold (asset #42)", or "Asset #42" while its name isn't known. */
+function assetText(name: string, assetId: number): string {
+  return name === `Asset #${assetId}` ? name : `${name} (asset #${assetId})`;
+}
+
+export function PaymentDetails({
+  order,
+  role,
+  coin: coinView,
+}: {
+  order: Order;
+  role: "buyer" | "seller";
+  /** The order's coin as this role sees it (orders/useOrderCoin.ts). */
+  coin: OrderCoinView;
+}) {
   const me = useSelector((state: RootState) => state.auth.user);
   const otherOrdersWithSameSignature = useSelector((state: RootState) => {
     const sig = order.payment?.transactionSignature;
@@ -68,9 +88,13 @@ export function PaymentDetails({ order, role }: { order: Order; role: "buyer" | 
     return Object.values(state.order.hashMapOrders).filter((o) => o.id !== order.id && o.payment?.transactionSignature === sig)
       .length;
   });
-  const summary = paymentSummary(order.payment);
-  const coin = orderCoin(order);
-  const coinSettings = orderCoinSettings(order);
+  const { summary, coin, settings: coinSettings, label, shop } = coinView;
+  // The seller's own shop says what it accepts; the buyer's screens don't check their own order.
+  const shopWarnings = role === "seller" ? shopPaymentWarnings(order.payment, shop) : [];
+  const paidIn =
+    summary.kind === "asset" && summary.assetId !== null
+      ? assetText(role === "buyer" ? summary.assetName || label : label, summary.assetId)
+      : label;
   const [tx, setTx] = useState<TxState>({ kind: "idle" });
 
   const loadTransaction = async () => {
@@ -87,7 +111,11 @@ export function PaymentDetails({ order, role }: { order: Order; role: "buyer" | 
           : null,
         role === "buyer" ? Promise.resolve(me?.address ?? null) : nameOwner(order.user).catch(() => null),
       ]);
-      setTx({ kind: "ready", tx: found, warnings: paymentWarnings(found, order.payment, { sellerAddress, buyerAddress }) });
+      setTx({
+        kind: "ready",
+        tx: found,
+        warnings: paymentWarnings(found, order.payment, { sellerAddress, buyerAddress, shop }),
+      });
     } catch {
       setTx({ kind: "error" });
     }
@@ -95,12 +123,13 @@ export function PaymentDetails({ order, role }: { order: Order; role: "buyer" | 
 
   return (
     <Box>
+      {shopWarnings.map((w) => (
+        <Alert key={w} severity="warning" sx={{ mb: 1 }}>
+          {w} Make sure you received what the order is worth before you ship.
+        </Alert>
+      ))}
       <Box component="dl" sx={{ m: 0 }}>
-        <Field label="Paid in">
-          {summary.kind === "asset"
-            ? `${summary.assetName || coinLabel(coin, coinSettings)} (asset #${summary.assetId})`
-            : coinLabel(coin, coinSettings)}
-        </Field>
+        <Field label="Paid in">{paidIn}</Field>
         <Field label="Total paid">
           <AmountTag value={order.payment?.total ?? order.details?.totalPrice} coin={coin} shop={coinSettings} size="small" />
         </Field>
@@ -124,9 +153,14 @@ export function PaymentDetails({ order, role }: { order: Order; role: "buyer" | 
             </Box>
           </Field>
         )}
-        {summary.kind === "foreign" && !summary.txid && (
+        {summary.kind === "foreign" && (
+          // Always: a transaction id in the order is only what the order says.
           <Field label="Transaction">
-            {summary.coin} payments can't be checked here. Check your {summary.coin} wallet for a payment to the address above.
+            {summary.known
+              ? `${label} payments can't be checked here. Check your ${label} wallet for the payment${
+                  summary.addressPaid ? " to the address above" : ""
+                }${summary.txid ? "; the transaction id is the one the order gives" : ""}.`
+              : "This payment can't be checked here."}
           </Field>
         )}
         {summary.signature ? (
@@ -186,7 +220,13 @@ export function PaymentDetails({ order, role }: { order: Order; role: "buyer" | 
           <Box component="dl" sx={{ m: 0 }}>
             {tx.tx.amount !== undefined && (
               <Field label="Amount">
-                <AmountTag value={tx.tx.amount} coin={coin} shop={coinSettings} size="small" />
+                {/* In the coin the node says moved, named by the node. */}
+                <AmountTag
+                  value={tx.tx.amount}
+                  coin={transactionCoin(tx.tx)?.coin ?? coin}
+                  shop={transactionCoin(tx.tx)?.settings ?? coinSettings}
+                  size="small"
+                />
               </Field>
             )}
             {tx.tx.recipient && (
