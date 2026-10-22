@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchReviewRows,
-  fetchVerifiedBuyers,
+  fetchReviewersWithOrders,
   hasOrderAtShop,
   isReviewSearchUrl,
   roundToHalf,
@@ -116,8 +116,8 @@ describe("searches", () => {
       { name: "Bob", service: "DOCUMENT_PRIVATE", identifier: "q-store-order-my-shop-2-BBBBBBBBBB" },
       { name: "Zed", service: "DOCUMENT_PRIVATE", identifier: "q-store-order-my-shop-ZZZZZZZZZZ" },
     ]);
-    const verified = await fetchVerifiedBuyers("my-shop", ["Ann", "Bob", "Ann", "Buyer+One"]);
-    expect([...verified]).toEqual(["Ann"]);
+    const ordered = await fetchReviewersWithOrders("my-shop", ["Ann", "Bob", "Ann", "Buyer+One"]);
+    expect([...ordered]).toEqual(["Ann"]);
     const url = new URL(String(fetchMock.mock.calls[0][0]), "http://node");
     expect(url.searchParams.get("service")).toBe("DOCUMENT_PRIVATE");
     expect(url.searchParams.get("identifier")).toBe("q-store-order-my-shop-");
@@ -125,7 +125,7 @@ describe("searches", () => {
     expect(url.searchParams.getAll("name")).toEqual(["Ann", "Bob", "Buyer+One"]);
     expect(url.searchParams.get("exactmatchnames")).toBe("true");
     expect(url.searchParams.get("limit")).toBe("100");
-    expect(await fetchVerifiedBuyers("my-shop", [])).toEqual(new Set());
+    expect(await fetchReviewersWithOrders("my-shop", [])).toEqual(new Set());
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

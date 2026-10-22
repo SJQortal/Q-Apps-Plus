@@ -163,10 +163,11 @@ export function AddReview({
   return (
     <ResponsiveDialog
       open={open}
-      onClose={busy ? () => {} : onClose}
+      onClose={onClose}
       title={storeTitle ? `Review ${storeTitle}` : "Write a review"}
       maxWidth="sm"
-      dismissible={!busy}
+      // While Hub publishes (up to 30 minutes): no Back or Close that would do nothing, no Escape, no backdrop.
+      busy={busy}
       actions={
         <>
           <Button color="inherit" onClick={onClose} disabled={busy}>

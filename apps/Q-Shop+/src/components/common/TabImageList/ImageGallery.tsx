@@ -11,9 +11,20 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { ResponsiveDialog } from "../mobile";
+import { LANDSCAPE_PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 
 export const MAX_GALLERY_IMAGES = 3;
 const SWIPE_PX = 40;
+
+/**
+ * The gallery's width (and so its square's height) on a phone held
+ * sideways: the app frame's height less the header and bar, so the whole
+ * picture fits one frame (about 148 px in Hub's 266 px frame), at most 42 %
+ * of the width, never under 148 px. Full width it was a square of about
+ * 800 px.
+ */
+export const GALLERY_LANDSCAPE_WIDTH = "min(42vw, max(148px, calc(var(--qshare-app-height, 100dvh) - 120px)))";
+const LANDSCAPE = `@media ${LANDSCAPE_PHONE_MEDIA}`;
 
 const arrowSx = (side: "left" | "right") =>
   ({
@@ -95,6 +106,7 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
           placeItems: "center",
           alignContent: "center",
           gap: 1,
+          [LANDSCAPE]: { width: GALLERY_LANDSCAPE_WIDTH },
         }}
       >
         <ImageOutlinedIcon sx={{ fontSize: 48 }} />
@@ -106,7 +118,13 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
   const label = (i: number) => `${title}, picture ${i + 1} of ${count}`;
 
   return (
-    <Box role="region" aria-roledescription="carousel" aria-label={`${title}: pictures`} onKeyDown={onKeyDown}>
+    <Box
+      role="region"
+      aria-roledescription="carousel"
+      aria-label={`${title}: pictures`}
+      onKeyDown={onKeyDown}
+      sx={{ minWidth: 0, [LANDSCAPE]: { width: GALLERY_LANDSCAPE_WIDTH } }}
+    >
       <Box
         {...swipe}
         sx={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 2, overflow: "hidden", bgcolor: "action.hover", touchAction: "pan-y" }}
@@ -137,7 +155,7 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
         )}
       </Box>
       {count > 1 && (
-        <Box role="group" aria-label="Pictures" sx={{ display: "flex", gap: 1, mt: 1 }}>
+        <Box role="group" aria-label="Pictures" sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
           {list.map((src, i) => (
             <ButtonBase
               key={i}
@@ -153,6 +171,8 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
                 borderColor: i === at ? "text.primary" : "divider",
                 bgcolor: "action.hover",
                 "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: 2 },
+                // Three fit under the smaller picture, still 44 px targets.
+                [LANDSCAPE]: { width: 44, height: 44 },
               }}
             >
               <Box component="img" src={src} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />

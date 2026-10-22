@@ -3,7 +3,9 @@ import {
   checkShopDetails,
   DETAIL_CHECK_CONCURRENCY,
   forgetFailedShopDetails,
+  forgetShopDetails,
   getShopDetails,
+  primeShopDetails,
   requestShopDetails,
   resetShopDetails,
 } from "./shopDetails";
@@ -56,6 +58,19 @@ describe("a shop's details", () => {
     // Already loaded: no new request.
     await requestShopDetails("Seller Name", "q-store-general-my-shop");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps no coin field of the wrong type for the cards and filters to trip on", async () => {
+    stubFetch(() => ({
+      status: 200,
+      body: { ...validShop, supportedCoins: 1, foreignCoins: { ARRR: 5 }, acceptedAssets: {} },
+    }));
+    const state = await requestShopDetails("Seller Name", "q-store-general-my-shop");
+    expect(state).toEqual({
+      status: "ready",
+      shop: { ...validShop, supportedCoins: [], foreignCoins: {}, acceptedAssets: [] },
+      valid: true,
+    });
   });
 
   it("marks a JSON that isn't a shop as not valid", async () => {
@@ -112,6 +127,78 @@ describe("a shop's details", () => {
     await vi.advanceTimersByTimeAsync(15000);
     await expect(job).resolves.toEqual({ status: "failed", final: true });
     expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("reads a shop again when the index says it changed, showing the old copy until the new one is in", async () => {
+    let logo = "data:image/webp;base64,T0xE";
+    const fetchMock = stubFetch(() => ({ status: 200, body: { ...validShop, logo } }));
+    await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 100 });
+    expect(getShopDetails(KEY)).toEqual({ status: "ready", shop: { ...validShop, logo }, valid: true, updated: 100 });
+    // Same version, or none known: nothing to read.
+    await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 100 });
+    await requestShopDetails("Seller Name", "q-store-general-my-shop");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    // The seller published a new logo: the index now says updated 200.
+    logo = "data:image/webp;base64,TkVX";
+    const job = requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 200 });
+    expect(getShopDetails(KEY)).toMatchObject({ status: "ready", shop: { logo: "data:image/webp;base64,T0xE" } });
+    await expect(job).resolves.toEqual({ status: "ready", shop: { ...validShop, logo }, valid: true, updated: 200 });
+    // Read past the session cache, which still held the old copy.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the old copy when the changed shop can't be read right now, without asking again for that version", async () => {
+    let up = true;
+    const fetchMock = stubFetch(() => (up ? { status: 200, body: validShop } : { status: 404, body: { error: 1401 } }));
+    await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 100 });
+    up = false;
+    await expect(requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 200 })).resolves.toEqual({
+      status: "ready",
+      shop: validShop,
+      valid: true,
+      updated: 200,
+    });
+    await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 200 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("a Pays in check reads again only the shops that changed", async () => {
+    const fetchMock = stubFetch(() => ({ status: 200, body: validShop }));
+    const shop = (i: number, updated: number): ShopEntry => ({
+      key: shopKey(`Owner ${i}`, `q-store-general-s${i}`),
+      owner: `Owner ${i}`,
+      id: `q-store-general-s${i}`,
+      shortStoreId: `s${i}`,
+      title: `s${i}`,
+      description: "",
+      created: 1,
+      updated,
+      acceptsArrr: false,
+    });
+    await checkShopDetails([shop(1, 10), shop(2, 10)]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await checkShopDetails([shop(1, 10), shop(2, 20)]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][0]).toBe("/arbitrary/STORE/Owner%202/q-store-general-s2");
+  });
+
+  it("takes a valid shop JSON read by the shop page, keeping the version the card read for", async () => {
+    const fetchMock = stubFetch(() => ({ status: 200, body: validShop }));
+    primeShopDetails("Seller Name", "q-store-general-my-shop", { ...validShop, supportedCoins: 1 });
+    expect(getShopDetails(KEY)).toEqual({ status: "ready", shop: { ...validShop, supportedCoins: [] }, valid: true });
+    await requestShopDetails("Seller Name", "q-store-general-my-shop");
+    expect(fetchMock).not.toHaveBeenCalled();
+    // A card that read version 100, then the shop page's copy: the next index version still reads again.
+    resetShopDetails();
+    await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 100 });
+    primeShopDetails("Seller Name", "q-store-general-my-shop", { ...validShop, title: "Renamed" });
+    expect(getShopDetails(KEY)).toMatchObject({ status: "ready", shop: { title: "Renamed" }, updated: 100 });
+    // Not a shop: never replaces what the list shows.
+    primeShopDetails("Seller Name", "q-store-general-my-shop", { title: "No ships-to" });
+    expect(getShopDetails(KEY)).toMatchObject({ shop: { title: "Renamed" } });
+    forgetShopDetails("Seller Name", "q-store-general-my-shop");
+    expect(getShopDetails(KEY)).toBeUndefined();
   });
 
   it("checks many shops five at a time", async () => {

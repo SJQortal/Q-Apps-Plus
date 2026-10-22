@@ -8,7 +8,7 @@
  * can't.
  */
 import { memo, useEffect, useId, type MouseEvent } from "react";
-import { Box, IconButton, Typography } from "@mui/material";
+import { Box, Button, IconButton, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
@@ -23,11 +23,12 @@ import { storePath } from "../../../qdn/links";
 import { addToHashMapStores } from "../../../state/features/storeSlice";
 import type { RootState } from "../../../state/store";
 import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
-import { requestShopDetails, useShopDetails, type ShopDetails, type ShopJson } from "../../../discovery/shopDetails";
+import { isOutdated, requestShopDetails, useShopDetails, type ShopDetails, type ShopJson } from "../../../discovery/shopDetails";
 import type { ShopEntry } from "../../../discovery/shopIndex";
 import { formatRating, type ShopRating } from "../../../discovery/ratings";
 import { CARD_ART_HEIGHT } from "../../../discovery/ShopGrid";
 import { visuallyHidden } from "../../../discovery/a11y";
+import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
 
 /** Coin marks shown before "+N". */
 const MAX_COINS = 5;
@@ -154,11 +155,12 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   const details = useShopDetails(shop.key);
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
 
-  // Not read yet, forgotten by a pull to refresh, or only tried once by a "Pays in" check.
-  const wanted = !details || (details.status === "failed" && !details.final);
+  // Not read yet, forgotten by a pull to refresh, only tried once by a "Pays in" check,
+  // or the shop changed since it was read (a newer `updated` in the index): its old logo stays meanwhile.
+  const wanted = !details || (details.status === "failed" && !details.final) || isOutdated(details, shop.updated);
   useEffect(() => {
-    if (inView && wanted) void requestShopDetails(shop.owner, shop.id);
-  }, [inView, wanted, shop.owner, shop.id]);
+    if (inView && wanted) void requestShopDetails(shop.owner, shop.id, { updated: shop.updated });
+  }, [inView, wanted, shop.owner, shop.id, shop.updated]);
 
   const json = details?.status === "ready" && details.valid ? details.shop : null;
 
@@ -299,4 +301,28 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   );
 }
 
-export const StoreCard = memo(StoreCardView);
+/** One shop's bad data gives way to a plain card with a link, never the whole page (LocalBoundary). */
+function SafeStoreCard(props: StoreCardProps) {
+  const { shop } = props;
+  return (
+    <LocalBoundary
+      label={`The card of ${shop.owner}'s shop ${shop.id}`}
+      fallback={
+        <UnavailableCard
+          component="li"
+          heading={shop.title}
+          text="This shop's card couldn't be shown."
+          action={
+            <Button component={RouterLink} to={storePath(shop.owner, shop.id)} sx={{ minHeight: 44, alignSelf: "flex-start" }}>
+              Open shop
+            </Button>
+          }
+        />
+      }
+    >
+      <StoreCardView {...props} />
+    </LocalBoundary>
+  );
+}
+
+export const StoreCard = memo(SafeStoreCard);

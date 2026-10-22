@@ -1,12 +1,17 @@
 /**
- * One review: who wrote it (and whether they bought here), the stars from the
- * identifier, the date, and the title and text from the search metadata,
- * which keeps at most 60 and 150 characters. "Read more" fetches the full
- * review then, once. Text is shown as plain text.
+ * One review: who wrote it (and whether they have an order at the shop), the
+ * stars from the identifier, the date, and the title and text from the
+ * search metadata, which keeps at most 60 and 150 characters. "Read more"
+ * fetches the full review then, once. Text is shown as plain text.
+ *
+ * "Ordered here" says exactly what is checked: an order resource for this
+ * shop exists under the reviewer's name. It isn't "Verified buyer": anyone
+ * can publish an order identifier for one publish fee, without paying the
+ * seller, and nothing here can see the payment or the seller's status note.
  */
 import { useState } from "react";
 import { Box, Button, Chip, Rating, Typography } from "@mui/material";
-import VerifiedOutlinedIcon from "@mui/icons-material/VerifiedOutlined";
+import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import { NameAvatar } from "../../../components/common/NameAvatar";
 import { useFetchStoreReviews } from "../../../hooks/useFetchStoreReviews";
 import { RetryCancelled, withPeerRetries } from "../peerRetry";
@@ -24,12 +29,29 @@ export function formatReviewDate(time: number | undefined): string {
 
 type FullState = "idle" | "loading" | "fetching" | "failed";
 
-export function StoreReviewCard({ review, verified }: { review: ShopReview; verified: boolean }) {
+/** A full review's text field, when it is text (review JSON is whatever its publisher wrote). */
+function textOf(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** What a card keeps of a full review: who published it, and its text. */
+interface FullReview {
+  name?: unknown;
+  title?: unknown;
+  description?: unknown;
+}
+
+export function StoreReviewCard({ review, orderedHere }: { review: ShopReview; orderedHere: boolean }) {
   const { getReview, hashMapStoreReviews } = useFetchStoreReviews();
-  const full = hashMapStoreReviews[review.id];
+  // The shared cache keeps full reviews by identifier only, and another name
+  // can publish under the same identifier (docs/QORTAL.md → pitfall 15): only
+  // a body this reviewer published counts, and the one this card read wins.
+  const cached = hashMapStoreReviews[review.id] as FullReview | undefined;
+  const [read, setRead] = useState<FullReview | null>(null);
+  const full = read ?? (cached && cached.name === review.name ? cached : undefined);
   const [state, setState] = useState<FullState>("idle");
-  const title = full?.title || review.title;
-  const text = full?.description || review.description;
+  const title = textOf(full?.title) || review.title;
+  const text = textOf(full?.description) || review.description;
   const date = formatReviewDate(review.created);
 
   const readMore = async () => {
@@ -38,7 +60,7 @@ export function StoreReviewCard({ review, verified }: { review: ShopReview; veri
     // A body that isn't a review won't change; only a missing one is worth waiting for.
     let notAReview = false;
     try {
-      await withPeerRetries(
+      const found = await withPeerRetries(
         async () => {
           const found = await getReview(review.name, review.id);
           if (!found) {
@@ -49,6 +71,7 @@ export function StoreReviewCard({ review, verified }: { review: ShopReview; veri
         },
         { onRetry: () => setState("fetching"), shouldRetry: () => !notAReview }
       );
+      setRead(found as FullReview);
       setState("idle");
     } catch (error) {
       if (!(error instanceof RetryCancelled)) setState("failed");
@@ -60,15 +83,7 @@ export function StoreReviewCard({ review, verified }: { review: ShopReview; veri
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <NameAvatar name={review.name} size={32} />
         <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{review.name}</Typography>
-        {verified && (
-          <Chip
-            size="small"
-            variant="outlined"
-            icon={<VerifiedOutlinedIcon />}
-            label="Verified buyer"
-            sx={{ "& .MuiChip-icon": { color: "success.main" } }}
-          />
-        )}
+        {orderedHere && <Chip size="small" variant="outlined" icon={<ShoppingBagOutlinedIcon />} label="Ordered here" />}
       </Box>
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 1 }}>
         <Rating value={review.rating} precision={0.5} readOnly size="small" />

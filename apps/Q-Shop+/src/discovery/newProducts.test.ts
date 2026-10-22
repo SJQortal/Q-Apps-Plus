@@ -65,6 +65,53 @@ describe("new products", () => {
     });
   });
 
+  it("leaves out products whose title isn't text, and keeps the fields it shows in their types", () => {
+    const items = newProductsFrom(
+      [
+        {
+          row: row("Seller Name", "q-store-catalogue-my-shop-CAT0000001"),
+          json: {
+            products: {
+              objectTitle: product("objectTitle", 90, { title: { a: 1 } }),
+              numberTitle: product("numberTitle", 80, { title: 5 }),
+              blankTitle: product("blankTitle", 70, { title: "   " }),
+              badDate: product("badDate", 60, { created: { at: 1 } }),
+              textDate: product("textDate", "50" as unknown as number),
+              oddStatus: product("oddStatus", 40, { status: { s: "AVAILABLE" } }),
+              oddDescription: product("oddDescription", 30, { description: ["x"] }),
+            },
+          },
+        },
+      ],
+      listedAll
+    );
+    expect(items.map((i) => i.product.id)).toEqual(["textDate", "oddStatus", "oddDescription"]);
+    expect(items[0].product.created).toBe(50);
+    expect(items[1].product.status).toBeUndefined();
+    expect(items[2].product.description).toBeUndefined();
+    for (const item of items) expect(typeof item.product.title).toBe("string");
+  });
+
+  it("keeps products without a description, which the product form allows", () => {
+    const items = newProductsFrom(
+      [
+        {
+          row: row("Seller Name", "q-store-catalogue-my-shop-CAT0000001"),
+          json: {
+            products: {
+              empty: product("empty", 30, { description: "" }),
+              missing: product("missing", 20, { description: undefined, type: undefined }),
+              noPrice: product("noPrice", 10, { price: undefined }),
+              noImages: product("noImages", 5, { images: "data:image/webp;base64,SU1H" }),
+            },
+          },
+        },
+      ],
+      listedAll
+    );
+    expect(items.map((i) => i.product.id)).toEqual(["empty", "missing"]);
+  });
+
   it("leaves out catalogues of shops that aren't listed under that name, and the hidden test shop", () => {
     const json = { products: { a: product("a", 10) } };
     const items = newProductsFrom(

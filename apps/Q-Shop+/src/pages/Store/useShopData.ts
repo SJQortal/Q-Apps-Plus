@@ -32,6 +32,8 @@ import { fetchQdnJson, mapWithConcurrency, resourceExists } from "../../qdn/sear
 import { currentStoreFrom } from "../../hooks/useOwnShops";
 import { checkStructureStore } from "../../utils/checkStructure";
 import { CATALOGUE_CONCURRENCY, fetchCatalogue, type LoadedCatalogue } from "../../utils/fetchCatalogues";
+import { normalizeShopJson } from "../../discovery/shopJson";
+import { primeShopDetails } from "../../discovery/shopDetails";
 import { RetryCancelled, withPeerRetries } from "./peerRetry";
 import { fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
 
@@ -155,15 +157,20 @@ export function useViewedShop(owner: string, storeId: string, options: { product
         onRetry: () => patch({ shopStatus: "fetching" }),
       });
       if (!alive) return;
-      if (result.kind !== "ok" || !result.value || typeof result.value !== "object") {
+      // Fields of the wrong type are dropped before anything renders them (discovery/shopJson.ts).
+      const json = result.kind === "ok" ? normalizeShopJson(result.value) : null;
+      if (!json) {
         patch({ shopStatus: result.kind === "missing" ? "missing" : "unavailable" });
         return;
       }
-      const json = result.value;
       const shop = currentStoreFrom(storeId, owner, json);
       patch({ shopStatus: "ready", shop });
       if (!isOwner) dispatch(setCurrentViewedStore(shop));
-      if (checkStructureStore(json)) dispatch(addToHashMapStores({ ...json, owner, id: storeId, isValid: true }));
+      if (checkStructureStore(json)) {
+        dispatch(addToHashMapStores({ ...json, owner, id: storeId, isValid: true }));
+        // The home card shows this copy too (logo, coins), without reading it again.
+        primeShopDetails(owner, storeId, json);
+      }
     };
 
     const readIndex = async () => {
@@ -194,9 +201,15 @@ export function useViewedShop(owner: string, storeId: string, options: { product
   }, [attempt, containerId, dispatch, isOwner, key, owner, servedFromRedux, shopKey, storeId, withProducts]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  // The seller's own copy stays as it is for their edits; the page shows a checked one.
+  const ownShopView = useMemo(() => (ownShop ? (normalizeShopJson(ownShop) as unknown as CurrentStore) : null), [ownShop]);
+  // After an edit (the seller tools update this copy), the home card shows the new logo and coins at once.
+  useEffect(() => {
+    if (ownShopView) primeShopDetails(owner, storeId, ownShopView);
+  }, [owner, ownShopView, storeId]);
 
   if (servedFromRedux) {
-    return { shop: ownShop, shopStatus: "ready", index: ownShopIndex, productsStatus: "ready", isOwner, retry };
+    return { shop: ownShopView, shopStatus: "ready", index: ownShopIndex, productsStatus: "ready", isOwner, retry };
   }
   if (load?.key === key) {
     return { shop: load.shop, shopStatus: load.shopStatus, index: load.index, productsStatus: load.productsStatus, isOwner, retry };
@@ -222,16 +235,50 @@ export function useViewedShop(owner: string, storeId: string, options: { product
 export type CatalogueStatus = "fetching" | "failed";
 
 /**
+ * Whether a catalogue in the shared map is `owner`'s. The map keeps
+ * catalogues by identifier only, and another name can publish under the same
+ * identifier (docs/QORTAL.md → pitfall 15): a shop that lists someone else's
+ * catalogue ids puts its own copies there, with its own titles, prices and
+ * descriptions. An entry counts when it was read under the owner's name
+ * (`user`), or, without a `user` (the signed-in seller's own publish stores
+ * none), when the signed-in name is the owner.
+ */
+export function isOwnersCatalogue(entry: Catalogue | undefined, owner: string, signedIn: string | undefined): entry is Catalogue {
+  if (!entry || !entry.products || typeof entry.products !== "object") return false;
+  return entry.user ? entry.user === owner : !!signedIn && signedIn === owner;
+}
+
+/**
  * Loads catalogues on demand, at most 5 at a time, each once (kept in
  * `global.catalogueHashMap`, which the cart and the orders screens share).
  * Catalogues the node hasn't got yet are retried after 2, 4 and 8 s.
+ *
+ * `catalogues` holds the owner's catalogues only: an entry of another name
+ * in the shared map counts as not loaded and is read again under the owner's
+ * name. What this hook read is also kept here, so another screen putting a
+ * different name's copy in the shared map later doesn't change this page.
  */
 export function useCatalogueLoader(owner: string) {
   const dispatch = useDispatch();
-  const catalogues = useSelector((state: RootState) => state.global.catalogueHashMap);
+  const shared = useSelector((state: RootState) => state.global.catalogueHashMap);
+  const signedIn = useSelector((state: RootState) => state.auth.user?.name);
+  const [fetched, setFetched] = useState<{ owner: string; catalogues: Record<string, Catalogue> }>({ owner, catalogues: {} });
   const [statuses, setStatuses] = useState<Record<string, CatalogueStatus>>({});
   const started = useRef(new Set<string>());
   const alive = useRef(true);
+
+  const catalogues = useMemo(() => {
+    const view: Record<string, Catalogue> = {};
+    for (const [id, entry] of Object.entries(shared)) {
+      if (isOwnersCatalogue(entry, owner, signedIn)) view[id] = entry;
+    }
+    if (fetched.owner === owner) {
+      for (const [id, entry] of Object.entries(fetched.catalogues)) {
+        if (!view[id]) view[id] = entry;
+      }
+    }
+    return view;
+  }, [fetched, owner, shared, signedIn]);
   const known = useRef(catalogues);
 
   useEffect(() => {
@@ -261,16 +308,22 @@ export function useCatalogueLoader(owner: string) {
   const load = useCallback(
     (ids: string[]) => {
       if (!owner) return;
-      const todo = ids.filter((id) => !known.current[id] && !started.current.has(id));
+      const todo = ids.filter((id) => !known.current[id] && !started.current.has(`${owner}\n${id}`));
       if (todo.length === 0) return;
-      todo.forEach((id) => started.current.add(id));
+      todo.forEach((id) => started.current.add(`${owner}\n${id}`));
       void mapWithConcurrency(todo, CATALOGUE_CONCURRENCY, async (id) => {
         try {
+          // By the owner's name and the identifier, never the body's (fetchCatalogue).
           const catalogue = await withPeerRetries(() => fetchCatalogue(owner, id), {
             isAlive: () => alive.current,
             onRetry: () => setStatus(id, "fetching"),
           });
           if (!alive.current) return;
+          setFetched((prev) =>
+            prev.owner === owner
+              ? { owner, catalogues: { ...prev.catalogues, [id]: catalogue } }
+              : { owner, catalogues: { [id]: catalogue } }
+          );
           dispatch(setCatalogueHashMap(catalogue));
           setStatus(id, null);
         } catch (error) {
@@ -286,26 +339,34 @@ export function useCatalogueLoader(owner: string) {
   const retryFailed = useCallback(() => {
     const failed = Object.keys(statuses).filter((id) => statuses[id] === "failed");
     failed.forEach((id) => {
-      started.current.delete(id);
+      started.current.delete(`${owner}\n${id}`);
       setStatus(id, null);
     });
     load(failed);
-  }, [load, setStatus, statuses]);
+  }, [load, owner, setStatus, statuses]);
 
   return { catalogues, statuses, load, retryFailed };
 }
 
 /**
  * One catalogue, for the product page: from the shared map when a list
- * already read it, else fetched (as the original did), with the peer
- * retries; `missing` when it doesn't exist at all.
+ * already read it under the owner's name (isOwnersCatalogue), else fetched
+ * by the owner's name (as the original did), with the peer retries;
+ * `missing` when it doesn't exist at all.
  */
 export function useCatalogue(owner: string, catalogueId: string): { catalogue: Catalogue | undefined; status: LoadStatus; retry: () => void } {
   const dispatch = useDispatch();
-  const catalogue = useSelector((state: RootState) => state.global.catalogueHashMap[catalogueId]);
+  const shared = useSelector((state: RootState) => state.global.catalogueHashMap[catalogueId]);
+  const signedIn = useSelector((state: RootState) => state.auth.user?.name);
+  const [fetched, setFetched] = useState<{ owner: string; catalogue: Catalogue } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<{ key: string; status: LoadStatus } | null>(null);
   const key = `${owner}\n${catalogueId}\n${attempt}`;
+  const catalogue = isOwnersCatalogue(shared, owner, signedIn)
+    ? shared
+    : fetched && fetched.owner === owner && fetched.catalogue.id === catalogueId
+      ? fetched.catalogue
+      : undefined;
   const have = !!catalogue;
 
   useEffect(() => {
@@ -319,7 +380,10 @@ export function useCatalogue(owner: string, catalogueId: string): { catalogue: C
     }).then(
       (read) => {
         if (!alive) return;
-        if (read.kind === "ok") dispatch(setCatalogueHashMap(read.value));
+        if (read.kind === "ok") {
+          setFetched({ owner, catalogue: read.value });
+          dispatch(setCatalogueHashMap(read.value));
+        }
         setResult({ key, status: read.kind === "ok" ? "ready" : read.kind });
       },
       () => {}

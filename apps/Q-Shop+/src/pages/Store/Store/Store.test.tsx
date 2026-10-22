@@ -9,6 +9,7 @@ import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { installMockNode, makeWorld, type World } from "../../../test/mockNode";
 import { addUser } from "../../../state/features/authSlice";
+import { setCatalogueHashMap } from "../../../state/features/globalSlice";
 import { createAppStore } from "../../../state/store";
 import { setPeerRetryDelaysForTests } from "../peerRetry";
 import { Store } from "./Store";
@@ -258,6 +259,94 @@ describe("shop page", { timeout: 20_000 }, () => {
     // The shop stays on screen while its products load again.
     expect(screen.getByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
+  });
+
+  it("shows a shop whose JSON has fields of the wrong type (it crashed the whole app)", async () => {
+    const world = makeWorld();
+    installMockNode(world);
+    const realFetch = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    const { storeJsonOf } = await import("../../../test/mockNode");
+    const odd = { ...storeJsonOf(world.shops[0]), supportedCoins: 1, foreignCoins: { ARRR: 5 }, acceptedAssets: {}, location: { city: "Lisbon" } };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.startsWith("/arbitrary/STORE/")
+          ? { ok: true, status: 200, text: async () => JSON.stringify(odd), json: async () => odd }
+          : realFetch(url)
+      )
+    );
+    renderWithProviders(
+      <Routes>
+        <Route path="/:user/:store" element={<Store />} />
+      </Routes>,
+      { initialEntries: [SHOP_PATH] }
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
+    const coins = screen.getByRole("list", { name: "Accepted coins" });
+    expect(within(coins).getByText("QORT")).toBeInTheDocument();
+    expect(within(coins).queryByText("ARRR")).toBeNull();
+    expect(screen.queryByText("Lisbon")).toBeNull();
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+  });
+
+  it("shows the other products when one can't be shown", async () => {
+    const world = makeWorld();
+    installMockNode(world);
+    const realFetch = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    const { catalogueOf } = await import("../../../test/mockNode");
+    const cat = catalogueOf(world.shops[0], "q-store-catalogue-my-shop-CAT0000001")!;
+    cat.products["q-store-product-my-shop-P000000011"].title = { en: "Odd" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/q-store-catalogue-my-shop-CAT0000001")
+          ? { ok: true, status: 200, text: async () => JSON.stringify(cat), json: async () => cat }
+          : realFetch(url)
+      )
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderWithProviders(
+        <Routes>
+          <Route path="/:user/:store" element={<Store />} />
+        </Routes>,
+        { initialEntries: [SHOP_PATH] }
+      );
+      expect(await screen.findByText("This product couldn't be shown.")).toBeInTheDocument();
+      await waitFor(() => expect(cardTitles()).toHaveLength(11));
+      expect(screen.getByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it("shows the owner's products, not another name's copies published under the same catalogue ids", async () => {
+    const world = makeWorld();
+    const node = installMockNode(world);
+    const store = createAppStore();
+    store.dispatch(
+      setCatalogueHashMap({
+        id: "q-store-catalogue-my-shop-CAT0000001",
+        user: "Mallory",
+        isValid: true,
+        products: {
+          "q-store-product-my-shop-P000000011": { title: "Pay me directly", price: [{ currency: "qort", value: 1 }], status: "AVAILABLE" },
+          "q-store-product-my-shop-P000000010": { title: "Pay me directly too", price: [{ currency: "qort", value: 1 }], status: "AVAILABLE" },
+        },
+      })
+    );
+    renderWithProviders(
+      <Routes>
+        <Route path="/:user/:store" element={<Store />} />
+      </Routes>,
+      { initialEntries: [SHOP_PATH], store }
+    );
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    expect(cardTitles()).toContain("Product 11");
+    expect(cardTitles()).not.toContain("Pay me directly");
+    expect(catalogueFetches(node).filter((u) => u.includes("CAT0000001"))).toEqual([
+      "/arbitrary/DOCUMENT/Seller%20Name/q-store-catalogue-my-shop-CAT0000001",
+    ]);
   });
 
   it("tells a buyer the shop has no products, and the owner how to add some", async () => {
