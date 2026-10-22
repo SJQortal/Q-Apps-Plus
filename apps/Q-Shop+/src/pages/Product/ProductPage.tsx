@@ -40,6 +40,7 @@ import { CopyLinkButton } from "../Store/CopyLinkButton";
 import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../Store/CartBits";
 import { visuallyHiddenSx } from "../Store/a11y";
 import { LocalBoundary } from "../Store/LocalBoundary";
+import { CategoryIcon } from "../../components/CategoryIcon";
 
 const FETCHING_NOTE = "Fetching from peers…";
 
@@ -219,7 +220,9 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             {product.type && <Chip size="small" variant="outlined" label={product.type === "physical" ? "Physical" : "Digital"} />}
-            {product.category && <Chip size="small" variant="outlined" label={product.category} />}
+            {product.category && (
+              <Chip size="small" variant="outlined" label={product.category} icon={<CategoryIcon category={product.category} size={20} />} />
+            )}
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
             <PriceTag product={product} coin={shopCoin.coin} rate={shopCoin.rate} shop={shop} size="large" />

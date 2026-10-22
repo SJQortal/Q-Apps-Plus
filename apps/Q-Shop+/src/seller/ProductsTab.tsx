@@ -52,6 +52,7 @@ import { BottomSheet } from "../components/common/mobile";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
 import { stickyBelowHeader } from "../components/layout/Navbar/Navbar-styles";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
+import { CategoryIcon } from "../components/CategoryIcon";
 import { STATUS_LABEL, productForEdit, productFromIndexRow } from "./productDraft";
 import {
   DEFAULT_FILTERS,
@@ -632,7 +633,12 @@ const ProductRow = memo(function ProductRow({
               <StatusChip status={row.status} />
               <AmountTag value={row.priceQort} coin="QORT" size="small" />
             </Box>
-            {row.category && <span>{row.category}</span>}
+            {row.category && (
+              <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+                <CategoryIcon category={row.category} size={20} />
+                {row.category}
+              </Box>
+            )}
             {edited && (
               <Chip size="small" variant="outlined" label="Edited, not published" sx={{ color: "text.primary", borderColor: "info.main" }} />
             )}

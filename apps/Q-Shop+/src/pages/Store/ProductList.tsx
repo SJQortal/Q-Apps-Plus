@@ -7,6 +7,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Box, Chip, ToggleButton, ToggleButtonGroup } from "@mui/material";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
+import { CategoryIcon } from "../../components/CategoryIcon";
 import CheckIcon from "@mui/icons-material/Check";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { setProductView } from "../../utils/productView";
@@ -30,12 +31,13 @@ export function useDebounced<T>(value: T, ms: number): T {
  * the Classic theme's primary is the original's surface colour (white in
  * light mode), so a primary chip would vanish there.
  */
-export function FilterChip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+export function FilterChip({ label, on, onClick, category }: { label: string; on: boolean; onClick: () => void; category?: string }) {
   return (
     <Chip
       label={label}
       onClick={onClick}
-      icon={on ? <CheckIcon /> : undefined}
+      // A category's chip shows its icon (components/CategoryIcon.tsx); chosen, a check.
+      icon={on ? <CheckIcon /> : category ? <CategoryIcon category={category} size={22} /> : undefined}
       variant={on ? "filled" : "outlined"}
       aria-pressed={on}
       sx={{
@@ -64,7 +66,7 @@ export function CategoryChips({
     <Box role="group" aria-label="Categories" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
       <FilterChip label="All" on={selected.length === 0} onClick={onClear} />
       {categories.map((category) => (
-        <FilterChip key={category} label={category} on={selected.includes(category)} onClick={() => onToggle(category)} />
+        <FilterChip key={category} label={category} category={category} on={selected.includes(category)} onClick={() => onToggle(category)} />
       ))}
     </Box>
   );
