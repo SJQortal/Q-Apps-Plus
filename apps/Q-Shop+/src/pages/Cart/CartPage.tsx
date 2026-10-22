@@ -1,27 +1,26 @@
 /**
- * The cart, as a page at /cart. Round 2 replaces the old modal with a real
- * page; until then this shows the old cart and leaves when it closes.
+ * The cart, as a page at /cart (it replaces the original's cart modal).
+ * Pages still ask for the cart with `setIsOpen(true)`; GlobalWrapper sends
+ * them here, and this page lowers the flag again so the next ask works.
  */
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
 import type { RootState } from "../../state/store";
 import { setIsOpen } from "../../state/features/cartSlice";
+import { Page } from "../../components/layout/Page";
 import { Cart } from "./Cart";
 
 export function CartPage() {
   const dispatch = useDispatch();
-  const navigate = useNavigate();
   const isOpen = useSelector((state: RootState) => state.cart.isOpen);
-  const wasOpen = useRef(false);
   useEffect(() => {
-    dispatch(setIsOpen(true));
-  }, [dispatch]);
-  useEffect(() => {
-    if (isOpen) wasOpen.current = true;
-    else if (wasOpen.current) navigate("/");
-  }, [isOpen, navigate]);
-  return <Cart />;
+    if (isOpen) dispatch(setIsOpen(false));
+  }, [isOpen, dispatch]);
+  return (
+    <Page width="list">
+      <Cart />
+    </Page>
+  );
 }
 
 export default CartPage;
