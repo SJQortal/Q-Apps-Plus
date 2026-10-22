@@ -1,18 +1,14 @@
 /**
- * Pins what the original checkout sends today, before any of it is touched:
+ * Pins what the original checkout sends, before any of it is touched:
  * the coin, the amount (as text), the recipient, the encrypted publish of the
  * order and the seller's mail, the public keys, the identifiers and the order
  * JSON. Written against the upstream Cart component (docs/apps/Q-Shop+.md →
- * Money code). The same expectations are checked again against the new
- * checkout code, so a refactor can't change a payment by accident.
+ * Money code), and ported unchanged to the cart page and checkout dialog that
+ * replaced it: only the clicks that reach Pay differ, never an expectation.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { Provider } from "react-redux";
-import { MemoryRouter } from "react-router-dom";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createAppStore } from "../../state/store";
-import { HubThemeProvider } from "../../hub-theme";
-import { THEME_STORAGE_KEY, themeConfig } from "../../theme/qplus-theme";
 import { addUser } from "../../state/features/authSlice";
 import {
   addToHashMapStores,
@@ -24,6 +20,7 @@ import {
 import { setCatalogueHashMap } from "../../state/features/globalSlice";
 import { setIsOpen, setProductToCart } from "../../state/features/cartSlice";
 import { installQortalMock, type QortalMock } from "../../test/qortalMock";
+import { renderWithProviders } from "../../test/renderWithProviders";
 import {
   ARRR_ADDRESS,
   BUYER,
@@ -43,7 +40,7 @@ import {
   poster,
   viewedStore,
 } from "../../test/fixtures/shop";
-import { Cart } from "./Cart";
+import { CartPage } from "./CartPage";
 
 vi.mock("short-unique-id", () => ({
   default: class {
@@ -96,21 +93,29 @@ function setup(opts: { coin?: "QORT" | "ARRR"; items: { product: any; qty: numbe
     PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true,
   });
 
-  render(
-    <Provider store={store}>
-      <MemoryRouter>
-        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
-          <Cart />
-        </HubThemeProvider>
-      </MemoryRouter>
-    </Provider>
-  );
+  renderWithProviders(<CartPage />, { store, initialEntries: ["/cart"] });
   return { store, q };
 }
 
+/** Presses a dialog button once it is enabled (prices may wait for the coin's rate). */
+async function press(name: string | RegExp) {
+  const dialog = await screen.findByRole("dialog");
+  const button = await within(dialog).findByRole("button", { name });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+}
+
+async function openCheckout() {
+  const button = await screen.findByRole("button", { name: `Check out ${STORE_TITLE}` });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+}
+
+/** Digital orders: Check out → Review → Confirm → Pay (the original: Purchase → Confirm). */
 async function purchaseDigital() {
-  fireEvent.click(await screen.findByRole("button", { name: "Purchase" }));
-  fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+  await openCheckout();
+  await press("Continue");
+  await press(/^Pay /);
 }
 
 function mailIdentifier() {
@@ -125,7 +130,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("checkout today (pinned)", () => {
+describe("checkout (pinned)", () => {
   it("pays a QORT digital order to the seller's address and publishes the order and mail encrypted", async () => {
     const { q, store } = setup({ items: [{ product: mug, qty: 2 }, { product: poster, qty: 1 }] });
     await purchaseDigital();
@@ -246,21 +251,25 @@ describe("checkout today (pinned)", () => {
 
   it("asks for the delivery address on physical orders and writes `state` for the United States", async () => {
     const { q } = setup({ items: [{ product: chair, qty: 1 }] });
-    fireEvent.click(await screen.findByRole("button", { name: "Checkout" }));
+    await openCheckout();
+    await press("Continue");
 
     const type = (label: RegExp, value: string) =>
       fireEvent.change(screen.getByLabelText(label), { target: { value } });
-    type(/Customer Name/, "Ann Buyer");
-    type(/Street Address/, "1 Main St");
+    // The form loads on demand (digital orders never fetch it).
+    await screen.findByLabelText(/Customer name/i);
+    type(/Customer name/i, "Ann Buyer");
+    type(/Street address/i, "1 Main St");
     type(/^City/, "Springfield");
-    // Country, then State (both MUI selects).
-    fireEvent.mouseDown(screen.getAllByRole("combobox")[0]);
+    // Country, then State (both lists of the original's values).
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
     fireEvent.click(await screen.findByRole("option", { name: "United States" }));
-    fireEvent.mouseDown(screen.getAllByRole("combobox")[1]);
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Oregon" } });
     fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
-    type(/Zip Code/, "97001");
-    type(/Delivery Note/, "Leave at the door");
-    fireEvent.click(screen.getByRole("button", { name: "Purchase" }));
+    type(/Zip code/i, "97001");
+    type(/Delivery note/i, "Leave at the door");
+    await press("Continue");
+    await press(/^Pay /);
 
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     expect(q.callsFor("SEND_COIN")[0]).toEqual({

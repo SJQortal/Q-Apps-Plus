@@ -157,6 +157,30 @@ export const cartSlice = createSlice({
     removeCartFromCarts: (state, action) => {
       const { storeId } = action.payload;
       delete state.carts[storeId];
+    },
+    /**
+     * Puts a removed line back where it was (the cart page's Undo). Recreates
+     * the shop's cart, with its old `lastUpdated`, if removing the line had
+     * emptied it. A line that is back in the cart already is left alone.
+     */
+    restoreCartItem: (state, action) => {
+      const { storeId, storeOwner, order, index, lastUpdated } = action.payload as {
+        storeId: string;
+        storeOwner: string | null;
+        order: Order;
+        index: number;
+        lastUpdated?: number;
+      };
+      const quantity = Math.min(Math.max(1, Math.floor(Number(order?.quantity) || 1)), MAX_QUANTITY);
+      if (!order?.productId || !order.catalogueId) return;
+      const cart =
+        state.carts[storeId] ??
+        (state.carts[storeId] = { orders: {}, lastUpdated: lastUpdated ?? Date.now(), storeId, storeOwner });
+      if (cart.orders[order.productId]) return;
+      const entries = Object.entries(cart.orders);
+      const at = Math.max(0, Math.min(Math.floor(Number(index) || 0), entries.length));
+      entries.splice(at, 0, [order.productId, { productId: order.productId, catalogueId: order.catalogueId, quantity }]);
+      cart.orders = Object.fromEntries(entries);
     }
   }
 });
@@ -168,7 +192,8 @@ export const {
   subtractQuantityFromCart,
   setCartQuantity,
   removeCartFromCarts,
-  removeProductFromCart
+  removeProductFromCart,
+  restoreCartItem
 } = cartSlice.actions;
 
 /** Items in one shop's cart. */
