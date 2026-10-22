@@ -100,8 +100,11 @@ describe("home page", () => {
     await waitFor(() => expect(cards()).toHaveLength(20));
     expect(cardTitles()[0]).toBe("Shop number 23");
     expect(screen.getByText("24 shops")).toBeInTheDocument();
+    // The cards paint from the one shop-index search; the reviews index (for
+    // their stars) follows once it is in, and still no shop JSON is read.
+    await waitFor(() => expect(node.summary().searches).toEqual({ STORE: 1, DOCUMENT: 1 }));
     const s = node.summary();
-    expect(s.searches).toEqual({ STORE: 1 });
+    expect(searchParams(node.fetchCalls).find((p) => p.get("service") === "DOCUMENT")?.get("identifier")).toBe("q-store-review-");
     expect(s.unlimitedSearches).toBe(0);
     expect(s.resources).toEqual({});
     // Titles and descriptions come from the metadata, without the coins marker.
@@ -113,7 +116,10 @@ describe("home page", () => {
     const link = await screen.findByRole("link", { name: "Seller's Shop" });
     expect(link).toHaveAttribute("href", "/Seller%20Name/q-store-general-my-shop");
     expect(link).toHaveAccessibleDescription(/Everything shop 0 sells/);
-    expect(link).toHaveAccessibleDescription(/By Seller Name\. Pays in QORT, ARRR\./);
+    // The reviews index loads after the shop index on every visit, so the stars join in.
+    await waitFor(() =>
+      expect(link).toHaveAccessibleDescription(/By Seller Name\. Rated 3\.5 out of 5 from 6 reviews\. Pays in QORT, ARRR\./)
+    );
   });
 
   it("shows 20 cards, then the rest as the end of the list comes into view", async () => {
@@ -275,7 +281,9 @@ describe("home page", () => {
       world.shops[5].products = [...world.shops[5].products, ...world.shops[6].products];
       const { node } = renderHome({ world, path: "/?sort=products" });
       await waitFor(() => expect(cardTitles()[0]).toBe("Shop number 5"));
-      const indexes = searchParams(node.fetchCalls).filter((p) => p.get("service") === "DOCUMENT");
+      const indexes = searchParams(node.fetchCalls).filter(
+        (p) => p.get("service") === "DOCUMENT" && p.get("identifier") === "q-store-general-"
+      );
       expect(indexes).toHaveLength(1);
       expect(indexes[0].get("identifier")).toBe("q-store-general-");
       expect(indexes[0].get("prefix")).toBe("true");

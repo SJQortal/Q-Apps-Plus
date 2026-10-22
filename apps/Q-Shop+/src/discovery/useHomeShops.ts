@@ -192,6 +192,8 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
 
   // ---- indexes a sort needs: loaded on demand, kept for the session
   const needActivity = sortNeedsActivity(sort);
+  // Top rated waits for the ratings; every other view loads them too, after
+  // the shop index, so the cards show their stars.
   const needRatings = sort === "rated";
   const [activity, setActivity] = useState<SideIndex<ActivityIndex>>(() => ({ data: peekActivity(), error: false }));
   const [activityRun, setActivityRun] = useState({ n: 0, fresh: false });
@@ -213,8 +215,9 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
 
   const [ratings, setRatings] = useState<SideIndex<RatingsIndex>>(() => ({ data: peekRatings(), error: false }));
   const [ratingsRun, setRatingsRun] = useState({ n: 0, fresh: false });
+  const loadRatingsNow = needRatings || index.status === "ready";
   useEffect(() => {
-    if (!needRatings) return;
+    if (!loadRatingsNow) return;
     let alive = true;
     loadRatings({ fresh: ratingsRun.fresh }).then(
       (data) => {
@@ -227,7 +230,7 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     return () => {
       alive = false;
     };
-  }, [needRatings, ratingsRun]);
+  }, [loadRatingsNow, ratingsRun]);
 
   const sortLoading = (needActivity && !activity.data && !activity.error) || (needRatings && !ratings.data && !ratings.error);
   const sortFailed = (needActivity && !activity.data && activity.error) || (needRatings && !ratings.data && ratings.error);

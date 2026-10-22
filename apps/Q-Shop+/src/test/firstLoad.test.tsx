@@ -105,9 +105,10 @@ describe("first load", () => {
     const node = await loadHome();
     const s = report("home (buyer)", node);
     expect(s.unlimitedSearches).toBe(0);
-    // The own-shops search and the shop index; no product-index or reviews search until a sort asks.
-    expect(total(s.searches)).toBeLessThanOrEqual(2);
-    expect(s.searches).toEqual({ STORE: 2 });
+    // The own-shops search, the shop index, and once the index is in, the
+    // reviews index for the cards' stars (Simon, 2026-10-22); no product-index search.
+    expect(total(s.searches)).toBeLessThanOrEqual(3);
+    expect(s.searches).toEqual({ STORE: 2, DOCUMENT: 1 });
     // Shop JSONs (logos) only for the cards on screen.
     expect(s.resources.STORE ?? 0).toBeGreaterThan(0);
     expect(s.resources.STORE ?? 0).toBeLessThanOrEqual(CARDS_IN_VIEW);
@@ -121,8 +122,8 @@ describe("first load", () => {
     const node = await loadHome(world);
     const s = report("home (owner)", node);
     expect(s.unlimitedSearches).toBe(0);
-    expect(total(s.searches)).toBeLessThanOrEqual(2);
-    expect(s.searches).toEqual({ STORE: 2 });
+    expect(total(s.searches)).toBeLessThanOrEqual(3);
+    expect(s.searches).toEqual({ STORE: 2, DOCUMENT: 1 });
     // The cards on screen, plus the owner's own shop (and its product index) for the seller pages.
     expect(s.resources.STORE ?? 0).toBeLessThanOrEqual(CARDS_IN_VIEW + 1);
     expect(s.resources["data container"] ?? 0).toBeLessThanOrEqual(1);

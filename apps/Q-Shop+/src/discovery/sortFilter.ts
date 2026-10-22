@@ -4,7 +4,7 @@
  */
 import { COINS, FOREIGN_TICKERS, shopCoins, type ForeignTicker } from "../money/coins";
 import type { ActivityIndex } from "./activity";
-import type { RatingsIndex } from "./ratings";
+import { weightedRating, type RatingsIndex } from "./ratings";
 import type { ShopDetails } from "./shopDetails";
 import type { ShopEntry } from "./shopIndex";
 
@@ -150,7 +150,10 @@ export function sortShops(shops: ShopEntry[], sort: ShopSort, context: SortConte
         const rb = rating(b);
         if (ra && !rb) return -1;
         if (!ra && rb) return 1;
-        if (ra && rb) return rb.average - ra.average || rb.count - ra.count || newestFirst(a, b);
+        if (ra && rb) {
+          const score = weightedRating(rb) - weightedRating(ra);
+          return score || rb.count - ra.count || newestFirst(a, b);
+        }
         return newestFirst(a, b);
       });
     }

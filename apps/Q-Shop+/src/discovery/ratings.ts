@@ -2,7 +2,9 @@
  * Shop ratings for the home page, from one paged search of every review's
  * identifier: `q-store-review-<shortStoreId>-<uid>-<rating×10>` carries the
  * shop and the rating, so no review is fetched (docs/apps/Q-Shop+.md → Data
- * contract). Loaded only when the Top rated sort asks for it.
+ * contract). Loaded on every home visit once the shop index is in, so the
+ * cards show their stars (Simon, 2026-10-22: one search of up to 100 review
+ * ids, about 10–20 kB with today's 44 reviews).
  *
  * Trusted reviews (Missing features 11, Bugs 12):
  * - one rating per reviewer per shop: their latest review;
@@ -29,6 +31,22 @@ export interface RatingsIndex {
   get: (owner: string, shortStoreId: string) => ShopRating | null;
   /** False when there were more reviews than the index holds. */
   complete: boolean;
+}
+
+/**
+ * Top rated blends each shop's reviews with RATING_PRIOR_WEIGHT imaginary
+ * reviews of RATING_PRIOR stars, so one 5★ review doesn't beat fifty
+ * averaging 4.9 (a Bayesian average; Simon, 2026-10-22). The prior is the
+ * middle of the scale, not the network's mean: with today's few, mostly
+ * 5★ reviews that mean is about 4.9 and would let a single 5 still win.
+ * The cards keep showing the plain average and the count.
+ */
+export const RATING_PRIOR = 3;
+export const RATING_PRIOR_WEIGHT = 3;
+
+/** The score Top rated sorts by. */
+export function weightedRating(rating: ShopRating): number {
+  return (RATING_PRIOR_WEIGHT * RATING_PRIOR + rating.average * rating.count) / (RATING_PRIOR_WEIGHT + rating.count);
 }
 
 export function buildRatingsIndex(rows: QdnResourceSummary[], complete = true): RatingsIndex {
