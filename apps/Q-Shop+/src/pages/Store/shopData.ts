@@ -119,7 +119,8 @@ export function isRetired(status: string | undefined): boolean {
   return status === RETIRED;
 }
 
-function compareRows(sort: ProductSort): (a: ProductRow, b: ProductRow) => number {
+/** The order a sort gives (newest first for equal values). */
+export function compareRows(sort: ProductSort): (a: ProductRow, b: ProductRow) => number {
   const newest = (a: ProductRow, b: ProductRow) => b.created - a.created;
   switch (sort) {
     case "oldest":
