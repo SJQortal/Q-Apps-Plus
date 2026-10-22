@@ -189,7 +189,9 @@ describe("checkout today (pinned)", () => {
       recipient: SELLER,
     });
     expect(mail.htmlContent).toContain("You have sold a product for your shop!");
-    expect(mail.htmlContent).toContain(`Shop: ${STORE_TITLE}`);
+    // Typed text is HTML-escaped in the mail since night 1 (a fix: the original
+    // wrote it raw); it reads the same in Q-Mail.
+    expect(mail.htmlContent).toContain("Shop: Seller&#39;s Shop");
     expect(mail.htmlContent).toContain("Product: Mug");
     expect(mail.htmlContent).toContain("x 2");
     // Digital orders carry no delivery block.

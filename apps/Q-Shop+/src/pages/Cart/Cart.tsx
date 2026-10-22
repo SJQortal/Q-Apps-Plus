@@ -19,8 +19,6 @@ import ShortUniqueId from "short-unique-id";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../state/store";
 import { setIsOpen } from "../../state/features/cartSlice";
-import { objectToBase64 } from "../../utils/toBase64";
-import { MAIL_SERVICE_TYPE } from "../../constants/mail";
 import { Cart as CartInterface } from "../../state/features/cartSlice";
 import {
   AddQuantityButton,
@@ -70,18 +68,17 @@ import {
 } from "../ProductManager/NewProduct/NewProduct-styles";
 import countries from "../../constants/countries.json";
 import states from "../../constants/states.json";
-import moment from "moment";
 import { BackArrowSVG } from "../../assets/svgs/BackArrowSVG";
 import { CloseIconModal } from "../Store/StoreReviews/StoreReviews-styles";
-import { ORDER_BASE, STORE_BASE } from "../../constants/identifiers";
+import { getRate } from "../../money/rates";
+import { startCheckout } from "../../money/checkout";
+import { missingDeliveryFields, type CartLine, type DeliveryInput } from "../../money/order";
 import QORTLogo from "../../assets/img/qort.png";
 import ARRRLogo from "../../assets/img/arrr.png";
 import { AcceptedCoin } from "../StoreList/StoreList-styles";
 import { ARRRSVG } from "../../assets/svgs/ARRRSVG";
 import { setPreferredCoin } from "../../state/features/storeSlice";
 import { CoinFilter } from "../Store/Store/Store";
-import { useModal } from "../../components/common/useModal";
-import { MultiplePublish } from "../../components/common/MultiplePublish/MultiplePublish";
 
 /* Currency must be replaced in the order confirmation email by proper currency */
 
@@ -93,8 +90,6 @@ interface CountryProps {
 export const Cart = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
-  const {isShow, onCancel, onOk, show} = useModal()
-  const [publishes, setPublishes] = useState<any>(null);
   const uid = new ShortUniqueId({
     length: 10,
   });
@@ -105,6 +100,7 @@ export const Cart = () => {
   const usernamePublicKey = useSelector(
     (state: RootState) => state.auth.user?.publicKey
   );
+  const userAddress = useSelector((state: RootState) => state.auth.user?.address);
   // Redux state to open the cart
   const isOpen = useSelector((state: RootState) => state.cart.isOpen);
   // Redux state to get the current cart
@@ -153,18 +149,7 @@ export const Cart = () => {
 
   const calculateARRRExchangeRate = async()=> {
     try {
-      const url = '/crosschain/price/PIRATECHAIN?maxtrades=10&inverse=true'
-    const info = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const responseDataStore = await info.text();
-
-    const ratio = +responseDataStore /100000000
-    if(isNaN(ratio)) throw new Error('Cannot get exchange rate')
-    setExchangeRate(ratio)
+      setExchangeRate(await getRate(CoinFilter.arrr))
     } catch (error) {
       dispatch(setPreferredCoin(CoinFilter.qort))
       dispatch(
@@ -290,16 +275,17 @@ export const Cart = () => {
       );
       return;
     }
-    if (
-      !isDigitalOrder &&
-      (!customerName ||
-        !streetAddress ||
-        !country ||
-        !city ||
-        (country === "United States" && !state) ||
-        (country !== "United States" && !region) ||
-        !zipCode)
-    ) {
+    const delivery: DeliveryInput = {
+      customerName,
+      streetAddress,
+      city,
+      state: state || "",
+      region,
+      country: country || "",
+      zipCode,
+      deliveryNote,
+    };
+    if (!isDigitalOrder && missingDeliveryFields(delivery).length > 0) {
       dispatch(
         setNotification({
           alertType: "error",
@@ -308,490 +294,76 @@ export const Cart = () => {
       );
       return;
     }
-    const details = (cartOrders || []).reduce(
-      (acc: any, key) => {
-        const order = localCart?.orders[key];
-        const quantity = order?.quantity;
-        const productId = order?.productId;
-        const catalogueId = order?.catalogueId;
-        let product = null;
-        if (productId && catalogueId && catalogueHashMap[catalogueId]) {
-          product = catalogueHashMap[catalogueId]?.products[productId];
-        }
-        if (!product) return acc;
-        let price = product?.price?.find(item => item?.currency === "qort")?.value;
-                      const priceArrr = product?.price?.find(item => item?.currency === CoinFilter.arrr)?.value;
-                    
-                      if(coinToUse === CoinFilter.arrr && priceArrr) {
-                        price = +priceArrr
-                      } else if(price && exchangeRate && coinToUse !== CoinFilter.qort){
-                        price = +price * exchangeRate
-                      }
-        if (!price) {
-          dispatch(
-            setNotification({
-              alertType: "error",
-              msg: "Could not find the price",
-            })
-          );
-          return;
-        }
-        const totalProductPrice = price * quantity;
-        acc[productId] = {
-          product,
-          catalogueId,
-          quantity,
-          pricePerUnit: price,
-          totalProductPrice: price * quantity,
-        };
-        acc["totalPrice"] = acc["totalPrice"] + totalProductPrice;
-        return acc;
-      },
-      {
-        totalPrice: 0,
-      }
-    );
-    details["totalPrice"] = details["totalPrice"].toFixed(8);
-    const priceToPay = details["totalPrice"];
-    if (!storeOwner) {
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Cannot find the store owner",
-        })
-      );
-      return;
-    }
-    const res = await qortalRequest({
-      action: "GET_NAME_DATA",
-      name: storeOwner,
+    if (!username || !usernamePublicKey || !userAddress) return;
+    const lines: CartLine[] = cartOrders.map((key) => {
+      const order = localCart.orders[key];
+      return {
+        productId: order.productId,
+        catalogueId: order.catalogueId,
+        quantity: order.quantity,
+        product: catalogueHashMap[order.catalogueId]?.products[order.productId] ?? null,
+      };
     });
-    const address = res.owner;
-    const resAddress = await qortalRequest({
-      action: "GET_ACCOUNT_DATA",
-      address: address,
-    });
-    if (!resAddress?.publicKey) {
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Cannot find the store owner",
-        })
-      );
-      return;
-    }
-
-    let responseSendCoin = null
-    let signature = null
-
-    if(coinToUse === CoinFilter.qort){
-       responseSendCoin = await qortalRequest({
-        action: "SEND_COIN",
-        coin: "QORT",
-        destinationAddress: address,
-        amount: priceToPay,
-      });
-       signature = responseSendCoin.signature;
-  
-    } else if(coinToUse === CoinFilter.arrr){
-
-      if(!storeToUse?.foreignCoins?.ARRR) throw new Error('Store has not set an ARRR address')
-      responseSendCoin = await qortalRequest({
-        action: "SEND_COIN",
-        coin: "ARRR",
-        destinationAddress: storeToUse?.foreignCoins?.ARRR.trim(),
-        amount: priceToPay,
-      });
-    } else {
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Currency not found",
-        })
-      );
-    }
-   
+    dispatch(setIsLoadingGlobal(true));
     try {
-      dispatch(setIsLoadingGlobal(true));
-      // Validate whether order is coming from the USA to put state instead of region
-      const orderObjectNotUSA: any = {
-        created: Date.now(),
-        version: 1,
-        details,
-        storeName: hashMapStores[storeId]?.title,
-        sellerName: storeOwner,
-        delivery: {
-          customerName,
-          shippingAddress: {
-            streetAddress,
-            city,
-            region,
-            country,
-            zipCode,
-            deliveryNote,
-          },
+      const result = await startCheckout({
+        buyer: { name: username, address: userAddress, publicKey: usernamePublicKey },
+        shop: {
+          id: storeId,
+          title: hashMapStores[storeId]?.title,
+          owner: storeOwner,
+          supportedCoins: storeToUse?.supportedCoins,
+          foreignCoins: storeToUse?.foreignCoins,
         },
-        payment: {
-          total: priceToPay,
-          currency: coinToUse,
-          transactionSignature: signature,
-          arrrAddressUsed: coinToUse === CoinFilter.arrr ? storeToUse?.foreignCoins?.ARRR.trim() : ""
+        lines,
+        coin: coinToUse,
+        rate: exchangeRate,
+        isDigital: isDigitalOrder,
+        delivery: isDigitalOrder ? null : delivery,
+        orderUid: uid(),
+        mailUid: mailUid(),
+        now: Date.now(),
+        onPaid: () => {
+          // Paid: the order now lives in pending orders until it's on QDN.
+          dispatch(removeCartFromCarts({ storeId }));
         },
-        communicationMethod: ["Q-Mail"],
-      };
-      const orderObjectUSA: any = {
-        created: Date.now(),
-        version: 1,
-        details,
-        storeName: hashMapStores[storeId]?.title,
-        sellerName: storeOwner,
-        delivery: {
-          customerName,
-          shippingAddress: {
-            streetAddress,
-            city,
-            state,
-            country,
-            zipCode,
-            deliveryNote,
-          },
-        },
-        payment: {
-          total: priceToPay,
-          currency: coinToUse,
-          transactionSignature: signature,
-          arrrAddressUsed: coinToUse === CoinFilter.arrr ? storeToUse?.foreignCoins?.ARRR.trim() : ""
-        },
-        communicationMethod: ["Q-Mail"],
-      };
-      const orderToBase64 = await objectToBase64(
-        country === "United States" ? orderObjectUSA : orderObjectNotUSA
-      );
-      const orderId = uid();
-      if (!storeId) throw new Error("Cannot find store identifier");
-      const parts = storeId.split(`${STORE_BASE}-`);
-      const shortStoreId = parts[1];
-      const productRequestBody = {
-        action: "PUBLISH_QDN_RESOURCE",
-        identifier: `${ORDER_BASE}-${shortStoreId}-${orderId}`,
-        name: username,
-        service: "DOCUMENT_PRIVATE",
-        data64: orderToBase64,
-      };
-
-      const mailId = mailUid();
-      const identifier = `qortal_qmail_${storeOwner?.slice(0, 20)}_${address.slice(
-        -6
-      )}_mail_${mailId}`;
-
-      // HTML with the order details being sent to seller by Q-Mail
-      const htmlContent = `
-      <div style="display: flex; flex-direction: column; align-items: center; padding: 10px; gap: 10px;">
-        <div style="font-family: Merriweather Sans, sans-serif; font-size: 20px; letter-spacing: 0; text-align: center;">
-          You have sold a product for your shop!
-        </div>
-        <div>
-          ${Object.keys(details)
-            .filter(key => key !== "totalPrice")
-            .map(key => {
-              const { product, quantity, pricePerUnit, totalProductPrice } =
-                details[key];
-              return `
-                <div style="display: flex; flex-direction: column; align-items: center; padding: 20px 40px; gap: 10px; background-color: white; border-radius: 5px; color: black;">
-                <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">Shop: ${
-                  hashMapStores[storeId]?.title
-                }</div>
-                  <div style="display: flex; flex-direction: row; align-items: center; gap: 10px;">
-                    <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">Product: ${
-                      product.title
-                    }</div>
-                    <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">x ${quantity}</div>
-                  </div>
-                  <div style="display: flex; flex-direction: row; align-items: center;">
-                    <div style="display: flex; align-items: center; font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center; gap: 7px">
-                    Price: 
-                    <div style="display: flex; align-items: center; gap: 2px;">
-                    ${
-                      orderObjectUSA?.payment?.currency === "QORT"
-                        ? `<svg
-                          fill={"#000000"}
-                          version="1.0"
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="22"
-                          height="22"
-                          viewBox="0 0 695.000000 754.000000"
-                          preserveAspectRatio="xMidYMid meet"
-                        >
-                          <g
-                            transform="translate(0.000000,754.000000) scale(0.100000,-0.100000)"
-                            stroke="none"
-                          >
-                            <path
-                              d="M3035 7289 c-374 -216 -536 -309 -1090 -629 -409 -236 -1129 -652
-                -1280 -739 -82 -48 -228 -132 -322 -186 l-173 -100 0 -1882 0 -1883 38 -24
-                c20 -13 228 -134 462 -269 389 -223 1779 -1026 2335 -1347 127 -73 268 -155
-                314 -182 56 -32 95 -48 118 -48 33 0 207 97 991 552 l102 60 0 779 c0 428 -2
-                779 -4 779 -3 0 -247 -140 -543 -311 -296 -170 -544 -308 -553 -306 -8 2 -188
-                104 -400 226 -212 123 -636 368 -942 544 l-558 322 0 1105 c0 1042 1 1106 18
-                1116 9 6 107 63 217 126 110 64 421 243 690 398 270 156 601 347 736 425 l247
-                142 363 -210 c200 -115 551 -317 779 -449 228 -132 495 -286 594 -341 l178
-                -102 -6 -1889 -6 -1888 23 14 c12 8 318 185 680 393 l657 379 0 1887 0 1886
-                -77 46 c-43 25 -458 264 -923 532 -465 268 -1047 605 -1295 748 -646 373 -965
-                557 -968 557 -1 0 -182 -104 -402 -231z"
-                            />
-                            <path
-                              d="M3010 4769 c-228 -133 -471 -274 -540 -313 l-125 -72 0 -633 0 -632
-                295 -171 c162 -94 407 -235 544 -315 137 -79 255 -142 261 -139 6 2 200 113
-                431 247 230 133 471 272 534 308 l115 66 2 635 3 635 -536 309 c-294 169 -543
-                310 -552 312 -9 2 -204 -105 -432 -237z"
-                            />
-                          </g>
-                        </svg>`
-                        : `<svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          xmlnsXlink="http://www.w3.org/1999/xlink"
-                          version="1.1"
-                          id="Layer_1"
-                          x="0px"
-                          y="0px"
-                          viewBox="0 0 2000 2000"
-                          width="22"
-                          height="22"
-                          xmlSpace="preserve"
-                        >
-                          <linearGradient
-                            id="SVGID_1_"
-                            gradientUnits="userSpaceOnUse"
-                            x1="0"
-                            y1="-2"
-                            x2="2000"
-                            y2="-2"
-                            gradientTransform="matrix(1 0 0 1 0 1002)"
-                          >
-                            <stop offset="0"></stop>
-                            <stop offset="1"></stop>
-                          </linearGradient>
-                          <path
-                            fill="#000000"
-                            d="M1000,0C447.6,0,0,447.6,0,1000s447.6,1000,1000,1000s1000-447.6,1000-1000S1552.4,0,1000,0z M548.6,741.5  c0-123.6,100.2-223.1,224.6-223.1h512.4c58.6,0,114.9,23,156.7,64.1l-262.2,131.9h-361c-40.7,0-73.1,29.4-73.1,64.8v160.5  l-196.7,102.5V741.5L548.6,741.5z M1507.9,1075.4c0,123.6-100.2,223.1-223.1,223.1H745.3v190.7c0,32.4-24.1,58.8-52.8,65.6  l-67.1,1.5h-76.9v-331.6l257-134.1h431.8c40.7,0,74.6-29.4,74.6-65.6V828.9l195.9-98.7L1507.9,1075.4L1507.9,1075.4z"
-                          ></path>
-                        </svg>`
-                    } ${pricePerUnit} ${
-                country === "United States"
-                  ? orderObjectUSA?.payment?.currency
-                  : orderObjectNotUSA?.payment?.currency
-              }
-                </div>
-                  </div>
-                    </div>
-                  <div style="display: flex; flex-direction: row; align-items: center;">
-                    <div style="display: flex; align-items: center; font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center; gap: 7px">
-                    Total Price:
-                    <div style="display: flex; align-items: center; gap: 2px;">
-                    ${
-                      orderObjectUSA?.payment?.currency === "QORT"
-                        ? `<svg
-                          fill={"#000000"}
-                          version="1.0"
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="22"
-                          height="22"
-                          viewBox="0 0 695.000000 754.000000"
-                          preserveAspectRatio="xMidYMid meet"
-                        >
-                          <g
-                            transform="translate(0.000000,754.000000) scale(0.100000,-0.100000)"
-                            stroke="none"
-                          >
-                            <path
-                              d="M3035 7289 c-374 -216 -536 -309 -1090 -629 -409 -236 -1129 -652
-                -1280 -739 -82 -48 -228 -132 -322 -186 l-173 -100 0 -1882 0 -1883 38 -24
-                c20 -13 228 -134 462 -269 389 -223 1779 -1026 2335 -1347 127 -73 268 -155
-                314 -182 56 -32 95 -48 118 -48 33 0 207 97 991 552 l102 60 0 779 c0 428 -2
-                779 -4 779 -3 0 -247 -140 -543 -311 -296 -170 -544 -308 -553 -306 -8 2 -188
-                104 -400 226 -212 123 -636 368 -942 544 l-558 322 0 1105 c0 1042 1 1106 18
-                1116 9 6 107 63 217 126 110 64 421 243 690 398 270 156 601 347 736 425 l247
-                142 363 -210 c200 -115 551 -317 779 -449 228 -132 495 -286 594 -341 l178
-                -102 -6 -1889 -6 -1888 23 14 c12 8 318 185 680 393 l657 379 0 1887 0 1886
-                -77 46 c-43 25 -458 264 -923 532 -465 268 -1047 605 -1295 748 -646 373 -965
-                557 -968 557 -1 0 -182 -104 -402 -231z"
-                            />
-                            <path
-                              d="M3010 4769 c-228 -133 -471 -274 -540 -313 l-125 -72 0 -633 0 -632
-                295 -171 c162 -94 407 -235 544 -315 137 -79 255 -142 261 -139 6 2 200 113
-                431 247 230 133 471 272 534 308 l115 66 2 635 3 635 -536 309 c-294 169 -543
-                310 -552 312 -9 2 -204 -105 -432 -237z"
-                            />
-                          </g>
-                        </svg>`
-                        : `<svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          xmlnsXlink="http://www.w3.org/1999/xlink"
-                          version="1.1"
-                          id="Layer_1"
-                          x="0px"
-                          y="0px"
-                          viewBox="0 0 2000 2000"
-                          width="22"
-                          height="22"
-                          xmlSpace="preserve"
-                        >
-                          <linearGradient
-                            id="SVGID_1_"
-                            gradientUnits="userSpaceOnUse"
-                            x1="0"
-                            y1="-2"
-                            x2="2000"
-                            y2="-2"
-                            gradientTransform="matrix(1 0 0 1 0 1002)"
-                          >
-                            <stop offset="0"></stop>
-                            <stop offset="1"></stop>
-                          </linearGradient>
-                          <path
-                            fill="#000000"
-                            d="M1000,0C447.6,0,0,447.6,0,1000s447.6,1000,1000,1000s1000-447.6,1000-1000S1552.4,0,1000,0z M548.6,741.5  c0-123.6,100.2-223.1,224.6-223.1h512.4c58.6,0,114.9,23,156.7,64.1l-262.2,131.9h-361c-40.7,0-73.1,29.4-73.1,64.8v160.5  l-196.7,102.5V741.5L548.6,741.5z M1507.9,1075.4c0,123.6-100.2,223.1-223.1,223.1H745.3v190.7c0,32.4-24.1,58.8-52.8,65.6  l-67.1,1.5h-76.9v-331.6l257-134.1h431.8c40.7,0,74.6-29.4,74.6-65.6V828.9l195.9-98.7L1507.9,1075.4L1507.9,1075.4z"
-                          ></path>
-                        </svg>`
-                    }
-                    ${totalProductPrice} ${
-                country === "United States"
-                  ? orderObjectUSA?.payment?.currency
-                  : orderObjectNotUSA?.payment?.currency
-              }
-                  </div>
-                </div>
-              </div>
-            </div>
-              `;
-            })
-            .join("")}
-        </div>
-        ${
-          !isDigitalOrder
-            ? `
-        <div>
-          <div style="font-family: Merriweather Sans, sans-serif; font-size: 20px; letter-spacing: 0; text-align: center;">
-            Delivery Information
-          </div>
-          <div style="display: flex; flex-direction: column; align-items: center; padding: 20px 40px; gap: 10px; background-color: white; border-radius: 5px; color: black;">
-            <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Qortal Username: ${username}
-            </div>
-            <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Customer Name: ${customerName}
-            </div>
-            <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Street Address: ${streetAddress}
-            </div>
-            <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              City: ${city}
-            </div>
-            ${
-              country === "United States"
-                ? `<div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-                State: ${state}
-              </div>`
-                : `<div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-                Region: ${region}
-              </div>`
-            }
-            <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Country: ${country}
-            </div>
-            <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Zip Code: ${zipCode}
-            </div>
-            <div style="font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Delivery Note: ${deliveryNote}
-            </div>
-          </div>
-        </div>
-        `
-            : `<div></div>`
-        }
-        <div>
-          <div style="font-family: Merriweather Sans, sans-serif; font-size: 20px; letter-spacing: 0; text-align: center;">
-            Date of purchase
-          </div>
-          <div style="display: flex; flex-direction: column; align-items: center; padding: 20px 40px; gap: 10px; background-color: white; border-radius: 5px; color: black;">
-            <div style="font-family: Karla; font-size: 18px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Date: ${moment(
-                country === "United States"
-                  ? orderObjectUSA?.created
-                  : orderObjectNotUSA?.created
-              ).format("llll")}
-            </div>
-          </div>
-        </div>
-      </div>
-      `;
-
-      const mailObject: any = {
-        title: `Order for shop ${shortStoreId} from ${username}`,
-        subject: "New order",
-        createdAt: Date.now(),
-        version: 1,
-        attachments: [],
-        textContent: "",
-        htmlContent: htmlContent,
-        generalData: {
-          thread: [],
-        },
-        recipient: storeOwner,
-      };
-
-      const mailObjectToBase64 = await objectToBase64(mailObject);
-      const mailRequestBody: any = {
-        action: "PUBLISH_QDN_RESOURCE",
-        name: username,
-        service: MAIL_SERVICE_TYPE,
-        data64: mailObjectToBase64,
-        identifier,
-      };
-
-      const multiplePublish = {
-        action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
-        resources: [productRequestBody, mailRequestBody],
-        encrypt: true,
-        publicKeys: [resAddress.publicKey, usernamePublicKey],
-      };
-      setPublishes(multiplePublish)
-      await show()
-      // await qortalRequest(multiplePublish);
-      // Clear this cart state from global carts redux
-      dispatch(removeCartFromCarts({ storeId }));
-      // Clear cart local state
-      setCheckoutPage(false);
-      setCustomerName("");
-      setStreetAddress("");
-      setCountry("");
-      setState("");
-      setCity("");
-      setRegion("");
-      setZipCode("");
-      setDeliveryNote("");
-      setConfirmPurchaseModalOpen(false);
-      // Close the modal and set notification message
-      closeModal();
-      dispatch(
-        setNotification({
-          alertType: "success",
-          msg: "Order placed successfully!",
-        })
-      );
-    } catch (error) {
-      console.log({ error });
-      const errMsg = "Order failed to be placed! Please try again!";
-      dispatch(
-        setNotification({
-          msg: errMsg,
-          alertType: "error",
-        })
-      );
+      });
+      if (result.kind === "done") {
+        setCheckoutPage(false);
+        setCustomerName("");
+        setStreetAddress("");
+        setCountry("");
+        setState("");
+        setCity("");
+        setRegion("");
+        setZipCode("");
+        setDeliveryNote("");
+        setConfirmPurchaseModalOpen(false);
+        closeModal();
+        dispatch(
+          setNotification({
+            alertType: "success",
+            msg: "Order placed successfully!",
+          })
+        );
+      } else if (result.kind === "failed") {
+        dispatch(setNotification({ alertType: "error", msg: result.message }));
+      } else if (result.kind === "not-recorded") {
+        setConfirmPurchaseModalOpen(false);
+        closeModal();
+        dispatch(setNotification({ alertType: "error", msg: result.message }));
+      } else if (result.kind === "unconfirmed") {
+        setConfirmPurchaseModalOpen(false);
+        closeModal();
+        dispatch(
+          setNotification({
+            alertType: "error",
+            msg: "Hub didn't confirm the payment. Check My orders before paying again.",
+          })
+        );
+      }
     } finally {
       dispatch(setIsLoadingGlobal(false));
-      setPublishes(null)
     }
   };
 
@@ -833,18 +405,6 @@ export const Cart = () => {
 
   return (
     <>
-      {isShow && (
-         <MultiplePublish
-           isOpen={isShow}
-           onError={(messageNotification)=> {
-             onCancel()
-           }}
-           onSubmit={() => {
-             onOk()
-           }}
-           publishes={publishes}
-         />
-       )}
       <ReusableModal
         open={isOpen}
         customStyles={{

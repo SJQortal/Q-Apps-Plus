@@ -3,6 +3,8 @@ import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { installQortalMock } from './qortalMock';
 import { resetQdnCaches } from '../qdn/search';
+import { resetRates } from '../money/rates';
+import { resetPendingOrders } from '../money/pendingOrders';
 
 // localStorage: jsdom has one, but a plain object store is easier to inspect.
 const localStorageStore: Record<string, string> = {};
@@ -87,6 +89,8 @@ beforeEach(() => {
   installQortalMock();
   localStorageMock.clear();
   resetQdnCaches();
+  resetRates();
+  resetPendingOrders();
 });
 
 afterEach(() => {
