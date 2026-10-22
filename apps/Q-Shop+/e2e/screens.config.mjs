@@ -53,6 +53,10 @@ const shops = OWNERS.map((owner, i) => {
 // Images are generated in setup() (data URLs, as the shops publish them).
 let IMG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
 let IMG2 = IMG;
+// A wide logo (5:2, transparent around the lettering), for shop-1: shop pages show logos whole.
+let LOGO_WIDE = IMG;
+// A product photo with a transparent background (a cut-out), for products 0 and 3: lists show it without a backdrop.
+let CUTOUT = IMG;
 let PNG = Buffer.from(IMG.split(',')[1], 'base64');
 
 const productId = (s, p) => `q-store-product-${s.short}-P${String(p).padStart(9, '0')}`;
@@ -63,7 +67,7 @@ function product(s, p) {
     description: p === 0 ? 'A mug.\nGlazed by hand, so every one is different.\n\nHolds 350 ml.' : `Description of product ${p}.`,
     created: s.created + p * 60_000,
     version: 1,
-    images: p % 4 === 0 ? [IMG, IMG2, IMG] : [p % 2 ? IMG2 : IMG],
+    images: p === 0 ? [CUTOUT, IMG2, IMG] : p === 3 ? [CUTOUT] : p % 4 === 0 ? [IMG, IMG2, IMG] : [p % 2 ? IMG2 : IMG],
     mainImageIndex: 0,
     type: p % 3 === 0 ? 'physical' : 'digital',
     price: s.arrr && p % 2 === 0 ? [{ currency: 'qort', value: 1.5 + p }, { currency: 'ARRR', value: 0.25 + p / 10 }] : [{ currency: 'qort', value: 1.5 + p }],
@@ -124,7 +128,7 @@ const storeJson = (s) => ({
   shipsTo: 'Europe and the UK',
   created: s.created,
   shortStoreId: s.short,
-  logo: IMG,
+  logo: s.short === 'shop-1' ? LOGO_WIDE : IMG,
   foreignCoins: s.arrr ? { ARRR: 'zs1arrrpayoutaddressxxxxxxxxxxxxxxxxxxxxxxxx' } : { ARRR: '' },
   supportedCoins: s.arrr ? ['QORT', 'ARRR'] : ['QORT'],
 });
@@ -222,6 +226,11 @@ export default {
     IMG = `data:image/png;base64,${PNG.toString('base64')}`;
     await gen.setContent('<div style="width:160px;height:160px;background:linear-gradient(45deg,#10b981,#6366f1)"></div>');
     IMG2 = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 } })).toString('base64')}`;
+    await gen.setContent('<div style="width:160px;height:160px;display:grid;place-items:center"><div style="width:110px;height:120px;border-radius:24px 24px 16px 16px;background:linear-gradient(#cbd5e1 0 22%,#facc15 22%)"></div></div>');
+    CUTOUT = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 }, omitBackground: true })).toString('base64')}`;
+    await gen.setViewportSize({ width: 400, height: 160 });
+    await gen.setContent('<div style="width:400px;height:160px;display:flex;align-items:center;gap:16px;font:800 64px sans-serif;color:#f59e0b"><div style="width:120px;height:120px;background:#3b82f6;transform:rotate(45deg) scale(.7)"></div>SHOP 1</div>');
+    LOGO_WIDE = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 400, height: 160 }, omitBackground: true })).toString('base64')}`;
     await gen.close();
   },
 
