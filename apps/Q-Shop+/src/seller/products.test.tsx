@@ -23,6 +23,7 @@ import {
   SHORT_STORE_ID,
   STORE_ID,
   catalogue,
+  chair,
   dataContainer,
   decodeData64,
   mug,
@@ -147,6 +148,62 @@ describe("the products tab", () => {
       status: "AVAILABLE",
       user: SELLER,
     });
+  });
+
+  it("a product its catalogue lacks says so and opens from its index row; saving puts it back in the catalogue", async () => {
+    // A publish where the catalogue failed and the index landed: the index names
+    // the lamp in CATALOGUE_ID, which doesn't hold it.
+    installVisibleIntersectionObserver();
+    stubNode();
+    const lamp = { id: `q-store-product-${SHORT_STORE_ID}-LAMPxxxxx4`, created: 1690000200000 };
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true }, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(
+      setDataContainer({
+        ...dataContainer,
+        products: {
+          ...dataContainer.products,
+          [lamp.id]: { created: lamp.created, priceQort: 3, category: "Lighting", catalogueId: CATALOGUE_ID, status: "OUT_OF_STOCK" },
+        },
+        catalogues: [{ id: CATALOGUE_ID, products: { ...dataContainer.catalogues[0].products, [lamp.id]: true } }],
+      })
+    );
+    const list = await screen.findByRole("list", { name: "Products" });
+    expect(await within(list).findByText("Missing from its catalogue: open it to add its details again")).toBeInTheDocument();
+    // Read once more, fresh, before it counts as missing; then never again.
+    expect(q.callsFor("FETCH_QDN_RESOURCE").filter((c) => c.identifier === CATALOGUE_ID)).toHaveLength(2);
+
+    fireEvent.click(within(list).getByRole("button", { name: "Edit product" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    expect(screen.queryByText("Opening…")).toBeNull();
+    expect(within(dialog).getByRole("textbox", { name: /^Price in QORT/ })).toHaveValue("3");
+    expect(within(dialog).getByRole("combobox", { name: /^Category/ })).toHaveValue("Lighting");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Lamp" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+    await waitFor(() => expect(store.getState().global.productsToSave[lamp.id]).toBeDefined());
+    expect(store.getState().global.productsToSave[lamp.id]).toMatchObject({
+      id: lamp.id,
+      created: lamp.created,
+      catalogueId: CATALOGUE_ID,
+      storeId: STORE_ID,
+      shortStoreId: SHORT_STORE_ID,
+      version: 1,
+      title: "Lamp",
+      images: ["data:image/webp;base64,TkVX"],
+      price: [{ currency: "qort", value: 3 }],
+      category: "Lighting",
+      status: "OUT_OF_STOCK",
+      isUpdate: true,
+      user: SELLER,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    const cat = decodeData64(call.resources[0].data64);
+    expect(call.resources[0].identifier).toBe(CATALOGUE_ID);
+    expect(Object.keys(cat.products)).toEqual([mug.id, poster.id, chair.id, lamp.id]);
+    expect(cat.products[lamp.id]).toMatchObject({ title: "Lamp", catalogueId: CATALOGUE_ID, price: [{ currency: "qort", value: 3 }] });
   });
 
   it("Add product puts a new product in Ready to publish, in the original's shape", async () => {
