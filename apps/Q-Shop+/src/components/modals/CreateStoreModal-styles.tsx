@@ -1,14 +1,19 @@
-import { styled } from "@mui/system";
+/**
+ * Form parts shared with other screens (the cart, reviews, orders), from the
+ * original's Create shop dialog. Colours come from the theme, so they work in
+ * all four themes; the shop dialogs themselves no longer use these.
+ */
+import { styled } from "@mui/material/styles";
 import { Box, Button, TextField, Theme, Typography } from "@mui/material";
 import AddPhotoAlternateIcon from "@mui/icons-material/AddPhotoAlternate";
 import { TimesSVG } from "../../assets/svgs/TimesSVG";
 import { NumericTextFieldQshop } from "../common/NumericTextFieldQshop";
-import { DownloadSVG } from "../../assets/svgs/DownloadSVG";
+import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 
 export const ModalBody = styled(Box)(({ theme }) => ({
   position: "absolute",
   backgroundColor: theme.palette.background.default,
-  borderRadius: "4px",
+  borderRadius: theme.shape.borderRadius,
   top: "50%",
   left: "50%",
   transform: "translate(-50%, -50%)",
@@ -18,30 +23,11 @@ export const ModalBody = styled(Box)(({ theme }) => ({
   flexDirection: "column",
   gap: "17px",
   overflowY: "auto",
-  maxHeight: "95vh",
-  boxShadow:
-    theme.palette.mode === "dark"
-      ? "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
-      : "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
-  "&::-webkit-scrollbar-track": {
-    backgroundColor: theme.palette.background.paper,
-  },
-  "&::-webkit-scrollbar-track:hover": {
-    backgroundColor: theme.palette.background.paper,
-  },
-  "&::-webkit-scrollbar": {
-    width: "16px",
-    height: "10px",
-    backgroundColor: theme.palette.mode === "light" ? "#f6f8fa" : "#292d3e",
-  },
-  "&::-webkit-scrollbar-thumb": {
-    backgroundColor: theme.palette.mode === "light" ? "#d3d9e1" : "#575757",
-    borderRadius: "8px",
-    backgroundClip: "content-box",
-    border: "4px solid transparent",
-  },
-  "&::-webkit-scrollbar-thumb:hover": {
-    backgroundColor: theme.palette.mode === "light" ? "#b7bcc4" : "#474646",
+  maxHeight: "calc(100dvh - 32px)",
+  boxShadow: theme.shadows[8],
+  [`@media ${PHONE_MEDIA}`]: {
+    width: "calc(100% - 24px)",
+    padding: "12px 16px",
   },
 }));
 
@@ -51,35 +37,30 @@ export const ModalTitle = styled(Typography)(() => ({
   userSelect: "none",
 }));
 
-export const StoreLogoPreview = styled("img")(() => ({
+export const StoreLogoPreview = styled("img")(({ theme }) => ({
   width: "100px",
   height: "100px",
   objectFit: "contain",
   userSelect: "none",
-  borderRadius: "3px",
+  borderRadius: theme.shape.borderRadius,
   marginBottom: "10px",
 }));
 
 export const AddLogoButton = styled(Button)(({ theme }) => ({
   backgroundColor: theme.palette.secondary.main,
-  color: "#fff",
+  color: theme.palette.secondary.contrastText,
   fontSize: "17px",
   padding: "5px 10px",
-  borderRadius: "5px",
+  minHeight: 44,
+  borderRadius: theme.shape.borderRadius,
   gap: "5px",
   border: "none",
-  transition: "all 0.3s ease-in-out",
-  boxShadow:
-    theme.palette.mode === "dark"
-      ? "0px 4px 5px 0px hsla(0,0%,0%,0.14),  0px 1px 10px 0px hsla(0,0%,0%,0.12),  0px 2px 4px -1px hsla(0,0%,0%,0.2)"
-      : "rgba(99, 99, 99, 0.2) 0px 2px 8px 0px",
+  transition: "background-color 150ms ease, box-shadow 150ms ease",
+  boxShadow: theme.shadows[2],
   marginBottom: "5px",
   "&:hover": {
     cursor: "pointer",
-    boxShadow:
-      theme.palette.mode === "dark"
-        ? "0px 8px 10px 1px hsla(0,0%,0%,0.14), 0px 3px 14px 2px hsla(0,0%,0%,0.12), 0px 5px 5px -3px hsla(0,0%,0%,0.2)"
-        : "rgba(0, 0, 0, 0.1) 0px 4px 6px -1px, rgba(0, 0, 0, 0.06) 0px 2px 4px -1px;",
+    boxShadow: theme.shadows[4],
     backgroundColor: theme.palette.secondary.dark,
   },
 }));
@@ -91,7 +72,7 @@ export const LogoPreviewRow = styled(Box)(() => ({
 }));
 
 export const AddLogoIcon = styled(AddPhotoAlternateIcon)(() => ({
-  color: "#fff",
+  color: "inherit",
   height: "25px",
   width: "auto",
 }));
@@ -100,10 +81,10 @@ export const TimesIcon = styled(TimesSVG)(({ theme }) => ({
   backgroundColor: theme.palette.background.paper,
   borderRadius: "50%",
   padding: "5px",
-  transition: "all 0.2s ease-in-out",
+  transition: "transform 150ms ease",
   "&:hover": {
     cursor: "pointer",
-    scale: "1.1",
+    transform: "scale(1.1)",
   },
 }));
 
@@ -115,25 +96,25 @@ const customInputStyle = (theme: Theme) => {
     backgroundColor: theme.palette.background.default,
     borderColor: theme.palette.background.paper,
     "& label": {
-      color: theme.palette.mode === "light" ? "#808183" : "#edeef0",
+      color: theme.palette.text.secondary,
       fontSize: "18px",
       letterSpacing: "0px",
     },
     "& label.Mui-focused": {
-      color: theme.palette.mode === "light" ? "#A0AAB4" : "#d7d8da",
+      color: theme.palette.primary.main,
     },
     "& .MuiInput-underline:after": {
-      borderBottomColor: theme.palette.mode === "light" ? "#B2BAC2" : "#c9cccf",
+      borderBottomColor: theme.palette.primary.main,
     },
     "& .MuiOutlinedInput-root": {
       "& fieldset": {
-        borderColor: "#E0E3E7",
+        borderColor: theme.palette.divider,
       },
       "&:hover fieldset": {
-        borderColor: "#B2BAC2",
+        borderColor: theme.palette.text.secondary,
       },
       "&.Mui-focused fieldset": {
-        borderColor: "#6F7E8C",
+        borderColor: theme.palette.primary.main,
       },
     },
     "& .MuiInputBase-root": {
@@ -146,92 +127,29 @@ const customInputStyle = (theme: Theme) => {
   };
 };
 
-export const CustomInputField = styled(TextField)(({ theme }) =>
-  customInputStyle(theme as Theme)
-);
+export const CustomInputField = styled(TextField)(({ theme }) => customInputStyle(theme as Theme));
 
-export const CustomNumberField = styled(NumericTextFieldQshop)(({ theme }) =>
-  customInputStyle(theme as Theme)
-);
+export const CustomNumberField = styled(NumericTextFieldQshop)(({ theme }) => customInputStyle(theme as Theme));
 
 export const ButtonRow = styled(Box)(() => ({
   display: "flex",
   gap: "10px",
   justifyContent: "flex-end",
+  flexWrap: "wrap",
 }));
 
 export const CancelButton = styled(Button)(() => ({
   fontSize: "15px",
+  minHeight: 44,
 }));
 
-export const CreateButton = styled(Button)(() => ({
+export const CreateButton = styled(Button)(({ theme }) => ({
   fontSize: "15px",
-  backgroundColor: "#32d43a",
-  color: "black",
+  minHeight: 44,
+  backgroundColor: theme.palette.success.main,
+  color: theme.palette.success.contrastText,
   "&:hover": {
     cursor: "pointer",
-    backgroundColor: "#2bb131",
+    backgroundColor: theme.palette.success.dark,
   },
-}));
-
-export const WalletRow = styled(Box)(() => ({
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-}));
-
-export const DownloadArrrWalletIcon = styled(DownloadSVG)(({ theme }) => ({
-  padding: "5px 7px",
-  borderRadius: "50%",
-  backgroundColor: theme.palette.background.paper,
-  "&:hover": {
-    cursor: "pointer",
-  },
-}));
-
-export const AdvancedSettingsBox = styled(Box)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "row",
-  alignItems: "center",
-  gap: "10px",
-  padding: "5px 10px",
-  borderRadius: "5px",
-  backgroundColor: theme.palette.background.paper,
-  "& .MuiTypography-root": {
-    fontSize: "20px",
-    fontWeight: 300,
-    letterSpacing: "0.2px",
-  }
-}));
-
-export const EditStoreButtonsRow = styled(Box)({
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-});
-
-export const CreateNewDataContainerRow = styled(Box)({
-  display: "flex",
-  alignItems: "center",
-});
-
-export const CreateNewDataContainerButton = styled(Button)(() => ({
-  backgroundColor: "#d43232",
-  textTransform: "none",
-  fontWeight: 300,
-  gap: "5px",
-  fontSize: "17px",
-  borderRadius: "5px",
-  border: "none",
-  color: "white",
-  padding: "5px 15px",
-  transition: "all 0.3s ease-in-out",
-  boxShadow:
-    "rgba(50, 50, 93, 0.25) 0px 2px 5px -1px, rgba(0, 0, 0, 0.3) 0px 1px 3px -1px;",
-  "&:hover": {
-    cursor: "pointer",
-    backgroundColor: "#a72727",
-    boxShadow:
-      "rgba(50, 50, 93, 0.35) 0px 3px 5px -1px, rgba(0, 0, 0, 0.4) 0px 2px 3px -1px;"
-  }
 }));

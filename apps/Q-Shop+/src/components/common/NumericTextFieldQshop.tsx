@@ -111,15 +111,17 @@ export const NumericTextFieldQshop = React.forwardRef<
         value={textFieldValue}
         className={className}
         slotProps={{
+          // Phones show the number pad, with a decimal key when decimals are allowed.
+          htmlInput: { inputMode: allowDecimals ? "decimal" : "numeric" },
           input: addIconButtons
             ? {
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => changeValueWithButton(1)}>
-                      <AddIcon />{" "}
+                    <IconButton aria-label={`More ${label}`} onClick={() => changeValueWithButton(1)} sx={{ width: 44, height: 44 }}>
+                      <AddIcon />
                     </IconButton>
-                    <IconButton onClick={() => changeValueWithButton(-1)}>
-                      <RemoveIcon />{" "}
+                    <IconButton aria-label={`Less ${label}`} onClick={() => changeValueWithButton(-1)} sx={{ width: 44, height: 44 }}>
+                      <RemoveIcon />
                     </IconButton>
                   </InputAdornment>
                 )
