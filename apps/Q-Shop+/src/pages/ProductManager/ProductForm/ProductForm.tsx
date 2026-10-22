@@ -55,6 +55,8 @@ interface ProductFormProps {
   pricing?: FiatPricing | null;
   /** The product as saved, to say when its price in the currency was changed elsewhere. */
   saved?: Record<string, unknown> | null;
+  /** Assets that can't be split (`ASSET:<id>`): their prices are whole units. */
+  wholeOnly?: string[];
   /** Editing a published product: the status can change. */
   editing: boolean;
   onImageError: (message: string) => void;
@@ -70,11 +72,15 @@ function coinName(coin: string, shop: ShopCoinSettings | null | undefined): stri
   return isCoinTicker(coin) ? COINS[coin].label : coinLabel(coin, shop);
 }
 
-export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricing, saved, editing, onImageError }: ProductFormProps) => {
+export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricing, saved, wholeOnly = [], editing, onImageError }: ProductFormProps) => {
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
     onChange((prev) => ({ ...prev, [key]: value }));
   const setPrice = (coin: string, text: string) =>
-    onChange((prev) => ({ ...prev, prices: { ...prev.prices, [coin]: sanitizeAmountInput(text) } }));
+    onChange((prev) => ({
+      ...prev,
+      // An asset that can't be split takes whole units only.
+      prices: { ...prev.prices, [coin]: wholeOnly.includes(coin) ? text.replace(/\D/g, "") : sanitizeAmountInput(text) },
+    }));
   const title = values.title.trim() || "Product";
   const fiat = typedFiat(values, pricing);
   // A price in the shop's currency gives the QORT and ARRR prices; only asset prices are typed then.
@@ -299,11 +305,11 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricin
                   fullWidth
                   helperText={
                     isAsset
-                      ? `Buyers can pay in ${label} only when you set a price here.`
+                      ? `Buyers can pay in ${label} only when you set a price here.${wholeOnly.includes(coin) ? ` ${label} can't be split: whole units only.` : ""}`
                       : "Optional. Empty: converted from the QORT price."
                   }
                   slotProps={{
-                    htmlInput: { inputMode: "decimal", autoComplete: "off" },
+                    htmlInput: { inputMode: wholeOnly.includes(coin) ? "numeric" : "decimal", autoComplete: "off" },
                     input: {
                       startAdornment: (
                         <InputAdornment position="start">

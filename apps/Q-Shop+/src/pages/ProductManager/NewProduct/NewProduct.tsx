@@ -6,7 +6,7 @@
  * seller/productDraft.ts (the original's shapes; ProductManager.pin pins them).
  * A published product also has Delete, which the seller page asks about first.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
@@ -14,7 +14,8 @@ import ShortUniqueId from "short-unique-id";
 import type { RootState } from "../../../state/store";
 import { setProductsToSave } from "../../../state/features/globalSlice";
 import { ResponsiveDialog } from "../../../components/common/mobile";
-import { shopCoins } from "../../../money/coins";
+import { assetCoinId, shopAssets, shopCoins } from "../../../money/coins";
+import { assetInfo } from "../../../qdn/assets";
 import { ProductForm } from "../ProductForm/ProductForm";
 import { FormError } from "../../../seller/FormError";
 import { listedCategory, oldCategoryOf } from "../../../constants/categories";
@@ -54,6 +55,19 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
   const coins = useMemo(() => shopCoins(currentStore) as string[], [currentStore]);
   // Prices in a currency at the seller's rates (Shop tab → Prices), when the shop uses them.
   const pricing = useMemo(() => fiatPricingOf(dataContainer), [dataContainer]);
+  // The shop's assets that can't be split (Core's info, cached): their prices are whole units.
+  const [wholeOnly, setWholeOnly] = useState<string[]>([]);
+  const assetIds = shopAssets(currentStore).map((a) => a.id).join(",");
+  useEffect(() => {
+    if (!assetIds) return;
+    let alive = true;
+    void Promise.all(assetIds.split(",").map((id) => assetInfo({ id: Number(id) }).catch(() => null))).then((infos) => {
+      if (alive) setWholeOnly(infos.filter((a) => a?.isDivisible === false).map((a) => assetCoinId(a!.assetId)));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [assetIds]);
   // A category saved before the list (constants/categories.ts) stays until the seller picks another.
   const [oldCategory] = useState(() => oldCategoryOf(product));
 
@@ -81,7 +95,7 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     if (!currentStore?.id || !dataContainer || dataContainer.storeId !== currentStore.id) {
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
-    const invalid = validateProductForm(values, coins, { oldCategory, pricing });
+    const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly });
     if (invalid) return setError(invalid);
     const trimmed = { ...values, title: values.title.trim(), category: values.category.trim() };
     const draft = product
@@ -140,6 +154,7 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
             oldCategory={oldCategory}
             pricing={pricing}
             saved={product}
+            wholeOnly={wholeOnly}
             editing={editingPublished}
             onImageError={setError}
           />

@@ -151,7 +151,7 @@ export function buildPriceList(
 export function validateProductForm(
   values: ProductFormValues,
   coins: string[],
-  options: { oldCategory?: string | null; pricing?: FiatPricing | null } = {}
+  options: { oldCategory?: string | null; pricing?: FiatPricing | null; wholeOnly?: string[] } = {}
 ): string | null {
   if (values.images.length === 0) return "Add at least one image";
   if (values.images.length > MAX_PRODUCT_IMAGES) return `Use at most ${MAX_PRODUCT_IMAGES} images`;
@@ -168,6 +168,10 @@ export function validateProductForm(
     const text = (values.prices[coin] ?? "").trim();
     if (text && Number.isNaN(parseAmount(text))) {
       return `Check the ${assetIdOf(coin) !== null ? "asset" : coin} price`;
+    }
+    // An indivisible asset moves in whole units only (qdn/assets.ts).
+    if (text && options.wholeOnly?.includes(coin) && !Number.isInteger(parseAmount(text))) {
+      return "Use whole units for the price in an asset that can't be split";
     }
   }
   return null;

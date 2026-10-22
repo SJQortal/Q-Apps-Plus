@@ -257,6 +257,16 @@ describe("a price in the shop's currency (money/fiatPricing.ts)", () => {
     expect(kept).toHaveProperty("fiatPrice");
   });
 
+  it("asks for whole units in an asset that can't be split", () => {
+    const assetCoins = ["QORT", "ASSET:90"];
+    const v = (price: string) => values({ prices: { QORT: "1", "ASSET:90": price } });
+    expect(validateProductForm(v("1.5"), assetCoins, { wholeOnly: ["ASSET:90"] })).toBe(
+      "Use whole units for the price in an asset that can't be split"
+    );
+    expect(validateProductForm(v("2"), assetCoins, { wholeOnly: ["ASSET:90"] })).toBeNull();
+    expect(validateProductForm(v("1.5"), assetCoins)).toBeNull();
+  });
+
   it("takes up to 8 decimals for a ticker of the seller's own", () => {
     const xau = { currency: "XAU", rates: { QORT: 0.0001 }, updated: 1 };
     expect(validateProductForm(values({ fiat: "0.00012", prices: { QORT: "" } }), coins, { pricing: xau })).toBeNull();
