@@ -2,8 +2,11 @@
  * A video in a product description: a 16:9 panel with Play. Nothing is
  * asked of the node until the buyer presses it; then the video is fetched
  * from peers if it has to be (qdn/resourceStatus.ts, with progress) and
- * plays in the browser's own player. Under it: its title, who published it,
- * and Open in Q-Tube when it came from there.
+ * plays in the browser's own player, in its own shape (Simon: "make sure
+ * that the video plays in its format, not only horizontal"): once the video
+ * says its size, the panel takes it, a tall one no higher than the screen
+ * allows. Under it: its title, who published it, and Open in Q-Tube when it
+ * came from there.
  */
 import { useEffect, useRef, useState } from "react";
 import { Box, Button, CircularProgress, IconButton, Link, Typography } from "@mui/material";
@@ -17,6 +20,8 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [percent, setPercent] = useState<number | null>(null);
   const [problem, setProblem] = useState("");
+  // The video's own width / height, once it is known; 16:9 until then.
+  const [aspect, setAspect] = useState<number | null>(null);
   const stop = useRef<AbortController | null>(null);
   useEffect(() => () => stop.current?.abort(), []);
   const title = embed.title || "Video";
@@ -47,7 +52,9 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
         sx={{
           position: "relative",
           width: "100%",
-          aspectRatio: "16 / 9",
+          aspectRatio: aspect ? `${aspect}` : "16 / 9",
+          // A tall video: no higher than most of the screen, centred.
+          ...(aspect && { maxWidth: `calc(min(75dvh, 640px) * ${aspect})`, mx: "auto" }),
           borderRadius: 2,
           overflow: "hidden",
           bgcolor: "common.black",
@@ -65,6 +72,10 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
             preload="metadata"
             src={resourceUrl(ref)}
             aria-label={title}
+            onLoadedMetadata={(event) => {
+              const { videoWidth, videoHeight } = event.currentTarget as HTMLVideoElement;
+              if (videoWidth > 0 && videoHeight > 0) setAspect(videoWidth / videoHeight);
+            }}
             sx={{ width: "100%", height: "100%", display: "block", bgcolor: "common.black" }}
           />
         ) : phase === "fetching" ? (
