@@ -34,6 +34,7 @@ import { checkStructureStore } from "../../utils/checkStructure";
 import { CATALOGUE_CONCURRENCY, fetchCatalogue, type LoadedCatalogue } from "../../utils/fetchCatalogues";
 import { normalizeShopJson } from "../../discovery/shopJson";
 import { markShopDeleted, primeShopDetails } from "../../discovery/shopDetails";
+import { isRecentlyDeletedShop } from "../../qdn/deleted";
 import { RetryCancelled, withPeerRetries } from "./peerRetry";
 import { fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
 
@@ -156,6 +157,11 @@ export function useViewedShop(owner: string, storeId: string, options: { product
       });
 
     const readShop = async () => {
+      // Deleted from this browser: the node may still serve it until a block confirms the delete.
+      if (isRecentlyDeletedShop(owner, storeId)) {
+        patch({ shopStatus: "deleted" });
+        return;
+      }
       const result = await readOrMissing<any>("STORE", owner, storeId, {
         fresh,
         isAlive,
@@ -186,6 +192,10 @@ export function useViewedShop(owner: string, storeId: string, options: { product
 
     const readIndex = async () => {
       if (!withProducts) return;
+      if (isRecentlyDeletedShop(owner, storeId)) {
+        patch({ productsStatus: "missing" });
+        return;
+      }
       const result = await readOrMissing<unknown>("DOCUMENT", owner, containerId, {
         fresh,
         isAlive,

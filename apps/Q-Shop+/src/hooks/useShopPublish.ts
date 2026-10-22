@@ -29,6 +29,7 @@ import {
 import { indexKey, notePublishedIndex } from "../seller/productIndex";
 import { dataContainerIdentifier, finalizeShortStoreId, shortStoreIdOf, storeIdentifier } from "../qdn/identifiers";
 import { invalidateQdnJson, invalidateQdnSearches, resourceExists } from "../qdn/search";
+import { forgetDeletedShop, isShopDeleted } from "../qdn/deleted";
 import { errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
 import { primeShopDetails } from "../discovery/shopDetails";
@@ -83,7 +84,8 @@ export function useShopPublish() {
       const identifier = storeIdentifier(shortStoreId);
       setBusy(true);
       try {
-        if (await resourceExists("STORE", name, identifier, { fresh: true })) {
+        // A shop deleted under this id can be created again: it starts fresh.
+        if ((await resourceExists("STORE", name, identifier, { fresh: true })) && !(await isShopDeleted(name, identifier))) {
           throw new ShopFormError("You already have a shop with this id. Pick another id.");
         }
         const created = Date.now();
@@ -114,6 +116,11 @@ export function useShopPublish() {
         // The new shop is the one the seller is on now (useOwnShops follows this id),
         // so an earlier shop doesn't take its place, and visiting that one again counts.
         dispatch(updateRecentlyVisitedStoreId(identifier));
+        forgetDeletedShop(name, identifier);
+        invalidateQdnJson("STORE", name, identifier);
+        invalidateQdnJson("DOCUMENT", name, dataContainerIdentifier(identifier));
+        // The home page lists it at once, deleted before or not.
+        primeShopDetails(name, identifier, storeObj);
         invalidateQdnSearches((url) => url.includes("service=STORE"));
         dispatch(setNotification({ msg: "Shop created", alertType: "success" }));
         return identifier;

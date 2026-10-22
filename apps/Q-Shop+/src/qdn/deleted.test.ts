@@ -3,7 +3,7 @@ import { DELETED_SHOPS_STORAGE_KEY } from "../constants/plus";
 import {
   DELETED_SHOP_MEMORY_MS,
   forgetDeletedShop,
-  isDeletedShopRow,
+  isDeletedRow,
   isRecentlyDeletedShop,
   noteDeletedShop,
   resetDeletedShops,
@@ -13,12 +13,12 @@ beforeEach(() => resetDeletedShops());
 
 describe("deleted shops", () => {
   it("tells a search row a Q-Shop+ delete wrote from a shop's", () => {
-    expect(isDeletedShopRow({ metadata: { title: "deleted", description: "deleted", tags: ["deleted"] } })).toBe(true);
-    expect(isDeletedShopRow({ metadata: { title: "deleted", tags: ["deleted"] } })).toBe(true);
-    expect(isDeletedShopRow({ metadata: { title: "deleted", description: "**coins:QORTtrue,ARRRfalse**Old things" } })).toBe(false);
-    expect(isDeletedShopRow({ metadata: { title: "Seller's Shop", description: "deleted", tags: ["deleted"] } })).toBe(false);
-    expect(isDeletedShopRow({})).toBe(false);
-    expect(isDeletedShopRow(null)).toBe(false);
+    expect(isDeletedRow({ metadata: { title: "deleted", description: "deleted", tags: ["deleted"] } })).toBe(true);
+    expect(isDeletedRow({ metadata: { title: "deleted", tags: ["deleted"] } })).toBe(true);
+    expect(isDeletedRow({ metadata: { title: "deleted", description: "**coins:QORTtrue,ARRRfalse**Old things" } })).toBe(false);
+    expect(isDeletedRow({ metadata: { title: "Seller's Shop", description: "deleted", tags: ["deleted"] } })).toBe(false);
+    expect(isDeletedRow({})).toBe(false);
+    expect(isDeletedRow(null)).toBe(false);
   });
 
   it("remembers this browser's deletes for an hour, per owner and shop id, across reloads", () => {

@@ -2,7 +2,7 @@
  * Deleted shops, as lists can tell before reading anything:
  * - a shop deleted from Q-Shop+ is republished as "D" titled and tagged
  *   "deleted" (qdn/payloads.ts buildDeleteShopPublish), so a search row with
- *   that metadata is left out without reading the shop (isDeletedShopRow);
+ *   that metadata is left out without reading the shop (isDeletedRow);
  *   a shop deleted by another tool shows as deleted once it is read
  *   (qdn/search.ts QdnDeletedError);
  * - right after a delete, the node can go on listing the shop with its old
@@ -10,7 +10,7 @@
  *   remembered for an hour (noteDeletedShop), per owner and shop id.
  */
 import { DELETED_SHOPS_STORAGE_KEY } from "../constants/plus";
-import type { QdnResourceSummary } from "./search";
+import { QdnDeletedError, fetchQdnJson, type QdnResourceSummary } from "./search";
 
 /** The title, description and tag a delete writes. */
 export const DELETED_TITLE = "deleted";
@@ -18,8 +18,8 @@ export const DELETED_TITLE = "deleted";
 /** How long a delete from this browser is remembered. */
 export const DELETED_SHOP_MEMORY_MS = 60 * 60 * 1000;
 
-/** A search row whose metadata a Q-Shop+ delete wrote. */
-export function isDeletedShopRow(row: Pick<QdnResourceSummary, "metadata"> | null | undefined): boolean {
+/** A search row whose metadata a Q-Shop+ delete wrote (a shop, product list or catalogue). */
+export function isDeletedRow(row: Pick<QdnResourceSummary, "metadata"> | null | undefined): boolean {
   const meta = row?.metadata;
   if (meta?.title !== DELETED_TITLE) return false;
   return (Array.isArray(meta.tags) && meta.tags.includes(DELETED_TITLE)) || meta.description === DELETED_TITLE;
@@ -83,6 +83,21 @@ export function forgetDeletedShop(owner: string, storeId: string): void {
 export function isRecentlyDeletedShop(owner: string, storeId: string, now = Date.now()): boolean {
   const at = load()[keyOf(owner, storeId)];
   return typeof at === "number" && now - at <= DELETED_SHOP_MEMORY_MS;
+}
+
+/**
+ * Was this shop deleted? This browser's memory first, else one fresh read
+ * (the delete marker). Anything else, a read that fails included, counts as
+ * a shop: creating a shop over it is then refused, as it always was.
+ */
+export async function isShopDeleted(owner: string, storeId: string): Promise<boolean> {
+  if (isRecentlyDeletedShop(owner, storeId)) return true;
+  try {
+    await fetchQdnJson("STORE", owner, storeId, { fresh: true });
+    return false;
+  } catch (error) {
+    return error instanceof QdnDeletedError;
+  }
 }
 
 /** For tests: forget everything, here and in storage. */

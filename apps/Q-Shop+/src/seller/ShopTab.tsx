@@ -1,18 +1,20 @@
 /**
  * The seller's Shop tab: the shop as buyers see its details, the coins and
  * assets it takes with their payout addresses, Edit shop (the same dialog as
- * on the shop page), and Advanced → Recreate shop data.
+ * on the shop page), and Advanced → Recreate shop data and Delete shop.
  */
 import { useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import type { RootState } from "../state/store";
 import EditStoreModal from "../components/modals/EditStoreModal";
 import { CoinIcon } from "../components/money/CoinIcon";
 import { COINS, FOREIGN_TICKERS, assetCoinId } from "../money/coins";
 import { SectionTitle } from "./ShopForm";
 import { RecreateShopDataDialog } from "./RecreateShopDataDialog";
+import { DeleteShopDialog } from "./DeleteShopDialog";
 
 /** `zs1abcd…wxyz`: enough to recognise an address without a line of its own. */
 export function shortAddress(address: string): string {
@@ -43,6 +45,7 @@ export function ShopTab() {
   const store = useSelector((state: RootState) => state.global.currentStore);
   const [editOpen, setEditOpen] = useState(false);
   const [recreateOpen, setRecreateOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   if (!store) return null;
   const coins = FOREIGN_TICKERS.filter((t) => store.supportedCoins?.includes(t) && store.foreignCoins?.[t]?.trim());
   const missingAddress = FOREIGN_TICKERS.filter((t) => store.supportedCoins?.includes(t) && !store.foreignCoins?.[t]?.trim());
@@ -119,11 +122,26 @@ export function ShopTab() {
               Recreate shop data
             </Button>
           </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ borderTop: 1, borderColor: "divider", pt: 1.5 }}>
+            Close your shop for good: it and all its products are deleted, here and in Q-Shop. Orders and reviews stay.
+          </Typography>
+          <Box>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteOutlineOutlinedIcon />}
+              onClick={() => setDeleteOpen(true)}
+              sx={{ minHeight: 44 }}
+            >
+              Delete shop
+            </Button>
+          </Box>
         </Card>
       </Box>
 
       {editOpen && <EditStoreModal open={editOpen} storeId={store.id} onClose={() => setEditOpen(false)} />}
       {recreateOpen && <RecreateShopDataDialog open={recreateOpen} onClose={() => setRecreateOpen(false)} />}
+      {deleteOpen && <DeleteShopDialog onClose={() => setDeleteOpen(false)} />}
     </Box>
   );
 }

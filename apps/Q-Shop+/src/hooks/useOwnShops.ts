@@ -37,6 +37,7 @@ import {
 import { addToHashMapStores, setAllMyStores, type Store } from "../state/features/storeSlice";
 import { dataContainerIdentifier, isStoreIdentifier, STORE_BASE, shortStoreIdOf } from "../qdn/identifiers";
 import { fetchQdnJson, resourceExists, searchQdn, type QdnResourceSummary } from "../qdn/search";
+import { isDeletedRow, isRecentlyDeletedShop } from "../qdn/deleted";
 import { checkStructureStore } from "../utils/checkStructure";
 
 /** The shop's QDN description without the original's `**coins:…**` marker. */
@@ -92,7 +93,11 @@ export async function findOwnShops(name: string, fresh = false): Promise<Store[]
     },
     { fresh }
   );
-  return rows.filter((row) => isStoreIdentifier(row.identifier) && row.name === name).map(storeFromRow);
+  // A deleted shop isn't one of the name's shops (its metadata says so, or this browser just deleted it).
+  return rows
+    .filter((row) => isStoreIdentifier(row.identifier) && row.name === name)
+    .filter((row) => !isDeletedRow(row) && !isRecentlyDeletedShop(name, row.identifier))
+    .map(storeFromRow);
 }
 
 /**

@@ -14,6 +14,7 @@ import { createAppStore } from "../../../state/store";
 import { setPeerRetryDelaysForTests } from "../peerRetry";
 import { getShopDetails, resetShopDetails } from "../../../discovery/shopDetails";
 import { shopKey } from "../../../discovery/shopIndex";
+import { noteDeletedShop, resetDeletedShops } from "../../../qdn/deleted";
 import { Store } from "./Store";
 
 const copyText = vi.fn(async (_text: string) => true);
@@ -26,6 +27,7 @@ let restoreDelays: (() => void) | null = null;
 beforeEach(() => {
   copyText.mockClear();
   resetShopDetails();
+  resetDeletedShops();
   restoreDelays = setPeerRetryDelaysForTests([30, 30, 30]);
 });
 afterEach(() => {
@@ -217,6 +219,13 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(screen.queryByText(/Fetching from peers/)).not.toBeInTheDocument();
     expect(getShopDetails(shopKey("Seller Name", STORE_ID))).toMatchObject({ status: "ready", valid: false, deleted: true });
     fireEvent.click(screen.getByRole("button", { name: "Browse shops" }));
+  });
+
+  it("says a shop this browser just deleted is deleted, while the node may still serve it", async () => {
+    noteDeletedShop("Seller Name", STORE_ID);
+    const { node } = renderShop(makeWorld());
+    expect(await screen.findByText("This shop was deleted")).toBeInTheDocument();
+    expect(node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/") || u.endsWith("-datacontainer"))).toEqual([]);
   });
 
   it("says Fetching from peers while the node gets the shop, then shows it", async () => {

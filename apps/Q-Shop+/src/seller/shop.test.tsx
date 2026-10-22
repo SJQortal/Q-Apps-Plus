@@ -29,6 +29,7 @@ import EditStoreModal from "../components/modals/EditStoreModal";
 import { RecreateShopDataDialog } from "./RecreateShopDataDialog";
 import { addressWarning, shopFormValues, toStoreFields, validateShopForm } from "./shopFields";
 import { assetInfo, parseAssetQuery, resetAssetCache } from "./assets";
+import { isRecentlyDeletedShop, noteDeletedShop, resetDeletedShops } from "../qdn/deleted";
 
 const LOGO = "data:image/webp;base64,TE9HTw==";
 
@@ -41,8 +42,8 @@ vi.mock("../components/common/ImageUploader", () => ({
   ),
 }));
 
-/** A node that knows our shops (by search) and two assets. */
-function stubNode(opts: { shops?: { name: string; identifier: string }[] } = {}) {
+/** A node that knows our shops (by search), the ones deleted (they serve "D"), and two assets. */
+function stubNode(opts: { shops?: { name: string; identifier: string }[]; deleted?: string[] } = {}) {
   const calls: string[] = [];
   const assets = [
     { assetId: 0, assetName: "QORT", isUnspendable: false },
@@ -68,6 +69,8 @@ function stubNode(opts: { shops?: { name: string; identifier: string }[] } = {})
       return asset ? ok(asset) : { ok: false, status: 400, text: async () => '{"error":601}' };
     }
     if (path === "/assets") return ok(assets);
+    const store = path.match(/^\/arbitrary\/STORE\/[^/]+\/([^/]+)$/);
+    if (store && opts.deleted?.includes(decodeURIComponent(store[1]))) return { ok: true, status: 200, text: async () => "D" };
     return { ok: false, status: 404, text: async () => "{}" };
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -213,6 +216,49 @@ describe("create shop", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Create shop" })).toBeEnabled());
     expect(screen.queryByRole("alert")).toBeNull();
     expect(onCreated).not.toHaveBeenCalled();
+  });
+});
+
+describe("create shop over a deleted one", () => {
+  it("creates a shop again under the id of one the seller deleted, which starts fresh", async () => {
+    resetDeletedShops();
+    stubNode({ shops: [{ name: SELLER, identifier: "q-store-general-My-Shop" }], deleted: ["q-store-general-My-Shop"] });
+    const q = installQortalMock({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    const onCreated = vi.fn();
+    const store = sellerStore();
+    renderWithProviders(<CreateStoreModal open onClose={() => {}} onCreated={onCreated} />, { store });
+    fireEvent.change(field(/^Shop id/), { target: { value: "My Shop" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add shop logo" }));
+    fireEvent.change(field(/^Title/), { target: { value: "Seller's Shop" } });
+    fireEvent.change(field(/^Description/), { target: { value: "Mugs" } });
+    fireEvent.change(field(/^Location/), { target: { value: "Lisbon" } });
+    fireEvent.change(field(/^Ships to/), { target: { value: "Europe" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create shop" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith("q-store-general-My-Shop"));
+    const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
+    expect(pub.resources.map((r: any) => [r.service, r.identifier])).toEqual([
+      ["STORE", "q-store-general-My-Shop"],
+      ["DOCUMENT", "q-store-general-My-Shop-datacontainer"],
+    ]);
+    expect(decodeData64(pub.resources[1].data64).products).toEqual({});
+  });
+
+  it("this browser's memory of the delete is forgotten once it's created again", async () => {
+    resetDeletedShops();
+    noteDeletedShop(SELLER, "q-store-general-My-Shop");
+    stubNode({ shops: [{ name: SELLER, identifier: "q-store-general-My-Shop" }] });
+    installQortalMock({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    const onCreated = vi.fn();
+    renderWithProviders(<CreateStoreModal open onClose={() => {}} onCreated={onCreated} />, { store: sellerStore() });
+    fireEvent.change(field(/^Shop id/), { target: { value: "My Shop" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add shop logo" }));
+    fireEvent.change(field(/^Title/), { target: { value: "Seller's Shop" } });
+    fireEvent.change(field(/^Description/), { target: { value: "Mugs" } });
+    fireEvent.change(field(/^Location/), { target: { value: "Lisbon" } });
+    fireEvent.change(field(/^Ships to/), { target: { value: "Europe" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create shop" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    expect(isRecentlyDeletedShop(SELLER, "q-store-general-My-Shop")).toBe(false);
   });
 });
 
