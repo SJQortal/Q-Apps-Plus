@@ -31,6 +31,15 @@ export function storeLink(owner: string, storeId: string): string {
   return `qortal://APP/${appSegment()}${storePath(owner, storeId)}`;
 }
 
+/** The shop opened on one of its collections (qdn/collections.ts): a query, so the shop route is unchanged. */
+export function collectionPath(owner: string, storeId: string, collectionId: string): string {
+  return `${storePath(owner, storeId)}?collection=${seg(collectionId)}`;
+}
+
+export function collectionLink(owner: string, storeId: string, collectionId: string): string {
+  return `qortal://APP/${appSegment()}${collectionPath(owner, storeId, collectionId)}`;
+}
+
 export function productLink(owner: string, storeId: string, productId: string, catalogueId: string): string {
   return `qortal://APP/${appSegment()}${productPath(owner, storeId, productId, catalogueId)}`;
 }

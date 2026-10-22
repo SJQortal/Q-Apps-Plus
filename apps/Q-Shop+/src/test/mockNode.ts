@@ -32,6 +32,8 @@ export interface WorldShop {
    * "deleted" (Q-Shop+'s delete); "plain" leaves the old metadata (other tools).
    */
   deleted?: "plain" | "marked";
+  /** Its collections document's list (qdn/collections.ts); the product index then points at it. */
+  collections?: { id: string; title: string; description?: string; image?: string; products: string[]; created?: number; updated?: number }[];
 }
 
 export interface WorldReview {
@@ -147,7 +149,15 @@ export function dataContainerOf(shop: WorldShop) {
     products[p.id] = { created: p.created, priceQort: p.price[0].value, category: p.category, catalogueId: cat, status: p.status };
     catalogues[Math.floor(idx / 10)].products[p.id] = true;
   });
-  return { storeId, shortStoreId: shop.shortStoreId, owner: shop.owner, products, catalogues, id: `${storeId}-datacontainer` };
+  return {
+    storeId,
+    shortStoreId: shop.shortStoreId,
+    owner: shop.owner,
+    products,
+    catalogues,
+    id: `${storeId}-datacontainer`,
+    ...(shop.collections && { collectionsId: `q-store-collections-${shop.shortStoreId}` }),
+  };
 }
 
 export function catalogueOf(shop: WorldShop, catalogueId: string) {
@@ -301,6 +311,11 @@ export function installMockNode(world: World): MockNode {
         const shop = findShop(name, id.replace(/-datacontainer$/, ""));
         if (shop?.deleted) return json("D");
         return shop ? json(dataContainerOf(shop)) : json({ error: 1401, message: "not found" }, 404);
+      }
+      if (service === "DOCUMENT" && id.startsWith("q-store-collections-")) {
+        const shop = world.shops.find((s) => s.owner === name && `q-store-collections-${s.shortStoreId}` === id && s.collections);
+        if (shop?.deleted) return json("D");
+        return shop ? json({ storeId: `q-store-general-${shop.shortStoreId}`, collections: shop.collections }) : json({ error: 1401 }, 404);
       }
       if (service === "DOCUMENT" && id.startsWith("q-store-review-")) {
         const r = world.reviews.find((x) => x.name === name && id.startsWith(`q-store-review-${x.shortStoreId}-${x.uid}`));

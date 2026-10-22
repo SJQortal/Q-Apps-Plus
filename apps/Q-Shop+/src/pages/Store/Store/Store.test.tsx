@@ -207,6 +207,45 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(exists[0]).toContain("identifier=q-store-general-nothing");
   });
 
+  it("shows the shop's collections; one opens on its products, with its description and a share link", async () => {
+    const world = makeWorld();
+    const ids = world.shops[0].products.map((p) => p.id);
+    world.shops[0].collections = [
+      { id: "GIFTSxxxx1", title: "Gifts", description: "For friends\nand family", image: "data:image/webp;base64,R0lGVA==", products: [ids[1], ids[2]] },
+      { id: "GONExxxxx2", title: "Empty one", products: ["q-store-product-my-shop-NOPExxxxx9"] },
+    ];
+    const { node } = renderShop(world);
+    expect(await screen.findByRole("region", { name: "Collections" })).toBeInTheDocument();
+    const gifts = await screen.findByRole("link", { name: /Gifts/ });
+    expect(gifts).toHaveAttribute("href", "/Seller%20Name/q-store-general-my-shop?collection=GIFTSxxxx1");
+    expect(within(gifts).getByText("2 products")).toBeInTheDocument();
+    // A collection with none of the shop's products isn't offered.
+    expect(screen.queryByRole("link", { name: /Empty one/ })).toBeNull();
+    expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toEqual([
+      "/arbitrary/DOCUMENT/Seller%20Name/q-store-collections-my-shop",
+    ]);
+
+    fireEvent.click(gifts);
+    expect(await screen.findByRole("heading", { level: 2, name: "Gifts" })).toBeInTheDocument();
+    expect(screen.getByText(/For friends/)).toBeInTheDocument();
+    expect(gifts).toHaveAttribute("aria-current", "page");
+    await waitFor(() => expect(cardTitles()).toEqual(["Product 2", "Product 1"]));
+    fireEvent.click(screen.getByRole("button", { name: "Share collection" }));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith("qortal://APP/Q-Shop+/Seller%20Name/q-store-general-my-shop?collection=GIFTSxxxx1"));
+
+    fireEvent.click(screen.getByRole("link", { name: "All products" }));
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    expect(screen.getByRole("heading", { level: 2, name: "Products" })).toBeInTheDocument();
+  });
+
+  it("reads no collections for a shop without them, and shows everything for a collection link that's gone", async () => {
+    const { node } = renderShop(makeWorld(), `${SHOP_PATH}?collection=OLDxxxxxx1`);
+    expect(await screen.findByText(/That collection isn.t in this shop any more/)).toBeInTheDocument();
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toEqual([]);
+    expect(screen.queryByRole("region", { name: "Collections" })).toBeNull();
+  });
+
   it("says when its owner deleted the shop, from one read: no retries, no existence search, gone from home", async () => {
     const world = makeWorld();
     world.shops[0].deleted = "plain";

@@ -9,10 +9,14 @@
  * search reads the rest progressively, at most 30 catalogues. Prices show in
  * the coin the buyer picks among the shop's (money/useShopCoin), computed by
  * money/pricing exactly as checkout does.
+ *
+ * A shop with collections (qdn/collections.ts) shows them as a row of cards
+ * above the products; `?collection=<id>` shows one collection's products,
+ * under its picture, title and description, with the same filters and sorts.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   Box,
   Button,
@@ -41,7 +45,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 import { BottomSheet, ResponsiveDialog } from "../../../components/common/mobile";
 import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { useShopCoin } from "../../../money/useShopCoin";
-import { decodeParam } from "../../../qdn/links";
+import { decodeParam, storePath } from "../../../qdn/links";
 import {
   categoriesOf,
   catalogueIdsOf,
@@ -68,6 +72,8 @@ import { CoinPicker, RateNote } from "../CoinPicker";
 import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../CartBits";
 import { visuallyHiddenSx } from "../a11y";
 import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
+import { useShopCollections, type ShopCollections } from "../useShopCollections";
+import { CollectionCards, CollectionHeader } from "../ShopCollections";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -178,6 +184,8 @@ function ShopProducts({
   index,
   onRetry,
   onSellerPage,
+  collections,
+  collectionId,
 }: {
   owner: string;
   storeId: string;
@@ -187,8 +195,12 @@ function ShopProducts({
   index: { products?: unknown } | null;
   onRetry: () => void;
   onSellerPage: () => void;
+  collections: ShopCollections;
+  /** `?collection=`: show only this collection's products. */
+  collectionId: string | null;
 }) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const phone = usePhoneLayout();
   const shopCoin = useShopCoin(shop);
   const { catalogues, statuses, load, retryFailed } = useCatalogueLoader(owner);
@@ -200,7 +212,25 @@ function ShopProducts({
   const terms = useMemo(() => searchTerms(debouncedSearch), [debouncedSearch]);
   const searching = terms.length > 0;
 
-  const rows = useMemo(() => productRowsFromContainer(index), [index]);
+  const allRows = useMemo(() => productRowsFromContainer(index), [index]);
+  // The products the shop lists, for the collections' counts.
+  const listedIds = useMemo(
+    () => new Set(filterAndSortProducts(allRows, DEFAULT_PRODUCT_QUERY, catalogues).map((row) => row.productId)),
+    [allRows, catalogues]
+  );
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const c of collections.collections) out[c.id] = c.products.filter((id) => listedIds.has(id)).length;
+    return out;
+  }, [collections.collections, listedIds]);
+  const collection = collectionId ? (collections.collections.find((c) => c.id === collectionId) ?? null) : null;
+  const waitingForCollection = !!collectionId && (collections.status === "loading" || collections.status === "fetching");
+  const collectionGone = !!collectionId && !collection && !waitingForCollection && productsStatus === "ready";
+  const rows = useMemo(() => {
+    if (!collection) return allRows;
+    const members = new Set(collection.products);
+    return allRows.filter((row) => members.has(row.productId));
+  }, [allRows, collection]);
   const categories = useMemo(() => categoriesOf(rows), [rows]);
   const filtered = useMemo(() => filterAndSortProducts(rows, query, catalogues), [rows, query, catalogues]);
   const scope = useMemo(() => (searching ? searchCatalogueIds(filtered) : null), [searching, filtered]);
@@ -210,7 +240,7 @@ function ShopProducts({
   );
 
   // Paging restarts whenever the list's meaning changes.
-  const listKey = JSON.stringify([query, terms]);
+  const listKey = JSON.stringify([query, terms, collection?.id ?? null]);
   const [paging, setPaging] = useState({ key: listKey, pages: 1 });
   const pages = paging.key === listKey ? paging.pages : 1;
   const shown = results.slice(0, pages * PRODUCTS_PAGE);
@@ -291,7 +321,7 @@ function ShopProducts({
   else status = `${filtered.length} product${filtered.length === 1 ? "" : "s"}`;
 
   let body: ReactNode;
-  if (productsStatus === "loading" || productsStatus === "fetching") {
+  if (productsStatus === "loading" || productsStatus === "fetching" || (productsStatus === "ready" && waitingForCollection)) {
     body = <ProductGridSkeleton count={phone ? 4 : 8} note={productsStatus === "fetching" ? FETCHING_NOTE : undefined} />;
   } else if (productsStatus === "missing") {
     body = isOwner ? (
@@ -313,6 +343,15 @@ function ShopProducts({
         description="The product list hasn't reached your node yet."
         actionLabel="Retry"
         onAction={onRetry}
+      />
+    );
+  } else if (collection && rows.length === 0) {
+    body = (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="Nothing in this collection right now"
+        actionLabel="All products"
+        onAction={() => navigate(storePath(owner, storeId))}
       />
     );
   } else if (rows.length === 0) {
@@ -390,123 +429,147 @@ function ShopProducts({
   }
 
   return (
-    <Box component="section" aria-labelledby="shop-products-heading" sx={{ mt: 3 }}>
-      <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1, mb: 1.5 }}>
-        <Typography id="shop-products-heading" component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
-          Products
-        </Typography>
-        <Typography variant="body2" color="text.secondary" role="status" aria-live="polite">
-          {status}
-        </Typography>
-      </Box>
-
-      {productsStatus === "ready" && rows.length > 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
-            <TextField
-              type="search"
-              size="small"
-              placeholder="Search this shop"
-              value={searchText}
-              onChange={(event) => setSearchText(event.target.value)}
-              sx={{ flex: "1 1 260px", minWidth: 0, "& .MuiInputBase-root": { minHeight: 44 } }}
-              slotProps={{
-                htmlInput: { "aria-label": "Search this shop", enterKeyHint: "search" },
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                  endAdornment: searchText ? (
-                    <InputAdornment position="end">
-                      <IconButton aria-label="Clear search" onClick={() => setSearchText("")} edge="end" sx={{ width: 40, height: 40 }}>
-                        <CloseIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : undefined,
-                },
-              }}
-            />
-            {sortSelect}
-            <CoinPicker shop={shop} shopCoin={shopCoin} />
-            {phone && (
-              <Button
-                variant={activeFilters ? "contained" : "outlined"}
-                color={activeFilters ? "primary" : "inherit"}
-                startIcon={<TuneIcon />}
-                onClick={() => setFiltersOpen(true)}
-                sx={{ minHeight: 44, flex: "1 1 auto" }}
-              >
-                {activeFilters ? `Filters (${activeFilters})` : "Filters"}
-              </Button>
-            )}
-          </Box>
-          {!phone && (
-            <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 2 }}>
-              <Box sx={{ flex: "1 1 320px", minWidth: 0 }}>
-                <CategoryChips
-                  categories={categories}
-                  selected={query.categories}
-                  onToggle={toggleCategory}
-                  onClear={() => setQuery((q) => ({ ...q, categories: [] }))}
-                />
-              </Box>
-              {stockSwitch}
-            </Box>
-          )}
-          <RateNote shopCoin={shopCoin} />
-          {scope?.capped && results.length > 0 && (
-            <Typography variant="body2" color="text.secondary">
-              {cappedNote}
+    <>
+      {productsStatus === "ready" && collections.status !== "none" && collections.status !== "unavailable" && (
+        <CollectionCards
+          owner={owner}
+          storeId={storeId}
+          collections={collections.collections}
+          counts={counts}
+          selectedId={collection?.id ?? null}
+          loading={collections.status !== "ready"}
+        />
+      )}
+      <Box component="section" aria-labelledby="shop-products-heading" sx={{ mt: 3 }}>
+        {collection ? (
+          <CollectionHeader owner={owner} storeId={storeId} collection={collection} count={counts[collection.id] ?? 0} headingId="shop-products-heading" />
+        ) : null}
+        <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1, mb: 1.5 }}>
+          {collection ? (
+            <span />
+          ) : (
+            <Typography id="shop-products-heading" component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
+              Products
             </Typography>
           )}
-          {failedCount > 0 && (
-            <Box role="status" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
-              <Typography variant="body2" color="text.secondary">
-                Some products aren't available on your node right now.
-              </Typography>
-              <Button variant="outlined" color="inherit" onClick={retryFailed} sx={{ minHeight: 44 }}>
-                Retry
-              </Button>
-            </Box>
-          )}
+          <Typography variant="body2" color="text.secondary" role="status" aria-live="polite">
+            {status}
+          </Typography>
         </Box>
-      )}
+        {collectionGone && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            That collection isn&apos;t in this shop any more, so here are all its products.
+          </Typography>
+        )}
 
-      {body}
-
-      {phone && (
-        <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {categories.length > 0 && (
-              <Box>
-                <Typography component="h3" variant="subtitle2" sx={{ mb: 1 }}>
-                  Categories
-                </Typography>
-                <CategoryChips
-                  categories={categories}
-                  selected={query.categories}
-                  onToggle={toggleCategory}
-                  onClear={() => setQuery((q) => ({ ...q, categories: [] }))}
-                />
+        {productsStatus === "ready" && rows.length > 0 && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+              <TextField
+                type="search"
+                size="small"
+                placeholder="Search this shop"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                sx={{ flex: "1 1 260px", minWidth: 0, "& .MuiInputBase-root": { minHeight: 44 } }}
+                slotProps={{
+                  htmlInput: { "aria-label": "Search this shop", enterKeyHint: "search" },
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchText ? (
+                      <InputAdornment position="end">
+                        <IconButton aria-label="Clear search" onClick={() => setSearchText("")} edge="end" sx={{ width: 40, height: 40 }}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : undefined,
+                  },
+                }}
+              />
+              {sortSelect}
+              <CoinPicker shop={shop} shopCoin={shopCoin} />
+              {phone && (
+                <Button
+                  variant={activeFilters ? "contained" : "outlined"}
+                  color={activeFilters ? "primary" : "inherit"}
+                  startIcon={<TuneIcon />}
+                  onClick={() => setFiltersOpen(true)}
+                  sx={{ minHeight: 44, flex: "1 1 auto" }}
+                >
+                  {activeFilters ? `Filters (${activeFilters})` : "Filters"}
+                </Button>
+              )}
+            </Box>
+            {!phone && (
+              <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 2 }}>
+                <Box sx={{ flex: "1 1 320px", minWidth: 0 }}>
+                  <CategoryChips
+                    categories={categories}
+                    selected={query.categories}
+                    onToggle={toggleCategory}
+                    onClear={() => setQuery((q) => ({ ...q, categories: [] }))}
+                  />
+                </Box>
+                {stockSwitch}
               </Box>
             )}
-            {stockSwitch}
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
-                Clear
-              </Button>
-              <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>
-                {`Show ${filtered.length} product${filtered.length === 1 ? "" : "s"}`}
-              </Button>
-            </Box>
+            <RateNote shopCoin={shopCoin} />
+            {scope?.capped && results.length > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {cappedNote}
+              </Typography>
+            )}
+            {failedCount > 0 && (
+              <Box role="status" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Some products aren't available on your node right now.
+                </Typography>
+                <Button variant="outlined" color="inherit" onClick={retryFailed} sx={{ minHeight: 44 }}>
+                  Retry
+                </Button>
+              </Box>
+            )}
           </Box>
-        </BottomSheet>
-      )}
+        )}
 
-      <AddedToCartSnackbar notice={added} onClose={() => setAdded(null)} />
-    </Box>
+        {body}
+
+        {phone && (
+          <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {categories.length > 0 && (
+                <Box>
+                  <Typography component="h3" variant="subtitle2" sx={{ mb: 1 }}>
+                    Categories
+                  </Typography>
+                  <CategoryChips
+                    categories={categories}
+                    selected={query.categories}
+                    onToggle={toggleCategory}
+                    onClear={() => setQuery((q) => ({ ...q, categories: [] }))}
+                  />
+                </Box>
+              )}
+              {stockSwitch}
+              <Box sx={{ display: "flex", gap: 1 }}>
+                <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
+                  Clear
+                </Button>
+                <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>
+                  {`Show ${filtered.length} product${filtered.length === 1 ? "" : "s"}`}
+                </Button>
+              </Box>
+            </Box>
+          </BottomSheet>
+        )}
+
+        <AddedToCartSnackbar notice={added} onClose={() => setAdded(null)} />
+      </Box>
+    </>
   );
 }
 
@@ -515,6 +578,9 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
   const dispatch = useDispatch();
   const currentStoreId = useSelector((state: RootState) => state.global.currentStore?.id);
   const { shop, shopStatus, index, productsStatus, isOwner, retry } = useViewedShop(owner, storeId);
+  const shopCollections = useShopCollections(owner, storeId, index);
+  const [searchParams] = useSearchParams();
+  const collectionId = searchParams.get("collection");
   const reviews = useShopReviews(storeId, owner);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [reviewsOpen, setReviewsOpen] = useState(false);
@@ -602,6 +668,8 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
           index={index}
           onRetry={retry}
           onSellerPage={sellerPage}
+          collections={shopCollections}
+          collectionId={collectionId}
         />
         {detailsOpen && <StoreDetails open onClose={() => setDetailsOpen(false)} shop={shop} owner={owner} />}
         {reviewsOpen && (
