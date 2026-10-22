@@ -31,6 +31,7 @@ import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
 import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../Store/CartBits";
 import { visuallyHiddenSx } from "../Store/a11y";
+import { LocalBoundary } from "../Store/LocalBoundary";
 
 const FETCHING_NOTE = "Fetching from peers…";
 
@@ -122,7 +123,9 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const shopPath = storePath(owner, storeId);
   const shopName = shop?.title || "the shop";
 
-  let title: ReactNode = product?.title?.trim() || "Product";
+  // Catalogues are JSON any seller writes: only text is shown as a title.
+  const productTitle = typeof product?.title === "string" ? product.title.trim() : "";
+  let title: ReactNode = productTitle || "Product";
   let content: ReactNode;
   if (status === "loading" || status === "fetching") {
     title = (
@@ -156,7 +159,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
       />
     );
   } else {
-    const name = product.title?.trim() || "Product";
+    const name = productTitle || "Product";
     const available = product.status === AVAILABLE;
     const quantity = clampQuantity(quantityText);
     const mainIndex = typeof product.mainImageIndex === "number" ? product.mainImageIndex : 0;
@@ -247,7 +250,21 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
         }
         actions={!isOwner ? <CartButton /> : undefined}
       />
-      {content}
+      {/* A product with data this page can't show leaves the header and navigation in place. */}
+      <LocalBoundary
+        label={`The product ${productId}`}
+        fallback={
+          <EmptyState
+            icon={<SearchOffOutlinedIcon />}
+            title="This product couldn't be shown"
+            description="Its listing has data this app can't read."
+            actionLabel="Go to the shop"
+            onAction={() => navigate(shopPath)}
+          />
+        }
+      >
+        {content}
+      </LocalBoundary>
       <AddedToCartSnackbar notice={added} onClose={() => setAdded(null)} />
     </Page>
   );

@@ -67,6 +67,7 @@ import { ReviewsPanel } from "../StoreReviews/ReviewsPanel";
 import { CoinPicker, RateNote } from "../CoinPicker";
 import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../CartBits";
 import { visuallyHiddenSx } from "../a11y";
+import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -251,7 +252,8 @@ function ShopProducts({
     dispatch(
       setProductToCart({ storeId, storeOwner: owner, productId: row.productId, catalogueId: row.catalogueId, quantity: 1 })
     );
-    setAdded((prev) => ({ at: (prev?.at ?? 0) + 1, title: product?.title?.trim() || "Product", quantity: 1 }));
+    const title = typeof product?.title === "string" ? product.title.trim() : "";
+    setAdded((prev) => ({ at: (prev?.at ?? 0) + 1, title: title || "Product", quantity: 1 }));
   };
 
   const sortSelect = (
@@ -349,19 +351,24 @@ function ShopProducts({
             return (
               <li key={row.productId}>
                 {product ? (
-                  <ProductCard
-                    product={product}
-                    productId={row.productId}
-                    catalogueId={row.catalogueId}
-                    owner={owner}
-                    storeId={storeId}
-                    status={effectiveStatus(row, catalogues)}
-                    shop={shop}
-                    coin={shopCoin.coin}
-                    rate={shopCoin.rate}
-                    isOwnProduct={isOwner}
-                    onAddToCart={() => addToCart(row)}
-                  />
+                  <LocalBoundary
+                    label={`The card of product ${row.productId}`}
+                    fallback={<UnavailableCard text="This product couldn't be shown." />}
+                  >
+                    <ProductCard
+                      product={product}
+                      productId={row.productId}
+                      catalogueId={row.catalogueId}
+                      owner={owner}
+                      storeId={storeId}
+                      status={effectiveStatus(row, catalogues)}
+                      shop={shop}
+                      coin={shopCoin.coin}
+                      rate={shopCoin.rate}
+                      isOwnProduct={isOwner}
+                      onAddToCart={() => addToCart(row)}
+                    />
+                  </LocalBoundary>
                 ) : (
                   <ProductCardSkeleton
                     note={state === "fetching" ? FETCHING_NOTE : state === "failed" ? "Not available on your node right now" : undefined}

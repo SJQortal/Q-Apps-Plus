@@ -58,6 +58,19 @@ describe("a shop's details", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps no coin field of the wrong type for the cards and filters to trip on", async () => {
+    stubFetch(() => ({
+      status: 200,
+      body: { ...validShop, supportedCoins: 1, foreignCoins: { ARRR: 5 }, acceptedAssets: {} },
+    }));
+    const state = await requestShopDetails("Seller Name", "q-store-general-my-shop");
+    expect(state).toEqual({
+      status: "ready",
+      shop: { ...validShop, supportedCoins: [], foreignCoins: {}, acceptedAssets: [] },
+      valid: true,
+    });
+  });
+
   it("marks a JSON that isn't a shop as not valid", async () => {
     stubFetch(() => ({ status: 200, body: { title: "No ships-to" } }));
     const state = await requestShopDetails("Seller Name", "q-store-general-my-shop");

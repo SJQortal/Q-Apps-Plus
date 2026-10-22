@@ -32,6 +32,7 @@ import { fetchQdnJson, mapWithConcurrency, resourceExists } from "../../qdn/sear
 import { currentStoreFrom } from "../../hooks/useOwnShops";
 import { checkStructureStore } from "../../utils/checkStructure";
 import { CATALOGUE_CONCURRENCY, fetchCatalogue, type LoadedCatalogue } from "../../utils/fetchCatalogues";
+import { normalizeShopJson } from "../../discovery/shopJson";
 import { RetryCancelled, withPeerRetries } from "./peerRetry";
 import { fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
 
@@ -155,11 +156,12 @@ export function useViewedShop(owner: string, storeId: string, options: { product
         onRetry: () => patch({ shopStatus: "fetching" }),
       });
       if (!alive) return;
-      if (result.kind !== "ok" || !result.value || typeof result.value !== "object") {
+      // Fields of the wrong type are dropped before anything renders them (discovery/shopJson.ts).
+      const json = result.kind === "ok" ? normalizeShopJson(result.value) : null;
+      if (!json) {
         patch({ shopStatus: result.kind === "missing" ? "missing" : "unavailable" });
         return;
       }
-      const json = result.value;
       const shop = currentStoreFrom(storeId, owner, json);
       patch({ shopStatus: "ready", shop });
       if (!isOwner) dispatch(setCurrentViewedStore(shop));
@@ -194,9 +196,11 @@ export function useViewedShop(owner: string, storeId: string, options: { product
   }, [attempt, containerId, dispatch, isOwner, key, owner, servedFromRedux, shopKey, storeId, withProducts]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  // The seller's own copy stays as it is for their edits; the page shows a checked one.
+  const ownShopView = useMemo(() => (ownShop ? (normalizeShopJson(ownShop) as unknown as CurrentStore) : null), [ownShop]);
 
   if (servedFromRedux) {
-    return { shop: ownShop, shopStatus: "ready", index: ownShopIndex, productsStatus: "ready", isOwner, retry };
+    return { shop: ownShopView, shopStatus: "ready", index: ownShopIndex, productsStatus: "ready", isOwner, retry };
   }
   if (load?.key === key) {
     return { shop: load.shop, shopStatus: load.shopStatus, index: load.index, productsStatus: load.productsStatus, isOwner, retry };

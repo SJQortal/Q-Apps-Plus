@@ -260,6 +260,65 @@ describe("shop page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
   });
 
+  it("shows a shop whose JSON has fields of the wrong type (it crashed the whole app)", async () => {
+    const world = makeWorld();
+    installMockNode(world);
+    const realFetch = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    const { storeJsonOf } = await import("../../../test/mockNode");
+    const odd = { ...storeJsonOf(world.shops[0]), supportedCoins: 1, foreignCoins: { ARRR: 5 }, acceptedAssets: {}, location: { city: "Lisbon" } };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.startsWith("/arbitrary/STORE/")
+          ? { ok: true, status: 200, text: async () => JSON.stringify(odd), json: async () => odd }
+          : realFetch(url)
+      )
+    );
+    renderWithProviders(
+      <Routes>
+        <Route path="/:user/:store" element={<Store />} />
+      </Routes>,
+      { initialEntries: [SHOP_PATH] }
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
+    const coins = screen.getByRole("list", { name: "Accepted coins" });
+    expect(within(coins).getByText("QORT")).toBeInTheDocument();
+    expect(within(coins).queryByText("ARRR")).toBeNull();
+    expect(screen.queryByText("Lisbon")).toBeNull();
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+  });
+
+  it("shows the other products when one can't be shown", async () => {
+    const world = makeWorld();
+    installMockNode(world);
+    const realFetch = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    const { catalogueOf } = await import("../../../test/mockNode");
+    const cat = catalogueOf(world.shops[0], "q-store-catalogue-my-shop-CAT0000001")!;
+    cat.products["q-store-product-my-shop-P000000011"].title = { en: "Odd" };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url.endsWith("/q-store-catalogue-my-shop-CAT0000001")
+          ? { ok: true, status: 200, text: async () => JSON.stringify(cat), json: async () => cat }
+          : realFetch(url)
+      )
+    );
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderWithProviders(
+        <Routes>
+          <Route path="/:user/:store" element={<Store />} />
+        </Routes>,
+        { initialEntries: [SHOP_PATH] }
+      );
+      expect(await screen.findByText("This product couldn't be shown.")).toBeInTheDocument();
+      await waitFor(() => expect(cardTitles()).toHaveLength(11));
+      expect(screen.getByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it("tells a buyer the shop has no products, and the owner how to add some", async () => {
     const world = makeWorld({ productsPerShop: 0 });
     renderShop(world);

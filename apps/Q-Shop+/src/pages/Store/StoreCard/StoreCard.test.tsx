@@ -116,6 +116,42 @@ describe("a shop card", () => {
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 
+  it("shows a shop whose JSON has coin fields of the wrong type (they crashed the whole app)", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ ...SHOP_JSON, supportedCoins: 1, foreignCoins: { ARRR: 5 }, acceptedAssets: {} }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    renderCard();
+    expect(await screen.findByRole("img", { name: "Seller's Shop" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAccessibleDescription(/Pays in QORT\./);
+  });
+
+  it("gives way to a plain card with a link when it can't be shown, and the rest of the list stays", async () => {
+    stubNode();
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      renderWithProviders(
+        <ul>
+          <StoreCard shop={SHOP} mine={false} rating={{ average: 4, count: { n: 1 } as unknown as number }} onOpen={() => {}} onMenu={() => {}} />
+          <StoreCard
+            shop={{ ...SHOP, key: shopKey("Other", "q-store-general-other"), owner: "Other", id: "q-store-general-other", title: "Other shop" }}
+            mine={false}
+            onOpen={() => {}}
+            onMenu={() => {}}
+          />
+        </ul>
+      );
+      expect(screen.getByText("This shop's card couldn't be shown.")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Open shop" })).toHaveAttribute("href", "/Seller%20Name/q-store-general-my-shop");
+      expect(screen.getByRole("link", { name: "Other shop" })).toBeInTheDocument();
+      expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it("is one link to the shop with a separate More button", async () => {
     stubNode();
     const onMenu = vi.fn();

@@ -12,22 +12,10 @@
 import { useSyncExternalStore } from "react";
 import { fetchQdnJson, mapWithConcurrency } from "../qdn/search";
 import { checkStructureStore } from "../utils/checkStructure";
-import type { ShopAsset } from "../money/coins";
 import { shopKey, type ShopEntry } from "./shopIndex";
+import { normalizeShopJson, type ShopJson } from "./shopJson";
 
-/** The STORE JSON as the original writes it (docs/apps/Q-Shop+.md → Data contract). */
-export interface ShopJson {
-  title?: string;
-  description?: string;
-  location?: string;
-  shipsTo?: string;
-  created?: number;
-  shortStoreId?: string;
-  logo?: string;
-  supportedCoins?: string[];
-  foreignCoins?: Record<string, string>;
-  acceptedAssets?: ShopAsset[];
-}
+export type { ShopJson } from "./shopJson";
 
 export type ShopDetails =
   | { status: "loading" }
@@ -113,8 +101,9 @@ export function requestShopDetails(
         await wait(DETAIL_RETRY_DELAYS_MS[attempt - 1]);
       }
       try {
-        const shop = await fetchQdnJson<ShopJson>("STORE", owner, id, { fresh: attempt > 0 });
-        const valid = Boolean(shop) && typeof shop === "object" && !Array.isArray(shop) && checkStructureStore(shop);
+        // Fields of the wrong type are dropped before anything renders them (shopJson.ts).
+        const shop = normalizeShopJson(await fetchQdnJson<unknown>("STORE", owner, id, { fresh: attempt > 0 }));
+        const valid = shop !== null && checkStructureStore(shop);
         return update(key, { status: "ready", shop: valid ? shop : {}, valid });
       } catch {
         // not on the node yet, or the node hiccupped: try again

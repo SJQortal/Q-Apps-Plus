@@ -116,6 +116,32 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("button", { name: /^Cart/ })).toBeNull();
   });
 
+  it("keeps the page when the product's data can't be shown (it crashed the whole app)", async () => {
+    const world = makeWorld();
+    const store = createAppStore();
+    const { catalogueOf } = await import("../../test/mockNode");
+    const cat = catalogueOf(world.shops[0], CAT1)!;
+    cat.products[P11] = { ...cat.products[P11], title: { en: "Odd" } };
+    cat.products["q-store-product-my-shop-P000000012"] = { ...cat.products[P11], title: "Odd price", price: { qort: 1 } };
+    store.dispatch(setCatalogueHashMap({ ...cat, user: "Seller Name", isValid: true }));
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const { unmount } = renderProduct(world, pathOf(P11), null, store);
+      // A title that isn't text: the page shows the rest.
+      expect(await screen.findByRole("heading", { level: 1, name: "Product" })).toBeInTheDocument();
+      expect(screen.getByText("Description of product 11")).toBeInTheDocument();
+      unmount();
+      // A price list that isn't a list: the header and a way back stay.
+      renderProduct(world, pathOf("q-store-product-my-shop-P000000012"), null, store);
+      expect(await screen.findByText("This product couldn't be shown")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { level: 1, name: "Odd price" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Go to the shop" }));
+      expect(await screen.findByText("Shop page")).toBeInTheDocument();
+    } finally {
+      error.mockRestore();
+    }
+  });
+
   it("says plainly when the product isn't there (no template text)", async () => {
     renderProduct(makeWorld(), pathOf("q-store-product-my-shop-GONE000000"));
     expect(await screen.findByRole("heading", { level: 1, name: "Product not found" })).toBeInTheDocument();

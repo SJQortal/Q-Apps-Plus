@@ -8,7 +8,7 @@
  * can't.
  */
 import { memo, useEffect, useId, type MouseEvent } from "react";
-import { Box, IconButton, Typography } from "@mui/material";
+import { Box, Button, IconButton, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
@@ -28,6 +28,7 @@ import type { ShopEntry } from "../../../discovery/shopIndex";
 import { formatRating, type ShopRating } from "../../../discovery/ratings";
 import { CARD_ART_HEIGHT } from "../../../discovery/ShopGrid";
 import { visuallyHidden } from "../../../discovery/a11y";
+import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
 
 /** Coin marks shown before "+N". */
 const MAX_COINS = 5;
@@ -299,4 +300,28 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   );
 }
 
-export const StoreCard = memo(StoreCardView);
+/** One shop's bad data gives way to a plain card with a link, never the whole page (LocalBoundary). */
+function SafeStoreCard(props: StoreCardProps) {
+  const { shop } = props;
+  return (
+    <LocalBoundary
+      label={`The card of ${shop.owner}'s shop ${shop.id}`}
+      fallback={
+        <UnavailableCard
+          component="li"
+          heading={shop.title}
+          text="This shop's card couldn't be shown."
+          action={
+            <Button component={RouterLink} to={storePath(shop.owner, shop.id)} sx={{ minHeight: 44, alignSelf: "flex-start" }}>
+              Open shop
+            </Button>
+          }
+        />
+      }
+    >
+      <StoreCardView {...props} />
+    </LocalBoundary>
+  );
+}
+
+export const StoreCard = memo(SafeStoreCard);
