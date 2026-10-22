@@ -15,6 +15,8 @@ export const REVIEW_BASE = "q-store-review";
 export const PRODUCT_BASE = "q-store-product";
 /** + app, additive (round 5): a shop's collections (qdn/collections.ts). The original never reads it. */
 export const COLLECTIONS_BASE = "q-store-collections";
+/** + app, additive (round 5): a product's pictures past the third (qdn/productPictures.ts). The original never reads it. */
+export const PICTURES_BASE = "q-store-pictures";
 
 /** A shop's id from its short id: `q-store-general-<shortStoreId>`. */
 export function storeIdentifier(shortStoreId: string): string {
@@ -57,6 +59,24 @@ export function isCatalogueOfShop(identifier: string, shortStoreId: string): boo
 /** The DOCUMENT holding a shop's collections: `q-store-collections-<shortStoreId>`. */
 export function collectionsIdentifier(shortStoreId: string): string {
   return `${COLLECTIONS_BASE}-${shortStoreId}`;
+}
+
+/**
+ * The DOCUMENT holding a product's pictures past the third: its product id
+ * with `q-store-product` turned into `q-store-pictures`, so
+ * `q-store-pictures-<shortStoreId>-<uid10>` (at most 53 characters, shop ids
+ * being at most 25).
+ */
+export function picturesIdentifier(productId: string): string {
+  return productId.startsWith(`${PRODUCT_BASE}-`) ? `${PICTURES_BASE}-${productId.slice(PRODUCT_BASE.length + 1)}` : `${PICTURES_BASE}-${productId}`;
+}
+
+/** One of this shop's pictures documents (the uid has no dash, as with catalogues). */
+export function isPicturesOfShop(identifier: string, shortStoreId: string): boolean {
+  const prefix = `${PICTURES_BASE}-${shortStoreId}-`;
+  if (!shortStoreId || !identifier.startsWith(prefix)) return false;
+  const uid = identifier.slice(prefix.length);
+  return uid.length > 0 && !uid.includes("-");
 }
 
 /** A product's id inside its catalogue (there is no product resource on QDN). */

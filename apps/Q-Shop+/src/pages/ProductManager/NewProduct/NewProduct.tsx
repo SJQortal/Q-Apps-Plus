@@ -20,6 +20,8 @@ import { ProductForm } from "../ProductForm/ProductForm";
 import { FormError } from "../../../seller/FormError";
 import { listedCategory, oldCategoryOf } from "../../../constants/categories";
 import { fiatPricingOf } from "../../../money/fiatPricing";
+import { needsMorePictures } from "../../../qdn/productPictures";
+import { useMorePictures } from "../../../hooks/useMorePictures";
 import {
   editedProductDraft,
   formValuesFor,
@@ -71,13 +73,24 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
   // A category saved before the list (constants/categories.ts) stays until the seller picks another.
   const [oldCategory] = useState(() => oldCategoryOf(product));
 
-  const [initial] = useState<ProductFormValues>(() => {
+  const [initial, setInitial] = useState<ProductFormValues>(() => {
     const start = formValuesFor(product, coins, pricing);
     // A listed category saved in another spelling shows as the list's; an old one trimmed, as oldCategoryOf
     // gives it (the original saved categories as typed, spaces and all).
     return { ...start, category: listedCategory(start.category) ?? start.category.trim() };
   });
   const [values, setValues] = useState<ProductFormValues>(initial);
+  // A published product's pictures past the third are in a document of their own (qdn/productPictures.ts):
+  // read first, and added after the catalogue's, before its pictures can change.
+  const [loadMore] = useState(() => needsMorePictures(product));
+  const more = useMorePictures(loadMore ? currentStore?.owner || name : null, loadMore ? product : null);
+  const [addedMore, setAddedMore] = useState("");
+  if (more.status === "ready" && more.key !== addedMore) {
+    setAddedMore(more.key);
+    setInitial((v) => ({ ...v, images: [...v.images, ...more.images] }));
+    setValues((v) => ({ ...v, images: [...v.images, ...more.images] }));
+  }
+  const picturesPending = loadMore && (more.status === "loading" || more.status === "failed");
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const editingPublished = !!product && (!!product.isUpdate || !!product.catalogueId);
@@ -94,6 +107,9 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     if (!name) return setError("Sign in with your Qortal name to add products.");
     if (!currentStore?.id || !dataContainer || dataContainer.storeId !== currentStore.id) {
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
+    }
+    if (picturesPending) {
+      return setError("This product's other pictures aren't in yet. Saving now would drop them, so wait for them or try again.");
     }
     const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly });
     if (invalid) return setError(invalid);
@@ -157,6 +173,11 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
             wholeOnly={wholeOnly}
             editing={editingPublished}
             onImageError={setError}
+            picturesLoad={
+              picturesPending && (more.status === "loading" || more.status === "failed")
+                ? { status: more.status, count: more.count, onRetry: more.retry }
+                : null
+            }
           />
           <FormError message={error} />
         </Box>

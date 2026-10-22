@@ -34,6 +34,7 @@ import { ProductManager } from "../pages/ProductManager/ProductManager";
 import { useOwnShops } from "../hooks/useOwnShops";
 import { useShopPublish } from "../hooks/useShopPublish";
 import { roomTiming } from "../qdn/publishBatches";
+import { picturesIdentifier } from "../qdn/identifiers";
 import { isDraftOfShop } from "./shopDrafts";
 import { resetPublishedIndexes } from "./productIndex";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
@@ -181,6 +182,51 @@ describe("the products tab", () => {
       status: "AVAILABLE",
       user: SELLER,
     });
+  });
+
+  it("publishes a product's pictures past the third in a document of their own, first; the catalogue keeps 3", async () => {
+    stubNode();
+    const { q, store } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    const images = ["QQ==", "Qg==", "Qw==", "RA==", "RQ=="].map((b) => `data:image/webp;base64,${b}`);
+    store.dispatch(setProductsToSave({ ...draft(1), images }));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    const picturesId = picturesIdentifier(draft(1).id);
+    expect(call.resources.map((r: any) => r.identifier)).toEqual([picturesId, CATALOGUE_ID, DATA_CONTAINER_ID]);
+    expect(call.resources[0]).toMatchObject({ service: "DOCUMENT", filename: "pictures.json", name: SELLER });
+    expect(decodeData64(call.resources[0].data64)).toEqual({ productId: draft(1).id, images: images.slice(3) });
+    const product = decodeData64(call.resources[1].data64).products[draft(1).id];
+    expect(product.images).toEqual(images.slice(0, 3));
+    expect(product.morePictures).toMatchObject({ id: picturesId, count: 2 });
+  });
+
+  it("an edit reads the product's other pictures first, and can't be saved until they're in", async () => {
+    installVisibleIntersectionObserver();
+    const served = new Map<string, unknown>();
+    stubNode({ served });
+    const picturesId = picturesIdentifier(poster.id);
+    const withMore = structuredClone(catalogue) as any;
+    withMore.products[poster.id] = { ...poster, morePictures: { id: picturesId, count: 2, sig: "2-a-b" } };
+    const { store } = setup({ FETCH_QDN_RESOURCE: async () => structuredClone(withMore) }, `/product-manager/${STORE_ID}?tab=products`);
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    // Not on the node: the pictures can't change, and saving would drop them.
+    expect(await within(dialog).findByText(/2 more pictures of this product couldn't be read/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: /^Add/ })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+    expect(await within(dialog).findByText(/other pictures aren't in yet/)).toBeInTheDocument();
+    expect(store.getState().global.productsToSave[poster.id]).toBeUndefined();
+    // On the node now: they join the pictures, and the product saves with all of them.
+    const more = ["data:image/webp;base64,TU9SRTE=", "data:image/webp;base64,TU9SRTI="];
+    served.set(picturesId, { productId: poster.id, images: more });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Try again" }));
+    expect(await within(dialog).findByRole("list", { name: `Pictures (${poster.images.length + 2} of 10)` })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+    await waitFor(() => expect(store.getState().global.productsToSave[poster.id]).toBeDefined());
+    const saved = store.getState().global.productsToSave[poster.id] as any;
+    expect(saved.images).toEqual([...poster.images, ...more]);
+    expect(saved.morePictures).toEqual({ id: picturesId, count: poster.images.length + 2 - 3, sig: "2-a-b" });
   });
 
   it("a product its catalogue lacks says so and opens from its index row; saving puts it back in the catalogue", async () => {

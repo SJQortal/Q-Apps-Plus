@@ -42,6 +42,7 @@ import {
   type PublishResource,
 } from "../qdn/payloads";
 import { QdnDeletedError, fetchQdnJson, invalidateQdnJson, invalidateQdnSearches, mapWithConcurrency } from "../qdn/search";
+import { emptiedPicturesOf, morePicturesOf } from "../qdn/productPictures";
 import { errorMessage } from "../qdn/hubErrors";
 import { isCatalogueJson } from "../utils/fetchCatalogues";
 import { indexKey, notePublishedIndex } from "./productIndex";
@@ -157,12 +158,21 @@ export function useDeleteProducts() {
         const catalogues = fresh.read;
         const built = buildDeleteProductsPublish({ name, dataContainer: seen, productIds: listed, catalogues, deletedAt: Date.now() });
         const labels: Record<string, string> = { [dataContainerIdentifier(storeId)]: "Product list" };
+        // Their pictures past the third (qdn/productPictures.ts) are emptied first.
+        const gone = built.removed
+          .map((id) => Object.values(catalogues).find((cat) => cat?.products?.[id])?.products?.[id] as { id: string; title?: unknown } | undefined)
+          .filter((p): p is { id: string; title?: unknown } => !!p && typeof p.id === "string");
+        const pictures = emptiedPicturesOf(name, gone);
+        for (const r of pictures) {
+          const product = gone.find((p) => morePicturesOf(p)?.id === r.identifier);
+          labels[r.identifier] = `More pictures · ${typeof product?.title === "string" && product.title.trim() ? product.title.trim() : "Product"}`;
+        }
         built.catalogues.forEach((cat, i) => {
           const left = Object.keys(cat.products ?? {}).length;
           labels[cat.id] = `Catalogue ${i + 1} · ${left === 0 ? "now empty" : left === 1 ? "1 product left" : `${left} products left`}`;
         });
         if (store.getState().global.dataContainer !== dataContainer) throw new PrepareError(LIST_CHANGED_TEXT);
-        setJob({ ...built, labels, storeId, name, baseKey: indexKey(seen) });
+        setJob({ ...built, resources: [...pictures, ...built.resources], labels, storeId, name, baseKey: indexKey(seen) });
         handedOver = true;
         return true;
       } catch (e) {

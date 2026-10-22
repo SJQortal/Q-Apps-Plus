@@ -420,16 +420,29 @@ function deletedResource(name: string, service: string, identifier: string, body
   };
 }
 
+/** A deleted product's pictures past the third (qdn/productPictures.ts), as the shop's delete leaves them. */
+export function picturesTombstone() {
+  return { productId: "", images: [], deleted: true };
+}
+
 /**
  * Delete a shop: the STORE, its product index, its collections (when it has
- * them) and every catalogue it has, each republished as its tombstone. The
- * shop goes first, so it leaves every list at once even if a later part
- * fails; then the index, so no product is listed; then the collections and
- * the catalogues, in the order given (duplicates once).
+ * them), every catalogue it has and its products' pictures documents, each
+ * republished as its tombstone. The shop goes first, so it leaves every list
+ * at once even if a later part fails; then the index, so no product is
+ * listed; then the collections, the catalogues and the pictures, in the
+ * order given (duplicates once).
  */
-export function buildDeleteShopPublish(args: { name: string; storeId: string; catalogueIds: string[]; collectionsId?: string | null }) {
+export function buildDeleteShopPublish(args: {
+  name: string;
+  storeId: string;
+  catalogueIds: string[];
+  collectionsId?: string | null;
+  picturesIds?: string[];
+}) {
   const { name, storeId } = args;
   const catalogueIds = [...new Set(args.catalogueIds)].filter(Boolean);
+  const picturesIds = [...new Set(args.picturesIds ?? [])].filter(Boolean);
   const resources: PublishResource[] = [
     deletedResource(name, "STORE", storeId, storeTombstone(), "store.json"),
     deletedResource(name, "DOCUMENT", dataContainerIdentifier(storeId), indexTombstone(storeId, name), "datacontainer.json"),
@@ -437,6 +450,7 @@ export function buildDeleteShopPublish(args: { name: string; storeId: string; ca
       ? [deletedResource(name, "DOCUMENT", args.collectionsId, collectionsTombstone(storeId), "collections.json")]
       : []),
     ...catalogueIds.map((id) => deletedResource(name, "DOCUMENT", id, catalogueTombstone(id), "catalogue.json")),
+    ...picturesIds.map((id) => deletedResource(name, "DOCUMENT", id, picturesTombstone(), "pictures.json")),
   ];
   return { resources };
 }

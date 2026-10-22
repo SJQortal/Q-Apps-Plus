@@ -41,6 +41,9 @@ const ORPHAN = "q-store-catalogue-my-shop-ORPHANxxx1";
 const GONE = "q-store-catalogue-my-shop-GONExxxxx1";
 const NEIGHBOUR = "q-store-catalogue-my-shop-2-OTHERxxxx1";
 const MARK = { title: "deleted", description: "deleted", tags: ["deleted"] };
+const PICTURES = "q-store-pictures-my-shop-MUGxxxxxxx";
+const PICTURES_GONE = "q-store-pictures-my-shop-GONExxxxx1";
+const PICTURES_NEIGHBOUR = "q-store-pictures-my-shop-2-OTHERxxxx1";
 
 /**
  * The node: the product list, a catalogue search by prefix (the list's
@@ -59,6 +62,14 @@ function stubNode(opts: { searchFails?: boolean } = {}) {
       if (path.startsWith("/transactions/unitfee")) return ok("1000000");
       if (path === "/arbitrary/resources/search" && params.get("service") === "DOCUMENT") {
         if (opts.searchFails) return { ok: false, status: 500, text: async () => "{}", json: async () => ({}) };
+        if (params.get("identifier")?.startsWith("q-store-pictures-")) {
+          const pictures = [
+            { name: SELLER, service: "DOCUMENT", identifier: PICTURES },
+            { name: SELLER, service: "DOCUMENT", identifier: PICTURES_GONE, metadata: MARK },
+            { name: SELLER, service: "DOCUMENT", identifier: PICTURES_NEIGHBOUR },
+          ];
+          return ok(Number(params.get("offset")) > 0 ? [] : pictures);
+        }
         const all = [
           { name: SELLER, service: "DOCUMENT", identifier: CATALOGUE_ID },
           { name: SELLER, service: "DOCUMENT", identifier: ORPHAN },
@@ -130,13 +141,18 @@ describe("deleting a shop", () => {
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
     // The list's catalogue and the one only the search found; not the deleted one, nor my-shop-2's.
-    expect(sent).toEqual(buildDeleteShopPublish({ name: SELLER, storeId: STORE_ID, catalogueIds: [CATALOGUE_ID, ORPHAN] }).resources);
+    // The same for its products' pictures documents (qdn/productPictures.ts).
+    expect(sent).toEqual(
+      buildDeleteShopPublish({ name: SELLER, storeId: STORE_ID, catalogueIds: [CATALOGUE_ID, ORPHAN], picturesIds: [PICTURES] }).resources
+    );
     expect(sent.map((r: any) => [r.service, r.identifier, decodeData64(r.data64).deleted])).toEqual([
       ["STORE", STORE_ID, true],
       ["DOCUMENT", DATA_CONTAINER_ID, true],
       ["DOCUMENT", CATALOGUE_ID, true],
       ["DOCUMENT", ORPHAN, true],
+      ["DOCUMENT", PICTURES, true],
     ]);
+    expect(decodeData64(sent[4].data64)).toEqual({ productId: "", images: [], deleted: true });
 
     expect(await screen.findByText("Home page")).toBeInTheDocument();
     const state = store.getState();
@@ -157,7 +173,7 @@ describe("deleting a shop", () => {
     fireEvent.click(go);
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
-    expect(sent.map((r: any) => r.identifier)).toEqual([STORE_ID, DATA_CONTAINER_ID, "q-store-collections-my-shop", CATALOGUE_ID, ORPHAN]);
+    expect(sent.map((r: any) => r.identifier)).toEqual([STORE_ID, DATA_CONTAINER_ID, "q-store-collections-my-shop", CATALOGUE_ID, ORPHAN, PICTURES]);
   });
 
   it("needs the shop id typed exactly; Cancel deletes nothing", async () => {

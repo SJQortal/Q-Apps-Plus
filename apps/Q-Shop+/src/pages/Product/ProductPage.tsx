@@ -34,6 +34,7 @@ import { useShopCoin } from "../../money/useShopCoin";
 import { collectionPath, decodeParam, productLink, storePath } from "../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
 import { useCatalogue, useViewedShop } from "../Store/useShopData";
+import { useMorePictures } from "../../hooks/useMorePictures";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
@@ -156,6 +157,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const [quantityText, setQuantityText] = useState("1");
   const [added, setAdded] = useState<AddedNotice | null>(null);
   const product = catalogue?.products?.[productId];
+  // Pictures past the third, from their own document (qdn/productPictures.ts), after the catalogue's.
+  const morePictures = useMorePictures(owner, product ? { id: productId, morePictures: (product as { morePictures?: unknown }).morePictures } : null);
   const shopPath = storePath(owner, storeId);
   const shopName = shop?.title || "the shop";
 
@@ -216,7 +219,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
     };
     content = (
       <Box data-product-layout sx={productLayoutSx}>
-        <ImageGallery images={product.images} title={name} initialIndex={mainIndex} />
+        <ImageGallery images={[...(product.images ?? []), ...morePictures.images]} title={name} initialIndex={mainIndex} />
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             {product.type && <Chip size="small" variant="outlined" label={product.type === "physical" ? "Physical" : "Digital"} />}

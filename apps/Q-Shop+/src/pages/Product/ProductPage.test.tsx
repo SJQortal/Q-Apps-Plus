@@ -4,7 +4,7 @@
  * products, and not-found.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { installMockNode, makeWorld, type World } from "../../test/mockNode";
@@ -32,8 +32,22 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderProduct(world: World, path: string, me: string | null = world.me?.name ?? null, store = createAppStore()) {
+function renderProduct(
+  world: World,
+  path: string,
+  me: string | null = world.me?.name ?? null,
+  store = createAppStore(),
+  serve?: (url: string) => unknown
+) {
   const node = installMockNode(world);
+  if (serve) {
+    // Extra documents the mock node doesn't hold: answered here, the rest by the node.
+    const nodeFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (input: string, init?: RequestInit) => {
+      const body = serve(String(input));
+      return body === undefined ? nodeFetch(input, init) : { ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body };
+    });
+  }
   if (me) store.dispatch(addUser({ address: "QAddr", publicKey: "pk", name: me }));
   const view = renderWithProviders(
     <Routes>
@@ -98,6 +112,25 @@ describe("product page", { timeout: 20_000 }, () => {
     const { node } = renderProduct(world, pathOf(P11), null, store);
     expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
     expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toHaveLength(0);
+  });
+
+  it("adds the product's pictures past the third, from their own document, to the gallery", async () => {
+    const world = makeWorld();
+    const store = createAppStore();
+    const { catalogueOf } = await import("../../test/mockNode");
+    const cat = catalogueOf(world.shops[0], CAT1) as any;
+    const PICTURES = "q-store-pictures-my-shop-P000000011";
+    const images = ["QQ==", "Qg==", "Qw=="].map((b) => `data:image/webp;base64,${b}`);
+    cat.products[P11] = { ...cat.products[P11], images, morePictures: { id: PICTURES, count: 2, sig: "2-a-b" } };
+    store.dispatch(setCatalogueHashMap({ ...cat, user: "Seller Name", isValid: true }));
+    const more = ["data:image/webp;base64,TU9SRTE=", "data:image/webp;base64,TU9SRTI="];
+    renderProduct(world, pathOf(P11), null, store, (url) =>
+      url === `/arbitrary/DOCUMENT/Seller%20Name/${PICTURES}` ? { productId: P11, images: more } : undefined
+    );
+    expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
+    await waitFor(() => expect(within(screen.getByRole("group", { name: "Pictures" })).getAllByRole("button")).toHaveLength(5));
+    fireEvent.click(within(screen.getByRole("group", { name: "Pictures" })).getAllByRole("button")[4]);
+    expect(screen.getByRole("button", { name: /full screen/ }).querySelector("img")).toHaveAttribute("src", more[1]);
   });
 
   it("shows the owner's product, not another name's copy published under the same catalogue id", async () => {

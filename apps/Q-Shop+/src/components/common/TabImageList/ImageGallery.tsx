@@ -1,5 +1,5 @@
 /**
- * A product's pictures (up to 3, as the seller tools allow): the main one,
+ * A product's pictures (up to 10, as the seller tools allow): the main one,
  * arrows and thumbnails, swipe on touch screens, ← and → keys, and a full
  * screen viewer (full-screen on phones) with the same controls and Esc, where
  * pictures zoom (ZoomableImage).
@@ -16,7 +16,7 @@ import { LANDSCAPE_PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { useLoadedPictures } from "../useLoadedPictures";
 import { ZoomableImage } from "./ZoomableImage";
 
-export const MAX_GALLERY_IMAGES = 3;
+export const MAX_GALLERY_IMAGES = 10;
 const SWIPE_PX = 40;
 
 /**
@@ -179,7 +179,7 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
                 borderColor: i === at ? "text.primary" : "divider",
                 bgcolor: pictures.isLoaded(src) ? "transparent" : "action.hover",
                 "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: 2 },
-                // Three fit under the smaller picture, still 44 px targets.
+                // They wrap under the smaller picture, still 44 px targets.
                 [LANDSCAPE]: { width: 44, height: 44 },
               }}
             >

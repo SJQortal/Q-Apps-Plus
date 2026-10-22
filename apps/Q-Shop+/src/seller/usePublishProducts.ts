@@ -1,7 +1,8 @@
 /**
- * Publish the drafts: build the catalogues and the product index with the
- * original's builder (qdn/payloads.ts buildProductPublish, unchanged), hand
- * them to PublishProductsDialog, and once everything is on QDN update Redux as
+ * Publish the drafts: pictures past the third go to their own documents
+ * (qdn/productPictures.ts splitProductPictures), then the catalogues and the
+ * product index come from the original's builder (qdn/payloads.ts
+ * buildProductPublish, unchanged); hand them to PublishProductsDialog, and once everything is on QDN update Redux as
  * the original did (clear the drafts, the new index, the products, the
  * catalogues) and drop the cached copies.
  *
@@ -36,6 +37,7 @@ import {
   type PublishResource,
 } from "../qdn/payloads";
 import { invalidateQdnJson, invalidateQdnSearches, isDeletedBody } from "../qdn/search";
+import { splitProductPictures } from "../qdn/productPictures";
 import { errorMessage } from "../qdn/hubErrors";
 import { draftsOfShop } from "./shopDrafts";
 import { indexKey, notePublishedIndex } from "./productIndex";
@@ -115,11 +117,13 @@ export function usePublishProducts() {
       // The node hasn't caught up with this tab's own last publish: what this tab sent is the newest.
       const nodeBehind = onQdn.kind === "behind";
       const base = seen;
+      // Pictures 4–10 go first, in documents of their own; the catalogues keep 3.
+      const pictures = splitProductPictures(name, productsToSave as unknown as Record<string, ProductDraft>);
       const built = await buildProductPublish({
         name,
         shortStoreId: shortStoreIdOf(storeId),
         dataContainer: base,
-        productsToSave: productsToSave as unknown as Record<string, ProductDraft>,
+        productsToSave: pictures.drafts,
         fetchCatalogue: async (catalogueId) => {
           let res: any = null;
           try {
@@ -153,7 +157,7 @@ export function usePublishProducts() {
         },
         newUid: () => uid(),
       });
-      const labels: Record<string, string> = {};
+      const labels: Record<string, string> = { ...pictures.labels };
       built.catalogues.forEach((cat, i) => {
         const n = Object.keys(cat.products ?? {}).length;
         labels[cat.id] = `Catalogue ${i + 1} · ${n === 1 ? "1 product" : `${n} products`}`;
@@ -161,7 +165,15 @@ export function usePublishProducts() {
       labels[built.dataContainer.id] = "Product list";
       // The page's list changed while this read the node (say, a reload): build again on the new one.
       if (store.getState().global.dataContainer !== dataContainer) throw new PrepareError(LIST_CHANGED_TEXT);
-      setJob({ ...built, labels, storeId, name, draftIds: Object.keys(productsToSave), baseKey: indexKey(base) });
+      setJob({
+        ...built,
+        resources: [...pictures.resources, ...built.resources],
+        labels,
+        storeId,
+        name,
+        draftIds: Object.keys(productsToSave),
+        baseKey: indexKey(base),
+      });
       handedOver = true;
     } catch (e) {
       setError(e instanceof PrepareError ? e.message : errorMessage(e, "Couldn't prepare the publish. Try again."));

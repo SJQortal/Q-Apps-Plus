@@ -10,6 +10,7 @@ import {
   Button,
   IconButton,
   InputAdornment,
+  Skeleton,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -63,6 +64,12 @@ interface ProductFormProps {
   /** Editing a published product: the status can change. */
   editing: boolean;
   onImageError: (message: string) => void;
+  /**
+   * The product's pictures past the third are still being read from QDN, or
+   * couldn't be (qdn/productPictures.ts): its pictures can't change until
+   * they are in.
+   */
+  picturesLoad?: { status: "loading" | "failed"; count: number; onRetry: () => void } | null;
 }
 
 const SectionTitle = ({ children }: { children: string }) => (
@@ -75,7 +82,20 @@ function coinName(coin: string, shop: ShopCoinSettings | null | undefined): stri
   return isCoinTicker(coin) ? COINS[coin].label : coinLabel(coin, shop);
 }
 
-export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricing, saved, wholeOnly = [], editing, onImageError }: ProductFormProps) => {
+export const ProductForm = ({
+  values,
+  onChange,
+  coins,
+  shop,
+  oldCategory,
+  pricing,
+  saved,
+  wholeOnly = [],
+  editing,
+  onImageError,
+  picturesLoad = null,
+}: ProductFormProps) => {
+  const picturesLocked = !!picturesLoad;
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
     onChange((prev) => ({ ...prev, [key]: value }));
   // The category the title suggests (utils/categoryMatch.ts). While the seller hasn't picked one,
@@ -130,7 +150,11 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricin
       <Box component="section" aria-label="Images" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
         <SectionTitle>Images</SectionTitle>
         {values.images.length > 0 && (
-          <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1 }}>
+          <Box
+            component="ul"
+            aria-label={`Pictures (${values.images.length} of ${MAX_PRODUCT_IMAGES})`}
+            sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(30%, 108px), 1fr))", gap: 1 }}
+          >
             {values.images.map((img, index) => (
               <Box component="li" key={`${index}-${img.slice(-24)}`} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
                 <Box
@@ -150,22 +174,53 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricin
                 <Box sx={{ display: "flex", justifyContent: "center", gap: 0.5 }}>
                   {index > 0 && (
                     <Tooltip title="Make main image">
-                      <IconButton aria-label={`Make image ${index + 1} the main image`} onClick={() => makeMain(index)} sx={{ width: 44, height: 44 }}>
-                        <StarOutlineOutlinedIcon />
-                      </IconButton>
+                      <span>
+                        <IconButton
+                          aria-label={`Make image ${index + 1} the main image`}
+                          onClick={() => makeMain(index)}
+                          disabled={picturesLocked}
+                          sx={{ width: 44, height: 44 }}
+                        >
+                          <StarOutlineOutlinedIcon />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   )}
                   <Tooltip title="Remove image">
-                    <IconButton aria-label={`Remove image ${index + 1}`} onClick={() => removeImage(index)} sx={{ width: 44, height: 44 }}>
-                      <DeleteOutlineOutlinedIcon />
-                    </IconButton>
+                    <span>
+                      <IconButton aria-label={`Remove image ${index + 1}`} onClick={() => removeImage(index)} disabled={picturesLocked} sx={{ width: 44, height: 44 }}>
+                        <DeleteOutlineOutlinedIcon />
+                      </IconButton>
+                    </span>
                   </Tooltip>
                 </Box>
               </Box>
             ))}
+            {picturesLoad?.status === "loading" &&
+              Array.from({ length: picturesLoad.count }, (_, i) => (
+                <Box component="li" key={`more-${i}`} aria-hidden>
+                  <Skeleton variant="rounded" sx={{ width: "100%", height: "auto", aspectRatio: "1 / 1" }} />
+                </Box>
+              ))}
           </Box>
         )}
-        {values.images.length < MAX_PRODUCT_IMAGES && (
+        {picturesLoad?.status === "loading" && (
+          <Typography variant="body2" color="text.secondary" role="status">
+            Loading {picturesLoad.count === 1 ? "1 more picture" : `${picturesLoad.count} more pictures`}…
+          </Typography>
+        )}
+        {picturesLoad?.status === "failed" && (
+          <Box role="alert" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+            <Typography variant="body2" sx={{ flex: "1 1 220px" }}>
+              {picturesLoad.count === 1 ? "1 more picture" : `${picturesLoad.count} more pictures`} of this product couldn't be read from
+              your node. The pictures can change once they are in, so none get lost.
+            </Typography>
+            <Button variant="outlined" color="inherit" onClick={picturesLoad.onRetry} sx={{ minHeight: 44 }}>
+              Try again
+            </Button>
+          </Box>
+        )}
+        {!picturesLocked && values.images.length < MAX_PRODUCT_IMAGES && (
           <ImageUploader
             label={values.images.length === 0 ? "Add images" : "Add another image"}
             max={MAX_PRODUCT_IMAGES - values.images.length}
@@ -174,7 +229,7 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricin
           />
         )}
         <Typography variant="body2" color="text.secondary">
-          The first image is the one buyers see in lists.
+          Up to {MAX_PRODUCT_IMAGES} images. The first is the one buyers see in lists; Q-Shop, the original app, shows the first 3.
         </Typography>
       </Box>
 

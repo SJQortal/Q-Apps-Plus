@@ -12,6 +12,7 @@
  */
 import { assetIdOf, priceCurrencyKey } from "../money/coins";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
+import { MAX_PRODUCT_PICTURES, withPicturesRef } from "../qdn/productPictures";
 import { isListedCategory } from "../constants/categories";
 import { fiatPriceOf, fiatToText, parseFiat, priceDecimals, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
 
@@ -33,8 +34,8 @@ export const STATUS_LABEL: Record<string, string> = {
 export const PRODUCT_TYPES = ["physical", "digital"] as const;
 export const TYPE_LABEL: Record<string, string> = { digital: "Digital", physical: "Physical" };
 
-/** The original's limits: 3 images, a 180-character title. */
-export const MAX_PRODUCT_IMAGES = 3;
+/** Up to 10 pictures (the original's 3 in the catalogue, the rest beside it: qdn/productPictures.ts); the original's 180-character title. */
+export const MAX_PRODUCT_IMAGES = MAX_PRODUCT_PICTURES;
 export const MAX_TITLE_LENGTH = 180;
 /** QORT and the other coins have 8 decimals. */
 export const MAX_DECIMALS = 8;
@@ -209,7 +210,7 @@ export function newProductDraft(args: {
     status: "AVAILABLE",
     user: name,
   };
-  return withFormFiat(draft, values, coins, args.pricing);
+  return withPicturesRef(withFormFiat(draft, values, coins, args.pricing));
 }
 
 /**
@@ -246,8 +247,8 @@ export function editedProductDraft(args: {
 }) {
   const { base, values, coins, name } = args;
   // Without the shop's pricing the form shows no price in a currency: the product keeps what it has.
-  if (!args.pricing) return editedWithoutFiat(base, values, coins, name);
-  return withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing);
+  if (!args.pricing) return withPicturesRef(editedWithoutFiat(base, values, coins, name));
+  return withPicturesRef(withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing));
 }
 
 function editedWithoutFiat(base: Record<string, any> & { id: string }, values: ProductFormValues, coins: string[], name: string) {

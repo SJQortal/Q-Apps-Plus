@@ -27,7 +27,15 @@ import {
 } from "../state/features/globalSlice";
 import { removeFromHashMapStores, setAllMyStores } from "../state/features/storeSlice";
 import { setNotification } from "../state/features/notificationsSlice";
-import { CATALOGUE_BASE, collectionsIdentifier, dataContainerIdentifier, isCatalogueOfShop, shortStoreIdOf } from "../qdn/identifiers";
+import {
+  CATALOGUE_BASE,
+  PICTURES_BASE,
+  collectionsIdentifier,
+  dataContainerIdentifier,
+  isCatalogueOfShop,
+  isPicturesOfShop,
+  shortStoreIdOf,
+} from "../qdn/identifiers";
 import { collectionsPointer } from "../qdn/collections";
 import { buildDeleteShopPublish, type DataContainerDoc, type PublishResource } from "../qdn/payloads";
 import { fetchQdnJson, invalidateQdnJson, invalidateQdnSearches, resourceExists, searchQdnAll } from "../qdn/search";
@@ -138,7 +146,21 @@ export function useDeleteShop() {
       }
       // Only this shop's own catalogue ids: a list naming another shop's catalogue mustn't delete it.
       const catalogueIds = [...ids].filter((id) => isCatalogueOfShop(id, short) && !deleted.has(id));
-      const { resources } = buildDeleteShopPublish({ name, storeId, catalogueIds, collectionsId });
+      // The products' pictures past the third (qdn/productPictures.ts). Not found, the shop still goes:
+      // nothing lists or links them once the shop and its catalogues are gone.
+      const picturesIds: string[] = [];
+      try {
+        const found = await searchQdnAll(
+          { service: "DOCUMENT", name, identifier: `${PICTURES_BASE}-${short}-`, prefix: true, exactmatchnames: true, includemetadata: true },
+          { pageSize: 100, maxPages: CATALOGUE_SEARCH_PAGES, fresh: true }
+        );
+        for (const row of found.rows) {
+          if (row.name === name && isPicturesOfShop(row.identifier, short) && !isDeletedRow(row)) picturesIds.push(row.identifier);
+        }
+      } catch {
+        // See above.
+      }
+      const { resources } = buildDeleteShopPublish({ name, storeId, catalogueIds, collectionsId, picturesIds });
       const labels: Record<string, string> = {
         [storeId]: "Shop",
         [dataContainerIdentifier(storeId)]: "Product list",
@@ -146,6 +168,9 @@ export function useDeleteShop() {
       };
       catalogueIds.forEach((id, i) => {
         labels[id] = `Catalogue ${i + 1}`;
+      });
+      picturesIds.forEach((id, i) => {
+        labels[id] = `More pictures ${i + 1}`;
       });
       setJob({ resources, labels, storeId, name });
       handedOver = true;
