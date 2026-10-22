@@ -266,7 +266,15 @@ Six agents built disjoint areas in their own worktrees on local branches `q-shop
 
 #### Screenshot matrix (round 3, final code)
 
-SCREENS_PLACEHOLDER
+`scripts/screens.mjs Q-Shop+` against the production build with `e2e/screens.config.mjs` (14 shops with owners that have a space, a `+` and non-ASCII letters, the signed-in name's own shop, orders both ways with statuses, reviews, a two-shop cart; every write declined). Screens: home, search, the filter sheet (phones), a shop as a buyer and as its owner, a product, the cart, checkout, My orders, the seller page with its Orders and Products tabs, Settings, the account menu and a missing shop; at 360×740, 390×844 and 844×390 (touch, with a scrolled landscape shot), 700 and 1280.
+
+| Run | Captures | Console errors | Sideways overflow | Unlabelled buttons | axe violations |
+|---|---|---|---|---|---|
+| Four themes, Hub dark | 292 | 0 | 0 | 0 | 0 after the last fix (the coin chips' names; home, search and filters re-run in all four themes at every size: 52 captures, 0) |
+| Hub 3.0 and Q-Shop Classic, Hub light (8 main screens) | 80 | 0 | 0 | 0 | 0 |
+| Real node, read-only, Hub 3.0 (9 screens) | 45 | 1 (404s for missing avatars) | 0 | 0 | fixed in the same commits as above |
+
+axe found and the fixes removed, over the night: shop-card links named only by their title, "Add <title> to cart", the bottom bar's Cart label against its badge, New products tiles, the coin chips (all label-content-name-mismatch), and orange/blue status text on white (color-contrast). Buttons under 40 px on phones: 0.
 
 #### Round 4: the Hub check — not possible tonight; real data checked instead
 
