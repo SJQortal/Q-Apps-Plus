@@ -54,3 +54,15 @@ describe("shop identifiers (the original's formats)", () => {
     expect(finalizeShortStoreId("-corner-")).toBe("corner");
   });
 });
+
+describe("a shop's catalogues", () => {
+  it("are q-store-catalogue-<shortStoreId>-<uid>, not another shop's whose id starts the same", async () => {
+    const { isCatalogueOfShop } = await import("./identifiers");
+    expect(isCatalogueOfShop("q-store-catalogue-my-shop-AbC123xyZ9", "my-shop")).toBe(true);
+    expect(isCatalogueOfShop("q-store-catalogue-my-shop-2-AbC123xyZ9", "my-shop")).toBe(false);
+    expect(isCatalogueOfShop("q-store-catalogue-my-shop-", "my-shop")).toBe(false);
+    expect(isCatalogueOfShop("q-store-catalogue-other-AbC123xyZ9", "my-shop")).toBe(false);
+    expect(isCatalogueOfShop("q-store-catalogue--AbC", "")).toBe(false);
+  });
+});
+

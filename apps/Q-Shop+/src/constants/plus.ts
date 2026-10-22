@@ -70,6 +70,9 @@ export const USED_PAYMENTS_STORAGE_KEY = `${STORAGE_PREFIX}used-payments`;
 /** The name picked in the name switcher, per account address. */
 export const ACTIVE_NAME_STORAGE_KEY = `${STORAGE_PREFIX}active-name`;
 
+/** Shops this browser deleted in the last hour (qdn/deleted.ts): the node can list them for a while after. */
+export const DELETED_SHOPS_STORAGE_KEY = `${STORAGE_PREFIX}deleted-shops`;
+
 /** Settings → Sync: a DOCUMENT under the user's name (additive data). */
 export const SETTINGS_SYNC_IDENTIFIER = "qshopplus_settings";
 

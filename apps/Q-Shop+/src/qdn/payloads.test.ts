@@ -4,10 +4,17 @@ import {
   base64ToJson,
   buildCreateStorePublish,
   buildEditStorePublish,
+  buildDeleteProductsPublish,
+  buildDeleteShopPublish,
   buildRecreateDataContainerPublish,
   buildReviewPublish,
   buildStatusPublish,
+  cataloguesHolding,
+  DELETED_DATA64,
   jsonToBase64,
+  MissingCatalogueError,
+  type CatalogueDoc,
+  type DataContainerDoc,
 } from "./payloads";
 import { ARRR_ADDRESS, SELLER, SHORT_STORE_ID, STORE_ID, viewedStore } from "../test/fixtures/shop";
 
@@ -162,5 +169,107 @@ describe("review and status publishes", () => {
     expect(req.filename).toBe("q-store-order-my-shop-abc_status.json");
     expect(req.publicKeys).toEqual(["B", "S"]);
     expect(base64ToJson(req.data64)).toEqual({ status: "Refunded", note: "" });
+  });
+});
+
+describe("deletes", () => {
+  const P = (n: number) => `q-store-product-${SHORT_STORE_ID}-P${String(n).padStart(9, "0")}`;
+  const C1 = `q-store-catalogue-${SHORT_STORE_ID}-CAT0000001`;
+  const C2 = `q-store-catalogue-${SHORT_STORE_ID}-CAT0000002`;
+  const entry = (n: number, catalogueId: string) => ({ created: 1700000000000 + n, priceQort: n, category: "Art", catalogueId, status: "AVAILABLE" });
+  const product = (n: number, catalogueId: string) => ({ id: P(n), title: `Product ${n}`, catalogueId, price: [{ currency: "qort", value: n }] });
+  const index = (): DataContainerDoc => ({
+    storeId: STORE_ID,
+    shortStoreId: SHORT_STORE_ID,
+    owner: SELLER,
+    products: { [P(1)]: entry(1, C1), [P(2)]: entry(2, C1), [P(3)]: entry(3, C2) },
+    catalogues: [
+      { id: C1, products: { [P(1)]: true, [P(2)]: true } },
+      { id: C2, products: { [P(3)]: true } },
+    ],
+    id: `${STORE_ID}-datacontainer`,
+  });
+  const catalogues = (): Record<string, CatalogueDoc> => ({
+    [C1]: { id: C1, products: { [P(1)]: product(1, C1), [P(2)]: product(2, C1) } },
+    [C2]: { id: C2, products: { [P(3)]: product(3, C2) } },
+  });
+
+  it("deletes a shop as the delete marker: the shop first, then its product list, then each catalogue once", () => {
+    const { resources } = buildDeleteShopPublish({ name: SELLER, storeId: STORE_ID, catalogueIds: [C1, C2, C1] });
+    expect(DELETED_DATA64).toBe(btoa("D"));
+    const marked = { data64: "RA==", title: "deleted", description: "deleted", tags: ["deleted"] };
+    expect(resources).toEqual([
+      { name: SELLER, service: "STORE", identifier: STORE_ID, ...marked },
+      { name: SELLER, service: "DOCUMENT", identifier: `${STORE_ID}-datacontainer`, ...marked },
+      { name: SELLER, service: "DOCUMENT", identifier: C1, ...marked },
+      { name: SELLER, service: "DOCUMENT", identifier: C2, ...marked },
+    ]);
+  });
+
+  it("finds the catalogues holding products: their own, and any the index lists them under", () => {
+    const dc = index();
+    dc.catalogues![1].products[P(1)] = true;
+    expect(cataloguesHolding(dc, [P(1)])).toEqual([C1, C2]);
+    expect(cataloguesHolding(dc, [P(3)])).toEqual([C2]);
+    expect(cataloguesHolding(dc, ["q-store-product-unknown"])).toEqual([]);
+  });
+
+  it("deletes products: the index first without them, then only the catalogues that held them", () => {
+    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(2)], catalogues: catalogues() });
+    expect(built.removed).toEqual([P(2)]);
+    expect(built.resources.map((r) => [r.service, r.identifier, r.filename])).toEqual([
+      ["DOCUMENT", `${STORE_ID}-datacontainer`, "datacontainer.json"],
+      ["DOCUMENT", C1, "catalogue.json"],
+    ]);
+    // The index keeps the original's shape and key order, minus the product.
+    const dc = base64ToJson(built.resources[0].data64);
+    expect(Object.keys(dc)).toEqual(["storeId", "shortStoreId", "owner", "products", "catalogues", "id"]);
+    expect(Object.keys(dc.products)).toEqual([P(1), P(3)]);
+    expect(dc.products[P(1)]).toEqual(entry(1, C1));
+    expect(dc.catalogues).toEqual([
+      { id: C1, products: { [P(1)]: true } },
+      { id: C2, products: { [P(3)]: true } },
+    ]);
+    // The catalogue keeps everything else as read.
+    expect(base64ToJson(built.resources[1].data64)).toEqual({ id: C1, products: { [P(1)]: product(1, C1) } });
+  });
+
+  it("keeps an emptied catalogue as a valid, empty one the next products can fill", () => {
+    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: catalogues() });
+    expect(base64ToJson(built.resources[1].data64)).toEqual({ id: C2, products: {} });
+    expect(built.dataContainer.catalogues).toEqual([
+      { id: C1, products: { [P(1)]: true, [P(2)]: true } },
+      { id: C2, products: {} },
+    ]);
+  });
+
+  it("deletes several across catalogues in one publish, and skips ids the index doesn't list", () => {
+    const built = buildDeleteProductsPublish({
+      name: SELLER,
+      dataContainer: index(),
+      productIds: [P(1), P(3), P(1), "q-store-product-elsewhere"],
+      catalogues: catalogues(),
+    });
+    expect(built.removed).toEqual([P(1), P(3)]);
+    expect(built.resources.map((r) => r.identifier)).toEqual([`${STORE_ID}-datacontainer`, C1, C2]);
+    expect(Object.keys(built.dataContainer.products)).toEqual([P(2)]);
+  });
+
+  it("doesn't touch the inputs, and needs every catalogue holding one", () => {
+    const dc = index();
+    const cats = catalogues();
+    buildDeleteProductsPublish({ name: SELLER, dataContainer: dc, productIds: [P(1)], catalogues: cats });
+    expect(dc).toEqual(index());
+    expect(cats).toEqual(catalogues());
+    expect(() => buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: { [C1]: catalogues()[C1] } })).toThrow(
+      MissingCatalogueError
+    );
+  });
+
+  it("doesn't republish a catalogue that turned out not to hold the product", () => {
+    const cats = catalogues();
+    delete cats[C2].products[P(3)];
+    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: cats });
+    expect(built.resources.map((r) => r.identifier)).toEqual([`${STORE_ID}-datacontainer`]);
   });
 });

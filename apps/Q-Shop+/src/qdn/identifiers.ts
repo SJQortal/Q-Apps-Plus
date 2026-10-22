@@ -40,6 +40,18 @@ export function catalogueIdentifier(shortStoreId: string, uid: string): string {
   return `${CATALOGUE_BASE}-${shortStoreId}-${uid}`;
 }
 
+/**
+ * One of this shop's catalogues: `q-store-catalogue-<shortStoreId>-<uid>`,
+ * the uid without dashes (ShortUniqueId's letters and digits). A search by
+ * that prefix also finds `my-shop-2`'s catalogues for `my-shop`.
+ */
+export function isCatalogueOfShop(identifier: string, shortStoreId: string): boolean {
+  const prefix = `${CATALOGUE_BASE}-${shortStoreId}-`;
+  if (!shortStoreId || !identifier.startsWith(prefix)) return false;
+  const uid = identifier.slice(prefix.length);
+  return uid.length > 0 && !uid.includes("-");
+}
+
 /** A product's id inside its catalogue (there is no product resource on QDN). */
 export function productIdentifier(shortStoreId: string, uid: string): string {
   return `${PRODUCT_BASE}-${shortStoreId}-${uid}`;

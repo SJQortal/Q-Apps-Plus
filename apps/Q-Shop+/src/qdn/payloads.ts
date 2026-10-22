@@ -11,6 +11,7 @@ import {
   storeIdentifier,
   reviewIdentifier,
 } from "./identifiers";
+import { DELETED_TITLE } from "./deleted";
 
 /** UTF-8 JSON as base64, byte for byte what the original's objectToBase64 produces. */
 export function jsonToBase64(obj: unknown): string {
@@ -38,6 +39,8 @@ export interface PublishResource {
   filename?: string;
   title?: string;
   description?: string;
+  /** Hub writes them as the resource's tag1–tag5. */
+  tags?: string[];
   encrypt?: boolean;
   publicKeys?: string[];
 }
@@ -342,6 +345,133 @@ export async function buildProductPublish(args: {
     },
   ];
   return { catalogues: list, dataContainer: dc, resources };
+}
+
+// ---------------------------------------------------------------- deletes
+
+/**
+ * "D" in base64: the body a delete publishes. QDN can't erase a resource, so
+ * Qortal apps delete by publishing this over it (qapp-core's deleteResource,
+ * Torq); readers treat it as gone (qdn/search.ts isDeleteMarker).
+ */
+export const DELETED_DATA64 = "RA==";
+
+/** One resource replaced by the delete marker, titled and tagged "deleted" so searches can leave it out. */
+function deletedResource(name: string, service: string, identifier: string): PublishResource {
+  return {
+    name,
+    service,
+    identifier,
+    data64: DELETED_DATA64,
+    title: DELETED_TITLE,
+    description: DELETED_TITLE,
+    tags: [DELETED_TITLE],
+  };
+}
+
+/**
+ * Delete a shop: the STORE, its product index and every catalogue it has,
+ * each republished as the delete marker. The shop goes first, so it leaves
+ * every list at once even if a later part fails; then the index, so no
+ * product is listed; then the catalogues, in the order given (duplicates
+ * once). The original Q-Shop leaves out a shop whose JSON doesn't parse (its
+ * checkStructureStore) and never reads the index or catalogues of one.
+ */
+export function buildDeleteShopPublish(args: { name: string; storeId: string; catalogueIds: string[] }) {
+  const { name, storeId } = args;
+  const catalogueIds = [...new Set(args.catalogueIds)].filter(Boolean);
+  const resources: PublishResource[] = [
+    deletedResource(name, "STORE", storeId),
+    deletedResource(name, "DOCUMENT", dataContainerIdentifier(storeId)),
+    ...catalogueIds.map((id) => deletedResource(name, "DOCUMENT", id)),
+  ];
+  return { resources };
+}
+
+/** A catalogue the product deletion needs wasn't passed in (it couldn't be read). */
+export class MissingCatalogueError extends Error {
+  readonly catalogueId: string;
+  constructor(catalogueId: string) {
+    super(`The catalogue ${catalogueId} isn't loaded`);
+    this.name = "MissingCatalogueError";
+    this.catalogueId = catalogueId;
+  }
+}
+
+/** The catalogues a product deletion rewrites: each product's own, and any the index lists it under. */
+export function cataloguesHolding(dataContainer: Pick<DataContainerDoc, "products" | "catalogues">, productIds: string[]): string[] {
+  const ids = new Set<string>();
+  for (const productId of productIds) {
+    const own = dataContainer.products?.[productId]?.catalogueId;
+    if (own) ids.add(own);
+    for (const cat of dataContainer.catalogues ?? []) {
+      if (cat?.products && productId in cat.products) ids.add(cat.id);
+    }
+  }
+  return [...ids];
+}
+
+/**
+ * Delete products: they leave the product index (its shape otherwise as the
+ * original writes it) and every catalogue that holds them. The index goes
+ * first, so they leave the shop at once even if a catalogue fails; then each
+ * catalogue that held one, without it. An emptied catalogue stays a valid,
+ * empty catalogue (both apps read it, and the next new products fill it
+ * again when it is the index's last, as the original's publish does), and a
+ * catalogue that didn't hold any of them isn't republished.
+ *
+ * `catalogues` are the catalogue JSONs as read from QDN just before (raw:
+ * no Redux fields), so the other products in them keep what is on QDN now.
+ * Products the index doesn't list are skipped (`removed` names the rest).
+ */
+export function buildDeleteProductsPublish(args: {
+  name: string;
+  dataContainer: DataContainerDoc;
+  productIds: string[];
+  catalogues: Record<string, CatalogueDoc>;
+}) {
+  const { name, dataContainer, catalogues } = args;
+  const listed = [...new Set(args.productIds)].filter((id) => !!dataContainer.products?.[id]);
+  const gone = new Set(listed);
+  const dc: DataContainerDoc = { ...dataContainer, products: {} };
+  for (const [id, entry] of Object.entries(dataContainer.products ?? {})) {
+    if (!gone.has(id)) dc.products[id] = structuredClone(entry);
+  }
+  if (dataContainer.catalogues) {
+    dc.catalogues = dataContainer.catalogues.map((cat) => ({
+      ...structuredClone(cat),
+      products: Object.fromEntries(Object.entries(cat.products ?? {}).filter(([id]) => !gone.has(id))) as Record<string, true>,
+    }));
+  }
+
+  const changed: CatalogueDoc[] = [];
+  for (const catalogueId of cataloguesHolding(dataContainer, listed)) {
+    const catalogue = catalogues[catalogueId];
+    if (!catalogue || !catalogue.products || typeof catalogue.products !== "object") throw new MissingCatalogueError(catalogueId);
+    const held = Object.keys(catalogue.products).filter((id) => gone.has(id));
+    if (held.length === 0) continue;
+    const copy = structuredClone(catalogue);
+    for (const id of held) delete copy.products[id];
+    changed.push(copy);
+  }
+
+  const resources: PublishResource[] = [
+    {
+      name,
+      service: "DOCUMENT",
+      identifier: dc.id || dataContainerIdentifier(dc.storeId),
+      filename: "datacontainer.json",
+      data64: jsonToBase64(dc),
+    },
+    ...changed.map((cat) => ({
+      name,
+      service: "DOCUMENT",
+      identifier: cat.id,
+      filename: "catalogue.json",
+      data64: jsonToBase64(cat),
+    })),
+  ];
+  return { dataContainer: dc, catalogues: changed, removed: listed, resources };
 }
 
 // ---------------------------------------------------------------- reviews
