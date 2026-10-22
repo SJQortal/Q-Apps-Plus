@@ -61,6 +61,9 @@ export const CART_STORAGE_KEY = `${STORAGE_PREFIX}cart`;
  */
 export const PENDING_ORDERS_STORAGE_KEY = `${STORAGE_PREFIX}pending-orders`;
 
+/** The name picked in the name switcher, per account address. */
+export const ACTIVE_NAME_STORAGE_KEY = `${STORAGE_PREFIX}active-name`;
+
 /** Settings → Sync: a DOCUMENT under the user's name (additive data). */
 export const SETTINGS_SYNC_IDENTIFIER = "qshopplus_settings";
 

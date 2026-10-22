@@ -1,0 +1,43 @@
+import { describe, expect, it } from 'vitest';
+import reducer, {
+  MAX_QUANTITY,
+  allCartsItemCount,
+  loadStoredCarts,
+  removeProductFromCart,
+  saveCarts,
+  setCartQuantity,
+  setProductToCart,
+  subtractQuantityFromCart,
+} from './cartSlice';
+import { CART_STORAGE_KEY } from '../../constants/plus';
+
+const add = (productId: string, quantity?: number) =>
+  setProductToCart({ storeId: 's1', storeOwner: 'Seller', productId, catalogueId: 'c1', quantity });
+
+describe('cart', () => {
+  it('adds, caps at 99, and removes a shop cart when it empties', () => {
+    let state = reducer(undefined, add('p1'));
+    state = reducer(state, add('p1', 3));
+    expect(state.carts.s1.orders.p1.quantity).toBe(4);
+    state = reducer(state, setCartQuantity({ storeId: 's1', productId: 'p1', quantity: 500 }));
+    expect(state.carts.s1.orders.p1.quantity).toBe(MAX_QUANTITY);
+    state = reducer(state, add('p2'));
+    expect(allCartsItemCount(state.carts)).toBe(MAX_QUANTITY + 1);
+    state = reducer(state, removeProductFromCart({ storeId: 's1', productId: 'p1' }));
+    state = reducer(state, subtractQuantityFromCart({ storeId: 's1', productId: 'p2' }));
+    expect(state.carts.s1).toBeUndefined();
+  });
+
+  it('survives a reload and drops anything that is not a cart', () => {
+    const state = reducer(undefined, add('p1', 2));
+    saveCarts(state.carts);
+    expect(loadStoredCarts()).toEqual({ s1: { ...state.carts.s1 } });
+    localStorage.setItem(
+      CART_STORAGE_KEY,
+      JSON.stringify({ s1: { orders: { p1: { quantity: 'x', catalogueId: 'c1' }, p2: { quantity: 2 } } }, s2: 'nope' })
+    );
+    expect(loadStoredCarts()).toEqual({});
+    localStorage.setItem(CART_STORAGE_KEY, '{not json');
+    expect(loadStoredCarts()).toEqual({});
+  });
+});

@@ -6,6 +6,7 @@ import storeReducer from './features/storeSlice'
 import cartReducer from './features/cartSlice'
 import orderReducer from './features/orderSlice'
 import { writeStoredSettings } from '../utils/settingsStorage'
+import { saveCarts } from './features/cartSlice'
 
 const reducer = {
   notifications: notificationsReducer,
@@ -36,6 +37,16 @@ store.subscribe(() => {
   if (next !== lastPreferredCoin) {
     lastPreferredCoin = next
     writeStoredSettings({ preferredCoin: next })
+  }
+})
+
+// Keep the carts between visits (the original kept them in memory only).
+let lastCarts = store.getState().cart.carts
+store.subscribe(() => {
+  const next = store.getState().cart.carts
+  if (next !== lastCarts) {
+    lastCarts = next
+    saveCarts(next)
   }
 })
 
