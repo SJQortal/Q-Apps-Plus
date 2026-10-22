@@ -5,7 +5,7 @@
  * before/after table; the assertions guard the efficiency rules
  * (docs/QORTAL.md): no unlimited search, bounded searches and fetches.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { installMockNode, installVisibleIntersectionObserver, makeWorld, type MockNode } from "./mockNode";
@@ -37,6 +37,15 @@ function report(label: string, node: MockNode) {
 afterEach(() => {
   vi.unstubAllGlobals();
 });
+
+// The first import of the whole app compiles every module; on a busy machine
+// that alone took over 5 s and timed out whichever case ran first. Compile it
+// here, with room to spare, so each case measures only its own load.
+beforeAll(async () => {
+  await import("../App");
+  await import("../pages/StoreList/StoreList");
+  await import("../pages/Store/Store/Store");
+}, 60_000);
 
 describe("first load", () => {
   it("home, signed in as a buyer", async () => {

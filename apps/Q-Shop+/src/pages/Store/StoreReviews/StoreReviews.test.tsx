@@ -50,7 +50,7 @@ function renderPanel(world: World, me: string | null) {
   return { node, ...view };
 }
 
-describe("reviews panel", () => {
+describe("reviews panel", { timeout: 20_000 }, () => {
   it("summarises and lists one review per reviewer, newest first, without the owner's or another shop's", async () => {
     renderPanel(worldWithReviews(), null);
     const list = await screen.findByRole("region", { name: "Reviews" });
@@ -122,7 +122,7 @@ describe("reviews panel", () => {
   });
 });
 
-describe("review dialog", () => {
+describe("review dialog", { timeout: 20_000 }, () => {
   function renderDialog(handlers: Parameters<typeof installQortalMock>[0]) {
     const q = installQortalMock(handlers);
     const store = createAppStore();

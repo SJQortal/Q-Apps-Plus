@@ -26,7 +26,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("adding a review (pinned)", () => {
+describe("adding a review (pinned)", { timeout: 20_000 }, () => {
   it("publishes a DOCUMENT q-store-review-<shop>-<uid>-<rating×10> with review.json", async () => {
     vi.spyOn(Date, "now").mockReturnValue(1763000000000);
     const store = createAppStore();

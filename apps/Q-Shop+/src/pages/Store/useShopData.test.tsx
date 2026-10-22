@@ -19,7 +19,7 @@ function wrapperFor(store: ReturnType<typeof createAppStore>) {
   return ({ children }: { children: ReactNode }) => <Provider store={store}>{children}</Provider>;
 }
 
-describe("useViewedShop", () => {
+describe("useViewedShop", { timeout: 20_000 }, () => {
   it("reads the shop and its index in parallel, and tells the app which shop is viewed", async () => {
     const node = installMockNode(makeWorld());
     const store = createAppStore();

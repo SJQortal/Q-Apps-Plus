@@ -50,7 +50,7 @@ const catalogueFetches = (node: ReturnType<typeof installMockNode>) =>
   node.fetchCalls.filter((u) => u.startsWith("/arbitrary/DOCUMENT/") && u.includes("q-store-catalogue-"));
 const cardTitles = () => screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
 
-describe("shop page", () => {
+describe("shop page", { timeout: 20_000 }, () => {
   it("shows the shop: title as the page heading, owner, rating from the shared review search, coins", async () => {
     const { node } = renderShop(makeWorld());
     expect(await screen.findByRole("heading", { level: 1, name: "Seller's Shop" })).toBeInTheDocument();
@@ -280,7 +280,7 @@ describe("shop page", () => {
   });
 });
 
-describe("shop page on a phone", () => {
+describe("shop page on a phone", { timeout: 20_000 }, () => {
   beforeEach(() => {
     Object.defineProperty(window, "matchMedia", {
       configurable: true,
