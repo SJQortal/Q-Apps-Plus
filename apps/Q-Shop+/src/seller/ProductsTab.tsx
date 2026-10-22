@@ -338,8 +338,14 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
             {rows.length === 1 ? "1 product" : `${rows.length} products`}
             {counts.OUT_OF_STOCK > 0 ? ` · ${counts.OUT_OF_STOCK} out of stock` : ""}
           </Typography>
+          {/* On phones: Add product across the row first, then Arrange and Select side by side. */}
           {rows.filter((row) => row.status !== "RETIRED").length > 1 && (
-            <Button variant="outlined" startIcon={<SwapVertIcon />} onClick={() => setArranging(true)} sx={{ minHeight: 44 }}>
+            <Button
+              variant="outlined"
+              startIcon={<SwapVertIcon />}
+              onClick={() => setArranging(true)}
+              sx={{ minHeight: 44, ...(phone && { flex: "1 1 0", order: 1 }) }}
+            >
               Arrange
             </Button>
           )}
@@ -349,12 +355,12 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
               variant="outlined"
               startIcon={<ChecklistOutlinedIcon />}
               onClick={startSelecting}
-              sx={{ minHeight: 44 }}
+              sx={{ minHeight: 44, ...(phone && { flex: "1 1 0", order: 1 }) }}
             >
               Select
             </Button>
           )}
-          <Button variant="contained" startIcon={<AddIcon />} onClick={onAdd} sx={{ minHeight: 44 }}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onAdd} sx={{ minHeight: 44, ...(phone && { flex: "1 1 100%" }) }}>
             Add product
           </Button>
         </Box>
