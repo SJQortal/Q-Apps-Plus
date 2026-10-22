@@ -13,6 +13,7 @@ import { THEME_STORAGE_KEY, themeConfig } from "./theme/qplus-theme";
 // (docs/QORTAL.md → Efficiency rules 8). Route shapes are the original's, so
 // links copied from Q-Shop open here too.
 const StoreList = lazy(() => import("./pages/StoreList/StoreList").then((m) => ({ default: m.StoreList })));
+const ProductsPage = lazy(() => import("./pages/Products/ProductsPage").then((m) => ({ default: m.ProductsPage })));
 const Store = lazy(() => import("./pages/Store/Store/Store").then((m) => ({ default: m.Store })));
 const ProductPage = lazy(() => import("./pages/Product/ProductPage").then((m) => ({ default: m.ProductPage })));
 const ProductManager = lazy(() =>
@@ -44,6 +45,7 @@ function App() {
                 <Route path="/my-orders" element={<MyOrders />} />
                 <Route path="/cart" element={<CartPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/products" element={<ProductsPage />} />
                 <Route path="/:user/:store" element={<Store />} />
                 <Route path="/" element={<StoreList />} />
               </Routes>

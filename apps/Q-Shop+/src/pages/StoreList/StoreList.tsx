@@ -20,6 +20,7 @@ import { Page, PageHeader } from "../../components/layout/Page";
 import { EmptyState } from "../../components/common/EmptyState";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
+import { PullIndicator } from "../../components/common/PullIndicator";
 import { APP_NAME } from "../../constants/plus";
 import { accentWash } from "../../hub-theme";
 import { storePath } from "../../qdn/links";
@@ -52,28 +53,6 @@ function statusText(home: HomeShops, q: string): string {
   const more = home.searchHasMore ? "+" : "";
   if (q) return `${home.total}${more} ${home.total === 1 && !more ? "shop matches" : "shops match"}`;
   return plural(home.total, "shop", "shops");
-}
-
-function PullIndicator({ pull, refreshing }: { pull: number; refreshing: boolean }) {
-  return (
-    <Box
-      role="status"
-      aria-label={refreshing ? "Refreshing" : "Pull to refresh"}
-      sx={{
-        height: refreshing ? 48 : Math.round(pull * 0.6),
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        overflow: "hidden",
-      }}
-    >
-      <CircularProgress
-        size={24}
-        variant={refreshing ? "indeterminate" : "determinate"}
-        value={Math.min(100, (pull / 72) * 100)}
-      />
-    </Box>
-  );
 }
 
 export const StoreList = () => {

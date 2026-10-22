@@ -6,13 +6,14 @@
  * (utils/productView.ts). Right-click copies the product's link.
  */
 import { Box, Button, Chip, Link, Skeleton, Typography } from "@mui/material";
+import { visuallyHiddenSx } from "../a11y";
 import AddShoppingCartOutlinedIcon from "@mui/icons-material/AddShoppingCartOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { Link as RouterLink } from "react-router-dom";
 import type { Product } from "../../../state/features/storeSlice";
 import type { ShopCoinSettings } from "../../../money/coins";
 import { PriceTag } from "../../../components/money/PriceTag";
-import { productLink, productPath } from "../../../qdn/links";
+import { productLink, productPath, storePath } from "../../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../../constants/product-status";
 import ContextMenuResource from "../../../components/common/ContextMenu/ContextMenuResource";
 
@@ -105,6 +106,7 @@ export function ProductCard({
   layout = "tile",
   compact = false,
   stacked = false,
+  shopName,
 }: {
   product: Product;
   productId: string;
@@ -123,6 +125,8 @@ export function ProductCard({
   compact?: boolean;
   /** A row on a phone (held either way): the button goes under the details, which keep the width. */
   stacked?: boolean;
+  /** Lists of several shops' products (the Products page): the shop's name under the title, linked to the shop. */
+  shopName?: string;
 }) {
   const title = product.title?.trim() || "Untitled product";
   const image = mainImageOf(product);
@@ -170,6 +174,20 @@ export function ProductCard({
                 {title}
               </Link>
             </Typography>
+            {shopName !== undefined && (
+              <Link
+                component={RouterLink}
+                to={storePath(owner, storeId)}
+                underline="hover"
+                color="text.secondary"
+                sx={{ fontSize: 14, mt: -0.5, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+              >
+                <Box component="span" sx={visuallyHiddenSx}>
+                  Shop:
+                </Box>{" "}
+                {shopName.trim() || owner}
+              </Link>
+            )}
             {layout === "row" && typeof product.description === "string" && product.description.trim() && (
               <Typography
                 variant="body2"
@@ -197,7 +215,8 @@ export function ProductCard({
             startIcon={available && !isOwnProduct && !compact ? <AddShoppingCartOutlinedIcon /> : undefined}
             disabled={!available || isOwnProduct}
             onClick={onAddToCart}
-            aria-label={available && !isOwnProduct ? `Add to cart: ${title}` : undefined}
+            // Several shops' lists can hold two products of one name: the shop tells them apart.
+            aria-label={available && !isOwnProduct ? `Add to cart: ${title}${shopName !== undefined ? ` (${shopName.trim() || owner})` : ""}` : undefined}
             sx={{
               mt: layout === "row" && !stacked ? 0 : "auto",
               minHeight: 44,
