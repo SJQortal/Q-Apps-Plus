@@ -62,6 +62,7 @@ const CreateStoreModal = ({ open, onClose, onCreated }: CreateShopDialogProps) =
       title="Create shop"
       maxWidth="sm"
       dismissible={false}
+      busy={creating}
       actions={
         <>
           <Button color="inherit" onClick={onClose} disabled={creating}>

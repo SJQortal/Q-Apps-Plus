@@ -378,6 +378,8 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
       title={title}
       maxWidth="sm"
       dismissible={false}
+      // Checking QDN after a timeout must finish before anything else is offered.
+      busy={phase === "checking"}
       actions={
         phase === "ready" ? (
           <>

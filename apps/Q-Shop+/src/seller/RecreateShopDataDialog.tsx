@@ -49,6 +49,7 @@ export function RecreateShopDataDialog({ open, onClose, mode = "recreate" }: Rec
       title={mode === "missing" ? "Create product list" : "Recreate shop data"}
       maxWidth="xs"
       dismissible={!working}
+      busy={working}
       actions={
         <>
           <Button color="inherit" onClick={onClose} disabled={working}>

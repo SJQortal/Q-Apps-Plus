@@ -97,6 +97,7 @@ function EditShopForm({
         title="Edit shop"
         maxWidth="sm"
         dismissible={false}
+        busy={saving}
         actions={
           <>
             <Button color="inherit" onClick={onClose} disabled={saving}>
