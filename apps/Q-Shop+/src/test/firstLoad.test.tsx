@@ -5,7 +5,7 @@
  * before/after table; the assertions guard the efficiency rules
  * (docs/QORTAL.md): no unlimited search, bounded searches and fetches.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { installMockNode, installVisibleIntersectionObserver, makeWorld, type MockNode } from "./mockNode";
@@ -89,6 +89,15 @@ async function loadHome(world = makeWorld()): Promise<MockNode> {
 
 const total = (counts: Record<string, number>) => Object.values(counts).reduce((a, b) => a + b, 0);
 
+// The first import of the whole app compiles every module; on a busy machine
+// that alone took over 5 s and timed out whichever case ran first. Compile it
+// here, with room to spare, so each case measures only its own load.
+beforeAll(async () => {
+  await import("../App");
+  await import("../pages/StoreList/StoreList");
+  await import("../pages/Store/Store/Store");
+}, 60_000);
+
 describe("first load", () => {
   // Before night 1: 2 STORE searches (limit 20, no metadata) and all 20 shop
   // JSONs, logos included, before any card showed.
@@ -119,10 +128,18 @@ describe("first load", () => {
     expect(s.resources["data container"] ?? 0).toBeLessThanOrEqual(1);
   }, 20_000);
 
-  // Fails until the shop page stops sending unlimited searches (round 2).
-  it.fails("a shop page, as a buyer", async () => {
+  // The original sent 4 searches here, 2 of them unlimited (one with limit 0
+  // only to learn whether the product index exists).
+  it("a shop page, as a buyer", async () => {
     const node = await loadAt("/Seller%20Name/q-store-general-my-shop");
     const s = report("shop (buyer)", node);
     expect(s.unlimitedSearches).toBe(0);
-  });
+    const searches = Object.values(s.searches).reduce((a, b) => a + b, 0);
+    expect(searches).toBeLessThanOrEqual(4);
+    // The shop and its product index once each, and one fetch per catalogue on screen (12 products: 2).
+    expect(s.resources.STORE).toBe(1);
+    expect(s.resources["data container"]).toBe(1);
+    expect(s.resources.DOCUMENT).toBe(2);
+    expect(s.hub.SEARCH_QDN_RESOURCES ?? 0).toBe(0);
+  }, 20_000);
 });

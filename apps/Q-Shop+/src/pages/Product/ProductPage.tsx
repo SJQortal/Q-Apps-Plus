@@ -1,337 +1,265 @@
-/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
-import {
-  Cart as CartInterface,
-  setIsOpen,
-  setProductToCart,
-} from "../../state/features/cartSlice";
-import { RootState } from "../../state/store";
-import { useNavigate, useParams } from "react-router-dom";
-import { useTheme } from "@mui/material";
-import TabImageList from "../../components/common/TabImageList/TabImageList";
-import { Product, setPreferredCoin } from "../../state/features/storeSlice";
-import DangerousIcon from "@mui/icons-material/Dangerous";
-import { CartIcon } from "../../components/layout/Navbar/Navbar-styles";
-import {
-  CartIconContainer,
-  NotificationBadge,
-} from "../Store/Store/Store-styles";
-import { useFetchOrders } from "../../hooks/useFetchOrders";
-import {
-  AddToCartButton,
-  ArrrSwitch,
-  BackToStoreButton,
-  CartBox,
-  ProductDescription,
-  ProductDetailsContainer,
-  ProductLayout,
-  ProductNotFound,
-  ProductPrice,
-  ProductPriceRow,
-  ProductTitle,
-  UnavailableButton,
-} from "./ProductPage-styles";
-import { QortalSVG } from "../../assets/svgs/QortalSVG";
-import { setNotification } from "../../state/features/notificationsSlice";
-import { BackArrowSVG } from "../../assets/svgs/BackArrowSVG";
-import {
-  NumericTextFieldQshop,
-  NumericTextFieldRef,
-  Variant,
-} from "../../components/common/NumericTextFieldQshop";
-import { ARRRSVG } from "../../assets/svgs/ARRRSVG";
-import { CoinFilter } from "../Store/Store/Store";
-import { setIsLoadingGlobal } from "../../state/features/globalSlice";
+/**
+ * One product: `/:user/:store/:product/:catalogue` (the original's route).
+ *
+ * The product lives in its catalogue (DOCUMENT, up to 10 products); a list
+ * that already read the catalogue hands it over, otherwise it is fetched, as
+ * the original did. The shop's JSON comes from the session cache for the
+ * coin picker and the shop link. A deep link no longer bounces to the shop
+ * page first. The description is plain text (never HTML).
+ */
+import { useState, type ReactNode } from "react";
+import { useDispatch } from "react-redux";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { Alert, Box, Button, Chip, Divider, IconButton, InputBase, Link, Skeleton, Typography } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
+import RemoveIcon from "@mui/icons-material/Remove";
+import AddShoppingCartOutlinedIcon from "@mui/icons-material/AddShoppingCartOutlined";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
+import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
+import { setProductToCart, MAX_QUANTITY } from "../../state/features/cartSlice";
+import { Page, PageHeader } from "../../components/layout/Page";
+import { EmptyState } from "../../components/common/EmptyState";
+import { ImageGallery } from "../../components/common/TabImageList/ImageGallery";
+import { PriceTag } from "../../components/money/PriceTag";
+import { useShopCoin } from "../../money/useShopCoin";
+import { decodeParam, productLink, storePath } from "../../qdn/links";
+import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
+import { useCatalogue, useViewedShop } from "../Store/useShopData";
+import { CoinPicker, RateNote } from "../Store/CoinPicker";
+import { CopyLinkButton } from "../Store/CopyLinkButton";
+import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../Store/CartBits";
+import { visuallyHiddenSx } from "../Store/a11y";
 
-export const ProductPage = () => {
+const FETCHING_NOTE = "Fetching from peers…";
+
+/** The quantity a typed value stands for: a whole number from 1 to 99. */
+export function clampQuantity(value: string | number): number {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.min(n, MAX_QUANTITY);
+}
+
+function QuantityStepper({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const quantity = clampQuantity(value);
+  return (
+    <Box
+      role="group"
+      aria-label="Quantity"
+      sx={{ display: "inline-flex", alignItems: "center", border: 1, borderColor: "divider", borderRadius: 2, flexShrink: 0 }}
+    >
+      <IconButton aria-label="Decrease quantity" onClick={() => onChange(String(clampQuantity(quantity - 1)))} disabled={quantity <= 1} sx={{ width: 44, height: 44 }}>
+        <RemoveIcon />
+      </IconButton>
+      <InputBase
+        value={value}
+        onChange={(event) => onChange(event.target.value.replace(/\D/g, "").slice(0, 2))}
+        onBlur={() => onChange(String(quantity))}
+        inputProps={{
+          inputMode: "numeric",
+          pattern: "[0-9]*",
+          "aria-label": "Quantity",
+          enterKeyHint: "done",
+          style: { textAlign: "center", width: 36, fontWeight: 600 },
+        }}
+      />
+      <IconButton
+        aria-label="Increase quantity"
+        onClick={() => onChange(String(clampQuantity(quantity + 1)))}
+        disabled={quantity >= MAX_QUANTITY}
+        sx={{ width: 44, height: 44 }}
+      >
+        <AddIcon />
+      </IconButton>
+    </Box>
+  );
+}
+
+function ProductSkeleton({ note }: { note?: string }) {
+  return (
+    <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: { xs: 2, md: 4 } }}>
+      <Skeleton variant="rounded" sx={{ width: "100%", height: "auto", aspectRatio: "1 / 1" }} />
+      <Box>
+        <Skeleton width="40%" />
+        <Skeleton width="30%" height={48} />
+        <Skeleton variant="rounded" height={44} sx={{ my: 2 }} />
+        <Skeleton />
+        <Skeleton />
+        <Skeleton width="60%" />
+        {note && (
+          <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 2 }}>
+            {note}
+          </Typography>
+        )}
+      </Box>
+    </Box>
+  );
+}
+
+function stockLine(status: string | undefined) {
+  if (status === AVAILABLE)
+    return (
+      <Typography sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 600 }}>
+        <CheckCircleOutlinedIcon fontSize="small" color="success" aria-hidden />
+        In stock
+      </Typography>
+    );
+  if (status === OUT_OF_STOCK) return <Alert severity="warning">Out of stock: it can't be ordered right now.</Alert>;
+  if (status === RETIRED) return <Alert severity="info">This product is retired and no longer for sale.</Alert>;
+  return null;
+}
+
+function ProductView({ owner, storeId, productId, catalogueId }: { owner: string; storeId: string; productId: string; catalogueId: string }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const params = useParams();
-  const theme = useTheme();
-  const ref = useRef<NumericTextFieldRef>(null);
+  const { shop, isOwner } = useViewedShop(owner, storeId, { products: false });
+  const { catalogue, status, retry } = useCatalogue(owner, catalogueId);
+  const shopCoin = useShopCoin(shop);
+  const [quantityText, setQuantityText] = useState("1");
+  const [added, setAdded] = useState<AddedNotice | null>(null);
+  const product = catalogue?.products?.[productId];
+  const shopPath = storePath(owner, storeId);
+  const shopName = shop?.title || "the shop";
 
-  // Get params for when user refreshes page or receives url link
-  const storeOwner: string = params.user || "";
-  const productID: string = params.product || "";
-  const catalogueID: string = params.catalogue || "";
-  const storeId: string = params.store || "";
-
-  const currentViewedStore = useSelector(
-    (state: RootState) => state.store.currentViewedStore
-  );
-  const [product, setProduct] = useState<Product | null>(null);
-  const [cartAddAmount, setCartAddAmount] = useState<number>(0);
-  const preferredCoin = useSelector(
-    (state: RootState) => state.store.preferredCoin
-  );
-  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
-  const catalogueHashMap = useSelector(
-    (state: RootState) => state.global.catalogueHashMap
-  );
-  const carts = useSelector((state: RootState) => state.cart.carts);
-  const user = useSelector((state: RootState) => state.auth.user);
-
-  const calculateARRRExchangeRate = async () => {
-    try {
-      const url = "/crosschain/price/PIRATECHAIN?maxtrades=10&inverse=true";
-      const info = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseDataStore = await info.text();
-
-      const ratio = +responseDataStore / 100000000;
-      if (isNaN(ratio)) throw new Error("Cannot get exchange rate");
-      setExchangeRate(ratio);
-    } catch (error) {
-      dispatch(setPreferredCoin(CoinFilter.qort));
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Cannot get exchange rate- reverted to QORT",
-        })
-      );
-    }
-  };
-
-  const storeToUse = useMemo(() => {
-    return currentViewedStore;
-  }, [storeOwner, user?.name, currentViewedStore]);
-
-  const switchCoin = async () => {
-    dispatch(setIsLoadingGlobal(true));
-
-    await calculateARRRExchangeRate();
-    dispatch(setIsLoadingGlobal(false));
-  };
-
-  useEffect(() => {
-    if (
-      preferredCoin === CoinFilter.arrr &&
-      storeToUse?.supportedCoins?.includes(CoinFilter.arrr)
-    ) {
-      switchCoin();
-    }
-  }, [preferredCoin, storeToUse]);
-
-  useEffect(() => {
-    if (!storeToUse && storeOwner !== user?.name) {
-      navigate(`/${storeOwner}/${storeId}`);
-    }
-  }, [storeToUse, storeOwner, user?.name]);
-
-  const coinToUse = useMemo(() => {
-    if (
-      preferredCoin === CoinFilter.arrr &&
-      storeToUse?.supportedCoins?.includes(CoinFilter.arrr)
-    ) {
-      return CoinFilter.arrr;
-    } else {
-      return CoinFilter.qort;
-    }
-  }, [preferredCoin, storeToUse]);
-
-  const { checkAndUpdateResourceCatalogue, getCatalogue } = useFetchOrders();
-
-  const minCart = 1;
-  const maxCart = 99;
-
-  // Set cart notifications when cart changes
-  useEffect(() => {
-    if (user?.name && storeId) {
-      const shopCart: CartInterface = carts[storeId];
-      // Get the orders of this cart
-      const orders = shopCart?.orders || {};
-      let totalQuantity = 0;
-      Object.keys(orders).forEach(key => {
-        const order = orders[key];
-        const { quantity } = order;
-        totalQuantity += quantity;
-      });
-      setCartAddAmount(totalQuantity);
-    }
-  }, [carts, user, storeId]);
-
-  const getProductData = async () => {
-    const productInRedux = catalogueHashMap[catalogueID]?.products[productID];
-    const paramsLoaded = productID && catalogueID && storeOwner && storeId;
-    if (productInRedux) {
-      setProduct(productInRedux);
-      return;
-    } else if (!productInRedux && paramsLoaded) {
-      checkAndUpdateResourceCatalogue({ id: catalogueID });
-      await getCatalogue(storeOwner, catalogueID);
-    } else {
-      return null;
-    }
-  };
-
-  useEffect(() => {
-    const awaitProductData = async () => {
-      await getProductData();
-    };
-    awaitProductData();
-  }, [catalogueHashMap]);
-
-  let price = product?.price?.find(item => item?.currency === "qort")?.value;
-  const priceArrr = product?.price?.find(
-    item => item?.currency === CoinFilter.arrr
-  )?.value;
-
-  if (coinToUse === CoinFilter.arrr && priceArrr) {
-    price = +priceArrr;
-  } else if (price && exchangeRate && coinToUse !== CoinFilter.qort) {
-    price = +price * exchangeRate;
-  }
-
-  const addToCart = () => {
-    if (user?.name === storeOwner) {
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "You own this store! You cannot add your own products to your cart!",
-        })
-      );
-      return;
-    }
-    if (product && ref?.current?.getTextFieldValue() !== "") {
-      for (let i = 0; i < Number(ref?.current?.getTextFieldValue() || 0); i++) {
-        dispatch(
-          setProductToCart({
-            productId: product.id,
-            catalogueId: product.catalogueId,
-            storeId,
-            storeOwner,
-          })
-        );
-      }
-    }
-  };
-  const status = product?.status;
-  const available = status === "AVAILABLE";
-  const availableJSX = (
-    <>
-      <NumericTextFieldQshop
-        name="Quantity"
-        label="Quantity"
-        variant={Variant.filled}
-        required={true}
-        style={{ width: "300px" }}
-        initialValue={"1"}
-        addIconButtons
-        allowDecimals={false}
-        minValue={minCart}
-        maxValue={maxCart}
-        ref={ref}
+  let title: ReactNode = product?.title?.trim() || "Product";
+  let content: ReactNode;
+  if (status === "loading" || status === "fetching") {
+    title = (
+      <>
+        <Box component="span" sx={visuallyHiddenSx}>
+          Loading product
+        </Box>
+        <Skeleton aria-hidden width="min(70%, 360px)" />
+      </>
+    );
+    content = <ProductSkeleton note={status === "fetching" ? FETCHING_NOTE : undefined} />;
+  } else if (status === "unavailable") {
+    content = (
+      <EmptyState
+        icon={<CloudOffOutlinedIcon />}
+        title="Not available on your node right now"
+        description="This product hasn't reached your node yet."
+        actionLabel="Retry"
+        onAction={retry}
       />
-      <AddToCartButton variant={"contained"} onClick={addToCart}>
-        <CartIcon color={"#ffffff"} height={"25"} width={"25"} />
-        <span style={{ marginLeft: "5px" }}>Add to Cart</span>
-      </AddToCartButton>
-    </>
-  );
-
-  const unavailableJSX = (
-    <UnavailableButton
-      variant={"contained"}
-      onClick={() => {
-        if (user?.name === storeOwner) {
-          dispatch(
-            setNotification({
-              alertType: "error",
-              msg: "You own this store! You cannot add your own products to your cart!",
-            })
-          );
-          return;
-        }
-        dispatch(
-          setNotification({
-            alertType: "error",
-            msg: "This product is out of stock!",
-          })
-        );
-      }}
-    >
-      <DangerousIcon height={"25"} width={"25"} />
-      Out of Stock
-    </UnavailableButton>
-  );
-
-  return product ? (
-    <ProductLayout>
-      <BackToStoreButton
-        onClick={() => {
-          navigate(`/${storeOwner}/${storeId}`);
+    );
+  } else if (!product) {
+    title = "Product not found";
+    content = (
+      <EmptyState
+        icon={<SearchOffOutlinedIcon />}
+        title="This product isn't in the shop any more"
+        description="The seller may have removed it, or the link is incomplete."
+        actionLabel="Go to the shop"
+        onAction={() => navigate(shopPath)}
+      />
+    );
+  } else {
+    const name = product.title?.trim() || "Product";
+    const available = product.status === AVAILABLE;
+    const quantity = clampQuantity(quantityText);
+    const mainIndex = typeof product.mainImageIndex === "number" ? product.mainImageIndex : 0;
+    const addToCart = () => {
+      dispatch(setProductToCart({ storeId, storeOwner: owner, productId, catalogueId, quantity }));
+      setAdded((prev) => ({ at: (prev?.at ?? 0) + 1, title: name, quantity }));
+    };
+    content = (
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" },
+          gap: { xs: 2, md: 4 },
+          alignItems: "start",
         }}
       >
-        <BackArrowSVG height={"20"} width={"20"} color={"#ffffff"} />
-        Store
-      </BackToStoreButton>
-      <TabImageList imgStyle={{ objectFit: "cover" }} images={product.images} />
-      <ProductDetailsContainer>
-        <ProductTitle variant="h2">{product.title}</ProductTitle>
-        <ProductDescription variant="h3">
-          {product.description}
-        </ProductDescription>
-        <ProductPriceRow>
-          {coinToUse === CoinFilter.qort && (
-            <ProductPrice>
-              <QortalSVG
-                height={"26"}
-                width={"26"}
-                color={theme.palette.text.primary}
-              />{" "}
-              {price}
-            </ProductPrice>
-          )}
-          {coinToUse === CoinFilter.arrr && (
-            <ProductPrice>
-              <ARRRSVG
-                height={"26"}
-                width={"26"}
-                color={theme.palette.text.primary}
-              />{" "}
-              {price}
-            </ProductPrice>
-          )}
-        </ProductPriceRow>
-        {available ? availableJSX : unavailableJSX}
-      </ProductDetailsContainer>
-      {/* Toggle to show price of ARRR or not */}
-      <ArrrSwitch
-        checked={coinToUse === CoinFilter.arrr}
-        onChange={() => {
-          if (coinToUse !== CoinFilter.arrr) {
-            dispatch(setPreferredCoin(CoinFilter.arrr));
-          } else {
-            dispatch(setPreferredCoin(CoinFilter.qort));
-          }
-        }}
+        <ImageGallery images={product.images} title={name} initialIndex={mainIndex} />
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {product.type && <Chip size="small" variant="outlined" label={product.type === "physical" ? "Physical" : "Digital"} />}
+            {product.category && <Chip size="small" variant="outlined" label={product.category} />}
+          </Box>
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+            <PriceTag product={product} coin={shopCoin.coin} rate={shopCoin.rate} shop={shop} size="large" />
+            <CoinPicker shop={shop} shopCoin={shopCoin} id="product-coin" />
+          </Box>
+          <RateNote shopCoin={shopCoin} />
+          {stockLine(product.status)}
+          {isOwner ? (
+            <Alert
+              severity="info"
+              action={
+                <Button color="inherit" onClick={() => navigate(`/product-manager/${encodeURIComponent(storeId)}`)} sx={{ minHeight: 44 }}>
+                  Seller page
+                </Button>
+              }
+            >
+              This is your product.
+            </Alert>
+          ) : available ? (
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+              <QuantityStepper value={quantityText} onChange={setQuantityText} />
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<AddShoppingCartOutlinedIcon />}
+                onClick={addToCart}
+                sx={{ minHeight: 48, flex: "1 1 180px" }}
+              >
+                Add to cart
+              </Button>
+            </Box>
+          ) : null}
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            <CopyLinkButton link={productLink(owner, storeId, productId, catalogueId)} label="Share" />
+            <Button component={RouterLink} to={shopPath} variant="outlined" color="inherit" startIcon={<StorefrontOutlinedIcon />} sx={{ minHeight: 44 }}>
+              Visit shop
+            </Button>
+          </Box>
+          <Divider />
+          <Box component="section" aria-labelledby="product-description-heading">
+            <Typography id="product-description-heading" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1 }}>
+              Description
+            </Typography>
+            <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }} color={product.description ? "text.primary" : "text.secondary"}>
+              {product.description || "No description."}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Page width="grid">
+      <PageHeader
+        back
+        backTo={shopPath}
+        title={title}
+        subtitle={
+          <>
+            From{" "}
+            <Link component={RouterLink} to={shopPath} color="inherit" underline="always">
+              {shopName}
+            </Link>{" "}
+            by {owner}
+          </>
+        }
+        actions={!isOwner ? <CartButton /> : undefined}
       />
-      {user?.name && user?.name !== storeOwner ? (
-        <CartBox>
-          <CartIconContainer fixedCartPosition={false}>
-            <CartIcon
-              color={theme.palette.text.primary}
-              height={"32"}
-              width={"32"}
-              onClickFunc={() => {
-                dispatch(setIsOpen(true));
-              }}
-            />
-            {cartAddAmount > 0 && (
-              <NotificationBadge fixedCartPosition={false}>
-                {cartAddAmount}
-              </NotificationBadge>
-            )}
-          </CartIconContainer>
-        </CartBox>
-      ) : null}
-    </ProductLayout>
-  ) : (
-    <ProductNotFound>Product ID ${productID} Not Found</ProductNotFound>
+      {content}
+      <AddedToCartSnackbar notice={added} onClose={() => setAdded(null)} />
+    </Page>
   );
+}
+
+export const ProductPage = () => {
+  const params = useParams();
+  const owner = decodeParam(params.user);
+  const storeId = decodeParam(params.store);
+  const productId = decodeParam(params.product);
+  const catalogueId = decodeParam(params.catalogue);
+  return <ProductView key={[owner, storeId, productId, catalogueId].join("\n")} owner={owner} storeId={storeId} productId={productId} catalogueId={catalogueId} />;
 };
+
+export default ProductPage;

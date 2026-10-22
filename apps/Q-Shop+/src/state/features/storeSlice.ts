@@ -1,7 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { CurrentStore, DataContainer, ProductDataContainer } from "./globalSlice";
 import { ForeignCoins } from "../../components/modals/CreateStoreModal";
-import { CoinFilter } from "../../pages/Store/Store/Store";
 import { readStoredSettings } from "../../utils/settingsStorage";
 import { assetIdOf, isCoinTicker } from "../../money/coins";
 
@@ -53,9 +52,14 @@ const initialState: GlobalState = {
   preferredCoin: storedPreferredCoin()
 };
 
+/**
+ * The saved preferred coin, else QORT. A plain "QORT" on purpose: importing
+ * the shop page's CoinFilter here pulled the whole lazy shop page (and its
+ * imports) into the chunk every screen loads.
+ */
 function storedPreferredCoin(): string {
   const coin = readStoredSettings().preferredCoin;
-  return typeof coin === "string" && (isCoinTicker(coin) || assetIdOf(coin) !== null) ? coin : CoinFilter.qort;
+  return typeof coin === "string" && (isCoinTicker(coin) || assetIdOf(coin) !== null) ? coin : "QORT";
 }
 
 export interface Price {

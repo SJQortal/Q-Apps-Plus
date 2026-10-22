@@ -1,248 +1,233 @@
-import { FC, useState } from "react";
-import {
-  AddReviewContainer,
-  AddReviewDescription,
-  AddReviewHeader
-} from "./AddReview-styles";
-import { Rating } from "@mui/material";
-import {
-  CreateButton,
-  CustomInputField
-} from "../../../../components/modals/CreateStoreModal-styles";
-import {
-  CloseButton,
-  CloseButtonRow,
-  Divider,
-  StoreTitle
-} from "../../StoreDetails/StoreDetails-styles";
+/**
+ * Writing a shop review. Only names with an order at the shop get here (the
+ * panel checks, as the original did). The publish is the original's, built
+ * by qdn/payloads (pinned by AddReview.pin.test.tsx): DOCUMENT
+ * `q-store-review-<shortStoreId>-<uid>-<rating×10>` with `review.json`
+ * `{title, description, rating, created}`, after its LIST_QDN_RESOURCES check
+ * that the identifier is free.
+ *
+ * What changed around it: a Hub decline is a quiet cancel; Hub gets its
+ * full 30 minutes for the publish, and after a timeout QDN is checked
+ * before saying it failed, so Retry never pays the fee twice (docs/QORTAL.md
+ * → pitfalls 10 and 11).
+ */
+import { useRef, useState } from "react";
+import { Alert, Box, Button, Rating, TextField, Typography } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../../../state/store";
 import ShortUniqueId from "short-unique-id";
+import type { RootState } from "../../../../state/store";
 import { setNotification } from "../../../../state/features/notificationsSlice";
-import {
-  addToHashMapStoreReviews,
-  addToReviews
-} from "../../../../state/features/storeSlice";
+import { addToHashMapStoreReviews, addToReviews } from "../../../../state/features/storeSlice";
+import { ResponsiveDialog } from "../../../../components/common/mobile";
 import { shortStoreIdOf } from "../../../../qdn/identifiers";
 import { buildReviewPublish } from "../../../../qdn/payloads";
+import { errorMessage, isHubDecline, isHubTimeout } from "../../../../qdn/hubErrors";
+import { invalidateQdnSearches, resourceExists } from "../../../../qdn/search";
+import { isReviewSearchUrl } from "../../reviewsData";
 
-/* Reviews notes
-  Prevent them from adding a review to their own store
-  Filter their own review
-  Make sure user has at least one store order before being able to leave a review
-  Get first 100 reviews for the average (without metadata)
-*/
-
-interface AddReviewProps {
-  storeId: string;
-  storeTitle: string;
-  setOpenLeaveReview: (open: boolean) => void;
-}
+/** Hub allows a publish up to 30 minutes (docs/QORTAL.md → pitfall 10). */
+const REVIEW_PUBLISH_TIMEOUT_MS = 30 * 60_000;
+export const REVIEW_TITLE_MAX = 180;
 
 const uid = new ShortUniqueId({ length: 10 });
 
-export const AddReview: FC<AddReviewProps> = ({
+/** The original's check: is this identifier already taken under the name? */
+async function identifierTaken(check: ReturnType<typeof buildReviewPublish>["existsCheck"]): Promise<boolean> {
+  try {
+    const response = await qortalRequest(check);
+    return response?.resources?.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+export function AddReview({
+  open,
   storeId,
   storeTitle,
-  setOpenLeaveReview
-}) => {
+  onClose,
+  onPublished,
+}: {
+  open: boolean;
+  storeId: string;
+  storeTitle: string;
+  onClose: () => void;
+  onPublished?: () => void;
+}) {
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
-
   const [rating, setRating] = useState<number | null>(null);
-  const [reviewTitle, setReviewTitle] = useState<string>("");
-  const [reviewDescription, setReviewDescription] = useState<string>("");
+  const [title, setTitle] = useState("");
+  const [text, setText] = useState("");
+  const [touched, setTouched] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // One id per review being written, so a retry after a timeout finds the first try.
+  const [reviewUid] = useState(() => uid());
+  const tried = useRef(new Set<string>());
 
-  // Verify if review identifier already exists
-
-  const verifyIfReviewIdExists = async (
-    username: string,
-    identifier: string
-  ) => {
-    try {
-      const response = await qortalRequest({
-        action: "LIST_QDN_RESOURCES",
-        service: "DOCUMENT",
-        name: username,
-        identifier: identifier,
-        includeMetadata: true,
-        limit: 1
-      });
-      if (response?.resources?.length > 0) {
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.log(err);
-      return false;
-    }
+  const missing = {
+    rating: !rating,
+    title: !title.trim(),
+    text: !text.trim(),
   };
 
-  // Add review to QDN
-  const addReviewFunc = async () => {
-    let address: string = "";
-    let name: string = "";
-    let errorMsg = "";
+  const finish = (built: ReturnType<typeof buildReviewPublish>) => {
+    const name = user?.name ?? "";
+    const { created } = built.review;
+    // As the original: the list gets the metadata's short copy, the full review is kept by id.
+    dispatch(
+      addToReviews({
+        id: built.identifier,
+        name,
+        created,
+        updated: created,
+        title: title.slice(0, 60),
+        description: text.slice(0, 150),
+        rating,
+      })
+    );
+    dispatch(
+      addToHashMapStoreReviews({
+        id: built.identifier,
+        name,
+        created,
+        updated: created,
+        title,
+        description: text,
+        rating,
+        isValid: true,
+      })
+    );
+    invalidateQdnSearches(isReviewSearchUrl);
+    dispatch(setNotification({ alertType: "success", msg: "Review published" }));
+    onPublished?.();
+    onClose();
+  };
 
-    address = user?.address || "";
-    name = user?.name || "";
-
-    // Validation
-    if (!address) {
-      errorMsg = "Cannot send: your address isn't available";
+  const publish = async () => {
+    if (busy) return;
+    setTouched(true);
+    setError(null);
+    const name = user?.name;
+    if (!user?.address || !name) {
+      setError("Sign in with a Qortal name to review this shop.");
+      return;
     }
-
-    if (!name) {
-      errorMsg = "Cannot send a message without a access to your name";
-    }
-
     if (!storeId) {
-      errorMsg = "Cannot add a review without having a store ID";
+      setError("This shop can't be reviewed: its id is missing.");
+      return;
     }
+    if (missing.rating || missing.title || missing.text) return;
 
-    if (!rating || !reviewTitle || !reviewDescription) {
-      errorMsg = "Cannot add a review without a rating, title, and description";
-    }
-
-    if (errorMsg) {
-      dispatch(
-        setNotification({
-          msg: errorMsg,
-          alertType: "error"
-        })
-      );
-      throw new Error(errorMsg);
-    }
     const built = buildReviewPublish({
       name,
       shortStoreId: shortStoreIdOf(storeId),
-      uid: uid(),
+      uid: reviewUid,
       rating: Number(rating),
-      title: reviewTitle,
-      description: reviewDescription,
+      title,
+      description: text,
       created: Date.now(),
     });
-    const reviewId = built.identifier;
-    // Check if review identifier already exists
-    const doesExist = await verifyIfReviewIdExists(name, reviewId);
-    if (doesExist) {
-      throw new Error(
-        "The review identifier already exists! Try changing your review's title"
-      );
-    }
+    setBusy(true);
     try {
-      // Publish Review to QDN
-      await qortalRequest(built.request);
-      setOpenLeaveReview(false);
-      dispatch(
-        addToReviews({
-          id: reviewId,
-          name: name,
-          created: Date.now(),
-          updated: Date.now(),
-          title: reviewTitle.slice(0, 60),
-          description: reviewDescription.slice(0, 150),
-          rating: rating
-        })
-      );
-      dispatch(
-        addToHashMapStoreReviews({
-          id: reviewId,
-          name: name,
-          created: Date.now(),
-          updated: Date.now(),
-          title: reviewTitle,
-          description: reviewDescription,
-          rating: rating,
-          isValid: true
-        })
-      );
-      dispatch(
-        setNotification({
-          alertType: "success",
-          msg: "Added Review Successfully!"
-        })
-      );
-    } catch (error: any) {
-      let notificationObj: any = null;
-      if (typeof error === "string") {
-        notificationObj = {
-          msg: error || "Failed to create review",
-          alertType: "error"
-        };
-      } else if (typeof error?.error === "string") {
-        notificationObj = {
-          msg: error?.error || "Failed to create review",
-          alertType: "error"
-        };
-      } else {
-        notificationObj = {
-          msg: error?.message || "Failed to create review",
-          alertType: "error"
-        };
+      if (await identifierTaken(built.existsCheck)) {
+        if (tried.current.has(built.identifier)) {
+          // An earlier try that timed out did land.
+          finish(built);
+          return;
+        }
+        setError("A review with this id already exists. Close this and write it again.");
+        return;
       }
-      if (!notificationObj) return;
-      dispatch(setNotification(notificationObj));
-      if (error instanceof Error) {
-        throw new Error(error.message);
-      } else {
-        throw new Error("An unknown error occurred");
+      tried.current.add(built.identifier);
+      await qortalRequestWithTimeout(built.request, REVIEW_PUBLISH_TIMEOUT_MS);
+      finish(built);
+    } catch (e) {
+      if (isHubDecline(e)) return;
+      if (isHubTimeout(e)) {
+        const landed = await resourceExists("DOCUMENT", name, built.identifier, { fresh: true }).catch(() => false);
+        if (landed) {
+          finish(built);
+          return;
+        }
+        setError("Hub didn't confirm the review in time. It may still arrive: check the reviews before publishing again.");
+        return;
       }
+      setError(`The review couldn't be published: ${errorMessage(e, "unknown error")}`);
+    } finally {
+      setBusy(false);
     }
   };
 
   return (
-    <AddReviewContainer>
-      <AddReviewHeader>
-        <StoreTitle>{`Leave a review for ${storeTitle}`}</StoreTitle>
-      </AddReviewHeader>
-      <Divider />
-      <AddReviewContainer style={{ padding: 0 }}>
-        <AddReviewContainer style={{ padding: 0, gap: "15px" }}>
+    <ResponsiveDialog
+      open={open}
+      onClose={busy ? () => {} : onClose}
+      title={storeTitle ? `Review ${storeTitle}` : "Write a review"}
+      maxWidth="sm"
+      dismissible={!busy}
+      actions={
+        <>
+          <Button color="inherit" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={publish} aria-disabled={busy || undefined}>
+            {busy ? "Publishing…" : "Publish review"}
+          </Button>
+        </>
+      }
+    >
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+        <Box component="fieldset" sx={{ border: 0, p: 0, m: 0, minWidth: 0 }}>
+          <Typography component="legend" variant="subtitle2" sx={{ mb: 0.5, p: 0 }}>
+            Your rating
+          </Typography>
           <Rating
-            onChange={(_e: React.SyntheticEvent, newValue: number | null) => {
-              setRating(newValue);
-            }}
+            name="review-rating"
             precision={0.5}
+            size="large"
             value={rating}
-            style={{ fontSize: "55px" }}
+            onChange={(_event, value) => setRating(value)}
+            sx={{ fontSize: 40 }}
           />
-          <CustomInputField
-            name="title"
-            label="Shop Review Title"
-            variant="filled"
-            value={reviewTitle}
-            onChange={(e) => setReviewTitle(e.target.value as string)}
-            slotProps={{ htmlInput: { maxLength: 180 } }}
-            required
-            style={{ width: "100%" }}
-          />
-          <AddReviewDescription
-            aria-label="review-description"
-            draggable={false}
-            minRows={3}
-            maxRows={10}
-            placeholder="Write a shop review..."
-            value={reviewDescription}
-            onChange={(e) => setReviewDescription(e.target.value as string)}
-            required
-          />
-        </AddReviewContainer>
-        <CloseButtonRow style={{ gap: "10px" }}>
-          <CloseButton
-            variant="outlined"
-            color="error"
-            onClick={() => {
-              setOpenLeaveReview(false);
-            }}
-          >
-            Close
-          </CloseButton>
-          <CreateButton variant="contained" onClick={addReviewFunc}>
-            Add Review
-          </CreateButton>
-        </CloseButtonRow>
-      </AddReviewContainer>
-    </AddReviewContainer>
+          {touched && missing.rating && (
+            <Typography variant="body2" color="error" role="alert">
+              Pick a rating.
+            </Typography>
+          )}
+        </Box>
+        <TextField
+          label="Title"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          required
+          fullWidth
+          error={touched && missing.title}
+          helperText={touched && missing.title ? "Add a title." : `${title.length}/${REVIEW_TITLE_MAX}`}
+          slotProps={{ htmlInput: { maxLength: REVIEW_TITLE_MAX } }}
+        />
+        <TextField
+          label="Your review"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          required
+          fullWidth
+          multiline
+          minRows={4}
+          maxRows={12}
+          error={touched && missing.text}
+          helperText={touched && missing.text ? "Write your review." : "What went well, and what didn't?"}
+        />
+        <Typography variant="body2" color="text.secondary">
+          Your review is public under your name. Publishing costs a small QORT fee; Hub asks you to confirm.
+        </Typography>
+        {error && (
+          <Alert severity="error" role="alert">
+            {error}
+          </Alert>
+        )}
+      </Box>
+    </ResponsiveDialog>
   );
-};
+}

@@ -1,61 +1,21 @@
-import { styled } from "@mui/system";
-import {
-  Box,
-  Button,
-  Typography,
-  Grid,
-  Checkbox,
-  InputLabel,
-  Autocomplete,
-  TextField,
-  Chip,
-} from "@mui/material";
-import { ReusableModal } from "../../../components/modals/ReusableModal";
+/**
+ * Styled parts other screens still import from the original shop page (the
+ * cart, the seller tools and the shop dialogs). The shop page itself no
+ * longer uses them. Colours come from the theme, so all four themes work.
+ */
+import { styled } from "@mui/material/styles";
+import { Autocomplete, Box, Button, Checkbox, Chip, TextField } from "@mui/material";
 
 interface StoreProps {
   fixedCartPosition: boolean;
 }
 
-export const FiltersCol = styled(Grid)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "column",
-  height: "100%",
-  padding: "20px 15px",
-  backgroundColor: theme.palette.background.default,
-  borderTop: `1px solid ${theme.palette.background.paper}`,
-  borderRight: `1px solid ${theme.palette.background.paper}`,
-}));
+const notFixedCartProp = (prop: PropertyKey) => prop !== "fixedCartPosition";
 
-export const FiltersContainer = styled(Box)(() => ({
-  display: "flex",
-  flexDirection: "column",
-  justifyContent: "space-between",
-}));
-
-export const FiltersRow = styled(Box)(() => ({
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  width: "100%",
-  padding: "0 15px",
-  fontSize: "16px",
-  userSelect: "none",
-}));
-
-export const FiltersTitle = styled(Typography)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  gap: "5px",
-  margin: "20px 0",
-  fontSize: "17px",
-  color: theme.palette.text.primary,
-  userSelect: "none",
-}));
-
-export const FiltersCheckbox = styled(Checkbox)(() => ({
-  color: "#c0d4ff",
+export const FiltersCheckbox = styled(Checkbox)(({ theme }) => ({
+  color: theme.palette.text.secondary,
   "&.Mui-checked": {
-    color: "#6596ff",
+    color: theme.palette.primary.main,
   },
 }));
 
@@ -96,148 +56,45 @@ export const FilterSelectMenuItems = styled(TextField)(({ theme }) => ({
   },
 }));
 
-export const ProductManagerRow = styled(Box)(() => ({
-  display: "grid",
-  gridTemplateColumns: "1fr auto",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  width: "100%",
-  padding: "15px 18px",
-}));
-
-export const StoreTitleCard = styled(Box)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  justifySelf: "center",
-  width: "fit-content",
-  borderRadius: "8px",
-  padding: "10px 15px",
-  backgroundColor: theme.palette.background.paper,
-  gap: "10px",
-  transition: "all 0.3s ease-in-out",
-}));
-
-export const StoreTitle = styled(Typography)(({ theme }) => ({
-  fontSize: "20px",
-  color: theme.palette.text.primary,
-  transition: "all 0.3s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    textDecoration: "underline",
-  },
-}));
-
-export const StoreLogo = styled("img")(() => ({
-  width: "70px",
-  height: "70px",
-  borderRadius: "3px",
-  objectFit: "cover",
-}));
-
-export const FiltersSubContainer = styled(Box)(() => ({
-  display: "flex",
-  alignItems: "center",
-  flexDirection: "column",
-  gap: "5px",
-}));
-
-export const FilterDropdownLabel = styled(InputLabel)(({ theme }) => ({
-  fontSize: "16px",
-  color: theme.palette.text.primary,
-}));
-
-export const StoreControlsRow = styled(Box)(() => ({
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-}));
-
-export const EditStoreButton = styled(Button)(() => ({
-  display: "flex",
-  alignItems: "center",
-  padding: "3px 12px",
-  fontSize: "15px",
-  color: "#ffffff",
-  backgroundColor: "#D4417E",
-  border: "none",
-  borderRadius: "5px",
-  transition: "all 0.3s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    backgroundColor: "#a13562",
-  },
-}));
-
-export const ProductManagerButton = styled(Button)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  padding: "3px 12px",
-  fontSize: "15px",
-  color: "#ffffff",
-  backgroundColor: theme.palette.secondary.main,
-  border: "none",
-  borderRadius: "5px",
-  transition: "all 0.3s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    backgroundColor: theme.palette.secondary.dark,
-  },
-}));
-
+/** A filled button in the theme's primary colour (the original's yellow "Back to all shops"). */
 export const BackToStorefrontButton = styled(Button)(({ theme }) => ({
   display: "flex",
   alignItems: "center",
+  minHeight: 40,
   padding: "3px 12px",
   fontSize: "15px",
-  color: "#ffffff",
-  backgroundColor: theme.palette.mode === "dark" ? "#bdba02" : "#e1dd04",
+  color: theme.palette.primary.contrastText,
+  backgroundColor: theme.palette.primary.main,
   border: "none",
-  borderRadius: "5px",
-  transition: "all 0.3s ease-in-out",
+  borderRadius: theme.shape.borderRadius,
+  transition: "background-color 150ms ease",
   "&:hover": {
     cursor: "pointer",
-    backgroundColor: theme.palette.mode === "dark" ? "#a5a201" : "#c7c402",
+    backgroundColor: theme.palette.primary.dark,
+  },
+  "&.Mui-disabled": {
+    color: theme.palette.action.disabled,
+    backgroundColor: theme.palette.action.disabledBackground,
   },
 }));
 
-export const ProductsContainer = styled(Grid)({
-  display: "flex",
-  flexWrap: "wrap",
-  padding: "5px 35px 15px 35px",
-});
-
-export const NoProductsContainer = styled(Box)({
-  textAlign: "center",
-  width: "100%",
-  marginTop: "70px",
-});
-
-export const NoProductsText = styled(Typography)(({ theme }) => ({
-  fontSize: "24px",
-  letterSpacing: "0.7px",
-  color: theme.palette.text.primary,
-  userSelect: "none",
-}));
-
-export const CartIconContainer = styled(Box)<StoreProps>(
+export const CartIconContainer = styled(Box, { shouldForwardProp: notFixedCartProp })<StoreProps>(
   ({ theme, fixedCartPosition }) => ({
     position: fixedCartPosition ? "fixed" : "relative",
     top: fixedCartPosition ? "90px" : 0,
     right: fixedCartPosition ? "17px" : 0,
-    zIndex: fixedCartPosition ? "55" : 0,
+    zIndex: fixedCartPosition ? 55 : 0,
     padding: fixedCartPosition ? "20px" : 0,
-    backgroundColor: fixedCartPosition
-      ? `${theme.palette.background.paper}`
-      : "none",
+    backgroundColor: fixedCartPosition ? theme.palette.background.paper : "transparent",
     borderRadius: fixedCartPosition ? "50%" : 0,
     display: fixedCartPosition ? "flex" : "block",
-    alignItems: fixedCartPosition ? "center" : "center",
-    justifyContent: fixedCartPosition ? "center" : "center",
+    alignItems: "center",
+    justifyContent: "center",
     cursor: "pointer",
   })
 );
 
-export const NotificationBadge = styled(Box)<StoreProps>(
+export const NotificationBadge = styled(Box, { shouldForwardProp: notFixedCartProp })<StoreProps>(
   ({ theme, fixedCartPosition }) => ({
     position: "absolute",
     top: fixedCartPosition ? "6px" : "-7px",
@@ -245,90 +102,21 @@ export const NotificationBadge = styled(Box)<StoreProps>(
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    width: "22px",
+    minWidth: "22px",
     height: "22px",
-    borderRadius: "50%",
-    backgroundColor: theme.palette.mode === "dark" ? "#bdba02" : "#e1dd04",
-    color: "#000000",
+    padding: "0 4px",
+    borderRadius: "11px",
+    backgroundColor: theme.palette.primary.main,
+    color: theme.palette.primary.contrastText,
     fontSize: "14px",
     fontWeight: "bold",
     userSelect: "none",
   })
 );
 
-export const ProductCardCol = styled(Grid)(({ theme }) => ({
-  display: "flex",
-  gap: 1,
-  alignItems: "center",
-  width: "auto",
-  position: "relative",
-  maxWidth: "100%",
-  flexGrow: 1,
-  [theme.breakpoints.down("sm")]: {
-    width: "100%",
-  },
-}));
-
-export const StoreTitleCol = styled(Box)({
-  display: "flex",
-  alignItems: "center",
-  flexDirection: "column",
-});
-
-export const RatingContainer = styled(Box)(() => ({
-  display: "flex",
-  alignItems: "center",
-  padding: "1px 5px",
-  borderRadius: "5px",
-  letterSpacing: 0,
-  fontWeight: 300,
-  fontSize: "21px",
-  backgroundColor: "transparent",
-  transition: "all 0.3s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    backgroundColor: "#e4ddddac",
-  },
-}));
-
-export const ReusableModalStyled = styled(ReusableModal)(({ theme }) => ({
-  "&#store-details": {
-    "&::-webkit-scrollbar-track": {
-      backgroundColor: "transparent",
-    },
-    "&::-webkit-scrollbar-track:hover": {
-      backgroundColor: "transparent",
-    },
-    "&::-webkit-scrollbar": {
-      width: "8px",
-      height: "10px",
-      backgroundColor: "transparent",
-    },
-    "&::-webkit-scrollbar-thumb": {
-      backgroundColor: theme.palette.mode === "light" ? "#d3d9e1" : "#414763",
-      borderRadius: "8px",
-      backgroundClip: "content-box",
-      border: "4px solid transparent",
-    },
-    "&::-webkit-scrollbar-thumb:hover": {
-      backgroundColor: theme.palette.mode === "light" ? "#b7bcc4" : "#40455f",
-    },
-  },
-}));
-
-export const OfferedCoinsRow = styled(Box)(() => ({
-  fontSize: "21px",
-  display: "flex",
-  alignItems: "center",
-  marginTop: "5px",
-  gap: "7px",
-  letterSpacing: 0,
-  fontWeight: 300,
-  userSelect: "none",
-}));
-
 export const AcceptedCoinRow = styled(Box)({
   display: "flex",
   alignItems: "center",
   gap: "7px",
 });
+

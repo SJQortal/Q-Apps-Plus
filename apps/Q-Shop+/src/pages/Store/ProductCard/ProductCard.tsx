@@ -1,183 +1,170 @@
-import { useMemo } from "react";
-import { CardMedia, useTheme } from "@mui/material";
-import { RootState } from "../../../state/store";
-import { Product } from "../../../state/features/storeSlice";
-import { useDispatch, useSelector } from "react-redux";
-import { setProductToCart } from "../../../state/features/cartSlice";
-import { QortalSVG } from "../../../assets/svgs/QortalSVG";
-import {
-  AddToCartButton,
-  ProductDescription,
-  ProductTitle,
-  StyledCard,
-  StyledCardContent,
-} from "./ProductCard-styles";
-import { CartSVG } from "../../../assets/svgs/CartSVG";
-import { useNavigate } from "react-router-dom";
-import { setNotification } from "../../../state/features/notificationsSlice";
-import { AcceptedCoinRow } from "../Store/Store-styles";
-import { ARRRSVG } from "../../../assets/svgs/ARRRSVG";
-import { CoinFilter } from "../Store/Store";
+/**
+ * A product on the shop page: picture, title, price in the shop's chosen coin
+ * (money/ computes it, exactly as checkout will), stock, and Add to cart.
+ * A tile on wider screens, a row (picture on the left) on phones, so the
+ * list stays one column there. Right-click copies the product's link.
+ */
+import { Box, Button, Chip, Link, Skeleton, Typography } from "@mui/material";
+import AddShoppingCartOutlinedIcon from "@mui/icons-material/AddShoppingCartOutlined";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import { Link as RouterLink } from "react-router-dom";
+import type { Product } from "../../../state/features/storeSlice";
+import type { ShopCoinSettings } from "../../../money/coins";
+import { PriceTag } from "../../../components/money/PriceTag";
+import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
+import { productLink, productPath } from "../../../qdn/links";
+import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../../constants/product-status";
+import ContextMenuResource from "../../../components/common/ContextMenu/ContextMenuResource";
 
-function addEllipsis(str: string, limit: number) {
-  if (str.length > limit) {
-    return str.substring(0, limit - 3) + "...";
-  } else {
-    return str;
-  }
-}
-interface ProductCardProps {
-  product: Product;
-  exchangeRate: number | null;
-  filterCoin: string;
+export type ProductCardState = "ready" | "loading" | "fetching" | "failed";
+
+/** The picture a list shows: the main image, else the first. */
+export function mainImageOf(product: Product | undefined): string | undefined {
+  const images = product?.images ?? [];
+  const main = typeof product?.mainImageIndex === "number" ? images[product.mainImageIndex] : undefined;
+  return main || images[0] || undefined;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, exchangeRate, filterCoin }) => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const theme = useTheme();
+const cardSx = {
+  height: "100%",
+  display: "grid",
+  gridTemplateRows: "auto 1fr",
+  border: 1,
+  borderColor: "divider",
+  borderRadius: 2,
+  bgcolor: "background.paper",
+  overflow: "hidden",
+  transition: "border-color 150ms ease",
+  "&:hover": { borderColor: "action.disabled" },
+  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+  [`@media ${PHONE_MEDIA}`]: { gridTemplateRows: "auto", gridTemplateColumns: "104px minmax(0, 1fr)" },
+} as const;
 
-  const storeId = useSelector((state: RootState) => state.store.storeId);
+const pictureSx = {
+  position: "relative",
+  display: "block",
+  aspectRatio: "1 / 1",
+  bgcolor: "action.hover",
+  color: "text.secondary",
+  [`@media ${PHONE_MEDIA}`]: { width: 104, height: 104, alignSelf: "start", m: 1, mr: 0, borderRadius: 1.5, overflow: "hidden" },
+} as const;
 
-  const storeOwner = useSelector((state: RootState) => state.store.storeOwner);
+const bodySx = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 1,
+  p: 1.5,
+  minWidth: 0,
+} as const;
 
-  const user = useSelector((state: RootState) => state.auth.user);
-
-  const catalogueHashMap = useSelector(
-    (state: RootState) => state.global.catalogueHashMap
+export function ProductCardSkeleton({ note }: { note?: string }) {
+  return (
+    <Box sx={cardSx} aria-hidden={note ? undefined : true}>
+      <Box sx={pictureSx}>
+        <Skeleton variant="rectangular" sx={{ width: "100%", height: "100%" }} />
+      </Box>
+      <Box sx={bodySx}>
+        <Skeleton width="85%" />
+        <Skeleton width="45%" />
+        {note ? (
+          <Typography variant="body2" color="text.secondary" role="status">
+            {note}
+          </Typography>
+        ) : (
+          <Skeleton variant="rounded" height={40} />
+        )}
+      </Box>
+    </Box>
   );
+}
 
-  const userName = useMemo(() => {
-    if (!user?.name) return "";
-    return user.name;
-  }, [user]);
-
-  const profileImg = product?.images?.[0];
-
-  const goToProductPage = () => {
-    if (!product || !product?.id || !product?.catalogueId || !storeId) {
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Unable to load product! Please try again!",
-        })
-      );
-      return;
-    }
-    navigate(
-      `/${
-        product?.user || catalogueHashMap[product?.catalogueId]?.user
-      }/${storeId}/${product?.id}/${product.catalogueId}`
-    );
-  };
-
-  let price = product?.price?.find(item => item?.currency === "qort")?.value;
-  const priceArrr = product?.price?.find(item => item?.currency === CoinFilter.arrr)?.value;
-  if(filterCoin === CoinFilter.arrr && priceArrr) {
-    price = +priceArrr
-  }
-  else if(price && exchangeRate && filterCoin !== CoinFilter.qort){
-    price = +price * exchangeRate
-  }
+export function ProductCard({
+  product,
+  productId,
+  catalogueId,
+  owner,
+  storeId,
+  status,
+  shop,
+  coin,
+  rate,
+  isOwnProduct,
+  onAddToCart,
+}: {
+  product: Product;
+  productId: string;
+  catalogueId: string;
+  owner: string;
+  storeId: string;
+  /** The catalogue's status, else the index's. */
+  status: string | undefined;
+  shop: ShopCoinSettings | null | undefined;
+  coin: string;
+  rate: number | null;
+  isOwnProduct: boolean;
+  onAddToCart: () => void;
+}) {
+  const title = product.title?.trim() || "Untitled product";
+  const image = mainImageOf(product);
+  const path = productPath(owner, storeId, productId, catalogueId);
+  const available = status === AVAILABLE;
+  const label = isOwnProduct ? "Your product" : status === OUT_OF_STOCK ? "Out of stock" : status === RETIRED ? "Retired" : "Add to cart";
 
   return (
-    <StyledCard>
-      <CardMedia
-        sx={{
-          "&.MuiCardMedia-root": {
-            padding: "10px",
-            borderRadius: "12px",
-            objectFit: "contain",
-          },
-        }}
-        component="img"
-        height="140"
-        image={profileImg}
-        alt={product?.title}
-        onClick={goToProductPage}
-      />
-      <StyledCardContent onClick={goToProductPage}>
-        <ProductTitle>{addEllipsis(product?.title || "", 39)}</ProductTitle>
-        <ProductDescription>
-          {addEllipsis(product?.description || "", 58)}
-        </ProductDescription>
-        <ProductDescription
-          style={{
-            display: "flex",
-            gap: "20px",
-            marginTop: "auto",
-            fontWeight: "bold",
-            width: "100%",
-          }}
-        >
-          {filterCoin === CoinFilter.qort && (
-            <AcceptedCoinRow>
-            <QortalSVG
-              color={theme.palette.text.primary}
-              height={"23"}
-              width={"23"}
-            />{" "}
-            {price}
-          </AcceptedCoinRow>
+    <ContextMenuResource link={productLink(owner, storeId, productId, catalogueId)}>
+      <Box component="article" sx={cardSx}>
+        <Link component={RouterLink} to={path} tabIndex={-1} aria-hidden sx={pictureSx}>
+          {image ? (
+            <Box
+              component="img"
+              src={image}
+              alt={title}
+              loading="lazy"
+              decoding="async"
+              sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          ) : (
+            <Box sx={{ width: "100%", height: "100%", display: "grid", placeItems: "center" }}>
+              <ImageOutlinedIcon fontSize="large" />
+            </Box>
           )}
-          {filterCoin === CoinFilter.arrr && (
-             <AcceptedCoinRow>
-             <ARRRSVG
-               color={theme.palette.text.primary}
-               height={"23"}
-               width={"23"}
-             />{" "}
-             {price}
-           </AcceptedCoinRow>
-          )}
-        
-        </ProductDescription>
-      </StyledCardContent>
-      <div style={{ height: "37px" }}>
-        {storeOwner !== userName && (
-          <AddToCartButton
-            style={{
-              cursor:
-                product.status === "AVAILABLE" ? "pointer" : "not-allowed",
-            }}
-            color="primary"
-            onClick={() => {
-              if (product.status !== "AVAILABLE") {
-                dispatch(
-                  setNotification({
-                    alertType: "error",
-                    msg: "Product is not available!",
-                  })
-                );
-                return;
-              }
-              dispatch(
-                setProductToCart({
-                  productId: product.id,
-                  catalogueId: product.catalogueId,
-                  storeId,
-                  storeOwner,
-                })
-              );
-            }}
+        </Link>
+        <Box sx={bodySx}>
+          <Typography component="h3" sx={{ fontWeight: 600, fontSize: 15, lineHeight: 1.35 }}>
+            <Link
+              component={RouterLink}
+              to={path}
+              underline="hover"
+              color="inherit"
+              sx={{
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+                overflow: "hidden",
+                overflowWrap: "anywhere",
+                minHeight: "2.7em",
+              }}
+            >
+              {title}
+            </Link>
+          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+            <PriceTag product={product} coin={coin} rate={rate} shop={shop} />
+            {status === OUT_OF_STOCK && <Chip size="small" label="Out of stock" variant="outlined" />}
+            {status === RETIRED && <Chip size="small" label="Retired" variant="outlined" />}
+          </Box>
+          <Button
+            variant={available && !isOwnProduct ? "contained" : "outlined"}
+            startIcon={available && !isOwnProduct ? <AddShoppingCartOutlinedIcon /> : undefined}
+            disabled={!available || isOwnProduct}
+            onClick={onAddToCart}
+            aria-label={available && !isOwnProduct ? `Add ${title} to cart` : undefined}
+            sx={{ mt: "auto", minHeight: 44, alignSelf: "stretch" }}
           >
-            {product.status === "AVAILABLE" ? (
-              <>
-                <CartSVG
-                  color={theme.palette.text.primary}
-                  height={"18"}
-                  width={"18"}
-                />{" "}
-                Add to Cart
-              </>
-            ) : product.status === "OUT_OF_STOCK" ? (
-              "Out of Stock"
-            ) : (
-              "Retired"
-            )}
-          </AddToCartButton>
-        )}
-      </div>
-    </StyledCard>
+            {label}
+          </Button>
+        </Box>
+      </Box>
+    </ContextMenuResource>
   );
-};
+}
