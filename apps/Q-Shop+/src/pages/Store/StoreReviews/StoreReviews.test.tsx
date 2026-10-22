@@ -216,6 +216,25 @@ describe("review dialog", { timeout: 20_000 }, () => {
     expect(q.calls).toHaveLength(0);
   });
 
+  it("offers no Close or Back while the publish runs, then closes as usual", async () => {
+    let decline: () => void = () => {};
+    const { q, onClose } = renderDialog({
+      LIST_QDN_RESOURCES: async () => ({ resources: [] }),
+      PUBLISH_QDN_RESOURCE: () => new Promise((_resolve, reject) => (decline = () => reject({ error: "User declined request" }))),
+    });
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    fill();
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    expect(screen.getByRole("button", { name: "Publishing…" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    decline();
+    fireEvent.click(await screen.findByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("treats a declined publish as a cancel: no error, the dialog stays", async () => {
     const { q, onClose } = renderDialog({
       LIST_QDN_RESOURCES: async () => ({ resources: [] }),
