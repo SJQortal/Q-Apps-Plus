@@ -264,8 +264,9 @@ describe("home page", () => {
       expect(reviews[0].get("limit")).toBe("100");
       // Six reviewers: 3, 3.5, 4, 3, 3.5, 4.
       const link = screen.getByRole("link", { name: "Seller's Shop" });
-      expect(within(link).getByText("3.5")).toBeInTheDocument();
-      expect(within(link).getByText("(6)")).toBeInTheDocument();
+      const card = link.closest("[data-shop-card]") as HTMLElement;
+      expect(within(card).getByText("3.5")).toBeInTheDocument();
+      expect(within(card).getByText("(6)")).toBeInTheDocument();
       expect(link).toHaveAccessibleDescription(/Rated 3\.5 out of 5 from 6 reviews\./);
     });
 
@@ -340,7 +341,7 @@ describe("home page", () => {
       await waitFor(() => expect(location()).toBe("/?mine=1"));
       await waitFor(() => expect(cardTitles()).toEqual(["Seller's Shop"]));
       const link = screen.getByRole("link", { name: "Seller's Shop" });
-      expect(within(link).getByText("Yours")).toBeInTheDocument();
+      expect(within(link.closest("[data-shop-card]") as HTMLElement).getByText("Yours")).toBeInTheDocument();
       expect(link).toHaveAccessibleDescription(/Your shop\./);
     });
 

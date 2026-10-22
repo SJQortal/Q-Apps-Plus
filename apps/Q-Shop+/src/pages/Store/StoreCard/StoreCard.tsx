@@ -44,7 +44,14 @@ export interface StoreCardProps {
   onMenu: (shop: ShopEntry, anchor: HTMLElement) => void;
 }
 
-const CardLink = styled(RouterLink)(({ theme }) => ({
+/**
+ * The card is a box; its title is the link, stretched over the whole card
+ * with ::after. So the link's name is exactly its visible text (the title),
+ * and a click anywhere on the card still opens the shop (axe
+ * label-content-name-mismatch flagged the old whole-card link).
+ */
+const CardBox = styled("div")(({ theme }) => ({
+  position: "relative",
   display: "flex",
   flexDirection: "column",
   height: "100%",
@@ -58,8 +65,10 @@ const CardLink = styled(RouterLink)(({ theme }) => ({
   "@media (hover: hover)": {
     "&:hover": { borderColor: theme.palette.primary.main, boxShadow: theme.shadows[3] },
   },
-  "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+  "&:has(a.card-link:focus-visible)": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+  "& a.card-link": { color: "inherit", textDecoration: "none", outline: "none" },
+  "& a.card-link::after": { content: '""', position: "absolute", inset: 0 },
 }));
 
 const Art = styled("div")(({ theme }) => ({
@@ -205,12 +214,7 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
 
   return (
     <Box component="li" ref={ref} data-shop-card sx={{ position: "relative", minWidth: 0 }}>
-      <CardLink
-        to={storePath(shop.owner, shop.id)}
-        onClick={follow}
-        aria-labelledby={titleId}
-        aria-describedby={shop.description ? `${descriptionId} ${summaryId}` : summaryId}
-      >
+      <CardBox>
         <Art>
           <CardArt shop={shop} details={details} />
           {mine && (
@@ -235,7 +239,14 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
         </Art>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, p: 1.5, flex: 1, minWidth: 0 }}>
           <Typography id={titleId} component="h2" sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, ...clamp(2) }}>
-            {shop.title}
+            <RouterLink
+              className="card-link"
+              to={storePath(shop.owner, shop.id)}
+              onClick={follow}
+              aria-describedby={shop.description ? `${descriptionId} ${summaryId}` : summaryId}
+            >
+              {shop.title}
+            </RouterLink>
           </Typography>
           {shop.description && (
             <Typography id={descriptionId} variant="body2" color="text.secondary" sx={{ lineHeight: 1.45, ...clamp(2) }}>
@@ -275,7 +286,7 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
             {summary}
           </Box>
         </Box>
-      </CardLink>
+      </CardBox>
       <IconButton
         aria-label={`More for ${shop.title}`}
         aria-haspopup="menu"
