@@ -1401,6 +1401,8 @@ export default {
         await asList(page);
         await page.getByRole('button', { name: /^Show the 1 transaction with / }).first().click();
         await page.getByRole('link', { name: 'Open transaction' }).first().waitFor({ timeout: 8000 });
+        // The pointer off the page, so no hover tooltip (a row's Compare) stays open in the capture.
+        await page.mouse.move(0, 0);
         await page.waitForTimeout(400);
       },
     },
