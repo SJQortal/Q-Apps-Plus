@@ -22,6 +22,7 @@ import type { CartLine } from "../../money/order";
 import type { CheckoutBuyer } from "../../money/checkout";
 import type { PendingOrder } from "../../money/pendingOrders";
 import { PageHeader } from "../../components/layout/Page";
+import { useShellActions } from "../../components/layout/shellState";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { CheckoutDialog } from "./CheckoutDialog";
@@ -53,6 +54,7 @@ export function Cart() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector((state: RootState) => state.auth.user);
+  const { signIn, authenticating } = useShellActions();
   const carts = useSelector((state: RootState) => state.cart.carts);
   const { views, retryShop, retryLines } = useCartData(carts);
   const pending = usePendingOrders(user?.name);
@@ -137,7 +139,15 @@ export function Cart() {
       <PageHeader title="Cart" subtitle={subtitle} />
 
       {!user && (
-        <Alert severity="info" sx={{ mb: 2 }}>
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" size="small" onClick={signIn} disabled={authenticating} sx={{ minHeight: 40 }}>
+              {authenticating ? "Signing in…" : "Sign in"}
+            </Button>
+          }
+        >
           Sign in to check out. Your cart stays on this device.
         </Alert>
       )}

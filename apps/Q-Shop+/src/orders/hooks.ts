@@ -1,12 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { useDispatch, useSelector, useStore } from "react-redux";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useSelector, useStore } from "react-redux";
 import type { RootState } from "../state/store";
 import type { Order, OrderListMeta } from "../state/features/orderSlice";
-import { addUser } from "../state/features/authSlice";
 import { shortStoreIdOf } from "../qdn/identifiers";
 import { listPendingOrders, subscribePendingOrders } from "../money/pendingOrders";
-import { getAccountNames, getPrimaryAccountName } from "../utils/qortalRequestFunctions";
-import { pickActiveName } from "../hooks/useUserAccount";
 import { loadOrders, ownerKey, retryOrder, type ListOwner, type OrderStore } from "./loader";
 import { selectItems, type OrderListItem } from "./selectors";
 
@@ -91,28 +88,3 @@ export function usePendingOrderCount(name: string | undefined): number {
   );
 }
 
-/**
- * Asks Hub for the account, as the header's Sign in does
- * (hooks/useUserAccount.ts). A decline or a timeout stays quiet: the page
- * keeps its Sign in button.
- */
-export function useSignIn(): { signIn: () => void; signingIn: boolean } {
-  const dispatch = useDispatch();
-  const [signingIn, setSigningIn] = useState(false);
-  const signIn = useCallback(() => {
-    setSigningIn(true);
-    void (async () => {
-      try {
-        const account = await qortalRequest({ action: "GET_USER_ACCOUNT" });
-        const names = await getAccountNames(account.address);
-        const primary = await getPrimaryAccountName(account.address);
-        dispatch(addUser({ ...account, name: pickActiveName(account.address, primary, names), names }));
-      } catch {
-        // Declined, timed out or no Hub: nothing to show; Sign in stays.
-      } finally {
-        setSigningIn(false);
-      }
-    })();
-  }, [dispatch]);
-  return { signIn, signingIn };
-}

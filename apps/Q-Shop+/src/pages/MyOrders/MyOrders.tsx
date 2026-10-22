@@ -15,7 +15,8 @@ import { Page, PageHeader } from "../../components/layout/Page";
 import { EmptyState } from "../../components/common/EmptyState";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import type { Order } from "../../state/features/orderSlice";
-import { useBuyerOrders, usePendingOrderCount, useSignIn } from "../../orders/hooks";
+import { useBuyerOrders, usePendingOrderCount } from "../../orders/hooks";
+import { useShellActions } from "../../components/layout/shellState";
 import { OrderListView } from "../../orders/components/OrderListView";
 import type { StatusFilter } from "../../orders/status";
 import { ShowOrder } from "../ProductManager/ShowOrder/ShowOrder";
@@ -24,7 +25,7 @@ export const MyOrders = () => {
   const navigate = useNavigate();
   const list = useBuyerOrders();
   const pending = usePendingOrderCount(list.name);
-  const { signIn, signingIn } = useSignIn();
+  const { signIn, authenticating: signingIn } = useShellActions();
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [openId, setOpenId] = useState<string | null>(null);
   // The order stays while the dialog slides away.

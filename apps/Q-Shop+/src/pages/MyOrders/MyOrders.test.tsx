@@ -9,6 +9,7 @@ import { createAppStore } from "../../state/store";
 import { savePendingOrder, type PendingOrder } from "../../money/pendingOrders";
 import { fetchRetry, resetOrderReadCaches } from "../../orders/reads";
 import { addOrder, addStatus, orderId, OTHER_SELLER, OTHER_SHORT } from "../../orders/testing";
+import { ShellContext } from "../../components/layout/shellState";
 import { MyOrders } from "./MyOrders";
 
 function world(count = 3): World {
@@ -56,7 +57,18 @@ afterEach(() => {
 describe("My orders", () => {
   it("asks a signed-out visitor to sign in", async () => {
     const node = installMockNode(world());
-    renderWithProviders(<MyOrders />);
+    const store = createAppStore();
+    // The shell's Sign in (GlobalWrapper → useUserAccount) asks Hub for the account.
+    const signIn = async () => {
+      const account = await qortalRequest({ action: "GET_USER_ACCOUNT" });
+      store.dispatch(addUser({ ...account, name: BUYER, names: [{ name: BUYER, owner: account.address }] }));
+    };
+    renderWithProviders(
+      <ShellContext.Provider value={{ signIn, reloadOwnShops: () => {}, authenticating: false }}>
+        <MyOrders />
+      </ShellContext.Provider>,
+      { store }
+    );
     expect(screen.getByRole("heading", { level: 1, name: "My orders" })).toBeInTheDocument();
     expect(node.fetchCalls.filter((u) => u.includes("q-store-order"))).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
