@@ -41,7 +41,7 @@ export const StoreReviewCard: FC<StoreReviewCardProps> = ({ review }) => {
           updated: review?.updated
         });
         if (res) {
-          getReview(review?.name, review?.id, review);
+          getReview(review?.name, review?.id);
         }
       }
     } catch (error) {
