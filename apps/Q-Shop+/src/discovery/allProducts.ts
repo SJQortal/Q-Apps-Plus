@@ -8,7 +8,7 @@
  * contract): for every product its catalogue, `created`, QORT price,
  * category and status, about 120 bytes each. Titles and pictures live in the
  * catalogues, which are big (on Simon's node in October 2026, 131 catalogues
- * held 39 MB, the 99 indexes 45 kB), so a catalogue is read only for the
+ * held 39 MB, the 113 indexes 52 kB), so a catalogue is read only for the
  * products on screen, or for a search, as a shop page does
  * (pages/Store/shopData.ts).
  *

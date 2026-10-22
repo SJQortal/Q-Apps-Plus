@@ -5,12 +5,13 @@ This is the **+** version of [Qortal's Q-Shop](https://github.com/Qortal/q-shop)
 What it adds:
 
 - **Finding things:** search across shops (owner, title, description), sorts (Newest, Recently active, Most products, Top rated, A–Z), filters by coin, shop pages that filter and sort every product without downloading the catalogues first, search within a shop, products as a grid or a list, product galleries, share links (`qortal://APP/Q-Shop+/…`).
+- **Products:** every shop's products on one page, newest first, with search, sorts, one or several categories across every shop and in stock only; it reads the shops' small product lists, and pictures only for the products on screen.
 - **Collections:** sellers group products into collections with a picture and a description; buyers browse them at the top of a shop, and each has its own link (`…?collection=<id>`).
 - **Buying safely:** a cart for every shop that survives a reload, a step-by-step checkout (review, delivery, confirm) with the amount frozen at Confirm, and paid orders kept until they are recorded on QDN, so a declined or timed-out recording is finished later without paying again.
 - **Pay in Q-Assets:** QORT and ARRR as before, and Qortal assets (Q-Assets) through Hub's asset transfer, set per shop by the seller.
 - **Orders and selling:** My orders with status filters and counts; a seller page with an overview, products, orders, reviews and shop settings; payment details checked against the chain; batched publishing for big catalogues (Core allows 25 unconfirmed transactions per account); deleting products (one or several at once) and whole shops.
 - **Trusted reviews:** one per reviewer, the owner's own left out, a badge for reviewers who ordered at the shop.
-- **Phones and GO:** a bottom bar, a header that hides on scroll, full-screen dialogs with buttons above the keyboard, 44 px targets, a compact landscape layout.
+- **Phones and GO:** a bottom bar (Shops, Products, Cart, Orders, Sell), a header that hides on scroll, full-screen dialogs with buttons above the keyboard, 44 px targets, a compact landscape layout.
 - **The Hub 3.0 look** with four themes (Hub 3.0, Q-Shop Classic, Black, White) and a Settings page (name switcher, preferred coin, blocked names, settings sync to QDN, changelog).
 - **Lighter on Qortal:** no unlimited searches, paged and cached searches, images loaded only on screen, every screen code-split (biggest chunk 341 kB, was 1,030 kB), and nothing published at start-up (the original could publish an empty product index over a shop's real one).
 
