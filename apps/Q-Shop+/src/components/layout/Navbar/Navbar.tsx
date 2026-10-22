@@ -5,50 +5,21 @@
  * comes back when you scroll up; the navigation lives in BottomNav there.
  */
 import React, { lazy, Suspense, useRef, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
-import {
-  Box,
-  Button,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  MenuItem,
-  MenuList,
-  Popover,
-  Skeleton,
-  Tooltip,
-} from "@mui/material";
-import AddBusinessOutlinedIcon from "@mui/icons-material/AddBusinessOutlined";
-import CheckIcon from "@mui/icons-material/Check";
+import { Button, IconButton, Skeleton, Tooltip } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
-import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { RootState } from "../../../state/store";
-import { resetProducts, toggleCreateStoreModal, updateRecentlyVisitedStoreId } from "../../../state/features/globalSlice";
-import { resetOrders } from "../../../state/features/orderSlice";
-import { APP_NAME, MAIL_APP_NAME } from "../../../constants/plus";
-import { shortStoreIdOf } from "../../../qdn/identifiers";
-import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
-import { useSwitchActiveName } from "../../../hooks/useUserAccount";
-import { BottomSheet } from "../../common/mobile/BottomSheet";
+import { APP_NAME } from "../../../constants/plus";
+import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { NameAvatar } from "../../common/NameAvatar";
 import PageLoader from "../../common/PageLoader";
-import { NameSwitcher } from "../NameSwitcher";
 import { CartBadgeIcon } from "../BottomNav/BottomNav";
-import {
-  cartLabel,
-  navSection,
-  sellerPath,
-  useCartItemCount,
-  usePendingOrderCount,
-  useSell,
-  useShellActions,
-} from "../shellState";
+import { cartLabel, navSection, useCartItemCount, usePendingOrderCount, useSell, useShellActions } from "../shellState";
 import {
   AppTitle,
   AvatarContainer,
@@ -57,33 +28,23 @@ import {
   HeaderActions,
   HeaderInner,
   LogoButton,
-  MenuSectionTitle,
   NavLinkButton,
   NavbarName,
 } from "./Navbar-styles";
 import { LogoMark } from "./LogoMark";
 import { useHideOnScroll, usePublishHeaderOffset } from "./useHideOnScroll";
 
-// Opened from the account menu now and then: loaded when first opened.
+// Both open now and then: loaded the first time they open, so the name
+// switcher, the sheet and the block list stay out of the first download.
+const AccountMenu = lazy(() => import("./AccountMenu"));
 const BlockedNamesModal = lazy(() =>
   import("../../common/BlockedNamesModal/BlockedNamesModal").then((m) => ({ default: m.BlockedNamesModal }))
 );
-
-/** The account menu's first column (MenuItem gives ListItemIcon 36 px). */
-const MENU_LEAD_SX = { width: 36, mr: 1, justifyContent: "center" } as const;
-
-/**
- * Account-menu rows are 44 px tap targets wherever the phone layout applies.
- * A plain `minHeight` loses to MenuItem's own `min-height: auto` from 600 px
- * up, a media rule emitted after it; this one is emitted later still.
- */
-const MENU_ROW_SX = { [`@media ${PHONE_MEDIA}`]: { minHeight: 44 } } as const;
 
 const ICON_BUTTON_SX = { minWidth: 44, minHeight: 44 } as const;
 
 const NavBar: React.FC = () => {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const { pathname } = useLocation();
   const phone = usePhoneLayout();
   const { hidden, reveal } = useHideOnScroll(phone);
@@ -94,161 +55,28 @@ const NavBar: React.FC = () => {
   const { signIn, authenticating } = useShellActions();
   const user = useSelector((state: RootState) => state.auth.user);
   const loading = useSelector((state: RootState) => state.global.isLoadingGlobal);
-  const myStores = useSelector((state: RootState) => state.store.myStores);
-  const hashMapStores = useSelector((state: RootState) => state.store.hashMapStores);
-  const currentStoreId = useSelector((state: RootState) => state.global.currentStore?.id);
   const items = useCartItemCount();
   const pending = usePendingOrderCount();
   const sell = useSell();
-  const switchName = useSwitchActiveName();
   const section = navSection(pathname);
 
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Mounted from the first open on, so the menu's closing slide can play.
+  const [menuLoaded, setMenuLoaded] = useState(false);
   const [blockedOpen, setBlockedOpen] = useState(false);
 
   const userName = user?.name || "";
-  const names = (user?.names ?? []).filter((n) => n.name);
   const menuOpen = phone ? sheetOpen : Boolean(anchorEl);
   const closeMenu = () => {
     setAnchorEl(null);
     setSheetOpen(false);
   };
   const openMenu = (e: React.MouseEvent<HTMLElement>) => {
+    setMenuLoaded(true);
     if (phone) setSheetOpen(true);
     else setAnchorEl(e.currentTarget);
   };
-
-  const openShop = (shopId: string) => {
-    closeMenu();
-    if (shopId !== currentStoreId) {
-      // As the original's "My Stores" menu: the other shop's orders and drafts don't carry over.
-      dispatch(resetOrders());
-      dispatch(resetProducts());
-      dispatch(updateRecentlyVisitedStoreId(shopId));
-    }
-    navigate(sellerPath(shopId));
-  };
-
-  const pickName = (name: string) => {
-    closeMenu();
-    switchName(name);
-    // The seller pages belong to the previous name's shop.
-    if (name !== userName && section === "sell") navigate("/");
-  };
-
-  // ↑ and ↓ run through the names and the rows under them as one menu, wrapping
-  // at the ends; ↑ from the top row goes to the name search when there is one.
-  const onMenuArrows = (event: React.KeyboardEvent<HTMLElement>) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    const rows = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]'));
-    const at = rows.indexOf(event.target as HTMLElement);
-    if (at === -1) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const search = event.currentTarget.querySelector("input");
-    if (event.key === "ArrowUp" && at === 0 && search) search.focus();
-    else rows[event.key === "ArrowDown" ? (at + 1) % rows.length : (at - 1 + rows.length) % rows.length].focus();
-  };
-
-  // Mounted only while the menu is open (Popover and BottomSheet both unmount
-  // their content when closed); each name's avatar loads once its row scrolls
-  // into view (NameAvatar). Many names get a search field (NameSwitcher).
-  const menuItems = (
-    <Box sx={{ minWidth: 260, maxWidth: phone ? undefined : 340, pb: 0.5 }} onKeyDownCapture={onMenuArrows}>
-      {names.length > 1 && (
-        <>
-          <MenuSectionTitle>Your names</MenuSectionTitle>
-          <NameSwitcher
-            names={names.map((n) => n.name)}
-            activeName={userName}
-            onPick={pickName}
-            autoFocusSearch={!phone}
-            onEscape={closeMenu}
-            // The search field stays put above a list that scrolls; the shops and rows below keep room.
-            maxListHeight={
-              phone
-                ? "min(35dvh, 300px, max(88px, calc(85dvh - 320px)))"
-                : "max(88px, min(300px, calc(var(--qshare-app-height, 100dvh) - 320px)))"
-            }
-          />
-        </>
-      )}
-      {myStores.length > 0 && (
-        <>
-          <MenuSectionTitle>My shops</MenuSectionTitle>
-          <MenuList aria-label="My shops" disablePadding sx={{ maxHeight: 240, overflowY: "auto" }}>
-            {myStores.map((shop) => {
-              const title = shop.title || hashMapStores[shop.id]?.title || shortStoreIdOf(shop.id);
-              const current = shop.id === currentStoreId;
-              return (
-                <MenuItem key={shop.id} onClick={() => openShop(shop.id)} sx={MENU_ROW_SX}>
-                  <ListItemIcon sx={MENU_LEAD_SX}>
-                    <StorefrontOutlinedIcon fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={title}
-                    secondary={current ? "Selling now" : undefined}
-                    slotProps={{ primary: { noWrap: true } }}
-                  />
-                  {current && <CheckIcon fontSize="small" sx={{ color: "primary.main", ml: 1, flexShrink: 0 }} />}
-                </MenuItem>
-              );
-            })}
-          </MenuList>
-        </>
-      )}
-      <MenuList
-        aria-label="Account"
-        disablePadding
-        sx={{ mt: 0.5, pt: 0.5, borderTop: names.length > 1 || myStores.length ? 1 : 0, borderColor: "divider" }}
-      >
-        <MenuItem
-          onClick={() => {
-            closeMenu();
-            dispatch(toggleCreateStoreModal(true));
-          }}
-          sx={MENU_ROW_SX}
-        >
-          <ListItemIcon sx={MENU_LEAD_SX}>
-            <AddBusinessOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Open a new shop" />
-        </MenuItem>
-        <MenuItem component="a" href={`qortal://APP/${MAIL_APP_NAME}`} onClick={closeMenu} sx={MENU_ROW_SX}>
-          <ListItemIcon sx={MENU_LEAD_SX}>
-            <EmailOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary={`Messages in ${MAIL_APP_NAME}`} />
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            closeMenu();
-            setBlockedOpen(true);
-          }}
-          sx={MENU_ROW_SX}
-        >
-          <ListItemIcon sx={MENU_LEAD_SX}>
-            <PersonOffOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Blocked names" />
-        </MenuItem>
-        <MenuItem
-          selected={section === "settings"}
-          onClick={() => {
-            closeMenu();
-            navigate("/settings");
-          }}
-          sx={MENU_ROW_SX}
-        >
-          <ListItemIcon sx={MENU_LEAD_SX}>
-            <SettingsOutlinedIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText primary="Settings" />
-        </MenuItem>
-      </MenuList>
-    </Box>
-  );
 
   const signedIn = Boolean(userName);
   const showSignIn = !user && !authenticating;
@@ -344,22 +172,16 @@ const NavBar: React.FC = () => {
             </AvatarContainer>
           )}
 
-          {phone ? (
-            <BottomSheet open={sheetOpen} onClose={closeMenu} title={userName || "Account"}>
-              {menuItems}
-            </BottomSheet>
-          ) : (
-            <Popover
-              id="user-popover"
-              open={Boolean(anchorEl)}
-              anchorEl={anchorEl}
-              onClose={closeMenu}
-              anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
-              transformOrigin={{ vertical: "top", horizontal: "right" }}
-              slotProps={{ paper: { role: "dialog", "aria-label": `Account menu for ${userName}` } }}
-            >
-              {menuItems}
-            </Popover>
+          {menuLoaded && signedIn && (
+            <Suspense fallback={null}>
+              <AccountMenu
+                phone={phone}
+                open={menuOpen}
+                anchorEl={anchorEl}
+                onClose={closeMenu}
+                onOpenBlockedNames={() => setBlockedOpen(true)}
+              />
+            </Suspense>
           )}
           {blockedOpen && (
             <Suspense fallback={null}>

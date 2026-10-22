@@ -135,12 +135,12 @@ describe("AppShell on desktop", () => {
   });
 
   describe("account menu", () => {
-    it("lists the names and the name's shops, and opens another shop's seller page", () => {
+    it("lists the names and the name's shops, and opens another shop's seller page", async () => {
       restore = mockViewport(DESKTOP);
       const store = sellerStore();
       renderShell({ store });
       openAccountMenu();
-      const menu = screen.getByRole("dialog", { name: "Account menu for Seller Name" });
+      const menu = await screen.findByRole("dialog", { name: "Account menu for Seller Name" });
       expect(within(menu).getByRole("menuitemradio", { name: "Seller Name" })).toHaveAttribute("aria-checked", "true");
       const shops = within(menu).getByRole("menu", { name: "My shops" });
       expect(within(shops).getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
@@ -152,25 +152,25 @@ describe("AppShell on desktop", () => {
       expect(store.getState().global.recentlyVisitedStoreId).toBe("q-store-general-other");
     });
 
-    it("opens Create shop, Settings and Messages in Q-Mail+", () => {
+    it("opens Create shop, Settings and Messages in Q-Mail+", async () => {
       restore = mockViewport(DESKTOP);
       const store = sellerStore();
       renderShell({ store });
       openAccountMenu();
-      expect(screen.getByRole("menuitem", { name: "Messages in Q-Mail+" })).toHaveAttribute("href", "qortal://APP/Q-Mail+");
+      expect(await screen.findByRole("menuitem", { name: "Messages in Q-Mail+" })).toHaveAttribute("href", "qortal://APP/Q-Mail+");
       fireEvent.click(screen.getByRole("menuitem", { name: "Open a new shop" }));
       expect(store.getState().global.isOpenCreateStoreModal).toBe(true);
       openAccountMenu();
-      fireEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Settings" }));
       expect(where()).toBe("/settings");
     });
 
-    it("switches the name, remembers it, and leaves the previous name's seller page", () => {
+    it("switches the name, remembers it, and leaves the previous name's seller page", async () => {
       restore = mockViewport(DESKTOP);
       const store = sellerStore();
       renderShell({ store, path: "/product-manager/q-store-general-my-shop" });
       openAccountMenu();
-      fireEvent.click(screen.getByRole("menuitemradio", { name: "Second Name" }));
+      fireEvent.click(await screen.findByRole("menuitemradio", { name: "Second Name" }));
       expect(store.getState().auth.user?.name).toBe("Second Name");
       expect(JSON.parse(localStorage.getItem(ACTIVE_NAME_STORAGE_KEY) || "{}")).toEqual({ [ADDRESS]: "Second Name" });
       expect(store.getState().global.currentStore).toBeNull();
@@ -184,7 +184,7 @@ describe("AppShell on desktop", () => {
       installQortalMock({ GET_LIST_ITEMS: async () => ["spammer"] });
       renderShell({ store: sellerStore() });
       openAccountMenu();
-      fireEvent.click(screen.getByRole("menuitem", { name: "Blocked names" }));
+      fireEvent.click(await screen.findByRole("menuitem", { name: "Blocked names" }));
       expect(await screen.findByText("spammer")).toBeInTheDocument();
       expect(screen.getByRole("dialog", { name: "Blocked names" })).toBeInTheDocument();
     });
