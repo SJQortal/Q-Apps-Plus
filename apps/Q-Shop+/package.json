@@ -1,7 +1,7 @@
 {
   "name": "q-shop-plus",
   "private": true,
-  "version": "1.0.0-plus.1",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

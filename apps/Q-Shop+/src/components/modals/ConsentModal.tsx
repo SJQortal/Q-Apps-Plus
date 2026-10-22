@@ -1,70 +1,63 @@
-/* eslint-disable no-empty, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
-import * as React from "react";
-import Button from "@mui/material/Button";
-import Dialog from "@mui/material/Dialog";
-import DialogActions from "@mui/material/DialogActions";
-import DialogContent from "@mui/material/DialogContent";
-import DialogContentText from "@mui/material/DialogContentText";
-import DialogTitle from "@mui/material/DialogTitle";
+import { useEffect, useState } from "react";
+import { Button, Typography } from "@mui/material";
 import localForage from "localforage";
-import { useTheme } from "@mui/material";
+import { ResponsiveDialog } from "../common/mobile/ResponsiveDialog";
+import { APP_NAME } from "../../constants/plus";
+
+/** The original's storage, so someone who accepted in Q-Shop (or Q-Blog) is not asked again. */
 const generalLocal = localForage.createInstance({
-  name: "q-blog-general"
+  name: "q-blog-general",
 });
+export const CONSENT_KEY = "general-consent";
 
+/**
+ * The original's one-time welcome notice, full-screen on phones. It is
+ * recorded as read only when its button is pressed (the original recorded it
+ * as soon as it showed).
+ */
 export default function ConsentModal() {
-  const theme = useTheme();
+  const [open, setOpen] = useState(false);
 
-  const [open, setOpen] = React.useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    generalLocal
+      .getItem(CONSENT_KEY)
+      .then((hasConsented) => {
+        if (!cancelled && !hasConsented) setOpen(true);
+      })
+      .catch(() => {
+        // Storage unavailable: skip the notice rather than block the app.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const handleClose = () => {
+  const accept = () => {
     setOpen(false);
+    generalLocal.setItem(CONSENT_KEY, true).catch(() => {
+      // The choice still applies for this visit.
+    });
   };
 
-  const getIsConsented = React.useCallback(async () => {
-    try {
-      const hasConsented = await generalLocal.getItem("general-consent");
-      if (hasConsented) return;
-
-      setOpen(true);
-      generalLocal.setItem("general-consent", true);
-    } catch (error) {}
-  }, []);
-
-  React.useEffect(() => {
-    getIsConsented();
-  }, []);
   return (
-    <div>
-      <Dialog
-        open={open}
-        onClose={handleClose}
-        aria-labelledby="alert-dialog-title"
-        aria-describedby="alert-dialog-description"
-      >
-        <DialogTitle id="alert-dialog-title">Welcome</DialogTitle>
-        <DialogContent>
-          <DialogContentText id="alert-dialog-description">
-            The Qortal community, along with its development team and the
-            creators of this application, cannot be held accountable for any
-            content published or displayed. Furthermore, they bear no
-            responsibility for any data loss that may occur as a result of using
-            this application.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button
-            sx={{
-              backgroundColor: theme.palette.primary.light,
-              color: theme.palette.text.primary,
-            }}
-            onClick={handleClose}
-            autoFocus
-          >
-            Close
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </div>
+    <ResponsiveDialog
+      open={open}
+      onClose={accept}
+      title={`Welcome to ${APP_NAME}`}
+      maxWidth="sm"
+      dismissible={false}
+      actions={
+        <Button variant="contained" onClick={accept} autoFocus sx={{ minHeight: 44 }}>
+          I understand
+        </Button>
+      }
+    >
+      <Typography variant="body2" sx={{ fontSize: 15, lineHeight: 1.6 }}>
+        The Qortal community, along with its development team and the creators of this application, cannot be held
+        accountable for any content published or displayed. Furthermore, they bear no responsibility for any data loss
+        that may occur as a result of using this application.
+      </Typography>
+    </ResponsiveDialog>
   );
 }

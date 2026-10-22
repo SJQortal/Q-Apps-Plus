@@ -1,37 +1,53 @@
 /**
- * The app's frame: header, the page, and (round 2) the phone's bottom bar.
- * This first version keeps the original Navbar.
+ * The app's frame (docs/DESIGN.md → Layout and Mobile): the sticky header,
+ * the page in a <main> landmark, and on phones the bottom bar with a spacer
+ * that keeps the page's end clear of it. It also keeps the Hub/GO frame
+ * height fresh (utils/hubFrame.ts), which pages and dialogs use instead of
+ * 100vh.
  */
-import type { ReactNode } from "react";
-import { useSelector } from "react-redux";
-import type { RootState } from "../../state/store";
+import { useEffect, useMemo, type ReactNode } from "react";
+import { Box } from "@mui/material";
+import { watchEmbeddedFrame } from "../../utils/hubFrame";
 import NavBar from "./Navbar/Navbar";
-import { avatarUrl } from "../../qdn/links";
+import { BottomNav, BottomNavSpacer } from "./BottomNav/BottomNav";
+import { ShellContext, isWebGateway } from "./shellState";
 
 export function AppShell({
   children,
   authenticate,
   onGatewaySignIn,
+  authenticating = false,
+  reloadOwnShops = () => {},
 }: {
   children: ReactNode;
+  /** Ask Hub for the account (the Sign in button). */
   authenticate: () => void;
   /** Sign in pressed on a web gateway, where there is no Hub. */
   onGatewaySignIn: () => void;
+  /** The account request is out. */
   authenticating?: boolean;
+  /** Load the signed-in name's shops again. */
+  reloadOwnShops?: () => void;
 }) {
-  const user = useSelector((state: RootState) => state.auth.user);
-  const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
+  useEffect(() => watchEmbeddedFrame(), []);
+
+  const actions = useMemo(
+    () => ({
+      signIn: () => (isWebGateway() ? onGatewaySignIn() : authenticate()),
+      reloadOwnShops,
+      authenticating,
+    }),
+    [authenticate, onGatewaySignIn, reloadOwnShops, authenticating]
+  );
+
   return (
-    <>
-      <NavBar
-        isAuthenticated={!!user?.name}
-        userName={user?.name || ""}
-        userAvatar={user?.name ? avatarUrl(user.name) : ""}
-        authenticate={authenticate}
-        displayDownloadGatewayModalFunc={onGatewaySignIn}
-        hasAttemptedToFetchShopInitial={ownShopStatus !== "idle" && ownShopStatus !== "loading"}
-      />
-      {children}
-    </>
+    <ShellContext.Provider value={actions}>
+      <NavBar />
+      <Box component="main" id="main" sx={{ display: "block", minWidth: 0 }}>
+        {children}
+      </Box>
+      <BottomNavSpacer />
+      <BottomNav />
+    </ShellContext.Provider>
   );
 }
