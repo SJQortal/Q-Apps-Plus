@@ -294,6 +294,9 @@ export default {
         const doc = owned && collectionsOf(owned);
         if (doc) return json(route, doc).then(() => true);
       }
+      // A shop its owner deleted: the tombstones Q-Shop+ writes (docs/apps/Q-Shop+.md → Data contract).
+      if (name === 'Gone Seller' && id === 'q-store-general-gone') return json(route, { deleted: true, title: 'Deleted shop' }).then(() => true);
+      if (name === 'Gone Seller' && id === 'q-store-general-gone-datacontainer') return json(route, { storeId: 'q-store-general-gone', shortStoreId: 'gone', owner: 'Gone Seller', products: {}, deleted: true }).then(() => true);
       const shop = shops.find((s) => s.owner === name && (id === s.id || id === `${s.id}-datacontainer` || id.startsWith(`q-store-catalogue-${s.short}-`)));
       if (service === 'STORE' && shop) return json(route, storeJson(shop)).then(() => true);
       if (service === 'DOCUMENT' && shop && id.endsWith('-datacontainer')) return json(route, dataContainer(shop)).then(() => true);
@@ -333,6 +336,8 @@ export default {
     { key: 'shop-list', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'List', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'seller-collections', path: `/product-manager/q-store-general-my-shop?tab=collections`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-collection-editor', path: `/product-manager/q-store-general-my-shop?tab=collections`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit Gifts for friends' }).click({ timeout: 2500 }); await page.waitForTimeout(700); } },
+    { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11$/ }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'settings', path: '/settings' },
     { key: 'account-menu', path: '/', overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /account/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'not-found', path: `/${encodeURIComponent('Nobody')}/q-store-general-missing`, after: async (page) => page.waitForTimeout(900), expectErrors: /404|Failed to load resource/ },
