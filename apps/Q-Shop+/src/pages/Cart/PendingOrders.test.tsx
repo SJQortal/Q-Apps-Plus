@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createAppStore } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
+import { cartFor, setProductToCart } from "../../state/features/cartSlice";
 import { installQortalMock, type QortalMock } from "../../test/qortalMock";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import {
@@ -298,6 +299,28 @@ describe("orders to finish", () => {
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     expect(published().order.payment.transactionSignature).toBe("SECONDSIGxxxxxxxxxxxxxxxxxxxxxxx");
     expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
+  it("puts the items back in the cart when the buyer wasn't charged", async () => {
+    savePendingOrder(pendingOrder({ state: "unconfirmed", payment: null }));
+    const store = createAppStore();
+    store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
+    // Checkout emptied the cart; the buyer has since added the poster again.
+    store.dispatch(setProductToCart({ storeId: STORE_ID, storeOwner: SELLER, productId: poster.id, catalogueId: CATALOGUE_ID, quantity: 3 }));
+    renderWithProviders(<CartPage />, { store, initialEntries: ["/cart"] });
+
+    fireEvent.click(await screen.findByRole("button", { name: "I wasn't charged — remove" }));
+    const dialog = await screen.findByRole("dialog", { name: "Remove this order?" });
+    expect(within(dialog).getByText(/Its items go back in your cart/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => expect(listPendingOrders(BUYER)).toEqual([]));
+    const cart = cartFor(store.getState().cart.carts, SELLER, STORE_ID);
+    expect(cart?.orders).toEqual({
+      [poster.id]: { productId: poster.id, catalogueId: CATALOGUE_ID, quantity: 3 },
+      [mug.id]: { productId: mug.id, catalogueId: CATALOGUE_ID, quantity: 2 },
+    });
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
 
   it("says so when no payment is found, and removes the order only after asking", async () => {

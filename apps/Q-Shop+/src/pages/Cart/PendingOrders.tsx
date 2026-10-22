@@ -15,6 +15,8 @@
  * - unconfirmed → "I wasn't charged — remove", behind a confirmation.
  */
 import { useId, useState, type ReactNode } from "react";
+import { useDispatch } from "react-redux";
+import { restoreCartItem } from "../../state/features/cartSlice";
 import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from "@mui/material";
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
@@ -159,6 +161,7 @@ export function PendingOrderCard({
   onRecorded: (order: PendingOrder) => void;
 }) {
   const titleId = useId();
+  const dispatch = useDispatch();
   const [ownBusy, setBusy] = useState<Busy>(null);
   // Another card (or the checkout) may be recording this order: show it, and offer nothing meanwhile.
   const recordingNow = useRecordingOrder(order.orderUid);
@@ -237,8 +240,25 @@ export function PendingOrderCard({
     finish(confirmPendingPayment(order, settings, {}));
   };
 
+  /**
+   * "I wasn't charged": checkout took the items out of the cart when Hub
+   * didn't answer, so they go back in (to the shop's cart, after anything
+   * there; a product already back in the cart is left as it is).
+   */
   const remove = () => {
     setConfirming(null);
+    if (!paid) {
+      for (const [productId, line] of lines) {
+        dispatch(
+          restoreCartItem({
+            storeId: order.store.id,
+            storeOwner: order.store.owner,
+            order: { productId, catalogueId: line?.catalogueId, quantity: line?.quantity },
+            index: Number.MAX_SAFE_INTEGER,
+          })
+        );
+      }
+    }
     removePendingOrder(order.buyer.name, order.orderUid);
   };
 
@@ -359,7 +379,7 @@ export function PendingOrderCard({
             Only if your wallet shows no payment of {amount} to {foreign ? shortAddress(order.recipient) : seller}.
           </Typography>
           <Typography variant="body2" sx={{ mt: 1.5 }}>
-            If you did pay, {seller} won't hear about this order once it's removed.
+            If you did pay, {seller} won't hear about this order once it's removed. Its items go back in your cart.
           </Typography>
         </ConfirmDialog>
       )}
