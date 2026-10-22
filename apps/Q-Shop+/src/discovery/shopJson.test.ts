@@ -32,8 +32,9 @@ describe("a shop's JSON, read safely", () => {
 
   it("drops coin fields of the wrong type, which crashed every screen that listed the shop", () => {
     const bad = { ...goodShop, supportedCoins: 1, foreignCoins: { ARRR: 5, BTC: "bc1q" }, acceptedAssets: {} };
-    // What the shop list called during render, before: a TypeError.
-    expect(() => shopCoins(bad as never)).toThrow();
+    // Before night 1's fixes this threw a TypeError during render; shopCoins
+    // is defensive now too, and the normalised copy is what screens use.
+    expect(() => shopCoins(bad as never)).not.toThrow();
     const shop = normalizeShopJson(bad)!;
     expect(shop.supportedCoins).toEqual([]);
     expect(shop.foreignCoins).toEqual({ BTC: "bc1q" });
