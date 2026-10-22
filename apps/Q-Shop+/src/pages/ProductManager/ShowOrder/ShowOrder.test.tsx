@@ -288,7 +288,7 @@ describe("the rest of the order", () => {
     expect(screen.getByText("Rua 1")).toBeInTheDocument();
     expect(screen.getByText("Ring twice")).toBeInTheDocument();
     expect(screen.getByText("Region")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: `Message ${BUYER}` })).toHaveAttribute("href", "qortal://APP/Q-Mail+/to/Buyer%2BOne");
+    expect(screen.getByRole("link", { name: `Message ${BUYER}` })).toHaveAttribute("href", "qortal://APP/Q-Mail/to/Buyer%2BOne");
     // The seller's form starts from the current status.
     expect(screen.getByRole("button", { name: "Shipped" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();

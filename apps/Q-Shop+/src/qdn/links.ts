@@ -44,7 +44,7 @@ export function productLink(owner: string, storeId: string, productId: string, c
   return `qortal://APP/${appSegment()}${productPath(owner, storeId, productId, catalogueId)}`;
 }
 
-/** Opens the mail app (Q-Mail+) at a new message to `name`. */
+/** Opens the mail app (Q-Mail, constants/plus.ts) at a new message to `name`. */
 export function mailToLink(name: string): string {
   return `qortal://APP/${MAIL_APP_NAME.replace(/ /g, "%20")}/to/${seg(name)}`;
 }

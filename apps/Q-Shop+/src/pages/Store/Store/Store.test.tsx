@@ -73,7 +73,7 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(screen.getByText("Lisbon")).toBeInTheDocument();
     expect(screen.getByText("Ships to Europe")).toBeInTheDocument();
     const mail = screen.getByRole("link", { name: /Message seller/ });
-    expect(mail).toHaveAttribute("href", "qortal://APP/Q-Mail+/to/Seller%20Name");
+    expect(mail).toHaveAttribute("href", "qortal://APP/Q-Mail/to/Seller%20Name");
 
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
     // No unlimited search: the reviews, and the order count's two (the shop's orders, and whether

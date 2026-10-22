@@ -154,12 +154,12 @@ describe("AppShell on desktop", () => {
       expect(store.getState().global.recentlyVisitedStoreId).toBe("q-store-general-other");
     });
 
-    it("opens Create shop, Settings and Messages in Q-Mail+", async () => {
+    it("opens Create shop, Settings and Messages in Q-Mail", async () => {
       restore = mockViewport(DESKTOP);
       const store = sellerStore();
       renderShell({ store });
       openAccountMenu();
-      expect(await screen.findByRole("menuitem", { name: "Messages in Q-Mail+" })).toHaveAttribute("href", "qortal://APP/Q-Mail+");
+      expect(await screen.findByRole("menuitem", { name: "Messages in Q-Mail" })).toHaveAttribute("href", "qortal://APP/Q-Mail");
       fireEvent.click(screen.getByRole("menuitem", { name: "Open a new shop" }));
       expect(store.getState().global.isOpenCreateStoreModal).toBe(true);
       openAccountMenu();

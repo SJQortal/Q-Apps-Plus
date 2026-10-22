@@ -3,7 +3,7 @@
  * full screen on phones (ResponsiveDialog). What was bought, with pictures,
  * quantities, unit and line amounts and the total in the order's coin; how
  * it was paid (PaymentDetails); where it goes for a physical order; Message
- * the other side (Q-Mail+); the status and the seller's note. The seller
+ * the other side (Q-Mail); the status and the seller's note. The seller
  * changes the status here: shown at once, put back if the publish doesn't
  * happen, and a decline in Hub's dialog is quiet.
  *

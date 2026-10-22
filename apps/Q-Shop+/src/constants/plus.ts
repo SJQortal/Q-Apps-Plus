@@ -36,10 +36,12 @@ export const ORIGINAL_APP_NAME = "Q-Shop";
 export const ORIGINAL_APP_LINK: string | null = `qortal://APP/${ORIGINAL_APP_NAME}`;
 
 /**
- * The mail app that "Message the seller/buyer" links open. Q-Mail+ reads the
- * same mail as Q-Mail (docs/QORTAL.md → Links between the + apps).
+ * The mail app that "Message the seller/buyer" links and the account menu
+ * open: the original Q-Mail (Simon, 2026-10-22: Q-Mail has been updated with
+ * Q-Mail+'s changes, so links go to it rather than the + testground). It
+ * opens `/to/<name>` at a new message to that name.
  */
-export const MAIL_APP_NAME = "Q-Mail+";
+export const MAIL_APP_NAME = "Q-Mail";
 
 /** Prefix of every browser storage key this build writes. */
 export const STORAGE_PREFIX = "qshopplus-";

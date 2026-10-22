@@ -132,7 +132,7 @@ describe("My orders", () => {
     expect(within(dialog).getByText("Tracking 42")).toBeInTheDocument();
     expect(within(dialog).getByRole("link", { name: `Message ${SELLER}` })).toHaveAttribute(
       "href",
-      "qortal://APP/Q-Mail+/to/Seller%20Name"
+      "qortal://APP/Q-Mail/to/Seller%20Name"
     );
     expect(within(dialog).getByText("Digital order: nothing to ship.")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Update status" })).not.toBeInTheDocument();

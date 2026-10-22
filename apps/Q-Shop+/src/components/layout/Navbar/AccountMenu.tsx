@@ -1,7 +1,7 @@
 /**
  * The header's account menu: a popover on desktop, a bottom sheet on phones.
  * The name switcher (several names), My shops (switch the seller pages to
- * another of the name's shops), Open a new shop, Messages in Q-Mail+ (the
+ * another of the name's shops), Open a new shop, Messages in Q-Mail (the
  * original's Q-Mail link), Blocked names and Settings.
  *
  * Loaded the first time the menu opens (Navbar), so the name switcher's

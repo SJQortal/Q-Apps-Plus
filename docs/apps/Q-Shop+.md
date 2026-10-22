@@ -24,6 +24,7 @@ Decentralised shops: sellers publish a store and products; buyers order and pay 
 - This has the oldest upstream code (last commit 2024-04-17). It was built from the Q-Blog template; leftovers are listed in the audit.
 - Payments go through `SEND_COIN`, and orders are encrypted (`DOCUMENT_PRIVATE`). Checkout, SEND_COIN, order encryption and price conversion are **money code**: pinned by tests before any change, kept identical unless a change is clearly a fix, and every change is listed under "Money code changes" below.
 - Simon's decisions for night 1 (2026-10-21): plain version `1.0.0`; the app's own share links point at `Q-Shop+`; keep the shared blocked-names list `blockedNames_q-blog` so the original keeps working.
+- Mail links (Simon, 2026-10-22): "Message seller/buyer" and the account menu's "Messages in …" open the original **Q-Mail** (`qortal://APP/Q-Mail/to/<name>`), not Q-Mail+, since Q-Mail has been updated with Q-Mail+'s changes. One constant, `MAIL_APP_NAME` in `src/constants/plus.ts`; Q-Mail has opened `/to/<name>` at a new message since 3.2.1.
 
 ## Feature ideas to weigh in the audit
 
