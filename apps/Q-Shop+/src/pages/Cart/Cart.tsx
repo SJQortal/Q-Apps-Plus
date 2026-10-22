@@ -33,7 +33,9 @@ import { usePendingOrders } from "./usePendingOrders";
 import { itemCount, type CartShop, type CartViewLine } from "./cartLines";
 
 interface OpenCheckout {
+  /** The cart being checked out: a shop is its owner plus its shop id. */
   storeId: string;
+  storeOwner: string | null;
   shop: CartShop;
   lines: CartLine[];
   leftOut: number;
@@ -77,7 +79,7 @@ export function Cart() {
       : undefined;
 
   const changeQuantity = (view: ShopCartView, line: CartViewLine, quantity: number) => {
-    dispatch(setCartQuantity({ storeId: view.storeId, productId: line.productId, quantity }));
+    dispatch(setCartQuantity({ storeId: view.storeId, storeOwner: view.owner, productId: line.productId, quantity }));
   };
 
   const remove = (view: ShopCartView, line: CartViewLine) => {
@@ -91,7 +93,7 @@ export function Cart() {
       lastUpdated: view.cart.lastUpdated,
       title: line.product?.title || "Item",
     });
-    dispatch(removeProductFromCart({ storeId: view.storeId, productId: line.productId }));
+    dispatch(removeProductFromCart({ storeId: view.storeId, storeOwner: view.owner, productId: line.productId }));
   };
 
   const undoRemove = () => {
@@ -113,6 +115,7 @@ export function Cart() {
     setRecorded(null);
     setCheckout({
       storeId: view.storeId,
+      storeOwner: view.owner,
       shop: view.shop,
       lines,
       leftOut,
@@ -123,15 +126,16 @@ export function Cart() {
   /** Paid: the order now lives in pending orders until it's on QDN, so the bought lines leave the cart. */
   const onPaid = () => {
     if (!checkout) return;
+    const { storeId, storeOwner } = checkout;
     if (checkout.wholeCart) {
-      dispatch(removeCartFromCarts({ storeId: checkout.storeId }));
+      dispatch(removeCartFromCarts({ storeId, storeOwner }));
     } else {
       // Lines left out (not for sale right now) stay, still flagged.
       for (const line of checkout.lines) {
-        dispatch(removeProductFromCart({ storeId: checkout.storeId, productId: line.productId }));
+        dispatch(removeProductFromCart({ storeId, storeOwner, productId: line.productId }));
       }
     }
-    if (removed?.storeId === checkout.storeId) setRemoved(null);
+    if (removed?.storeId === storeId && removed.storeOwner === storeOwner) setRemoved(null);
   };
 
   return (
@@ -180,7 +184,7 @@ export function Cart() {
       ) : (
         views.map((view) => (
           <ShopCart
-            key={view.storeId}
+            key={view.key}
             view={view}
             gate={gate}
             onCheckout={openCheckout}
@@ -194,7 +198,7 @@ export function Cart() {
 
       {checkout && buyer && (
         <CheckoutDialog
-          key={checkout.storeId}
+          key={`${checkout.storeOwner ?? ""}\n${checkout.storeId}`}
           shop={checkout.shop}
           lines={checkout.lines}
           leftOut={checkout.leftOut}

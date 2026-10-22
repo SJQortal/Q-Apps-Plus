@@ -30,6 +30,8 @@ import { useRetryingLoads, type LoadJob, type LoadPhase } from "./useRetryingLoa
 import { cartShopFrom, cartViewLines, catalogueFor, type CartShop, type CartViewLine } from "./cartLines";
 
 export interface ShopCartView {
+  /** The cart's key in Redux: unique per owner + shop id (React key; never parse it). */
+  key: string;
   storeId: string;
   owner: string | null;
   cart: Cart;
@@ -75,7 +77,8 @@ export function useCartData(carts: Record<string, Cart>): {
   const [readCatalogues, setReadCatalogues] = useState<Record<string, Catalogue>>({});
 
   // Newest cart first: Object key order is the order the carts were started in.
-  const cartList = useMemo(() => Object.values(carts).reverse(), [carts]);
+  const cartEntries = useMemo(() => Object.entries(carts).reverse(), [carts]);
+  const cartList = useMemo(() => cartEntries.map(([, cart]) => cart), [cartEntries]);
 
   const shopOf = useCallback(
     (cart: Cart): CartShop | null => {
@@ -156,11 +159,12 @@ export function useCartData(carts: Record<string, Cart>): {
 
   const views = useMemo(
     () =>
-      cartList.map((cart): ShopCartView => {
+      cartEntries.map(([key, cart]): ShopCartView => {
         const storeId = cart.storeId ?? "";
         const owner = cart.storeOwner;
         const shop = shopOf(cart);
         return {
+          key,
           storeId,
           owner,
           cart,
@@ -174,7 +178,7 @@ export function useCartData(carts: Record<string, Cart>): {
           ),
         };
       }),
-    [cartList, shopOf, shopPhaseOf, cataloguePhaseOf, catalogueOf, hashMapStores]
+    [cartEntries, shopOf, shopPhaseOf, cataloguePhaseOf, catalogueOf, hashMapStores]
   );
 
   const retryShop = useCallback(

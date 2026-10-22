@@ -11,7 +11,7 @@ import { createAppStore } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
 import { addToHashMapStores, setPreferredCoin } from "../../state/features/storeSlice";
 import { setCatalogueHashMap } from "../../state/features/globalSlice";
-import { setIsOpen, setProductToCart } from "../../state/features/cartSlice";
+import { cartFor, setIsOpen, setProductToCart } from "../../state/features/cartSlice";
 import { installQortalMock, type QortalMock } from "../../test/qortalMock";
 import { installMockNode, makeWorld } from "../../test/mockNode";
 import { renderWithProviders } from "../../test/renderWithProviders";
@@ -255,6 +255,41 @@ describe("cart page", () => {
     expect(screen.getByRole("link", { name: "Mallory mug" })).toBeInTheDocument();
     // The shared map keeps the first copy it got; the other never replaces it.
     expect(store.getState().global.catalogueHashMap[CATALOGUE_ID]?.user).toBeDefined();
+  });
+
+  it("keeps two owners' shops with the same shop id apart, and pays each owner for their own", async () => {
+    // Shop ids are the seller's choice: "Shop+Plus" runs a copy under Seller Name's id.
+    const world = makeWorld({ shops: 2 });
+    const [real, copy] = world.shops;
+    copy.shortStoreId = real.shortStoreId;
+    copy.title = "Copycat shop";
+    copy.products = copy.products.map((p: any, i: number) => ({ ...p, title: `Copy ${i}` }));
+    const node = installMockNode(world);
+    node.q.on("SEND_COIN", async () => ({ signature: "PAYSIG" }));
+    node.q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    const storeId = `q-store-general-${real.shortStoreId}`;
+    const cat = `q-store-catalogue-${real.shortStoreId}-CAT0000000`;
+    const store = newStore();
+    store.dispatch(setProductToCart({ productId: real.products[1].id, catalogueId: cat, storeId, storeOwner: real.owner }));
+    store.dispatch(setProductToCart({ productId: copy.products[2].id, catalogueId: cat, storeId, storeOwner: copy.owner }));
+    renderCart(store);
+
+    const realShop = await screen.findByRole("region", { name: real.title });
+    const copyShop = await screen.findByRole("region", { name: "Copycat shop" });
+    expect(await within(realShop).findByRole("link", { name: "Product 1" })).toBeInTheDocument();
+    expect(await within(copyShop).findByRole("link", { name: "Copy 2" })).toBeInTheDocument();
+    expect(within(realShop).queryByRole("link", { name: "Copy 2" })).toBeNull();
+    expect(screen.getByText("2 items from 2 shops")).toBeInTheDocument();
+
+    await openCheckout("Copycat shop");
+    await press("Continue");
+    await press(/^Pay /);
+    expect(await screen.findByText("Order placed", { selector: "p" })).toBeInTheDocument();
+    expect(node.q.callsFor("GET_NAME_DATA").map((c) => c.name)).toEqual([copy.owner]);
+    expect(node.q.callsFor("SEND_COIN")[0]).toMatchObject({ coin: "QORT", destinationAddress: "QShopPlusAddress", amount: "3.00000000" });
+    // Only the copy's cart was bought; Seller Name's stays.
+    expect(cartFor(store.getState().cart.carts, copy.owner, storeId)).toBeUndefined();
+    expect(Object.keys(cartFor(store.getState().cart.carts, real.owner, storeId)!.orders)).toEqual([real.products[1].id]);
   });
 
   it("explains a product without a price in the chosen coin, and won't go on", async () => {
