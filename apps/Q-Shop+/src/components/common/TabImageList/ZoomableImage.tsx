@@ -51,6 +51,8 @@ export function ZoomableImage({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ view: View; mid: { x: number; y: number }; distance: number } | null>(null);
   const lastTap = useRef<{ time: number; x: number; y: number } | null>(null);
+  // Phones send a dblclick for a double tap too; the tap is handled already, so only a mouse's counts.
+  const lastPointer = useRef<string>("mouse");
 
   /** The picture kept inside the frame: centred on an axis where it is smaller, never past an edge where it is larger. */
   const clamp = useCallback((next: View): View => {
@@ -120,6 +122,7 @@ export function ZoomableImage({
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.target instanceof Element && event.target.closest("button")) return;
+    lastPointer.current = event.pointerType || "mouse";
     event.currentTarget.setPointerCapture?.(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     startGesture();
@@ -171,9 +174,10 @@ export function ZoomableImage({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      onDoubleClick={(event) => toggleAt(event.clientX, event.clientY)}
-      // Two fingers zoom the picture, not the page; one finger drags it once it's zoomed.
-      sx={{ position: "relative", width: "100%", overflow: "hidden", touchAction: "none", cursor: zoomed ? "grab" : "zoom-in", userSelect: "none" }}
+      onDoubleClick={(event) => lastPointer.current === "mouse" && toggleAt(event.clientX, event.clientY)}
+      // Two fingers zoom the picture, not the page; one finger drags it once it's zoomed, and scrolls the
+      // viewer while it isn't (a phone held sideways shows only part of it).
+      sx={{ position: "relative", width: "100%", overflow: "hidden", touchAction: zoomed ? "none" : "pan-y", cursor: zoomed ? "grab" : "zoom-in", userSelect: "none" }}
     >
       <Box
         ref={img}
