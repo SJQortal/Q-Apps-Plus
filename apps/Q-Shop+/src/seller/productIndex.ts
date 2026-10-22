@@ -9,14 +9,15 @@
  * Nothing here changes the original's shape: the merged index is the
  * original's, plus additive fields the + app writes and both apps'
  * publishes keep (they spread the index): `collectionsId`
- * (qdn/collections.ts), `productOrder` (qdn/productOrder.ts) and
- * `deletedProducts`, `{ productId: when }`, the products a + app delete
+ * (qdn/collections.ts), `productOrder` (qdn/productOrder.ts), `fiatPricing`
+ * (money/fiatPricing.ts) and `deletedProducts`, `{ productId: when }`, the products a + app delete
  * removed. Without that record a copy loaded before a delete couldn't tell a
  * deleted product from one added elsewhere, and its next publish would bring
  * the deleted product back.
  */
 import { deletedProductsOf, mergeDeletions, type DataContainerDoc } from "../qdn/payloads";
 import { productOrderOf } from "../qdn/productOrder";
+import { fiatPricingOf } from "../money/fiatPricing";
 
 export { MAX_DELETED_PRODUCTS, deletedProductsOf, mergeDeletions } from "../qdn/payloads";
 
@@ -44,10 +45,16 @@ export function isProductIndexDoc(body: unknown): body is DataContainerDoc {
 
 /**
  * What an index names (its products, catalogues, collections pointer,
- * product order and deletions), as a string two copies can be compared by.
+ * product order, pricing and deletions), as a string two copies can be
+ * compared by.
  */
 export function indexKey(
-  index: Pick<DataContainerDoc, "products" | "catalogues"> & { collectionsId?: unknown; deletedProducts?: unknown; productOrder?: unknown }
+  index: Pick<DataContainerDoc, "products" | "catalogues"> & {
+    collectionsId?: unknown;
+    deletedProducts?: unknown;
+    productOrder?: unknown;
+    fiatPricing?: unknown;
+  }
 ): string {
   return canonical({
     products: index.products ?? {},
@@ -55,6 +62,7 @@ export function indexKey(
     collectionsId: typeof index.collectionsId === "string" ? index.collectionsId : null,
     deletedProducts: deletedProductsOf(index),
     productOrder: productOrderOf(index),
+    fiatPricing: fiatPricingOf(index),
   });
 }
 
@@ -65,9 +73,9 @@ export function indexKey(
  * seen copy has is kept (the node may not serve this tab's own latest
  * publish yet, or another device may have published from a stale copy),
  * unless either copy records it as deleted. A product is listed only under
- * the catalogue its entry names. The collections pointer and the product
- * order are the fresh copy's, else the seen copy's (an empty order on QDN
- * counts: the seller went back to newest first).
+ * the catalogue its entry names. The collections pointer, the product
+ * order and the pricing are the fresh copy's, else the seen copy's (an empty
+ * order or a stopped pricing on QDN counts: the seller chose it).
  */
 export function mergeProductIndexes(seen: DataContainerDoc, fresh: DataContainerDoc): DataContainerDoc {
   const deleted = mergeDeletions(deletedProductsOf(fresh), deletedProductsOf(seen));
@@ -99,6 +107,7 @@ export function mergeProductIndexes(seen: DataContainerDoc, fresh: DataContainer
   // An empty order on QDN is a seller's "newest first" again: it wins too.
   if (Array.isArray(fresh.productOrder)) result.productOrder = productOrderOf(fresh);
   else if (productOrderOf(seen).length > 0) result.productOrder = productOrderOf(seen);
+  if (!("fiatPricing" in fresh) && fiatPricingOf(seen)) result.fiatPricing = seen.fiatPricing;
   if (Object.keys(deleted).length > 0) result.deletedProducts = deleted;
   else delete result.deletedProducts;
   return result;

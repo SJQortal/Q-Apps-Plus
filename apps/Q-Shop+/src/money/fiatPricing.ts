@@ -1,0 +1,271 @@
+/**
+ * Prices in a currency like USD, at exchange rates the seller types in
+ * (community request, 2026-10-22: "set all my prices in my chosen currency
+ * (USD)… choose the exchange rate I want to use for QORT and ARRR… I do not
+ * mean that it should go out to web2"). Nothing here asks anything outside
+ * Qortal: the rates are the seller's own numbers.
+ *
+ * Buyers still pay the QORT and ARRR prices published on each product, as in
+ * the original: this only works those prices out for the seller, and
+ * publishes them again when a rate changes. Checkout and the pinned money
+ * code don't change. New data, additive only (CLAUDE.md rule 1):
+ * - the product index gains `fiatPricing: { currency, rates: { QORT, ARRR? }, updated }`
+ *   (rates: how much one coin is worth in the currency), or `null` once the
+ *   seller stops (so an older copy can't switch it back on);
+ * - a product priced this way gains `fiatPrice: { currency, value, qort }`:
+ *   its price in the currency, and the QORT price that gave. A product whose
+ *   QORT price no longer matches `qort` was repriced elsewhere (the
+ *   original's form, which keeps unknown fields): it no longer follows the
+ *   rate until the seller sets its price in the currency again.
+ * Products without a price in the currency keep their QORT and ARRR prices.
+ * Asset prices are never touched.
+ */
+import { jsonToBase64, type CatalogueDoc, type DataContainerDoc, type PublishResource } from "../qdn/payloads";
+import { dataContainerIdentifier } from "../qdn/identifiers";
+
+/** The currencies offered: the most traded, USD first. Any 3-letter code reads, should another app write one. */
+export const FIAT_CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "CHF", "JPY", "CNY", "INR", "BRL", "MXN", "ZAR", "SEK", "NZD"] as const;
+
+export interface FiatRates {
+  /** One QORT in the currency. */
+  QORT: number;
+  /** One ARRR in the currency; none: buyers paying in ARRR pay the QORT price at the node's rate. */
+  ARRR?: number;
+}
+
+export interface FiatPricing {
+  currency: string;
+  rates: FiatRates;
+  updated: number;
+}
+
+export interface FiatPrice {
+  currency: string;
+  value: number;
+  /** The QORT price this gave. */
+  qort: number;
+}
+
+const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
+const isCurrency = (value: unknown): value is string => typeof value === "string" && /^[A-Z]{3}$/.test(value);
+
+/** The shop's pricing as its product index holds it, or null (none, stopped, or malformed). */
+export function fiatPricingOf(index: object | null | undefined): FiatPricing | null {
+  const raw = (index as { fiatPricing?: unknown } | null | undefined)?.fiatPricing;
+  if (!raw || typeof raw !== "object") return null;
+  const { currency, rates, updated } = raw as { currency?: unknown; rates?: unknown; updated?: unknown };
+  if (!isCurrency(currency) || !rates || typeof rates !== "object") return null;
+  const { QORT, ARRR } = rates as { QORT?: unknown; ARRR?: unknown };
+  if (!positive(QORT)) return null;
+  return { currency, rates: { QORT, ...(positive(ARRR) && { ARRR }) }, updated: positive(updated) ? updated : 0 };
+}
+
+/** The QORT price on a product (`{currency: "qort"}`), or undefined. */
+export function qortPriceOf(product: { price?: unknown } | null | undefined): number | undefined {
+  const list = Array.isArray(product?.price) ? (product.price as { currency?: unknown; value?: unknown }[]) : [];
+  const value = list.find((p) => p?.currency === "qort")?.value;
+  return positive(value) ? value : undefined;
+}
+
+/** Two coin prices the same, as stored (8 decimals). */
+function samePrice(a: number | undefined, b: number | undefined): boolean {
+  return a !== undefined && b !== undefined && Math.round(a * 1e8) === Math.round(b * 1e8);
+}
+
+/**
+ * The product's price in `currency` when it still follows it: it has one, in
+ * that currency, and its QORT price is still the one that price gave.
+ */
+export function fiatPriceOf(product: { price?: unknown; fiatPrice?: unknown } | null | undefined, currency: string): FiatPrice | null {
+  const raw = product?.fiatPrice as { currency?: unknown; value?: unknown; qort?: unknown } | undefined;
+  if (!raw || typeof raw !== "object" || raw.currency !== currency || !positive(raw.value) || !positive(raw.qort)) return null;
+  if (!samePrice(qortPriceOf(product), raw.qort)) return null;
+  return { currency, value: raw.value, qort: raw.qort };
+}
+
+/** A product priced in the currency once, whose QORT price was changed elsewhere since: its old price, else null. */
+export function staleFiatPriceOf(product: { price?: unknown; fiatPrice?: unknown } | null | undefined, currency: string): number | null {
+  const raw = product?.fiatPrice as { currency?: unknown; value?: unknown } | undefined;
+  if (!raw || raw.currency !== currency || !positive(raw.value) || fiatPriceOf(product, currency)) return null;
+  return raw.value;
+}
+
+/**
+ * A coin price from a price in the currency: two decimals from 1 coin up
+ * (69.44 QORT), four significant digits below (0.5556), never under the
+ * coin's smallest unit.
+ */
+export function coinPriceFromFiat(value: number, rate: number): number {
+  if (!positive(value) || !positive(rate)) return NaN;
+  const raw = value / rate;
+  let rounded: number;
+  if (raw >= 1) rounded = Math.round(raw * 100) / 100;
+  else {
+    const digits = 4 - Math.ceil(Math.log10(raw));
+    const factor = 10 ** Math.min(digits, 8);
+    rounded = Math.round(raw * factor) / factor;
+  }
+  return Math.max(rounded, 1e-8);
+}
+
+/** A typed price or rate in the currency: up to `decimals` decimals, above 0; NaN otherwise. */
+export function parseFiat(text: string, decimals = 2): number {
+  const t = text.trim().replace(/,/g, ".");
+  if (!t || !new RegExp(`^\\d*\\.?\\d{0,${decimals}}$`).test(t) || t === ".") return NaN;
+  const n = Number(t);
+  return n > 0 ? n : NaN;
+}
+
+/** What a seller types into a price or rate field in the currency, cleaned as they type (comma to dot, `decimals` at most). */
+export function sanitizeFiatInput(text: string, decimals = 2): string {
+  const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+  const dot = cleaned.indexOf(".");
+  if (dot < 0) return cleaned;
+  return `${cleaned.slice(0, dot)}.${cleaned.slice(dot + 1).replace(/\./g, "").slice(0, decimals)}`;
+}
+
+/** Rates are typed with up to 8 decimals (one QORT may be worth less than a cent). */
+export const RATE_DECIMALS = 8;
+
+/** "$12.50", "€3.00", "¥1,200" (the browser's own currency names; nothing is fetched). */
+export function formatFiat(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+  } catch {
+    return `${value.toFixed(2)} ${currency}`;
+  }
+}
+
+/** A rate as typed: "0.18", never an exponent. */
+export function rateToText(rate: number | undefined): string {
+  if (!positive(rate)) return "";
+  return rate.toFixed(RATE_DECIMALS).replace(/0+$/, "").replace(/\.$/, "");
+}
+
+/**
+ * A product's `price` list for a price in the currency: QORT first, then
+ * ARRR when the shop takes it and there is an ARRR rate (no ARRR entry
+ * without one: checkout then converts the QORT price at the node's rate, as
+ * the original does), then every other entry as it was (assets).
+ */
+export function priceListFromFiat(
+  existing: { currency: string; value: number }[] | undefined,
+  value: number,
+  rates: FiatRates,
+  takesArrr: boolean
+): { currency: string; value: number }[] {
+  const list = [{ currency: "qort", value: coinPriceFromFiat(value, rates.QORT) }];
+  if (takesArrr && positive(rates.ARRR)) list.push({ currency: "ARRR", value: coinPriceFromFiat(value, rates.ARRR) });
+  for (const entry of existing ?? []) {
+    if (!entry || entry.currency === "qort" || entry.currency === "ARRR") continue;
+    list.push(entry);
+  }
+  return list;
+}
+
+/**
+ * One product priced from the currency: its `price` list, and `fiatPrice`
+ * with the QORT price it gave, the rest unchanged (the original's shape,
+ * key order included; `fiatPrice` is added at the end).
+ */
+export function productPricedInFiat<T extends Record<string, unknown>>(
+  product: T,
+  value: number,
+  pricing: Pick<FiatPricing, "currency" | "rates">,
+  takesArrr: boolean
+): T & { fiatPrice: FiatPrice } {
+  const price = priceListFromFiat(product.price as { currency: string; value: number }[] | undefined, value, pricing.rates, takesArrr);
+  const { fiatPrice: _old, ...rest } = product as Record<string, unknown>;
+  return { ...rest, price, fiatPrice: { currency: pricing.currency, value, qort: price[0].value } } as unknown as T & { fiatPrice: FiatPrice };
+}
+
+/** The product without `fiatPrice` (its prices as they are). */
+export function withoutFiatPrice<T extends Record<string, unknown>>(product: T): T {
+  if (!("fiatPrice" in product)) return product;
+  const { fiatPrice: _old, ...rest } = product as Record<string, unknown>;
+  return rest as T;
+}
+
+/** The same JSON, whatever the key order. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") {
+    const obj = value as Record<string, unknown>;
+    return `{${Object.keys(obj)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical(obj[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/** A price missing from the catalogues the publish needs (couldn't be read). */
+export class MissingPriceCatalogueError extends Error {
+  readonly catalogueId: string;
+  constructor(catalogueId: string) {
+    super(`The catalogue ${catalogueId} isn't loaded`);
+    this.name = "MissingPriceCatalogueError";
+    this.catalogueId = catalogueId;
+  }
+}
+
+/**
+ * Publish prices: every product in `prices` (product id → its price in the
+ * currency, or null to stop following it) is priced again in its catalogue,
+ * the product index gets the new QORT prices and `fiatPricing` (or `null`
+ * when `pricing` is null: the seller stopped), and goes last. Products not
+ * in `prices`, and catalogues none of whose products change, aren't
+ * republished. `catalogues` are the JSONs as read from QDN just before (raw:
+ * no Redux fields), so the other products in them keep what is on QDN now.
+ */
+export function buildPricesPublish(args: {
+  name: string;
+  dataContainer: DataContainerDoc;
+  catalogues: Record<string, CatalogueDoc>;
+  prices: Record<string, number | null>;
+  pricing: Pick<FiatPricing, "currency" | "rates"> | null;
+  takesArrr: boolean;
+  now: number;
+}) {
+  const { name, dataContainer, catalogues, prices, pricing, takesArrr } = args;
+  const dc: DataContainerDoc = {
+    ...dataContainer,
+    products: structuredClone(dataContainer.products ?? {}),
+    fiatPricing: pricing ? { currency: pricing.currency, rates: { ...pricing.rates }, updated: args.now } : null,
+  };
+  const changed = new Map<string, CatalogueDoc>();
+  const changedProducts: string[] = [];
+  for (const [productId, value] of Object.entries(prices)) {
+    const entry = dc.products[productId];
+    if (!entry?.catalogueId) continue;
+    const catalogue = changed.get(entry.catalogueId) ?? catalogues[entry.catalogueId];
+    if (!catalogue?.products || typeof catalogue.products !== "object") throw new MissingPriceCatalogueError(entry.catalogueId);
+    const product = catalogue.products[productId] as Record<string, unknown> | undefined;
+    if (!product) continue;
+    const next = value !== null && pricing ? productPricedInFiat(product, value, pricing, takesArrr) : withoutFiatPrice(product);
+    if (canonical(next) === canonical(product)) continue;
+    const copy = changed.get(entry.catalogueId) ?? structuredClone(catalogue);
+    copy.products[productId] = next;
+    changed.set(entry.catalogueId, copy);
+    changedProducts.push(productId);
+    const qort = qortPriceOf(next);
+    if (qort !== undefined) dc.products[productId] = { ...entry, priceQort: qort };
+  }
+  const resources: PublishResource[] = [
+    ...[...changed.values()].map((cat) => ({
+      name,
+      service: "DOCUMENT",
+      identifier: cat.id,
+      filename: "catalogue.json",
+      data64: jsonToBase64(cat),
+    })),
+    {
+      name,
+      service: "DOCUMENT",
+      identifier: dc.id || dataContainerIdentifier(dc.storeId),
+      filename: "datacontainer.json",
+      data64: jsonToBase64(dc),
+    },
+  ];
+  return { dataContainer: dc, catalogues: [...changed.values()], changedProducts, resources };
+}
