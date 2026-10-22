@@ -1,0 +1,241 @@
+/**
+ * The top of a shop page: logo, owner, rating, where it is and ships to,
+ * the coins it takes, and what you can do (message the seller, share, see
+ * the details; the owner also edits the shop or opens the seller page).
+ */
+import { Box, Button, Rating, Skeleton, Typography } from "@mui/material";
+import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import type { CurrentStore } from "../../state/features/globalSlice";
+import { NameAvatar } from "../../components/common/NameAvatar";
+import { CoinIcon } from "../../components/money/CoinIcon";
+import { coinLabel, shopCoins } from "../../money/coins";
+import { mailToLink, storeLink } from "../../qdn/links";
+import { CopyLinkButton } from "./CopyLinkButton";
+import { roundToHalf } from "./reviewsData";
+import type { ShopReviews } from "./useShopData";
+
+const panelSx = {
+  border: 1,
+  borderColor: "divider",
+  borderRadius: 2,
+  bgcolor: "background.paper",
+  p: { xs: 2, sm: 2.5 },
+} as const;
+
+export function ShopHeaderSkeleton() {
+  return (
+    <Box sx={panelSx} aria-hidden>
+      <Box sx={{ display: "flex", gap: 2 }}>
+        <Skeleton variant="rounded" sx={{ width: { xs: 64, sm: 88 }, height: { xs: 64, sm: 88 }, flexShrink: 0 }} />
+        <Box sx={{ flex: 1 }}>
+          <Skeleton width="40%" />
+          <Skeleton width="55%" />
+          <Skeleton width="70%" />
+        </Box>
+      </Box>
+      <Skeleton variant="rounded" height={44} sx={{ mt: 2 }} />
+    </Box>
+  );
+}
+
+export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews; onOpen: () => void }) {
+  const { summary, status } = reviews;
+  if (status === "loading") return <Skeleton width={140} height={32} />;
+  const average = summary.average;
+  const label =
+    average === null
+      ? "No reviews yet"
+      : `${average.toFixed(1)} · ${summary.count} review${summary.count === 1 ? "" : "s"}`;
+  return (
+    <Button
+      onClick={onOpen}
+      color="inherit"
+      aria-label={average === null ? "Reviews: none yet" : `Rated ${average.toFixed(1)} out of 5 from ${summary.count} review${summary.count === 1 ? "" : "s"}. Open reviews`}
+      sx={{ minHeight: 44, px: 1, ml: -1, gap: 1, fontWeight: 600, textTransform: "none", justifyContent: "flex-start" }}
+    >
+      {average !== null && <Rating value={roundToHalf(average)} precision={0.5} readOnly size="small" aria-hidden />}
+      <span>{label}</span>
+    </Button>
+  );
+}
+
+export function ShopHeader({
+  shop,
+  owner,
+  storeId,
+  isOwner,
+  canEdit,
+  reviews,
+  onOpenReviews,
+  onOpenDetails,
+  onEdit,
+  onSellerPage,
+}: {
+  shop: CurrentStore;
+  owner: string;
+  storeId: string;
+  isOwner: boolean;
+  /** The owner's current shop is this one (the edit dialog edits the current shop). */
+  canEdit: boolean;
+  reviews: ShopReviews;
+  onOpenReviews: () => void;
+  onOpenDetails: () => void;
+  onEdit: () => void;
+  onSellerPage: () => void;
+}) {
+  const coins = shopCoins(shop);
+  const title = shop.title || "Shop";
+  return (
+    <Box component="section" aria-label="About this shop" sx={panelSx}>
+      <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+        {shop.logo ? (
+          <Box
+            component="img"
+            src={shop.logo}
+            alt={`${title} logo`}
+            sx={{
+              width: { xs: 64, sm: 88 },
+              height: { xs: 64, sm: 88 },
+              borderRadius: 2,
+              objectFit: "cover",
+              flexShrink: 0,
+              bgcolor: "action.hover",
+            }}
+          />
+        ) : (
+          <Box
+            aria-hidden
+            sx={{
+              width: { xs: 64, sm: 88 },
+              height: { xs: 64, sm: 88 },
+              borderRadius: 2,
+              flexShrink: 0,
+              display: "grid",
+              placeItems: "center",
+              bgcolor: "action.hover",
+              color: "text.secondary",
+            }}
+          >
+            <StorefrontOutlinedIcon fontSize="large" />
+          </Box>
+        )}
+        <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+            <NameAvatar name={owner} size={24} eager />
+            <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
+              <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
+                by{" "}
+              </Box>
+              {owner}
+              {isOwner ? (
+                <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
+                  {" "}
+                  (you)
+                </Box>
+              ) : null}
+            </Typography>
+          </Box>
+          <RatingSummaryButton reviews={reviews} onOpen={onOpenReviews} />
+          {(shop.location || shop.shipsTo) && (
+            <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 2, rowGap: 0.5, color: "text.secondary" }}>
+              {shop.location ? (
+                <Typography variant="body2" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                  <PlaceOutlinedIcon fontSize="small" aria-hidden />
+                  <span>{shop.location}</span>
+                </Typography>
+              ) : null}
+              {shop.shipsTo ? (
+                <Typography variant="body2" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                  <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
+                  <span>Ships to {shop.shipsTo}</span>
+                </Typography>
+              ) : null}
+            </Box>
+          )}
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
+            <Typography variant="body2" color="text.secondary" component="span">
+              Accepts
+            </Typography>
+            <Box component="ul" aria-label="Accepted coins" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {coins.map((coin) => (
+                <Box
+                  component="li"
+                  key={coin}
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    px: 1,
+                    py: 0.25,
+                    border: 1,
+                    borderColor: "divider",
+                    borderRadius: 4,
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  <CoinIcon coin={coin} size={16} label={coinLabel(coin, shop)} />
+                  {coinLabel(coin, shop)}
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+      {shop.description ? (
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 1.5,
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            display: "-webkit-box",
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {shop.description}
+        </Typography>
+      ) : null}
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2, "& > *": { flex: { xs: "1 1 auto", sm: "0 0 auto" } } }}>
+        {isOwner ? (
+          <>
+            <Button variant="contained" startIcon={<StorefrontOutlinedIcon />} onClick={onSellerPage} sx={{ minHeight: 44 }}>
+              Seller page
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<EditOutlinedIcon />}
+              onClick={onEdit}
+              disabled={!canEdit}
+              sx={{ minHeight: 44 }}
+            >
+              Edit shop
+            </Button>
+          </>
+        ) : (
+          <Button
+            component="a"
+            href={mailToLink(owner)}
+            className="qortal-link"
+            variant="outlined"
+            startIcon={<EmailOutlinedIcon />}
+            sx={{ minHeight: 44 }}
+          >
+            Message seller
+          </Button>
+        )}
+        <CopyLinkButton link={storeLink(owner, storeId)} label="Share" />
+        <Button variant="outlined" startIcon={<InfoOutlinedIcon />} onClick={onOpenDetails} sx={{ minHeight: 44 }}>
+          Details
+        </Button>
+      </Box>
+    </Box>
+  );
+}

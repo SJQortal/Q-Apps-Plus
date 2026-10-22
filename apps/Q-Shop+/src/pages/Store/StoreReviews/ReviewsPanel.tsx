@@ -10,6 +10,8 @@ export function ReviewsPanel(props: {
   storeImage: string;
   averageStoreRating?: number | null;
   onClose?: () => void;
+  /** The shop's owner, whose own reviews don't count (else the viewed or current shop's). */
+  storeOwner?: string;
 }) {
   return (
     <StoreReviews
