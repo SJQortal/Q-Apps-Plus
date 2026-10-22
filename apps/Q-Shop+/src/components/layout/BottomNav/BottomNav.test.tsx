@@ -67,11 +67,11 @@ afterEach(() => restore());
 
 describe("BottomNav", () => {
   it("has the five items in order, labelled, with the current page marked", () => {
-    renderNav({ path: "/settings" });
+    renderNav({ path: "/products" });
     const nav = screen.getByRole("navigation", { name: "Main" });
     const labels = Array.from(nav.querySelectorAll("button")).map((b) => b.textContent);
-    expect(labels).toEqual(["Shops", "Cart", "Orders", "Sell", "Settings"]);
-    expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute("aria-current", "page");
+    expect(labels).toEqual(["Shops", "Products", "Cart", "Orders", "Sell"]);
+    expect(screen.getByRole("button", { name: "Products" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Shops" })).not.toHaveAttribute("aria-current");
   });
 
@@ -83,7 +83,7 @@ describe("BottomNav", () => {
     expect(screen.getByRole("button", { name: "Sell" })).toHaveAttribute("aria-current", "page");
   });
 
-  it("navigates to shops, cart, orders and settings", () => {
+  it("navigates to shops, products, cart and orders", () => {
     renderNav({ path: "/settings" });
     fireEvent.click(screen.getByRole("button", { name: "Cart" }));
     expect(where()).toBe("/cart");
@@ -91,8 +91,8 @@ describe("BottomNav", () => {
     expect(where()).toBe("/my-orders");
     fireEvent.click(screen.getByRole("button", { name: "Shops" }));
     expect(where()).toBe("/");
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
-    expect(where()).toBe("/settings");
+    fireEvent.click(screen.getByRole("button", { name: "Products" }));
+    expect(where()).toBe("/products");
   });
 
   it("shows how many items wait in every shop's cart", () => {

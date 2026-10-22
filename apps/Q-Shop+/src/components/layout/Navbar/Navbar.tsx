@@ -1,8 +1,9 @@
 /**
  * The sticky header (docs/DESIGN.md → Layout): the logo and the app's name
- * (home), Shops / Orders / Sell, the cart and Settings on desktop, and the
- * account menu or Sign in. On phones it slides away when you scroll down and
- * comes back when you scroll up; the navigation lives in BottomNav there.
+ * (home), Shops / Products / Orders / Sell and the cart on desktop, Settings,
+ * and the account menu or Sign in. On phones it slides away when you scroll
+ * down and comes back when you scroll up; the navigation lives in BottomNav
+ * there, and Settings stays up here (the bar takes five items).
  */
 import React, { lazy, Suspense, useRef, useState } from "react";
 import { useSelector } from "react-redux";
@@ -11,6 +12,7 @@ import { Button, IconButton, Skeleton, Tooltip } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
+import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { RootState } from "../../../state/store";
@@ -102,6 +104,15 @@ const NavBar: React.FC = () => {
             </NavLinkButton>
             <NavLinkButton
               type="button"
+              active={section === "products"}
+              aria-current={section === "products" ? "page" : undefined}
+              onClick={() => navigate("/products")}
+            >
+              <LocalMallOutlinedIcon aria-hidden />
+              Products
+            </NavLinkButton>
+            <NavLinkButton
+              type="button"
               active={section === "orders"}
               aria-current={section === "orders" ? "page" : undefined}
               onClick={() => navigate("/my-orders")}
@@ -134,18 +145,16 @@ const NavBar: React.FC = () => {
               </IconButton>
             </Tooltip>
           )}
-          {!phone && (
-            <Tooltip title="Settings">
-              <IconButton
-                aria-label="Settings"
-                aria-current={section === "settings" ? "page" : undefined}
-                onClick={() => navigate("/settings")}
-                sx={{ ...ICON_BUTTON_SX, color: section === "settings" ? "primary.main" : "text.primary" }}
-              >
-                <SettingsOutlinedIcon />
-              </IconButton>
-            </Tooltip>
-          )}
+          <Tooltip title="Settings">
+            <IconButton
+              aria-label="Settings"
+              aria-current={section === "settings" ? "page" : undefined}
+              onClick={() => navigate("/settings")}
+              sx={{ ...ICON_BUTTON_SX, color: section === "settings" ? "primary.main" : "text.primary" }}
+            >
+              <SettingsOutlinedIcon />
+            </IconButton>
+          </Tooltip>
           {authenticating && !user && (
             <Skeleton variant="circular" width={32} height={32} aria-hidden sx={{ mx: 0.75, flexShrink: 0 }} />
           )}

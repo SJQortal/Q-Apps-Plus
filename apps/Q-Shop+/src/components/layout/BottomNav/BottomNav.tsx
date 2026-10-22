@@ -1,6 +1,7 @@
 /**
- * The phone's navigation bar (docs/DESIGN.md → Mobile): Shops, Cart, Orders,
- * Sell and Settings, thumb-reachable at the bottom of the frame. On a phone
+ * The phone's navigation bar (docs/DESIGN.md → Mobile): Shops, Products,
+ * Cart, Orders and Sell, thumb-reachable at the bottom of the frame (Settings
+ * is in the header, as five items is the most a bar takes). On a phone
  * held sideways the bar is compact (icon and label side by side, 48 px), as
  * Hub's frame is only about 266 px tall there. Renders nothing on wider
  * screens, where the header carries the same items.
@@ -13,7 +14,7 @@ import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
 import { headerFill, primarySoft } from "../../../hub-theme";
 import { useLandscapePhone, usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { cartLabel, navSection, useCartItemCount, usePendingOrderCount, useSell, type NavSection } from "../shellState";
@@ -166,6 +167,7 @@ export function BottomNav() {
   const section = navSection(pathname);
   const nav: NavItem[] = [
     { key: "shops", label: "Shops", icon: <StorefrontOutlinedIcon />, onClick: () => navigate("/") },
+    { key: "products", label: "Products", icon: <LocalMallOutlinedIcon />, onClick: () => navigate("/products") },
     {
       key: "cart",
       label: "Cart",
@@ -175,7 +177,6 @@ export function BottomNav() {
     },
     { key: "orders", label: "Orders", icon: <ReceiptLongOutlinedIcon />, onClick: () => navigate("/my-orders") },
     { key: "sell", label: "Sell", icon: <SellOutlinedIcon />, onClick: sell },
-    { key: "settings", label: "Settings", icon: <SettingsOutlinedIcon />, onClick: () => navigate("/settings") },
   ];
 
   return (

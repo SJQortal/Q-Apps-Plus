@@ -5,7 +5,7 @@
  * hides itself when there is nothing new to show.
  */
 import { useEffect, useId, useState } from "react";
-import { Box, Button, Skeleton, Typography } from "@mui/material";
+import { Box, Button, Link, Skeleton, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import { Link as RouterLink } from "react-router-dom";
 import { useInView } from "react-intersection-observer";
@@ -143,9 +143,19 @@ export function NewProductsStrip({ isListedShop }: { isListedShop: (owner: strin
 
   return (
     <Box component="section" ref={ref} aria-labelledby={headingId} sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
-      <Typography id={headingId} component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
-        New products
-      </Typography>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+        <Typography id={headingId} component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
+          New products
+        </Typography>
+        <Link
+          component={RouterLink}
+          to="/products"
+          underline="hover"
+          sx={{ fontSize: 14, fontWeight: 600, minHeight: 44, display: "inline-flex", alignItems: "center", px: 0.5 }}
+        >
+          See all products
+        </Link>
+      </Box>
       {!settled ? (
         <Box role="status" aria-busy="true" aria-label="Loading new products" sx={{ display: "flex", gap: 1.5, overflow: "hidden" }}>
           {Array.from({ length: 4 }, (_, i) => (

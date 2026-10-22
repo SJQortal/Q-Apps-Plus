@@ -136,7 +136,8 @@ describe("home page", () => {
       "href",
       "/Seller%2023/q-store-general-shop-23/q-store-product-shop-23-P000000011/q-store-catalogue-shop-23-CAT0000001"
     );
-    expect(within(strip).getAllByRole("link")).toHaveLength(12);
+    expect(within(within(strip).getByRole("list")).getAllByRole("link")).toHaveLength(12);
+    expect(within(strip).getByRole("link", { name: "See all products" })).toHaveAttribute("href", "/products");
     const catalogues = searchParams(node.fetchCalls).filter((p) => p.get("identifier") === "q-store-catalogue-");
     expect(catalogues).toHaveLength(1);
     expect(catalogues[0].get("limit")).toBe("4");
@@ -150,7 +151,7 @@ describe("home page", () => {
     renderHome({ world, allInView: true });
     const strip = await screen.findByRole("region", { name: "New products" });
     await within(strip).findByRole("link", { name: /^Product 10\b/ }, { timeout: 5000 });
-    const hrefs = within(strip).getAllByRole("link").map((link) => link.getAttribute("href"));
+    const hrefs = within(within(strip).getByRole("list")).getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toHaveLength(12);
     expect(hrefs.some((href) => href?.includes("q-store-product-shop-23-P000000011"))).toBe(false);
     expect(cards()).toHaveLength(24);

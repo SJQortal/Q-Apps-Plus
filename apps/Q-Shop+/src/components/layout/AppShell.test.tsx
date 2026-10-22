@@ -65,14 +65,16 @@ let restore: () => void = () => {};
 afterEach(() => restore());
 
 describe("AppShell on desktop", () => {
-  it("has the logo, Shops / Orders / Sell, the cart, Settings and Sign in, and the page in <main>", () => {
+  it("has the logo, Shops / Products / Orders / Sell, the cart, Settings and Sign in, and the page in <main>", () => {
     restore = mockViewport(DESKTOP);
     const { authenticate, onGatewaySignIn } = renderShell({ path: "/my-orders" });
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("main")).toContainElement(screen.getByTestId("where"));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Orders", "Sell"]);
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Orders", "Sell"]);
     expect(within(nav).getByRole("button", { name: "Orders" })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(within(nav).getByRole("button", { name: "Products" }));
+    expect(where()).toBe("/products");
     // The bottom bar is for phones only.
     expect(screen.getAllByRole("navigation")).toHaveLength(1);
 
@@ -198,13 +200,15 @@ describe("AppShell on a phone", () => {
     const nav = screen.getByRole("navigation", { name: "Main" });
     expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual([
       "Shops",
+      "Products",
       "Cart",
       "Orders",
       "Sell",
-      "Settings",
     ]);
     expect(screen.getAllByRole("navigation")).toHaveLength(1);
-    expect(within(screen.getByRole("banner")).queryByRole("button", { name: "Settings" })).toBeNull();
+    // Five items fill the bar: Settings is in the header.
+    fireEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Settings" }));
+    expect(where()).toBe("/settings");
     openAccountMenu();
     const sheet = await screen.findByRole("dialog", { name: "Seller Name" });
     expect(within(sheet).getByRole("menuitem", { name: "Open a new shop" })).toBeInTheDocument();
