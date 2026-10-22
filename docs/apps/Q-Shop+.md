@@ -203,6 +203,24 @@ _In progress._
 
 - `main` merged (the branch now carries #8's commits plus the current kit); ESLint 9 with the Q-Share+ config: 278 → 0 problems, with the hooks findings of 22 upstream files listed in a per-file header that each rewrite removes; 19 dead files removed; `constants/plus.ts`.
 - Money and data writes pinned before any change: 10 tests over the untouched upstream components (34 tests in all).
+- Data layer `src/qdn/` (identifiers, paged/deduped/cached search and JSON reads keyed by name + identifier, links with a literal `+`, Hub error shapes, pure payload builders) and money layer `src/money/` (coins, pricing, one cached rate per coin, order and mail builders, the checkout service, pending orders). The product manager, order status, review and shop create/edit publishes go through the builders; the pins pass unchanged.
+- Foundation for the parallel round: the Q-Share+ phone parts, the account hook (names and primary name from Hub), own shops in one search, carts that survive a reload, code-split routes behind an error boundary, a `/cart` page, `Page`/`PageHeader`, `PriceTag`/`CoinIcon`/`useShopCoin`, a mock node with first-load call counts, and `e2e/screens.config.mjs`.
+
+#### Money code changes (each a fix, each tested)
+
+Pinned first by `Cart.pin.test.tsx`, `ShowOrder.pin.test.tsx`, `ProductManager.pin.test.tsx` and `AddReview.pin.test.tsx` on the untouched upstream code; the same expectations pass on the new code. What the checkout sends is unchanged: `GET_NAME_DATA` → `GET_ACCOUNT_DATA` → `SEND_COIN {coin, destinationAddress, amount: total.toFixed(8)}` → one encrypted `PUBLISH_MULTIPLE_QDN_RESOURCES [order, mail]` to `[seller, buyer]`, with the same identifiers and order JSON.
+
+| Change | Why | Test |
+|---|---|---|
+| The paid order is saved locally (`qshopplus-pending-orders`, without the delivery address) the moment Hub confirms the payment, and the cart is emptied; a declined, failed or timed-out order publish is finished later from the cart with the same identifiers and payment signature | Bug 1: the original lost the order and invited a second payment | checkout.test.ts "keeps a paid order…" |
+| Before publishing a pending order again, QDN is checked for it (fresh, by name + exact identifier) | A publish that timed out may still have landed; publishing twice would duplicate the order and the mail | checkout.test.ts "doesn't publish again…" |
+| The order publish gets Hub's 30-minute budget (`qortalRequestWithTimeout`), not 30 s per resource | Hub allows 30 minutes; the shorter budget declared live publishes failed (pitfall 10) | checkout.test.ts |
+| A payment request Hub doesn't answer in time is kept as "unconfirmed"; for QORT and assets the buyer's latest transactions are searched for a matching payment (recipient, amount, after the checkout started) | Hub applies a late Accept after its 30 s answer timeout | checkout.test.ts "marks a payment…" |
+| No price is shown or charged in a coin until its rate is known | Bug 6: the original showed (and could charge) the QORT number as ARRR | money.test.ts |
+| A missing price or a missing coin address stops the checkout before anything is paid, with a message | Bugs 7 and 8: an unhandled rejection or a crash | checkout.test.ts |
+| Typed text (shop and product titles, the buyer's name and address) is HTML-escaped in the seller's order mail | Bug 14 | money.test.ts, Cart.pin (`Seller&#39;s Shop`) |
+
+New and additive: BTC, LTC, DOGE, DGB and RVN through Hub's `SEND_COIN` to the shop's address for that coin (`payment.foreignAddressUsed`, `foreignTxid`), Qortal assets through Hub's `TRANSFER_ASSET` to the seller's address (`payment.assetId`, `assetName`); ARRR's payment block is written exactly as before.
 
 ## Follow-ups
 
