@@ -114,6 +114,19 @@ describe("the seller's Orders tab", () => {
     expect(within(dialog).getByText("Not recorded in this order.")).toBeInTheDocument();
   });
 
+  it("loads again when the list is reset while it shows (another shop picked)", async () => {
+    const node = installMockNode(world());
+    const store = sellerStore();
+    renderWithProviders(<OrdersTab />, { store });
+    await screen.findByRole("list", { name: "Orders received" });
+    const searches = () => node.fetchCalls.filter((u) => u.includes("identifier=q-store-order-my-shop-")).length;
+    expect(searches()).toBe(1);
+    store.dispatch({ type: "order/resetOrders" });
+    await waitFor(() => expect(store.getState().order.orders).toHaveLength(6));
+    expect(searches()).toBe(1); // the search result is still in the session cache
+    expect(store.getState().order.seller.phase).toBe("ready");
+  });
+
   it("finds orders by buyer among the loaded ones", async () => {
     installMockNode(world());
     renderWithProviders(<OrdersTab />, { store: sellerStore() });

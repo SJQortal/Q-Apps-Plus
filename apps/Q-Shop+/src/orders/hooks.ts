@@ -33,16 +33,18 @@ const NO_ITEMS: OrderListItem[] = [];
 
 /** An order list for `owner` (null: signed out, or no shop): page one on mount, then on demand. */
 function useOrderList(owner: ListOwner | null): OrderList {
-  const store = useStore<RootState>() as unknown as OrderStore;
+  const store: OrderStore = useStore<RootState>();
   const kind = owner?.kind ?? "buyer";
   const key = owner ? ownerKey(owner) : "";
   const meta = useSelector((state: RootState) => state.order[kind]);
   const items = useSelector(selectItems(kind));
   const mine = !!owner && meta.owner === key;
+  // Also after the list was reset under it (resetOrders when another shop is picked).
+  const needsLoad = !mine || meta.phase === "idle";
 
   useEffect(() => {
-    if (owner) void loadOrders(store, owner, "first");
-  }, [store, owner]);
+    if (owner && needsLoad) void loadOrders(store, owner, "first");
+  }, [store, owner, needsLoad]);
 
   const loadMore = useCallback(() => (owner ? loadOrders(store, owner, "more") : Promise.resolve(false)), [store, owner]);
   const refresh = useCallback(() => (owner ? loadOrders(store, owner, "refresh") : Promise.resolve(false)), [store, owner]);
