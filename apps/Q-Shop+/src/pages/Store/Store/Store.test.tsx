@@ -76,14 +76,51 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(mail).toHaveAttribute("href", "qortal://APP/Q-Mail+/to/Seller%20Name");
 
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
-    // No unlimited search; the review search is the only one (no shop search, no limit-0 container search).
+    // No unlimited search: the reviews, and the order count's two (the shop's orders, and whether
+    // another name has a shop with this id); no shop search, no limit-0 container search.
+    expect(await screen.findByText("No orders yet")).toBeInTheDocument();
     const searches = searchUrls(node);
     expect(searches.every((u) => /[?&]limit=[1-9]/.test(u))).toBe(true);
-    expect(searches).toHaveLength(1);
-    expect(searches[0]).toContain("identifier=q-store-review-my-shop-");
+    expect(searches).toHaveLength(3);
+    expect(searches.filter((u) => u.includes("identifier=q-store-review-my-shop-"))).toHaveLength(1);
+    expect(searches.filter((u) => u.includes("service=DOCUMENT_PRIVATE") && u.includes("identifier=q-store-order-my-shop-"))).toHaveLength(1);
+    expect(searches.filter((u) => u.includes("service=STORE") && u.includes("identifier=q-store-general-my-shop&"))).toHaveLength(1);
     expect(node.q.callsFor("SEARCH_QDN_RESOURCES")).toHaveLength(0);
     expect(node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/"))).toHaveLength(1);
     expect(node.fetchCalls.filter((u) => u.endsWith("-datacontainer"))).toHaveLength(1);
+  });
+
+  it("says how many orders the shop has received: buyers' orders since it opened, once each", async () => {
+    const world = makeWorld();
+    const shopCreated = world.shops[0].created;
+    const order = (buyer: string, uid: string, created: number, short = "my-shop") => ({
+      identifier: `q-store-order-${short}-${uid}`,
+      buyer,
+      created,
+      json: {},
+    });
+    world.orders = [
+      order("Ann", "ORDERxxxx1", shopCreated + 10),
+      order("Bob", "ORDERxxxx2", shopCreated + 20),
+      order("Bob", "ORDERxxxx3", shopCreated + 30),
+      // The owner's own, one from before the shop opened, and one at a longer shop id: not counted.
+      order("Seller Name", "ORDERxxxx4", shopCreated + 40),
+      order("Cy", "ORDERxxxx5", shopCreated - 1000),
+      order("Dee", "ORDERxxxx6", shopCreated + 50, "my-shop-2"),
+    ];
+    renderShop(world);
+    expect(await screen.findByText("3 orders")).toBeInTheDocument();
+  });
+
+  it("shows no order count when another name has a shop with the same id (its orders can't be told apart)", async () => {
+    const world = makeWorld();
+    world.shops.push({ ...world.shops[1], owner: "Someone Else", shortStoreId: "my-shop", title: "Other shop" });
+    world.orders = [{ identifier: "q-store-order-my-shop-ORDERxxxx1", buyer: "Ann", created: world.shops[0].created + 10, json: {} }];
+    const { node } = renderShop(world);
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    await waitFor(() => expect(searchUrls(node).filter((u) => u.includes("service=STORE"))).toHaveLength(1));
+    expect(screen.queryByText(/orders?$/)).toBeNull();
+    expect(screen.queryByText("No orders yet")).toBeNull();
   });
 
   it("fetches catalogues only for the 20 products on screen, once each, and more on Show more", async () => {

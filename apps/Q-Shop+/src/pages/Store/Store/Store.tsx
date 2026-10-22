@@ -83,6 +83,7 @@ import { visuallyHiddenSx } from "../a11y";
 import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
 import { useShopCollections, type ShopCollections } from "../useShopCollections";
 import { CollectionCards, CollectionHeader } from "../ShopCollections";
+import { useOrderCount } from "../orderCount";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -532,6 +533,8 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
   const [searchParams] = useSearchParams();
   const collectionId = searchParams.get("collection");
   const reviews = useShopReviews(storeId, owner);
+  // Once the shop is read: its `created` leaves out orders for an earlier shop with this id.
+  const orderCount = useOrderCount(owner, shop ? storeId : "", shop ? Number(shop.created) || undefined : undefined);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [reviewsOpen, setReviewsOpen] = useState(false);
   const sellerPage = () => navigate(`/product-manager/${encodeURIComponent(storeId)}`);
@@ -604,6 +607,7 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
           isOwner={isOwner}
           canEdit={currentStoreId === storeId}
           reviews={reviews}
+          orderCount={orderCount}
           onOpenReviews={() => setReviewsOpen(true)}
           onOpenDetails={() => setDetailsOpen(true)}
           onEdit={() => dispatch(toggleEditStoreModal(true))}

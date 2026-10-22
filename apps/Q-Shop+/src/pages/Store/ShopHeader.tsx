@@ -1,6 +1,6 @@
 /**
- * The top of a shop page: logo, owner, rating, where it is and ships to,
- * the coins it takes, and what you can do (message the seller, share, see
+ * The top of a shop page: logo, owner, rating and how many orders it has
+ * received (pages/Store/orderCount.ts), where it is and ships to, the coins it takes, and what you can do (message the seller, share, see
  * the details; the owner also edits the shop or opens the seller page).
  */
 import { Box, Button, Rating, Skeleton, Typography } from "@mui/material";
@@ -10,6 +10,7 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import type { CurrentStore } from "../../state/features/globalSlice";
 import { NameAvatar } from "../../components/common/NameAvatar";
 import { CoinIcon } from "../../components/money/CoinIcon";
@@ -18,6 +19,7 @@ import { mailToLink, storeLink } from "../../qdn/links";
 import { CopyLinkButton } from "./CopyLinkButton";
 import { roundToHalf } from "./reviewsData";
 import type { ShopReviews } from "./useShopData";
+import { orderCountLabel, type OrderCount } from "./orderCount";
 
 const panelSx = {
   border: 1,
@@ -71,6 +73,7 @@ export function ShopHeader({
   isOwner,
   canEdit,
   reviews,
+  orderCount,
   onOpenReviews,
   onOpenDetails,
   onEdit,
@@ -83,12 +86,15 @@ export function ShopHeader({
   /** The owner's current shop is this one (the edit dialog edits the current shop). */
   canEdit: boolean;
   reviews: ShopReviews;
+  /** Orders received (null while it loads, or for a shop id another name shares). */
+  orderCount?: OrderCount | null;
   onOpenReviews: () => void;
   onOpenDetails: () => void;
   onEdit: () => void;
   onSellerPage: () => void;
 }) {
   const coins = shopCoins(shop);
+  const orders = orderCount ? orderCountLabel(orderCount) : null;
   const title = shop.title || "Shop";
   return (
     <Box component="section" aria-label="About this shop" sx={panelSx}>
@@ -140,7 +146,15 @@ export function ShopHeader({
               ) : null}
             </Typography>
           </Box>
-          <RatingSummaryButton reviews={reviews} onOpen={onOpenReviews} />
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5 }}>
+            <RatingSummaryButton reviews={reviews} onOpen={onOpenReviews} />
+            {orders && (
+              <Typography variant="body2" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+                <ShoppingBagOutlinedIcon fontSize="small" aria-hidden />
+                {orders}
+              </Typography>
+            )}
+          </Box>
           {(shop.location || shop.shipsTo) && (
             <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 2, rowGap: 0.5, color: "text.secondary" }}>
               {shop.location ? (
