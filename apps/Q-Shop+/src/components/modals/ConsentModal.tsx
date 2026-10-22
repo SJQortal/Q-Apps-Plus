@@ -56,7 +56,6 @@ export default function ConsentModal() {
             sx={{
               backgroundColor: theme.palette.primary.light,
               color: theme.palette.text.primary,
-              fontFamily: "Raleway"
             }}
             onClick={handleClose}
             autoFocus

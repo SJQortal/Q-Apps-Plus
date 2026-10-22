@@ -92,7 +92,7 @@ export const StoreCard: FC<StoreCardProps> = ({
   }, [storeDescription]);
 
   return (
-    <StoresRow item xs={12} sm={6} md={6} lg={3} key={storeId}>
+    <StoresRow  key={storeId} size={{ xs: 12, sm: 6, md: 6, lg: 3 }}>
       <ContextMenuResource
         name={storeOwner}
         service="STORE"
@@ -110,7 +110,7 @@ export const StoreCard: FC<StoreCardProps> = ({
             <StoreCardImage src={storeLogo} alt={storeTitle} />
             <OpenStoreCard>Open</OpenStoreCard>
           </StoreCardImageContainer>
-          <StoreCardInfo item>
+          <StoreCardInfo>
             <StoreCardTitle>{storeTitle}</StoreCardTitle>
             <StoreCardDescription>
               {showCompleteStoreDescription

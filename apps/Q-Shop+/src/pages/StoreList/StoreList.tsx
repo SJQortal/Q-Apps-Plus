@@ -123,7 +123,7 @@ export const StoreList = () => {
   return (
     <>
       <StoresContainer container>
-        <WelcomeRow item xs={12}>
+        <WelcomeRow size={{ xs: 12 }}>
           <LogoRow>
             <QShopLogo
               src={
@@ -144,14 +144,14 @@ export const StoreList = () => {
                 <MyStoresCheckbox
                   checked={filterUserStores}
                   onChange={handleFilterUserStores}
-                  inputProps={{ "aria-label": "controlled" }}
+                  slotProps={{ input: { "aria-label": "controlled" } }}
                 />
                 See My Stores
               </MyStoresCard>
             )}
           </WelcomeCol>
         </WelcomeRow>
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Grid container spacing={3}>
             {filteredStores.length > 0 &&
               filteredStores
@@ -177,13 +177,7 @@ export const StoreList = () => {
                   if (!hasHash) {
                     return (
                       <StoresRow
-                        item
-                        xs={12}
-                        sm={6}
-                        md={6}
-                        lg={3}
-                        key={storeId}
-                      >
+                        key={storeId} size={{ xs: 12, sm: 6, md: 6, lg: 3 }}>
                         <Skeleton
                           variant="rectangular"
                           style={{

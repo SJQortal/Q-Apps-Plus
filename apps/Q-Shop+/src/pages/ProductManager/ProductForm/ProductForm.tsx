@@ -249,7 +249,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         variant="filled"
         value={product.title}
         onChange={handleInputChange}
-        inputProps={{ maxLength: 180 }}
+        slotProps={{ htmlInput: { maxLength: 180 } }}
         required
       />
       <CustomInputField
