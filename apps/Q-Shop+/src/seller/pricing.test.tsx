@@ -34,6 +34,7 @@ import { roomTiming } from "../qdn/publishBatches";
 import { resetPublishedIndexes } from "./productIndex";
 import { resetSentCatalogues } from "./sentCatalogues";
 import { PRICES_DRAFTS_TEXT } from "./useShopPricing";
+import { pickCategory } from "../test/categories";
 
 vi.mock("../components/common/ImageUploader", () => ({
   default: ({ label, onPick }: { label: string; onPick: (img: string) => void }) => (
@@ -287,7 +288,7 @@ describe("the product form with prices in a currency", () => {
     const dialog = await screen.findByRole("dialog", { name: "Add product" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Jam" } });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: /^Category/ }), { target: { value: "Food & Drink" } });
+    await pickCategory(dialog, "food", "Food & Drink");
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^Price in USD/ }), { target: { value: "10" } });
     expect(within(dialog).getByText(/^= 55\.56 QORT · 40 ARRR at your rates/)).toBeInTheDocument();
     // Its QORT and ARRR prices come from the USD price: no fields for them.

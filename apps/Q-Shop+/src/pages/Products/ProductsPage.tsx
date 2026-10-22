@@ -53,6 +53,8 @@ import { useInView } from "react-intersection-observer";
 import type { RootState } from "../../state/store";
 import { setProductToCart } from "../../state/features/cartSlice";
 import { Page, PageHeader } from "../../components/layout/Page";
+import { CategoryIcon } from "../../components/CategoryIcon";
+import { searchCategories } from "../../utils/categoryMatch";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PullIndicator } from "../../components/common/PullIndicator";
 import { BottomSheet } from "../../components/common/mobile";
@@ -192,7 +194,9 @@ function CategoryPicker({
     );
   }
   const needle = find.trim().toLocaleLowerCase();
-  const shown = needle ? options.filter((option) => option.label.toLocaleLowerCase().includes(needle)) : options;
+  // By name, or by a thing the category holds ("glasses" finds Health & Beauty: utils/categoryMatch.ts).
+  const meant = new Set(needle ? searchCategories(needle).filter((hit) => hit.via).map((hit) => categoryKey(hit.category)) : []);
+  const shown = needle ? options.filter((option) => option.label.toLocaleLowerCase().includes(needle) || meant.has(option.key)) : options;
   // The sellers' own words from before the list come under their own heading.
   const hasListed = options.some((option) => option.listed);
   const firstOther = shown.findIndex((option) => !option.listed);
@@ -224,7 +228,8 @@ function CategoryPicker({
           <FormControlLabel
             control={<Checkbox checked={selected.includes(option.key)} onChange={() => onToggle(option.key)} />}
             label={
-              <Box component="span" sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
+              <Box component="span" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <CategoryIcon category={option.label} size={24} />
                 <Box component="span" sx={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>
                   {option.label}
                 </Box>

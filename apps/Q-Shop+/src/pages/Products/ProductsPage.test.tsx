@@ -131,6 +131,24 @@ describe("Products", () => {
     expect(within(group).getByRole("heading", { name: "Other categories" })).toBeInTheDocument();
   });
 
+  it("finds a category by a thing it holds: “glasses” finds Health & Beauty", async () => {
+    const world = makeWorld({ shops: 3, productsPerShop: 4 });
+    const names = ["Baby", "Health & Beauty", "Home & Garden", "Food & Drink", "Services", "Pet Supplies", "Toys & Hobbies", "Sporting Goods", "Coins & Bullion", "flower", "Books, Movies & Music", "Everything Else"];
+    world.shops.flatMap((shop) => shop.products).forEach((p, i) => (p.category = names[i % names.length]));
+    renderProducts({ world });
+    await waitFor(() => expect(cards()).toHaveLength(12));
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+    const dialog = await screen.findByRole("dialog", { name: "Categories" });
+    await within(dialog).findByRole("group", { name: "Categories" });
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Find a category" }), { target: { value: "glasses" } });
+    const group = within(dialog).getByRole("group", { name: "Categories" });
+    expect(within(group).getAllByRole("checkbox").map((box) => box.closest("label")?.textContent)).toEqual([
+      "Health & Beauty1, 1 product",
+      // "glass", its singular, is Home & Garden's (a drinking glass).
+      "Home & Garden1, 1 product",
+    ]);
+  });
+
   it("opens with the categories a link names, and sorts by price across shops", async () => {
     const world = makeWorld({ shops: 3, productsPerShop: 3 });
     world.shops[0].products[2].price = [{ currency: "qort", value: 0.5 }];

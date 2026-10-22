@@ -4,9 +4,10 @@
  * other coin the shop takes, type, category and (when editing) status. It is
  * controlled: NewProduct.tsx holds the values and turns them into a draft.
  */
-import type { Dispatch, SetStateAction } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import {
   Box,
+  Button,
   IconButton,
   InputAdornment,
   TextField,
@@ -19,7 +20,9 @@ import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined
 import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
 import { CoinIcon } from "../../../components/money/CoinIcon";
-import { SHOP_CATEGORIES } from "../../../constants/categories";
+import { CategoryField } from "../../../seller/CategoryField";
+import { CategoryIcon } from "../../../components/CategoryIcon";
+import { suggestCategory } from "../../../utils/categoryMatch";
 import {
   coinPriceFromFiat,
   formatFiat,
@@ -75,6 +78,33 @@ function coinName(coin: string, shop: ShopCoinSettings | null | undefined): stri
 export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricing, saved, wholeOnly = [], editing, onImageError }: ProductFormProps) => {
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
     onChange((prev) => ({ ...prev, [key]: value }));
+  // The category the title suggests (utils/categoryMatch.ts). While the seller hasn't picked one,
+  // it follows the title as they type it; once they pick, it stays theirs.
+  const [autoFill, setAutoFill] = useState(!values.category);
+  const [autoCategory, setAutoCategory] = useState<string | null>(null);
+  // What is typed in the category field to search it; null: it shows the category.
+  const [categoryText, setCategoryText] = useState<string | null>(null);
+  const suggested = suggestCategory(values.title);
+  const setTitle = (title: string) => {
+    const follow = autoFill && (!values.category || values.category === autoCategory);
+    const next = follow ? suggestCategory(title) : null;
+    if (next) {
+      setAutoCategory(next);
+      setCategoryText(null);
+    }
+    onChange((prev) => ({ ...prev, title, ...(next && { category: next }) }));
+  };
+  const pickCategory = (category: string) => {
+    setAutoFill(false);
+    setCategoryText(null);
+    set("category", category);
+  };
+  const categoryHelp =
+    oldCategory && values.category === oldCategory
+      ? `“${oldCategory}” isn't one of the categories every shop uses. Pick one, so buyers find this product with others like it.`
+      : autoFill && values.category && values.category === autoCategory
+        ? "Suggested from the title. Pick another if it doesn't fit."
+        : "Type what it is (e.g. glasses, ghee, hoodie) or pick one. The same categories in every shop.";
   const setPrice = (coin: string, text: string) =>
     onChange((prev) => ({
       ...prev,
@@ -153,7 +183,7 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricin
         <TextField
           label="Title"
           value={values.title}
-          onChange={(e) => set("title", e.target.value)}
+          onChange={(e) => setTitle(e.target.value)}
           required
           fullWidth
           slotProps={{ htmlInput: { maxLength: MAX_TITLE_LENGTH } }}
@@ -189,35 +219,26 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricin
             {values.type === "physical" ? "Buyers give a delivery address at checkout." : "No delivery address is asked for."}
           </Typography>
         </Box>
-        <TextField
-          select
-          label="Category"
-          required
-          fullWidth
+        <CategoryField
           value={values.category}
-          onChange={(e) => set("category", e.target.value)}
-          slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-          helperText={
-            oldCategory && values.category === oldCategory
-              ? `“${oldCategory}” isn't one of the categories every shop uses. Pick one, so buyers find this product with others like it.`
-              : "The same categories in every shop, so buyers can browse all products by them."
-          }
-          sx={{ "& .MuiInputBase-root": { minHeight: 44 } }}
-        >
-          <option value="" disabled>
-            Choose a category
-          </option>
-          {SHOP_CATEGORIES.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-          {oldCategory && (
-            <optgroup label="This product's category now">
-              <option value={oldCategory}>{oldCategory}</option>
-            </optgroup>
-          )}
-        </TextField>
+          inputValue={categoryText ?? values.category}
+          onInputChange={(text) => setCategoryText(text === values.category ? null : text)}
+          onPick={pickCategory}
+          oldCategory={oldCategory}
+          helperText={categoryHelp}
+        />
+        {oldCategory && values.category === oldCategory && suggested && (
+          <Box>
+            <Button
+              variant="outlined"
+              onClick={() => pickCategory(suggested)}
+              startIcon={<CategoryIcon category={suggested} size={24} />}
+              sx={{ minHeight: 44, textTransform: "none" }}
+            >
+              {`Use ${suggested} (suggested from the title)`}
+            </Button>
+          </Box>
+        )}
         {editing && (
           <Box>
             <Typography id="product-status-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
