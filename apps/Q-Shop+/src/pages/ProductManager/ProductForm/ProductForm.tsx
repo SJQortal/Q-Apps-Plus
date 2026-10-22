@@ -4,7 +4,7 @@
  * other coin the shop takes, type, category and (when editing) status. It is
  * controlled: NewProduct.tsx holds the values and turns them into a draft.
  */
-import { useState, type Dispatch, type SetStateAction } from "react";
+import { lazy, Suspense, useId, useState, type Dispatch, type SetStateAction } from "react";
 import {
   Box,
   Button,
@@ -20,6 +20,9 @@ import {
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
+
+// Quill and the media dialogs: loaded with the form, never for buyers.
+const DescriptionEditor = lazy(() => import("../../../richtext/DescriptionEditor"));
 import { CoinIcon } from "../../../components/money/CoinIcon";
 import { CategoryField } from "../../../seller/CategoryField";
 import { CategoryIcon } from "../../../components/CategoryIcon";
@@ -70,6 +73,9 @@ interface ProductFormProps {
    * they are in.
    */
   picturesLoad?: { status: "loading" | "failed"; count: number; onRetry: () => void } | null;
+  /** The name the shop publishes under: videos and PDFs added in the description are published by it. */
+  publisher?: string | null;
+  shopTitle?: string;
 }
 
 const SectionTitle = ({ children }: { children: string }) => (
@@ -94,8 +100,11 @@ export const ProductForm = ({
   editing,
   onImageError,
   picturesLoad = null,
+  publisher = null,
+  shopTitle,
 }: ProductFormProps) => {
   const picturesLocked = !!picturesLoad;
+  const descriptionLabel = useId();
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
     onChange((prev) => ({ ...prev, [key]: value }));
   // The category the title suggests (utils/categoryMatch.ts). While the seller hasn't picked one,
@@ -244,15 +253,26 @@ export const ProductForm = ({
           slotProps={{ htmlInput: { maxLength: MAX_TITLE_LENGTH } }}
           helperText={`${values.title.length}/${MAX_TITLE_LENGTH}`}
         />
-        <TextField
-          label="Description"
-          value={values.description}
-          onChange={(e) => set("description", e.target.value)}
-          fullWidth
-          multiline
-          minRows={3}
-          maxRows={10}
-        />
+        <Box>
+          <Typography id={descriptionLabel} variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+            Description
+          </Typography>
+          <Suspense fallback={<Skeleton variant="rounded" height={208} aria-label="Loading the editor" />}>
+            <DescriptionEditor
+              value={values.description}
+              onChange={(html) => set("description", html)}
+              name={publisher}
+              productTitle={values.title.trim()}
+              shopTitle={shopTitle}
+              labelId={descriptionLabel}
+              placeholder="What it is, what's included, sizes, care…"
+            />
+          </Suspense>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            Format it with the toolbar, or paste formatted text. To link to Qortal, select text and use the link button with a qortal:// address. The last two
+            buttons add a video or a PDF; a Q-Tube or Q-Share link on a line of its own shows its video or files too.
+          </Typography>
+        </Box>
         <Box>
           <Typography id="product-type-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
             Type

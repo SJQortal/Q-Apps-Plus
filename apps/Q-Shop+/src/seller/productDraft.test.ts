@@ -282,3 +282,36 @@ describe("a price in the shop's currency (money/fiatPricing.ts)", () => {
     expect(validateProductForm(values({ fiat: "", prices: { QORT: "" } }), coins, { pricing })).toBe("Set a price in QORT above 0");
   });
 });
+
+describe("a formatted description (richtext/plainText.ts)", () => {
+  const rich = "<h2>Ghee</h2><p>Slow-cooked <strong>Icelandic</strong> ghee.</p>";
+
+  it("is stored as htmlDescription beside the original's plain description", () => {
+    const draft = newProductDraft({ values: values({ description: rich }), coins, storeId: STORE_ID, name: SELLER, uid: "UIDxxxxxx1", now: 1 }) as Record<string, unknown>;
+    expect(draft.description).toBe("Ghee\nSlow-cooked Icelandic ghee.");
+    expect(draft.htmlDescription).toBe(rich);
+    // Right after the description; every other key in the original's order.
+    expect(Object.keys(draft).slice(0, 3)).toEqual(["title", "description", "htmlDescription"]);
+  });
+
+  it("plain text needs none, as the original writes it", () => {
+    const draft = newProductDraft({ values: values({ description: "<p>Line one</p><p><br></p><p>Line two</p>" }), coins, storeId: STORE_ID, name: SELLER, uid: "UIDxxxxxx1", now: 1 }) as Record<string, unknown>;
+    expect(draft.description).toBe("Line one\n\nLine two");
+    expect("htmlDescription" in draft).toBe(false);
+  });
+
+  it("opens in the editor as it was, and goes when an edit makes it plain again", () => {
+    const product = { ...poster, description: "Ghee\nSlow-cooked Icelandic ghee.", htmlDescription: rich };
+    expect(formValuesFor(product, coins).description).toBe(rich);
+    expect(formValuesFor(poster, coins).description).toBe(`<p>${poster.description}</p>`);
+    const edited = editedProductDraft({ base: product, values: { ...formValuesFor(product, coins), description: "<p>Just text</p>" }, coins, name: SELLER }) as Record<string, unknown>;
+    expect(edited.description).toBe("Just text");
+    expect("htmlDescription" in edited).toBe(false);
+    const kept = editedProductDraft({ base: product, values: formValuesFor(product, coins), coins, name: SELLER }) as Record<string, unknown>;
+    expect(kept.htmlDescription).toBe(rich);
+  });
+
+  it("is refused when it is too long to publish", () => {
+    expect(validateProductForm(values({ description: `<p>${"x".repeat(20_001)}</p>`, images: ["data:image/webp;base64,SU1H"], title: "T", category: "Baby" }), coins)).toMatch(/Shorten the description/);
+  });
+});

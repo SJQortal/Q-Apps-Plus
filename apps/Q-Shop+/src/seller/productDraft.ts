@@ -13,6 +13,8 @@
 import { assetIdOf, priceCurrencyKey } from "../money/coins";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { MAX_PRODUCT_PICTURES, withPicturesRef } from "../qdn/productPictures";
+import { MAX_DESCRIPTION_HTML, descriptionHtmlOf, htmlToPlainText, isPlainHtml } from "../richtext/plainText";
+import { normalizeQuillHtml } from "../richtext/quillHtml";
 import { isListedCategory } from "../constants/categories";
 import { fiatPriceOf, fiatToText, parseFiat, priceDecimals, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
 
@@ -158,6 +160,7 @@ export function validateProductForm(
   if (values.images.length === 0) return "Add at least one image";
   if (values.images.length > MAX_PRODUCT_IMAGES) return `Use at most ${MAX_PRODUCT_IMAGES} images`;
   if (!values.title.trim()) return "Add a title";
+  if (values.description.length > MAX_DESCRIPTION_HTML) return "Shorten the description: it is too long to publish";
   if (!values.category.trim()) return "Pick a category";
   if (!isListedCategory(values.category) && values.category !== options.oldCategory) return "Pick a category from the list";
   const fiatText = options.pricing ? (values.fiat ?? "").trim() : "";
@@ -183,6 +186,24 @@ export function validateProductForm(
  * A new product, exactly as the original's NewProduct.addProduct builds it
  * (the same keys in the same order). It joins a catalogue when published.
  */
+/**
+ * `htmlDescription` (additive) for a description with formatting, videos or
+ * files, in Quill 1's shape; nothing for plain text, which `description`
+ * holds alone, as the original writes it (richtext/plainText.ts).
+ */
+function richDescription(html: string): { htmlDescription?: string } {
+  return isPlainHtml(html) ? {} : { htmlDescription: normalizeQuillHtml(html) };
+}
+
+/** The product with `htmlDescription` as the form's HTML calls for: set, or taken off when it is plain again. */
+function withHtmlDescription<T extends Record<string, unknown>>(product: T, html: string): T {
+  const rich = richDescription(html);
+  if (rich.htmlDescription) return { ...product, htmlDescription: rich.htmlDescription };
+  const rest = { ...product };
+  delete rest.htmlDescription;
+  return rest;
+}
+
 export function newProductDraft(args: {
   values: ProductFormValues;
   coins: string[];
@@ -196,7 +217,8 @@ export function newProductDraft(args: {
   const shortStoreId = shortStoreIdOf(storeId);
   const draft = {
     title: values.title,
-    description: values.description,
+    description: htmlToPlainText(values.description),
+    ...richDescription(values.description),
     created: now,
     version: 1,
     images: values.images,
@@ -254,31 +276,37 @@ export function editedProductDraft(args: {
 function editedWithoutFiat(base: Record<string, any> & { id: string }, values: ProductFormValues, coins: string[], name: string) {
   const price = buildPriceList(values.prices, coins, Array.isArray(base.price) ? base.price : []);
   if (!base.isUpdate && !base.catalogueId) {
-    return {
+    return withHtmlDescription(
+      {
+        ...base,
+        title: values.title,
+        description: htmlToPlainText(values.description),
+        images: values.images,
+        mainImageIndex: 0,
+        type: values.type,
+        price,
+        category: values.category,
+        user: name,
+      },
+      values.description
+    );
+  }
+  return withHtmlDescription(
+    {
       ...base,
       title: values.title,
-      description: values.description,
+      description: htmlToPlainText(values.description),
       images: values.images,
       mainImageIndex: 0,
       type: values.type,
       price,
       category: values.category,
+      isUpdate: true,
+      status: values.status,
       user: name,
-    };
-  }
-  return {
-    ...base,
-    title: values.title,
-    description: values.description,
-    images: values.images,
-    mainImageIndex: 0,
-    type: values.type,
-    price,
-    category: values.category,
-    isUpdate: true,
-    status: values.status,
-    user: name,
-  };
+    },
+    values.description
+  );
 }
 
 /**
@@ -343,7 +371,8 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
   return {
     ...(pricing && { fiat: fiat ? fiatToText(fiat.value, pricing.currency) : "" }),
     title: typeof product.title === "string" ? product.title : "",
-    description: typeof product.description === "string" ? product.description : "",
+    // The editor's HTML: the product's formatted description, else its plain one (richtext/plainText.ts).
+    description: descriptionHtmlOf(product),
     images: Array.isArray(product.images) ? product.images.filter((i: unknown) => typeof i === "string") : [],
     // As checkout reads it (money/order.ts): only "digital" skips the delivery address.
     type: product.type === "digital" ? "digital" : "physical",

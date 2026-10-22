@@ -5,7 +5,8 @@
  * that already read the catalogue hands it over, otherwise it is fetched, as
  * the original did. The shop's JSON comes from the session cache for the
  * coin picker and the shop link. A deep link no longer bounces to the shop
- * page first. The description is plain text (never HTML).
+ * page first. The description shows the seller's formatting, videos and
+ * files when it has them (richtext/ProductDescription.tsx), made safe first.
  *
  * The collections the product is in are named under its price, each a link
  * to that collection on the shop page (Follow-up 15): the shop's product
@@ -35,6 +36,7 @@ import { collectionPath, decodeParam, productLink, storePath } from "../../qdn/l
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
 import { useCatalogue, useViewedShop } from "../Store/useShopData";
 import { useMorePictures } from "../../hooks/useMorePictures";
+import { ProductDescription } from "../../richtext/ProductDescription";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
@@ -287,9 +289,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             <Typography id="product-description-heading" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1 }}>
               Description
             </Typography>
-            <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }} color={product.description ? "text.primary" : "text.secondary"}>
-              {product.description || "No description."}
-            </Typography>
+            <ProductDescription product={product as { description?: unknown; htmlDescription?: unknown }} />
           </Box>
         </Box>
       </Box>

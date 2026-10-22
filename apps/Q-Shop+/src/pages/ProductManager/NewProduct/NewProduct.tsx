@@ -173,6 +173,8 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
             wholeOnly={wholeOnly}
             editing={editingPublished}
             onImageError={setError}
+            publisher={name}
+            shopTitle={currentStore?.title}
             picturesLoad={
               picturesPending && (more.status === "loading" || more.status === "failed")
                 ? { status: more.status, count: more.count, onRetry: more.retry }

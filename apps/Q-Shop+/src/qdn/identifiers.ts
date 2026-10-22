@@ -17,6 +17,8 @@ export const PRODUCT_BASE = "q-store-product";
 export const COLLECTIONS_BASE = "q-store-collections";
 /** + app, additive (round 5): a product's pictures past the third (qdn/productPictures.ts). The original never reads it. */
 export const PICTURES_BASE = "q-store-pictures";
+/** + app, additive (round 5): a product video published from the description editor (richtext/qortalSources.ts). */
+export const VIDEO_BASE = "q-store-video";
 
 /** A shop's id from its short id: `q-store-general-<shortStoreId>`. */
 export function storeIdentifier(shortStoreId: string): string {
