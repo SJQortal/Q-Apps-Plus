@@ -6,7 +6,11 @@ What it adds:
 
 - **Finding things:** search across shops (owner, title, description), sorts (Newest, Recently active, Most products, Top rated, A–Z), filters by coin, shop pages that filter and sort every product without downloading the catalogues first, search within a shop, products as a grid or a list, product galleries, share links (`qortal://APP/Q-Shop+/…`).
 - **Products:** every shop's products on one page, newest first, with search, sorts, one or several categories across every shop and in stock only; it reads the shops' small product lists, and pictures only for the products on screen.
-- **Collections:** sellers group products into collections with a picture and a description; buyers browse them at the top of a shop, and each has its own link (`…?collection=<id>`).
+- **One category list:** sellers pick a product's category from one list for every shop (eBay's top level with Amazon's names, plus Digital Goods & Software, Services and Coins & Bullion), so the Products page groups them; older products keep their own until edited.
+- **Collections:** sellers group products into collections with a picture and a description, in an order they choose; buyers browse them at the top of a shop, each has its own link (`…?collection=<id>`), and product pages name the collections they are in.
+- **Featured order:** sellers arrange their shop's products; shop pages open on that order, and buyers can still sort.
+- **Order count:** a shop page says how many orders the shop has received (from the order ids buyers publish; not shown when another name has a shop with the same id, as their orders can't be told apart).
+- **Prices in a currency:** sellers set prices in USD (or another currency) and type their own QORT and ARRR exchange rates; the app works out and publishes every product's QORT and ARRR price, and reprices them all when a rate changes. Buyers pay those prices as before; nothing is fetched from outside Qortal.
 - **Buying safely:** a cart for every shop that survives a reload, a step-by-step checkout (review, delivery, confirm) with the amount frozen at Confirm, and paid orders kept until they are recorded on QDN, so a declined or timed-out recording is finished later without paying again.
 - **Pay in Q-Assets:** QORT and ARRR as before, and Qortal assets (Q-Assets) through Hub's asset transfer, set per shop by the seller.
 - **Orders and selling:** My orders with status filters and counts; a seller page with an overview, products, orders, reviews and shop settings; payment details checked against the chain; batched publishing for big catalogues (Core allows 25 unconfirmed transactions per account); deleting products (one or several at once) and whole shops.
@@ -39,6 +43,7 @@ The QDN identifiers and JSON shapes are the original's (`src/qdn/identifiers.ts`
 - products may carry their own price per asset (`{currency: "ASSET:<id>", value}`);
 - orders paid in an asset add `payment.assetId`/`assetName`;
 - collections are a DOCUMENT `q-store-collections-<shortStoreId>` under the seller's name, and the product index gains a `collectionsId` field pointing at it (both apps' product publishes keep it);
+- the product index may carry `productOrder` (product ids in the seller's order) and `fiatPricing` (`{currency, rates: {QORT, ARRR?}, updated}`, or `null` once stopped); a product priced in a currency carries `fiatPrice` (`{currency, value, qort}`); its `price` list keeps the original's shape;
 - settings sync is a DOCUMENT `qshopplus_settings` under the user's name (theme, preferred coin, product view);
 - deletes publish over each part, since QDN can't erase anything: a deleted shop's STORE, product list, catalogues and collections become empty JSON in the original's shapes marked `deleted: true` (titled and tagged `deleted`), which the original also leaves out; deleted products leave the product list and their catalogues, which keep the original's shapes. Q-Shop+ also reads the `"D"` marker other Qortal apps write as deleted.
 
