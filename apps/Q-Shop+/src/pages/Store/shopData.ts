@@ -20,6 +20,8 @@ export const PRODUCTS_PAGE = 20;
 export const SEARCH_CATALOGUE_CAP = 30;
 
 export type ProductSort = "newest" | "oldest" | "price-asc" | "price-desc";
+/** A shop page's sorts: the general ones, and the seller's own order (qdn/productOrder.ts, a collection's order). */
+export type ShopSort = ProductSort | "featured";
 
 export const PRODUCT_SORTS: { value: ProductSort; label: string }[] = [
   { value: "newest", label: "Newest" },
@@ -27,6 +29,19 @@ export const PRODUCT_SORTS: { value: ProductSort; label: string }[] = [
   { value: "price-asc", label: "Price: low to high" },
   { value: "price-desc", label: "Price: high to low" },
 ];
+
+/** The seller's order, offered first on a shop page that has one. */
+export const FEATURED_SORT: { value: ShopSort; label: string } = { value: "featured", label: "Featured" };
+
+/**
+ * The sort a shop page shows: the buyer's pick, else the seller's order when
+ * there is one (`hasOrder`), else newest first. "Featured" without an order
+ * is newest first.
+ */
+export function effectiveSort(picked: ShopSort | null, hasOrder: boolean): ShopSort {
+  if (picked && (picked !== "featured" || hasOrder)) return picked;
+  return hasOrder ? "featured" : "newest";
+}
 
 /** One product as the shop's index lists it. */
 export interface ProductRow {
@@ -42,7 +57,7 @@ export interface ProductRow {
 export interface ProductQuery {
   categories: string[];
   inStockOnly: boolean;
-  sort: ProductSort;
+  sort: ShopSort;
 }
 
 export const DEFAULT_PRODUCT_QUERY: ProductQuery = { categories: [], inStockOnly: false, sort: "newest" };
@@ -119,10 +134,25 @@ export function isRetired(status: string | undefined): boolean {
   return status === RETIRED;
 }
 
-/** The order a sort gives (newest first for equal values). */
-export function compareRows(sort: ProductSort): (a: ProductRow, b: ProductRow) => number {
+/**
+ * The order a sort gives (newest first for equal values). "featured" follows
+ * `order` (product ids): those it names first, in its order, then the rest
+ * newest first.
+ */
+export function compareRows(sort: ShopSort, order: string[] = []): (a: ProductRow, b: ProductRow) => number {
   const newest = (a: ProductRow, b: ProductRow) => b.created - a.created;
   switch (sort) {
+    case "featured": {
+      const at = new Map(order.map((id, i) => [id, i]));
+      return (a, b) => {
+        const x = at.get(a.productId);
+        const y = at.get(b.productId);
+        if (x !== undefined && y !== undefined) return x - y;
+        if (x !== undefined) return -1;
+        if (y !== undefined) return 1;
+        return newest(a, b);
+      };
+    }
     case "oldest":
       return (a, b) => a.created - b.created;
     case "price-asc":
@@ -141,14 +171,14 @@ export function compareRows(sort: ProductSort): (a: ProductRow, b: ProductRow) =
   }
 }
 
-/** Category and stock filters, then the sort. Returns a new array. */
-export function filterAndSortProducts(rows: ProductRow[], query: ProductQuery, catalogues: CatalogueMap): ProductRow[] {
+/** Category and stock filters, then the sort (`order`: the seller's, for "featured"). Returns a new array. */
+export function filterAndSortProducts(rows: ProductRow[], query: ProductQuery, catalogues: CatalogueMap, order: string[] = []): ProductRow[] {
   const categories = new Set(query.categories);
   return rows
     .filter((row) => isListed(row, catalogues))
     .filter((row) => categories.size === 0 || (!!row.category && categories.has(row.category)))
     .filter((row) => !query.inStockOnly || isInStock(row, catalogues))
-    .sort(compareRows(query.sort));
+    .sort(compareRows(query.sort, order));
 }
 
 /** The words of a search, lower case. */

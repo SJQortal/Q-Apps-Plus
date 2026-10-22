@@ -145,6 +145,16 @@ describe("deletions and the collections pointer", () => {
     expect(mergeProductIndexes(pointed, seen).collectionsId).toBe(`q-store-collections-${SHORT_STORE_ID}`);
   });
 
+  it("keeps the seller's product order either copy has; an empty one on QDN (newest first again) wins", () => {
+    const ordered = { ...seen, productOrder: [chair.id, mug.id] } as DataContainerDoc;
+    expect(indexKey(ordered)).not.toBe(indexKey(seen));
+    expect(mergeProductIndexes(seen, ordered).productOrder).toEqual([chair.id, mug.id]);
+    expect(mergeProductIndexes(ordered, seen).productOrder).toEqual([chair.id, mug.id]);
+    const cleared = { ...seen, productOrder: [] } as DataContainerDoc;
+    expect(mergeProductIndexes(ordered, cleared).productOrder).toEqual([]);
+    expect(indexKey(mergeProductIndexes(ordered, cleared))).not.toBe(indexKey(ordered));
+  });
+
   it("knows every list this session's publishes replaced, not only the last one", () => {
     notePublishedIndex(STORE_ID, "v0", "v1");
     notePublishedIndex(STORE_ID, "v1", "v2");

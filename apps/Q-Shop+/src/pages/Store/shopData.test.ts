@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   categoriesOf,
+  effectiveSort,
   filterAndSortProducts,
   isListed,
   matchesSearch,
@@ -83,6 +84,30 @@ describe("filterAndSortProducts", () => {
     row({ productId: "retired", created: 5, priceQort: 2, status: "RETIRED" }),
   ];
   const ids = (list: ProductRow[]) => list.map((r) => r.productId);
+
+  it("sorts Featured in the seller's order, then the rest newest first", () => {
+    const order = ["mid-mid", "gone", "old-cheap"];
+    expect(ids(filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "featured" }, {}, order))).toEqual([
+      "mid-mid",
+      "old-cheap",
+      "no-price",
+      "new-dear",
+    ]);
+    // Without an order, Featured is newest first.
+    expect(ids(filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "featured" }, {}))).toEqual([
+      "no-price",
+      "new-dear",
+      "mid-mid",
+      "old-cheap",
+    ]);
+  });
+
+  it("defaults to Featured only where the seller set an order, and keeps the buyer's pick", () => {
+    expect(effectiveSort(null, true)).toBe("featured");
+    expect(effectiveSort(null, false)).toBe("newest");
+    expect(effectiveSort("price-asc", true)).toBe("price-asc");
+    expect(effectiveSort("featured", false)).toBe("newest");
+  });
 
   it("sorts newest and oldest by the index's created time", () => {
     expect(ids(filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "newest" }, {}))).toEqual([

@@ -36,6 +36,8 @@ export interface WorldShop {
   deleted?: "plain" | "marked";
   /** Its collections document's list (qdn/collections.ts); the product index then points at it. */
   collections?: { id: string; title: string; description?: string; image?: string; products: string[]; created?: number; updated?: number }[];
+  /** The seller's order of its products (qdn/productOrder.ts), in the product index. */
+  productOrder?: string[];
 }
 
 export interface WorldReview {
@@ -160,6 +162,7 @@ export function dataContainerOf(shop: WorldShop) {
     catalogues,
     id: `${storeId}-datacontainer`,
     ...(shop.collections && { collectionsId: `q-store-collections-${shop.shortStoreId}` }),
+    ...(shop.productOrder && { productOrder: shop.productOrder }),
   };
 }
 

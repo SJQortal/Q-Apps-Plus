@@ -15,6 +15,10 @@
  * under its picture, title and description, with the same filters and sorts.
  * Products show as a grid of tiles or a list of rows (utils/productView.ts:
  * the buyer's choice, kept in Settings; by default rows on phones).
+ *
+ * "Featured" is the seller's order: the shop's (qdn/productOrder.ts) or,
+ * in a collection, the collection's. It is the default sort wherever there
+ * is one; buyers can still pick another.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -50,7 +54,9 @@ import {
   categoriesOf,
   catalogueIdsOf,
   DEFAULT_PRODUCT_QUERY,
+  effectiveSort,
   effectiveStatus,
+  FEATURED_SORT,
   filterAndSortProducts,
   productOf,
   productRowsFromContainer,
@@ -61,8 +67,9 @@ import {
   searchTerms,
   type ProductQuery,
   type ProductRow,
-  type ProductSort,
+  type ShopSort,
 } from "../shopData";
+import { productOrderOf } from "../../../qdn/productOrder";
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
 import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
 import { CategoryChips, FETCHING_NOTE, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../ProductList";
@@ -114,7 +121,9 @@ function ShopProducts({
   const layout = productLayout(useProductView(), phone);
   const shopCoin = useShopCoin(shop);
   const { catalogues, statuses, load, retryFailed } = useCatalogueLoader(owner);
-  const [query, setQuery] = useState<ProductQuery>(DEFAULT_PRODUCT_QUERY);
+  const [filters, setFilters] = useState<Omit<ProductQuery, "sort">>({ categories: [], inStockOnly: false });
+  // The buyer's sort, once they pick one; until then the page's default (effectiveSort).
+  const [pickedSort, setPickedSort] = useState<ShopSort | null>(null);
   const [searchText, setSearchText] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [added, setAdded] = useState<AddedNotice | null>(null);
@@ -151,8 +160,14 @@ function ShopProducts({
     const members = new Set(collection.products);
     return allRows.filter((row) => members.has(row.productId));
   }, [allRows, collection]);
+  // The seller's order here: the collection's, or the shop's.
+  const shopOrder = useMemo(() => productOrderOf(index), [index]);
+  const order = collection ? collection.products : shopOrder;
+  const sort = effectiveSort(pickedSort, order.length > 0);
+  const query = useMemo<ProductQuery>(() => ({ ...filters, sort }), [filters, sort]);
+  const sortOptions = order.length > 0 ? [FEATURED_SORT, ...PRODUCT_SORTS] : PRODUCT_SORTS;
   const categories = useMemo(() => categoriesOf(rows), [rows]);
-  const filtered = useMemo(() => filterAndSortProducts(rows, query, catalogues), [rows, query, catalogues]);
+  const filtered = useMemo(() => filterAndSortProducts(rows, query, catalogues, order), [rows, query, catalogues, order]);
   const scope = useMemo(() => (searching ? searchCatalogueIds(filtered) : null), [searching, filtered]);
   const results = useMemo(
     () => (scope ? searchProducts(filtered, terms, scope.ids, catalogues) : filtered),
@@ -191,11 +206,11 @@ function ShopProducts({
   const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0);
 
   const toggleCategory = (category: string) =>
-    setQuery((q) => ({
+    setFilters((q) => ({
       ...q,
       categories: q.categories.includes(category) ? q.categories.filter((c) => c !== category) : [...q.categories, category],
     }));
-  const clearFilters = () => setQuery((q) => ({ ...q, categories: [], inStockOnly: false }));
+  const clearFilters = () => setFilters((q) => ({ ...q, categories: [], inStockOnly: false }));
 
   const addToCart = (row: ProductRow) => {
     const product = productOf(row, catalogues);
@@ -211,12 +226,12 @@ function ShopProducts({
       select
       size="small"
       label="Sort"
-      value={query.sort}
-      onChange={(event) => setQuery((q) => ({ ...q, sort: event.target.value as ProductSort }))}
+      value={sort}
+      onChange={(event) => setPickedSort(event.target.value as ShopSort)}
       slotProps={{ select: { native: true } }}
       sx={{ minWidth: 170, flex: { xs: "1 1 150px", sm: "0 0 auto" }, "& .MuiInputBase-root": { minHeight: 44 } }}
     >
-      {PRODUCT_SORTS.map((option) => (
+      {sortOptions.map((option) => (
         <option key={option.value} value={option.value}>
           {option.label}
         </option>
@@ -227,7 +242,7 @@ function ShopProducts({
   const stockSwitch = (
     <FormControlLabel
       control={
-        <Switch checked={query.inStockOnly} onChange={(event) => setQuery((q) => ({ ...q, inStockOnly: event.target.checked }))} />
+        <Switch checked={query.inStockOnly} onChange={(event) => setFilters((q) => ({ ...q, inStockOnly: event.target.checked }))} />
       }
       label="In stock only"
       sx={{ minHeight: 44, mr: 0 }}
@@ -446,7 +461,7 @@ function ShopProducts({
                     categories={categories}
                     selected={query.categories}
                     onToggle={toggleCategory}
-                    onClear={() => setQuery((q) => ({ ...q, categories: [] }))}
+                    onClear={() => setFilters((q) => ({ ...q, categories: [] }))}
                   />
                 </Box>
                 {stockSwitch}
@@ -485,7 +500,7 @@ function ShopProducts({
                     categories={categories}
                     selected={query.categories}
                     onToggle={toggleCategory}
-                    onClear={() => setQuery((q) => ({ ...q, categories: [] }))}
+                    onClear={() => setFilters((q) => ({ ...q, categories: [] }))}
                   />
                 </Box>
               )}

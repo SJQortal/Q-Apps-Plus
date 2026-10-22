@@ -235,6 +235,10 @@ describe("shop page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(heading).toHaveFocus());
     expect(screen.getByText(/For friends/)).toBeInTheDocument();
     expect(gifts).toHaveAttribute("aria-current", "page");
+    // In the order the seller picked them (Follow-up 14), which buyers can change.
+    await waitFor(() => expect(cardTitles()).toEqual(["Product 1", "Product 2"]));
+    expect(screen.getByRole("combobox", { name: "Sort" })).toHaveValue("featured");
+    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "newest" } });
     await waitFor(() => expect(cardTitles()).toEqual(["Product 2", "Product 1"]));
     fireEvent.click(screen.getByRole("button", { name: "Share collection" }));
     await waitFor(() => expect(copyText).toHaveBeenCalledWith("qortal://APP/Q-Shop+/Seller%20Name/q-store-general-my-shop?collection=GIFTSxxxx1"));
@@ -242,6 +246,37 @@ describe("shop page", { timeout: 20_000 }, () => {
     fireEvent.click(screen.getByRole("link", { name: "All products" }));
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
     expect(screen.getByRole("heading", { level: 2, name: "Products" })).toBeInTheDocument();
+  });
+
+  it("lists the shop in its seller's order as Featured, products added since after them, and buyers can re-sort", async () => {
+    const world = makeWorld();
+    const ids = world.shops[0].products.map((p) => p.id);
+    // Products 3, 0 (the long title) and 7 first, in that order; one id the shop no longer lists is skipped.
+    world.shops[0].productOrder = [ids[3], "q-store-product-my-shop-GONExxxxx1", ids[0], ids[7]];
+    renderShop(world);
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    const sort = screen.getByRole("combobox", { name: "Sort" });
+    expect(sort).toHaveValue("featured");
+    expect(within(sort).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "Featured",
+      "Newest",
+      "Oldest",
+      "Price: low to high",
+      "Price: high to low",
+    ]);
+    // Then the rest, newest first.
+    expect(cardTitles().slice(0, 5)).toEqual(["Product 3", expect.stringMatching(/^A product with a long title/), "Product 7", "Product 11", "Product 10"]);
+    fireEvent.change(sort, { target: { value: "oldest" } });
+    await waitFor(() => expect(cardTitles()[1]).toBe("Product 1"));
+    expect(cardTitles()[0]).toMatch(/^A product with a long title/);
+  });
+
+  it("offers no Featured sort for a shop its seller hasn't arranged", async () => {
+    renderShop(makeWorld());
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    const sort = screen.getByRole("combobox", { name: "Sort" });
+    expect(sort).toHaveValue("newest");
+    expect(within(sort).queryByRole("option", { name: "Featured" })).toBeNull();
   });
 
   it("offers Retry when the shop's collections can't be read for a collection link", async () => {

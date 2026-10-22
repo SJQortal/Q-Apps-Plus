@@ -7,14 +7,16 @@
  * list of a shop's products).
  *
  * Nothing here changes the original's shape: the merged index is the
- * original's, plus two additive fields the + app writes and both apps'
+ * original's, plus additive fields the + app writes and both apps'
  * publishes keep (they spread the index): `collectionsId`
- * (qdn/collections.ts) and `deletedProducts`, `{ productId: when }`, the
- * products a + app delete removed. Without that record a copy loaded before
- * a delete couldn't tell a deleted product from one added elsewhere, and its
- * next publish would bring the deleted product back.
+ * (qdn/collections.ts), `productOrder` (qdn/productOrder.ts) and
+ * `deletedProducts`, `{ productId: when }`, the products a + app delete
+ * removed. Without that record a copy loaded before a delete couldn't tell a
+ * deleted product from one added elsewhere, and its next publish would bring
+ * the deleted product back.
  */
 import { deletedProductsOf, mergeDeletions, type DataContainerDoc } from "../qdn/payloads";
+import { productOrderOf } from "../qdn/productOrder";
 
 export { MAX_DELETED_PRODUCTS, deletedProductsOf, mergeDeletions } from "../qdn/payloads";
 
@@ -41,15 +43,18 @@ export function isProductIndexDoc(body: unknown): body is DataContainerDoc {
 }
 
 /**
- * What an index names (its products, catalogues, collections pointer and
- * deletions), as a string two copies can be compared by.
+ * What an index names (its products, catalogues, collections pointer,
+ * product order and deletions), as a string two copies can be compared by.
  */
-export function indexKey(index: Pick<DataContainerDoc, "products" | "catalogues"> & { collectionsId?: unknown; deletedProducts?: unknown }): string {
+export function indexKey(
+  index: Pick<DataContainerDoc, "products" | "catalogues"> & { collectionsId?: unknown; deletedProducts?: unknown; productOrder?: unknown }
+): string {
   return canonical({
     products: index.products ?? {},
     catalogues: index.catalogues ?? [],
     collectionsId: typeof index.collectionsId === "string" ? index.collectionsId : null,
     deletedProducts: deletedProductsOf(index),
+    productOrder: productOrderOf(index),
   });
 }
 
@@ -60,8 +65,9 @@ export function indexKey(index: Pick<DataContainerDoc, "products" | "catalogues"
  * seen copy has is kept (the node may not serve this tab's own latest
  * publish yet, or another device may have published from a stale copy),
  * unless either copy records it as deleted. A product is listed only under
- * the catalogue its entry names. The collections pointer is the fresh
- * copy's, else the seen copy's.
+ * the catalogue its entry names. The collections pointer and the product
+ * order are the fresh copy's, else the seen copy's (an empty order on QDN
+ * counts: the seller went back to newest first).
  */
 export function mergeProductIndexes(seen: DataContainerDoc, fresh: DataContainerDoc): DataContainerDoc {
   const deleted = mergeDeletions(deletedProductsOf(fresh), deletedProductsOf(seen));
@@ -90,6 +96,9 @@ export function mergeProductIndexes(seen: DataContainerDoc, fresh: DataContainer
   if (catalogues.length > 0 || fresh.catalogues) result.catalogues = catalogues;
   const pointer = typeof fresh.collectionsId === "string" ? fresh.collectionsId : seen.collectionsId;
   if (typeof pointer === "string") result.collectionsId = pointer;
+  // An empty order on QDN is a seller's "newest first" again: it wins too.
+  if (Array.isArray(fresh.productOrder)) result.productOrder = productOrderOf(fresh);
+  else if (productOrderOf(seen).length > 0) result.productOrder = productOrderOf(seen);
   if (Object.keys(deleted).length > 0) result.deletedProducts = deleted;
   else delete result.deletedProducts;
   return result;
