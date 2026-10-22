@@ -45,19 +45,34 @@ describe("asset avatars (Q-Assets' convention)", () => {
     expect(assetAvatarIdentifier(88, "BHC Coin")).toBe(ID);
   });
 
-  it("takes the avatar of the name spelled as the coin first, when its issuer holds that name", async () => {
+  it("takes the Q-Assets image first, even when the coin's own name has an avatar", async () => {
     const calls = stubNode([{ name: "Simon James", updated: 2 }], { "BHC Coin": OWNER }, "Simon James", ["BHC Coin"]);
+    expect(await assetAvatarUrl(88)).toBe("/arbitrary/IMAGE/Simon%20James/asset88_BHC%20Coin_aavatar");
+    // Nothing more is read once it has one.
+    expect(calls.filter((u) => u.includes("service=THUMBNAIL"))).toEqual([]);
+  });
+
+  it("falls back to the avatar of the name spelled as the coin, when its issuer holds that name", async () => {
+    stubNode([], { "BHC Coin": OWNER }, "Simon James", ["BHC Coin"]);
     expect(await assetAvatarUrl(88)).toBe("/arbitrary/THUMBNAIL/BHC%20Coin/qortal_avatar");
-    // Nothing more is read once the coin's own name has one.
-    expect(calls.filter((u) => u.includes("service=IMAGE"))).toEqual([]);
   });
 
   it("never takes the avatar of a name spelled as the coin that someone else holds", async () => {
-    stubNode([{ name: "Simon James", updated: 2 }], { "BHC Coin": "QSomeoneElse" }, "Simon James", ["BHC Coin"]);
-    expect(await assetAvatarUrl(88)).toBe("/arbitrary/IMAGE/Simon%20James/asset88_BHC%20Coin_aavatar");
+    stubNode([], { "BHC Coin": "QSomeoneElse" }, "Simon James", ["BHC Coin"]);
+    expect(await assetAvatarUrl(88)).toBeNull();
   });
 
-  it("takes the owner's primary name's avatar first, even when another of its names published one later", async () => {
+  it("falls back to the issuer's primary name's avatar, then to none", async () => {
+    stubNode([], {}, "Simon James", ["Simon James"]);
+    expect(await assetAvatarUrl(88)).toBe("/arbitrary/THUMBNAIL/Simon%20James/qortal_avatar");
+    resetAssetAvatars();
+    resetQdnCaches();
+    // Then none: the icon shows the asset's initial.
+    stubNode([], {}, "Simon James", []);
+    expect(await assetAvatarUrl(88)).toBeNull();
+  });
+
+  it("takes the Q-Assets image under the owner's primary name first, even when another of its names published one later", async () => {
     stubNode(
       [
         { name: "Biohackers Corner", updated: 3 },
