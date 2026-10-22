@@ -57,6 +57,8 @@ let IMG2 = IMG;
 let LOGO_WIDE = IMG;
 // A product photo with a transparent background (a cut-out), for products 0 and 3: lists show it without a backdrop.
 let CUTOUT = IMG;
+// A real PDF (made by Chromium in setup), for the description's PDF and its preview with pdf.js.
+let PDF = Buffer.from('%PDF-1.4');
 let PNG = Buffer.from(IMG.split(',')[1], 'base64');
 
 const productId = (s, p) => `q-store-product-${s.short}-P${String(p).padStart(9, '0')}`;
@@ -79,8 +81,19 @@ function product(s, p) {
     user: s.owner,
     // The seller's shop prices some products in USD (money/fiatPricing.ts).
     ...(s.short === 'my-shop' && USD_PRICED.includes(p) && { fiatPrice: { currency: 'USD', value: Math.round((1.5 + p) * 18) / 100, qort: 1.5 + p } }),
+    // The product page's product: a formatted description with a video, a PDF and a Q-Tube link, and 7 pictures.
+    ...(s.short === 'shop-3' && p === 0 && RICH),
   };
 }
+const RICH = {
+  htmlDescription:
+    '<h2>Hand-thrown, glazed by hand</h2><p>Every mug is <strong>one of a kind</strong>: the glaze runs its own way in the kiln.</p><ul><li>Holds 350 ml</li><li>Food-safe glaze</li></ul>' +
+    '<p>See the rest of the set at <a href="qortal://APP/Q-Shop+/Seller%203/q-store-general-shop-3">our shop</a>.</p>' +
+    '<div class="qshop-embed" data-kind="video" data-name="Seller 3" data-identifier="q-store-video-MUGVIDEO01" data-title="Throwing the mug">Video: Throwing the mug</div>' +
+    '<div class="qshop-embed" data-kind="file" data-name="Seller 3" data-identifier="qshare_file_care_abc123" data-title="Mug care guide" data-filename="mug-care.pdf" data-mimetype="application/pdf" data-size="48211" data-link="qortal://APP/Q-Share/share/Seller%203/qshare_file_care_def456_metadata">PDF: Mug care guide</div>' +
+    '<p><a href="qortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz">qortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz</a></p>',
+  morePictures: { id: 'q-store-pictures-shop-3-P000000000', count: 4, sig: '4-a-b' },
+};
 const USD_PRICED = [1, 3, 7, 11];
 function catalogue(s, c) {
   const products = {};
@@ -228,6 +241,8 @@ export default {
     IMG2 = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 } })).toString('base64')}`;
     await gen.setContent('<div style="width:160px;height:160px;display:grid;place-items:center"><div style="width:110px;height:120px;border-radius:24px 24px 16px 16px;background:linear-gradient(#cbd5e1 0 22%,#facc15 22%)"></div></div>');
     CUTOUT = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 }, omitBackground: true })).toString('base64')}`;
+    await gen.setContent('<div style="font:16px sans-serif;padding:24px"><h1 style="font-size:28px">Mug care guide</h1><p>Wash by hand in warm water. The glaze is food safe and dishwasher safe up to 60 °C.</p><ul><li>No microwave for the gold rim</li><li>Dry upside down</li></ul></div>');
+    PDF = await gen.pdf({ width: '420px', height: '595px', printBackground: true });
     await gen.setViewportSize({ width: 400, height: 160 });
     await gen.setContent('<div style="width:400px;height:160px;display:flex;align-items:center;gap:16px;font:800 64px sans-serif;color:#f59e0b"><div style="width:120px;height:120px;background:#3b82f6;transform:rotate(45deg) scale(.7)"></div>SHOP 1</div>');
     LOGO_WIDE = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 400, height: 160 }, omitBackground: true })).toString('base64')}`;
@@ -304,9 +319,14 @@ export default {
     if (p.startsWith('/crosschain/price/')) return route.fulfill({ status: 200, contentType: 'text/plain', body: '25000000' }).then(() => true);
     if (p.startsWith('/transactions/')) return json(route, []).then(() => true);
     if (p.startsWith('/assets')) return json(route, p.includes('/info') ? { assetId: 81, name: 'Gold Bar', owner: 'QOwner', quantity: 1000, isDivisible: true, isUnspendable: false } : [{ assetId: 0, name: 'QORT', description: 'QORTAL coin', isDivisible: true }, { assetId: 81, name: 'Gold Bar', description: 'A test asset', isDivisible: true }, { assetId: 82, name: 'Silver', description: '', isDivisible: true }, { assetId: 83, name: 'Gold Seats', description: 'Whole seats only', isDivisible: false }, { assetId: 84, name: 'Golden Locked', description: '', isDivisible: true, isUnspendable: true }]).then(() => true);
+    // Videos and files in descriptions: on the node at once.
+    if (p.startsWith('/arbitrary/resource/status/')) return json(route, { status: 'READY', percentLoaded: 100 }).then(() => true);
     const m = p.match(/^\/arbitrary\/([A-Z_]+)\/([^/]+)\/([^/]+)$/);
     if (m) {
       const [, service, name, id] = m;
+      if (service === 'FILE' && name === 'Seller 3' && id === 'qshare_file_care_abc123') return route.fulfill({ status: 200, contentType: 'application/pdf', body: PDF }).then(() => true);
+      if (service === 'DOCUMENT' && name === 'Seller 3' && id === 'q-store-pictures-shop-3-P000000000') return json(route, { productId: 'q-store-product-shop-3-P000000000', images: [IMG, IMG2, IMG, IMG2] }).then(() => true);
+      if (service === 'DOCUMENT' && name === 'Video Maker' && id === 'qtube_vid_kiln_xyz') return json(route, { title: 'Inside the kiln', videoReference: { name: 'Video Maker', identifier: 'qtube_vid_kiln_xyz_v', service: 'VIDEO' } }).then(() => true);
       if (service === 'THUMBNAIL') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
       if (service === 'IMAGE' && id === 'asset81_Gold Bar_aavatar' && name === 'Gold Issuer') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
       if (service === 'DOCUMENT' && id.startsWith('q-store-collections-')) {
@@ -342,6 +362,8 @@ export default {
     { key: 'shop', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => page.waitForTimeout(900) },
     { key: 'shop-own', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
     { key: 'product', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'product-pdf', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ timeout: 20000 }); await page.waitForTimeout(1000); } },
+    { key: 'product-zoom', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('group', { name: 'Pictures' }).getByRole('button').nth(5).waitFor({ timeout: 8000 }); await page.getByRole('button', { name: /^Open picture 1 of/ }).click({ timeout: 4000 }); const d = page.getByRole('dialog'); await d.getByRole('button', { name: 'Zoom in' }).click(); await d.getByRole('button', { name: 'Zoom in' }).click(); await page.waitForTimeout(500); } },
     { key: 'product-collections', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 2)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('navigation', { name: 'Collections' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); } },
     { key: 'cart', path: '/cart', after: async (page) => page.waitForTimeout(900) },
     { key: 'checkout', path: '/cart', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /check ?out/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
@@ -367,6 +389,9 @@ export default {
     { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 4000 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 4000 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a file or PDF' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Upload a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-edit-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const box = page.getByRole('dialog', { name: 'Edit shop' }).getByRole('textbox', { name: /^Meta description/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('Hand-thrown mugs and plates from Lisbon.'); await page.waitForTimeout(400); } },
     { key: 'settings', path: '/settings' },
     { key: 'account-menu', path: '/', overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /account/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'not-found', path: `/${encodeURIComponent('Nobody')}/q-store-general-missing`, after: async (page) => page.waitForTimeout(900), expectErrors: /404|Failed to load resource/ },
