@@ -1,6 +1,7 @@
 /**
  * Publishes the seller's catalogues and product index and shows what landed
- * (it replaces the original's MultiplePublish dialog).
+ * (it replaces the original's MultiplePublish dialog). Deletes go through it
+ * too (`verb="delete"`, `order="given"`: seller/deletes.ts).
  *
  * - Up to 20 resources go in one PUBLISH_MULTIPLE_QDN_RESOURCES, exactly as
  *   the original sent them, with Hub's 30-minute budget.
@@ -34,8 +35,8 @@ import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
-import { base64ToJson, type PublishResource } from "../qdn/payloads";
-import { QdnFetchError, fetchQdnJson, mapWithConcurrency } from "../qdn/search";
+import { DELETED_DATA64, base64ToJson, type PublishResource } from "../qdn/payloads";
+import { QdnDeletedError, QdnFetchError, fetchQdnJson, mapWithConcurrency } from "../qdn/search";
 import {
   MAX_UNCONFIRMED_PER_ACCOUNT,
   RESOURCES_PER_BATCH,
@@ -53,15 +54,55 @@ type RowState = "queued" | "waiting" | "checking" | "done" | "failed" | "missing
 /** "ready": a publish in batches waits for Start; "room": waiting for the network between batches. */
 type Phase = "ready" | "room" | "publishing" | "checking" | "settled";
 
-const STATE_TEXT: Record<RowState, string> = {
-  queued: "Not sent yet",
-  waiting: "Publishing",
-  checking: "Checking QDN",
-  done: "Published",
-  failed: "Failed",
-  missing: "Not on QDN yet",
-  unknown: "Not confirmed",
+type Verb = "publish" | "delete";
+
+const STATE_TEXT: Record<Verb, Record<RowState, string>> = {
+  publish: {
+    queued: "Not sent yet",
+    waiting: "Publishing",
+    checking: "Checking QDN",
+    done: "Published",
+    failed: "Failed",
+    missing: "Not on QDN yet",
+    unknown: "Not confirmed",
+  },
+  delete: {
+    queued: "Not sent yet",
+    waiting: "Sending",
+    checking: "Checking QDN",
+    done: "Done",
+    failed: "Failed",
+    missing: "Not on QDN yet",
+    unknown: "Not confirmed",
+  },
 };
+
+/** The words that differ between a publish and a delete. */
+const WORDS: Record<Verb, { noun: string; doing: string; done: string; start: string; failedParts: string; recheck: string }> = {
+  publish: {
+    noun: "Publish",
+    doing: "Publishing",
+    done: "published",
+    start: "Start publishing",
+    failedParts: "Some parts were not published.",
+    recheck: "check again before you publish again",
+  },
+  delete: {
+    noun: "Delete",
+    doing: "Deleting",
+    done: "done",
+    start: "Start deleting",
+    failedParts: "Some parts didn't go through.",
+    recheck: "check again before you try again",
+  },
+};
+
+/** Batches of `perBatch`, in the order given. */
+function batchesInOrder<T>(resources: T[], perBatch = RESOURCES_PER_BATCH): T[][] {
+  const parts: T[][] = [];
+  for (let i = 0; i < resources.length; i += perBatch) parts.push(resources.slice(i, i + perBatch));
+  return parts;
+}
 
 /** After this long without an answer from Hub, "Stop waiting" checks QDN instead. */
 export const STOP_WAITING_AFTER_MS = 60_000;
@@ -81,20 +122,23 @@ function canonical(value: unknown): string {
 
 /**
  * Is exactly this resource on QDN? "done" when the node serves the content
- * this publish sent, "missing" when it serves something else or nothing,
- * "unknown" when the node can't be asked.
+ * this publish sent (for a delete, the delete marker), "missing" when it
+ * serves something else or nothing, "unknown" when the node can't be asked.
  */
 export async function checkOnQdn(resource: PublishResource): Promise<"done" | "missing" | "unknown"> {
+  const deleting = resource.data64 === DELETED_DATA64;
   try {
     const body = await fetchQdnJson(resource.service, resource.name, resource.identifier, { fresh: true });
+    if (deleting) return "missing";
     return canonical(body) === canonical(base64ToJson(resource.data64)) ? "done" : "missing";
   } catch (error) {
+    if (error instanceof QdnDeletedError) return deleting ? "done" : "missing";
     return error instanceof QdnFetchError ? "missing" : "unknown";
   }
 }
 
-function StateIcon({ state }: { state: RowState }) {
-  const title = STATE_TEXT[state];
+function StateIcon({ state, verb }: { state: RowState; verb: Verb }) {
+  const title = STATE_TEXT[verb][state];
   if (state === "done") return <CheckCircleOutlinedIcon sx={{ color: "success.main" }} titleAccess={title} />;
   if (state === "failed") return <ErrorOutlineOutlinedIcon sx={{ color: "error.main" }} titleAccess={title} />;
   if (state === "missing") return <ReportProblemOutlinedIcon sx={{ color: "warning.main" }} titleAccess={title} />;
@@ -105,7 +149,7 @@ function StateIcon({ state }: { state: RowState }) {
 
 export interface PublishProductsDialogProps {
   open: boolean;
-  /** The catalogues, then the product index, as buildProductPublish returns them. */
+  /** The catalogues, then the product index, as buildProductPublish returns them; or a delete's, in order. */
   resources: PublishResource[];
   /** A readable name per identifier ("Catalogue · 10 products", "Product list"). */
   labels: Record<string, string>;
@@ -115,11 +159,33 @@ export interface PublishProductsDialogProps {
   onDone: () => void;
   /** Closed before everything was on QDN (declined, cancelled, or closed after a failure). */
   onClose: (published: string[]) => void;
+  /**
+   * "index-last" (a product publish): the catalogues in batches, then the
+   * product index on its own once every catalogue is on QDN. "given": in the
+   * order given (a delete sends the shop or the product index first).
+   */
+  order?: "index-last" | "given";
+  /** A delete's words ("Deleting", "Delete failed", "Start deleting"). */
+  verb?: Verb;
+  /** Under a result that isn't complete: what the shop shows meanwhile. */
+  settledNote?: string;
 }
 
-export function PublishProductsDialog({ open, resources, labels, publicKey, onDone, onClose }: PublishProductsDialogProps) {
+export function PublishProductsDialog({
+  open,
+  resources,
+  labels,
+  publicKey,
+  onDone,
+  onClose,
+  order = "index-last",
+  verb = "publish",
+  settledNote = "Your shop shows the changes once its product list is published. Until then your drafts stay in Ready to publish.",
+}: PublishProductsDialogProps) {
   const batched = resources.length > RESOURCES_PER_BATCH;
-  const plan = useMemo(() => splitPublishBatches(resources), [resources]);
+  const indexLast = order === "index-last";
+  const words = WORDS[verb];
+  const plan = useMemo(() => (indexLast ? splitPublishBatches(resources) : batchesInOrder(resources)), [indexLast, resources]);
   const [phase, setPhase] = useState<Phase>(batched ? "ready" : "publishing");
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const rowsRef = useRef(rows);
@@ -269,8 +335,8 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
       const mine = ++sequence.current;
       const current = () => alive.current && sequence.current === mine;
       // Batched, the index is always a batch of its own, retries included, so
-      // the check below covers every catalogue.
-      const parts = batched ? batchesWithIndexLast(list) : [list];
+      // the check below covers every catalogue. A delete goes in the order given.
+      const parts = !batched ? [list] : indexLast ? batchesWithIndexLast(list) : batchesInOrder(list);
       mark(
         list.map((r) => r.identifier),
         "queued"
@@ -280,7 +346,7 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
         if (!current()) return;
         let part = parts[i];
         // The index names every catalogue: it goes only once they are all on QDN.
-        if (batched && part.some(isProductIndex)) {
+        if (batched && indexLast && part.some(isProductIndex)) {
           const here = new Set(part.map((r) => r.identifier));
           const left = resources.some(
             (r) => !isProductIndex(r) && !here.has(r.identifier) && rowsRef.current[r.identifier] !== "done"
@@ -310,7 +376,7 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
       if (allDone()) finish();
       else setPhase("settled");
     },
-    [batched, mark, resources, publicKey, run, allDone, finish]
+    [batched, indexLast, mark, resources, publicKey, run, allDone, finish]
   );
 
   useEffect(() => {
@@ -353,22 +419,24 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
 
   const title =
     phase === "ready"
-      ? `Publish in ${plan.length} batches`
+      ? `${words.noun} in ${plan.length} batches`
       : phase === "room"
         ? "Waiting for the network"
         : phase === "publishing"
           ? batched
-            ? `Publishing batch ${batch.index + 1} of ${batch.count}`
-            : "Publishing products"
+            ? `${words.doing} batch ${batch.index + 1} of ${batch.count}`
+            : verb === "delete"
+              ? "Deleting"
+              : "Publishing products"
           : phase === "checking"
             ? "Checking QDN"
             : unknownCount > 0
-              ? "Publish not confirmed"
+              ? `${words.noun} not confirmed`
               : failedCount === total
-                ? "Publish failed"
+                ? `${words.noun} failed`
                 : queuedCount > 0 && failedCount === 0 && missingCount === 0
-                  ? "Publish paused"
-                  : "Publish incomplete";
+                  ? `${words.noun} paused`
+                  : `${words.noun} incomplete`;
 
   return (
     <ResponsiveDialog
@@ -387,7 +455,7 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
               Cancel
             </Button>
             <Button variant="contained" onClick={start}>
-              Start publishing
+              {words.start}
             </Button>
           </>
         ) : phase === "room" ? (
@@ -427,7 +495,7 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
             <Typography variant="body2" color="text.secondary">
               Qortal takes at most {MAX_UNCONFIRMED_PER_ACCOUNT} unconfirmed publishes per account, so each batch waits for
               the network to confirm the one before; a block comes about once a minute. Hub asks you to confirm each batch.
-              Your product list goes last, once every product is on QDN. Keep this tab open until it finishes.
+              {indexLast ? " Your product list goes last, once every product is on QDN." : ""} Keep this tab open until it finishes.
             </Typography>
           </>
         ) : phase === "room" ? (
@@ -440,14 +508,14 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {unconfirmed !== null ? `${unconfirmed} still unconfirmed. ` : ""}
-              {doneCount} of {total} published.
+              {doneCount} of {total} {words.done}.
             </Typography>
           </Box>
         ) : phase === "publishing" ? (
           <Box>
             <LinearProgress aria-label="Publishing" />
             <Typography sx={{ mt: 1.5 }}>
-              Hub asks you to confirm, then publishes. Keep this tab open. {batched ? `${doneCount} of ${total} published.` : ""}
+              Hub asks you to confirm, then publishes. Keep this tab open. {batched ? `${doneCount} of ${total} ${words.done}.` : ""}
             </Typography>
             {slow && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -462,9 +530,9 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
           </Box>
         ) : (
           <Box>
-            <LinearProgress variant="determinate" value={total ? (doneCount / total) * 100 : 0} aria-label="Published" />
+            <LinearProgress variant="determinate" value={total ? (doneCount / total) * 100 : 0} aria-label={verb === "delete" ? "Done" : "Published"} />
             <Typography sx={{ mt: 1.5, fontWeight: 600 }}>
-              {doneCount} of {total} published
+              {doneCount} of {total} {words.done}
             </Typography>
           </Box>
         )}
@@ -472,7 +540,7 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
         {errorText && <Alert severity="error">{errorText}</Alert>}
         {settled && failedCount > 0 && (
           <Alert severity="warning">
-            Some parts were not published. Retry sends only those; if it keeps failing, wait a minute and try again.
+            {words.failedParts} Retry sends only those; if it keeps failing, wait a minute and try again.
           </Alert>
         )}
         {settled && queuedCount > 0 && failedCount === 0 && (
@@ -488,22 +556,22 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
           </Alert>
         )}
         {settled && unknownCount > 0 && (
-          <Alert severity="warning">Could not check QDN. Hub may still be publishing, so check again before you publish again.</Alert>
+          <Alert severity="warning">Could not check QDN. Hub may still be publishing, so {words.recheck}.</Alert>
         )}
-        {settled && (
+        {settled && settledNote && (
           <Typography variant="body2" color="text.secondary">
-            Your shop shows the changes once its product list is published. Until then your drafts stay in Ready to publish.
+            {settledNote}
           </Typography>
         )}
 
-        <List dense disablePadding aria-label="What is published">
+        <List dense disablePadding aria-label={verb === "delete" ? "What is sent" : "What is published"}>
           {resources.map((r) => {
             const state = stateOf(r.identifier);
             return (
               <ListItem key={r.identifier} divider sx={{ minHeight: 48, px: 0 }}>
-                <ListItemText primary={labels[r.identifier] ?? r.identifier} secondary={STATE_TEXT[state]} />
+                <ListItemText primary={labels[r.identifier] ?? r.identifier} secondary={STATE_TEXT[verb][state]} />
                 <ListItemIcon sx={{ minWidth: 0, ml: 1 }}>
-                  <StateIcon state={state} />
+                  <StateIcon state={state} verb={verb} />
                 </ListItemIcon>
               </ListItem>
             );
