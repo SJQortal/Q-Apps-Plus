@@ -1,8 +1,9 @@
 /**
  * A product's description on its page: the seller's formatting (headings,
- * lists, links…), its videos and files, styled by the theme (after Q-Share+'s
- * DisplayHtml). The HTML is made safe first (richtext/sanitize.ts), then cut
- * into runs of text and the blocks between them:
+ * lists, links…), styled by the theme (after Q-Share+'s DisplayHtml), and its
+ * videos and files, which show under the product's pictures (ProductMedia).
+ * The HTML is made safe first (richtext/sanitize.ts), then cut into runs of
+ * text and the blocks between them:
  *
  * - an embed (richtext/embeds.ts) plays or previews in place;
  * - a paragraph that is only a Q-Tube video link plays it, and one that is
@@ -13,7 +14,7 @@
  * A product with only the original's plain `description` shows it the same
  * way (a paragraph a line), so its Qortal links work too.
  */
-import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { useEffect, useId, useMemo, useState, type MouseEvent } from "react";
 import { useDispatch } from "react-redux";
 import { useInView } from "react-intersection-observer";
 import { Box, Link, Skeleton, Typography } from "@mui/material";
@@ -171,10 +172,74 @@ function LinkedMedia({ target, href }: { target: QortalTarget; href: string }) {
   );
 }
 
-export function ProductDescription({ product }: { product: { description?: unknown; htmlDescription?: unknown } }) {
-  const dispatch = useDispatch();
+export type MediaItem = { kind: "embed"; embed: QortalEmbed } | { kind: "link"; target: QortalTarget; href: string };
+
+export interface DescriptionParts {
+  /** The text, in runs (videos and files taken out). */
+  text: Segment[];
+  videos: MediaItem[];
+  attachments: MediaItem[];
+}
+
+const VIDEO_TARGETS = new Set(["qtube", "video"]);
+
+/**
+ * A product's description cut once into its text and its media: the videos
+ * and the files (attachments) show under the product's pictures (Simon,
+ * 2026-10-22), the text in the description.
+ */
+export function useDescriptionParts(product: { description?: unknown; htmlDescription?: unknown }): DescriptionParts {
   const html = descriptionHtmlOf(product);
-  const segments = useMemo(() => segmentsOf(sanitizeDescription(html)), [html]);
+  return useMemo(() => {
+    const parts: DescriptionParts = { text: [], videos: [], attachments: [] };
+    for (const segment of segmentsOf(sanitizeDescription(html))) {
+      if (segment.kind === "html") parts.text.push(segment);
+      else if (segment.kind === "embed") (segment.embed.kind === "video" ? parts.videos : parts.attachments).push(segment);
+      else (VIDEO_TARGETS.has(segment.target.kind) ? parts.videos : parts.attachments).push(segment);
+    }
+    return parts;
+  }, [html]);
+}
+
+function Media({ item }: { item: MediaItem }) {
+  if (item.kind === "link") return <LinkedMedia target={item.target} href={item.href} />;
+  return item.embed.kind === "video" ? <QortalVideo embed={item.embed} /> : <QortalFile embed={item.embed} />;
+}
+
+/** The product's videos and attachments, each list with its heading; nothing when it has none. */
+export function ProductMedia({ parts }: { parts: DescriptionParts }) {
+  const videosId = useId();
+  const filesId = useId();
+  if (parts.videos.length === 0 && parts.attachments.length === 0) return null;
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, minWidth: 0 }}>
+      {parts.videos.length > 0 && (
+        <Box component="section" aria-labelledby={videosId} sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Typography id={videosId} component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
+            {parts.videos.length === 1 ? "Video" : "Videos"}
+          </Typography>
+          {parts.videos.map((item, i) => (
+            <Media key={i} item={item} />
+          ))}
+        </Box>
+      )}
+      {parts.attachments.length > 0 && (
+        <Box component="section" aria-labelledby={filesId} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          <Typography id={filesId} component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
+            Attachments
+          </Typography>
+          {parts.attachments.map((item, i) => (
+            <Media key={i} item={item} />
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+/** The description's text (its videos and files show in ProductMedia). */
+export function ProductDescription({ parts }: { parts: DescriptionParts }) {
+  const dispatch = useDispatch();
 
   // qortal:// links keep their default (q-apps.js opens them in Hub); the others copy themselves.
   const copyLink = async (event: MouseEvent<HTMLDivElement>) => {
@@ -187,22 +252,12 @@ export function ProductDescription({ product }: { product: { description?: unkno
     dispatch(setNotification(copied ? { msg: messages.copied, alertType: "success" } : { msg: messages.failed(target.text), alertType: "error" }));
   };
 
-  if (segments.length === 0) return <Typography color="text.secondary">No description.</Typography>;
+  if (parts.text.length === 0) {
+    return <Typography color="text.secondary">{parts.videos.length || parts.attachments.length ? "See the videos and attachments." : "No description."}</Typography>;
+  }
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
-      {segments.map((segment, i) =>
-        segment.kind === "html" ? (
-          <RichText key={i} onClick={copyLink} dangerouslySetInnerHTML={{ __html: segment.html }} />
-        ) : segment.kind === "embed" ? (
-          segment.embed.kind === "video" ? (
-            <QortalVideo key={i} embed={segment.embed} />
-          ) : (
-            <QortalFile key={i} embed={segment.embed} />
-          )
-        ) : (
-          <LinkedMedia key={i} target={segment.target} href={segment.href} />
-        )
-      )}
+      {parts.text.map((segment, i) => (segment.kind === "html" ? <RichText key={i} onClick={copyLink} dangerouslySetInnerHTML={{ __html: segment.html }} /> : null))}
     </Box>
   );
 }

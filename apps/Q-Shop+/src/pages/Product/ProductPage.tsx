@@ -36,7 +36,7 @@ import { collectionPath, decodeParam, productLink, storePath } from "../../qdn/l
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
 import { useCatalogue, useViewedShop } from "../Store/useShopData";
 import { useMorePictures } from "../../hooks/useMorePictures";
-import { ProductDescription } from "../../richtext/ProductDescription";
+import { ProductDescription, ProductMedia, useDescriptionParts } from "../../richtext/ProductDescription";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
@@ -95,13 +95,25 @@ function QuantityStepper({ value, onChange }: { value: string; onChange: (value:
  * gallery sized by the frame's height (GALLERY_LANDSCAPE_WIDTH), so the
  * price and Add to cart sit beside the picture instead of about three
  * frames below an 800 px square. Last, so it wins over the width rules.
+ *
+ * The description's videos and attachments show under the pictures (Simon,
+ * 2026-10-22); in one column they come after the description, so the price
+ * and Add to cart stay near the top, and on a phone held sideways under the
+ * details, beside the picture.
  */
 const productLayoutSx = {
   display: "grid",
   gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" },
+  gridTemplateAreas: { xs: '"gallery" "details" "media"', md: '"gallery details" "media details"' },
+  gridTemplateRows: { md: "auto 1fr" },
   gap: { xs: 2, md: 4 },
   alignItems: "start",
-  [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { gridTemplateColumns: "auto minmax(0, 1fr)", gap: 2 },
+  [`@media ${LANDSCAPE_PHONE_MEDIA}`]: {
+    gridTemplateColumns: "auto minmax(0, 1fr)",
+    gridTemplateAreas: '"gallery details" "gallery media"',
+    gridTemplateRows: "auto 1fr",
+    gap: 2,
+  },
 } as const;
 
 function ProductSkeleton({ note }: { note?: string }) {
@@ -161,6 +173,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const product = catalogue?.products?.[productId];
   // Pictures past the third, from their own document (qdn/productPictures.ts), after the catalogue's.
   const morePictures = useMorePictures(owner, product ? { id: productId, morePictures: (product as { morePictures?: unknown }).morePictures } : null);
+  // Its description's text, and its videos and attachments (shown under the pictures).
+  const descriptionParts = useDescriptionParts((product ?? {}) as { description?: unknown; htmlDescription?: unknown });
   const shopPath = storePath(owner, storeId);
   const shopName = shop?.title || "the shop";
 
@@ -221,7 +235,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
     };
     content = (
       <Box data-product-layout sx={productLayoutSx}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+        <Box sx={{ gridArea: "gallery", display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
           <ImageGallery images={[...(product.images ?? []), ...morePictures.images]} title={name} initialIndex={mainIndex} />
           {morePictures.status === "failed" && (
             <Box
@@ -237,7 +251,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             </Box>
           )}
         </Box>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+        <Box sx={{ gridArea: "details", display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             {product.type && <Chip size="small" variant="outlined" label={product.type === "physical" ? "Physical" : "Digital"} />}
             {product.category && (
@@ -304,9 +318,14 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             <Typography id="product-description-heading" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1 }}>
               Description
             </Typography>
-            <ProductDescription product={product as { description?: unknown; htmlDescription?: unknown }} />
+            <ProductDescription parts={descriptionParts} />
           </Box>
         </Box>
+        {(descriptionParts.videos.length > 0 || descriptionParts.attachments.length > 0) && (
+          <Box sx={{ gridArea: "media", minWidth: 0 }}>
+            <ProductMedia parts={descriptionParts} />
+          </Box>
+        )}
       </Box>
     );
   }
