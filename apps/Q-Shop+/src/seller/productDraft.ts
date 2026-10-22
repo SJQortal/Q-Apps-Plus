@@ -97,8 +97,8 @@ export function initialPriceText(
 /**
  * The product's `price` array as the original writes it: `{currency: "qort",
  * value}` first, then each other coin the shop takes that has a price (the
- * original wrote ARRR as `"ARRR"`; the other tickers and `ASSET:<id>` follow
- * the same pattern), as numbers. Coins with an empty or zero field are left
+ * original wrote ARRR as `"ARRR"`; `ASSET:<id>` follows the same pattern), as
+ * numbers. Coins with an empty or zero field are left
  * out, as the original did for ARRR. Entries for coins the form doesn't show
  * (a coin the shop no longer takes) are kept as they were, at the end.
  */

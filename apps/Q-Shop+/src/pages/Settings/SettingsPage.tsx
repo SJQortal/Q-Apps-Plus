@@ -40,8 +40,8 @@ import { copyText } from "../../utils/clipboard";
 import { collectSettingsSnapshot, fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settingsQdn";
 import { isProductView, setProductView, useProductView } from "../../utils/productView";
 
-/** The coins a buyer can prefer, in the order the shops offer them (QORT, then Hub's SEND_COIN order). */
-export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR", "BTC", "LTC", "DOGE", "DGB", "RVN"];
+/** The coins a buyer can prefer, in the order the shops offer them. */
+export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR"];
 
 const SectionTitle = styled("h2")(({ theme }) => ({
   margin: theme.spacing(0, 0, 1),

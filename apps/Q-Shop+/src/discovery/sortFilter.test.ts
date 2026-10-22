@@ -28,7 +28,8 @@ describe("parsing the URL", () => {
     expect(parseSort("rated")).toBe("rated");
     expect(parseSort("bogus")).toBe("newest");
     expect(parseSort(null)).toBe("newest");
-    expect(parsePay("BTC")).toBe("BTC");
+    expect(parsePay("ARRR")).toBe("ARRR");
+    expect(parsePay("BTC")).toBe("");
     expect(parsePay("assets")).toBe("assets");
     expect(parsePay("QORT")).toBe("");
     expect(parsePay("ASSET:1")).toBe("");
@@ -108,22 +109,21 @@ describe("filtering shops", () => {
     expect(payMatch(arrr, "ARRR", ready({ supportedCoins: ["QORT", "ARRR"], foreignCoins: { ARRR: "zs1x" } }))).toBe("yes");
   });
 
-  it("other coins and assets are unknown until the JSON is read", () => {
-    expect(payMatch(plain, "BTC", undefined)).toBe("unknown");
-    expect(payMatch(plain, "BTC", { status: "loading" })).toBe("unknown");
-    expect(payMatch(plain, "BTC", ready({ supportedCoins: ["QORT", "BTC"], foreignCoins: { BTC: "bc1x" } }))).toBe("yes");
-    expect(payMatch(plain, "BTC", ready({ supportedCoins: ["QORT", "BTC"], foreignCoins: {} }))).toBe("no");
+  it("assets are unknown until the JSON is read", () => {
+    expect(payMatch(plain, "assets", undefined)).toBe("unknown");
+    expect(payMatch(plain, "assets", { status: "loading" })).toBe("unknown");
     expect(payMatch(plain, "assets", ready({ acceptedAssets: [{ id: 7, name: "Gold" }] }))).toBe("yes");
     expect(payMatch(plain, "assets", ready({ acceptedAssets: [] }))).toBe("no");
-    expect(payMatch(plain, "BTC", { status: "failed", final: false })).toBe("no");
+    expect(payMatch(plain, "assets", ready({ acceptedAssets: [{ id: 0, name: "Bad" }] }))).toBe("no");
+    expect(payMatch(plain, "assets", { status: "failed", final: false })).toBe("no");
   });
 
   it("splits shops into matches and ones still to check, and counts unreadable ones", () => {
     const details: Record<string, ShopDetails> = {
-      [arrr.key]: ready({ supportedCoins: ["QORT", "LTC"], foreignCoins: { LTC: "ltc1x" } }),
+      [arrr.key]: ready({ supportedCoins: ["QORT"], foreignCoins: { ARRR: "" }, acceptedAssets: [{ id: 7, name: "Gold" }] }),
       [plain.key]: { status: "failed", final: true },
     };
-    const result = filterShops([arrr, plain, other], { pay: "LTC", mine: null }, (key) => details[key]);
+    const result = filterShops([arrr, plain, other], { pay: "assets", mine: null }, (key) => details[key]);
     expect(result.shops).toEqual([arrr]);
     expect(result.unknown).toEqual([other]);
     expect(result.unreadable).toBe(1);

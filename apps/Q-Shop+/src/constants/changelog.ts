@@ -22,7 +22,7 @@ export const CHANGELOG: Release[] = [
       "Find things: search shops by name, title and description; sort by newest, recently active, most products, top rated (weighted by how many reviews) or A–Z; filter by the coins a shop takes; stars on every shop; a New products strip.",
       "Shop pages filter and sort every product (category, in stock, newest, price) and search within the shop, as a grid or a list; product pages have a picture gallery and share links.",
       "Collections: sellers group their products into collections, each with a picture and a description; buyers browse them at the top of a shop and can share a collection's link.",
-      "Pay in more coins: QORT and ARRR as before, plus BTC, LTC, DOGE, DGB and RVN, and Qortal assets (Q-Assets) when the shop takes them.",
+      "Pay in Qortal assets (Q-Assets) as well as QORT and ARRR, when the shop takes them.",
       "A safer checkout: review, delivery and confirm steps with the amount fixed before you pay, and a payment that went through is never lost: if the order can't be recorded, it is kept so you can finish it without paying again.",
       "Your cart survives a reload, keeps every shop's items apart, and the cart button counts them.",
       "Orders: My orders with status filters and counts; for sellers, an overview, orders to handle, status updates and payment checks against the chain.",

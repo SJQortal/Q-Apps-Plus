@@ -1,8 +1,8 @@
 /**
  * The shop's fields, shared by Create shop and Edit shop: logo, title,
- * description, location, ships to, the coins it takes (QORT always; ARRR,
- * BTC, LTC, DOGE, DGB and RVN each with a payout address) and the Q-Assets it
- * accepts. Controlled: the dialog holds the values (seller/shopFields.ts).
+ * description, location, ships to, the coins it takes (QORT always; ARRR
+ * with a payout address) and the Q-Assets it accepts. Controlled: the dialog
+ * holds the values (seller/shopFields.ts).
  */
 import { useState, type Dispatch, type SetStateAction } from "react";
 import {

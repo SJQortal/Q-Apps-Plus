@@ -24,6 +24,8 @@ export interface WorldShop {
   updated: number;
   supportedCoins: string[];
   foreignCoins: Record<string, string>;
+  /** The Q-Assets it takes (the + app's additive list), when any. */
+  acceptedAssets?: { id: number; name: string }[];
   products: any[];
   logo?: string;
   /**
@@ -136,6 +138,7 @@ export function storeJsonOf(shop: WorldShop) {
     logo: shop.logo ?? LOGO,
     foreignCoins: shop.foreignCoins,
     supportedCoins: shop.supportedCoins,
+    ...(shop.acceptedAssets ? { acceptedAssets: shop.acceptedAssets } : {}),
   };
 }
 

@@ -44,8 +44,8 @@ describe("settings snapshot", () => {
   });
 
   it("reads an object, JSON text, base64 JSON and a nested data field, and rejects other documents", () => {
-    const stored = { version: 1, theme: "white", preferredCoin: "BTC" };
-    const expected = { version: 1, theme: "white", preferredCoin: "BTC" };
+    const stored = { version: 1, theme: "white", preferredCoin: "ARRR" };
+    const expected = { version: 1, theme: "white", preferredCoin: "ARRR" };
     expect(normalizeSettingsSnapshot(stored)).toEqual(expected);
     expect(normalizeSettingsSnapshot(JSON.stringify(stored))).toEqual(expected);
     expect(normalizeSettingsSnapshot(btoa(JSON.stringify(stored)))).toEqual(expected);
@@ -54,6 +54,12 @@ describe("settings snapshot", () => {
     expect(normalizeSettingsSnapshot({ version: 2, theme: "neon", preferredCoin: 5, extra: true })).toEqual({
       version: 1,
       theme: null,
+      preferredCoin: null,
+    });
+    // A coin Q-Shop+'s test builds offered (BTC, LTC, DOGE, DGB, RVN) is no longer one to prefer.
+    expect(normalizeSettingsSnapshot({ version: 1, theme: "white", preferredCoin: "BTC" })).toEqual({
+      version: 1,
+      theme: "white",
       preferredCoin: null,
     });
     expect(normalizeSettingsSnapshot({ title: "a product" })).toBeNull();
@@ -66,7 +72,7 @@ describe("settings snapshot", () => {
 describe("Save to QDN", () => {
   it("publishes one DOCUMENT under the active name and the sync identifier", async () => {
     const q = installQortalMock({ PUBLISH_QDN_RESOURCE: async () => true });
-    const snapshot = collectSettingsSnapshot("hub20", "LTC");
+    const snapshot = collectSettingsSnapshot("hub20", "ARRR");
     await publishSettingsToQdn("Buyer+One", snapshot);
 
     const calls = q.callsFor("PUBLISH_QDN_RESOURCE");
@@ -80,7 +86,7 @@ describe("Save to QDN", () => {
       title: "Q-Shop+ settings",
       filename: "settings.json",
     });
-    expect(base64ToJson(String(calls[0].data64))).toEqual({ version: 1, theme: "hub20", preferredCoin: "LTC" });
+    expect(base64ToJson(String(calls[0].data64))).toEqual({ version: 1, theme: "hub20", preferredCoin: "ARRR" });
     expect(buildSettingsPublish("x", snapshot).identifier).toBe(SETTINGS_SYNC_IDENTIFIER);
     // Nothing else was asked of Hub.
     expect(q.calls).toHaveLength(1);
@@ -103,11 +109,11 @@ describe("Restore", () => {
 
   it("reads the document with one fetch, the name encoded, and no search", async () => {
     const urls = stubFetch((url) =>
-      url === docPath ? { body: { version: 1, theme: "black", preferredCoin: "DOGE" } } : { status: 404, body: { error: 1 } }
+      url === docPath ? { body: { version: 1, theme: "black", preferredCoin: "ARRR" } } : { status: 404, body: { error: 1 } }
     );
     expect(await fetchSettingsFromQdn("Buyer+One")).toEqual({
       kind: "found",
-      snapshot: { version: 1, theme: "black", preferredCoin: "DOGE" },
+      snapshot: { version: 1, theme: "black", preferredCoin: "ARRR" },
     });
     expect(urls).toEqual([docPath]);
     expect(await fetchSettingsFromQdn("")).toEqual({ kind: "none" });

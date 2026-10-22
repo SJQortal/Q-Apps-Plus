@@ -94,30 +94,42 @@ afterEach(() => {
 });
 
 describe("shop form values", () => {
-  it("keeps the original's shapes: QORT first, foreignCoins.ARRR always there, extra coins only with an address", () => {
+  it("keeps the original's shapes: QORT first, foreignCoins.ARRR always there", () => {
     const values = shopFormValues({ ...viewedStore, foreignCoins: { ARRR: ` ${ARRR_ADDRESS} ` } });
-    expect(values.coins).toMatchObject({ ARRR: true, BTC: false });
+    expect(values.coins).toEqual({ ARRR: true });
     const fields = toStoreFields(values);
     expect(fields.supportedCoins).toEqual(["QORT", "ARRR"]);
     expect(fields.foreignCoins).toEqual({ ARRR: ARRR_ADDRESS });
     const none = toStoreFields(shopFormValues(null));
     expect(none.supportedCoins).toEqual(["QORT"]);
     expect(none.foreignCoins).toEqual({ ARRR: "" });
-    const btcOff = toStoreFields({ ...values, addresses: { ...values.addresses, BTC: "bc1qkeepme" } });
-    expect(btcOff.supportedCoins).toEqual(["QORT", "ARRR"]);
-    expect(btcOff.foreignCoins).toEqual({ ARRR: ARRR_ADDRESS, BTC: "bc1qkeepme" });
   });
 
-  it("asks for an address for every coin switched on", () => {
-    const values = { ...shopFormValues(viewedStore), coins: { ...shopFormValues(viewedStore).coins, LTC: true } };
-    expect(validateShopForm(values)).toBe("Add your LTC payout address, or switch LTC off");
+  it("saves a shop that names a coin Q-Shop+ no longer takes without it, as the original does", () => {
+    // Q-Shop+'s test builds offered BTC, LTC, DOGE, DGB and RVN.
+    const values = shopFormValues({
+      ...viewedStore,
+      supportedCoins: ["QORT", "ARRR", "BTC"],
+      foreignCoins: { ARRR: ARRR_ADDRESS, BTC: "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq" },
+    });
+    expect(values.coins).toEqual({ ARRR: true });
+    const fields = toStoreFields(values);
+    expect(fields.supportedCoins).toEqual(["QORT", "ARRR"]);
+    expect(fields.foreignCoins).toEqual({ ARRR: ARRR_ADDRESS });
+  });
+
+  it("asks for an address for ARRR when it is switched on", () => {
+    const values = shopFormValues({ ...viewedStore, foreignCoins: { ARRR: " " } });
+    expect(validateShopForm(values)).toBe("Add your ARRR payout address, or switch ARRR off");
+    expect(validateShopForm({ ...values, coins: { ARRR: false } })).toBeNull();
   });
 
   it("warns, without blocking, about an address that doesn't look like the coin's", () => {
-    expect(addressWarning("BTC", "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq")).toBeNull();
-    expect(addressWarning("BTC", "QSeLLeRAddressxxxxxxxxxxxxxxx9f3c2")).toMatch(/Qortal address/);
+    const sapling = `zs1${"qpzry9x8gf2tvdw0s3jn54khce6mua7l".repeat(3).slice(0, 75)}`;
+    expect(addressWarning("ARRR", sapling)).toBeNull();
+    expect(addressWarning("ARRR", "QSeLLeRAddressxxxxxxxxxxxxxxx9f3c2")).toMatch(/Qortal address/);
     expect(addressWarning("ARRR", "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq")).toMatch(/doesn't look like a ARRR/);
-    expect(addressWarning("LTC", "")).toBeNull();
+    expect(addressWarning("ARRR", "")).toBeNull();
   });
 });
 
@@ -263,11 +275,11 @@ describe("create shop over a deleted one", () => {
 });
 
 describe("edit shop", () => {
-  function setup(handlers: Record<string, (p: any) => unknown> = {}) {
+  function setup(handlers: Record<string, (p: any) => unknown> = {}, shop: Partial<typeof viewedStore> = {}) {
     stubNode();
     const q = installQortalMock({ PUBLISH_QDN_RESOURCE: async () => true, ...handlers });
     const store = sellerStore();
-    store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
+    store.dispatch(setCurrentStore({ ...viewedStore, ...shop, owner: SELLER }));
     const onClose = vi.fn();
     renderWithProviders(<EditStoreModal open storeId={STORE_ID} onClose={onClose} />, { store });
     return { q, store, onClose };
@@ -298,12 +310,15 @@ describe("edit shop", () => {
     expect(req.description.startsWith("**coins:QORTtrue,ARRRtrue**")).toBe(true);
   });
 
-  it("adds BTC from the wallet and an asset by name, and saves them as additive data", async () => {
-    const { q, onClose } = setup({ GET_USER_WALLET: async (p) => ({ address: p.coin === "BTC" ? "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq" : "x" }) });
-    fireEvent.click(screen.getByRole("switch", { name: /Accept Bitcoin/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Use my BTC wallet address" }));
-    await waitFor(() => expect(field(/^BTC payout address/)).toHaveValue("bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"));
-    expect(q.callsFor("GET_USER_WALLET")).toEqual([{ action: "GET_USER_WALLET", coin: "BTC" }]);
+  it("adds ARRR from the wallet and an asset by name, the asset as additive data", async () => {
+    const { q, onClose } = setup(
+      { GET_USER_WALLET: async (p) => ({ address: p.coin === "ARRR" ? ARRR_ADDRESS : "x" }) },
+      { supportedCoins: ["QORT"], foreignCoins: { ARRR: "" } }
+    );
+    fireEvent.click(screen.getByRole("switch", { name: /Accept Pirate Chain/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use my ARRR wallet address" }));
+    await waitFor(() => expect(field(/^ARRR payout address/)).toHaveValue(ARRR_ADDRESS));
+    expect(q.callsFor("GET_USER_WALLET")).toEqual([{ action: "GET_USER_WALLET", coin: "ARRR" }]);
 
     fireEvent.change(field(/^Asset name or id/), { target: { value: "QORT" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
@@ -317,24 +332,27 @@ describe("edit shop", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     const [req] = q.callsFor("PUBLISH_QDN_RESOURCE") as any[];
     const saved = decodeData64(req.data64);
-    expect(saved.supportedCoins).toEqual(["QORT", "ARRR", "BTC"]);
-    expect(saved.foreignCoins).toEqual({ ARRR: ARRR_ADDRESS, BTC: "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq" });
+    expect(saved.supportedCoins).toEqual(["QORT", "ARRR"]);
+    expect(saved.foreignCoins).toEqual({ ARRR: ARRR_ADDRESS });
     expect(saved.acceptedAssets).toEqual([{ id: 81, name: "Gold" }]);
     expect(saved).toMatchObject({ id: STORE_ID, shortStoreId: SHORT_STORE_ID, title: viewedStore.title });
   });
 
   it("a declined wallet request is quiet, and a coin switched on needs an address", async () => {
-    const { q } = setup({
-      GET_USER_WALLET: async () => {
-        throw { error: "User declined request" };
+    const { q } = setup(
+      {
+        GET_USER_WALLET: async () => {
+          throw { error: "User declined request" };
+        },
       },
-    });
-    fireEvent.click(screen.getByRole("switch", { name: /Accept Litecoin/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Use my LTC wallet address" }));
+      { supportedCoins: ["QORT"], foreignCoins: { ARRR: "" } }
+    );
+    fireEvent.click(screen.getByRole("switch", { name: /Accept Pirate Chain/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Use my ARRR wallet address" }));
     await waitFor(() => expect(q.callsFor("GET_USER_WALLET")).toHaveLength(1));
-    expect(screen.queryByText(/Couldn't read your LTC wallet/)).toBeNull();
+    expect(screen.queryByText(/Couldn't read your ARRR wallet/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    expect(await screen.findByText("Add your LTC payout address, or switch LTC off")).toBeInTheDocument();
+    expect(await screen.findByText("Add your ARRR payout address, or switch ARRR off")).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(0);
   });
 });

@@ -125,13 +125,13 @@ describe("SettingsPage", () => {
   });
 
   describe("Shopping", () => {
-    it("offers the seven coins and keeps the choice between visits", () => {
+    it("offers QORT and ARRR and keeps the choice between visits", () => {
       renderSettings({ store: appStore });
       const select = screen.getByRole("combobox", { name: "Coin" }) as HTMLSelectElement;
-      expect(Array.from(select.options).map((o) => o.value)).toEqual(["QORT", "ARRR", "BTC", "LTC", "DOGE", "DGB", "RVN"]);
-      fireEvent.change(select, { target: { value: "BTC" } });
-      expect(appStore.getState().store.preferredCoin).toBe("BTC");
-      expect(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}")).toEqual({ preferredCoin: "BTC" });
+      expect(Array.from(select.options).map((o) => o.value)).toEqual(["QORT", "ARRR"]);
+      fireEvent.change(select, { target: { value: "ARRR" } });
+      expect(appStore.getState().store.preferredCoin).toBe("ARRR");
+      expect(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}")).toEqual({ preferredCoin: "ARRR" });
       act(() => {
         appStore.dispatch(setPreferredCoin("QORT"));
       });
@@ -214,16 +214,30 @@ describe("SettingsPage", () => {
       const q = installQortalMock();
       stubFetch((url) =>
         url.startsWith(`/arbitrary/DOCUMENT/Buyer%2BOne/${SETTINGS_SYNC_IDENTIFIER}`)
-          ? { version: 1, theme: "black", preferredCoin: "LTC" }
+          ? { version: 1, theme: "black", preferredCoin: "ARRR" }
           : []
       );
       const store = signedInStore();
       renderSettings({ store });
       fireEvent.click(screen.getByRole("button", { name: /Restore/ }));
       expect(await screen.findByText("Restored your theme and preferred coin from QDN.")).toBeInTheDocument();
-      expect(store.getState().store.preferredCoin).toBe("LTC");
+      expect(store.getState().store.preferredCoin).toBe("ARRR");
       expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe(JSON.stringify("black"));
       expect(q.calls).toHaveLength(0);
+    });
+
+    it("Restore keeps the coin when the saved one is a coin Q-Shop+ no longer offers", async () => {
+      installQortalMock();
+      stubFetch((url) =>
+        url.startsWith(`/arbitrary/DOCUMENT/Buyer%2BOne/${SETTINGS_SYNC_IDENTIFIER}`)
+          ? { version: 1, theme: "black", preferredCoin: "LTC" }
+          : []
+      );
+      const store = signedInStore();
+      renderSettings({ store });
+      fireEvent.click(screen.getByRole("button", { name: /Restore/ }));
+      expect(await screen.findByText("Restored your theme from QDN.")).toBeInTheDocument();
+      expect(store.getState().store.preferredCoin).toBe("QORT");
     });
 
     it("Restore also applies a saved product view", async () => {
@@ -231,7 +245,7 @@ describe("SettingsPage", () => {
       installQortalMock();
       stubFetch((url) =>
         url.startsWith(`/arbitrary/DOCUMENT/Buyer%2BOne/${SETTINGS_SYNC_IDENTIFIER}`)
-          ? { version: 1, theme: "black", preferredCoin: "LTC", productView: "grid" }
+          ? { version: 1, theme: "black", preferredCoin: "ARRR", productView: "grid" }
           : []
       );
       renderSettings({ store: signedInStore() });

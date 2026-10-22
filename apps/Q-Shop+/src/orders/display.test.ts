@@ -143,7 +143,10 @@ describe("payments", () => {
       addressPaid: "zs1",
       signature: null,
     });
+    // A coin Q-Shop+ doesn't take (its test builds offered DOGE): shown with what the order says, never checked.
     expect(paymentSummary({ total: "1", currency: "DOGE", foreignAddressUsed: "D1", foreignTxid: "T" } as any)).toMatchObject({
+      kind: "foreign",
+      known: false,
       addressPaid: "D1",
       txid: "T",
     });
@@ -172,14 +175,15 @@ describe("payments", () => {
 describe("payments checked against the seller's shop", () => {
   const qortOnly = { supportedCoins: ["QORT"], foreignCoins: { ARRR: "" } };
   const withGold = { ...qortOnly, acceptedAssets: [{ id: 42, name: "Gold" }] };
-  const withBtc = { supportedCoins: ["QORT", "BTC"], foreignCoins: { BTC: "bc1shop" } };
+  const withArrr = { supportedCoins: ["QORT", "ARRR"], foreignCoins: { ARRR: "zs1shop" } };
 
   it("reads the coin strictly", () => {
     expect(orderCoinOf({ currency: "QORT" } as any)).toEqual({ coin: "QORT", known: true });
     expect(orderCoinOf({ currency: " qort " } as any)).toEqual({ coin: "QORT", known: true });
     expect(orderCoinOf({ currency: "" } as any)).toEqual({ coin: "QORT", known: true });
     expect(orderCoinOf({ currency: "asset:42" } as any)).toEqual({ coin: "ASSET:42", known: true });
-    expect(orderCoinOf({ currency: "btc" } as any)).toEqual({ coin: "BTC", known: true });
+    expect(orderCoinOf({ currency: "arrr" } as any)).toEqual({ coin: "ARRR", known: true });
+    expect(orderCoinOf({ currency: "btc" } as any)).toEqual({ coin: "btc", known: false });
     expect(orderCoinOf({ currency: "QORT2" } as any)).toEqual({ coin: "QORT2", known: false });
     // The currency decides, not a stray asset id.
     expect(paymentSummary({ currency: "QORT", assetId: 5 } as any).kind).toBe("qort");
@@ -193,12 +197,17 @@ describe("payments checked against the seller's shop", () => {
       "This order was paid in asset #9999, which your shop doesn't accept.",
     ]);
     expect(shopPaymentWarnings({ currency: "ASSET:42", assetId: 42, assetName: "Fake" } as any, withGold)).toEqual([]);
-    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1shop" } as any, qortOnly)).toEqual([
-      "This order was paid in BTC, which your shop doesn't accept.",
+    expect(shopPaymentWarnings({ currency: "ARRR", arrrAddressUsed: "zs1shop" } as any, qortOnly)).toEqual([
+      "This order was paid in ARRR, which your shop doesn't accept.",
     ]);
-    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1shop", foreignTxid: "T" } as any, withBtc)).toEqual([]);
-    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1other" } as any, withBtc)).toEqual([
-      "The BTC address in this order isn't your shop's current BTC address.",
+    expect(shopPaymentWarnings({ currency: "ARRR", arrrAddressUsed: "zs1shop" } as any, withArrr)).toEqual([]);
+    expect(shopPaymentWarnings({ currency: "ARRR", arrrAddressUsed: "zs1other" } as any, withArrr)).toEqual([
+      "The ARRR address in this order isn't your shop's current ARRR address.",
+    ]);
+    // A coin Q-Shop+ doesn't take, even one the shop still names.
+    const withBtc = { supportedCoins: ["QORT", "BTC"], foreignCoins: { BTC: "bc1shop" } };
+    expect(shopPaymentWarnings({ currency: "BTC", foreignAddressUsed: "bc1shop" } as any, withBtc)).toEqual([
+      "This order names a coin Q-Shop+ doesn't know, so its payment can't be checked here.",
     ]);
     expect(shopPaymentWarnings({ currency: "QORT" } as any, qortOnly)).toEqual([]);
     // A coin the app doesn't know is flagged even when the shop isn't known.

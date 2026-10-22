@@ -52,7 +52,7 @@ export function pendingShopSettings(order: PendingOrder): ShopCoinSettings {
   return assetId === null ? {} : { acceptedAssets: [{ id: assetId, name: order.currencyLabel }] };
 }
 
-/** QORT payments and asset transfers can be looked up on chain; other coins can't from here. */
+/** QORT payments and asset transfers can be looked up on chain; ARRR can't from here. */
 export function canSearchPayment(order: PendingOrder): boolean {
   return order.coin === "QORT" || assetIdOf(order.coin) !== null;
 }

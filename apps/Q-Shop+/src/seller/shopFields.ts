@@ -3,8 +3,8 @@
  * the StoreFields the payload builders take (qdn/payloads.ts). The shapes are
  * the original's (docs/apps/Q-Shop+.md → Data contract): `supportedCoins`
  * starts with QORT; `foreignCoins` always carries `ARRR` (an empty string when
- * there is none, as the original wrote it) plus the payout address of every
- * other coin that has one; `acceptedAssets` is the + app's additive list.
+ * there is none, as the original wrote it); `acceptedAssets` is the + app's
+ * additive list.
  */
 import { FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
 import type { StoreFields } from "../qdn/payloads";
@@ -61,11 +61,6 @@ export function shopFormValues(store?: {
 export function toStoreFields(values: ShopFormValues): StoreFields {
   const supportedCoins = ["QORT", ...FOREIGN_TICKERS.filter((t) => values.coins[t])];
   const foreignCoins: Record<string, string> = { ARRR: values.addresses.ARRR.trim() };
-  for (const t of FOREIGN_TICKERS) {
-    if (t === "ARRR") continue;
-    const address = values.addresses[t].trim();
-    if (address) foreignCoins[t] = address;
-  }
   return {
     title: values.title.trim(),
     description: values.description.trim(),
@@ -91,14 +86,8 @@ export function validateShopForm(values: ShopFormValues): string | null {
   return null;
 }
 
-const BASE58 = "[1-9A-HJ-NP-Za-km-z]";
 const ADDRESS_PATTERNS: Record<ForeignTicker, RegExp> = {
   ARRR: /^zs1[02-9ac-hj-np-z]{60,}$/,
-  BTC: new RegExp(`^(bc1[02-9ac-hj-np-z]{25,87}|[13]${BASE58}{25,34})$`),
-  LTC: new RegExp(`^(ltc1[02-9ac-hj-np-z]{25,87}|[LM3]${BASE58}{26,33})$`),
-  DOGE: new RegExp(`^[DA9]${BASE58}{25,34}$`),
-  DGB: new RegExp(`^(dgb1[02-9ac-hj-np-z]{25,87}|[DS3]${BASE58}{25,34})$`),
-  RVN: new RegExp(`^[Rr]${BASE58}{25,34}$`),
 };
 
 /**

@@ -18,8 +18,7 @@
  *   and assets the buyer's recent transactions are searched for it;
  * - declines are quiet, and nothing throws outside the flow.
  *
- * New, additive: other coins through SEND_COIN and Qortal assets through
- * TRANSFER_ASSET.
+ * New, additive: Qortal assets through TRANSFER_ASSET.
  */
 import { isHubDecline, isHubTimeout, errorMessage } from "../qdn/hubErrors";
 import { orderIdentifier, orderMailIdentifier, shortStoreIdOf } from "../qdn/identifiers";
@@ -140,6 +139,7 @@ export function paymentRecord(
   if (coin === "ARRR") {
     return { total: amount, currency: "ARRR", transactionSignature: null, arrrAddressUsed: recipient };
   }
+  // No other coin gets past paymentRequest; should one ever be paid, its order still records where the money went.
   return {
     total: amount,
     currency: coin,

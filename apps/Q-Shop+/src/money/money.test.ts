@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import moment from "moment";
 import { amountText, formatPrice, ownPrice, unitPrice } from "./pricing";
-import { getRate, parseRate, rateUrl } from "./rates";
+import { getRate, parseRate, rateUrl, resetRates } from "./rates";
 import {
   buildDelivery,
   buildOrderDetails,
@@ -41,20 +41,31 @@ describe("pricing (the original's rules)", () => {
   it("keys product prices as the original does", () => {
     expect(priceCurrencyKey("QORT")).toBe("qort");
     expect(priceCurrencyKey("ARRR")).toBe("ARRR");
-    expect(priceCurrencyKey("BTC")).toBe("BTC");
+    expect(priceCurrencyKey("ASSET:81")).toBe("ASSET:81");
     expect(assetIdOf(assetCoinId(81))).toBe(81);
     expect(assetIdOf("ASSET:x")).toBeNull();
   });
 
-  it("lists a shop's coins: QORT, foreign coins with an address, then assets", () => {
+  it("lists a shop's coins: QORT, ARRR with an address, then assets", () => {
     expect(
       shopCoins({
-        supportedCoins: ["QORT", "ARRR", "BTC", "LTC"],
-        foreignCoins: { ARRR: " zs1 ", BTC: "", LTC: "ltc1" },
+        supportedCoins: ["QORT", "ARRR"],
+        foreignCoins: { ARRR: " zs1 " },
         acceptedAssets: [{ id: 81, name: "Gold" }],
       })
-    ).toEqual(["QORT", "ARRR", "LTC", "ASSET:81"]);
+    ).toEqual(["QORT", "ARRR", "ASSET:81"]);
+    expect(shopCoins({ supportedCoins: ["QORT", "ARRR"], foreignCoins: { ARRR: " " } })).toEqual(["QORT"]);
     expect(shopCoins(null)).toEqual(["QORT"]);
+  });
+
+  it("reads a shop that still names a coin Q-Shop+ no longer takes as without it", () => {
+    // Q-Shop+ offered BTC, LTC, DOGE, DGB and RVN for a while; Simon took them out.
+    expect(
+      shopCoins({
+        supportedCoins: ["QORT", "BTC", "ARRR", "LTC"],
+        foreignCoins: { ARRR: "zs1", BTC: "bc1", LTC: "ltc1" },
+      })
+    ).toEqual(["QORT", "ARRR"]);
   });
 
   it("never throws on a shop JSON with mistyped coin fields (anyone can publish one)", () => {
@@ -69,8 +80,8 @@ describe("pricing (the original's rules)", () => {
     expect(
       shopCoins(bad({ acceptedAssets: [null, 5, { id: "81" }, { id: 81, name: { x: 1 } }, { id: 81, name: "Again" }, { id: 82 }] }))
     ).toEqual(["QORT", "ASSET:81", "ASSET:82"]);
-    expect(payoutAddress(bad({ foreignCoins: { BTC: " bc1 " } }), "BTC")).toBe("bc1");
-    expect(payoutAddress(bad({ foreignCoins: "bc1" }), "BTC")).toBe("");
+    expect(payoutAddress(bad({ foreignCoins: { ARRR: " zs1 " } }), "ARRR")).toBe("zs1");
+    expect(payoutAddress(bad({ foreignCoins: "zs1" }), "ARRR")).toBe("");
 
     // Labels are always text, never an object React can't render.
     expect(coinLabel("ASSET:81", bad({ acceptedAssets: {} }))).toBe("Asset #81");
@@ -101,9 +112,13 @@ describe("rates", () => {
     vi.unstubAllGlobals();
   });
 
-  it("refuses a zero rate", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, text: async () => "0" })));
-    await expect(getRate("DOGE")).rejects.toThrow();
+  it("refuses a zero rate, and has no rate for a coin it doesn't take", async () => {
+    resetRates();
+    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => "0" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(getRate("ARRR")).rejects.toThrow("Cannot get exchange rate");
+    await expect(getRate("DOGE")).rejects.toThrow("No exchange rate for DOGE");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 });

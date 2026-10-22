@@ -27,8 +27,9 @@ const SHOP_JSON = {
   created: 1690000000000,
   shortStoreId: "my-shop",
   logo: "data:image/webp;base64,TE9HTw==",
-  supportedCoins: ["QORT", "ARRR", "BTC"],
-  foreignCoins: { ARRR: "zs1arrr", BTC: "bc1q" },
+  supportedCoins: ["QORT", "ARRR"],
+  foreignCoins: { ARRR: "zs1arrr" },
+  acceptedAssets: [{ id: 81, name: "Gold" }],
 };
 
 let up = true;
@@ -73,7 +74,7 @@ describe("a shop card", () => {
     const fetchMock = stubNode();
     const { store } = renderCard();
     expect(await screen.findByRole("img", { name: "Seller's Shop" })).toHaveAttribute("src", SHOP_JSON.logo);
-    expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAccessibleDescription(/Pays in QORT, ARRR, BTC\./);
+    expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAccessibleDescription(/Pays in QORT, ARRR, Gold\./);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(store.getState().store.hashMapStores["q-store-general-my-shop"]).toMatchObject({ isValid: true, owner: "Seller Name", title: "Seller's Shop" }));
   });
@@ -83,7 +84,7 @@ describe("a shop card", () => {
     SHOP_JSON.logo = "https://tracker.example/pixel.png";
     try {
       renderCard();
-      await waitFor(() => expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAccessibleDescription(/BTC/));
+      await waitFor(() => expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAccessibleDescription(/Gold/));
       expect(screen.queryByRole("img", { name: "Seller's Shop" })).not.toBeInTheDocument();
     } finally {
       SHOP_JSON.logo = "data:image/webp;base64,TE9HTw==";
@@ -167,10 +168,11 @@ describe("a shop card", () => {
     }
     renderWithProviders(<Harness />);
     expect(await screen.findByRole("img", { name: "Seller's Shop" })).toHaveAttribute("src", SHOP_JSON.logo);
-    // The seller edits the shop: a new logo, and BTC dropped.
+    // The seller edits the shop: a new logo, and the asset dropped.
     const oldLogo = SHOP_JSON.logo;
+    const oldAssets = SHOP_JSON.acceptedAssets;
     SHOP_JSON.logo = "data:image/webp;base64,TkVX";
-    SHOP_JSON.supportedCoins = ["QORT", "ARRR"];
+    SHOP_JSON.acceptedAssets = [];
     try {
       // The same version again: nothing to read.
       act(() => setShop({ ...SHOP }));
@@ -183,7 +185,7 @@ describe("a shop card", () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     } finally {
       SHOP_JSON.logo = oldLogo;
-      SHOP_JSON.supportedCoins = ["QORT", "ARRR", "BTC"];
+      SHOP_JSON.acceptedAssets = oldAssets;
     }
   });
 

@@ -14,9 +14,9 @@ export interface StoredSettings {
 }
 
 /**
- * A coin the app can prefer: a ticker Hub pays in (QORT, ARRR, BTC, LTC,
- * DOGE, DGB, RVN) or a Qortal asset as `ASSET:<id>`. Anything else (a
- * typo, a coin a later version added) is ignored, so prices fall back to QORT.
+ * A coin the app can prefer: QORT, ARRR or a Qortal asset as `ASSET:<id>`.
+ * Anything else (a typo, a coin an earlier build offered) is ignored, so
+ * prices fall back to QORT.
  */
 export function isPreferredCoin(value: unknown): value is string {
   return typeof value === "string" && (isCoinTicker(value) || assetIdOf(value) !== null);

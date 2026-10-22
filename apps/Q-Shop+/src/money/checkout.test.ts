@@ -53,8 +53,8 @@ const shop = {
   id: STORE_ID,
   title: STORE_TITLE,
   owner: SELLER,
-  supportedCoins: [...storeJson.supportedCoins, "BTC"],
-  foreignCoins: { ...storeJson.foreignCoins, BTC: " bc1qseller " },
+  supportedCoins: storeJson.supportedCoins,
+  foreignCoins: storeJson.foreignCoins,
   acceptedAssets: [{ id: 81, name: "Gold Bar" }],
 };
 
@@ -472,9 +472,9 @@ describe("startCheckout", () => {
 
   it("stops before paying when the shop has no address for the coin, or a price is missing", async () => {
     sellerHandlers();
-    const noLtc = await startCheckout(args({ coin: "LTC", rate: 2 }));
-    expect(noLtc).toEqual({ kind: "failed", message: "This shop has not set a LTC address" });
-    const noRate = await startCheckout(args({ coin: "BTC", rate: null }));
+    const noArrr = await startCheckout(args({ coin: "ARRR", rate: 2, shop: { ...shop, foreignCoins: { ARRR: " " } } }));
+    expect(noArrr).toEqual({ kind: "failed", message: "This shop has not set a ARRR address" });
+    const noRate = await startCheckout(args({ coin: "ARRR", rate: null }));
     expect(noRate.kind).toBe("failed");
     expect(q.callsFor("SEND_COIN")).toHaveLength(0);
   });
@@ -489,26 +489,20 @@ describe("startCheckout", () => {
   });
 });
 
-describe("other coins and assets (additive)", () => {
-  it("pays BTC to the shop's trimmed BTC address and records the address and txid", async () => {
+describe("ARRR and assets", () => {
+  it("refuses a coin Q-Shop+ doesn't take before paying, even when the shop names it", async () => {
+    // Q-Shop+'s test builds offered BTC, LTC, DOGE, DGB and RVN; round 5 took them out.
     sellerHandlers();
-    const result = await startCheckout(args({ coin: "BTC", rate: 0.000001 }));
-    expect(result.kind).toBe("done");
-    expect(q.callsFor("SEND_COIN")[0]).toEqual({
-      action: "SEND_COIN",
-      coin: "BTC",
-      destinationAddress: "bc1qseller",
-      amount: (1.5 * 0.000001 * 2 + 0.1 * 0.000001).toFixed(8),
-    });
-    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
-    expect(order.payment).toEqual({
-      total: (1.5 * 0.000001 * 2 + 0.1 * 0.000001).toFixed(8),
-      currency: "BTC",
-      transactionSignature: null,
-      arrrAddressUsed: "",
-      foreignAddressUsed: "bc1qseller",
-      foreignTxid: "foreign-txid",
-    });
+    const btcShop = { ...shop, supportedCoins: ["QORT", "BTC"], foreignCoins: { ARRR: "", BTC: "bc1qseller" } };
+    const btcMug = { ...mug, price: [...mug.price, { currency: "BTC", value: 0.0001 }] };
+    for (const product of [mug, btcMug]) {
+      const result = await startCheckout(
+        args({ coin: "BTC", rate: 0.000001, shop: btcShop, lines: [{ productId: mug.id, catalogueId: CATALOGUE_ID, quantity: 1, product }] })
+      );
+      expect(result.kind).toBe("failed");
+    }
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
 
   it("keeps ARRR exactly as the original writes it", async () => {

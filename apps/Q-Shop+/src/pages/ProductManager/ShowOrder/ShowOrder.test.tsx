@@ -137,7 +137,7 @@ describe("payment details", () => {
     expect(screen.getAllByText("ARRR").length).toBeGreaterThan(0);
   });
 
-  it("another coin: the address paid and the transaction id", () => {
+  it("a coin Q-Shop+ no longer takes (its test builds offered LTC): the address paid and the transaction id still show", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({ ok: true, json: async () => [] }))
@@ -249,12 +249,23 @@ describe("the seller's view of the coin an order names", () => {
     expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith("/assets/"))).toBe(false);
   });
 
-  it("another coin: always says it can't be checked here, and flags a coin the shop doesn't take", () => {
+  it("ARRR: always says it can't be checked here, and flags it when the shop doesn't take it", () => {
     stubNode(null);
-    sellerView(orderJson({ currency: "BTC", signature: null, payment: { foreignAddressUsed: "bc1shop", foreignTxid: "TX1" } }));
+    sellerView(orderJson({ currency: "ARRR", signature: null, payment: { arrrAddressUsed: "zs1shop" } }));
+    expect(screen.getByText("zs1shop")).toBeInTheDocument();
+    expect(screen.getByText(/ARRR payments can't be checked here/)).toBeInTheDocument();
+    expect(screen.getByText(/This order was paid in ARRR, which your shop doesn't accept/)).toBeInTheDocument();
+  });
+
+  it("a coin Q-Shop+ no longer takes is an unknown coin to the seller, even when the shop still names it", () => {
+    stubNode(null);
+    sellerView(orderJson({ currency: "BTC", signature: null, payment: { foreignAddressUsed: "bc1shop", foreignTxid: "TX1" } }), {
+      supportedCoins: ["QORT", "BTC"],
+      foreignCoins: { BTC: "bc1shop" },
+    });
     expect(screen.getByText("TX1")).toBeInTheDocument();
-    expect(screen.getByText(/BTC payments can't be checked here/)).toBeInTheDocument();
-    expect(screen.getByText(/This order was paid in BTC, which your shop doesn't accept/)).toBeInTheDocument();
+    expect(screen.getAllByText("Unknown coin").length).toBeGreaterThan(0);
+    expect(screen.getByText(/names a coin Q-Shop\+ doesn't know/)).toBeInTheDocument();
   });
 
   it("a coin the app doesn't know is shown as such, never in the buyer's words", () => {

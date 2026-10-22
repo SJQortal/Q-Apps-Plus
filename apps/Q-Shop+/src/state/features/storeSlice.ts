@@ -24,7 +24,7 @@ interface GlobalState {
     products: ProductDataContainer[];
     categories: string[];
   };
-  /** The coin the buyer prefers to see and pay in (QORT, ARRR, BTC…, or ASSET:<id>). */
+  /** The coin the buyer prefers to see and pay in (QORT, ARRR, or ASSET:<id>). */
   preferredCoin: string
 }
 

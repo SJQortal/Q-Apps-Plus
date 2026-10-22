@@ -148,7 +148,7 @@ export interface PaymentRecord {
   currency: string;
   transactionSignature: string | null;
   arrrAddressUsed: string;
-  /** + app, additive: the address paid for BTC, LTC, DOGE, DGB, RVN. */
+  /** + app, additive: the address paid in a coin besides QORT and ARRR (Q-Shop+'s test builds offered BTC, LTC, DOGE, DGB, RVN). */
   foreignAddressUsed?: string;
   /** + app, additive: Hub's answer for a foreign-coin payment (the transaction id). */
   foreignTxid?: string;

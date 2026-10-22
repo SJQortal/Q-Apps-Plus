@@ -5,8 +5,9 @@
  * - QORT: Hub's SEND_COIN signature (`payment.transactionSignature`).
  * - ARRR: the shop's address paid (`payment.arrrAddressUsed`); Hub gives no
  *   signature, as in the original.
- * - BTC, LTC, DOGE, DGB, RVN (+ app): the address paid
- *   (`payment.foreignAddressUsed`) and Hub's answer (`payment.foreignTxid`).
+ * - Another coin (Q-Shop+'s test builds offered BTC, LTC, DOGE, DGB and
+ *   RVN): the address paid (`payment.foreignAddressUsed`) and Hub's answer
+ *   (`payment.foreignTxid`), shown to the seller as an unknown coin.
  * - A Qortal asset (+ app): TRANSFER_ASSET's signature, the asset's id and name.
  *
  * Anyone can encrypt an order to a seller, so for the seller everything in
