@@ -158,24 +158,26 @@ export function CollectionHeader({
   headingId: string;
 }) {
   return (
-    <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", mb: 2 }}>
-      {collection.image && <Picture src={collection.image} size={88} />}
-      <Box sx={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
-        <Typography id={headingId} component="h2" sx={{ fontSize: 20, fontWeight: 700, lineHeight: 1.25, overflowWrap: "anywhere" }}>
-          {collection.title}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Collection · {countText(count)}
-        </Typography>
-        {collection.description && (
-          <Typography sx={{ whiteSpace: "pre-line", overflowWrap: "anywhere", mt: 0.5 }}>{collection.description}</Typography>
-        )}
-        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
-          <Button component={RouterLink} to={storePath(owner, storeId)} variant="outlined" color="inherit" startIcon={<ArrowBackIcon />} sx={{ minHeight: 44 }}>
-            All products
-          </Button>
-          <CopyLinkButton link={collectionLink(owner, storeId, collection.id)} label="Share collection" />
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
+      <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
+        {collection.image && <Picture src={collection.image} size={88} />}
+        <Box sx={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+          <Typography id={headingId} component="h2" sx={{ fontSize: 20, fontWeight: 700, lineHeight: 1.25, overflowWrap: "anywhere" }}>
+            {collection.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Collection · {countText(count)}
+          </Typography>
         </Box>
+      </Box>
+      {collection.description && (
+        <Typography sx={{ whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{collection.description}</Typography>
+      )}
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+        <Button component={RouterLink} to={storePath(owner, storeId)} variant="outlined" color="inherit" startIcon={<ArrowBackIcon />} sx={{ minHeight: 44 }}>
+          All products
+        </Button>
+        <CopyLinkButton link={collectionLink(owner, storeId, collection.id)} label="Share collection" />
       </Box>
     </Box>
   );

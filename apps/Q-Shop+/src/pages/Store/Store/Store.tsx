@@ -225,7 +225,8 @@ function ShopProducts({
   }, [collections.collections, listedIds]);
   const collection = collectionId ? (collections.collections.find((c) => c.id === collectionId) ?? null) : null;
   const waitingForCollection = !!collectionId && (collections.status === "loading" || collections.status === "fetching");
-  const collectionGone = !!collectionId && !collection && !waitingForCollection && productsStatus === "ready";
+  const collectionsUnreadable = !!collectionId && collections.status === "unavailable";
+  const collectionGone = !!collectionId && !collection && !waitingForCollection && !collectionsUnreadable && productsStatus === "ready";
   const rows = useMemo(() => {
     if (!collection) return allRows;
     const members = new Set(collection.products);
@@ -460,6 +461,16 @@ function ShopProducts({
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
             That collection isn&apos;t in this shop any more, so here are all its products.
           </Typography>
+        )}
+        {collectionsUnreadable && (
+          <Box role="status" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+            <Typography variant="body2" color="text.secondary">
+              This shop&apos;s collections aren&apos;t available on your node right now, so here are all its products.
+            </Typography>
+            <Button variant="outlined" color="inherit" onClick={collections.retry} sx={{ minHeight: 44 }}>
+              Retry
+            </Button>
+          </Box>
         )}
 
         {productsStatus === "ready" && rows.length > 0 && (

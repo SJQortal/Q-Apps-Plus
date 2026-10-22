@@ -96,7 +96,8 @@ export function CollectionsTab({ ready, loading = false }: { ready: boolean; loa
 
       {c.collections.length > 0 && (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          <Typography sx={{ flex: 1, minWidth: 0, color: "text.secondary" }}>
+          {/* The list's heading (its rows are h3), styled as the count it is. */}
+          <Typography component="h2" sx={{ flex: 1, minWidth: 0, color: "text.secondary", fontSize: "inherit", fontWeight: 400 }}>
             {c.collections.length === 1 ? "1 collection" : `${c.collections.length} collections`}
           </Typography>
           <Button

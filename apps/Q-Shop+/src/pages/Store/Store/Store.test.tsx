@@ -238,6 +238,26 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(screen.getByRole("heading", { level: 2, name: "Products" })).toBeInTheDocument();
   });
 
+  it("offers Retry when the shop's collections can't be read for a collection link", async () => {
+    const world = makeWorld();
+    world.shops[0].collections = [{ id: "GIFTSxxxx1", title: "Gifts", products: [world.shops[0].products[1].id] }];
+    const { node } = renderShop(world, `${SHOP_PATH}?collection=GIFTSxxxx1`);
+    const serve = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    let down = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string): Promise<unknown> =>
+        down && String(url).includes("q-store-collections-") ? { ok: false, status: 500, text: async (): Promise<string> => "{}" } : serve(url)
+      )
+    );
+    expect(await screen.findByText(/collections aren.t available on your node right now/)).toBeInTheDocument();
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    down = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("heading", { level: 2, name: "Gifts" })).toBeInTheDocument();
+    expect(node.fetchCalls.length).toBeGreaterThan(0);
+  });
+
   it("reads no collections for a shop without them, and shows everything for a collection link that's gone", async () => {
     const { node } = renderShop(makeWorld(), `${SHOP_PATH}?collection=OLDxxxxxx1`);
     expect(await screen.findByText(/That collection isn.t in this shop any more/)).toBeInTheDocument();
