@@ -33,6 +33,7 @@ import { currentStoreFrom } from "../../hooks/useOwnShops";
 import { checkStructureStore } from "../../utils/checkStructure";
 import { CATALOGUE_CONCURRENCY, fetchCatalogue, type LoadedCatalogue } from "../../utils/fetchCatalogues";
 import { normalizeShopJson } from "../../discovery/shopJson";
+import { primeShopDetails } from "../../discovery/shopDetails";
 import { RetryCancelled, withPeerRetries } from "./peerRetry";
 import { fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
 
@@ -165,7 +166,11 @@ export function useViewedShop(owner: string, storeId: string, options: { product
       const shop = currentStoreFrom(storeId, owner, json);
       patch({ shopStatus: "ready", shop });
       if (!isOwner) dispatch(setCurrentViewedStore(shop));
-      if (checkStructureStore(json)) dispatch(addToHashMapStores({ ...json, owner, id: storeId, isValid: true }));
+      if (checkStructureStore(json)) {
+        dispatch(addToHashMapStores({ ...json, owner, id: storeId, isValid: true }));
+        // The home card shows this copy too (logo, coins), without reading it again.
+        primeShopDetails(owner, storeId, json);
+      }
     };
 
     const readIndex = async () => {
@@ -198,6 +203,10 @@ export function useViewedShop(owner: string, storeId: string, options: { product
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   // The seller's own copy stays as it is for their edits; the page shows a checked one.
   const ownShopView = useMemo(() => (ownShop ? (normalizeShopJson(ownShop) as unknown as CurrentStore) : null), [ownShop]);
+  // After an edit (the seller tools update this copy), the home card shows the new logo and coins at once.
+  useEffect(() => {
+    if (ownShopView) primeShopDetails(owner, storeId, ownShopView);
+  }, [owner, ownShopView, storeId]);
 
   if (servedFromRedux) {
     return { shop: ownShopView, shopStatus: "ready", index: ownShopIndex, productsStatus: "ready", isOwner, retry };

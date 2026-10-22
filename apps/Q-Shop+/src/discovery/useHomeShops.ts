@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadActivity, peekActivity, type ActivityIndex } from "./activity";
 import { loadRatings, peekRatings, type RatingsIndex } from "./ratings";
-import { checkShopDetails, forgetFailedShopDetails, useShopDetailsSnapshot } from "./shopDetails";
+import { checkShopDetails, forgetFailedShopDetails, getShopDetails, isOutdated, useShopDetailsSnapshot } from "./shopDetails";
 import { loadShopIndex, peekShopIndex, searchShopsPage, type ShopEntry, type ShopIndex } from "./shopIndex";
 import {
   filterShops,
@@ -257,6 +257,17 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
 
   const [checking, setChecking] = useState(false);
   const needsDetails = payNeedsDetails(pay);
+
+  // A "Pays in" filter answers from each shop's JSON as it was read. When the
+  // index (or a search) shows that a shop changed since (pull to refresh, or
+  // the next read of the index), read just those shops again, so a shop that
+  // now takes the coin shows up and one that stopped goes. Cards on screen do
+  // the same for themselves; this covers the shops the filter left out.
+  useEffect(() => {
+    if (!needsDetails) return;
+    const changedShops = base.filter((shop) => isOutdated(getShopDetails(shop.key), shop.updated));
+    if (changedShops.length > 0) void checkShopDetails(changedShops);
+  }, [base, needsDetails]);
   const more: MoreKind = searching
     ? null
     : count < sorted.length
@@ -301,7 +312,9 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     }
   }, [needActivity, needRatings]);
 
-  // Pull to refresh: ask the node again for what the list is showing.
+  // Pull to refresh: ask the node again for what the list is showing. The
+  // fresh index carries each shop's latest `updated`, so the cards (and the
+  // "Pays in" check above) read again the shops that changed, and only those.
   const refresh = useCallback(async () => {
     forgetFailedShopDetails();
     const jobs: Promise<unknown>[] = [loadShopIndex({ fresh: true }).then((data) => setIndex({ status: "ready", data }))];

@@ -10,6 +10,8 @@ import { installMockNode, makeWorld } from "../../test/mockNode";
 import { currentStoreFrom } from "../../hooks/useOwnShops";
 import { DATA_CONTAINER_ID, SELLER, STORE_ID, dataContainer, storeJson } from "../../test/fixtures/shop";
 import { useCatalogue, useCatalogueLoader, useShopReviews, useViewedShop } from "./useShopData";
+import { getShopDetails, resetShopDetails } from "../../discovery/shopDetails";
+import { shopKey } from "../../discovery/shopIndex";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -53,6 +55,28 @@ describe("useViewedShop", { timeout: 20_000 }, () => {
     expect(result.current.isOwner).toBe(true);
     expect(Object.keys(result.current.index!.products)).toHaveLength(3);
     expect(node.fetchCalls).toEqual([]);
+  });
+
+  it("hands the shop it read to the home cards, and the seller's own copy after an edit", async () => {
+    resetShopDetails();
+    installMockNode(makeWorld());
+    const key = shopKey(SELLER, STORE_ID);
+    const visitor = renderHook(() => useViewedShop(SELLER, STORE_ID), { wrapper: wrapperFor(createAppStore()) });
+    await waitFor(() => expect(visitor.result.current.shopStatus).toBe("ready"));
+    expect(getShopDetails(key)).toMatchObject({ status: "ready", valid: true, shop: { title: "Seller's Shop" } });
+    visitor.unmount();
+
+    const store = createAppStore();
+    store.dispatch(addUser({ address: "Q", publicKey: "pk", name: SELLER }));
+    store.dispatch(setCurrentStore(currentStoreFrom(STORE_ID, SELLER, storeJson)));
+    store.dispatch(setDataContainer({ ...dataContainer, id: DATA_CONTAINER_ID }));
+    renderHook(() => useViewedShop(SELLER, STORE_ID), { wrapper: wrapperFor(store) });
+    // The seller tools publish an edit and update their copy: the home card follows.
+    const logo = "data:image/webp;base64,TkVX";
+    act(() => {
+      store.dispatch(setCurrentStore(currentStoreFrom(STORE_ID, SELLER, { ...storeJson, logo, supportedCoins: ["QORT", "BTC"], foreignCoins: { BTC: "bc1q" } })));
+    });
+    expect(getShopDetails(key)).toMatchObject({ status: "ready", shop: { logo, supportedCoins: ["QORT", "BTC"] } });
   });
 
   it("says missing when the shop doesn't exist", async () => {

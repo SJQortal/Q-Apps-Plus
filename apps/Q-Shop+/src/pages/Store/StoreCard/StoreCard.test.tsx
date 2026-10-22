@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, screen, waitFor } from "@testing-library/react";
 import { StoreCard } from "./StoreCard";
@@ -149,6 +150,40 @@ describe("a shop card", () => {
       expect(screen.getAllByRole("listitem")).toHaveLength(2);
     } finally {
       error.mockRestore();
+    }
+  });
+
+  it("reads its shop again when the index says the shop changed, keeping the old logo meanwhile", async () => {
+    const fetchMock = stubNode();
+    let setShop: (shop: ShopEntry) => void = () => {};
+    function Harness() {
+      const [shop, set] = useState(SHOP);
+      setShop = set;
+      return (
+        <ul>
+          <StoreCard shop={shop} mine={false} onOpen={() => {}} onMenu={() => {}} />
+        </ul>
+      );
+    }
+    renderWithProviders(<Harness />);
+    expect(await screen.findByRole("img", { name: "Seller's Shop" })).toHaveAttribute("src", SHOP_JSON.logo);
+    // The seller edits the shop: a new logo, and BTC dropped.
+    const oldLogo = SHOP_JSON.logo;
+    SHOP_JSON.logo = "data:image/webp;base64,TkVX";
+    SHOP_JSON.supportedCoins = ["QORT", "ARRR"];
+    try {
+      // The same version again: nothing to read.
+      act(() => setShop({ ...SHOP }));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // A pull to refresh brings the index's newer `updated`.
+      act(() => setShop({ ...SHOP, updated: SHOP.updated + 60_000 }));
+      expect(screen.getByRole("img", { name: "Seller's Shop" })).toHaveAttribute("src", oldLogo);
+      await waitFor(() => expect(screen.getByRole("img", { name: "Seller's Shop" })).toHaveAttribute("src", "data:image/webp;base64,TkVX"));
+      expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAccessibleDescription(/Pays in QORT, ARRR\./);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      SHOP_JSON.logo = oldLogo;
+      SHOP_JSON.supportedCoins = ["QORT", "ARRR", "BTC"];
     }
   });
 

@@ -19,6 +19,7 @@ import { resetActivityMemory } from "../../discovery/activity";
 import { resetShopDetails } from "../../discovery/shopDetails";
 import { resetHomeMemory } from "../../discovery/useHomeShops";
 import { resetNewProductsCache } from "../../discovery/newProducts";
+import { invalidateQdnSearches } from "../../qdn/search";
 
 function LocationProbe() {
   const location = useLocation();
@@ -306,6 +307,30 @@ describe("home page", () => {
       await waitFor(() => expect(cardTitles()).toEqual(["Shop number 4"]));
       await waitFor(() => expect(screen.getByText("1 shop")).toBeInTheDocument());
       expect(node.summary().resources.STORE).toBe(24);
+    });
+
+    it("Pays in BTC finds a shop that added BTC once the index shows it changed, reading only that shop again", async () => {
+      const world = makeWorld();
+      world.shops[4].supportedCoins = ["QORT", "BTC"];
+      world.shops[4].foreignCoins = { BTC: "bc1qpayout" };
+      const first = renderHome({ world, path: "/?pay=BTC", allInView: true });
+      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 4"]));
+      expect(first.node.summary().resources.STORE).toBe(24);
+      first.unmount();
+
+      // Shop 7 starts taking BTC; the index (read again after a pull to refresh,
+      // or once its cache is dropped) shows its newer `updated`.
+      world.shops[7].supportedCoins = ["QORT", "BTC"];
+      world.shops[7].foreignCoins = { BTC: "bc1qseven" };
+      world.shops[7].updated += 60_000;
+      invalidateQdnSearches();
+      resetHomeMemory();
+      const second = renderHome({ world, path: "/?pay=BTC", allInView: true });
+      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 7", "Shop number 4"]));
+      // One shop JSON read again, not 24.
+      expect(second.node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/"))).toEqual([
+        "/arbitrary/STORE/Seller%207/q-store-general-shop-7",
+      ]);
     });
 
     it("My shops shows the signed-in name's shops, with a Yours badge", async () => {

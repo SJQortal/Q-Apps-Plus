@@ -8,6 +8,13 @@
  * useSyncExternalStore. A shop that isn't on the node yet is fetched again
  * after 2, 4 and 8 seconds ("Fetching from peers…"), then reported as not
  * available, never as an endless placeholder (docs/QORTAL.md → pitfall 14).
+ *
+ * A shop's details are read again when the shop index (or a search) says the
+ * shop changed since they were read (its QDN `updated` is newer), so a new
+ * logo or payout coin shows on its card and in the "Pays in" filter after a
+ * pull to refresh or the next index read, without reading the shops that
+ * didn't change. The old copy stays on screen meanwhile. The shop and
+ * product pages also hand over every shop JSON they read (primeShopDetails).
  */
 import { useSyncExternalStore } from "react";
 import { fetchQdnJson, mapWithConcurrency } from "../qdn/search";
@@ -21,8 +28,12 @@ export type ShopDetails =
   | { status: "loading" }
   /** Not on the node yet: asking again (attempt 1–3). */
   | { status: "retrying"; attempt: number }
-  /** `valid` is the original's check (title, created, description, shipsTo, shortStoreId). */
-  | { status: "ready"; shop: ShopJson; valid: boolean }
+  /**
+   * `valid` is the original's check (title, created, description, shipsTo,
+   * shortStoreId). `updated`: the shop's QDN `updated` (from the index) this
+   * copy was read for, when known.
+   */
+  | { status: "ready"; shop: ShopJson; valid: boolean; updated?: number }
   /** `final`: the retries are spent; otherwise a single check failed and a card may try again. */
   | { status: "failed"; final: boolean };
 
@@ -75,42 +86,68 @@ export function getShopDetails(key: string): ShopDetails | undefined {
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
+ * The copy was read before the shop's latest publish: `updated` is the
+ * shop's QDN `updated` as the index (or a search) now reports it.
+ */
+export function isOutdated(details: ShopDetails | undefined, updated: number | undefined): boolean {
+  return details?.status === "ready" && typeof updated === "number" && (details.updated ?? 0) < updated;
+}
+
+/** A shop's JSON as a ready entry: fields of the wrong type dropped (shopJson.ts), then the original's check. */
+function readyFrom(json: unknown, updated: number | undefined): ShopDetails {
+  const shop = normalizeShopJson(json);
+  const valid = shop !== null && checkStructureStore(shop);
+  return { status: "ready", shop: valid ? shop : {}, valid, ...(updated !== undefined && { updated }) };
+}
+
+/**
  * Loads a shop's JSON unless it is loaded or loading. With `retries: false`
  * (the "Pays in" check) one attempt is made, and a card that shows the shop
- * later still gets its own retries.
+ * later still gets its own retries. `updated` is the shop's QDN `updated`
+ * as the caller knows it: a copy read for an older one is read again (one
+ * attempt, bypassing the cache), and stays on screen until the new one is in
+ * (or stays, if the node can't give it right now).
  */
 export function requestShopDetails(
   owner: string,
   id: string,
-  options: { retries?: boolean } = {}
+  options: { retries?: boolean; updated?: number } = {}
 ): Promise<ShopDetails> {
   const retries = options.retries ?? true;
+  const { updated } = options;
   const key = shopKey(owner, id);
   const pending = running.get(key);
   if (pending) return pending;
   const current = states.get(key);
-  if (current?.status === "ready") return Promise.resolve(current);
+  if (current?.status === "ready" && !isOutdated(current, updated)) return Promise.resolve(current);
   if (current?.status === "failed" && (current.final || !retries)) return Promise.resolve(current);
 
-  const attempts = retries ? DETAIL_RETRY_DELAYS_MS.length + 1 : 1;
-  const job = (async (): Promise<ShopDetails> => {
-    update(key, { status: "loading" });
-    for (let attempt = 0; attempt < attempts; attempt++) {
-      if (attempt > 0) {
-        update(key, { status: "retrying", attempt });
-        await wait(DETAIL_RETRY_DELAYS_MS[attempt - 1]);
-      }
-      try {
-        // Fields of the wrong type are dropped before anything renders them (shopJson.ts).
-        const shop = normalizeShopJson(await fetchQdnJson<unknown>("STORE", owner, id, { fresh: attempt > 0 }));
-        const valid = shop !== null && checkStructureStore(shop);
-        return update(key, { status: "ready", shop: valid ? shop : {}, valid });
-      } catch {
-        // not on the node yet, or the node hiccupped: try again
-      }
-    }
-    return update(key, { status: "failed", final: retries });
-  })();
+  const job =
+    current?.status === "ready"
+      ? (async (): Promise<ShopDetails> => {
+          try {
+            return update(key, readyFrom(await fetchQdnJson<unknown>("STORE", owner, id, { fresh: true }), updated));
+          } catch {
+            // Keep what was shown; the next change in the index asks again.
+            return update(key, { ...current, updated });
+          }
+        })()
+      : (async (): Promise<ShopDetails> => {
+          const attempts = retries ? DETAIL_RETRY_DELAYS_MS.length + 1 : 1;
+          update(key, { status: "loading" });
+          for (let attempt = 0; attempt < attempts; attempt++) {
+            if (attempt > 0) {
+              update(key, { status: "retrying", attempt });
+              await wait(DETAIL_RETRY_DELAYS_MS[attempt - 1]);
+            }
+            try {
+              return update(key, readyFrom(await fetchQdnJson<unknown>("STORE", owner, id, { fresh: attempt > 0 }), updated));
+            } catch {
+              // not on the node yet, or the node hiccupped: try again
+            }
+          }
+          return update(key, { status: "failed", final: retries });
+        })();
   running.set(key, job);
   const forget = () => {
     if (running.get(key) === job) running.delete(key);
@@ -119,11 +156,34 @@ export function requestShopDetails(
   return job;
 }
 
-/** Reads the coins of shops a "Pays in" filter hasn't checked yet, five at a time, one attempt each. */
+/**
+ * Reads the coins of shops a "Pays in" filter hasn't checked yet, or that
+ * changed since, five at a time, one attempt each.
+ */
 export async function checkShopDetails(shops: ShopEntry[]): Promise<void> {
   await mapWithConcurrency(shops, DETAIL_CHECK_CONCURRENCY, (shop) =>
-    requestShopDetails(shop.owner, shop.id, { retries: false })
+    requestShopDetails(shop.owner, shop.id, { retries: false, updated: shop.updated })
   );
+}
+
+/**
+ * A shop JSON read elsewhere (the shop and product pages, or the seller's
+ * own copy after an edit): the home card and filters show it at once. It
+ * keeps the version the card last read for, so a newer `updated` in the
+ * index still has the card read the shop again. Only a valid shop is taken,
+ * so this never drops a shop from the list.
+ */
+export function primeShopDetails(owner: string, id: string, json: unknown): void {
+  const key = shopKey(owner, id);
+  const current = states.get(key);
+  const next = readyFrom(json, current?.status === "ready" ? current.updated : undefined);
+  if (next.status !== "ready" || !next.valid) return;
+  update(key, next);
+}
+
+/** Forgets one shop's details (for example after its owner edits it), so its card reads it again. */
+export function forgetShopDetails(owner: string, id: string): void {
+  if (states.delete(shopKey(owner, id))) changed();
 }
 
 /** Pull to refresh: shops that couldn't be read get another chance. */

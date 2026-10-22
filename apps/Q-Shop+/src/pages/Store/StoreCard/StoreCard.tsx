@@ -23,7 +23,7 @@ import { storePath } from "../../../qdn/links";
 import { addToHashMapStores } from "../../../state/features/storeSlice";
 import type { RootState } from "../../../state/store";
 import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
-import { requestShopDetails, useShopDetails, type ShopDetails, type ShopJson } from "../../../discovery/shopDetails";
+import { isOutdated, requestShopDetails, useShopDetails, type ShopDetails, type ShopJson } from "../../../discovery/shopDetails";
 import type { ShopEntry } from "../../../discovery/shopIndex";
 import { formatRating, type ShopRating } from "../../../discovery/ratings";
 import { CARD_ART_HEIGHT } from "../../../discovery/ShopGrid";
@@ -155,11 +155,12 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   const details = useShopDetails(shop.key);
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
 
-  // Not read yet, forgotten by a pull to refresh, or only tried once by a "Pays in" check.
-  const wanted = !details || (details.status === "failed" && !details.final);
+  // Not read yet, forgotten by a pull to refresh, only tried once by a "Pays in" check,
+  // or the shop changed since it was read (a newer `updated` in the index): its old logo stays meanwhile.
+  const wanted = !details || (details.status === "failed" && !details.final) || isOutdated(details, shop.updated);
   useEffect(() => {
-    if (inView && wanted) void requestShopDetails(shop.owner, shop.id);
-  }, [inView, wanted, shop.owner, shop.id]);
+    if (inView && wanted) void requestShopDetails(shop.owner, shop.id, { updated: shop.updated });
+  }, [inView, wanted, shop.owner, shop.id, shop.updated]);
 
   const json = details?.status === "ready" && details.valid ? details.shop : null;
 
