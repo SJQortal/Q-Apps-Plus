@@ -24,6 +24,18 @@ describe("ImageGallery", { timeout: 20_000 }, () => {
     expect(mainImage()).toHaveAttribute("src", images[1]);
   });
 
+  it("drops the picture's backdrop once it has loaded, so a transparent background shows through", () => {
+    renderWithProviders(<ImageGallery images={images} title="Mug" />);
+    const area = mainImage().closest("button")!.parentElement!;
+    const clear = (el: Element) => ["transparent", "rgba(0, 0, 0, 0)"].includes(getComputedStyle(el).backgroundColor);
+    expect(clear(area)).toBe(false);
+    fireEvent.load(mainImage());
+    expect(clear(area)).toBe(true);
+    // The next picture has its backdrop until it loads too.
+    fireEvent.click(screen.getByRole("button", { name: "Next picture" }));
+    expect(clear(area)).toBe(false);
+  });
+
   it("swipes on touch screens", () => {
     renderWithProviders(<ImageGallery images={images} title="Mug" />);
     const area = mainImage().closest("button")!.parentElement!;

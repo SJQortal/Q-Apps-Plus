@@ -29,6 +29,7 @@ import { formatRating, type ShopRating } from "../../../discovery/ratings";
 import { CARD_ART_HEIGHT } from "../../../discovery/ShopGrid";
 import { visuallyHidden } from "../../../discovery/a11y";
 import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
+import { useLoadedPictures } from "../../../components/common/useLoadedPictures";
 
 /** Coin marks shown before "+N". */
 const MAX_COINS = 5;
@@ -87,6 +88,8 @@ const Art = styled("div")(({ theme }) => ({
   [theme.breakpoints.up("sm")]: { height: CARD_ART_HEIGHT.wide },
   // Last, so it wins over the width rule on a phone held sideways.
   [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { height: CARD_ART_HEIGHT.landscape },
+  // Once the logo is in, no backdrop: a logo with a transparent background sits on the card.
+  "&[data-clear]": { backgroundColor: "transparent", borderBottomColor: "transparent" },
 }));
 
 const Logo = styled("img")({
@@ -135,9 +138,9 @@ function coinsOf(shop: ShopEntry, json: ShopJson | null): { coins: CoinId[]; lab
   return { coins, labels: coins.map((coin) => coinLabel(coin, json)) };
 }
 
-function CardArt({ shop, details }: { shop: ShopEntry; details: ShopDetails | undefined }) {
+function CardArt({ shop, details, onLogoLoad }: { shop: ShopEntry; details: ShopDetails | undefined; onLogoLoad: () => void }) {
   const logo = logoOf(details);
-  if (logo) return <Logo src={logo} alt={shop.title} decoding="async" />;
+  if (logo) return <Logo src={logo} alt={shop.title} decoding="async" onLoad={onLogoLoad} />;
   const caption =
     details?.status === "retrying"
       ? "Fetching from peers…"
@@ -172,6 +175,8 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   }, [inView, wanted, shop.owner, shop.id, shop.updated]);
 
   const json = details?.status === "ready" && details.valid ? details.shop : null;
+  const logo = logoOf(details);
+  const pictures = useLoadedPictures();
 
   // The cart and the header's shop menu read titles from hashMapStores, as
   // the original's home page filled it. Only when the id is new there: two
@@ -215,8 +220,8 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   return (
     <Box component="li" ref={ref} data-shop-card sx={{ position: "relative", minWidth: 0 }}>
       <CardBox>
-        <Art>
-          <CardArt shop={shop} details={details} />
+        <Art data-clear={pictures.isLoaded(logo) ? "" : undefined}>
+          <CardArt shop={shop} details={details} onLogoLoad={pictures.onLoad(logo)} />
           {mine && (
             <Box
               aria-hidden

@@ -11,6 +11,7 @@ import { NameAvatar } from "../../../components/common/NameAvatar";
 import { CoinIcon } from "../../../components/money/CoinIcon";
 import { coinLabel, shopCoins, type ShopCoinSettings } from "../../../money/coins";
 import { mailToLink } from "../../../qdn/links";
+import { useLoadedPictures } from "../../../components/common/useLoadedPictures";
 
 export interface ShopDetails extends ShopCoinSettings {
   title?: string;
@@ -52,6 +53,7 @@ export function StoreDetails({
   owner: string;
 }) {
   const title = shop.title || "Shop";
+  const pictures = useLoadedPictures();
   const opened = formatShopDate(shop.created);
   const coins = shopCoins(shop);
   return (
@@ -72,7 +74,8 @@ export function StoreDetails({
             component="img"
             src={shop.logo}
             alt={`${title} logo`}
-            // The whole logo, never cropped to a square.
+            onLoad={pictures.onLoad(shop.logo)}
+            // The whole logo, its backdrop gone once it is in (a transparent background shows the dialog).
             sx={{
               height: 64,
               width: "auto",
@@ -81,7 +84,7 @@ export function StoreDetails({
               borderRadius: 2,
               objectFit: "contain",
               flexShrink: 0,
-              bgcolor: "action.hover",
+              bgcolor: pictures.isLoaded(shop.logo) ? "transparent" : "action.hover",
             }}
           />
         ) : null}

@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { Box } from "@mui/material";
+import { useLoadedPictures } from "../../components/common/useLoadedPictures";
 
 /**
  * A square picture (a product image or a shop logo, data URLs from QDN) that
  * shows `fallback` instead of a broken image when there is none or it can't
  * be decoded. A logo is shown whole (`fit="contain"`); a product photo fills the square.
+ * The square's backdrop goes once the picture is in, so a transparent background shows the page.
  */
 export function Picture({
   src,
@@ -21,6 +23,7 @@ export function Picture({
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   const show = !!src && failed !== src;
+  const pictures = useLoadedPictures();
   return (
     <Box
       sx={{
@@ -29,7 +32,7 @@ export function Picture({
         borderRadius: 1,
         overflow: "hidden",
         flexShrink: 0,
-        bgcolor: "action.hover",
+        bgcolor: show && pictures.isLoaded(src) ? "transparent" : "action.hover",
         color: "text.secondary",
         display: "flex",
         alignItems: "center",
@@ -43,6 +46,7 @@ export function Picture({
           alt={alt}
           loading="lazy"
           decoding="async"
+          onLoad={pictures.onLoad(src)}
           onError={() => setFailed(src ?? null)}
           sx={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
         />

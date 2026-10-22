@@ -13,6 +13,7 @@ import { accentWash } from "../hub-theme";
 import { PriceTag } from "../components/money/PriceTag";
 import { productPath } from "../qdn/links";
 import { loadNewProducts, type NewProduct } from "./newProducts";
+import { useLoadedPictures } from "../components/common/useLoadedPictures";
 
 const TILE_WIDTH = { phone: 156, wide: 184 } as const;
 
@@ -50,6 +51,7 @@ function ProductTile({ item }: { item: NewProduct }) {
   const titleId = useId();
   const detailId = useId();
   const { product } = item;
+  const pictures = useLoadedPictures();
   const outOfStock = product.status === "OUT_OF_STOCK";
   return (
     <Box component="li" sx={{ scrollSnapAlign: "start", minWidth: 0 }}>
@@ -57,13 +59,15 @@ function ProductTile({ item }: { item: NewProduct }) {
         to={productPath(item.owner, item.storeId, product.id, item.catalogueId)}
         aria-describedby={detailId}
       >
-        <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", bgcolor: accentWash(theme, 0.08) })}>
+        {/* Once the picture is in, no backdrop: a transparent background shows the tile. */}
+        <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", bgcolor: pictures.isLoaded(item.image) ? "transparent" : accentWash(theme, 0.08) })}>
           <Box
             component="img"
             src={item.image}
             // The title is the next text in the link, so the picture adds nothing to its name.
             alt=""
             decoding="async"
+            onLoad={pictures.onLoad(item.image)}
             sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />
           {outOfStock && (

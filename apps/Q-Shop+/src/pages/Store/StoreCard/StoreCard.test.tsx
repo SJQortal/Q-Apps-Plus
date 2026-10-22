@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { StoreCard } from "./StoreCard";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { installVisibleIntersectionObserver } from "../../../test/mockNode";
@@ -78,6 +78,16 @@ describe("a shop card", () => {
     // The shop is read once (the Gold asset's icon may look up its avatar: qdn/assetAvatar.ts).
     expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/arbitrary/STORE/"))).toHaveLength(1);
     await waitFor(() => expect(store.getState().store.hashMapStores["q-store-general-my-shop"]).toMatchObject({ isValid: true, owner: "Seller Name", title: "Seller's Shop" }));
+  });
+
+  it("drops the logo's backdrop once the logo has loaded, so a transparent logo sits on the card", async () => {
+    stubNode();
+    renderCard();
+    const logo = await screen.findByRole("img", { name: "Seller's Shop" });
+    const art = logo.parentElement!;
+    expect(art).not.toHaveAttribute("data-clear");
+    fireEvent.load(logo);
+    expect(art).toHaveAttribute("data-clear");
   });
 
   it("shows no logo that isn't an image inside the shop's JSON", async () => {

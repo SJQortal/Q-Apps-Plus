@@ -16,6 +16,7 @@ import { PriceTag } from "../../../components/money/PriceTag";
 import { productLink, productPath, storePath } from "../../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../../constants/product-status";
 import ContextMenuResource from "../../../components/common/ContextMenu/ContextMenuResource";
+import { useLoadedPictures } from "../../../components/common/useLoadedPictures";
 
 export type ProductCardState = "ready" | "loading" | "fetching" | "failed";
 
@@ -133,11 +134,13 @@ export function ProductCard({
   const path = productPath(owner, storeId, productId, catalogueId);
   const available = status === AVAILABLE;
   const label = isOwnProduct ? "Your product" : status === OUT_OF_STOCK ? "Out of stock" : status === RETIRED ? "Retired" : "Add to cart";
+  const pictures = useLoadedPictures();
 
   return (
     <ContextMenuResource link={productLink(owner, storeId, productId, catalogueId)}>
       <Box component="article" sx={cardSx(layout)}>
-        <Link component={RouterLink} to={path} tabIndex={-1} aria-hidden sx={pictureSx(layout)}>
+        {/* Once the picture is in, no backdrop: a transparent background shows the card. */}
+        <Link component={RouterLink} to={path} tabIndex={-1} aria-hidden sx={[pictureSx(layout), pictures.isLoaded(image) && { bgcolor: "transparent" }]}>
           {image ? (
             <Box
               component="img"
@@ -145,6 +148,7 @@ export function ProductCard({
               alt={title}
               loading="lazy"
               decoding="async"
+              onLoad={pictures.onLoad(image)}
               sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
             />
           ) : (

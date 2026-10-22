@@ -12,6 +12,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { ResponsiveDialog } from "../mobile";
 import { LANDSCAPE_PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
+import { useLoadedPictures } from "../useLoadedPictures";
 
 export const MAX_GALLERY_IMAGES = 3;
 const SWIPE_PX = 40;
@@ -65,6 +66,8 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
   const count = list.length;
   const [index, setIndex] = useState(() => (initialIndex >= 0 && initialIndex < count ? initialIndex : 0));
   const [viewerOpen, setViewerOpen] = useState(false);
+  // Once a picture is in, no backdrop behind it: a transparent background shows the page.
+  const pictures = useLoadedPictures();
   const at = count ? Math.min(index, count - 1) : 0;
   const go = (delta: number) => {
     if (count > 1) setIndex((i) => (Math.min(i, count - 1) + delta + count) % count);
@@ -127,14 +130,14 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
     >
       <Box
         {...swipe}
-        sx={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 2, overflow: "hidden", bgcolor: "action.hover", touchAction: "pan-y" }}
+        sx={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 2, overflow: "hidden", bgcolor: pictures.isLoaded(list[at]) ? "transparent" : "action.hover", touchAction: "pan-y" }}
       >
         <ButtonBase
           onClick={() => setViewerOpen(true)}
           aria-label={`Open picture ${at + 1} of ${count} full screen`}
           sx={{ width: "100%", height: "100%", display: "block", "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: -2 } }}
         >
-          <Box component="img" src={list[at]} alt={label(at)} sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+          <Box component="img" src={list[at]} alt={label(at)} onLoad={pictures.onLoad(list[at])} sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
         </ButtonBase>
         {count > 1 && (
           <>
@@ -169,13 +172,13 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
                 overflow: "hidden",
                 border: 2,
                 borderColor: i === at ? "text.primary" : "divider",
-                bgcolor: "action.hover",
+                bgcolor: pictures.isLoaded(src) ? "transparent" : "action.hover",
                 "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: 2 },
                 // Three fit under the smaller picture, still 44 px targets.
                 [LANDSCAPE]: { width: 44, height: 44 },
               }}
             >
-              <Box component="img" src={src} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <Box component="img" src={src} alt="" onLoad={pictures.onLoad(src)} sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
             </ButtonBase>
           ))}
         </Box>

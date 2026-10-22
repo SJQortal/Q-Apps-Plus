@@ -20,6 +20,7 @@ import { CopyLinkButton } from "./CopyLinkButton";
 import { roundToHalf } from "./reviewsData";
 import type { ShopReviews } from "./useShopData";
 import { orderCountLabel, type OrderCount } from "./orderCount";
+import { useLoadedPictures } from "../../components/common/useLoadedPictures";
 
 const panelSx = {
   border: 1,
@@ -96,6 +97,7 @@ export function ShopHeader({
   const coins = shopCoins(shop);
   const orders = orderCount ? orderCountLabel(orderCount) : null;
   const title = shop.title || "Shop";
+  const pictures = useLoadedPictures();
   return (
     <Box component="section" aria-label="About this shop" sx={panelSx}>
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
@@ -104,7 +106,9 @@ export function ShopHeader({
             component="img"
             src={shop.logo}
             alt={`${title} logo`}
-            // The whole logo, never cropped to a square: as wide as it is (a wide logo up to the max), square while it loads.
+            onLoad={pictures.onLoad(shop.logo)}
+            // The whole logo, never cropped to a square: as wide as it is (a wide logo up to the max), square while it
+            // loads. Its backdrop goes once it is in, so a transparent background shows the panel.
             sx={{
               height: { xs: 64, sm: 88 },
               width: "auto",
@@ -113,7 +117,7 @@ export function ShopHeader({
               borderRadius: 2,
               objectFit: "contain",
               flexShrink: 0,
-              bgcolor: "action.hover",
+              bgcolor: pictures.isLoaded(shop.logo) ? "transparent" : "action.hover",
             }}
           />
         ) : (
