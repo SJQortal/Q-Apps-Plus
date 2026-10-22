@@ -8,7 +8,7 @@
  * catalogues and product index, seller/PublishProductsDialog.tsx sends them
  * (in batches past 20). Nothing is ever published without the seller asking.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Box, Button, IconButton, Skeleton, Tab, Tabs, Tooltip } from "@mui/material";
@@ -16,11 +16,12 @@ import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { AppDispatch, RootState } from "../../state/store";
 import { setAllMyStores, type Store } from "../../state/features/storeSlice";
-import { setOwnShopStatus, toggleCreateStoreModal } from "../../state/features/globalSlice";
+import { setOwnShopStatus, toggleCreateStoreModal, updateRecentlyVisitedStoreId } from "../../state/features/globalSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { resetOrders } from "../../state/features/orderSlice";
 import { Page, PageHeader } from "../../components/layout/Page";
 import { EmptyState } from "../../components/common/EmptyState";
+import { useShellActions } from "../../components/layout/shellState";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { findOwnShops, loadOwnShop } from "../../hooks/useOwnShops";
 import { decodeParam, storeLink, storePath } from "../../qdn/links";
@@ -63,6 +64,7 @@ export const ProductManager = () => {
   const tab: SellerTab = isSellerTab(tabParam) ? tabParam : "overview";
 
   const user = useSelector((state: RootState) => state.auth.user);
+  const { signIn, authenticating } = useShellActions();
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
@@ -75,13 +77,16 @@ export const ProductManager = () => {
   const ready = isCurrent && !!dataContainer && dataContainer.storeId === storeId;
 
   // The routed shop is one of the seller's but not the current one: make it
-  // current (once; if it can't be read, the status card says so).
-  const asked = useRef<string | null>(null);
+  // current the way the rest of the app does, through the recently visited
+  // shop that useOwnShops follows. Asked again whenever the current shop
+  // moves away from it (Back from another of the seller's shops); if it
+  // can't be read, the status card says so.
+  const routedId = routedShop?.id;
+  const currentId = currentStore?.id;
   useEffect(() => {
-    if (isCurrent || !routedShop || asked.current === routedShop.id) return;
-    asked.current = routedShop.id;
-    void loadOwnShop(dispatch, routedShop);
-  }, [isCurrent, routedShop, dispatch]);
+    if (!routedId || routedId === currentId) return;
+    dispatch(updateRecentlyVisitedStoreId(routedId));
+  }, [routedId, currentId, dispatch]);
 
   // Leaving the seller page forgets the received orders, as the original did.
   useEffect(() => {
@@ -136,10 +141,29 @@ export const ProductManager = () => {
   };
 
   if (!user?.name) {
+    // The header shows no Sign in while the account request is out, nor for an
+    // account without a name, so the page says what applies and offers its own.
     return (
       <Page width="list">
         <PageHeader title="Your shop" back />
-        <EmptyState title="Sign in to manage your shop" description="Use Sign in at the top to load your Qortal name." />
+        {authenticating ? (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }} aria-busy="true" aria-label="Loading your account">
+            <Skeleton variant="rounded" height={48} />
+            <Skeleton variant="rounded" height={72} />
+          </Box>
+        ) : user ? (
+          <EmptyState
+            title="Register a Qortal name in Hub to sell"
+            description="A shop is published under a Qortal name. Once your account has one, your shop is managed here."
+          />
+        ) : (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <EmptyState title="Sign in to manage your shop" description="Your shop is published under your Qortal name." />
+            <Button variant="contained" onClick={signIn} sx={{ alignSelf: "center", minHeight: 44 }}>
+              Sign in
+            </Button>
+          </Box>
+        )}
       </Page>
     );
   }
@@ -218,7 +242,13 @@ export const ProductManager = () => {
       <PageHeader title={currentStore.title || "Your shop"} subtitle="Your shop" back backTo={shopUrl} actions={actions} />
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {!ready && <ProductListStatus status={ownShopStatus} onReload={onReload} />}
-        <DraftsCard onEdit={openEdit} onPublish={() => void publish.prepare()} preparing={publish.preparing} error={publish.error} />
+        <DraftsCard
+          onEdit={openEdit}
+          onPublish={() => void publish.prepare()}
+          preparing={publish.preparing}
+          error={publish.error}
+          notice={publish.notice}
+        />
         <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tabs
             value={tab}

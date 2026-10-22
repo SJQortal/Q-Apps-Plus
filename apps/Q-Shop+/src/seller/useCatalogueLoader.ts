@@ -9,6 +9,10 @@
  * asked for again after 2, 4 and 8 seconds; after that it is "failed" until
  * the seller presses Retry. An entry another name published under the same
  * identifier (pitfall 15) doesn't count as the seller's.
+ *
+ * A loaded catalogue that lacks a product its index names can be read again,
+ * fresh, once (`refresh`): the copy held may predate a publish from another
+ * device. While that read is out the catalogue is "loading" again.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -51,6 +55,7 @@ export function useCatalogueLoader(owner: string | undefined) {
   const [loads, setLoads] = useState<Record<string, CatalogueLoad>>({});
   const hashMapRef = useRef(hashMap);
   const queued = useRef(new Set<string>());
+  const refreshed = useRef(new Set<string>());
   const queue = useRef<string[]>([]);
   const running = useRef(false);
   const alive = useRef(true);
@@ -141,8 +146,37 @@ export function useCatalogueLoader(owner: string | undefined) {
     [request]
   );
 
+  /**
+   * Reads a loaded catalogue again, fresh, once while mounted. Returns false
+   * when it was read again already (or there is no owner), so the caller can
+   * go on with the copy held.
+   */
+  const refresh = useCallback(
+    (id: string): boolean => {
+      if (!owner || !id || refreshed.current.has(id)) return false;
+      refreshed.current.add(id);
+      setLoad(id, "loading");
+      void (async () => {
+        try {
+          const catalogue = await fetchCatalogue(owner, id);
+          if (catalogue && alive.current) dispatch(setCatalogueHashMap(catalogue));
+        } catch {
+          // The copy held stays.
+        }
+        // Whatever the answer, the catalogue is loaded: the copy held, or the new one.
+        setLoad(id, "ready");
+      })();
+      return true;
+    },
+    [owner, dispatch, setLoad]
+  );
+
   const statusOf = useCallback(
-    (id: string): CatalogueLoad => (isOwnCatalogue(hashMap[id], owner) ? "ready" : (loads[id] ?? "idle")),
+    (id: string): CatalogueLoad => {
+      if (!isOwnCatalogue(hashMap[id], owner)) return loads[id] ?? "idle";
+      // Being read again (refresh): loading, though a copy is held.
+      return loads[id] === "loading" ? "loading" : "ready";
+    },
     [hashMap, loads, owner]
   );
 
@@ -155,5 +189,5 @@ export function useCatalogueLoader(owner: string | undefined) {
     [hashMap, owner]
   );
 
-  return { request, retry, statusOf, productOf };
+  return { request, retry, refresh, statusOf, productOf };
 }

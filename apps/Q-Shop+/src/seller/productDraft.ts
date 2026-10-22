@@ -235,6 +235,28 @@ export function productForEdit(
   return merged;
 }
 
+/**
+ * A product its index row names but its catalogue doesn't hold (a publish in
+ * which the catalogue failed and the index landed). As the original did, the
+ * edit form starts from the index row, so saving writes the product back
+ * into its catalogue. The QORT price and category come from the row, with
+ * the fields every product carries; the title, images and description have
+ * to be filled in again.
+ */
+export function productFromIndexRow(
+  row: { created: number; catalogueId: string; productId: string; user?: string; status: string; priceQort: number; category: string },
+  storeId: string
+): Record<string, any> & { id: string } {
+  const priceQort = Number(row.priceQort);
+  return productForEdit(row, {
+    version: 1,
+    price: Number.isFinite(priceQort) && priceQort > 0 ? [{ currency: "qort", value: priceQort }] : [],
+    storeId,
+    shortStoreId: shortStoreIdOf(storeId),
+    category: typeof row.category === "string" ? row.category : "",
+  });
+}
+
 /** The form's starting values for a product (new when `product` is null). */
 export function formValuesFor(product: Record<string, any> | null, coins: string[]): ProductFormValues {
   if (!product) {

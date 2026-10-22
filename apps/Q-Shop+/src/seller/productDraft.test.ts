@@ -7,6 +7,7 @@ import {
   newProductDraft,
   parseAmount,
   productForEdit,
+  productFromIndexRow,
   sanitizeAmountInput,
   validateProductForm,
   type ProductFormValues,
@@ -143,6 +144,39 @@ describe("editing a product (bug 3: prices are kept)", () => {
       { currency: "qort", value: 1 },
       { currency: "LTC", value: 0.5 },
     ]);
+  });
+
+  it("a product missing from its catalogue starts from its index row, and saving makes a whole product again", () => {
+    const indexRow = { ...dataContainer.products[mug.id], productId: mug.id, user: SELLER, status: "OUT_OF_STOCK" };
+    const base = productFromIndexRow(indexRow, STORE_ID);
+    const form = formValuesFor(base, coins);
+    expect(form).toMatchObject({ title: "", images: [], category: "Kitchen", status: "OUT_OF_STOCK", prices: { QORT: "1.5", ARRR: "" } });
+    const edited = editedProductDraft({
+      base,
+      values: { ...form, title: "Mug", images: ["data:image/webp;base64,SU1H"] },
+      coins,
+      name: SELLER,
+    });
+    expect(edited).toEqual({
+      created: mug.created,
+      catalogueId: CATALOGUE_ID,
+      id: mug.id,
+      user: SELLER,
+      status: "OUT_OF_STOCK",
+      version: 1,
+      price: [{ currency: "qort", value: 1.5 }],
+      storeId: STORE_ID,
+      shortStoreId: SHORT_STORE_ID,
+      category: "Kitchen",
+      title: "Mug",
+      description: "",
+      images: ["data:image/webp;base64,SU1H"],
+      mainImageIndex: 0,
+      type: "digital",
+      isUpdate: true,
+    });
+    // No usable price in the row: the field starts empty.
+    expect(formValuesFor(productFromIndexRow({ ...indexRow, priceQort: 0 }, STORE_ID), coins).prices.QORT).toBe("");
   });
 
   it("an edit of a new draft stays a new product", () => {

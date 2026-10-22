@@ -22,9 +22,11 @@ interface DraftsCardProps {
   onPublish: () => void;
   preparing: boolean;
   error: string | null;
+  /** Something the seller should know before publishing again (the product list changed on QDN). */
+  notice?: string | null;
 }
 
-export function DraftsCard({ onEdit, onPublish, preparing, error }: DraftsCardProps) {
+export function DraftsCard({ onEdit, onPublish, preparing, error, notice = null }: DraftsCardProps) {
   const dispatch = useDispatch();
   const productsToSave = useShopDrafts();
   const [open, setOpen] = useState(false);
@@ -92,6 +94,11 @@ export function DraftsCard({ onEdit, onPublish, preparing, error }: DraftsCardPr
       {error && (
         <Alert severity="error" role="alert">
           {error}
+        </Alert>
+      )}
+      {notice && (
+        <Alert severity="info" role="status">
+          {notice}
         </Alert>
       )}
       <Collapse in={open} id={listId} unmountOnExit>

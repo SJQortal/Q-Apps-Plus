@@ -15,6 +15,7 @@ import {
   setCurrentStore,
   setDataContainer,
   setOwnShopStatus,
+  updateRecentlyVisitedStoreId,
 } from "../state/features/globalSlice";
 import { addToAllMyStores, addToHashMapStores, addToStores } from "../state/features/storeSlice";
 import { setNotification } from "../state/features/notificationsSlice";
@@ -22,8 +23,10 @@ import {
   buildCreateStorePublish,
   buildEditStorePublish,
   buildRecreateDataContainerPublish,
+  type DataContainerDoc,
   type StoreFields,
 } from "../qdn/payloads";
+import { indexKey, notePublishedIndex } from "../seller/productIndex";
 import { dataContainerIdentifier, finalizeShortStoreId, shortStoreIdOf, storeIdentifier } from "../qdn/identifiers";
 import { invalidateQdnJson, invalidateQdnSearches, resourceExists } from "../qdn/search";
 import { errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
@@ -61,6 +64,7 @@ export function useShopPublish() {
   const dispatch = useDispatch<AppDispatch>();
   const userName = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
+  const ownIndex = useSelector((state: RootState) => state.global.dataContainer);
   const [busy, setBusy] = useState(false);
 
   /**
@@ -106,6 +110,9 @@ export function useShopPublish() {
         );
         dispatch(setDataContainer({ ...dataContainer, id: dataContainerIdentifier(identifier) }));
         dispatch(setOwnShopStatus("ready"));
+        // The new shop is the one the seller is on now (useOwnShops follows this id),
+        // so an earlier shop doesn't take its place, and visiting that one again counts.
+        dispatch(updateRecentlyVisitedStoreId(identifier));
         invalidateQdnSearches((url) => url.includes("service=STORE"));
         dispatch(setNotification({ msg: "Shop created", alertType: "success" }));
         return identifier;
@@ -159,6 +166,8 @@ export function useShopPublish() {
   const recreateProductList = useCallback(async (): Promise<boolean> => {
     if (!userName || !currentStore?.id) throw new ShopFormError(userName ? NO_SHOP_TEXT : NO_NAME_TEXT);
     const storeId = currentStore.id;
+    // The list this replaces, if the page holds this shop's.
+    const before = ownIndex && ownIndex.storeId === storeId ? indexKey(ownIndex as unknown as DataContainerDoc) : null;
     setBusy(true);
     try {
       const { dataContainer, request } = buildRecreateDataContainerPublish({
@@ -167,6 +176,9 @@ export function useShopPublish() {
         shortStoreId: currentStore.shortStoreId || shortStoreIdOf(storeId),
       });
       await qortalRequestWithTimeout(request, PUBLISH_TIMEOUT_MS);
+      // A node still serving the old list right after this isn't a change from
+      // elsewhere: the next product publish mustn't bring the old products back.
+      if (before !== null) notePublishedIndex(storeId, before, indexKey(dataContainer as unknown as DataContainerDoc));
       dispatch(setDataContainer({ ...dataContainer, id: dataContainerIdentifier(storeId) }));
       dispatch(resetListProducts());
       dispatch(resetProducts());
@@ -181,7 +193,7 @@ export function useShopPublish() {
     } finally {
       setBusy(false);
     }
-  }, [currentStore, dispatch, userName]);
+  }, [currentStore, ownIndex, dispatch, userName]);
 
   return { createShop, editShop, recreateProductList, busy };
 }

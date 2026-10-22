@@ -5,6 +5,11 @@
  * from the index at once; titles and images come from the catalogues, loaded
  * only for the products on screen (useCatalogueLoader). Tapping a product
  * opens its edit form.
+ *
+ * A product the index names but its catalogue doesn't hold (a publish where
+ * the catalogue failed and the index landed) says so once its catalogue has
+ * been read again, fresh, and opens from its index row, as the original did:
+ * saving puts it back into its catalogue.
  */
 import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
@@ -33,7 +38,7 @@ import { formatPrice } from "../money/pricing";
 import { EmptyState } from "../components/common/EmptyState";
 import { BottomSheet } from "../components/common/mobile";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
-import { STATUS_LABEL, productForEdit } from "./productDraft";
+import { STATUS_LABEL, productForEdit, productFromIndexRow } from "./productDraft";
 import {
   DEFAULT_FILTERS,
   SORT_LABEL,
@@ -79,10 +84,11 @@ interface ProductsTabProps {
 export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsTabProps) {
   const phone = usePhoneLayout();
   const owner = useSelector((state: RootState) => state.global.currentStore?.owner || state.auth.user?.name);
+  const storeId = useSelector((state: RootState) => state.global.currentStore?.id ?? "");
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const categories = useSelector((state: RootState) => state.global.listProducts.categories);
   const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
-  const { request, retry, statusOf: loadOf, productOf } = useCatalogueLoader(owner);
+  const { request, retry, refresh, statusOf: loadOf, productOf } = useCatalogueLoader(owner);
 
   const [filters, setFilters] = useState<SellerFilters>(DEFAULT_FILTERS);
   const [shown, setShown] = useState(PRODUCTS_PAGE);
@@ -112,22 +118,33 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsT
     if (draft) return onEdit(draft as unknown as Record<string, any> & { id: string });
     const details = productOf(row.catalogueId, row.productId);
     if (details) return onEdit(productForEdit(row, details));
+    const load = loadOf(row.catalogueId);
+    // Loaded, and the product isn't in it: read it once more (a copy from
+    // before another device's publish), else open the form from the index row.
+    if (load === "ready" && !refresh(row.catalogueId)) return onEdit(productFromIndexRow(row, storeId));
     openedFor.current = null;
     setPendingEdit(row.productId);
-    if (loadOf(row.catalogueId) === "failed") retry(row.catalogueId);
-    else request([row.catalogueId]);
+    if (load === "failed") retry(row.catalogueId);
+    else if (load !== "ready") request([row.catalogueId]);
   };
 
-  // Open the form once the catalogue of the product the seller tapped lands.
+  // Open the form once the catalogue of the product the seller tapped lands:
+  // from its entry there, or from its index row if it isn't there.
   const pendingRow = pendingEdit ? rows.find((r) => r.productId === pendingEdit) : undefined;
   const pendingDetails = pendingRow ? productOf(pendingRow.catalogueId, pendingRow.productId) : undefined;
   const pendingLoad = pendingRow ? loadOf(pendingRow.catalogueId) : "idle";
-  const opening = pendingRow && !pendingDetails && pendingLoad !== "failed" ? pendingRow.productId : null;
+  const opening =
+    pendingRow && !pendingDetails && pendingLoad !== "failed" && pendingLoad !== "ready" ? pendingRow.productId : null;
   useEffect(() => {
-    if (!pendingRow || !pendingDetails || openedFor.current === pendingRow.productId) return;
-    openedFor.current = pendingRow.productId;
-    onEdit(productForEdit(pendingRow, pendingDetails));
-  }, [pendingRow, pendingDetails, onEdit]);
+    if (!pendingRow || openedFor.current === pendingRow.productId) return;
+    if (pendingDetails) {
+      openedFor.current = pendingRow.productId;
+      onEdit(productForEdit(pendingRow, pendingDetails));
+    } else if (pendingLoad === "ready") {
+      openedFor.current = pendingRow.productId;
+      onEdit(productFromIndexRow(pendingRow, storeId));
+    }
+  }, [pendingRow, pendingDetails, pendingLoad, storeId, onEdit]);
 
   const update = (patch: Partial<SellerFilters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -295,6 +312,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsT
                     opening={opening === row.productId}
                     onVisible={request}
                     onRetry={retry}
+                    onMissing={refresh}
                     onEdit={edit}
                   />
                 ))}
@@ -348,15 +366,23 @@ interface ProductRowProps {
   opening: boolean;
   onVisible: (catalogueIds: string[]) => void;
   onRetry: (catalogueId: string) => void;
+  /** The catalogue is loaded but lacks this product: read it again (once). */
+  onMissing: (catalogueId: string) => void;
   onEdit: (row: SellerRow) => void;
 }
 
-const ProductRow = memo(function ProductRow({ row, details, load, edited, opening, onVisible, onRetry, onEdit }: ProductRowProps) {
+const ProductRow = memo(function ProductRow({ row, details, load, edited, opening, onVisible, onRetry, onMissing, onEdit }: ProductRowProps) {
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px", fallbackInView: true });
   const metaId = useId();
   useEffect(() => {
     if (inView) onVisible([row.catalogueId]);
   }, [inView, row.catalogueId, onVisible]);
+
+  // In its index, not in its catalogue (once that has been read again).
+  const missing = load === "ready" && !details;
+  useEffect(() => {
+    if (inView && missing) onMissing(row.catalogueId);
+  }, [inView, missing, row.catalogueId, onMissing]);
 
   const title = typeof details?.title === "string" && details.title ? details.title : null;
   const images: unknown[] = Array.isArray(details?.images) ? details.images : [];
@@ -420,6 +446,10 @@ const ProductRow = memo(function ProductRow({ row, details, load, edited, openin
             <Typography color="text.secondary">Fetching from peers…</Typography>
           ) : load === "failed" ? (
             <Typography color="text.secondary">Not available on your node right now</Typography>
+          ) : missing ? (
+            <Typography color="text.secondary">Missing from its catalogue: open it to add its details again</Typography>
+          ) : details ? (
+            <Typography color="text.secondary">Untitled product</Typography>
           ) : (
             <Skeleton width="60%" />
           )}
@@ -445,7 +475,14 @@ const ProductRow = memo(function ProductRow({ row, details, load, edited, openin
         <ChevronRightIcon sx={{ color: "text.secondary" }} />
         {/* What the row shows, for screen readers (the columns differ by width). */}
         <Box component="span" id={metaId} sx={VISUALLY_HIDDEN}>
-          {[STATUS_LABEL[statusOf(row)], `${formatPrice(Number(row.priceQort))} QORT`, row.category, created && `added ${created}`, edited && "edited, not published"]
+          {[
+            missing && "missing from its catalogue",
+            STATUS_LABEL[statusOf(row)],
+            `${formatPrice(Number(row.priceQort))} QORT`,
+            row.category,
+            created && `added ${created}`,
+            edited && "edited, not published",
+          ]
             .filter(Boolean)
             .join(", ")}
         </Box>
