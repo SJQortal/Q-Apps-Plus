@@ -64,4 +64,37 @@ describe("ImageGallery", { timeout: 20_000 }, () => {
     renderWithProviders(<ImageGallery images={[]} title="Mug" />);
     expect(screen.getByText("No pictures")).toBeInTheDocument();
   });
+
+  it("zooms a picture in the full-screen viewer: buttons, keys, double click and the wheel; a zoomed picture doesn't swipe", async () => {
+    renderWithProviders(<ImageGallery images={images} title="Mug" />);
+    fireEvent.click(screen.getByRole("button", { name: "Open picture 1 of 3 full screen" }));
+    const viewer = await screen.findByRole("dialog", { name: "Mug (1 of 3)" });
+    const zoom = within(viewer).getByRole("group", { name: "Zoom" });
+    expect(zoom).toHaveTextContent("100 %");
+    expect(within(zoom).getByRole("button", { name: "Zoom out" })).toBeDisabled();
+    fireEvent.click(within(zoom).getByRole("button", { name: "Zoom in" }));
+    expect(zoom).toHaveTextContent("150 %");
+    fireEvent.click(within(zoom).getByRole("button", { name: "Zoom out" }));
+    expect(zoom).toHaveTextContent("100 %");
+    fireEvent.keyDown(window, { key: "+" });
+    fireEvent.keyDown(window, { key: "+" });
+    expect(zoom).toHaveTextContent("225 %");
+    fireEvent.keyDown(window, { key: "0" });
+    expect(zoom).toHaveTextContent("100 %");
+    const picture = within(viewer).getByRole("img", { name: "Mug, picture 1 of 3" });
+    fireEvent.doubleClick(picture);
+    expect(zoom).toHaveTextContent("250 %");
+    // Zoomed: a swipe drags the picture instead of going to the next one.
+    const area = picture.parentElement!.parentElement!;
+    fireEvent.touchStart(area, { touches: [{ clientX: 200, clientY: 100 }] });
+    fireEvent.touchEnd(area, { changedTouches: [{ clientX: 100, clientY: 110 }] });
+    expect(within(viewer).getByRole("img", { name: "Mug, picture 1 of 3" })).toBeInTheDocument();
+    fireEvent.click(within(zoom).getByRole("button", { name: "Fit the picture" }));
+    expect(zoom).toHaveTextContent("100 %");
+    fireEvent.wheel(picture.parentElement!, { deltaY: -200, clientX: 10, clientY: 10 });
+    expect(zoom).not.toHaveTextContent("100 %");
+    // The next picture starts fitted.
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(within(screen.getByRole("dialog")).getByRole("group", { name: "Zoom" })).toHaveTextContent("100 %");
+  });
 });

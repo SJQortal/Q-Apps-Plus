@@ -1,7 +1,8 @@
 /**
  * A product's pictures (up to 3, as the seller tools allow): the main one,
  * arrows and thumbnails, swipe on touch screens, ← and → keys, and a full
- * screen viewer (full-screen on phones) with the same controls and Esc.
+ * screen viewer (full-screen on phones) with the same controls and Esc, where
+ * pictures zoom (ZoomableImage).
  * Replaces the original's TabImageList, whose thumbnails were clickable
  * images with no keyboard access.
  */
@@ -13,6 +14,7 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { ResponsiveDialog } from "../mobile";
 import { LANDSCAPE_PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { useLoadedPictures } from "../useLoadedPictures";
+import { ZoomableImage } from "./ZoomableImage";
 
 export const MAX_GALLERY_IMAGES = 3;
 const SWIPE_PX = 40;
@@ -47,7 +49,8 @@ function useSwipe(onSwipe: (direction: 1 | -1) => void) {
   return {
     onTouchStart: (event: TouchEvent) => {
       const touch = event.touches[0];
-      start.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+      // Two fingers pinch; they never swipe.
+      start.current = touch && event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null;
     },
     onTouchEnd: (event: TouchEvent) => {
       const from = start.current;
@@ -66,6 +69,8 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
   const count = list.length;
   const [index, setIndex] = useState(() => (initialIndex >= 0 && initialIndex < count ? initialIndex : 0));
   const [viewerOpen, setViewerOpen] = useState(false);
+  // A zoomed picture is dragged, not swiped to the next one.
+  const [viewerZoomed, setViewerZoomed] = useState(false);
   // Once a picture is in, no backdrop behind it: a transparent background shows the page.
   const pictures = useLoadedPictures();
   const at = count ? Math.min(index, count - 1) : 0;
@@ -185,13 +190,8 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
       )}
       {viewerOpen && (
         <ResponsiveDialog open onClose={() => setViewerOpen(false)} title={count > 1 ? `${title} (${at + 1} of ${count})` : title} maxWidth="lg">
-          <Box {...swipe} sx={{ position: "relative", touchAction: "pan-y", display: "flex", justifyContent: "center" }}>
-            <Box
-              component="img"
-              src={list[at]}
-              alt={label(at)}
-              sx={{ width: "100%", height: "auto", maxHeight: "75dvh", objectFit: "contain", display: "block" }}
-            />
+          <Box {...(viewerZoomed ? {} : swipe)} sx={{ position: "relative", display: "flex", justifyContent: "center" }}>
+            <ZoomableImage key={list[at]} src={list[at]} alt={label(at)} onZoomedChange={setViewerZoomed} />
             {count > 1 && (
               <>
                 <IconButton aria-label="Previous picture" onClick={() => go(-1)} sx={arrowSx("left")}>
