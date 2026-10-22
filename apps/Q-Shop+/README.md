@@ -13,7 +13,7 @@ What it adds:
 - **Trusted reviews:** one per reviewer, the owner's own left out, a badge for reviewers who ordered at the shop.
 - **Phones and GO:** a bottom bar (Shops, Products, Cart, Orders, Sell), a header that hides on scroll, full-screen dialogs with buttons above the keyboard, 44 px targets, a compact landscape layout.
 - **The Hub 3.0 look** with four themes (Hub 3.0, Q-Shop Classic, Black, White) and a Settings page (name switcher, preferred coin, blocked names, settings sync to QDN, changelog).
-- **Lighter on Qortal:** no unlimited searches, paged and cached searches, images loaded only on screen, every screen code-split (biggest chunk 341 kB, was 1,030 kB), and nothing published at start-up (the original could publish an empty product index over a shop's real one).
+- **Lighter on Qortal:** no unlimited searches, paged and cached searches, images loaded only on screen, every screen code-split (biggest chunk 342 kB, was 1,030 kB), and nothing published at start-up (the original could publish an empty product index over a shop's real one).
 
 See `src/constants/changelog.ts` (Settings → About → What's new) for versions, and `docs/apps/Q-Shop+.md` in the monorepo for the audit, the data contract, the money-code changes and the test records.
 
