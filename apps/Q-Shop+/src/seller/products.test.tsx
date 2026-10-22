@@ -400,6 +400,9 @@ describe("publishing on the product list as QDN has it now", () => {
     const second = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[])[1];
     const dc = decodeData64(second.resources.at(-1).data64);
     expect(Object.keys(dc.products)).toEqual(expect.arrayContaining([draft(1).id, draft(2).id]));
+    // The catalogue builds on what this tab sent, not the node's older copy: the first product stays in it.
+    const cat = decodeData64(second.resources[0].data64);
+    expect(Object.keys(cat.products)).toEqual(expect.arrayContaining([draft(1).id, draft(2).id]));
     expect(screen.queryByText(/Your product list on QDN changed/)).toBeNull();
   });
 

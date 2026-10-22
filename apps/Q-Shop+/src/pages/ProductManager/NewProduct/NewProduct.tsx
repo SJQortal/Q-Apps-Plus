@@ -36,7 +36,7 @@ export interface ProductDialogProps {
    */
   product: (Record<string, any> & { id: string }) | null;
   /** Delete this (published) product; the form stays open until it is deleted. */
-  onDelete?: (product: { id: string; title: string }) => void;
+  onDelete?: (product: { id: string; catalogueId?: string; title?: string }) => void;
 }
 
 function sameValues(a: ProductFormValues, b: ProductFormValues): boolean {
@@ -103,7 +103,13 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
               <Button
                 color="error"
                 startIcon={<DeleteOutlineOutlinedIcon />}
-                onClick={() => onDelete({ id: product.id, title: String(product.title || values.title || "This product").trim() })}
+                onClick={() =>
+                  onDelete({
+                    id: product.id,
+                    catalogueId: typeof product.catalogueId === "string" ? product.catalogueId : undefined,
+                    title: String(product.title || values.title || "").trim() || undefined,
+                  })
+                }
                 sx={{ mr: "auto" }}
               >
                 Delete

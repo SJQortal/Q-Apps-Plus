@@ -36,6 +36,8 @@ import { roomTiming } from "../qdn/publishBatches";
 import { indexKey, notePublishedIndex, resetPublishedIndexes } from "./productIndex";
 import { DELETE_INDEX_CHANGED_TEXT } from "./freshIndex";
 import { DELETE_CATALOGUES_UNREADABLE_TEXT, DELETE_NODE_BEHIND_TEXT } from "./useDeleteProducts";
+import { noteSentCatalogue, resetSentCatalogues } from "./sentCatalogues";
+import { resetPendingDeletes } from "./pendingDeletes";
 
 /** The node: the product list (`index`, the fixture's unless given) and the catalogue (unless `catalogue: null`). */
 function stubNode(opts: { index?: unknown; catalogue?: unknown | null } = {}) {
@@ -90,6 +92,8 @@ beforeEach(() => {
   installVisibleIntersectionObserver();
   resetQdnCaches();
   resetPublishedIndexes();
+  resetSentCatalogues();
+  resetPendingDeletes();
   roomTiming.visibleMs = 5;
 });
 
@@ -130,15 +134,16 @@ describe("deleting products", () => {
       catalogues: { [CATALOGUE_ID]: catalogue },
       deletedAt: 0,
     }).resources;
-    expect(sent.map((r: any) => r.identifier).sort()).toEqual(expected.map((r) => r.identifier).sort());
-    expect(sent[0].identifier).toBe(DATA_CONTAINER_ID);
-    expect(decodeData64(sent[0].data64)).toEqual({
+    expect(sent.map((r: any) => r.identifier)).toEqual(expected.map((r) => r.identifier));
+    // The catalogue first, the product list last.
+    expect(sent.map((r: any) => r.identifier)).toEqual([CATALOGUE_ID, DATA_CONTAINER_ID]);
+    expect(decodeData64(sent[1].data64)).toEqual({
       ...dataContainer,
       products: { [chair.id]: dataContainer.products[chair.id] },
       catalogues: [{ id: CATALOGUE_ID, products: { [chair.id]: true } }],
       deletedProducts: { [mug.id]: expect.any(Number), [poster.id]: expect.any(Number) },
     });
-    expect(decodeData64(sent[1].data64)).toEqual({ id: CATALOGUE_ID, products: { [chair.id]: chair } });
+    expect(decodeData64(sent[0].data64)).toEqual({ id: CATALOGUE_ID, products: { [chair.id]: chair } });
 
     // The page follows: one product left, its draft gone, out of select mode.
     await waitFor(() => expect(Object.keys(store.getState().global.dataContainer!.products)).toEqual([chair.id]));
@@ -242,11 +247,16 @@ describe("deleting products", () => {
     expect(screen.getByRole("toolbar", { name: "Selected products" })).toBeInTheDocument();
   });
 
-  it("when only the product list lands, the products leave the page and it says what wasn't cleared", async () => {
+  it("when only the product list lands, the products leave the page, and Finish deleting clears their catalogue", async () => {
     stubNode();
-    const { store } = setup({
-      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
-        throw { error: { unsuccessfulPublishes: [{ identifier: CATALOGUE_ID }] } };
+    let fail = true;
+    const { store, q } = setup({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async (p: any) => {
+        if (fail) {
+          fail = false;
+          throw { error: { unsuccessfulPublishes: [{ identifier: CATALOGUE_ID }] } };
+        }
+        return true;
       },
     });
     await selectAndDelete(["Mug"]);
@@ -256,7 +266,25 @@ describe("deleting products", () => {
     fireEvent.click(within(result).getAllByRole("button", { name: "Close" }).at(-1)!);
     await waitFor(() => expect(Object.keys(store.getState().global.dataContainer!.products)).not.toContain(mug.id));
     expect(store.getState().notifications.alertTypes.alertInfo).toBe(
-      "The products left your shop, but some of their details weren't cleared from your catalogues."
+      "The products left your shop, but some catalogues still hold them. Finish deleting them from your seller page."
     );
+    // The seller page offers to finish: the catalogue, read fresh, without the mug.
+    expect(await screen.findByText(/A product you deleted is still in your catalogues/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Finish deleting" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
+    const second = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[1] as any).resources;
+    expect(second.map((r: any) => r.identifier)).toEqual([CATALOGUE_ID]);
+    expect(Object.keys(decodeData64(second[0].data64).products)).not.toContain(mug.id);
+    await waitFor(() => expect(screen.queryByText(/still in your catalogues/)).toBeNull());
+  });
+
+  it("waits while the node still serves a catalogue from before this tab's last change", async () => {
+    stubNode();
+    // This tab just sent the catalogue without the poster; the node still serves the old one.
+    noteSentCatalogue(SELLER, { ...catalogue, products: { [mug.id]: mug, [chair.id]: chair } });
+    const { q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    const ask = await selectAndDelete(["Mug"]);
+    expect(await within(ask).findByText(DELETE_NODE_BEHIND_TEXT)).toBeInTheDocument();
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
 });

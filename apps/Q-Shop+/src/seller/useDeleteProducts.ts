@@ -8,8 +8,16 @@
  *   node serves could be older still;
  * - each catalogue holding one of the products is read fresh from QDN, so
  *   the other products in it keep what is on QDN now;
- * - qdn/payloads.ts buildDeleteProductsPublish: the index without them
- *   first, then those catalogues without them.
+ * - qdn/payloads.ts buildDeleteProductsPublish: those catalogues without
+ *   them first, then the index without them (sent through
+ *   PublishProductsDialog with the index last, after waiting for room in the
+ *   account's 25 unconfirmed publishes);
+ * - a catalogue this session sent minutes ago and the node serves
+ *   differently counts as the node lagging (seller/sentCatalogues.ts):
+ *   building on that copy would undo the earlier publish.
+ * If the index lands but a catalogue doesn't and the seller closes the
+ * dialog, the products are left in those catalogues: the seller page offers
+ * Finish deleting (seller/pendingDeletes.ts).
  * Once everything landed, the page's index, products and catalogues follow,
  * the products' drafts go, and the cached copies are dropped. Their orders
  * keep their own copy of each product, so nothing changes for them.
@@ -45,6 +53,8 @@ import {
   useShowNewerIndex,
 } from "./freshIndex";
 import { CATALOGUE_CONCURRENCY } from "./useCatalogueLoader";
+import { isCatalogueBehind, noteSentCatalogue } from "./sentCatalogues";
+import { notePendingDelete } from "./pendingDeletes";
 
 export const DELETE_NODE_BEHIND_TEXT =
   "Your last change hasn't reached your node yet, so nothing was deleted. Try again in a minute.";
@@ -64,21 +74,30 @@ export interface DeleteProductsJob {
   baseKey: string;
 }
 
-/** Each catalogue as QDN serves it now, raw; a deleted one holds nothing. Null when one can't be read. */
-async function readCataloguesFresh(name: string, ids: string[]): Promise<Record<string, CatalogueDoc> | null> {
+/**
+ * Each catalogue as QDN serves it now, raw; a deleted one holds nothing.
+ * `failed` when one can't be read; `behind` when one is an older copy of one
+ * this session just sent.
+ */
+export async function readCataloguesFresh(
+  name: string,
+  ids: string[]
+): Promise<{ read: Record<string, CatalogueDoc>; failed: boolean; behind: boolean }> {
   const read: Record<string, CatalogueDoc> = {};
   let failed = false;
+  let behind = false;
   await mapWithConcurrency(ids, CATALOGUE_CONCURRENCY, async (id) => {
     try {
       const body = await fetchQdnJson("DOCUMENT", name, id, { fresh: true });
-      if (isCatalogueJson(body)) read[id] = body as unknown as CatalogueDoc;
-      else failed = true;
+      if (!isCatalogueJson(body)) failed = true;
+      else if (isCatalogueBehind(name, id, body)) behind = true;
+      else read[id] = body as unknown as CatalogueDoc;
     } catch (error) {
       if (error instanceof QdnDeletedError) read[id] = { id, products: {} };
       else failed = true;
     }
   });
-  return failed ? null : read;
+  return { read, failed, behind };
 }
 
 export function useDeleteProducts() {
@@ -124,10 +143,12 @@ export function useDeleteProducts() {
         }
         if (state.kind === "behind") throw new PrepareError(DELETE_NODE_BEHIND_TEXT);
         if (state.kind === "unknown") throw new PrepareError(DELETE_INDEX_UNREADABLE_TEXT);
-        const catalogues = await readCataloguesFresh(name, cataloguesHolding(seen, listed));
-        if (!catalogues) throw new PrepareError(DELETE_CATALOGUES_UNREADABLE_TEXT);
+        const fresh = await readCataloguesFresh(name, cataloguesHolding(seen, listed));
+        if (fresh.behind) throw new PrepareError(DELETE_NODE_BEHIND_TEXT);
+        if (fresh.failed) throw new PrepareError(DELETE_CATALOGUES_UNREADABLE_TEXT);
+        const catalogues = fresh.read;
         const built = buildDeleteProductsPublish({ name, dataContainer: seen, productIds: listed, catalogues, deletedAt: Date.now() });
-        const labels: Record<string, string> = { [built.resources[0].identifier]: "Product list" };
+        const labels: Record<string, string> = { [dataContainerIdentifier(storeId)]: "Product list" };
         built.catalogues.forEach((cat, i) => {
           const left = Object.keys(cat.products ?? {}).length;
           labels[cat.id] = `Catalogue ${i + 1} · ${left === 0 ? "now empty" : left === 1 ? "1 product left" : `${left} products left`}`;
@@ -146,12 +167,15 @@ export function useDeleteProducts() {
 
   /**
    * The page follows what landed: the index (the products leave the shop,
-   * their drafts go) and each catalogue sent. `sent` holds identifiers.
+   * their drafts go) and each catalogue sent. When the index landed without
+   * some catalogues, those are remembered for Finish deleting. `sent` holds
+   * identifiers.
    */
   const apply = useCallback(
     (current: DeleteProductsJob, sent: Set<string>) => {
       const { dataContainer: dc, catalogues, storeId, name, resources, removed, baseKey } = current;
-      if (sent.has(resources[0].identifier)) {
+      const listSent = sent.has(dataContainerIdentifier(storeId));
+      if (listSent) {
         notePublishedIndex(storeId, baseKey, indexKey(dc));
         dispatch(setDataContainer({ ...dc, id: dataContainerIdentifier(storeId) }));
         dispatch(setProducts(Object.keys(dc.products).map((key) => ({ ...dc.products[key], id: key }))));
@@ -160,9 +184,13 @@ export function useDeleteProducts() {
       }
       const map: Record<string, Catalogue> = {};
       for (const cat of catalogues) {
-        if (sent.has(cat.id)) map[cat.id] = { ...cat, user: name, isValid: true } as unknown as Catalogue;
+        if (!sent.has(cat.id)) continue;
+        map[cat.id] = { ...cat, user: name, isValid: true } as unknown as Catalogue;
+        noteSentCatalogue(name, cat);
       }
       if (Object.keys(map).length > 0) dispatch(updateCatalogueHashMap(map));
+      const left = catalogues.filter((cat) => !sent.has(cat.id)).map((cat) => cat.id);
+      if (listSent && left.length > 0) notePendingDelete({ name, storeId, productIds: removed, catalogueIds: left });
       for (const r of resources) if (sent.has(r.identifier)) invalidateQdnJson(r.service, name, r.identifier);
       invalidateQdnSearches((url) => url.includes("service=DOCUMENT"));
     },
@@ -183,11 +211,11 @@ export function useDeleteProducts() {
     (sent: string[]) => {
       if (job && sent.length > 0) {
         apply(job, new Set(sent));
-        const listDone = sent.includes(job.resources[0].identifier);
+        const listDone = sent.includes(dataContainerIdentifier(job.storeId));
         dispatch(
           setNotification({
             msg: listDone
-              ? "The products left your shop, but some of their details weren't cleared from your catalogues."
+              ? "The products left your shop, but some catalogues still hold them. Finish deleting them from your seller page."
               : "Nothing left your shop yet. Delete the products again to finish.",
             alertType: "info",
           })

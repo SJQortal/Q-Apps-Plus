@@ -98,7 +98,7 @@ interface ProductsTabProps {
   /** Not ready yet, and still loading (else the status card above says why). */
   loading?: boolean;
   /** Delete these products (the seller page asks first); `onDeleted` runs once they are gone. */
-  onDelete?: (products: { id: string; title: string }[], onDeleted: () => void) => void;
+  onDelete?: (products: { id: string; catalogueId?: string; title?: string }[], onDeleted: () => void) => void;
 }
 
 export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }: ProductsTabProps) {
@@ -183,15 +183,14 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
     setSelecting(false);
     setSelected(new Set());
   };
-  const titleOf = (row: SellerRow) => {
+  const knownTitle = (row: SellerRow) => {
     const title = detailsOf(row)?.title;
-    if (typeof title === "string" && title.trim()) return title.trim();
-    return row.created ? `A product added ${dateFormat.format(new Date(row.created))}` : "A product";
+    return typeof title === "string" && title.trim() ? title.trim() : undefined;
   };
   const askDelete = () => {
     if (!onDelete || chosen.length === 0) return;
     onDelete(
-      chosen.map((row) => ({ id: row.productId, title: titleOf(row) })),
+      chosen.map((row) => ({ id: row.productId, catalogueId: row.catalogueId, title: knownTitle(row) })),
       stopSelecting
     );
   };

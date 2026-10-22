@@ -7,6 +7,11 @@ import { resetRates } from '../money/rates';
 import { resetRateNotices } from '../money/useShopCoin';
 import { resetPendingOrders } from '../money/pendingOrders';
 import { resetOrderReadCaches } from '../orders/reads';
+import { resetPublishedIndexes } from '../seller/productIndex';
+import { resetSentCatalogues } from '../seller/sentCatalogues';
+import { resetPendingDeletes } from '../seller/pendingDeletes';
+import { resetDeletedShops } from '../qdn/deleted';
+import { resetProductView } from '../utils/productView';
 
 // localStorage: jsdom has one, but a plain object store is easier to inspect.
 const localStorageStore: Record<string, string> = {};
@@ -95,6 +100,12 @@ beforeEach(() => {
   resetRateNotices();
   resetPendingOrders();
   resetOrderReadCaches();
+  // Session memories of the seller tools: each test starts as a new session.
+  resetPublishedIndexes();
+  resetSentCatalogues();
+  resetPendingDeletes();
+  resetDeletedShops();
+  resetProductView();
 });
 
 afterEach(() => {

@@ -39,7 +39,11 @@ import { invalidateQdnJson, invalidateQdnSearches, isDeletedBody } from "../qdn/
 import { errorMessage } from "../qdn/hubErrors";
 import { draftsOfShop } from "./shopDrafts";
 import { indexKey, notePublishedIndex } from "./productIndex";
-import { INDEX_CHANGED_TEXT, PrepareError, newerIndexOnQdn, useShowNewerIndex } from "./freshIndex";
+import { INDEX_CHANGED_TEXT, PrepareError, indexOnQdn, useShowNewerIndex } from "./freshIndex";
+import { isCatalogueBehind, noteSentCatalogue, sentCatalogue } from "./sentCatalogues";
+
+export const CATALOGUE_BEHIND_TEXT =
+  "Your last change hasn't reached your node yet, so nothing was published. Try again in a minute.";
 
 export { INDEX_CHANGED_TEXT, INDEX_UNREADABLE_TEXT } from "./freshIndex";
 
@@ -97,12 +101,14 @@ export function usePublishProducts() {
       // The publish builds on the page's copy only once it holds everything the
       // index on QDN names now; otherwise the page shows what's new first.
       const seen = dataContainer as unknown as DataContainerDoc;
-      const newer = await newerIndexOnQdn(name, storeId, seen);
-      if (newer) {
-        await showNewerIndex(seen, newer, storeId, name);
+      const onQdn = await indexOnQdn(name, storeId, seen);
+      if (onQdn.kind === "newer") {
+        await showNewerIndex(seen, onQdn.merged, storeId, name);
         setNotice(INDEX_CHANGED_TEXT);
         return;
       }
+      // The node hasn't caught up with this tab's own last publish: what this tab sent is the newest.
+      const nodeBehind = onQdn.kind === "behind";
       const base = seen;
       const built = await buildProductPublish({
         name,
@@ -123,7 +129,16 @@ export function usePublishProducts() {
           }
           // A deleted catalogue holds nothing: an edit puts its product back into it.
           if (isDeletedBody(res)) return { id: catalogueId, products: {} };
-          if (res && typeof res === "object" && !res.error && res.products) return res as CatalogueDoc;
+          if (res && typeof res === "object" && !res.error && res.products) {
+            // A different copy of a catalogue this session just sent: building on it could undo that
+            // publish. When the node is known to lag behind this tab, build on what this tab sent.
+            if (isCatalogueBehind(name, catalogueId, res)) {
+              const mine = nodeBehind ? sentCatalogue(name, catalogueId) : null;
+              if (mine) return mine as unknown as CatalogueDoc;
+              throw new PrepareError(CATALOGUE_BEHIND_TEXT);
+            }
+            return res as CatalogueDoc;
+          }
           if (edited.has(catalogueId)) {
             throw new PrepareError(
               "Some products you edited couldn't be read from your node, so their changes can't be saved yet. Try again in a minute."
@@ -158,7 +173,10 @@ export function usePublishProducts() {
     dispatch(setDataContainer({ ...dc, id: dataContainerIdentifier(storeId) }));
     dispatch(setProducts(Object.keys(dc.products).map((key) => ({ ...dc.products[key], id: key }))));
     const map: Record<string, Catalogue> = {};
-    for (const cat of catalogues) map[cat.id] = cat as unknown as Catalogue;
+    for (const cat of catalogues) {
+      map[cat.id] = cat as unknown as Catalogue;
+      noteSentCatalogue(name, cat);
+    }
     dispatch(updateCatalogueHashMap(map));
     for (const r of resources) invalidateQdnJson(r.service, name, r.identifier);
     invalidateQdnSearches((url) => url.includes("service=DOCUMENT"));

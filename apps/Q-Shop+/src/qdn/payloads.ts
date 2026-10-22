@@ -473,12 +473,15 @@ export function cataloguesHolding(dataContainer: Pick<DataContainerDoc, "product
 }
 
 /**
- * Delete products: they leave the product index (its shape otherwise as the
- * original writes it) and every catalogue that holds them. The index goes
- * first, so they leave the shop at once even if a catalogue fails; then each
- * catalogue that held one, without it. An emptied catalogue stays a valid,
- * empty catalogue (both apps read it, and the next new products fill it
- * again when it is the index's last, as the original's publish does), and a
+ * Delete products: they leave every catalogue that holds them, then the
+ * product index (its shape otherwise as the original writes it, plus the
+ * deletion record). The catalogues go first and the index last, as in a
+ * product publish: if a catalogue fails, the index that would stop listing
+ * its products shouldn't land without it (PublishProductsDialog holds it
+ * back in batches), or the product would stay orderable by its link while
+ * the shop no longer lists it. An emptied catalogue stays a valid, empty
+ * catalogue (both apps read it, and the next new products fill it again
+ * when it is the index's last, as the original's publish does), and a
  * catalogue that didn't hold any of them isn't republished.
  *
  * `catalogues` are the catalogue JSONs as read from QDN just before (raw:
@@ -523,13 +526,6 @@ export function buildDeleteProductsPublish(args: {
   }
 
   const resources: PublishResource[] = [
-    {
-      name,
-      service: "DOCUMENT",
-      identifier: dc.id || dataContainerIdentifier(dc.storeId),
-      filename: "datacontainer.json",
-      data64: jsonToBase64(dc),
-    },
     ...changed.map((cat) => ({
       name,
       service: "DOCUMENT",
@@ -537,8 +533,46 @@ export function buildDeleteProductsPublish(args: {
       filename: "catalogue.json",
       data64: jsonToBase64(cat),
     })),
+    {
+      name,
+      service: "DOCUMENT",
+      identifier: dc.id || dataContainerIdentifier(dc.storeId),
+      filename: "datacontainer.json",
+      data64: jsonToBase64(dc),
+    },
   ];
   return { dataContainer: dc, catalogues: changed, removed: listed, resources };
+}
+
+/**
+ * Finish a product delete whose catalogues didn't all land: each catalogue
+ * still holding one of the products, republished without it (the index
+ * already doesn't list them). `catalogues` are the JSONs as read from QDN
+ * just before; one that holds none of them isn't republished.
+ */
+export function buildRemoveFromCataloguesPublish(args: {
+  name: string;
+  productIds: string[];
+  catalogues: Record<string, CatalogueDoc>;
+}) {
+  const gone = new Set(args.productIds);
+  const changed: CatalogueDoc[] = [];
+  for (const catalogue of Object.values(args.catalogues)) {
+    if (!catalogue?.products || typeof catalogue.products !== "object") continue;
+    const held = Object.keys(catalogue.products).filter((id) => gone.has(id));
+    if (held.length === 0) continue;
+    const copy = structuredClone(catalogue);
+    for (const id of held) delete copy.products[id];
+    changed.push(copy);
+  }
+  const resources: PublishResource[] = changed.map((cat) => ({
+    name: args.name,
+    service: "DOCUMENT",
+    identifier: cat.id,
+    filename: "catalogue.json",
+    data64: jsonToBase64(cat),
+  }));
+  return { catalogues: changed, resources };
 }
 
 // ---------------------------------------------------------------- reviews

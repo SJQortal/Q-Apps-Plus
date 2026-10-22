@@ -78,7 +78,10 @@ const STATE_TEXT: Record<Verb, Record<RowState, string>> = {
 };
 
 /** The words that differ between a publish and a delete. */
-const WORDS: Record<Verb, { noun: string; doing: string; done: string; start: string; failedParts: string; recheck: string }> = {
+const WORDS: Record<
+  Verb,
+  { noun: string; doing: string; done: string; start: string; failedParts: string; recheck: string; sends: string; checking: string; listLast: string }
+> = {
   publish: {
     noun: "Publish",
     doing: "Publishing",
@@ -86,6 +89,9 @@ const WORDS: Record<Verb, { noun: string; doing: string; done: string; start: st
     start: "Start publishing",
     failedParts: "Some parts were not published.",
     recheck: "check again before you publish again",
+    sends: "Hub asks you to confirm, then publishes.",
+    checking: "Checking QDN for what was published…",
+    listLast: "Your product list goes last, once every product is on QDN.",
   },
   delete: {
     noun: "Delete",
@@ -94,6 +100,9 @@ const WORDS: Record<Verb, { noun: string; doing: string; done: string; start: st
     start: "Start deleting",
     failedParts: "Some parts didn't go through.",
     recheck: "check again before you try again",
+    sends: "Hub asks you to confirm, then sends the delete.",
+    checking: "Checking QDN for what went through…",
+    listLast: "Your product list goes last, once every catalogue is updated.",
   },
 };
 
@@ -368,7 +377,9 @@ export function PublishProductsDialog({
           if (part.length === 0) continue;
         }
         setBatch({ index: i, count: parts.length });
-        if (batched && publicKey) {
+        // A delete always waits for room, however small: Hub carries on past a refused part, and a
+        // product list landing without its catalogues would leave deleted products orderable.
+        if ((batched || verb === "delete") && publicKey) {
           setUnconfirmed(null);
           setPhase("room");
           const controller = new AbortController();
@@ -389,7 +400,7 @@ export function PublishProductsDialog({
       if (allDone()) finish();
       else setPhase("settled");
     },
-    [batched, indexLast, mark, resources, publicKey, run, allDone, finish]
+    [batched, indexLast, verb, mark, resources, publicKey, run, allDone, finish]
   );
 
   useEffect(() => {
@@ -508,7 +519,7 @@ export function PublishProductsDialog({
             <Typography variant="body2" color="text.secondary">
               Qortal takes at most {MAX_UNCONFIRMED_PER_ACCOUNT} unconfirmed publishes per account, so each batch waits for
               the network to confirm the one before; a block comes about once a minute. Hub asks you to confirm each batch.
-              {indexLast ? " Your product list goes last, once every product is on QDN." : ""} Keep this tab open until it finishes.
+              {indexLast ? ` ${words.listLast}` : ""} Keep this tab open until it finishes.
             </Typography>
           </>
         ) : phase === "room" ? (
@@ -526,9 +537,9 @@ export function PublishProductsDialog({
           </Box>
         ) : phase === "publishing" ? (
           <Box>
-            <LinearProgress aria-label="Publishing" />
+            <LinearProgress aria-label={words.doing} />
             <Typography sx={{ mt: 1.5 }}>
-              Hub asks you to confirm, then publishes. Keep this tab open. {batched ? `${doneCount} of ${total} ${words.done}.` : ""}
+              {words.sends} Keep this tab open. {batched ? `${doneCount} of ${total} ${words.done}.` : ""}
             </Typography>
             {slow && (
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -539,7 +550,7 @@ export function PublishProductsDialog({
         ) : phase === "checking" ? (
           <Box>
             <LinearProgress aria-label="Checking QDN" />
-            <Typography sx={{ mt: 1.5 }}>Checking QDN for what was published…</Typography>
+            <Typography sx={{ mt: 1.5 }}>{words.checking}</Typography>
           </Box>
         ) : (
           <Box>

@@ -38,6 +38,7 @@ import { DraftsCard } from "../../seller/DraftsCard";
 import { ShopTab } from "../../seller/ShopTab";
 import { CollectionsTab } from "../../seller/CollectionsTab";
 import { ProductListStatus } from "../../seller/ProductListStatus";
+import { FinishDeletesCard } from "../../seller/FinishDeletesCard";
 import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteProductsDialog";
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
@@ -266,6 +267,7 @@ export const ProductManager = () => {
           error={publish.error}
           notice={publish.notice}
         />
+        <FinishDeletesCard />
         <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tabs
             value={tab}
