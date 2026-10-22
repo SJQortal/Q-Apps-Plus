@@ -50,7 +50,7 @@ export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews;
   const label =
     average === null
       ? "No reviews yet"
-      : `${average.toFixed(1)} · ${summary.count} review${summary.count === 1 ? "" : "s"}`;
+      : `${average.toFixed(1)} (${summary.count} review${summary.count === 1 ? "" : "s"})`;
   return (
     <Button
       onClick={onOpen}
@@ -211,6 +211,7 @@ export function ShopHeader({
             </Button>
             <Button
               variant="outlined"
+              color="inherit"
               startIcon={<EditOutlinedIcon />}
               onClick={onEdit}
               disabled={!canEdit}
@@ -225,6 +226,7 @@ export function ShopHeader({
             href={mailToLink(owner)}
             className="qortal-link"
             variant="outlined"
+            color="inherit"
             startIcon={<EmailOutlinedIcon />}
             sx={{ minHeight: 44 }}
           >
@@ -232,7 +234,7 @@ export function ShopHeader({
           </Button>
         )}
         <CopyLinkButton link={storeLink(owner, storeId)} label="Share" />
-        <Button variant="outlined" startIcon={<InfoOutlinedIcon />} onClick={onOpenDetails} sx={{ minHeight: 44 }}>
+        <Button variant="outlined" color="inherit" startIcon={<InfoOutlinedIcon />} onClick={onOpenDetails} sx={{ minHeight: 44 }}>
           Details
         </Button>
       </Box>

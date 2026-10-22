@@ -27,6 +27,7 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
+import CheckIcon from "@mui/icons-material/Check";
 import TuneIcon from "@mui/icons-material/Tune";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
@@ -86,6 +87,29 @@ function useDebounced<T>(value: T, ms: number): T {
   return debounced;
 }
 
+/**
+ * Selected chips are filled and ticked, others outlined, in neutral colours:
+ * the Classic theme's primary is the original's surface colour (white in
+ * light mode), so a primary chip would vanish there.
+ */
+function FilterChip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <Chip
+      label={label}
+      onClick={onClick}
+      icon={on ? <CheckIcon /> : undefined}
+      variant={on ? "filled" : "outlined"}
+      aria-pressed={on}
+      sx={{
+        minHeight: 36,
+        maxWidth: "100%",
+        fontWeight: on ? 700 : 500,
+        ...(on && { bgcolor: "action.selected", "&:hover": { bgcolor: "action.focus" } }),
+      }}
+    />
+  );
+}
+
 function CategoryChips({
   categories,
   selected,
@@ -100,28 +124,10 @@ function CategoryChips({
   if (categories.length === 0) return null;
   return (
     <Box role="group" aria-label="Categories" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-      <Chip
-        label="All"
-        onClick={onClear}
-        color={selected.length === 0 ? "primary" : "default"}
-        variant={selected.length === 0 ? "filled" : "outlined"}
-        aria-pressed={selected.length === 0}
-        sx={{ minHeight: 36 }}
-      />
-      {categories.map((category) => {
-        const on = selected.includes(category);
-        return (
-          <Chip
-            key={category}
-            label={category}
-            onClick={() => onToggle(category)}
-            color={on ? "primary" : "default"}
-            variant={on ? "filled" : "outlined"}
-            aria-pressed={on}
-            sx={{ minHeight: 36, maxWidth: "100%" }}
-          />
-        );
-      })}
+      <FilterChip label="All" on={selected.length === 0} onClick={onClear} />
+      {categories.map((category) => (
+        <FilterChip key={category} label={category} on={selected.includes(category)} onClick={() => onToggle(category)} />
+      ))}
     </Box>
   );
 }
@@ -360,7 +366,7 @@ function ShopProducts({
         </ProductGrid>
         {hasMore && (
           <Box ref={sentinel} sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
-            <Button variant="outlined" onClick={more} sx={{ minHeight: 44, minWidth: 160 }}>
+            <Button variant="outlined" color="inherit" onClick={more} sx={{ minHeight: 44, minWidth: 160 }}>
               Show more
             </Button>
           </Box>
@@ -413,6 +419,7 @@ function ShopProducts({
             {phone && (
               <Button
                 variant={activeFilters ? "contained" : "outlined"}
+                color={activeFilters ? "primary" : "inherit"}
                 startIcon={<TuneIcon />}
                 onClick={() => setFiltersOpen(true)}
                 sx={{ minHeight: 44, flex: "1 1 auto" }}
@@ -445,7 +452,7 @@ function ShopProducts({
               <Typography variant="body2" color="text.secondary">
                 Some products aren't available on your node right now.
               </Typography>
-              <Button variant="outlined" onClick={retryFailed} sx={{ minHeight: 44 }}>
+              <Button variant="outlined" color="inherit" onClick={retryFailed} sx={{ minHeight: 44 }}>
                 Retry
               </Button>
             </Box>
@@ -473,7 +480,7 @@ function ShopProducts({
             )}
             {stockSwitch}
             <Box sx={{ display: "flex", gap: 1 }}>
-              <Button onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
+              <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
                 Clear
               </Button>
               <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>

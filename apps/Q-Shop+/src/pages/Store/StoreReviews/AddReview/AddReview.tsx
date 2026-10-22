@@ -169,7 +169,7 @@ export function AddReview({
       dismissible={!busy}
       actions={
         <>
-          <Button onClick={onClose} disabled={busy}>
+          <Button color="inherit" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
           <Button variant="contained" onClick={publish} aria-disabled={busy || undefined}>

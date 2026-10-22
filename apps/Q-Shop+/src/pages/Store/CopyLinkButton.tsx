@@ -74,7 +74,7 @@ export function CopyLinkButton({
   if (label) {
     return (
       <>
-        <Button variant={variant} startIcon={<LinkOutlinedIcon />} onClick={() => copy(link)} sx={{ minHeight: 44 }}>
+        <Button variant={variant} color="inherit" startIcon={<LinkOutlinedIcon />} onClick={() => copy(link)} sx={{ minHeight: 44 }}>
           {label}
         </Button>
         {dialog}

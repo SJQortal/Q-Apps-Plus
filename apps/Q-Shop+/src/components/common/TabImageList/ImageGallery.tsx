@@ -114,7 +114,7 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
         <ButtonBase
           onClick={() => setViewerOpen(true)}
           aria-label={`Open picture ${at + 1} of ${count} full screen`}
-          sx={{ width: "100%", height: "100%", display: "block", "&:focus-visible": { outline: 2, outlineColor: "primary.main", outlineOffset: -2 } }}
+          sx={{ width: "100%", height: "100%", display: "block", "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: -2 } }}
         >
           <Box component="img" src={list[at]} alt={label(at)} sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
         </ButtonBase>
@@ -150,9 +150,9 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
                 borderRadius: 1.5,
                 overflow: "hidden",
                 border: 2,
-                borderColor: i === at ? "primary.main" : "divider",
+                borderColor: i === at ? "text.primary" : "divider",
                 bgcolor: "action.hover",
-                "&:focus-visible": { outline: 2, outlineColor: "primary.main", outlineOffset: 2 },
+                "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: 2 },
               }}
             >
               <Box component="img" src={src} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />

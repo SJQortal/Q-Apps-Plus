@@ -67,9 +67,10 @@ function Summary({ summary, fallback }: { summary: ReviewSummary; fallback?: num
               </Typography>
               <LinearProgress
                 variant="determinate"
+                color="inherit"
                 value={(count / most) * 100}
                 aria-label={`${stars} star${stars === 1 ? "" : "s"}: ${count} review${count === 1 ? "" : "s"}`}
-                sx={{ height: 8, borderRadius: 4 }}
+                sx={{ height: 8, borderRadius: 4, color: "text.secondary" }}
               />
               <Typography variant="body2" color="text.secondary" sx={{ textAlign: "right" }}>
                 {count}
@@ -183,7 +184,7 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
           <Typography variant="body2" color="text.secondary">
             Couldn't check your orders with this shop.
           </Typography>
-          <Button variant="outlined" onClick={() => setRightNonce((n) => n + 1)} sx={{ minHeight: 44 }}>
+          <Button variant="outlined" color="inherit" onClick={() => setRightNonce((n) => n + 1)} sx={{ minHeight: 44 }}>
             Retry
           </Button>
         </Box>
@@ -228,7 +229,7 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
         </Box>
         {shown.length < reviews.length && (
           <Box sx={{ display: "flex", justifyContent: "center", mt: 2 }}>
-            <Button variant="outlined" onClick={() => setPages((p) => p + 1)} sx={{ minHeight: 44, minWidth: 160 }}>
+            <Button variant="outlined" color="inherit" onClick={() => setPages((p) => p + 1)} sx={{ minHeight: 44, minWidth: 160 }}>
               Show more reviews
             </Button>
           </Box>

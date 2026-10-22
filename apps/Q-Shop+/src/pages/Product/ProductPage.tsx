@@ -212,7 +212,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
           ) : null}
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             <CopyLinkButton link={productLink(owner, storeId, productId, catalogueId)} label="Share" />
-            <Button component={RouterLink} to={shopPath} variant="outlined" startIcon={<StorefrontOutlinedIcon />} sx={{ minHeight: 44 }}>
+            <Button component={RouterLink} to={shopPath} variant="outlined" color="inherit" startIcon={<StorefrontOutlinedIcon />} sx={{ minHeight: 44 }}>
               Visit shop
             </Button>
           </Box>

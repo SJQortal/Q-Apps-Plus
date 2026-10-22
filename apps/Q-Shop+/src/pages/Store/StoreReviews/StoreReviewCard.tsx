@@ -66,7 +66,7 @@ export function StoreReviewCard({ review, verified }: { review: ShopReview; veri
             variant="outlined"
             icon={<VerifiedOutlinedIcon />}
             label="Verified buyer"
-            sx={{ "& .MuiChip-icon": { color: "primary.main" } }}
+            sx={{ "& .MuiChip-icon": { color: "success.main" } }}
           />
         )}
       </Box>
@@ -93,6 +93,7 @@ export function StoreReviewCard({ review, verified }: { review: ShopReview; veri
         <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
           <Button
             size="small"
+            color="inherit"
             onClick={readMore}
             aria-disabled={state === "loading" || state === "fetching" || undefined}
             sx={{ minHeight: 44, ml: -1 }}
