@@ -1,0 +1,183 @@
+import { describe, expect, it } from "vitest";
+import {
+  categoriesOf,
+  filterAndSortProducts,
+  isListed,
+  matchesSearch,
+  productRowsFromContainer,
+  searchCatalogueIds,
+  searchProducts,
+  searchTerms,
+  type CatalogueMap,
+  type ProductRow,
+} from "./shopData";
+import { CATALOGUE_ID, catalogue, chair, dataContainer, mug, poster } from "../../test/fixtures/shop";
+
+const row = (over: Partial<ProductRow> & { productId: string }): ProductRow => ({
+  catalogueId: "cat-1",
+  created: 1,
+  ...over,
+});
+
+describe("productRowsFromContainer", () => {
+  it("reads every product of the index, newest first", () => {
+    const rows = productRowsFromContainer(dataContainer);
+    expect(rows.map((r) => r.productId)).toEqual([mug.id, poster.id, chair.id]);
+    expect(rows[0]).toEqual({
+      productId: mug.id,
+      catalogueId: CATALOGUE_ID,
+      created: mug.created,
+      priceQort: 1.5,
+      category: "Kitchen",
+      status: "AVAILABLE",
+    });
+  });
+
+  it("skips malformed entries and tolerates a missing index", () => {
+    expect(productRowsFromContainer(null)).toEqual([]);
+    expect(productRowsFromContainer({ products: "x" })).toEqual([]);
+    const rows = productRowsFromContainer({
+      products: { a: { created: 2, catalogueId: "c" }, b: null, c: { created: 3 }, d: { created: "4", priceQort: "2.5", catalogueId: "c" } },
+    });
+    expect(rows).toEqual([
+      { productId: "d", catalogueId: "c", created: 4, priceQort: 2.5, category: undefined, status: undefined },
+      { productId: "a", catalogueId: "c", created: 2, priceQort: undefined, category: undefined, status: undefined },
+    ]);
+  });
+});
+
+describe("categoriesOf", () => {
+  it("lists each category once, A to Z", () => {
+    expect(categoriesOf(productRowsFromContainer(dataContainer))).toEqual(["Art", "Furniture", "Kitchen"]);
+  });
+});
+
+describe("isListed", () => {
+  const loaded: CatalogueMap = { [CATALOGUE_ID]: { ...catalogue, user: "Seller Name" } as any };
+  it("shows available and out-of-stock products, hides retired ones (as the original)", () => {
+    expect(isListed(row({ productId: "a", status: "AVAILABLE" }), {})).toBe(true);
+    expect(isListed(row({ productId: "a", status: "OUT_OF_STOCK" }), {})).toBe(true);
+    expect(isListed(row({ productId: "a", status: "RETIRED" }), {})).toBe(false);
+  });
+
+  it("lets the catalogue's status win once loaded", () => {
+    const retired: CatalogueMap = {
+      [CATALOGUE_ID]: { id: CATALOGUE_ID, products: { [mug.id]: { ...mug, status: "RETIRED" } } } as any,
+    };
+    expect(isListed(row({ productId: mug.id, catalogueId: CATALOGUE_ID, status: "AVAILABLE" }), retired)).toBe(false);
+  });
+
+  it("keeps a product without status until its catalogue says, and drops one its catalogue lacks", () => {
+    expect(isListed(row({ productId: mug.id, catalogueId: CATALOGUE_ID }), {})).toBe(true);
+    expect(isListed(row({ productId: mug.id, catalogueId: CATALOGUE_ID }), loaded)).toBe(true);
+    expect(isListed(row({ productId: "gone", catalogueId: CATALOGUE_ID, status: "AVAILABLE" }), loaded)).toBe(false);
+  });
+});
+
+describe("filterAndSortProducts", () => {
+  const rows: ProductRow[] = [
+    row({ productId: "old-cheap", created: 1, priceQort: 1, category: "Art", status: "AVAILABLE" }),
+    row({ productId: "new-dear", created: 3, priceQort: 9, category: "Kitchen", status: "OUT_OF_STOCK" }),
+    row({ productId: "mid-mid", created: 2, priceQort: 5, category: "Art", status: "AVAILABLE" }),
+    row({ productId: "no-price", created: 4, category: "Art", status: "AVAILABLE" }),
+    row({ productId: "retired", created: 5, priceQort: 2, status: "RETIRED" }),
+  ];
+  const ids = (list: ProductRow[]) => list.map((r) => r.productId);
+
+  it("sorts newest and oldest by the index's created time", () => {
+    expect(ids(filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "newest" }, {}))).toEqual([
+      "no-price",
+      "new-dear",
+      "mid-mid",
+      "old-cheap",
+    ]);
+    expect(ids(filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "oldest" }, {}))).toEqual([
+      "old-cheap",
+      "mid-mid",
+      "new-dear",
+      "no-price",
+    ]);
+  });
+
+  it("sorts by the QORT price, products without one last", () => {
+    expect(ids(filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "price-asc" }, {}))).toEqual([
+      "old-cheap",
+      "mid-mid",
+      "new-dear",
+      "no-price",
+    ]);
+    expect(ids(filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "price-desc" }, {}))).toEqual([
+      "new-dear",
+      "mid-mid",
+      "old-cheap",
+      "no-price",
+    ]);
+  });
+
+  it("sorts by the QORT price even when price[0] is another coin (bug 13)", () => {
+    const fromIndex = productRowsFromContainer({
+      products: {
+        a: { created: 1, priceQort: 3, catalogueId: "c", status: "AVAILABLE" },
+        b: { created: 2, priceQort: 2, catalogueId: "c", status: "AVAILABLE" },
+      },
+    });
+    const catalogues: CatalogueMap = {
+      c: {
+        id: "c",
+        products: {
+          a: { ...mug, id: "a", price: [{ currency: "ARRR", value: 1 }, { currency: "qort", value: 3 }] },
+          b: { ...mug, id: "b", price: [{ currency: "ARRR", value: 50 }, { currency: "qort", value: 2 }] },
+        },
+      } as any,
+    };
+    expect(ids(filterAndSortProducts(fromIndex, { categories: [], inStockOnly: false, sort: "price-asc" }, catalogues))).toEqual(["b", "a"]);
+  });
+
+  it("filters by categories and stock", () => {
+    expect(ids(filterAndSortProducts(rows, { categories: ["Art"], inStockOnly: false, sort: "newest" }, {}))).toEqual([
+      "no-price",
+      "mid-mid",
+      "old-cheap",
+    ]);
+    expect(ids(filterAndSortProducts(rows, { categories: ["Art", "Kitchen"], inStockOnly: true, sort: "newest" }, {}))).toEqual([
+      "no-price",
+      "mid-mid",
+      "old-cheap",
+    ]);
+  });
+
+  it("does not change the input", () => {
+    const copy = [...rows];
+    filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "price-desc" }, {});
+    expect(rows).toEqual(copy);
+  });
+});
+
+describe("search", () => {
+  it("matches every word in the title, description or category, ignoring case", () => {
+    expect(searchTerms("  Big   MUG ")).toEqual(["big", "mug"]);
+    expect(matchesSearch(mug, ["mug"])).toBe(true);
+    expect(matchesSearch(mug, ["a", "kitchen"])).toBe(true);
+    expect(matchesSearch(mug, ["mug", "poster"])).toBe(false);
+    expect(matchesSearch(undefined, ["mug"])).toBe(false);
+  });
+
+  it("reads at most 30 catalogues, in list order, and says when it stopped", () => {
+    const many = Array.from({ length: 35 }, (_, i) => row({ productId: `p${i}`, catalogueId: `c${i}` }));
+    const doubled = many.flatMap((r) => [r, { ...r, productId: `${r.productId}b` }]);
+    const { ids, capped } = searchCatalogueIds(doubled);
+    expect(ids).toHaveLength(30);
+    expect(ids[0]).toBe("c0");
+    expect(ids[29]).toBe("c29");
+    expect(capped).toBe(true);
+    expect(searchCatalogueIds(doubled.slice(0, 20))).toEqual({ ids: Array.from({ length: 10 }, (_, i) => `c${i}`), capped: false });
+  });
+
+  it("shows only loaded, searched, matching products", () => {
+    const rows = productRowsFromContainer(dataContainer);
+    const catalogues: CatalogueMap = { [CATALOGUE_ID]: catalogue as any };
+    expect(searchProducts(rows, ["poster"], [CATALOGUE_ID], catalogues).map((r) => r.productId)).toEqual([poster.id]);
+    expect(searchProducts(rows, ["poster"], [], catalogues)).toEqual([]);
+    expect(searchProducts(rows, ["poster"], [CATALOGUE_ID], {})).toEqual([]);
+  });
+});
