@@ -317,7 +317,7 @@ export function PendingOrderCard({
           onConfirm={remove}
         >
           <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
-            Only if your wallet shows no payment of {amount} to {seller}.
+            Only if your wallet shows no payment of {amount} to {foreign ? shortAddress(order.recipient) : seller}.
           </Typography>
           <Typography variant="body2" sx={{ mt: 1.5 }}>
             If you did pay, {seller} won't hear about this order once it's removed.
