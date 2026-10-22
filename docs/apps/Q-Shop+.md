@@ -63,7 +63,7 @@ Every shape below is what the original app writes; the + app writes the same, an
 | DOCUMENT | `q-store-review-<shortStoreId>-<uid10>-<rating×10>` | buyer with an order | R/W | JSON `{title, description, rating (0.5 steps), created}`, `filename: "review.json"`, metadata `title.slice(0,60)`, `description.slice(0,150)`. Lists read the rating from the identifier and the text from the metadata | AddReview.pin |
 | THUMBNAIL | `qortal_avatar` | any name | R | avatar image | |
 | Hub list | `blockedNames_q-blog` | user | R/W | names, shared with the original (Simon, night 1) | |
-| localStorage | `qshopplus-ui-theme`, `qshopplus-settings` (session 1); `qshopplus-cart` (carts per owner and shop: the first cart for a shop id keeps the plain id as its key, another owner's cart for that id is keyed `owner\nshopId`), `qshopplus-pending-orders` (paid orders not yet recorded, without the delivery address; optional `published`, `imagesStripped`), `qshopplus-used-payments` (payment signatures of orders recorded from this device), `qshopplus-active-name` (night 1, all additive) | | R/W | browser only | |
+| localStorage | `qshopplus-ui-theme`, `qshopplus-settings` (session 1); `qshopplus-cart` (carts per owner and shop: the first cart for a shop id keeps the plain id as its key, another owner's cart for that id is keyed `owner\nshopId`), `qshopplus-pending-orders` (paid orders not yet recorded, without the delivery address; optional `published`, `imagesStripped`), `qshopplus-used-payments` (payment signatures of orders recorded from this device), `qshopplus-active-name` (night 1), `qshopplus-deleted-shops` (shops this browser deleted in the last hour, round 5; all additive) | | R/W | browser only | |
 | localforage | `general-consent` | | R/W | welcome notice | |
 
 **Searches the original makes** (what the + app must keep finding): shops `service=STORE&query=q-store-general&prefix=true` (home), own shops by `name=` + `exactmatchnames`; a shop's orders `service=DOCUMENT_PRIVATE&query=q-store-order-<shortStoreId>` (all names); a buyer's orders `query=q-store-order-&name=<buyer>`; reviews `service=DOCUMENT&query=q-store-review-<shortStoreId>` with the exact prefix re-checked in code (Core's `query` is a case-insensitive substring).
@@ -71,6 +71,7 @@ Every shape below is what the original app writes; the + app writes the same, an
 **New data in the + app (additive only):**
 - Other payment coins: the store's existing `supportedCoins` array and `foreignCoins` map gain more tickers (`BTC`, `LTC`, `DOGE`, `DGB`, `RVN`) with their payout addresses; products may carry their own price per coin in the existing `price` array (`{currency: "BTC", value}`); orders paid in them write `payment.currency: "<ticker>"` and the address paid in a new `payment.foreignAddressUsed` (ARRR keeps `arrrAddressUsed`). The original shows QORT/ARRR only and ignores the rest; editing such a store in the original asks for an address for the extra coin (its form only has ARRR), so the seller removes the coin there or keeps editing in the + app.
 - Q-Assets: a new store field `acceptedAssets: [{id, name}]` (Qortal assets the shop accepts, paid with `TRANSFER_ASSET` to the seller's Qortal address) and product prices `{currency: "ASSET:<id>", value}`; orders paid in an asset write `payment.currency: "ASSET:<id>"`, `payment.assetId`, `payment.assetName` and the transfer's `transactionSignature`. The original ignores all of these.
+- Deletes (round 5): a deleted shop's STORE, product list and catalogues are republished as `"D"` (`data64: "RA=="`, the marker qapp-core's `deleteResource` and Torq delete with), with metadata `title: "deleted"`, `description: "deleted"`, `tags: ["deleted"]` so searches can leave them out; the shop goes first. Deleted products leave the product list and their catalogues, which are republished in the original's shapes (the list first; an emptied catalogue stays `{id, products: {}}`, which both apps read). The original hides a shop whose JSON fails its `checkStructureStore` and never reads the product list or catalogues of one; creating a shop over a deleted one's id publishes the original's STORE and empty product list as usual.
 - The QORT/ARRR/order shapes above are unchanged.
 
 ### Money code (pinned before any change)
@@ -282,7 +283,43 @@ A test Hub was started next to Simon's normal Hub (`--remote-debugging-port=9223
 
 Instead, `e2e/screens.realnode.config.mjs` ran the app against **real data from the local node, read-only**: every Core GET answered by the node, Hub's reads emulated over the same GETs, every write, payment and decrypt refused. Screens: home, search ("gold"), Top rated, the largest shop (2r0y's Qortal Goldback Store, 45 products in 6 catalogues), a shop whose owner has a space and whose short id (`store`) other shops share, a real product, its reviews, the cart and Settings, at 1280, 700, 390×844, 360×740 and 844×390 (45 captures): **0 sideways overflow, 0 unlabelled buttons**, the only console errors 404s for reviewers without an avatar; a shop page made 1 search + 7 fetches, a product page 0 searches + 2 fetches, home 2 searches + the logos on screen. Checked by eye: real logos and product pictures, prices, a long plain-text description with line breaks, the gallery.
 
+### Round 5: Simon's requests (2026-10-22)
+
+Simon answered the night's questions (Follow-ups below) and asked for deletes. Every change below has its own commit, builds, lints and passes the whole suite (606 tests, from 559); `release/Q-Shop+.zip` rebuilt after each.
+
+| Question | Answer | Change |
+|---|---|---|
+| 1. Classic text on phones | Smaller on phones | Q-Shop Classic body text is 16 px (body2 14 px) on phones; desktop keeps the original's 23 px (`1ba20cb2`) |
+| 2. Trimmed shop fields, fixed coin order | Keep | none |
+| 3. "Ordered here" badge | Keep | none |
+| 4. Ratings on home | Stars always, Top rated weighted | Every shop card shows its stars once the shop index is in (one more search, cached); Top rated sorts by a Bayesian average with a neutral prior (3 stars, weight 3), so one 5-star review no longer beats twenty 4.8s (`87bef2be`) |
+| 5. Node-blocked names hidden on home | Keep hidden | none |
+| 6. One preferred coin for the app | One for the app | none |
+| 7. Unconfirmed payments: 30 minutes, per device | Keep | none |
+| 8. Hide a paid order that won't record | No hide | none |
+| 9. Seller payment checks | Keep the address check, soften the sender one | A payment from another account than the one that owns the buyer's name now is a plain note, not a warning (names can be sold) (`ff8ec711`) |
+| 10. Seller's Orders tab | Open on To handle | It opens on To handle while there are orders to handle, else All (`ad204e58`); other owners' same-id orders stay apart |
+| 11. Publish needs the fresh product list | Keep the safety check | none |
+| 12. Q-Assets in the official Hub | (checked) | Qortal-Hub `develop` has `TRANSFER_ASSET`, and `GET_USER_WALLET` returns an address for BTC, LTC, DOGE, DGB and RVN as for ARRR: nothing to change |
+| 13. Order lists re-read after 2 minutes | Keep 2 minutes | none |
+
+The same-identifier question ("can another name's shop with the same id get mixed up?"): fixed everywhere the app can tell the two apart (catalogues, carts, statuses, orders and review bodies are all matched by name as well as id). One limit stays, in the data itself: review identifiers carry only the short shop id, so two names' shops with the same id share their review count, as in the original.
+
+**Deleting products and shops** (Simon: "the abilities for users that published shop or products to delete them"; his choices: delete the shop *and* its products; one or several products at once; a deleted shop's id can be used again):
+- *Read side first* (`c2d943ab`): the delete marker (`"D"` or an empty body) now reads as deleted instead of a parse error retried as "not on the node yet". The shop and product pages say "This shop was deleted" from one read (no retries, no existence search), home leaves the shop out, the cart says its owner deleted it and offers Remove items, and a deleted catalogue reads as one with no products. A shop deleted and created again comes back on home once the index shows it changed.
+- *Builders* (`a5430e3a`): `buildDeleteShopPublish` and `buildDeleteProductsPublish` in `qdn/payloads.ts`, pure and tested like every other write; the exact test for a shop's catalogue ids (`my-shop-2`'s aren't `my-shop`'s); the one-hour memory of this browser's deletes (the node lists a deleted shop with its old metadata until a block confirms the delete).
+- *The publish dialog sends deletes* (`69da2d67`): `order="given"` (batches of 20 in order instead of the product list last) and `verb="delete"`; its QDN check after a timeout counts the marker as landed. A product publish is unchanged.
+- *Products* (`36e0612d`): Select in the Products tab (tap products, Select all for what the filters show, Delete) and Delete in a published product's form; the seller page asks first, naming what goes and pointing to Retired for taking a product off sale. The product list is read fresh first (a change from another device is shown and nothing is deleted; right after this tab's own publish, while the node still serves the list from before it, it asks to try again in a minute, since the catalogues it serves could be older still), each catalogue holding one is read fresh, then one publish: the list without them first, then those catalogues without them. Their drafts go too, and a delete closed part-way leaves the page matching what landed. The fresh-list check moved to `seller/freshIndex.ts`, shared with publishing.
+- *Shops* (`cff27759`): Shop tab → Advanced → Delete shop, with the shop id typed to confirm; it says what goes (the shop and its products, here and in Q-Shop), what stays (orders and reviews: buyers keep their orders, the seller keeps the order mails in Q-Mail) and that the shop's orders won't show on a seller page any more, so open orders come first. The shop, its product list and every catalogue of it (the list's, plus the seller's other catalogues of that id from one prefix search, exact ids only, already deleted ones left out) go as `"D"`, the shop first, in batches past 20. The shop then leaves the seller's shops, home and every list at once, its drafts go, and another of the seller's shops becomes current. Creating a shop under a deleted one's id is allowed and starts fresh (its old orders and reviews show there again, since they carry the short id).
+- Tests: 44 new (the marker, the builders, the dialog's delete mode, both flows end to end against the mocked Hub and node, every stop before sending, a decline, a delete closed part-way, lists leaving a deleted shop out, creating over one).
+- Screenshot check (`95cd9751`): select mode, the delete-products question and the delete-shop question in all four themes at all five sizes, Hub dark: 60 captures, 0 console errors, 0 sideways overflow, 0 unlabelled buttons, **0 axe violations**.
+- Not checked in Hub yet (round 4): Hub's own confirmation for a `"D"` publish, and how fast the node serves the marker after a delete.
+
+**Next (Simon, 2026-10-22):** collections inside a shop (products grouped by the seller, each collection with a description and a picture), then a list or grid choice for products.
+
 ## Follow-ups
+
+**Answered on 2026-10-22** (see Round 5): 1 smaller Classic text on phones; 2 keep; 3 keep; 4 stars always, weighted; 5 keep hidden; 6 one for the app; 7 keep 30 minutes; 8 no hide; 9 keep the address check, soften the sender one; 10 open on To handle; 11 keep the check; 12 the official Hub has both; 13 keep 2 minutes. The questions as they were asked:
 
 **Questions for Simon** (each is a one-line change either way)
 
