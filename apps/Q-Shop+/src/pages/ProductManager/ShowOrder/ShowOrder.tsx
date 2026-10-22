@@ -90,7 +90,12 @@ function ItemRow({ item, order, sellerName }: { item: OrderItem; order: Order; s
       )}
       <Box sx={{ flex: 1, minWidth: 0 }}>
         {to ? (
-          <Link component={RouterLink} to={to} underline="hover" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
+          <Link
+            component={RouterLink}
+            to={to}
+            underline="always"
+            sx={{ fontWeight: 600, overflowWrap: "anywhere", textUnderlineOffset: "3px" }}
+          >
             {item.title}
           </Link>
         ) : (
