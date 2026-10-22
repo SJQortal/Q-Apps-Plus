@@ -116,3 +116,44 @@ describe("this session's own publish", () => {
     expect(isOwnPublishNotServedYet("q-store-general-other", "after", "before")).toBe(false);
   });
 });
+
+describe("deletions and the collections pointer", () => {
+  const withoutMug: DataContainerDoc = {
+    ...seen,
+    products: Object.fromEntries(Object.entries(seen.products).filter(([id]) => id !== mug.id)),
+    catalogues: [{ id: CATALOGUE_ID, products: { [poster.id]: true, [chair.id]: true } }],
+    deletedProducts: { [mug.id]: 10 },
+  };
+
+  it("never brings back a product another copy deleted (a page loaded before the delete)", () => {
+    // The page still lists the mug; the list on QDN deleted it on another device.
+    const merged = mergeProductIndexes(seen, withoutMug);
+    expect(Object.keys(merged.products)).not.toContain(mug.id);
+    expect(merged.catalogues).toEqual([{ id: CATALOGUE_ID, products: { [poster.id]: true, [chair.id]: true } }]);
+    expect(merged.deletedProducts).toEqual({ [mug.id]: 10 });
+    expect(indexKey(merged)).not.toBe(indexKey(seen));
+    // And the other way round: a node still serving the list from before this page's own delete.
+    const back = mergeProductIndexes(withoutMug, seen);
+    expect(Object.keys(back.products)).not.toContain(mug.id);
+    expect(indexKey(back)).toBe(indexKey(withoutMug));
+  });
+
+  it("keeps the collections pointer either copy has, and tells a pointer-only change apart", () => {
+    const pointed = { ...seen, collectionsId: `q-store-collections-${SHORT_STORE_ID}` } as DataContainerDoc;
+    expect(indexKey(pointed)).not.toBe(indexKey(seen));
+    expect(mergeProductIndexes(seen, pointed).collectionsId).toBe(`q-store-collections-${SHORT_STORE_ID}`);
+    expect(mergeProductIndexes(pointed, seen).collectionsId).toBe(`q-store-collections-${SHORT_STORE_ID}`);
+  });
+
+  it("knows every list this session's publishes replaced, not only the last one", () => {
+    notePublishedIndex(STORE_ID, "v0", "v1");
+    notePublishedIndex(STORE_ID, "v1", "v2");
+    // The node still serves v0, two publishes back.
+    expect(isOwnPublishNotServedYet(STORE_ID, "v2", "v0")).toBe(true);
+    expect(isOwnPublishNotServedYet(STORE_ID, "v2", "v1")).toBe(true);
+    expect(isOwnPublishNotServedYet(STORE_ID, "v1", "v0")).toBe(false);
+    // A shop deleted and created again: the new list's base isn't known.
+    notePublishedIndex(STORE_ID, null, "empty");
+    expect(isOwnPublishNotServedYet(STORE_ID, "empty", "v2")).toBe(true);
+  });
+});

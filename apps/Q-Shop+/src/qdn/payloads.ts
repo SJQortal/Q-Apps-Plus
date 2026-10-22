@@ -416,6 +416,39 @@ export function buildDeleteShopPublish(args: { name: string; storeId: string; ca
   return { resources };
 }
 
+/*
+ * A product list (index) may carry `deletedProducts`, `{ productId: when }`:
+ * the products a + app delete removed, so a copy loaded before the delete
+ * can't bring them back (seller/productIndex.ts mergeProductIndexes).
+ * Additive: both apps' product publishes spread the index and keep it.
+ */
+/** The most deletions a product list remembers (the newest are kept). */
+export const MAX_DELETED_PRODUCTS = 1000;
+
+/** The deletions an index records: product id → when. Anything malformed is skipped. */
+export function deletedProductsOf(index: object | null | undefined): Record<string, number> {
+  const record = (index as { deletedProducts?: unknown } | null | undefined)?.deletedProducts;
+  if (!record || typeof record !== "object" || Array.isArray(record)) return {};
+  const out: Record<string, number> = {};
+  for (const [id, at] of Object.entries(record as Record<string, unknown>)) {
+    if (typeof at === "number" && Number.isFinite(at)) out[id] = at;
+  }
+  return out;
+}
+
+/** Two deletion records as one, each product once (its latest time), at most MAX_DELETED_PRODUCTS. */
+export function mergeDeletions(...records: Record<string, number>[]): Record<string, number> {
+  const all: Record<string, number> = {};
+  for (const record of records) {
+    for (const [id, at] of Object.entries(record)) all[id] = Math.max(all[id] ?? 0, at);
+  }
+  const ids = Object.keys(all);
+  if (ids.length <= MAX_DELETED_PRODUCTS) return all;
+  return Object.fromEntries(
+    ids.sort((a, b) => all[b] - all[a]).slice(0, MAX_DELETED_PRODUCTS).map((id) => [id, all[id]])
+  );
+}
+
 /** A catalogue the product deletion needs wasn't passed in (it couldn't be read). */
 export class MissingCatalogueError extends Error {
   readonly catalogueId: string;
@@ -457,6 +490,8 @@ export function buildDeleteProductsPublish(args: {
   dataContainer: DataContainerDoc;
   productIds: string[];
   catalogues: Record<string, CatalogueDoc>;
+  /** When the delete happens: recorded in the index's `deletedProducts`. */
+  deletedAt: number;
 }) {
   const { name, dataContainer, catalogues } = args;
   const listed = [...new Set(args.productIds)].filter((id) => !!dataContainer.products?.[id]);
@@ -471,6 +506,10 @@ export function buildDeleteProductsPublish(args: {
       products: Object.fromEntries(Object.entries(cat.products ?? {}).filter(([id]) => !gone.has(id))) as Record<string, true>,
     }));
   }
+  dc.deletedProducts = mergeDeletions(
+    deletedProductsOf(dataContainer),
+    Object.fromEntries(listed.map((id) => [id, args.deletedAt]))
+  );
 
   const changed: CatalogueDoc[] = [];
   for (const catalogueId of cataloguesHolding(dataContainer, listed)) {

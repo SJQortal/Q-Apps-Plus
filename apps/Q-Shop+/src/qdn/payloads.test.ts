@@ -236,15 +236,16 @@ describe("deletes", () => {
   });
 
   it("deletes products: the index first without them, then only the catalogues that held them", () => {
-    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(2)], catalogues: catalogues() });
+    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(2)], catalogues: catalogues(), deletedAt: 99 });
     expect(built.removed).toEqual([P(2)]);
     expect(built.resources.map((r) => [r.service, r.identifier, r.filename])).toEqual([
       ["DOCUMENT", `${STORE_ID}-datacontainer`, "datacontainer.json"],
       ["DOCUMENT", C1, "catalogue.json"],
     ]);
-    // The index keeps the original's shape and key order, minus the product.
+    // The index keeps the original's shape and key order, minus the product, and records the delete (additive).
     const dc = base64ToJson(built.resources[0].data64);
-    expect(Object.keys(dc)).toEqual(["storeId", "shortStoreId", "owner", "products", "catalogues", "id"]);
+    expect(Object.keys(dc)).toEqual(["storeId", "shortStoreId", "owner", "products", "catalogues", "id", "deletedProducts"]);
+    expect(dc.deletedProducts).toEqual({ [P(2)]: 99 });
     expect(Object.keys(dc.products)).toEqual([P(1), P(3)]);
     expect(dc.products[P(1)]).toEqual(entry(1, C1));
     expect(dc.catalogues).toEqual([
@@ -255,8 +256,25 @@ describe("deletes", () => {
     expect(base64ToJson(built.resources[1].data64)).toEqual({ id: C1, products: { [P(1)]: product(1, C1) } });
   });
 
+  it("adds to the deletions the index already records, keeping the newest 1000", async () => {
+    const { MAX_DELETED_PRODUCTS } = await import("./payloads");
+    const older = Object.fromEntries(Array.from({ length: MAX_DELETED_PRODUCTS }, (_, i) => [`old-${i}`, i + 1]));
+    const built = buildDeleteProductsPublish({
+      name: SELLER,
+      dataContainer: { ...index(), deletedProducts: { ...older, junk: "x" } },
+      productIds: [P(2)],
+      catalogues: catalogues(),
+      deletedAt: 5000,
+    });
+    const recorded = built.dataContainer.deletedProducts as Record<string, number>;
+    expect(Object.keys(recorded)).toHaveLength(MAX_DELETED_PRODUCTS);
+    expect(recorded[P(2)]).toBe(5000);
+    expect(recorded).not.toHaveProperty("old-0");
+    expect(recorded).not.toHaveProperty("junk");
+  });
+
   it("keeps an emptied catalogue as a valid, empty one the next products can fill", () => {
-    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: catalogues() });
+    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: catalogues(), deletedAt: 99 });
     expect(base64ToJson(built.resources[1].data64)).toEqual({ id: C2, products: {} });
     expect(built.dataContainer.catalogues).toEqual([
       { id: C1, products: { [P(1)]: true, [P(2)]: true } },
@@ -270,6 +288,7 @@ describe("deletes", () => {
       dataContainer: index(),
       productIds: [P(1), P(3), P(1), "q-store-product-elsewhere"],
       catalogues: catalogues(),
+      deletedAt: 99,
     });
     expect(built.removed).toEqual([P(1), P(3)]);
     expect(built.resources.map((r) => r.identifier)).toEqual([`${STORE_ID}-datacontainer`, C1, C2]);
@@ -279,10 +298,10 @@ describe("deletes", () => {
   it("doesn't touch the inputs, and needs every catalogue holding one", () => {
     const dc = index();
     const cats = catalogues();
-    buildDeleteProductsPublish({ name: SELLER, dataContainer: dc, productIds: [P(1)], catalogues: cats });
+    buildDeleteProductsPublish({ name: SELLER, dataContainer: dc, productIds: [P(1)], catalogues: cats, deletedAt: 99 });
     expect(dc).toEqual(index());
     expect(cats).toEqual(catalogues());
-    expect(() => buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: { [C1]: catalogues()[C1] } })).toThrow(
+    expect(() => buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: { [C1]: catalogues()[C1] }, deletedAt: 99 })).toThrow(
       MissingCatalogueError
     );
   });
@@ -290,7 +309,7 @@ describe("deletes", () => {
   it("doesn't republish a catalogue that turned out not to hold the product", () => {
     const cats = catalogues();
     delete cats[C2].products[P(3)];
-    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: cats });
+    const built = buildDeleteProductsPublish({ name: SELLER, dataContainer: index(), productIds: [P(3)], catalogues: cats, deletedAt: 99 });
     expect(built.resources.map((r) => r.identifier)).toEqual([`${STORE_ID}-datacontainer`]);
   });
 });

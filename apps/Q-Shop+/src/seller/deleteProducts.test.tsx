@@ -128,6 +128,7 @@ describe("deleting products", () => {
       dataContainer: dataContainer as unknown as DataContainerDoc,
       productIds: [mug.id, poster.id],
       catalogues: { [CATALOGUE_ID]: catalogue },
+      deletedAt: 0,
     }).resources;
     expect(sent.map((r: any) => r.identifier).sort()).toEqual(expected.map((r) => r.identifier).sort());
     expect(sent[0].identifier).toBe(DATA_CONTAINER_ID);
@@ -135,6 +136,7 @@ describe("deleting products", () => {
       ...dataContainer,
       products: { [chair.id]: dataContainer.products[chair.id] },
       catalogues: [{ id: CATALOGUE_ID, products: { [chair.id]: true } }],
+      deletedProducts: { [mug.id]: expect.any(Number), [poster.id]: expect.any(Number) },
     });
     expect(decodeData64(sent[1].data64)).toEqual({ id: CATALOGUE_ID, products: { [chair.id]: chair } });
 

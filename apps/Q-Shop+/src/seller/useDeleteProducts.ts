@@ -126,7 +126,7 @@ export function useDeleteProducts() {
         if (state.kind === "unknown") throw new PrepareError(DELETE_INDEX_UNREADABLE_TEXT);
         const catalogues = await readCataloguesFresh(name, cataloguesHolding(seen, listed));
         if (!catalogues) throw new PrepareError(DELETE_CATALOGUES_UNREADABLE_TEXT);
-        const built = buildDeleteProductsPublish({ name, dataContainer: seen, productIds: listed, catalogues });
+        const built = buildDeleteProductsPublish({ name, dataContainer: seen, productIds: listed, catalogues, deletedAt: Date.now() });
         const labels: Record<string, string> = { [built.resources[0].identifier]: "Product list" };
         built.catalogues.forEach((cat, i) => {
           const left = Object.keys(cat.products ?? {}).length;

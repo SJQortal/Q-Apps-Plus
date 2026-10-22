@@ -112,6 +112,8 @@ export function useShopPublish() {
           })
         );
         dispatch(setDataContainer({ ...dataContainer, id: dataContainerIdentifier(identifier) }));
+        // Over a shop deleted in this session, the node may still serve the old list for a while: it isn't news.
+        notePublishedIndex(identifier, null, indexKey(dataContainer as unknown as DataContainerDoc));
         dispatch(setOwnShopStatus("ready"));
         // The new shop is the one the seller is on now (useOwnShops follows this id),
         // so an earlier shop doesn't take its place, and visiting that one again counts.

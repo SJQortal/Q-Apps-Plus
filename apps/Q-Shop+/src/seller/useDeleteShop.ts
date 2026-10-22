@@ -35,7 +35,7 @@ import { isDeletedRow, noteDeletedShop } from "../qdn/deleted";
 import { errorMessage } from "../qdn/hubErrors";
 import { markShopDeleted } from "../discovery/shopDetails";
 import { loadOwnShop } from "../hooks/useOwnShops";
-import { isProductIndexDoc } from "./productIndex";
+import { indexKey, isProductIndexDoc, notePublishedIndex } from "./productIndex";
 import { isDraftOfShop } from "./shopDrafts";
 
 /** Catalogue search pages (of 100) read at most: 10,000 products. */
@@ -158,6 +158,11 @@ export function useDeleteShop() {
       for (const r of resources) invalidateQdnJson(r.service, name, r.identifier);
       invalidateQdnSearches((url) => url.includes("service=STORE") || url.includes("service=DOCUMENT"));
       const state = store.getState();
+      // A shop created again under this id mustn't take the deleted list, still served for a while, as news.
+      const page = state.global.dataContainer;
+      if (page && page.storeId === storeId) {
+        notePublishedIndex(storeId, indexKey(page as unknown as DataContainerDoc), `deleted:${storeId}`);
+      }
       const remaining = state.store.myStores.filter((s) => s.id !== storeId);
       dispatch(setAllMyStores(remaining));
       if (state.store.hashMapStores[storeId]?.owner === name) dispatch(removeFromHashMapStores(storeId));

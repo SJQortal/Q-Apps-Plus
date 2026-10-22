@@ -6,10 +6,17 @@
  * publish added (docs/apps/Q-Shop+.md → Data contract: the index is the only
  * list of a shop's products).
  *
- * Nothing here changes what is written: the merged index has the original's
- * shape, and only says which products and catalogues it names.
+ * Nothing here changes the original's shape: the merged index is the
+ * original's, plus two additive fields the + app writes and both apps'
+ * publishes keep (they spread the index): `collectionsId`
+ * (qdn/collections.ts) and `deletedProducts`, `{ productId: when }`, the
+ * products a + app delete removed. Without that record a copy loaded before
+ * a delete couldn't tell a deleted product from one added elsewhere, and its
+ * next publish would bring the deleted product back.
  */
-import type { DataContainerDoc } from "../qdn/payloads";
+import { deletedProductsOf, mergeDeletions, type DataContainerDoc } from "../qdn/payloads";
+
+export { MAX_DELETED_PRODUCTS, deletedProductsOf, mergeDeletions } from "../qdn/payloads";
 
 type IndexEntry = DataContainerDoc["products"][string];
 type CatalogueEntry = NonNullable<DataContainerDoc["catalogues"]>[number];
@@ -33,24 +40,42 @@ export function isProductIndexDoc(body: unknown): body is DataContainerDoc {
   return !!body && typeof body === "object" && !!products && typeof products === "object" && !Array.isArray(products);
 }
 
-/** What an index names (its products and catalogues), as a string two copies can be compared by. */
-export function indexKey(index: Pick<DataContainerDoc, "products" | "catalogues">): string {
-  return canonical({ products: index.products ?? {}, catalogues: index.catalogues ?? [] });
+/**
+ * What an index names (its products, catalogues, collections pointer and
+ * deletions), as a string two copies can be compared by.
+ */
+export function indexKey(index: Pick<DataContainerDoc, "products" | "catalogues"> & { collectionsId?: unknown; deletedProducts?: unknown }): string {
+  return canonical({
+    products: index.products ?? {},
+    catalogues: index.catalogues ?? [],
+    collectionsId: typeof index.collectionsId === "string" ? index.collectionsId : null,
+    deletedProducts: deletedProductsOf(index),
+  });
 }
 
 /**
- * The two copies merged so that nothing either one names is lost. The fresh
- * copy (on QDN now) is the base and wins for a product both have; a product
- * or catalogue only the seen copy has is kept (the node may not serve this
- * tab's own latest publish yet, or another device may have published from a
- * stale copy). A product is listed only under the catalogue its entry names.
+ * The two copies merged so that nothing either one names is lost, and
+ * nothing either one deleted comes back. The fresh copy (on QDN now) is the
+ * base and wins for a product both have; a product or catalogue only the
+ * seen copy has is kept (the node may not serve this tab's own latest
+ * publish yet, or another device may have published from a stale copy),
+ * unless either copy records it as deleted. A product is listed only under
+ * the catalogue its entry names. The collections pointer is the fresh
+ * copy's, else the seen copy's.
  */
 export function mergeProductIndexes(seen: DataContainerDoc, fresh: DataContainerDoc): DataContainerDoc {
-  const products: Record<string, IndexEntry> = structuredClone(fresh.products ?? {});
-  for (const [id, entry] of Object.entries(seen.products ?? {})) {
-    if (!(id in products)) products[id] = structuredClone(entry);
+  const deleted = mergeDeletions(deletedProductsOf(fresh), deletedProductsOf(seen));
+  const products: Record<string, IndexEntry> = {};
+  for (const [id, entry] of Object.entries(fresh.products ?? {})) {
+    if (!(id in deleted)) products[id] = structuredClone(entry);
   }
-  const catalogues: CatalogueEntry[] = structuredClone(fresh.catalogues ?? []);
+  for (const [id, entry] of Object.entries(seen.products ?? {})) {
+    if (!(id in products) && !(id in deleted)) products[id] = structuredClone(entry);
+  }
+  const catalogues: CatalogueEntry[] = structuredClone(fresh.catalogues ?? []).map((cat) => ({
+    ...cat,
+    products: Object.fromEntries(Object.entries(cat.products ?? {}).filter(([id]) => id in products)) as Record<string, true>,
+  }));
   for (const cat of seen.catalogues ?? []) {
     let merged = catalogues.find((c) => c.id === cat.id);
     if (!merged) {
@@ -63,6 +88,10 @@ export function mergeProductIndexes(seen: DataContainerDoc, fresh: DataContainer
   }
   const result: DataContainerDoc = { ...fresh, products };
   if (catalogues.length > 0 || fresh.catalogues) result.catalogues = catalogues;
+  const pointer = typeof fresh.collectionsId === "string" ? fresh.collectionsId : seen.collectionsId;
+  if (typeof pointer === "string") result.collectionsId = pointer;
+  if (Object.keys(deleted).length > 0) result.deletedProducts = deleted;
+  else delete result.deletedProducts;
   return result;
 }
 
@@ -87,23 +116,33 @@ export function changedCatalogueIds(seen: DataContainerDoc, merged: DataContaine
 }
 
 /**
- * What this session last published per shop: the index it built on and the
- * one it sent. Right after a publish the node may still serve the index from
- * before it; that is this session's own base, not a change from elsewhere.
+ * What this session published per shop: every index its publishes replaced,
+ * and the one it sent last. Right after a publish the node may still serve
+ * an index from before it, even from before several publishes in a row
+ * (or a shop deleted and created again); those are this session's own
+ * earlier versions, not a change from elsewhere.
  */
-const lastPublished = new Map<string, { base: string; sent: string }>();
+const published = new Map<string, { replaced: Set<string>; latest: string }>();
 
-export function notePublishedIndex(storeId: string, base: string, sent: string): void {
-  lastPublished.set(storeId, { base, sent });
+/** A publish of the shop's index: `base` (what it replaced, when known) and `sent`. */
+export function notePublishedIndex(storeId: string, base: string | null, sent: string): void {
+  const previous = published.get(storeId);
+  const entry = previous ?? { replaced: new Set<string>(), latest: sent };
+  // A new publish replaces the one this session sent before, whatever it was built on.
+  if (previous) entry.replaced.add(previous.latest);
+  if (base !== null) entry.replaced.add(base);
+  entry.replaced.delete(sent);
+  entry.latest = sent;
+  published.set(storeId, entry);
 }
 
-/** True when `freshKey` is the index this session's last publish replaced and `seenKey` the one it sent. */
+/** True when `seenKey` is the index this session sent last and `freshKey` one its publishes replaced. */
 export function isOwnPublishNotServedYet(storeId: string, seenKey: string, freshKey: string): boolean {
-  const last = lastPublished.get(storeId);
-  return !!last && last.sent === seenKey && last.base === freshKey;
+  const entry = published.get(storeId);
+  return !!entry && entry.latest === seenKey && entry.replaced.has(freshKey);
 }
 
 /** For tests. */
 export function resetPublishedIndexes(): void {
-  lastPublished.clear();
+  published.clear();
 }
