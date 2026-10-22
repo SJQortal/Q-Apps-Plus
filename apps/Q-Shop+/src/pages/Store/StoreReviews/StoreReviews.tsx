@@ -224,7 +224,8 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
       <>
         <Box>
           {shown.map((review) => (
-            <StoreReviewCard key={review.id} review={review} orderedHere={orderedHere.has(review.name)} />
+            // Two names can publish under one identifier: each is its own review.
+            <StoreReviewCard key={`${review.name}\n${review.id}`} review={review} orderedHere={orderedHere.has(review.name)} />
           ))}
         </Box>
         {shown.length < reviews.length && (

@@ -114,6 +114,51 @@ describe("reviews panel", { timeout: 20_000 }, () => {
     expect(screen.getByText("x".repeat(150))).toBeInTheDocument();
   });
 
+  it("never shows another name's copy, published under the same identifier, as the reviewer's text", async () => {
+    const world = worldWithReviews();
+    // Mallory publishes under Reviewer 0's exact review identifier.
+    world.reviews.push({
+      name: "Mallory",
+      shortStoreId: "my-shop",
+      uid: "LATERxxxx1",
+      rating: 1,
+      title: "Fake title",
+      description: "y".repeat(150),
+      created: 1700000750000,
+    });
+    const error = vi.spyOn(console, "error");
+    renderPanel(world, null);
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(7));
+    const articleOf = (name: string) => screen.getAllByRole("article").find((a) => within(a).queryByText(name))!;
+    fireEvent.click(within(articleOf("Mallory")).getByRole("button", { name: "Read more" }));
+    await waitFor(() => expect(within(articleOf("Mallory")).queryByRole("button", { name: "Read more" })).toBeNull());
+    const genuine = articleOf("Reviewer 0");
+    expect(within(genuine).getByText("Changed my mind")).toBeInTheDocument();
+    expect(within(genuine).queryByText("Fake title")).toBeNull();
+    expect(within(genuine).getByRole("button", { name: "Read more" })).toBeInTheDocument();
+    // One key per reviewer and identifier.
+    expect(error.mock.calls.some((args) => String(args[0]).includes("same key"))).toBe(false);
+  });
+
+  it("keeps the short copy when a full review's title isn't text", async () => {
+    const world = worldWithReviews();
+    installMockNode(world);
+    const realFetch = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    const body = { title: { a: 1 }, description: "The whole story", rating: 1, created: 1700000700000 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === "/arbitrary/DOCUMENT/Reviewer%200/q-store-review-my-shop-LATERxxxx1-10"
+          ? { ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body }
+          : realFetch(url)
+      )
+    );
+    renderWithProviders(<ReviewsPanel storeId={STORE_ID} storeTitle="Seller's Shop" storeImage="" storeOwner="Seller Name" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Read more" }));
+    expect(await screen.findByText("The whole story")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "Changed my mind" })).toBeInTheDocument();
+  });
+
   it("lets a buyer with an order write a review, and nobody else", async () => {
     const world = worldWithReviews();
     renderPanel(world, "Reviewer 1");

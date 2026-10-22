@@ -29,12 +29,29 @@ export function formatReviewDate(time: number | undefined): string {
 
 type FullState = "idle" | "loading" | "fetching" | "failed";
 
+/** A full review's text field, when it is text (review JSON is whatever its publisher wrote). */
+function textOf(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+/** What a card keeps of a full review: who published it, and its text. */
+interface FullReview {
+  name?: unknown;
+  title?: unknown;
+  description?: unknown;
+}
+
 export function StoreReviewCard({ review, orderedHere }: { review: ShopReview; orderedHere: boolean }) {
   const { getReview, hashMapStoreReviews } = useFetchStoreReviews();
-  const full = hashMapStoreReviews[review.id];
+  // The shared cache keeps full reviews by identifier only, and another name
+  // can publish under the same identifier (docs/QORTAL.md → pitfall 15): only
+  // a body this reviewer published counts, and the one this card read wins.
+  const cached = hashMapStoreReviews[review.id] as FullReview | undefined;
+  const [read, setRead] = useState<FullReview | null>(null);
+  const full = read ?? (cached && cached.name === review.name ? cached : undefined);
   const [state, setState] = useState<FullState>("idle");
-  const title = full?.title || review.title;
-  const text = full?.description || review.description;
+  const title = textOf(full?.title) || review.title;
+  const text = textOf(full?.description) || review.description;
   const date = formatReviewDate(review.created);
 
   const readMore = async () => {
@@ -43,7 +60,7 @@ export function StoreReviewCard({ review, orderedHere }: { review: ShopReview; o
     // A body that isn't a review won't change; only a missing one is worth waiting for.
     let notAReview = false;
     try {
-      await withPeerRetries(
+      const found = await withPeerRetries(
         async () => {
           const found = await getReview(review.name, review.id);
           if (!found) {
@@ -54,6 +71,7 @@ export function StoreReviewCard({ review, orderedHere }: { review: ShopReview; o
         },
         { onRetry: () => setState("fetching"), shouldRetry: () => !notAReview }
       );
+      setRead(found as FullReview);
       setState("idle");
     } catch (error) {
       if (!(error instanceof RetryCancelled)) setState("failed");

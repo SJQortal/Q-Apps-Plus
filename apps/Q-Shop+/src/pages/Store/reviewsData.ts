@@ -56,8 +56,8 @@ export function reviewFromRow(row: QdnResourceSummary, shortStoreId: string): Sh
     name: row.name,
     created: row.created ?? 0,
     updated: row.updated,
-    title: row.metadata?.title ?? "",
-    description: row.metadata?.description ?? "",
+    title: typeof row.metadata?.title === "string" ? row.metadata.title : "",
+    description: typeof row.metadata?.description === "string" ? row.metadata.description : "",
     rating,
   };
 }
