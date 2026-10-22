@@ -59,8 +59,9 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
 
   const [initial] = useState<ProductFormValues>(() => {
     const start = formValuesFor(product, coins, pricing);
-    // A listed category saved in another spelling shows as the list's.
-    return { ...start, category: listedCategory(start.category) ?? start.category };
+    // A listed category saved in another spelling shows as the list's; an old one trimmed, as oldCategoryOf
+    // gives it (the original saved categories as typed, spaces and all).
+    return { ...start, category: listedCategory(start.category) ?? start.category.trim() };
   });
   const [values, setValues] = useState<ProductFormValues>(initial);
   const [error, setError] = useState<string | null>(null);

@@ -303,6 +303,20 @@ describe("the products tab", () => {
     expect(added.category).toBe("Food & Drink");
   });
 
+  it("an old category saved with spaces around it shows, and saves, trimmed", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const { store } = setup(
+      { FETCH_QDN_RESOURCE: async () => ({ ...structuredClone(catalogue), products: { ...catalogue.products, [poster.id]: { ...poster, category: "Art " } } }) },
+      `/product-manager/${STORE_ID}?tab=products`
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Poster" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    expect((within(dialog).getByRole("combobox", { name: /^Category/ }) as HTMLSelectElement).value).toBe("Art");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+    await waitFor(() => expect(store.getState().global.productsToSave[poster.id]?.category).toBe("Art"));
+  });
+
   it("an edited product keeps its category from before the list until the seller picks one", async () => {
     installVisibleIntersectionObserver();
     stubNode();
