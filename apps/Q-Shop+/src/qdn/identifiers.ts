@@ -13,6 +13,8 @@ export const ORDER_BASE = "q-store-order";
 export const STATUS_ORDER_BASE = "q-store-status-order";
 export const REVIEW_BASE = "q-store-review";
 export const PRODUCT_BASE = "q-store-product";
+/** + app, additive (round 5): a shop's collections (qdn/collections.ts). The original never reads it. */
+export const COLLECTIONS_BASE = "q-store-collections";
 
 /** A shop's id from its short id: `q-store-general-<shortStoreId>`. */
 export function storeIdentifier(shortStoreId: string): string {
@@ -50,6 +52,11 @@ export function isCatalogueOfShop(identifier: string, shortStoreId: string): boo
   if (!shortStoreId || !identifier.startsWith(prefix)) return false;
   const uid = identifier.slice(prefix.length);
   return uid.length > 0 && !uid.includes("-");
+}
+
+/** The DOCUMENT holding a shop's collections: `q-store-collections-<shortStoreId>`. */
+export function collectionsIdentifier(shortStoreId: string): string {
+  return `${COLLECTIONS_BASE}-${shortStoreId}`;
 }
 
 /** A product's id inside its catalogue (there is no product resource on QDN). */

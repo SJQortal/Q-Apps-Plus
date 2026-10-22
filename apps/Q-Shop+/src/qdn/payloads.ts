@@ -370,19 +370,21 @@ function deletedResource(name: string, service: string, identifier: string): Pub
 }
 
 /**
- * Delete a shop: the STORE, its product index and every catalogue it has,
- * each republished as the delete marker. The shop goes first, so it leaves
- * every list at once even if a later part fails; then the index, so no
- * product is listed; then the catalogues, in the order given (duplicates
- * once). The original Q-Shop leaves out a shop whose JSON doesn't parse (its
- * checkStructureStore) and never reads the index or catalogues of one.
+ * Delete a shop: the STORE, its product index, its collections (when it has
+ * them) and every catalogue it has, each republished as the delete marker.
+ * The shop goes first, so it leaves every list at once even if a later part
+ * fails; then the index, so no product is listed; then the collections and
+ * the catalogues, in the order given (duplicates once). The original Q-Shop
+ * leaves out a shop whose JSON doesn't parse (its checkStructureStore) and
+ * never reads the index or catalogues of one.
  */
-export function buildDeleteShopPublish(args: { name: string; storeId: string; catalogueIds: string[] }) {
+export function buildDeleteShopPublish(args: { name: string; storeId: string; catalogueIds: string[]; collectionsId?: string | null }) {
   const { name, storeId } = args;
   const catalogueIds = [...new Set(args.catalogueIds)].filter(Boolean);
   const resources: PublishResource[] = [
     deletedResource(name, "STORE", storeId),
     deletedResource(name, "DOCUMENT", dataContainerIdentifier(storeId)),
+    ...(args.collectionsId ? [deletedResource(name, "DOCUMENT", args.collectionsId)] : []),
     ...catalogueIds.map((id) => deletedResource(name, "DOCUMENT", id)),
   ];
   return { resources };

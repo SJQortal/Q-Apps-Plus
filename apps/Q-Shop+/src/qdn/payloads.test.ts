@@ -206,6 +206,17 @@ describe("deletes", () => {
     ]);
   });
 
+  it("deletes a shop's collections after its product list, when it has them", () => {
+    const { resources } = buildDeleteShopPublish({
+      name: SELLER,
+      storeId: STORE_ID,
+      catalogueIds: [C1],
+      collectionsId: `q-store-collections-${SHORT_STORE_ID}`,
+    });
+    expect(resources.map((r) => r.identifier)).toEqual([STORE_ID, `${STORE_ID}-datacontainer`, `q-store-collections-${SHORT_STORE_ID}`, C1]);
+    expect(resources.every((r) => r.data64 === "RA==")).toBe(true);
+  });
+
   it("finds the catalogues holding products: their own, and any the index lists them under", () => {
     const dc = index();
     dc.catalogues![1].products[P(1)] = true;

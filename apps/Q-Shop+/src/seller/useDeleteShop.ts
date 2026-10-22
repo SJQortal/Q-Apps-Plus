@@ -1,8 +1,8 @@
 /**
  * Delete the current shop (DeleteShopDialog asks first, then
- * PublishProductsDialog sends it): the shop, its product list and every
- * catalogue of it become the delete marker (qdn/payloads.ts
- * buildDeleteShopPublish), the shop first.
+ * PublishProductsDialog sends it): the shop, its product list, its
+ * collections and every catalogue of it become the delete marker
+ * (qdn/payloads.ts buildDeleteShopPublish), the shop first.
  *
  * Its catalogues are the ones its product list names (read fresh, plus the
  * page's copy) and any other catalogue of this shop id the seller published
@@ -27,9 +27,10 @@ import {
 } from "../state/features/globalSlice";
 import { removeFromHashMapStores, setAllMyStores } from "../state/features/storeSlice";
 import { setNotification } from "../state/features/notificationsSlice";
-import { CATALOGUE_BASE, dataContainerIdentifier, isCatalogueOfShop, shortStoreIdOf } from "../qdn/identifiers";
+import { CATALOGUE_BASE, collectionsIdentifier, dataContainerIdentifier, isCatalogueOfShop, shortStoreIdOf } from "../qdn/identifiers";
+import { collectionsPointer } from "../qdn/collections";
 import { buildDeleteShopPublish, type DataContainerDoc, type PublishResource } from "../qdn/payloads";
-import { fetchQdnJson, invalidateQdnJson, invalidateQdnSearches, searchQdnAll } from "../qdn/search";
+import { fetchQdnJson, invalidateQdnJson, invalidateQdnSearches, resourceExists, searchQdnAll } from "../qdn/search";
 import { isDeletedRow, noteDeletedShop } from "../qdn/deleted";
 import { errorMessage } from "../qdn/hubErrors";
 import { markShopDeleted } from "../discovery/shopDetails";
@@ -85,14 +86,24 @@ export function useDeleteShop() {
     setPreparing(true);
     try {
       const ids = new Set<string>();
+      let collectionsId: string | null = null;
       if (dataContainer && dataContainer.storeId === storeId) {
         for (const id of catalogueIdsOf(dataContainer as unknown as DataContainerDoc)) ids.add(id);
+        collectionsId = collectionsPointer(dataContainer, storeId);
       }
       try {
         const fresh = await fetchQdnJson("DOCUMENT", name, dataContainerIdentifier(storeId), { fresh: true });
-        if (isProductIndexDoc(fresh)) for (const id of catalogueIdsOf(fresh)) ids.add(id);
+        if (isProductIndexDoc(fresh)) {
+          for (const id of catalogueIdsOf(fresh)) ids.add(id);
+          collectionsId ??= collectionsPointer(fresh, storeId);
+        }
       } catch {
         // Deleted, missing or no answer: the page's copy and the search below cover it.
+      }
+      // Collections the list doesn't point at (say, after "Recreate shop data") are found by id.
+      if (!collectionsId) {
+        const id = collectionsIdentifier(short);
+        if (await resourceExists("DOCUMENT", name, id, { fresh: true }).catch(() => false)) collectionsId = id;
       }
       let rows;
       try {
@@ -119,10 +130,11 @@ export function useDeleteShop() {
       }
       // Only this shop's own catalogue ids: a list naming another shop's catalogue mustn't delete it.
       const catalogueIds = [...ids].filter((id) => isCatalogueOfShop(id, short) && !deleted.has(id));
-      const { resources } = buildDeleteShopPublish({ name, storeId, catalogueIds });
+      const { resources } = buildDeleteShopPublish({ name, storeId, catalogueIds, collectionsId });
       const labels: Record<string, string> = {
         [storeId]: "Shop",
         [dataContainerIdentifier(storeId)]: "Product list",
+        ...(collectionsId && { [collectionsId]: "Collections" }),
       };
       catalogueIds.forEach((id, i) => {
         labels[id] = `Catalogue ${i + 1}`;

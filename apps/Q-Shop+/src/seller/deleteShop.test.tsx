@@ -147,6 +147,17 @@ describe("deleting a shop", () => {
     expect(getShopDetails(shopKey(SELLER, STORE_ID))).toMatchObject({ valid: false, deleted: true });
   });
 
+  it("also deletes the shop's collections, which its product list points at", async () => {
+    stubNode();
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    store.dispatch(setDataContainer({ ...dataContainer, collectionsId: "q-store-collections-my-shop" }));
+    const { go } = await confirmDelete();
+    fireEvent.click(go);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    expect(sent.map((r: any) => r.identifier)).toEqual([STORE_ID, DATA_CONTAINER_ID, "q-store-collections-my-shop", CATALOGUE_ID, ORPHAN]);
+  });
+
   it("needs the shop id typed exactly; Cancel deletes nothing", async () => {
     stubNode();
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
