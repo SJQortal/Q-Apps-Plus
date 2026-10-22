@@ -16,6 +16,7 @@ import { DownloadQortalModal } from "../components/modals/DownloadQortalModal";
 import { AppShell } from "../components/layout/AppShell";
 import { useUserAccount } from "../hooks/useUserAccount";
 import { useOwnShops } from "../hooks/useOwnShops";
+import { useTrackInAppHistory } from "../hooks/useSafeBack";
 
 interface Props {
   children: React.ReactNode;
@@ -26,6 +27,7 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const location = useLocation();
   const { authenticate, authenticating } = useUserAccount();
   useOwnShops();
+  useTrackInAppHistory();
   const isLoadingGlobal = useSelector((state: RootState) => state.global.isLoadingGlobal);
   const cartOpen = useSelector((state: RootState) => state.cart.isOpen);
   const [showDownloadModal, setShowDownloadModal] = useState<boolean>(false);
