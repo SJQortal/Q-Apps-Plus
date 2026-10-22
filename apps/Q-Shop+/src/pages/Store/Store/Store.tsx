@@ -16,7 +16,7 @@
  * Products show as a grid of tiles or a list of rows (utils/productView.ts:
  * the buyer's choice, kept in Settings; by default rows on phones).
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
@@ -72,6 +72,7 @@ import {
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
 import { ProductCard, ProductCardSkeleton, type ProductCardLayout } from "../ProductCard/ProductCard";
 import { productLayout, setProductView, useProductView } from "../../../utils/productView";
+import { primarySoft } from "../../../hub-theme";
 import { ShopHeader, ShopHeaderSkeleton } from "../ShopHeader";
 import { StoreDetails } from "../StoreDetails/StoreDetails";
 import { ReviewsPanel } from "../StoreReviews/ReviewsPanel";
@@ -196,7 +197,15 @@ function ProductViewToggle({ layout }: { layout: ProductCardLayout }) {
       value={layout === "tile" ? "grid" : "list"}
       onChange={(_event, next: "grid" | "list" | null) => next && setProductView(next)}
       aria-label="Show products as"
-      sx={{ "& .MuiToggleButton-root": { minHeight: 44, minWidth: 44, px: 1.25 } }}
+      sx={(theme) => ({
+        "& .MuiToggleButton-root": { minHeight: 44, minWidth: 44, px: 1.25 },
+        // The chosen one stands out in every theme, not by a faint background alone.
+        "& .MuiToggleButton-root.Mui-selected, & .MuiToggleButton-root.Mui-selected:hover": {
+          bgcolor: primarySoft(theme),
+          color: theme.palette.primary.main,
+          borderColor: theme.palette.primary.main,
+        },
+      })}
     >
       {/* ToggleButtonGroup clones its direct children, so no Tooltip wrappers: a title does the job. */}
       <ToggleButton value="grid" aria-label="Grid" title="Grid">
@@ -260,6 +269,15 @@ function ShopProducts({
     return out;
   }, [collections.collections, listedIds]);
   const collection = collectionId ? (collections.collections.find((c) => c.id === collectionId) ?? null) : null;
+  // A collection link (shared, or a card tapped) opens on the collection: its heading comes into view and takes focus.
+  const collectionHeading = useRef<HTMLHeadingElement>(null);
+  const openedId = collection?.id;
+  useEffect(() => {
+    const heading = collectionHeading.current;
+    if (!openedId || !heading) return;
+    if (typeof heading.scrollIntoView === "function") heading.scrollIntoView({ block: "start" });
+    heading.focus({ preventScroll: true });
+  }, [openedId]);
   const waitingForCollection = !!collectionId && (collections.status === "loading" || collections.status === "fetching");
   const collectionsUnreadable = !!collectionId && collections.status === "unavailable";
   const collectionGone = !!collectionId && !collection && !waitingForCollection && !collectionsUnreadable && productsStatus === "ready";
@@ -382,7 +400,7 @@ function ShopProducts({
         onAction={onRetry}
       />
     );
-  } else if (collection && rows.length === 0) {
+  } else if (collection && filterAndSortProducts(rows, DEFAULT_PRODUCT_QUERY, catalogues).length === 0) {
     body = (
       <EmptyState
         icon={<StorefrontOutlinedIcon />}
@@ -445,6 +463,7 @@ function ShopProducts({
                       onAddToCart={() => addToCart(row)}
                       layout={layout}
                       compact={layout === "tile" && phone}
+                      stacked={phone}
                     />
                   </LocalBoundary>
                 ) : (
@@ -470,21 +489,29 @@ function ShopProducts({
 
   return (
     <>
-      {productsStatus === "ready" && collections.status !== "none" && collections.status !== "unavailable" && (
+      {productsStatus === "ready" && collections.status !== "none" && (
         <CollectionCards
           owner={owner}
           storeId={storeId}
           collections={collections.collections}
           counts={counts}
           selectedId={collection?.id ?? null}
-          loading={collections.status !== "ready"}
+          state={collections.status}
+          onRetry={collections.retry}
         />
       )}
       <Box component="section" aria-labelledby="shop-products-heading" sx={{ mt: 3 }}>
         {collection ? (
-          <CollectionHeader owner={owner} storeId={storeId} collection={collection} count={counts[collection.id] ?? 0} headingId="shop-products-heading" />
+          <CollectionHeader
+            owner={owner}
+            storeId={storeId}
+            collection={collection}
+            count={counts[collection.id] ?? 0}
+            headingId="shop-products-heading"
+            headingRef={collectionHeading}
+          />
         ) : null}
-        <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1, mb: 1.5 }}>
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 1.5, minHeight: 44 }}>
           {collection ? (
             <span />
           ) : (
@@ -492,24 +519,17 @@ function ShopProducts({
               Products
             </Typography>
           )}
-          <Typography variant="body2" color="text.secondary" role="status" aria-live="polite">
-            {status}
-          </Typography>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: "auto" }}>
+            <Typography variant="body2" color="text.secondary" role="status" aria-live="polite" sx={{ fontSize: 14 }}>
+              {status}
+            </Typography>
+            {productsStatus === "ready" && rows.length > 0 && <ProductViewToggle layout={layout} />}
+          </Box>
         </Box>
         {collectionGone && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            That collection isn&apos;t in this shop any more, so here are all its products.
+            That collection isn&apos;t in this shop any more. Here are all the shop&apos;s products.
           </Typography>
-        )}
-        {collectionsUnreadable && (
-          <Box role="status" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
-            <Typography variant="body2" color="text.secondary">
-              This shop&apos;s collections aren&apos;t available on your node right now, so here are all its products.
-            </Typography>
-            <Button variant="outlined" color="inherit" onClick={collections.retry} sx={{ minHeight: 44 }}>
-              Retry
-            </Button>
-          </Box>
         )}
 
         {productsStatus === "ready" && rows.length > 0 && (
@@ -541,7 +561,6 @@ function ShopProducts({
                 }}
               />
               {sortSelect}
-              <ProductViewToggle layout={layout} />
               <CoinPicker shop={shop} shopCoin={shopCoin} />
               {phone && (
                 <Button

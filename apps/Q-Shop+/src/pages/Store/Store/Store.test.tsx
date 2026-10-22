@@ -230,7 +230,9 @@ describe("shop page", { timeout: 20_000 }, () => {
     ]);
 
     fireEvent.click(gifts);
-    expect(await screen.findByRole("heading", { level: 2, name: "Gifts" })).toBeInTheDocument();
+    const heading = await screen.findByRole("heading", { level: 2, name: "Gifts" });
+    // The collection opens in view, with focus on its heading.
+    await waitFor(() => expect(heading).toHaveFocus());
     expect(screen.getByText(/For friends/)).toBeInTheDocument();
     expect(gifts).toHaveAttribute("aria-current", "page");
     await waitFor(() => expect(cardTitles()).toEqual(["Product 2", "Product 1"]));
@@ -262,9 +264,19 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(node.fetchCalls.length).toBeGreaterThan(0);
   });
 
+  it("says when every product of a collection is retired, with a way back to all products", async () => {
+    const world = makeWorld();
+    const ids = world.shops[0].products.map((p) => p.id);
+    world.shops[0].products[1].status = "RETIRED";
+    world.shops[0].collections = [{ id: "OLDxxxxxx1", title: "Old stock", products: [ids[1]] }];
+    renderShop(world, `${SHOP_PATH}?collection=OLDxxxxxx1`);
+    expect(await screen.findByText("Nothing in this collection right now")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "All products" })).toBeInTheDocument();
+  });
+
   it("reads no collections for a shop without them, and shows everything for a collection link that's gone", async () => {
     const { node } = renderShop(makeWorld(), `${SHOP_PATH}?collection=OLDxxxxxx1`);
-    expect(await screen.findByText(/That collection isn.t in this shop any more/)).toBeInTheDocument();
+    expect(await screen.findByText(/That collection isn.t in this shop any more. Here are all the shop.s products./)).toBeInTheDocument();
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
     expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toEqual([]);
     expect(screen.queryByRole("region", { name: "Collections" })).toBeNull();

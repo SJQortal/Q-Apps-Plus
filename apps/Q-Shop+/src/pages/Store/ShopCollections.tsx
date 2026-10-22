@@ -7,7 +7,7 @@
  * - CollectionHeader: the open collection's picture, title and description
  *   over its products, with All products and Share collection.
  */
-import { useId } from "react";
+import { useId, type Ref } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { Box, Button, ButtonBase, Skeleton, Typography } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -38,107 +38,128 @@ function Picture({ src, size }: { src?: string; size?: number }) {
       {src ? (
         <Box component="img" src={src} alt="" loading="lazy" decoding="async" sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
       ) : (
-        <CollectionsBookmarkOutlinedIcon sx={{ fontSize: size ? size / 2.5 : 40 }} />
-      )}
-    </Box>
-  );
-}
+          <CollectionsBookmarkOutlinedIcon sx={{ fontSize: size ? size / 2.5 : 40 }} />
+        )}
+      </Box>
+    );
+  }
 
-export function CollectionCards({
-  owner,
-  storeId,
-  collections,
-  counts,
-  selectedId,
-  loading = false,
-}: {
-  owner: string;
-  storeId: string;
-  collections: ShopCollection[];
-  /** Listed products per collection id. */
-  counts: Record<string, number>;
-  selectedId: string | null;
-  loading?: boolean;
-}) {
-  const headingId = useId();
-  const shown = collections.filter((c) => (counts[c.id] ?? 0) > 0);
-  if (!loading && shown.length === 0) return null;
-  return (
-    <Box component="section" aria-labelledby={headingId} sx={{ mt: 3, minWidth: 0 }}>
-      <Typography id={headingId} component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
-        Collections
-      </Typography>
-      <Box
-        component="ul"
-        aria-busy={loading || undefined}
-        sx={{
-          listStyle: "none",
-          m: 0,
-          p: 0,
-          pb: 1,
-          display: "grid",
-          gridAutoFlow: "column",
-          gridAutoColumns: { xs: "minmax(136px, 40%)", sm: "176px" },
-          gap: 1.5,
-          overflowX: "auto",
-          overscrollBehaviorX: "contain",
-          scrollSnapType: "x proximity",
-          "& > li": { scrollSnapAlign: "start", minWidth: 0 },
-        }}
-      >
-        {loading
-          ? Array.from({ length: 3 }, (_, i) => (
-              <li key={i}>
-                <Skeleton variant="rounded" sx={{ width: "100%", height: "auto", aspectRatio: "4 / 3" }} />
-                <Skeleton width="70%" />
-              </li>
-            ))
-          : shown.map((c) => {
-              const selected = c.id === selectedId;
-              return (
-                <li key={c.id}>
-                  <ButtonBase
-                    component={RouterLink}
-                    to={collectionPath(owner, storeId, c.id)}
-                    aria-current={selected ? "page" : undefined}
-                    sx={{
-                      width: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "stretch",
-                      textAlign: "left",
-                      gap: 0.75,
-                      p: 1,
-                      borderRadius: 1.5,
-                      border: 1,
-                      borderColor: selected ? "primary.main" : "divider",
-                      bgcolor: selected ? "action.selected" : "background.paper",
-                      "@media (hover: hover)": { "&:hover": { bgcolor: "action.hover" } },
-                      "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 2 },
-                    }}
-                  >
-                    <Picture src={c.image} />
-                    <Typography
+  export function CollectionCards({
+    owner,
+    storeId,
+    collections,
+    counts,
+    selectedId,
+    state,
+    onRetry,
+  }: {
+    owner: string;
+    storeId: string;
+    collections: ShopCollection[];
+    /** Listed products per collection id. */
+    counts: Record<string, number>;
+    selectedId: string | null;
+    /** Where reading them stands (pages/Store/useShopCollections). */
+    state: "loading" | "fetching" | "ready" | "unavailable";
+    onRetry: () => void;
+  }) {
+    const headingId = useId();
+    const loading = state === "loading" || state === "fetching";
+    const shown = collections.filter((c) => (counts[c.id] ?? 0) > 0);
+    if (state === "ready" && shown.length === 0) return null;
+    return (
+      <Box component="section" aria-labelledby={headingId} sx={{ mt: 3, minWidth: 0 }}>
+        <Typography id={headingId} component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
+          Collections
+        </Typography>
+        {state === "unavailable" ? (
+          <Box role="status" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 14 }}>
+              This shop&apos;s collections aren&apos;t available on your node right now.
+            </Typography>
+            <Button variant="outlined" color="inherit" onClick={onRetry} sx={{ minHeight: 44 }}>
+              Retry
+            </Button>
+          </Box>
+        ) : (
+        <Box
+          component="ul"
+          aria-busy={loading || undefined}
+          sx={{
+            listStyle: "none",
+            m: 0,
+            p: 0,
+            pb: 1,
+            display: "grid",
+            gridAutoFlow: "column",
+            gridAutoColumns: { xs: "minmax(136px, 40%)", sm: "176px" },
+            gap: 1.5,
+            overflowX: "auto",
+            overscrollBehaviorX: "contain",
+            scrollSnapType: "x proximity",
+            "& > li": { scrollSnapAlign: "start", minWidth: 0 },
+          }}
+        >
+          {loading
+            ? Array.from({ length: 3 }, (_, i) => (
+                <li key={i}>
+                  <Skeleton variant="rounded" sx={{ width: "100%", height: "auto", aspectRatio: "4 / 3" }} />
+                  <Skeleton width="70%" />
+                </li>
+              ))
+            : shown.map((c) => {
+                const selected = c.id === selectedId;
+                return (
+                  <li key={c.id}>
+                    <ButtonBase
+                      component={RouterLink}
+                      to={collectionPath(owner, storeId, c.id)}
+                      aria-current={selected ? "page" : undefined}
                       sx={{
-                        fontWeight: 700,
-                        lineHeight: 1.3,
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                        overflow: "hidden",
-                        overflowWrap: "anywhere",
+                        width: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "stretch",
+                        textAlign: "left",
+                        gap: 0.75,
+                        p: 1,
+                        borderRadius: 1.5,
+                        border: 1,
+                        borderColor: selected ? "primary.main" : "divider",
+                        bgcolor: selected ? "action.selected" : "background.paper",
+                        "@media (hover: hover)": { "&:hover": { bgcolor: "action.hover" } },
+                        "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 2 },
                       }}
                     >
-                      {c.title}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {countText(counts[c.id] ?? 0)}
-                    </Typography>
-                  </ButtonBase>
-                </li>
-              );
-            })}
-      </Box>
+                      <Picture src={c.image} />
+                      <Typography
+                        sx={{
+                          fontWeight: 700,
+                          fontSize: 15,
+                          lineHeight: 1.3,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                          overflowWrap: "anywhere",
+                        }}
+                      >
+                        {c.title}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+                        {countText(counts[c.id] ?? 0)}
+                      </Typography>
+                    </ButtonBase>
+                  </li>
+                );
+              })}
+        </Box>
+      )}
+      {state === "fetching" && (
+        <Typography variant="body2" color="text.secondary" role="status" sx={{ fontSize: 14, mt: 0.5 }}>
+          Fetching from peers…
+        </Typography>
+      )}
     </Box>
   );
 }
@@ -149,6 +170,7 @@ export function CollectionHeader({
   collection,
   count,
   headingId,
+  headingRef,
 }: {
   owner: string;
   storeId: string;
@@ -156,22 +178,39 @@ export function CollectionHeader({
   count: number;
   /** The products section is labelled by this heading. */
   headingId: string;
+  /** The heading, for the page to bring into view and focus (tabIndex -1). */
+  headingRef?: Ref<HTMLHeadingElement>;
 }) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
         {collection.image && <Picture src={collection.image} size={88} />}
         <Box sx={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
-          <Typography id={headingId} component="h2" sx={{ fontSize: 20, fontWeight: 700, lineHeight: 1.25, overflowWrap: "anywhere" }}>
+          <Typography
+            id={headingId}
+            ref={headingRef}
+            tabIndex={-1}
+            component="h2"
+            sx={{
+              fontSize: 20,
+              fontWeight: 700,
+              lineHeight: 1.25,
+              overflowWrap: "anywhere",
+              // Clear of the sticky header when brought into view.
+              scrollMarginTop: 88,
+              "&:focus": { outline: "none" },
+              "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 2 },
+            }}
+          >
             {collection.title}
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: 14 }}>
             Collection · {countText(count)}
           </Typography>
         </Box>
       </Box>
       {collection.description && (
-        <Typography sx={{ whiteSpace: "pre-line", overflowWrap: "anywhere" }}>{collection.description}</Typography>
+        <Typography sx={{ whiteSpace: "pre-line", overflowWrap: "anywhere", fontSize: 16 }}>{collection.description}</Typography>
       )}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
         <Button component={RouterLink} to={storePath(owner, storeId)} variant="outlined" color="inherit" startIcon={<ArrowBackIcon />} sx={{ minHeight: 44 }}>

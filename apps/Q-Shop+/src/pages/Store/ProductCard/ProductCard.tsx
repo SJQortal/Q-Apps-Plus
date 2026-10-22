@@ -31,7 +31,8 @@ const cardSx = (layout: ProductCardLayout) =>
   ({
     height: "100%",
     display: "grid",
-    ...(layout === "tile" ? { gridTemplateRows: "auto 1fr" } : { gridTemplateColumns: "104px minmax(0, 1fr)" }),
+    // A row's column is the 104 px picture and its 8 px margin.
+    ...(layout === "tile" ? { gridTemplateRows: "auto 1fr" } : { gridTemplateColumns: "112px minmax(0, 1fr)" }),
     border: 1,
     borderColor: "divider",
     borderRadius: 2,
@@ -60,12 +61,12 @@ const bodySx = {
   minWidth: 0,
 } as const;
 
-/** A row's body: its details, with the button under them on phones and beside them on wider screens. */
+/** A row's body on wider screens: its details, with the button beside them. */
 const rowBodySx = {
   ...bodySx,
-  flexDirection: { xs: "column", sm: "row" },
-  alignItems: { xs: "stretch", sm: "center" },
-  gap: { xs: 1, sm: 2 },
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 2,
 } as const;
 
 export function ProductCardSkeleton({ note, layout = "tile" }: { note?: string; layout?: ProductCardLayout }) {
@@ -103,6 +104,7 @@ export function ProductCard({
   onAddToCart,
   layout = "tile",
   compact = false,
+  stacked = false,
 }: {
   product: Product;
   productId: string;
@@ -119,6 +121,8 @@ export function ProductCard({
   layout?: ProductCardLayout;
   /** A narrow tile (two side by side on a phone): the button drops its icon so its text fits. */
   compact?: boolean;
+  /** A row on a phone (held either way): the button goes under the details, which keep the width. */
+  stacked?: boolean;
 }) {
   const title = product.title?.trim() || "Untitled product";
   const image = mainImageOf(product);
@@ -145,7 +149,7 @@ export function ProductCard({
             </Box>
           )}
         </Link>
-        <Box sx={layout === "row" ? rowBodySx : bodySx}>
+        <Box sx={layout === "row" && !stacked ? rowBodySx : bodySx}>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, flex: layout === "row" ? 1 : undefined }}>
             <Typography component="h3" sx={{ fontWeight: 600, fontSize: 15, lineHeight: 1.35 }}>
               <Link
@@ -171,7 +175,8 @@ export function ProductCard({
                 variant="body2"
                 color="text.secondary"
                 sx={{
-                  display: { xs: "none", sm: "-webkit-box" },
+                  fontSize: 14,
+                  display: stacked ? "none" : "-webkit-box",
                   WebkitLineClamp: 2,
                   WebkitBoxOrient: "vertical",
                   overflow: "hidden",
@@ -194,12 +199,12 @@ export function ProductCard({
             onClick={onAddToCart}
             aria-label={available && !isOwnProduct ? `Add to cart: ${title}` : undefined}
             sx={{
-              mt: layout === "row" ? 0 : "auto",
+              mt: layout === "row" && !stacked ? 0 : "auto",
               minHeight: 44,
               flexShrink: 0,
               whiteSpace: "nowrap",
               ...(compact && { px: 1 }),
-              alignSelf: layout === "row" ? { xs: "stretch", sm: "center" } : "stretch",
+              alignSelf: layout === "row" && !stacked ? "center" : "stretch",
             }}
           >
             {label}
