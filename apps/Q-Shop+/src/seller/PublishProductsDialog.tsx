@@ -6,8 +6,8 @@
  *   the original sent them, with Hub's 30-minute budget.
  * - More go in batches of 20 (qdn/publishBatches.ts): before each batch the
  *   node is asked whether the seller's account has room (Core refuses a 26th
- *   unconfirmed transaction), and the product index goes last, only once
- *   every catalogue it names is on QDN.
+ *   unconfirmed transaction), and the product index goes last, in a batch of
+ *   its own, only once every catalogue it names is on QDN (retries too).
  * - When Hub names resources that failed, only those are retried. A decline
  *   is quiet. A timeout is not a failure: Hub keeps going, so QDN is checked
  *   (the content, not only the identifier, since catalogues and the index
@@ -39,6 +39,7 @@ import { QdnFetchError, fetchQdnJson, mapWithConcurrency } from "../qdn/search";
 import {
   MAX_UNCONFIRMED_PER_ACCOUNT,
   RESOURCES_PER_BATCH,
+  batchesWithIndexLast,
   formatQort,
   isProductIndex,
   publishUnitFee,
@@ -267,7 +268,9 @@ export function PublishProductsDialog({ open, resources, labels, publicKey, onDo
     async (list: PublishResource[]) => {
       const mine = ++sequence.current;
       const current = () => alive.current && sequence.current === mine;
-      const parts = batched ? splitPublishBatches(list) : [list];
+      // Batched, the index is always a batch of its own, retries included, so
+      // the check below covers every catalogue.
+      const parts = batched ? batchesWithIndexLast(list) : [list];
       mark(
         list.map((r) => r.identifier),
         "queued"

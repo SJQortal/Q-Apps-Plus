@@ -278,9 +278,9 @@ describe("publishing", () => {
     expect(isDraftOfShop({ id: `q-store-product-${SHORT_STORE_ID}-ABCDEFGHIJ`, storeId: "q-store-general-other" }, STORE_ID)).toBe(false);
   });
 
-  it("sends more than 20 resources in batches of 20, waiting for room, with the product list last", async () => {
-    // The second batch (2 resources) fits once at most 23 wait: 24 makes it wait one round.
-    const calls = stubNode({ unconfirmed: [0, 24, 3] });
+  it("sends more than 20 resources in batches of 20, waiting for room, with the product list last, on its own", async () => {
+    // The second batch (1 resource) fits once at most 24 wait: 25 makes it wait one round.
+    const calls = stubNode({ unconfirmed: [0, 25, 3, 3] });
     const timeouts: number[] = [];
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     (globalThis as any).qortalRequestWithTimeout = (params: any, ms: number) => {
@@ -289,8 +289,8 @@ describe("publishing", () => {
     };
     for (let n = 1; n <= 201; n++) store.dispatch(setProductsToSave(draft(n)));
     fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
-    const dialog = await screen.findByRole("dialog", { name: "Publish in 2 batches" });
-    expect(await within(dialog).findByText(/22 publishes in 2 batches of up to 20, 0.22 QORT in fees/)).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: "Publish in 3 batches" });
+    expect(await within(dialog).findByText(/22 publishes in 3 batches of up to 20, 0.22 QORT in fees/)).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
     fireEvent.click(within(dialog).getByRole("button", { name: "Start publishing" }));
     await waitFor(() => expect(store.getState().global.productsToSave).toEqual({}), { timeout: 4000 });
@@ -299,19 +299,18 @@ describe("publishing", () => {
     expect(pubs.map((p) => Object.keys(p).sort())).toEqual([
       ["action", "resources"],
       ["action", "resources"],
+      ["action", "resources"],
     ]);
-    expect(pubs.map((p) => p.resources.length)).toEqual([20, 2]);
+    expect(pubs.map((p) => p.resources.length)).toEqual([20, 1, 1]);
     expect(pubs[0].resources.some((r: any) => r.identifier === DATA_CONTAINER_ID)).toBe(false);
-    expect(pubs[1].resources.at(-1).identifier).toBe(DATA_CONTAINER_ID);
+    expect(pubs[1].resources.some((r: any) => r.identifier === DATA_CONTAINER_ID)).toBe(false);
+    expect(pubs[2].resources[0].identifier).toBe(DATA_CONTAINER_ID);
     expect(pubs[0].resources[0].identifier).toBe(CATALOGUE_ID);
     // Room checked before each batch; the second waited until the first was confirmed.
-    expect(calls.filter((u) => u.startsWith("/transactions/unconfirmed"))).toEqual([
-      `/transactions/unconfirmed?creator=${encodeURIComponent(SELLER_PK)}&limit=100`,
-      `/transactions/unconfirmed?creator=${encodeURIComponent(SELLER_PK)}&limit=100`,
-      `/transactions/unconfirmed?creator=${encodeURIComponent(SELLER_PK)}&limit=100`,
-    ]);
-    expect(timeouts).toEqual([PUBLISH_TIMEOUT_MS, PUBLISH_TIMEOUT_MS]);
-    const dc = decodeData64(pubs[1].resources[1].data64);
+    const roomCheck = `/transactions/unconfirmed?creator=${encodeURIComponent(SELLER_PK)}&limit=100`;
+    expect(calls.filter((u) => u.startsWith("/transactions/unconfirmed"))).toEqual([roomCheck, roomCheck, roomCheck, roomCheck]);
+    expect(timeouts).toEqual([PUBLISH_TIMEOUT_MS, PUBLISH_TIMEOUT_MS, PUBLISH_TIMEOUT_MS]);
+    const dc = decodeData64(pubs[2].resources[0].data64);
     expect(Object.keys(dc.products)).toHaveLength(3 + 201);
     expect(dc.catalogues).toHaveLength(21);
     expect(dc.catalogues.every((c: any) => Object.keys(c.products).length <= 10)).toBe(true);
@@ -341,7 +340,8 @@ describe("publishing", () => {
     fireEvent.click(retry);
     await waitFor(() => expect(store.getState().global.productsToSave).toEqual({}), { timeout: 4000 });
     pubs = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
-    expect(pubs[2].resources.map((r: any) => r.identifier)).toEqual([CATALOGUE_ID, DATA_CONTAINER_ID]);
+    // The failed catalogue first, then the product list on its own.
+    expect(pubs.slice(2).map((p) => p.resources.map((r: any) => r.identifier))).toEqual([[CATALOGUE_ID], [DATA_CONTAINER_ID]]);
   });
 
   it("a decline in Hub closes quietly and keeps the drafts", async () => {

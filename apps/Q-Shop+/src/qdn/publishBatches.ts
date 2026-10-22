@@ -32,9 +32,7 @@ export function isProductIndex(resource: { identifier: string }): boolean {
 /**
  * The resources in the batches they are sent in. Up to `perBatch` resources
  * go as one batch, in the order given (the original's single publish).
- * More go in batches of `perBatch` in order, with the product index last, in
- * the final batch, so the index only lands once the catalogues it names are
- * on QDN.
+ * More go as batchesWithIndexLast splits them.
  */
 export function splitPublishBatches<T extends { identifier: string }>(
   resources: T[],
@@ -43,15 +41,28 @@ export function splitPublishBatches<T extends { identifier: string }>(
 ): T[][] {
   if (resources.length === 0) return [];
   if (resources.length <= perBatch) return [resources.slice()];
+  return batchesWithIndexLast(resources, perBatch, isIndex);
+}
+
+/**
+ * A publish in batches: the catalogues in batches of `perBatch`, in order,
+ * then the product index on its own as the final batch. Hub publishes each
+ * resource of a request separately and reports the ones that failed, so an
+ * index sharing a request with a catalogue could land while that catalogue
+ * didn't. Alone, it is sent only once every catalogue it names is on QDN
+ * (PublishProductsDialog checks before the last batch). A retry of a batched
+ * publish is split this way too, however few resources are left.
+ */
+export function batchesWithIndexLast<T extends { identifier: string }>(
+  resources: T[],
+  perBatch = RESOURCES_PER_BATCH,
+  isIndex: (resource: T) => boolean = isProductIndex
+): T[][] {
   const others = resources.filter((r) => !isIndex(r));
   const index = resources.filter(isIndex);
   const batches: T[][] = [];
   for (let i = 0; i < others.length; i += perBatch) batches.push(others.slice(i, i + perBatch));
-  if (index.length > 0) {
-    const last = batches.at(-1);
-    if (last && last.length + index.length <= perBatch) last.push(...index);
-    else batches.push(index);
-  }
+  if (index.length > 0) batches.push(index);
   return batches;
 }
 

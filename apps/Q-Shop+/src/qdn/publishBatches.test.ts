@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  batchesWithIndexLast,
   formatQort,
   publishUnitFee,
   resetPublishUnitFee,
@@ -43,21 +44,33 @@ describe("splitPublishBatches", () => {
     expect(splitPublishBatches([])).toEqual([]);
   });
 
-  it("splits more than 20 into batches of 20 with the product index last, in the final batch", () => {
+  it("splits more than 20 into batches of 20, then the product index in a batch of its own", () => {
     const batches = splitPublishBatches([...catalogues(25), index]);
-    expect(batches.map((b) => b.length)).toEqual([20, 6]);
-    expect(batches[1].at(-1)).toBe(index);
+    expect(batches.map((b) => b.length)).toEqual([20, 5, 1]);
+    expect(batches[2]).toEqual([index]);
     expect(batches.flat().map((r) => r.identifier)).toEqual([...catalogues(25), index].map((r) => r.identifier));
   });
 
-  it("never lets a batch pass 20: an index that doesn't fit goes alone, last", () => {
+  it("never sends the index with catalogues once batched, even when it would fit in the last batch", () => {
+    // Hub publishes each resource of a request separately: an index next to a
+    // catalogue that fails would still land and name it.
+    expect(splitPublishBatches([...catalogues(24), index]).map((b) => b.length)).toEqual([20, 4, 1]);
     expect(splitPublishBatches([...catalogues(20), index]).map((b) => b.length)).toEqual([20, 1]);
     expect(splitPublishBatches([...catalogues(40), index]).map((b) => b.length)).toEqual([20, 20, 1]);
     // An index listed first still goes last.
     const batches = splitPublishBatches([index, ...catalogues(30)]);
-    expect(batches.map((b) => b.length)).toEqual([20, 11]);
-    expect(batches[1].at(-1)).toBe(index);
+    expect(batches.map((b) => b.length)).toEqual([20, 10, 1]);
+    expect(batches.at(-1)).toEqual([index]);
     for (const batch of splitPublishBatches([...catalogues(97), index])) expect(batch.length).toBeLessThanOrEqual(20);
+    // Without an index there is no extra batch.
+    expect(splitPublishBatches(catalogues(21)).map((b) => b.length)).toEqual([20, 1]);
+  });
+
+  it("splits a retry of a batched publish the same way, however few resources are left", () => {
+    const [cat] = catalogues(1);
+    expect(batchesWithIndexLast([index, cat])).toEqual([[cat], [index]]);
+    expect(batchesWithIndexLast([index])).toEqual([[index]]);
+    expect(batchesWithIndexLast(catalogues(3))).toEqual([catalogues(3)]);
   });
 });
 
