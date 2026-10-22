@@ -7,7 +7,7 @@
  */
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Badge } from "@mui/material";
+import { Badge, Box } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
@@ -24,6 +24,19 @@ export const BOTTOM_NAV_HEIGHT = 64;
 export const COMPACT_BOTTOM_NAV_HEIGHT = 48;
 
 const LABEL_CLASS = "BottomNav-label";
+
+/** Read by screen readers, not shown. */
+const visuallyHidden = {
+  border: 0,
+  clip: "rect(0 0 0 0)",
+  height: "1px",
+  margin: "-1px",
+  overflow: "hidden",
+  padding: 0,
+  position: "absolute",
+  whiteSpace: "nowrap",
+  width: "1px",
+} as const;
 const INDICATOR_CLASS = "BottomNav-indicator";
 
 const Bar = styled("nav", { shouldForwardProp: (prop) => prop !== "compact" })<{ compact?: boolean }>(
@@ -103,7 +116,12 @@ const Item = styled("button", {
   },
 }));
 
-/** The cart icon with its item count, and a dot while paid orders wait to be finished. */
+/**
+ * The cart icon with its item count, and a dot while paid orders wait to be
+ * finished. Both are decorative: the button's label says the count (cartLabel),
+ * and a number read before "Cart" made the label not match the visible text
+ * (axe label-content-name-mismatch).
+ */
 export function CartBadgeIcon({ items, pending }: { items: number; pending: number }) {
   return (
     <Badge
@@ -112,8 +130,9 @@ export function CartBadgeIcon({ items, pending }: { items: number; pending: numb
       invisible={pending === 0}
       overlap="circular"
       anchorOrigin={{ vertical: "top", horizontal: "left" }}
+      slotProps={{ badge: { "aria-hidden": true } }}
     >
-      <Badge color="primary" badgeContent={items} max={99} overlap="circular">
+      <Badge color="primary" badgeContent={items} max={99} overlap="circular" slotProps={{ badge: { "aria-hidden": true } }}>
         <ShoppingCartOutlinedIcon />
       </Badge>
     </Badge>
@@ -123,7 +142,12 @@ export function CartBadgeIcon({ items, pending }: { items: number; pending: numb
 interface NavItem {
   key: NavSection;
   label: string;
-  ariaLabel?: string;
+  /**
+   * Read after the label by screen readers only (e.g. ", 4 items"). An
+   * aria-label would hide the visible text from the name and fail WCAG 2.5.3
+   * (axe label-content-name-mismatch), since the badge's number shows too.
+   */
+  srExtra?: string;
   icon: ReactNode;
   onClick: () => void;
 }
@@ -145,7 +169,7 @@ export function BottomNav() {
     {
       key: "cart",
       label: "Cart",
-      ariaLabel: cartLabel(items, pending),
+      srExtra: cartLabel(items, pending).slice("Cart".length),
       icon: <CartBadgeIcon items={items} pending={pending} />,
       onClick: () => navigate("/cart"),
     },
@@ -164,7 +188,6 @@ export function BottomNav() {
             type="button"
             compact={compact}
             active={active}
-            aria-label={item.ariaLabel}
             aria-current={active ? "page" : undefined}
             onClick={item.onClick}
           >
@@ -172,6 +195,11 @@ export function BottomNav() {
               {item.icon}
             </span>
             <span className={LABEL_CLASS}>{item.label}</span>
+            {item.srExtra && (
+              <Box component="span" sx={visuallyHidden}>
+                {item.srExtra}
+              </Box>
+            )}
           </Item>
         );
       })}
