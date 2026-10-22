@@ -18,6 +18,7 @@ import { shopCoins } from "../../../money/coins";
 import { ProductForm } from "../ProductForm/ProductForm";
 import { FormError } from "../../../seller/FormError";
 import { listedCategory, oldCategoryOf } from "../../../constants/categories";
+import { fiatPricingOf } from "../../../money/fiatPricing";
 import {
   editedProductDraft,
   formValuesFor,
@@ -51,11 +52,13 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
 
   const coins = useMemo(() => shopCoins(currentStore) as string[], [currentStore]);
+  // Prices in a currency at the seller's rates (Shop tab → Prices), when the shop uses them.
+  const pricing = useMemo(() => fiatPricingOf(dataContainer), [dataContainer]);
   // A category saved before the list (constants/categories.ts) stays until the seller picks another.
   const [oldCategory] = useState(() => oldCategoryOf(product));
 
   const [initial] = useState<ProductFormValues>(() => {
-    const start = formValuesFor(product, coins);
+    const start = formValuesFor(product, coins, pricing);
     // A listed category saved in another spelling shows as the list's.
     return { ...start, category: listedCategory(start.category) ?? start.category };
   });
@@ -77,12 +80,12 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     if (!currentStore?.id || !dataContainer || dataContainer.storeId !== currentStore.id) {
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
-    const invalid = validateProductForm(values, coins, { oldCategory });
+    const invalid = validateProductForm(values, coins, { oldCategory, pricing });
     if (invalid) return setError(invalid);
     const trimmed = { ...values, title: values.title.trim(), category: values.category.trim() };
     const draft = product
-      ? editedProductDraft({ base: product, values: trimmed, coins, name })
-      : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now: Date.now() });
+      ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing })
+      : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now: Date.now(), pricing });
     dispatch(setProductsToSave(draft));
     onClose();
   };
@@ -134,6 +137,8 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
             coins={coins}
             shop={currentStore}
             oldCategory={oldCategory}
+            pricing={pricing}
+            saved={product}
             editing={editingPublished}
             onImageError={setError}
           />

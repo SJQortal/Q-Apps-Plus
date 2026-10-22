@@ -20,6 +20,7 @@ import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
 import { CoinIcon } from "../../../components/money/CoinIcon";
 import { SHOP_CATEGORIES } from "../../../constants/categories";
+import { coinPriceFromFiat, formatFiat, rateToText, sanitizeFiatInput, staleFiatPriceOf, type FiatPricing } from "../../../money/fiatPricing";
 import { COINS, assetIdOf, coinLabel, isCoinTicker, type ShopCoinSettings } from "../../../money/coins";
 import {
   MAX_PRODUCT_IMAGES,
@@ -29,6 +30,7 @@ import {
   STATUS_LABEL,
   TYPE_LABEL,
   sanitizeAmountInput,
+  typedFiat,
   type ProductFormValues,
 } from "../../../seller/productDraft";
 
@@ -41,6 +43,10 @@ interface ProductFormProps {
   shop: ShopCoinSettings | null | undefined;
   /** The product's saved category when it isn't one of the list (constants/categories.ts): kept until another is picked. */
   oldCategory?: string | null;
+  /** The shop prices in a currency at the seller's rates (money/fiatPricing.ts): a price in it comes first. */
+  pricing?: FiatPricing | null;
+  /** The product as saved, to say when its price in the currency was changed elsewhere. */
+  saved?: Record<string, unknown> | null;
   /** Editing a published product: the status can change. */
   editing: boolean;
   onImageError: (message: string) => void;
@@ -56,13 +62,16 @@ function coinName(coin: string, shop: ShopCoinSettings | null | undefined): stri
   return isCoinTicker(coin) ? COINS[coin].label : coinLabel(coin, shop);
 }
 
-export const ProductForm = ({ values, onChange, coins, shop, oldCategory, editing, onImageError }: ProductFormProps) => {
+export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricing, saved, editing, onImageError }: ProductFormProps) => {
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
     onChange((prev) => ({ ...prev, [key]: value }));
   const setPrice = (coin: string, text: string) =>
     onChange((prev) => ({ ...prev, prices: { ...prev.prices, [coin]: sanitizeAmountInput(text) } }));
   const title = values.title.trim() || "Product";
-  const otherCoins = coins.filter((c) => c !== "QORT");
+  const fiat = typedFiat(values, pricing);
+  // A price in the shop's currency gives the QORT and ARRR prices; only asset prices are typed then.
+  const otherCoins = coins.filter((c) => c !== "QORT" && !(fiat !== null && c === "ARRR"));
+  const stale = pricing && !(values.fiat ?? "").trim() ? staleFiatPriceOf(saved, pricing.currency) : null;
 
   const removeImage = (index: number) => onChange((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
   const makeMain = (index: number) =>
@@ -219,6 +228,32 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, editin
 
       <Box component="section" aria-label="Price" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <SectionTitle>Price</SectionTitle>
+        {pricing && (
+          <TextField
+            label={`Price in ${pricing.currency}`}
+            value={values.fiat ?? ""}
+            onChange={(e) => onChange((prev) => ({ ...prev, fiat: sanitizeFiatInput(e.target.value) }))}
+            fullWidth
+            helperText={
+              fiat !== null
+                ? `= ${coinPriceFromFiat(fiat, pricing.rates.QORT)} QORT${
+                    !coins.includes("ARRR")
+                      ? ""
+                      : pricing.rates.ARRR
+                        ? ` · ${coinPriceFromFiat(fiat, pricing.rates.ARRR)} ARRR`
+                        : " (ARRR at your node's rate)"
+                  } at your rates (1 QORT = ${rateToText(pricing.rates.QORT)} ${pricing.currency}). They follow when you change a rate in Shop → Prices.`
+                : stale
+                  ? `Its QORT price was changed elsewhere since it was ${formatFiat(stale, pricing.currency)}. Type a price in ${pricing.currency} to follow your rates again.`
+                  : `Its QORT and ARRR prices then follow from your rates. Leave it empty to set them yourself.`
+            }
+            slotProps={{
+              htmlInput: { inputMode: "decimal", autoComplete: "off" },
+              input: { endAdornment: <InputAdornment position="end">{pricing.currency}</InputAdornment> },
+            }}
+          />
+        )}
+        {fiat === null && (
         <TextField
           label="Price in QORT"
           value={values.prices.QORT ?? ""}
@@ -237,6 +272,7 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, editin
             },
           }}
         />
+        )}
         {otherCoins.length > 0 && (
           <>
             <Typography variant="body2" color="text.secondary">

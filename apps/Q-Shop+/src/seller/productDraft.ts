@@ -13,6 +13,7 @@
 import { assetIdOf, priceCurrencyKey } from "../money/coins";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { isListedCategory } from "../constants/categories";
+import { fiatPriceOf, parseFiat, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
 
 export interface PriceEntry {
   currency: string;
@@ -46,6 +47,25 @@ export interface ProductFormValues {
   status: string;
   /** The typed price per coin (`QORT`, `ARRR`…, `ASSET:<id>`). */
   prices: Record<string, string>;
+  /**
+   * The typed price in the shop's currency (money/fiatPricing.ts), when the
+   * shop prices in one; then QORT and ARRR follow from it. "" when not.
+   */
+  fiat?: string;
+}
+
+/** The shop's pricing in a currency, as the product form uses it. */
+export interface FormPricing {
+  pricing: FiatPricing | null;
+  /** The shop takes ARRR (an ARRR price is worked out only then). */
+  takesArrr: boolean;
+}
+
+/** The form's price in the currency, when the shop prices in one and it is filled in properly. */
+export function typedFiat(values: ProductFormValues, pricing: FiatPricing | null | undefined): number | null {
+  if (!pricing) return null;
+  const n = parseFiat(values.fiat ?? "");
+  return Number.isNaN(n) ? null : n;
 }
 
 /**
@@ -131,16 +151,20 @@ export function buildPriceList(
 export function validateProductForm(
   values: ProductFormValues,
   coins: string[],
-  options: { oldCategory?: string | null } = {}
+  options: { oldCategory?: string | null; pricing?: FiatPricing | null } = {}
 ): string | null {
   if (values.images.length === 0) return "Add at least one image";
   if (values.images.length > MAX_PRODUCT_IMAGES) return `Use at most ${MAX_PRODUCT_IMAGES} images`;
   if (!values.title.trim()) return "Add a title";
   if (!values.category.trim()) return "Pick a category";
   if (!isListedCategory(values.category) && values.category !== options.oldCategory) return "Pick a category from the list";
-  if (!(parseAmount(values.prices.QORT ?? "") > 0)) return "Set a price in QORT above 0";
+  const fiatText = options.pricing ? (values.fiat ?? "").trim() : "";
+  if (fiatText && typedFiat(values, options.pricing) === null) return `Check the ${options.pricing?.currency} price`;
+  // A price in the shop's currency gives the QORT and ARRR prices.
+  const fromFiat = !!fiatText;
+  if (!fromFiat && !(parseAmount(values.prices.QORT ?? "") > 0)) return "Set a price in QORT above 0";
   for (const coin of coins) {
-    if (coin === "QORT") continue;
+    if (coin === "QORT" || (fromFiat && coin === "ARRR")) continue;
     const text = (values.prices[coin] ?? "").trim();
     if (text && Number.isNaN(parseAmount(text))) {
       return `Check the ${assetIdOf(coin) !== null ? "asset" : coin} price`;
@@ -160,10 +184,11 @@ export function newProductDraft(args: {
   name: string;
   uid: string;
   now: number;
+  pricing?: FiatPricing | null;
 }) {
   const { values, coins, storeId, name, uid, now } = args;
   const shortStoreId = shortStoreIdOf(storeId);
-  return {
+  const draft = {
     title: values.title,
     description: values.description,
     created: now,
@@ -179,6 +204,26 @@ export function newProductDraft(args: {
     status: "AVAILABLE",
     user: name,
   };
+  return withFormFiat(draft, values, coins, args.pricing);
+}
+
+/**
+ * A draft priced from the form's price in the shop's currency, when it has
+ * one (money/fiatPricing.ts: QORT and ARRR from the rates, `fiatPrice` added
+ * at the end); else the draft as built, without a `fiatPrice` it no longer
+ * follows.
+ */
+function withFormFiat<T extends Record<string, unknown>>(
+  draft: T,
+  values: ProductFormValues,
+  coins: string[],
+  pricing: FiatPricing | null | undefined
+): T {
+  const value = typedFiat(values, pricing);
+  const { fiatPrice: _old, ...rest } = draft as Record<string, unknown>;
+  if (value === null || !pricing) return rest as T;
+  const price = priceListFromFiat(draft.price as PriceEntry[], value, pricing.rates, coins.includes("ARRR"));
+  return { ...rest, price, fiatPrice: { currency: pricing.currency, value, qort: price[0].value } } as unknown as T;
 }
 
 /**
@@ -192,8 +237,15 @@ export function editedProductDraft(args: {
   values: ProductFormValues;
   coins: string[];
   name: string;
+  pricing?: FiatPricing | null;
 }) {
   const { base, values, coins, name } = args;
+  // Without the shop's pricing the form shows no price in a currency: the product keeps what it has.
+  if (!args.pricing) return editedWithoutFiat(base, values, coins, name);
+  return withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing);
+}
+
+function editedWithoutFiat(base: Record<string, any> & { id: string }, values: ProductFormValues, coins: string[], name: string) {
   const price = buildPriceList(values.prices, coins, Array.isArray(base.price) ? base.price : []);
   if (!base.isUpdate && !base.catalogueId) {
     return {
@@ -268,11 +320,22 @@ export function productFromIndexRow(
 }
 
 /** The form's starting values for a product (new when `product` is null). */
-export function formValuesFor(product: Record<string, any> | null, coins: string[]): ProductFormValues {
+export function formValuesFor(product: Record<string, any> | null, coins: string[], pricing?: FiatPricing | null): ProductFormValues {
   if (!product) {
-    return { title: "", description: "", images: [], type: "digital", category: "", status: "AVAILABLE", prices: initialPriceText(null, coins) };
+    return {
+      title: "",
+      description: "",
+      images: [],
+      type: "digital",
+      category: "",
+      status: "AVAILABLE",
+      prices: initialPriceText(null, coins),
+      ...(pricing && { fiat: "" }),
+    };
   }
+  const fiat = pricing ? fiatPriceOf(product, pricing.currency) : null;
   return {
+    ...(pricing && { fiat: fiat ? fiat.value.toFixed(2) : "" }),
     title: typeof product.title === "string" ? product.title : "",
     description: typeof product.description === "string" ? product.description : "",
     images: Array.isArray(product.images) ? product.images.filter((i: unknown) => typeof i === "string") : [],

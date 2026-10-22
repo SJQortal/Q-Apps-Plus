@@ -201,3 +201,65 @@ describe("validation", () => {
     expect(validateProductForm(values({ category: "Mugs" }), coins, { oldCategory: "Cups" })).toBe("Pick a category from the list");
   });
 });
+
+describe("a price in the shop's currency (money/fiatPricing.ts)", () => {
+  const pricing = { currency: "USD", rates: { QORT: 0.18, ARRR: 0.25 }, updated: 1 };
+
+  it("gives a new product its QORT and ARRR prices, with fiatPrice after the original's keys", () => {
+    const draft = newProductDraft({
+      values: values({ fiat: "10", prices: { QORT: "", ARRR: "" } }),
+      coins,
+      storeId: STORE_ID,
+      name: SELLER,
+      uid: "UIDxxxxxx1",
+      now: 1,
+      pricing,
+    });
+    expect(Object.keys(draft)).toEqual([
+      "title",
+      "description",
+      "created",
+      "version",
+      "images",
+      "mainImageIndex",
+      "type",
+      "price",
+      "storeId",
+      "shortStoreId",
+      "category",
+      "id",
+      "status",
+      "user",
+      "fiatPrice",
+    ]);
+    expect(draft.price).toEqual([
+      { currency: "qort", value: 55.56 },
+      { currency: "ARRR", value: 40 },
+    ]);
+    expect((draft as Record<string, unknown>).fiatPrice).toEqual({ currency: "USD", value: 10, qort: 55.56 });
+  });
+
+  it("without a price in the currency, the product is priced in QORT as before, and an edit stops following", () => {
+    const plain = newProductDraft({ values: values({ fiat: "" }), coins, storeId: STORE_ID, name: SELLER, uid: "UIDxxxxxx1", now: 1, pricing });
+    expect(plain).not.toHaveProperty("fiatPrice");
+    expect(plain.price).toEqual([{ currency: "qort", value: 2.5 }]);
+    const base = productForEdit({ ...dataContainer.products[mug.id], productId: mug.id, user: SELLER }, {
+      ...mug,
+      price: [{ currency: "qort", value: 55.56 }],
+      fiatPrice: { currency: "USD", value: 10, qort: 55.56 },
+    });
+    expect(formValuesFor(base, coins, pricing).fiat).toBe("10.00");
+    const edited = editedProductDraft({ base, values: values({ fiat: "", prices: { QORT: "60", ARRR: "" } }), coins, name: SELLER, pricing });
+    expect(edited).not.toHaveProperty("fiatPrice");
+    expect(edited.price).toEqual([{ currency: "qort", value: 60 }]);
+    // A shop without pricing keeps what the product has (the form shows no price in a currency).
+    const kept = editedProductDraft({ base, values: values({ prices: { QORT: "55.56", ARRR: "" } }), coins, name: SELLER });
+    expect(kept).toHaveProperty("fiatPrice");
+  });
+
+  it("asks for a valid price in the currency, and then no QORT price", () => {
+    expect(validateProductForm(values({ fiat: "12.345", prices: { QORT: "" } }), coins, { pricing })).toBe("Check the USD price");
+    expect(validateProductForm(values({ fiat: "12.34", prices: { QORT: "" } }), coins, { pricing })).toBeNull();
+    expect(validateProductForm(values({ fiat: "", prices: { QORT: "" } }), coins, { pricing })).toBe("Set a price in QORT above 0");
+  });
+});
