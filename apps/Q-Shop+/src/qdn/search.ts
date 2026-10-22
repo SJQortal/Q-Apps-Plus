@@ -182,8 +182,22 @@ export function isDeleteMarker(text: string): boolean {
 }
 
 /**
- * The publisher deleted the resource: the node serves the delete marker. It
- * won't come back by asking again, unlike a resource not on the node yet.
+ * A tombstone: the JSON a Q-Shop+ delete writes (qdn/payloads.ts), the
+ * original's shape with `deleted: true`, which the original can still parse.
+ */
+export function isTombstone(body: unknown): boolean {
+  return !!body && typeof body === "object" && !Array.isArray(body) && (body as { deleted?: unknown }).deleted === true;
+}
+
+/** Anything a delete leaves, as Hub's FETCH_QDN_RESOURCE hands it back: the "D" marker's text, or a tombstone. */
+export function isDeletedBody(value: unknown): boolean {
+  return typeof value === "string" ? isDeleteMarker(value) : isTombstone(value);
+}
+
+/**
+ * The publisher deleted the resource: the node serves the delete marker or a
+ * tombstone. It won't come back by asking again, unlike a resource not on
+ * the node yet.
  */
 export class QdnDeletedError extends QdnFetchError {
   constructor(url: string) {
@@ -199,8 +213,8 @@ const jsonInflight = new Map<string, Promise<unknown>>();
  * A resource's JSON, cached for the session by service, name and identifier
  * (docs/QORTAL.md → pitfall 15: another name can publish the same
  * identifier). A Core `{ error }` body or an HTTP error rejects with a
- * QdnFetchError and isn't cached; the delete marker rejects with a
- * QdnDeletedError.
+ * QdnFetchError and isn't cached; the delete marker or a tombstone rejects
+ * with a QdnDeletedError.
  */
 export async function fetchQdnJson<T = any>(
   service: string,
@@ -231,6 +245,7 @@ export async function fetchQdnJson<T = any>(
     if (body && typeof body === "object" && !Array.isArray(body) && "error" in body) {
       throw new QdnFetchError(String((body as { message?: unknown }).message ?? "Core error"), 0);
     }
+    if (isTombstone(body)) throw new QdnDeletedError(url);
     jsonCache.set(url, { value: body, expires: Date.now() + QDN_SEARCH_TTL_MS });
     return body;
   })();

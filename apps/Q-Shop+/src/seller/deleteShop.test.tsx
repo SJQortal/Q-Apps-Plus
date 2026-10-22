@@ -21,6 +21,7 @@ import {
   SELLER_PK,
   STORE_ID,
   dataContainer,
+  decodeData64,
   mug,
   viewedStore,
 } from "../test/fixtures/shop";
@@ -129,11 +130,11 @@ describe("deleting a shop", () => {
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
     // The list's catalogue and the one only the search found; not the deleted one, nor my-shop-2's.
     expect(sent).toEqual(buildDeleteShopPublish({ name: SELLER, storeId: STORE_ID, catalogueIds: [CATALOGUE_ID, ORPHAN] }).resources);
-    expect(sent.map((r: any) => [r.service, r.identifier, r.data64])).toEqual([
-      ["STORE", STORE_ID, "RA=="],
-      ["DOCUMENT", DATA_CONTAINER_ID, "RA=="],
-      ["DOCUMENT", CATALOGUE_ID, "RA=="],
-      ["DOCUMENT", ORPHAN, "RA=="],
+    expect(sent.map((r: any) => [r.service, r.identifier, decodeData64(r.data64).deleted])).toEqual([
+      ["STORE", STORE_ID, true],
+      ["DOCUMENT", DATA_CONTAINER_ID, true],
+      ["DOCUMENT", CATALOGUE_ID, true],
+      ["DOCUMENT", ORPHAN, true],
     ]);
 
     expect(await screen.findByText("Home page")).toBeInTheDocument();

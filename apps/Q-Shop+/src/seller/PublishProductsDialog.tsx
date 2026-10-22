@@ -35,8 +35,8 @@ import ReportProblemOutlinedIcon from "@mui/icons-material/ReportProblemOutlined
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
-import { DELETED_DATA64, base64ToJson, type PublishResource } from "../qdn/payloads";
-import { QdnDeletedError, QdnFetchError, fetchQdnJson, mapWithConcurrency } from "../qdn/search";
+import { base64ToJson, type PublishResource } from "../qdn/payloads";
+import { QdnDeletedError, QdnFetchError, fetchQdnJson, isTombstone, mapWithConcurrency } from "../qdn/search";
 import {
   MAX_UNCONFIRMED_PER_ACCOUNT,
   RESOURCES_PER_BATCH,
@@ -120,13 +120,23 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+/** The resource a publish sends is a tombstone (a delete, qdn/payloads.ts). */
+function sendsTombstone(resource: PublishResource): boolean {
+  try {
+    return isTombstone(base64ToJson(resource.data64));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Is exactly this resource on QDN? "done" when the node serves the content
- * this publish sent (for a delete, the delete marker), "missing" when it
- * serves something else or nothing, "unknown" when the node can't be asked.
+ * this publish sent (for a delete, a tombstone or the delete marker),
+ * "missing" when it serves something else or nothing, "unknown" when the
+ * node can't be asked.
  */
 export async function checkOnQdn(resource: PublishResource): Promise<"done" | "missing" | "unknown"> {
-  const deleting = resource.data64 === DELETED_DATA64;
+  const deleting = sendsTombstone(resource);
   try {
     const body = await fetchQdnJson(resource.service, resource.name, resource.identifier, { fresh: true });
     if (deleting) return "missing";

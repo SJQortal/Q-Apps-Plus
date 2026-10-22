@@ -7,6 +7,7 @@
 import {
   CATALOGUE_BASE,
   dataContainerIdentifier,
+  shortStoreIdOf,
   statusIdentifierForOrder,
   storeIdentifier,
   reviewIdentifier,
@@ -349,20 +350,45 @@ export async function buildProductPublish(args: {
 
 // ---------------------------------------------------------------- deletes
 
-/**
- * "D" in base64: the body a delete publishes. QDN can't erase a resource, so
- * Qortal apps delete by publishing this over it (qapp-core's deleteResource,
- * Torq); readers treat it as gone (qdn/search.ts isDeleteMarker).
+/*
+ * QDN can't erase a resource: an app deletes by publishing over it. Other
+ * Qortal apps (qapp-core, Torq) publish "D", which the readers here treat as
+ * deleted (qdn/search.ts isDeleteMarker), but Q-Shop+ never writes it: the
+ * original Q-Shop runs `response.json()` on its seller's oldest shop at
+ * start-up, and a "D" there throws before its "My Stores" menu (and with it
+ * Create store) appears; a "D" catalogue a product list still names crashes
+ * its shop page. So a delete writes a tombstone instead: JSON with
+ * `deleted: true` in the original's shape, empty, that both apps parse.
  */
-export const DELETED_DATA64 = "RA==";
 
-/** One resource replaced by the delete marker, titled and tagged "deleted" so searches can leave it out. */
-function deletedResource(name: string, service: string, identifier: string): PublishResource {
+/** The deleted shop's STORE: `checkStructureStore` fails on it (no description, ships-to…), so the original's home leaves it out. */
+export function storeTombstone() {
+  return { deleted: true, title: "Deleted shop" };
+}
+
+/** A deleted product list: no products (both apps read it as an empty shop). */
+export function indexTombstone(storeId: string, owner: string) {
+  return { storeId, shortStoreId: shortStoreIdOf(storeId), owner, products: {}, deleted: true };
+}
+
+/** A deleted catalogue: no products, so a product list that still names it shows nothing from it, in either app. */
+export function catalogueTombstone(id: string) {
+  return { id, products: {}, deleted: true };
+}
+
+/** A deleted collections document (qdn/collections.ts). */
+export function collectionsTombstone(storeId: string) {
+  return { storeId, collections: [], deleted: true };
+}
+
+/** One resource replaced by its tombstone, titled and tagged "deleted" so searches can leave it out. */
+function deletedResource(name: string, service: string, identifier: string, body: object, filename: string): PublishResource {
   return {
     name,
     service,
     identifier,
-    data64: DELETED_DATA64,
+    filename,
+    data64: jsonToBase64(body),
     title: DELETED_TITLE,
     description: DELETED_TITLE,
     tags: [DELETED_TITLE],
@@ -371,21 +397,21 @@ function deletedResource(name: string, service: string, identifier: string): Pub
 
 /**
  * Delete a shop: the STORE, its product index, its collections (when it has
- * them) and every catalogue it has, each republished as the delete marker.
- * The shop goes first, so it leaves every list at once even if a later part
+ * them) and every catalogue it has, each republished as its tombstone. The
+ * shop goes first, so it leaves every list at once even if a later part
  * fails; then the index, so no product is listed; then the collections and
- * the catalogues, in the order given (duplicates once). The original Q-Shop
- * leaves out a shop whose JSON doesn't parse (its checkStructureStore) and
- * never reads the index or catalogues of one.
+ * the catalogues, in the order given (duplicates once).
  */
 export function buildDeleteShopPublish(args: { name: string; storeId: string; catalogueIds: string[]; collectionsId?: string | null }) {
   const { name, storeId } = args;
   const catalogueIds = [...new Set(args.catalogueIds)].filter(Boolean);
   const resources: PublishResource[] = [
-    deletedResource(name, "STORE", storeId),
-    deletedResource(name, "DOCUMENT", dataContainerIdentifier(storeId)),
-    ...(args.collectionsId ? [deletedResource(name, "DOCUMENT", args.collectionsId)] : []),
-    ...catalogueIds.map((id) => deletedResource(name, "DOCUMENT", id)),
+    deletedResource(name, "STORE", storeId, storeTombstone(), "store.json"),
+    deletedResource(name, "DOCUMENT", dataContainerIdentifier(storeId), indexTombstone(storeId, name), "datacontainer.json"),
+    ...(args.collectionsId
+      ? [deletedResource(name, "DOCUMENT", args.collectionsId, collectionsTombstone(storeId), "collections.json")]
+      : []),
+    ...catalogueIds.map((id) => deletedResource(name, "DOCUMENT", id, catalogueTombstone(id), "catalogue.json")),
   ];
   return { resources };
 }

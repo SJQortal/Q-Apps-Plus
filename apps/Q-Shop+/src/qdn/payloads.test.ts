@@ -10,13 +10,13 @@ import {
   buildReviewPublish,
   buildStatusPublish,
   cataloguesHolding,
-  DELETED_DATA64,
   jsonToBase64,
   MissingCatalogueError,
   type CatalogueDoc,
   type DataContainerDoc,
 } from "./payloads";
 import { ARRR_ADDRESS, SELLER, SHORT_STORE_ID, STORE_ID, viewedStore } from "../test/fixtures/shop";
+import { checkStructureStore } from "../utils/checkStructure";
 
 describe("payload encoding", () => {
   it("encodes JSON exactly like the original objectToBase64, unicode included", async () => {
@@ -194,16 +194,25 @@ describe("deletes", () => {
     [C2]: { id: C2, products: { [P(3)]: product(3, C2) } },
   });
 
-  it("deletes a shop as the delete marker: the shop first, then its product list, then each catalogue once", () => {
+  it("deletes a shop with tombstones the original can parse: the shop first, then its product list, then each catalogue once", () => {
     const { resources } = buildDeleteShopPublish({ name: SELLER, storeId: STORE_ID, catalogueIds: [C1, C2, C1] });
-    expect(DELETED_DATA64).toBe(btoa("D"));
-    const marked = { data64: "RA==", title: "deleted", description: "deleted", tags: ["deleted"] };
-    expect(resources).toEqual([
-      { name: SELLER, service: "STORE", identifier: STORE_ID, ...marked },
-      { name: SELLER, service: "DOCUMENT", identifier: `${STORE_ID}-datacontainer`, ...marked },
-      { name: SELLER, service: "DOCUMENT", identifier: C1, ...marked },
-      { name: SELLER, service: "DOCUMENT", identifier: C2, ...marked },
+    const marked = { title: "deleted", description: "deleted", tags: ["deleted"] };
+    expect(resources.map(({ data64: _data, ...rest }) => rest)).toEqual([
+      { name: SELLER, service: "STORE", identifier: STORE_ID, filename: "store.json", ...marked },
+      { name: SELLER, service: "DOCUMENT", identifier: `${STORE_ID}-datacontainer`, filename: "datacontainer.json", ...marked },
+      { name: SELLER, service: "DOCUMENT", identifier: C1, filename: "catalogue.json", ...marked },
+      { name: SELLER, service: "DOCUMENT", identifier: C2, filename: "catalogue.json", ...marked },
     ]);
+    expect(resources.map((r) => base64ToJson(r.data64))).toEqual([
+      // Fails the original's checkStructureStore (no description, ships-to…): its home leaves it out.
+      { deleted: true, title: "Deleted shop" },
+      // The original's own boot reads this as an empty product list.
+      { storeId: STORE_ID, shortStoreId: SHORT_STORE_ID, owner: SELLER, products: {}, deleted: true },
+      { id: C1, products: {}, deleted: true },
+      { id: C2, products: {}, deleted: true },
+    ]);
+    // The original's own check (utils/checkStructure is its copy) rejects the shop's tombstone.
+    expect(checkStructureStore(base64ToJson(resources[0].data64))).toBe(false);
   });
 
   it("deletes a shop's collections after its product list, when it has them", () => {
@@ -214,7 +223,8 @@ describe("deletes", () => {
       collectionsId: `q-store-collections-${SHORT_STORE_ID}`,
     });
     expect(resources.map((r) => r.identifier)).toEqual([STORE_ID, `${STORE_ID}-datacontainer`, `q-store-collections-${SHORT_STORE_ID}`, C1]);
-    expect(resources.every((r) => r.data64 === "RA==")).toBe(true);
+    expect(base64ToJson(resources[2].data64)).toEqual({ storeId: STORE_ID, collections: [], deleted: true });
+    expect(resources.every((r) => base64ToJson(r.data64).deleted === true)).toBe(true);
   });
 
   it("finds the catalogues holding products: their own, and any the index lists them under", () => {

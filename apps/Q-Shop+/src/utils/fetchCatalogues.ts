@@ -5,7 +5,7 @@
  * `global.catalogueHashMap` as `{ ...json, id, user, isValid: true }`.
  */
 import type { Catalogue } from "../state/features/globalSlice";
-import { QdnDeletedError, fetchQdnJson, isDeleteMarker } from "../qdn/search";
+import { QdnDeletedError, fetchQdnJson, isDeletedBody } from "../qdn/search";
 
 /** Catalogue fetches in flight at once, across every screen. */
 export const CATALOGUE_CONCURRENCY = 5;
@@ -75,8 +75,8 @@ export const fetchAndEvaluateCatalogues = async (data: any) => {
       identifier: catalogueId,
     });
     if (!catalogue) return { isValid: false };
-    // + app: Hub hands a deleted catalogue back as the marker's text.
-    if (typeof catalogue === "string" && isDeleteMarker(catalogue)) return deletedCatalogue(user, catalogueId);
+    // + app: a deleted catalogue (Hub hands back the "D" marker's text, or a tombstone).
+    if (isDeletedBody(catalogue)) return deletedCatalogue(user, catalogueId);
     return { ...catalogue, user, id: catalogueId, isValid: true };
   } catch (error) {
     console.error(error);

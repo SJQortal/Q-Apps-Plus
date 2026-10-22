@@ -35,7 +35,7 @@ import {
   type ProductDraft,
   type PublishResource,
 } from "../qdn/payloads";
-import { invalidateQdnJson, invalidateQdnSearches } from "../qdn/search";
+import { invalidateQdnJson, invalidateQdnSearches, isDeletedBody } from "../qdn/search";
 import { errorMessage } from "../qdn/hubErrors";
 import { draftsOfShop } from "./shopDrafts";
 import { indexKey, notePublishedIndex } from "./productIndex";
@@ -121,6 +121,8 @@ export function usePublishProducts() {
           } catch {
             res = null;
           }
+          // A deleted catalogue holds nothing: an edit puts its product back into it.
+          if (isDeletedBody(res)) return { id: catalogueId, products: {} };
           if (res && typeof res === "object" && !res.error && res.products) return res as CatalogueDoc;
           if (edited.has(catalogueId)) {
             throw new PrepareError(

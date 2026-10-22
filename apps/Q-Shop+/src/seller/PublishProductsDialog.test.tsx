@@ -8,7 +8,7 @@ import { renderWithProviders } from "../test/renderWithProviders";
 import { installQortalMock } from "../test/qortalMock";
 import { DATA_CONTAINER_ID, SELLER, SELLER_PK, SHORT_STORE_ID, encodeData64 } from "../test/fixtures/shop";
 import { roomTiming } from "../qdn/publishBatches";
-import { DELETED_DATA64, type PublishResource } from "../qdn/payloads";
+import { catalogueTombstone, jsonToBase64, storeTombstone, type PublishResource } from "../qdn/payloads";
 import { resetQdnCaches } from "../qdn/search";
 import { PublishProductsDialog, checkOnQdn } from "./PublishProductsDialog";
 
@@ -107,7 +107,7 @@ describe("PublishProductsDialog for a delete", () => {
     name: SELLER,
     service,
     identifier,
-    data64: DELETED_DATA64,
+    data64: jsonToBase64(service === "STORE" ? storeTombstone() : catalogueTombstone(identifier)),
     title: "deleted",
     description: "deleted",
     tags: ["deleted"],
@@ -143,18 +143,20 @@ describe("PublishProductsDialog for a delete", () => {
     expect(pubs[0].resources[0]).toEqual(resources[0]);
   });
 
-  it("checks a delete on QDN by the delete marker", async () => {
+  it("checks a delete on QDN by its tombstone (or another app's \"D\")", async () => {
     const serve = (text: string) =>
       vi.stubGlobal(
         "fetch",
         vi.fn(async () => ({ ok: true, status: 200, text: async () => text }))
       );
-    serve("D");
+    serve(JSON.stringify(storeTombstone()));
     expect(await checkOnQdn(deleted("STORE", "q-store-general-a"))).toBe("done");
+    serve("D");
+    expect(await checkOnQdn(deleted("STORE", "q-store-general-c"))).toBe("done");
     serve(JSON.stringify({ title: "Still here" }));
     expect(await checkOnQdn(deleted("STORE", "q-store-general-b"))).toBe("missing");
     // A JSON publish whose resource reads as deleted isn't on QDN.
-    serve("D");
+    serve(JSON.stringify(catalogueTombstone("q-store-catalogue-x-C1")));
     expect(await checkOnQdn(resource("q-store-catalogue-x-C1"))).toBe("missing");
   });
 });

@@ -27,9 +27,9 @@ export interface WorldShop {
   products: any[];
   logo?: string;
   /**
-   * Its owner deleted it: the shop, its product list and its catalogues serve
-   * the delete marker "D". "marked" also retitles the shop's search row
-   * "deleted" (Q-Shop+'s delete); "plain" leaves the old metadata (other tools).
+   * Its owner deleted it. "marked": Q-Shop+'s delete, tombstones (JSON with
+   * `deleted: true`) and search rows retitled "deleted"; "plain": another
+   * tool's, the "D" marker with the old metadata.
    */
   deleted?: "plain" | "marked";
   /** Its collections document's list (qdn/collections.ts); the product index then points at it. */
@@ -304,17 +304,17 @@ export function installMockNode(world: World): MockNode {
       const id = decodeURIComponent(rawId);
       if (service === "STORE") {
         const shop = findShop(name, id);
-        if (shop?.deleted) return json("D");
+        if (shop?.deleted) return json(shop.deleted === "marked" ? { deleted: true, title: "Deleted shop" } : "D");
         return shop ? json(storeJsonOf(shop)) : json({ error: 1401, message: "not found" }, 404);
       }
       if (service === "DOCUMENT" && id.endsWith("-datacontainer")) {
         const shop = findShop(name, id.replace(/-datacontainer$/, ""));
-        if (shop?.deleted) return json("D");
+        if (shop?.deleted) return json(shop.deleted === "marked" ? { storeId: id.replace(/-datacontainer$/, ""), products: {}, deleted: true } : "D");
         return shop ? json(dataContainerOf(shop)) : json({ error: 1401, message: "not found" }, 404);
       }
       if (service === "DOCUMENT" && id.startsWith("q-store-collections-")) {
         const shop = world.shops.find((s) => s.owner === name && `q-store-collections-${s.shortStoreId}` === id && s.collections);
-        if (shop?.deleted) return json("D");
+        if (shop?.deleted) return json(shop.deleted === "marked" ? { collections: [], deleted: true } : "D");
         return shop ? json({ storeId: `q-store-general-${shop.shortStoreId}`, collections: shop.collections }) : json({ error: 1401 }, 404);
       }
       if (service === "DOCUMENT" && id.startsWith("q-store-review-")) {
@@ -324,7 +324,7 @@ export function installMockNode(world: World): MockNode {
       if (service === "DOCUMENT" && id.startsWith("q-store-catalogue-")) {
         const shop = world.shops.find((s) => s.owner === name);
         const cat = shop ? catalogueOf(shop, id) : null;
-        if (cat && shop?.deleted) return json("D");
+        if (cat && shop?.deleted) return json(shop.deleted === "marked" ? { id, products: {}, deleted: true } : "D");
         return cat ? json(cat) : json({ error: 1401 }, 404);
       }
       if (service === "THUMBNAIL") return json({ error: 1401 }, 404);
@@ -355,7 +355,8 @@ export function installMockNode(world: World): MockNode {
       if (id.startsWith("q-store-catalogue-")) {
         const shop = world.shops.find((s) => s.owner === name);
         const cat = shop ? catalogueOf(shop, id) : null;
-        return cat && shop?.deleted ? "D" : cat;
+        if (cat && shop?.deleted) return shop.deleted === "marked" ? { id, products: {}, deleted: true } : "D";
+        return cat;
       }
       const order = world.orders.find((o) => o.identifier === id && o.buyer === name);
       if (order) return `ENC:${id}`;

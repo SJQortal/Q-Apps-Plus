@@ -18,7 +18,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "../state/store";
 import { setCatalogueHashMap, type Catalogue } from "../state/features/globalSlice";
-import { mapWithConcurrency } from "../qdn/search";
+import { isDeletedBody, mapWithConcurrency } from "../qdn/search";
 
 export type CatalogueLoad = "idle" | "loading" | "peers" | "failed" | "ready";
 
@@ -35,7 +35,11 @@ function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** One FETCH_QDN_RESOURCE, as the original's fetchAndEvaluateCatalogues asks it. */
+/**
+ * One FETCH_QDN_RESOURCE, as the original's fetchAndEvaluateCatalogues asks
+ * it. A deleted catalogue (the "D" marker, or a tombstone) holds nothing, so
+ * the products the list still names there show as missing from it.
+ */
 export async function fetchCatalogue(owner: string, catalogueId: string): Promise<Catalogue | null> {
   const res = await qortalRequest({
     action: "FETCH_QDN_RESOURCE",
@@ -43,6 +47,7 @@ export async function fetchCatalogue(owner: string, catalogueId: string): Promis
     service: "DOCUMENT",
     identifier: catalogueId,
   });
+  if (isDeletedBody(res)) return { id: catalogueId, products: {}, user: owner, isValid: true } as unknown as Catalogue;
   if (res && typeof res === "object" && !(res as { error?: unknown }).error && (res as { products?: unknown }).products) {
     return { ...(res as object), user: owner, id: catalogueId, isValid: true } as unknown as Catalogue;
   }

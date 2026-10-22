@@ -301,6 +301,13 @@ describe("shop page", { timeout: 20_000 }, () => {
     fireEvent.click(screen.getByRole("button", { name: "Browse shops" }));
   });
 
+  it("reads a Q-Shop+ tombstone as a deleted shop too", async () => {
+    const world = makeWorld();
+    world.shops[0].deleted = "marked";
+    renderShop(world);
+    expect(await screen.findByText("This shop was deleted")).toBeInTheDocument();
+  });
+
   it("says a shop this browser just deleted is deleted, while the node may still serve it", async () => {
     noteDeletedShop("Seller Name", STORE_ID);
     const { node } = renderShop(makeWorld());
