@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAppStore } from "../state/store";
 import { installMockNode, makeWorld, type World } from "../test/mockNode";
 import { BUYER, SELLER } from "../test/fixtures/shop";
-import { loadOrders, retryOrder, type ListOwner } from "./loader";
+import { loadOrders, openListedOrders, retryOrder, type ListOwner } from "./loader";
 import { fetchRetry, resetOrderReadCaches } from "./reads";
 import { sendOrderStatus } from "./statusUpdate";
 import { selectBuyerItems, selectSellerItems } from "./selectors";
@@ -225,6 +225,26 @@ describe("the seller's orders", () => {
     expect(store.getState().order.seller).toMatchObject({ offset: 100, hasMore: true, phase: "ready" });
     expect(await loadOrders(store, SHOP, "more")).toBe(true);
     expect(store.getState().order.orders.map((r) => r.id)).toEqual([orderId("S0")]);
+  });
+
+  it("with an open limit, opens the first orders and those its own status doesn't settle; the rest on demand", async () => {
+    const world = sellerWorld();
+    addStatus(world, "S1", "Refunded");
+    addStatus(world, "S0", "Shipped");
+    const node = installMockNode(world);
+    const store = createAppStore();
+    await loadOrders(store, SHOP, "first", { openLimit: 2 });
+    // S5 and S4 (the first two), then S3 (Shipped only by an impostor) and S2 (no status): they may be To handle.
+    // S1 and S0 are settled by the seller's own Refunded and Shipped: they wait.
+    expect(Object.keys(store.getState().order.hashMapOrders).sort()).toEqual(["S2", "S3", "S4", "S5"].map((u) => orderId(u)));
+    expect(store.getState().order.statuses[orderId("S0")]).toMatchObject({ status: "Shipped" });
+    expect(node.summary().hub["FETCH q-store-order"]).toBe(4);
+
+    // A view shows them: they open then, each once.
+    openListedOrders(store, SHOP, store.getState().order.orders);
+    openListedOrders(store, SHOP, store.getState().order.orders);
+    await vi.waitFor(() => expect(Object.keys(store.getState().order.hashMapOrders)).toHaveLength(6));
+    expect(node.summary().hub["FETCH q-store-order"]).toBe(6);
   });
 
   it("forgets the list when another shop is picked (resetOrders)", async () => {

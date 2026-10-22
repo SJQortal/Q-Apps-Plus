@@ -5,7 +5,15 @@ import type { Order, OrderListMeta } from "../state/features/orderSlice";
 import { shortStoreIdOf } from "../qdn/identifiers";
 import { listPendingOrders, subscribePendingOrders } from "../money/pendingOrders";
 import { QDN_SEARCH_TTL_MS } from "../qdn/search";
-import { loadOrders, ownerKey, retryOrder, watchRecordedOrders, type ListOwner, type OrderStore } from "./loader";
+import {
+  loadOrders,
+  openListedOrders,
+  ownerKey,
+  retryOrder,
+  watchRecordedOrders,
+  type ListOwner,
+  type OrderStore,
+} from "./loader";
 import { selectItems, type OrderListItem } from "./selectors";
 
 export interface OrderList {
@@ -16,6 +24,8 @@ export interface OrderList {
   loadMore: () => Promise<boolean>;
   refresh: () => Promise<boolean>;
   retry: (row: Order) => Promise<boolean>;
+  /** Opens the shown rows that aren't open yet (a seller's list; nothing for the buyer's, which opens every row). */
+  open: (rows: Order[]) => void;
 }
 
 const IDLE: OrderListMeta = {
@@ -35,8 +45,11 @@ export const LIST_REREAD_AFTER_MS = QDN_SEARCH_TTL_MS;
 
 const NO_ITEMS: OrderListItem[] = [];
 
-/** An order list for `owner` (null: signed out, or no shop): page one on mount, then on demand. */
-function useOrderList(owner: ListOwner | null): OrderList {
+/**
+ * An order list for `owner` (null: signed out, or no shop): page one on
+ * mount, then on demand. `openLimit`: see LoadOptions (the seller's Overview).
+ */
+function useOrderList(owner: ListOwner | null, openLimit?: number): OrderList {
   const store: OrderStore = useStore<RootState>();
   const kind = owner?.kind ?? "buyer";
   const key = owner ? ownerKey(owner) : "";
@@ -47,8 +60,8 @@ function useOrderList(owner: ListOwner | null): OrderList {
   const needsLoad = !mine || meta.phase === "idle";
 
   useEffect(() => {
-    if (owner && needsLoad) void loadOrders(store, owner, "first");
-  }, [store, owner, needsLoad]);
+    if (owner && needsLoad) void loadOrders(store, owner, "first", { openLimit });
+  }, [store, owner, needsLoad, openLimit]);
 
   // A list read longer ago than the search cache lasts is read again when it shows (new orders,
   // statuses the seller published since); the rows stay on screen meanwhile.
@@ -56,15 +69,19 @@ function useOrderList(owner: ListOwner | null): OrderList {
     if (!owner) return;
     const current = store.getState().order[owner.kind];
     if (current.owner !== ownerKey(owner) || current.phase !== "ready" || current.refreshing) return;
-    if (Date.now() - current.loadedAt > LIST_REREAD_AFTER_MS) void loadOrders(store, owner, "refresh");
-  }, [store, owner]);
+    if (Date.now() - current.loadedAt > LIST_REREAD_AFTER_MS) void loadOrders(store, owner, "refresh", { openLimit });
+  }, [store, owner, openLimit]);
 
   const loadMore = useCallback(() => (owner ? loadOrders(store, owner, "more") : Promise.resolve(false)), [store, owner]);
-  const refresh = useCallback(() => (owner ? loadOrders(store, owner, "refresh") : Promise.resolve(false)), [store, owner]);
+  const refresh = useCallback(
+    () => (owner ? loadOrders(store, owner, "refresh", { openLimit }) : Promise.resolve(false)),
+    [store, owner, openLimit]
+  );
   const retry = useCallback((row: Order) => (owner ? retryOrder(store, owner, row) : Promise.resolve(false)), [store, owner]);
+  const open = useCallback((rows: Order[]) => (owner ? openListedOrders(store, owner, rows) : undefined), [store, owner]);
 
   const seller = owner?.kind === "seller" ? owner.seller : "";
-  return { items: mine ? items : NO_ITEMS, meta: mine ? meta : IDLE, seller, loadMore, refresh, retry };
+  return { items: mine ? items : NO_ITEMS, meta: mine ? meta : IDLE, seller, loadMore, refresh, retry, open };
 }
 
 /** The orders the signed-in name placed (My orders). */
@@ -89,14 +106,21 @@ export function useSellerShop(storeId?: string): { storeId: string; shortStoreId
   }, [id, seller]);
 }
 
-/** The orders one shop received (all buyers). */
-export function useShopOrders(storeId?: string): OrderList & { shop: ReturnType<typeof useSellerShop> } {
+/**
+ * The orders one shop received (all buyers). `openLimit`: open only that
+ * many of page one's orders up front (plus the ones needed to count them);
+ * the view opens the others it shows with `open`.
+ */
+export function useShopOrders(
+  storeId?: string,
+  options: { openLimit?: number } = {}
+): OrderList & { shop: ReturnType<typeof useSellerShop> } {
   const shop = useSellerShop(storeId);
   const owner = useMemo<ListOwner | null>(
     () => (shop ? { kind: "seller", storeId: shop.storeId, shortStoreId: shop.shortStoreId, seller: shop.seller } : null),
     [shop]
   );
-  return { ...useOrderList(owner), shop };
+  return { ...useOrderList(owner, options.openLimit), shop };
 }
 
 /** How many paid orders the buyer still has to finish (money/pendingOrders.ts). */

@@ -240,6 +240,28 @@ describe("the seller overview", () => {
     expect(onOpenTab).toHaveBeenLastCalledWith("reviews");
   });
 
+  it("opens only the latest orders and the ones it needs to count, and Orders opens the rest", async () => {
+    const w = makeWorld({ shops: 2, me: { name: SELLER, address: SELLER_ADDRESS, publicKey: SELLER_PK } });
+    for (let i = 0; i < 12; i++) addOrder(w, `S${String(i).padStart(2, "0")}`, 2000 + i, { buyer: `Buyer ${i}` });
+    // The seller shipped the older ones, except S03.
+    for (const uid of ["S00", "S01", "S02", "S04", "S05", "S06"]) addStatus(w, uid, "Shipped");
+    const node = installMockNode(w);
+    const store = sellerStore();
+    const overview = renderWithProviders(<SellerOverview storeId={STORE_ID} onOpenTab={vi.fn()} />, { store });
+    await waitFor(() => expect(screen.getByRole("button", { name: /6\s*To handle/ })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /6\s*Shipped/ })).toBeInTheDocument();
+    await waitFor(() => expect(within(screen.getByRole("list", { name: "Latest orders" })).getAllByRole("button")).toHaveLength(5));
+    await new Promise((r) => setTimeout(r, 200));
+    // The 5 shown, and S03 (it may be To handle, so it must be opened to count): not the 6 already shipped.
+    expect(node.summary().hub["FETCH q-store-order"]).toBe(6);
+    overview.unmount();
+
+    renderWithProviders(<OrdersTab />, { store });
+    await waitFor(() => expect(node.summary().hub["FETCH q-store-order"]).toBe(12));
+    const list = await screen.findByRole("list", { name: "Orders received" });
+    await waitFor(() => expect(within(list).getAllByRole("button")).toHaveLength(12));
+  });
+
   it("doesn't count orders it can't open, or orders naming another seller", async () => {
     installMockNode(withUncounted(world()));
     renderWithProviders(<SellerOverview storeId={STORE_ID} onOpenTab={vi.fn()} />, { store: sellerStore() });

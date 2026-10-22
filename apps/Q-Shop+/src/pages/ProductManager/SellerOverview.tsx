@@ -4,7 +4,7 @@
  * so far, "+" while more pages exist), the products in the shop, the five
  * latest orders, and links to the other tabs.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, ButtonBase, Skeleton, Typography } from "@mui/material";
 import HourglassEmptyOutlinedIcon from "@mui/icons-material/HourglassEmptyOutlined";
@@ -90,7 +90,8 @@ function Tile({
 }
 
 export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpenTab?: (tab: SellerTab) => void }) {
-  const list = useShopOrders(storeId);
+  // Only the latest few orders are opened up front, plus the ones the counts need (orders/loader.ts).
+  const list = useShopOrders(storeId, { openLimit: LATEST });
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -102,7 +103,12 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
   const ordersLoading = list.meta.phase === "loading" || list.meta.phase === "idle";
   const productCount =
     dataContainer && dataContainer.storeId === storeId ? Object.keys(dataContainer.products ?? {}).length : null;
-  const latest = main.slice(0, LATEST);
+  const latest = useMemo(() => main.slice(0, LATEST), [main]);
+  // When rows above didn't count (another seller's, or unreadable), the ones that move up get opened now.
+  const { open } = list;
+  useEffect(() => {
+    open(latest.map((item) => item.row));
+  }, [open, latest]);
   const opened: Order | null = list.items.find((i) => i.row.id === openId)?.order ?? null;
   const openOrders = onOpenTab ? () => onOpenTab("orders") : undefined;
 

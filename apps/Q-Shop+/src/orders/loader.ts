@@ -43,6 +43,7 @@ import {
 } from "./reads";
 import { invalidateQdnSearches, mapWithConcurrency } from "../qdn/search";
 import { NO_STATUS_DOCUMENT } from "./status";
+import { settledByStatus } from "./listView";
 
 /** The parts of the Redux store the loader needs (the app's store, or a test's). */
 export interface OrderStore {
@@ -77,12 +78,23 @@ function isCurrent(store: OrderStore, kind: OrderListKind, owner: string, genera
   return meta.owner === owner && meta.generation === generation;
 }
 
+export interface LoadOptions {
+  /**
+   * A seller's list: open only this many orders of page one now (the
+   * Overview shows the latest 5), plus the ones it needs to count: an order
+   * that may be "To handle" must be opened to show it names this seller,
+   * while one the seller's own status settles (Shipped, Refunded) can wait
+   * until a view shows it (openListedOrders). Default: every order.
+   */
+  openLimit?: number;
+}
+
 /**
  * Loads page one ("first": only if this list isn't loaded or loading yet),
  * the next page ("more"), or page one again from the node ("refresh").
  * Resolves true when a page landed.
  */
-export function loadOrders(store: OrderStore, owner: ListOwner, mode: LoadMode): Promise<boolean> {
+export function loadOrders(store: OrderStore, owner: ListOwner, mode: LoadMode, options: LoadOptions = {}): Promise<boolean> {
   const kind = owner.kind;
   const key = ownerKey(owner);
   if (!key || (owner.kind === "seller" && (!owner.shortStoreId || !owner.seller))) return Promise.resolve(false);
@@ -102,14 +114,14 @@ export function loadOrders(store: OrderStore, owner: ListOwner, mode: LoadMode):
     if (meta.owner !== key || meta.phase !== "ready" || !meta.hasMore || meta.refreshing) return Promise.resolve(false);
   }
 
-  const task = runPage(store, owner, mode).finally(() => {
+  const task = runPage(store, owner, mode, options).finally(() => {
     if (running.get(runningKey) === task) running.delete(runningKey);
   });
   running.set(runningKey, task);
   return task;
 }
 
-async function runPage(store: OrderStore, owner: ListOwner, mode: LoadMode): Promise<boolean> {
+async function runPage(store: OrderStore, owner: ListOwner, mode: LoadMode, options: LoadOptions): Promise<boolean> {
   const kind = owner.kind;
   const key = ownerKey(owner);
   const first = mode !== "more";
@@ -137,17 +149,30 @@ async function runPage(store: OrderStore, owner: ListOwner, mode: LoadMode): Pro
   const live = () => isCurrent(store, kind, key, generation);
   if (owner.kind === "seller") {
     const index = sellerStatusIndex(store, owner, generation, first, fresh);
+    const limit = first && options.openLimit !== undefined ? Math.max(0, options.openLimit) : page.rows.length;
+    const now = page.rows.slice(0, limit);
+    const later = page.rows.slice(limit);
+    // The seller's statuses come from the shop's index by order id, so they don't wait for the orders.
+    const statuses = index.then((idx) =>
+      resolveStatuses(
+        page.rows.map((row) => ({ orderId: row.id, seller: owner.seller, buyer: row.user })),
+        idx,
+        statusSink(store, live),
+        fresh
+      )
+    );
     await Promise.all([
-      // The seller's statuses come from the shop's index by order id, so they don't wait for the orders.
-      openRows(store, page.rows, live),
-      index.then((idx) =>
-        resolveStatuses(
-          page.rows.map((row) => ({ orderId: row.id, seller: owner.seller, buyer: row.user })),
-          idx,
-          statusSink(store, live),
-          fresh
-        )
-      ),
+      openRows(store, now, live),
+      statuses.then(() => {
+        if (!live() || later.length === 0) return;
+        // Past the limit, only orders that may be "To handle" are opened now (to count them).
+        const known = store.getState().order.statuses;
+        return openRows(
+          store,
+          later.filter((row) => !settledByStatus(known[row.id])),
+          live
+        );
+      }),
     ]);
   } else {
     const opened = await openRows(store, page.rows, live, (order) => buyerOrderOpenedLate(store, order, live));
@@ -208,7 +233,27 @@ async function openRows(
   live: () => boolean,
   onLateOpen?: (order: Order) => void
 ): Promise<(Order | null)[]> {
-  return mapWithConcurrency(rows, OPEN_CONCURRENCY, async (row) => {
+  return mapWithConcurrency(rows, OPEN_CONCURRENCY, (row) => openRow(store, row, live, onLateOpen));
+}
+
+const openingRows = new WeakMap<OrderStore, Map<string, { task: Promise<Order | null>; live: () => boolean }>>();
+
+/** One row's first attempt; a row already being opened for the same list generation shares that attempt. */
+function openRow(
+  store: OrderStore,
+  row: Order,
+  live: () => boolean,
+  onLateOpen?: (order: Order) => void
+): Promise<Order | null> {
+  let running = openingRows.get(store);
+  if (!running) {
+    running = new Map();
+    openingRows.set(store, running);
+  }
+  const key = `${row.user}\n${row.id}`;
+  const current = running.get(key);
+  if (current && current.live()) return current.task;
+  const task = (async () => {
     // Not `fresh` even on a refresh: an order is cached by its `updated`, so only a changed one is read again.
     const outcome = await openOrderOnce(row);
     if (!live()) return null;
@@ -225,7 +270,30 @@ async function openRows(
       if (order) onLateOpen?.(order);
     });
     return null;
-  });
+  })();
+  const entry = { task, live };
+  running.set(key, entry);
+  const done = () => {
+    if (running.get(key) === entry) running.delete(key);
+  };
+  task.then(done, done);
+  return task;
+}
+
+/**
+ * Opens the rows a view of a seller's list shows that aren't open yet (the
+ * Overview opens only what it needs: LoadOptions.openLimit). Rows already
+ * opened, being opened, or that failed are left alone. Their statuses were
+ * read with the page.
+ */
+export function openListedOrders(store: OrderStore, owner: ListOwner, rows: Order[]): void {
+  if (owner.kind !== "seller" || rows.length === 0) return;
+  const key = ownerKey(owner);
+  const state = store.getState().order;
+  if (state.seller.owner !== key || state.seller.phase === "idle") return;
+  const generation = state.seller.generation;
+  const todo = rows.filter((row) => state.hashMapOrders[row.id]?.user !== row.user && !state.openState[row.id]);
+  if (todo.length > 0) void openRows(store, todo, () => isCurrent(store, "seller", key, generation));
 }
 
 /** Asks again for an order the node didn't have: after 2, 4 and 8 s, then gives up. */

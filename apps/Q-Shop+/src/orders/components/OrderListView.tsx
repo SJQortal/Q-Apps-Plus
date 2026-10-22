@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { EmptyState } from "../../components/common/EmptyState";
@@ -170,6 +170,11 @@ export function OrderListView({
     () => visibleItems(main, { filter, search, role, seller: role === "seller" ? seller : undefined }),
     [main, filter, search, role, seller]
   );
+  // A seller's rows are opened when a view shows them (the Overview opens only its latest few).
+  const { open } = list;
+  useEffect(() => {
+    if (role === "seller") open(shown.map((item) => item.row));
+  }, [role, open, shown]);
 
   if (meta.phase === "error" && items.length === 0) {
     return (
