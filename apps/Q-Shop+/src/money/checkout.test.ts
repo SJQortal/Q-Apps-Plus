@@ -17,6 +17,7 @@ import {
   SHORT_STORE_ID,
   STORE_ID,
   STORE_TITLE,
+  catalogue,
   chair,
   decodeData64,
   mug,
@@ -28,11 +29,19 @@ import {
   findUnconfirmedPayment,
   recordOrder,
   startCheckout,
+  withImagesRefilled,
   PAYMENT_MATCH_WINDOW_MS,
   PUBLISH_TIMEOUT_MS,
   type StartCheckoutArgs,
 } from "./checkout";
-import { getPendingOrder, isRecordingOrder, listPendingOrders, pendingDelivery, resetPendingOrders } from "./pendingOrders";
+import {
+  getPendingOrder,
+  isRecordingOrder,
+  listPendingOrders,
+  pendingDelivery,
+  resetPendingOrders,
+  type PendingOrder,
+} from "./pendingOrders";
 import { digitalDelivery } from "./order";
 import { PENDING_ORDERS_STORAGE_KEY } from "../constants/plus";
 import { orderMailIdentifier } from "../qdn/identifiers";
@@ -274,6 +283,72 @@ describe("startCheckout", () => {
     const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     expect(pub).toHaveLength(1);
     expect(pub[0].resources.map((r: any) => r.identifier)).toEqual([MAIL_ID]);
+  });
+
+  it("puts back the product pictures a full localStorage dropped before publishing the order", async () => {
+    // All Q-Apps on a node share one origin's storage: the order with its pictures doesn't fit.
+    const setItem = vi.mocked(localStorage.setItem);
+    const original = setItem.getMockImplementation()!;
+    setItem.mockImplementation((key: string, value: string) => {
+      if (key === PENDING_ORDERS_STORAGE_KEY && value.includes("data:image")) throw new Error("QuotaExceededError");
+      original(key, value);
+    });
+    try {
+      sellerHandlers({
+        PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+          throw { error: "User declined request" };
+        },
+      });
+      await startCheckout(args());
+      const firstOrder = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+      expect(localStorage.getItem(PENDING_ORDERS_STORAGE_KEY)).not.toContain("data:image");
+
+      resetPendingOrders(); // a reload: the order comes back from storage, without its pictures
+      const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+      expect(pending.imagesStripped).toBe(true);
+      expect((pending.details[mug.id] as any).product.images).toEqual([]);
+
+      const catalogueUrl = `/arbitrary/DOCUMENT/${encodeURIComponent(SELLER)}/${encodeURIComponent(CATALOGUE_ID)}`;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          String(url) === catalogueUrl
+            ? { ok: true, status: 200, text: async () => JSON.stringify(catalogue), json: async () => catalogue }
+            : { ok: true, status: 200, text: async () => "[]", json: async () => [] }
+        )
+      );
+      q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+      q.reset();
+      expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+      const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+      expect(order.details[mug.id].product.images).toEqual(mug.images);
+      // Exactly the order the first attempt sent.
+      expect(order).toEqual(firstOrder);
+    } finally {
+      setItem.mockImplementation(original);
+    }
+  });
+
+  it("still publishes a paid order whose pictures can't be read back", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw { error: "User declined request" };
+      },
+    });
+    await startCheckout(args());
+    const saved = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    const pending = {
+      ...saved,
+      imagesStripped: true,
+      details: { ...saved.details, [mug.id]: { ...(saved.details[mug.id] as any), product: { ...mug, images: [] } } },
+    } as PendingOrder;
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404, text: async () => "{}", json: async () => ({}) })));
+    expect(await withImagesRefilled(pending)).toMatchObject({ details: { [mug.id]: { product: { images: [] } } } });
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    q.reset();
+    expect(await recordOrder(pending, digitalDelivery(BUYER), { skipCheck: true })).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details[mug.id].product.images).toEqual([]);
   });
 
   it("treats a failure Hub answers instead of throwing as a failure", async () => {

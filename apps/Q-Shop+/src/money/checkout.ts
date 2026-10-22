@@ -23,7 +23,7 @@
  */
 import { isHubDecline, isHubTimeout, errorMessage } from "../qdn/hubErrors";
 import { orderIdentifier, orderMailIdentifier, shortStoreIdOf } from "../qdn/identifiers";
-import { resourceExists, invalidateQdnSearches } from "../qdn/search";
+import { fetchQdnJson, resourceExists, invalidateQdnSearches } from "../qdn/search";
 import { assetIdOf, coinLabel, isForeignTicker, payoutAddress, type ShopCoinSettings } from "./coins";
 import {
   buildOrder,
@@ -32,6 +32,7 @@ import {
   buildOrderMailHtml,
   buildOrderPublish,
   digitalDelivery,
+  orderLines,
   type CartLine,
   type DeliveryInput,
   type OrderDetails,
@@ -226,6 +227,34 @@ function unsuccessfulPublishes(value: unknown): { identifier: string; reason: st
 }
 
 /**
+ * A pending order stored without its product pictures (localStorage was
+ * full, pendingOrders.ts) gets them back from the seller's catalogues before
+ * it is published, so the seller sees the pictures as in every other order.
+ * Only `images` is put back, from the product as its catalogue holds it now.
+ * Best effort: a catalogue that can't be read leaves those lines without
+ * pictures, and the paid order is published anyway.
+ */
+export async function withImagesRefilled(pending: PendingOrder): Promise<PendingOrder> {
+  if (!pending.imagesStripped) return pending;
+  const details: Record<string, unknown> = { ...pending.details };
+  const catalogues = new Map<string, Promise<any>>();
+  for (const [productId, line] of orderLines(pending.details)) {
+    const product = line?.product;
+    if (!product || typeof product !== "object" || !line.catalogueId) continue;
+    if (Array.isArray(product.images) && product.images.length > 0) continue;
+    if (!catalogues.has(line.catalogueId)) {
+      catalogues.set(line.catalogueId, fetchQdnJson("DOCUMENT", pending.store.owner, line.catalogueId).catch(() => null));
+    }
+    const catalogue = await catalogues.get(line.catalogueId);
+    const images: unknown = catalogue?.products?.[productId]?.images;
+    if (Array.isArray(images) && images.length > 0 && images.every((image) => typeof image === "string")) {
+      details[productId] = { ...line, product: { ...product, images } };
+    }
+  }
+  return { ...pending, details: details as OrderDetails };
+}
+
+/**
  * The order is on QDN: it leaves the pending list, and its payment is
  * remembered as used, so "Check again" never gives it to another order.
  */
@@ -279,7 +308,7 @@ async function recordOrderNow(
       if (parts.length === 0) return done();
     }
     options.onStep?.("recording");
-    const request = publishOrderRequest(pending, delivery);
+    const request = publishOrderRequest(parts.includes("order") ? await withImagesRefilled(pending) : pending, delivery);
     const resources = request.resources.filter((_, i) => parts.includes(ORDER_PARTS[i]));
     sent = resources.map((resource) => ({ part: ORDER_PARTS[request.resources.indexOf(resource)], identifier: resource.identifier }));
     const answer = await qortalRequestWithTimeout({ ...request, resources }, PUBLISH_TIMEOUT_MS);

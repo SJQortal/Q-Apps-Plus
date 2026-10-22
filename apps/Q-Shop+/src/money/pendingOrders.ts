@@ -52,6 +52,11 @@ export interface PendingOrder {
    * (it names the ones that failed): Finish sends only the rest.
    */
   published?: OrderPart[];
+  /**
+   * Stored without its product pictures (localStorage was full): they are
+   * read again from the seller's catalogues before the order is published.
+   */
+  imagesStripped?: boolean;
   /** The last thing that went wrong, in plain words. */
   lastError?: string;
 }
@@ -83,14 +88,19 @@ function load(): Store {
   return memory;
 }
 
+/** A copy without the product pictures, marked so they are fetched again before it is published. */
 function stripImages(order: PendingOrder): PendingOrder {
   const details = { ...order.details } as Record<string, any>;
+  let stripped = false;
   for (const key of Object.keys(details)) {
     if (key === "totalPrice") continue;
     const line = details[key];
-    if (line?.product?.images) details[key] = { ...line, product: { ...line.product, images: [] } };
+    if (Array.isArray(line?.product?.images) && line.product.images.length > 0) {
+      details[key] = { ...line, product: { ...line.product, images: [] } };
+      stripped = true;
+    }
   }
-  return { ...order, details: details as OrderDetails };
+  return stripped ? { ...order, details: details as OrderDetails, imagesStripped: true } : order;
 }
 
 function write(next: Store): void {
@@ -98,7 +108,9 @@ function write(next: Store): void {
   try {
     localStorage.setItem(PENDING_ORDERS_STORAGE_KEY, JSON.stringify(next));
   } catch {
-    // Quota: product images are only a copy inside the order; drop them and try again.
+    // Quota: product images are only a copy inside the order; drop them and
+    // try again. The copy is marked, and checkout reads them back from the
+    // seller's catalogues before publishing it (withImagesRefilled).
     try {
       const slim: Store = {};
       for (const [name, list] of Object.entries(next)) slim[name] = list.map(stripImages);
