@@ -236,7 +236,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
                   clickable
                   variant="outlined"
                   label={c.title}
-                  sx={{ minHeight: 36, maxWidth: "100%", "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
+                  sx={{ height: 44, borderRadius: 22, maxWidth: "100%", "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
                 />
               ))}
             </Box>
