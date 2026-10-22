@@ -60,10 +60,39 @@ function mainImage(product: CatalogueProduct): string | null {
   return typeof image === "string" && image.startsWith("data:image/") ? image : null;
 }
 
+function finiteNumber(value: unknown): number | undefined {
+  const n = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * A catalogue entry as the strip shows it, or null. Catalogues are JSON any
+ * name can publish, and the original's check only asks that the title is
+ * there: a title like `{"a": 1}` was rendered as a React child, which threw
+ * and blanked the whole app for every visitor while the catalogue was among
+ * the newest. So the title must be text, the date a number, and the status
+ * text (or nothing).
+ */
+function stripProduct(productId: string, value: unknown): CatalogueProduct | null {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !checkStructure(value)) return null;
+  const product = value as Record<string, unknown>;
+  const title = typeof product.title === "string" ? product.title.trim() : "";
+  const created = finiteNumber(product.created);
+  if (!title || created === undefined) return null;
+  return {
+    ...(product as unknown as CatalogueProduct),
+    id: productId,
+    title,
+    created,
+    description: typeof product.description === "string" ? product.description : undefined,
+    status: typeof product.status === "string" ? product.status : undefined,
+  };
+}
+
 /**
  * The products worth showing from fetched catalogues, newest first: valid
- * products (the original's check), not retired, with an image, from listed
- * shops only.
+ * products (stripProduct), not retired, with an image, from listed shops
+ * only.
  */
 export function newProductsFrom(
   catalogues: { row: QdnResourceSummary; json: unknown }[],
@@ -75,11 +104,11 @@ export function newProductsFrom(
     if (!short || row.name === HIDDEN_TEST_SHOP_OWNER) continue;
     const storeId = storeIdentifier(short);
     if (!isListedShop(row.name, storeId)) continue;
-    const products = (json as { products?: Record<string, CatalogueProduct> } | null)?.products;
+    const products = (json as { products?: Record<string, unknown> } | null)?.products;
     if (!products || typeof products !== "object") continue;
-    for (const [productId, product] of Object.entries(products)) {
-      if (!product || typeof product !== "object" || !checkStructure(product)) continue;
-      if (product.status === "RETIRED") continue;
+    for (const [productId, value] of Object.entries(products)) {
+      const product = stripProduct(productId, value);
+      if (!product || product.status === "RETIRED") continue;
       const image = mainImage(product);
       if (!image) continue;
       items.push({
@@ -87,7 +116,7 @@ export function newProductsFrom(
         owner: row.name,
         storeId,
         catalogueId: row.identifier,
-        product: { ...product, id: productId },
+        product,
         image,
       });
     }

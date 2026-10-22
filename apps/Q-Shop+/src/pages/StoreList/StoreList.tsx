@@ -24,6 +24,7 @@ import { APP_NAME } from "../../constants/plus";
 import { accentWash } from "../../hub-theme";
 import { storePath } from "../../qdn/links";
 import { StoreCard } from "../Store/StoreCard/StoreCard";
+import { LocalBoundary } from "../Store/LocalBoundary";
 import { ShopGridList, ShopGridSkeleton } from "../../discovery/ShopGrid";
 import { ShopMenu, type ShopMenuTarget } from "../../discovery/ShopMenu";
 import { LoadMoreSentinel } from "../../discovery/LoadMoreSentinel";
@@ -272,7 +273,12 @@ export const StoreList = () => {
             {first.map(card)}
           </ShopGridList>
         )}
-        {strip && <NewProductsStrip isListedShop={isListedShop} />}
+        {strip && (
+          // Products any seller wrote: if one can't be shown, the strip goes and the list stays.
+          <LocalBoundary label="The new products strip" fallback={null}>
+            <NewProductsStrip isListedShop={isListedShop} />
+          </LocalBoundary>
+        )}
         {rest.length > 0 && <ShopGridList aria-label="More shops">{rest.map(card)}</ShopGridList>}
         {home.more && !home.busy && (
           <LoadMoreSentinel

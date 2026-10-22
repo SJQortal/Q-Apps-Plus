@@ -18,6 +18,7 @@ import { resetRatingsMemory } from "../../discovery/ratings";
 import { resetActivityMemory } from "../../discovery/activity";
 import { resetShopDetails } from "../../discovery/shopDetails";
 import { resetHomeMemory } from "../../discovery/useHomeShops";
+import { resetNewProductsCache } from "../../discovery/newProducts";
 
 function LocationProbe() {
   const location = useLocation();
@@ -85,6 +86,7 @@ beforeEach(() => {
   resetActivityMemory();
   resetShopDetails();
   resetHomeMemory();
+  resetNewProductsCache();
 });
 
 afterEach(() => {
@@ -132,6 +134,18 @@ describe("home page", () => {
     const catalogues = searchParams(node.fetchCalls).filter((p) => p.get("identifier") === "q-store-catalogue-");
     expect(catalogues).toHaveLength(1);
     expect(catalogues[0].get("limit")).toBe("4");
+  });
+
+  it("leaves out a new product whose title isn't text (it blanked the whole app)", async () => {
+    const world = makeWorld();
+    world.shops[23].products[11].title = { a: 1 };
+    renderHome({ world, allInView: true });
+    const strip = await screen.findByRole("region", { name: "New products" });
+    await within(strip).findByRole("link", { name: "Product 10" });
+    const hrefs = within(strip).getAllByRole("link").map((link) => link.getAttribute("href"));
+    expect(hrefs).toHaveLength(12);
+    expect(hrefs.some((href) => href?.includes("q-store-product-shop-23-P000000011"))).toBe(false);
+    expect(cards()).toHaveLength(24);
   });
 
   it("has no new-products strip while searching or filtering, and reads none until it is in view", async () => {
