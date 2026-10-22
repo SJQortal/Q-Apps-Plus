@@ -4,6 +4,7 @@ import reducer, {
   allCartsItemCount,
   loadStoredCarts,
   removeProductFromCart,
+  restoreCartItem,
   saveCarts,
   setCartQuantity,
   setProductToCart,
@@ -26,6 +27,42 @@ describe('cart', () => {
     state = reducer(state, removeProductFromCart({ storeId: 's1', productId: 'p1' }));
     state = reducer(state, subtractQuantityFromCart({ storeId: 's1', productId: 'p2' }));
     expect(state.carts.s1).toBeUndefined();
+  });
+
+  it('puts a removed line back in its place, recreating an emptied cart', () => {
+    let state = reducer(undefined, add('p1'));
+    state = reducer(state, add('p2', 2));
+    state = reducer(state, add('p3'));
+    const { lastUpdated } = state.carts.s1;
+    state = reducer(state, removeProductFromCart({ storeId: 's1', productId: 'p2' }));
+    state = reducer(
+      state,
+      restoreCartItem({ storeId: 's1', storeOwner: 'Seller', order: { productId: 'p2', catalogueId: 'c1', quantity: 2 }, index: 1 })
+    );
+    expect(Object.keys(state.carts.s1.orders)).toEqual(['p1', 'p2', 'p3']);
+    expect(state.carts.s1.orders.p2).toEqual({ productId: 'p2', catalogueId: 'c1', quantity: 2 });
+
+    // Restoring twice changes nothing.
+    const again = reducer(
+      state,
+      restoreCartItem({ storeId: 's1', storeOwner: 'Seller', order: { productId: 'p2', catalogueId: 'c1', quantity: 5 }, index: 0 })
+    );
+    expect(again.carts.s1.orders).toEqual(state.carts.s1.orders);
+
+    // The last line of a shop: its cart comes back with its old timestamp.
+    let single = reducer(undefined, add('p9'));
+    single = reducer(single, removeProductFromCart({ storeId: 's1', productId: 'p9' }));
+    expect(single.carts.s1).toBeUndefined();
+    single = reducer(
+      single,
+      restoreCartItem({ storeId: 's1', storeOwner: 'Seller', order: { productId: 'p9', catalogueId: 'c1', quantity: 1 }, index: 0, lastUpdated })
+    );
+    expect(single.carts.s1).toEqual({
+      orders: { p9: { productId: 'p9', catalogueId: 'c1', quantity: 1 } },
+      lastUpdated,
+      storeId: 's1',
+      storeOwner: 'Seller',
+    });
   });
 
   it('survives a reload and drops anything that is not a cart', () => {
