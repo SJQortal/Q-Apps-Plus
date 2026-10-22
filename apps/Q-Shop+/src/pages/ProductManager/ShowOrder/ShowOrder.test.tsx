@@ -17,6 +17,7 @@ import { resetAssetNamesFromNode } from "../../../orders/useOrderCoin";
 import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, poster } from "../../../test/fixtures/shop";
 import { fetchRetry, resetOrderReadCaches } from "../../../orders/reads";
 import { addStatus, orderId, orderJson } from "../../../orders/testing";
+import { SENDER_NOTE } from "../../../orders/payment";
 import { ShowOrder } from "./ShowOrder";
 
 const ID = orderId("ORDERxxxx1");
@@ -81,7 +82,9 @@ describe("payment details", () => {
     expect(screen.getByText("QSomeoneElse")).toBeInTheDocument();
     expect(screen.getByText("The amount sent is not the order total.")).toBeInTheDocument();
     expect(screen.getByText("It was sent to another address than the shop owner's.")).toBeInTheDocument();
-    expect(screen.getByText("It was sent by another account than the buyer's.")).toBeInTheDocument();
+    // A different sender is a neutral note, not a warning (names can be sold).
+    const note = screen.getByText(SENDER_NOTE);
+    expect(note.closest(".MuiAlert-root")).toBeNull();
   });
 
   it("QORT: a transaction that matches shows no warning", async () => {

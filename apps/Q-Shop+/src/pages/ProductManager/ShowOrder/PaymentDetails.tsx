@@ -20,7 +20,7 @@ import type { Order } from "../../../state/features/orderSlice";
 import { AmountTag } from "../../../components/money/PriceTag";
 import { copyText } from "../../../utils/clipboard";
 import { fetchPaymentTransaction, nameOwner, type PaymentTransaction } from "../../../orders/reads";
-import { paymentWarnings, shopPaymentWarnings, transactionCoin } from "../../../orders/payment";
+import { paymentWarnings, shopPaymentWarnings, transactionCoin, paymentNotes } from "../../../orders/payment";
 import { formatOrderDate } from "../../../orders/format";
 import type { OrderCoinView } from "../../../orders/useOrderCoin";
 
@@ -64,7 +64,7 @@ type TxState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "ready"; tx: PaymentTransaction; warnings: string[] };
+  | { kind: "ready"; tx: PaymentTransaction; warnings: string[]; notes: string[] };
 
 /** "Gold (asset #42)", or "Asset #42" while its name isn't known. */
 function assetText(name: string, assetId: number): string {
@@ -115,6 +115,7 @@ export function PaymentDetails({
         kind: "ready",
         tx: found,
         warnings: paymentWarnings(found, order.payment, { sellerAddress, buyerAddress, shop }),
+        notes: paymentNotes(found, { buyerAddress }),
       });
     } catch {
       setTx({ kind: "error" });
@@ -216,6 +217,11 @@ export function PaymentDetails({
             <Alert key={w} severity="warning" sx={{ my: 1 }}>
               {w}
             </Alert>
+          ))}
+          {tx.notes.map((n) => (
+            <Typography key={n} variant="body2" color="text.secondary" sx={{ my: 1 }}>
+              {n}
+            </Typography>
           ))}
           <Box component="dl" sx={{ m: 0 }}>
             {tx.tx.amount !== undefined && (

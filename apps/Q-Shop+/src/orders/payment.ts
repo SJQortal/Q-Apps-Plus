@@ -166,10 +166,22 @@ export function paymentWarnings(
   if (opts.sellerAddress && tx.recipient && tx.recipient !== opts.sellerAddress) {
     warnings.push("It was sent to another address than the shop owner's.");
   }
-  if (opts.buyerAddress && tx.creatorAddress && tx.creatorAddress !== opts.buyerAddress) {
-    warnings.push("It was sent by another account than the buyer's.");
-  }
   return warnings;
+}
+
+/** A neutral note when a payment came from another account than the one owning the buyer's name now. */
+export const SENDER_NOTE =
+  "It was sent from another account than the one that owns the buyer's name now. Names can be sold, so this alone doesn't mean anything is wrong.";
+
+/**
+ * What's worth knowing but isn't a warning. The account that owns the
+ * buyer's name now may not be the one that owned it when they paid (names
+ * are sold), so a different sender is a note, not a warning (Simon,
+ * 2026-10-22, Follow-up 9).
+ */
+export function paymentNotes(tx: PaymentTransaction, opts: { buyerAddress?: string | null } = {}): string[] {
+  if (opts.buyerAddress && tx.creatorAddress && tx.creatorAddress !== opts.buyerAddress) return [SENDER_NOTE];
+  return [];
 }
 
 /**
