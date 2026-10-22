@@ -1,12 +1,13 @@
-import { useMemo, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { EmptyState } from "../../components/common/EmptyState";
 import type { Order } from "../../state/features/orderSlice";
 import type { OrderList } from "../hooks";
-import { visibleItems } from "../listView";
-import { countStatuses, type StatusFilter } from "../status";
-import { OrderCard, type OrderRole } from "./OrderCard";
+import type { OrderListItem } from "../selectors";
+import { sellerStatusCounts, splitSellerItems, visibleItems } from "../listView";
+import { countStatuses, type StatusCounts, type StatusFilter } from "../status";
+import { ForeignOrderCard, OrderCard, type OrderRole } from "./OrderCard";
 import { StatusFilterBar } from "./StatusFilterBar";
 import { LoadMore } from "./LoadMore";
 
@@ -52,9 +53,86 @@ export function OrderListSkeleton({ rows = 4 }: { rows?: number }) {
 }
 
 /**
+ * The rows of a seller's list that aren't counted as theirs: orders that
+ * couldn't be opened (with Retry), and orders that name another seller (a
+ * shop with the same id under another name). Folded by default.
+ */
+export function UncountedOrders({ items, onRetry }: { items: OrderListItem[]; onRetry: (row: Order) => void }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <Box
+      component="section"
+      aria-labelledby={`${id}-title`}
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 1.5,
+        p: { xs: 1.5, sm: 2 },
+        border: 1,
+        borderColor: "divider",
+        borderRadius: 2,
+      }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <Box sx={{ flex: 1, minWidth: 200 }}>
+          <Typography id={`${id}-title`} component="h3" sx={{ fontWeight: 700 }}>
+            Orders not counted ({items.length})
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            They use your shop's id but couldn't be opened, or they name another seller. They aren't in your counts.
+          </Typography>
+        </Box>
+        <Button
+          variant="outlined"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={`${id}-list`}
+          sx={{ minHeight: 44 }}
+        >
+          {open ? "Hide" : "Show"}
+        </Button>
+      </Box>
+      {open && (
+        <Box
+          component="ul"
+          id={`${id}-list`}
+          aria-label="Orders not counted"
+          sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}
+        >
+          {items.map((item) => (
+            <Box component="li" key={item.row.id} sx={{ minWidth: 0 }}>
+              {item.order ? (
+                <ForeignOrderCard item={item} />
+              ) : (
+                <OrderCard item={item} role="seller" onOpen={() => {}} onRetry={onRetry} />
+              )}
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function buyerCounts(items: OrderListItem[]): { counts: StatusCounts; loading: boolean } {
+  const counts = countStatuses(
+    items.map((i) => i.row.id),
+    Object.fromEntries(items.map((i) => [i.row.id, i.status ?? undefined]))
+  );
+  // An order that can't be opened never gets a status on the buyer's side: don't wait for it.
+  const loading = items.some((i) => !i.status && i.openState !== "unreadable" && i.openState !== "unavailable");
+  return { counts, loading };
+}
+
+const NO_ROWS: OrderListItem[] = [];
+
+/**
  * An order list with its filters and every state: first-page placeholders,
  * a first-page error with Retry, the empty list (`empty`), "nothing matches"
- * for a filter or a search, the cards, and the next pages.
+ * for a filter or a search, the cards, and the next pages. A seller's rows
+ * that aren't theirs to count (couldn't be opened, or name another seller)
+ * are kept out of the counts, the filters and "To handle", and shown apart.
  */
 export function OrderListView({
   role,
@@ -79,17 +157,19 @@ export function OrderListView({
   errorText: string;
 }) {
   const { items, meta } = list;
-  const counts = useMemo(
-    () =>
-      countStatuses(
-        items.map((i) => i.row.id),
-        Object.fromEntries(items.map((i) => [i.row.id, i.status ?? undefined]))
-      ),
-    [items]
+  const seller = role === "seller" ? list.seller : "";
+  const { main, others } = useMemo(
+    () => (role === "seller" ? splitSellerItems(items, seller) : { main: items, others: NO_ROWS }),
+    [items, role, seller]
   );
-  const shown = useMemo(() => visibleItems(items, { filter, search, role }), [items, filter, search, role]);
-  // An order that can't be opened never gets a status on the buyer's side: don't wait for it.
-  const statusesLoading = items.some((i) => !i.status && i.openState !== "unreadable" && i.openState !== "unavailable");
+  const { counts, loading: statusesLoading } = useMemo(
+    () => (role === "seller" ? sellerStatusCounts(main, seller) : buyerCounts(main)),
+    [main, role, seller]
+  );
+  const shown = useMemo(
+    () => visibleItems(main, { filter, search, role, seller: role === "seller" ? seller : undefined }),
+    [main, filter, search, role, seller]
+  );
 
   if (meta.phase === "error" && items.length === 0) {
     return (
@@ -104,67 +184,75 @@ export function OrderListView({
   }
   if ((meta.phase === "loading" || meta.phase === "idle") && items.length === 0) return <OrderListSkeleton />;
   if (items.length === 0 && !meta.hasMore) return <>{empty}</>;
-  if (items.length === 0) {
-    // The pages read so far held only other shops' orders (a longer id with the same start): look further.
-    return (
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-        <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: "center", pt: 2 }}>
-          No orders found in the first {meta.offset} results.
-        </Typography>
-        <LoadMore hasMore loading={meta.loadingMore} failed={meta.moreError} onLoadMore={list.loadMore} />
-      </Box>
-    );
-  }
 
   const more = meta.hasMore;
   const filtered = filter !== "all" || search.trim() !== "";
+  let content: ReactNode;
+  if (main.length === 0) {
+    // Nothing of this shop's in the pages read so far (another shop's orders, or rows not counted): look further.
+    content = more ? (
+      <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: "center", pt: 2 }}>
+        No orders found in the first {meta.offset} results.
+      </Typography>
+    ) : (
+      empty
+    );
+  } else {
+    content = (
+      <>
+        <StatusFilterBar
+          value={filter}
+          onChange={onFilterChange}
+          counts={counts}
+          total={main.length}
+          more={more}
+          role={role}
+          statusesLoading={statusesLoading}
+        />
+        {shown.length === 0 ? (
+          <Box
+            role="status"
+            sx={{ py: 4, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}
+          >
+            <Typography sx={{ fontWeight: 700 }}>
+              {search.trim()
+                ? `No orders from “${search.trim()}”${more ? " in the orders loaded so far" : ""}`
+                : `${noneText(filter, role)}${more ? " in the orders loaded so far" : ""}`}
+            </Typography>
+            {filtered && (
+              <Button
+                variant="outlined"
+                sx={{ minHeight: 44 }}
+                onClick={() => {
+                  if (search.trim() && onClearSearch) onClearSearch();
+                  else onFilterChange("all");
+                }}
+              >
+                {search.trim() && onClearSearch ? "Clear search" : "Show all orders"}
+              </Button>
+            )}
+          </Box>
+        ) : (
+          <Box
+            component="ul"
+            aria-label={role === "seller" ? "Orders received" : "Your orders"}
+            sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}
+          >
+            {shown.map((item) => (
+              <Box component="li" key={item.row.id} sx={{ minWidth: 0 }}>
+                <OrderCard item={item} role={role} onOpen={onOpen} onRetry={(row) => void list.retry(row)} />
+              </Box>
+            ))}
+          </Box>
+        )}
+      </>
+    );
+  }
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <StatusFilterBar
-        value={filter}
-        onChange={onFilterChange}
-        counts={counts}
-        total={items.length}
-        more={more}
-        role={role}
-        statusesLoading={statusesLoading}
-      />
-      {shown.length === 0 ? (
-        <Box
-          role="status"
-          sx={{ py: 4, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}
-        >
-          <Typography sx={{ fontWeight: 700 }}>
-            {search.trim()
-              ? `No orders from “${search.trim()}”${more ? " in the orders loaded so far" : ""}`
-              : `${noneText(filter, role)}${more ? " in the orders loaded so far" : ""}`}
-          </Typography>
-          {filtered && (
-            <Button
-              variant="outlined"
-              sx={{ minHeight: 44 }}
-              onClick={() => {
-                if (search.trim() && onClearSearch) onClearSearch();
-                else onFilterChange("all");
-              }}
-            >
-              {search.trim() && onClearSearch ? "Clear search" : "Show all orders"}
-            </Button>
-          )}
-        </Box>
-      ) : (
-        <Box
-          component="ul"
-          aria-label={role === "seller" ? "Orders received" : "Your orders"}
-          sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}
-        >
-          {shown.map((item) => (
-            <Box component="li" key={item.row.id} sx={{ minWidth: 0 }}>
-              <OrderCard item={item} role={role} onOpen={onOpen} onRetry={(row) => void list.retry(row)} />
-            </Box>
-          ))}
-        </Box>
-      )}
+      {content}
+      {others.length > 0 && <UncountedOrders items={others} onRetry={(row) => void list.retry(row)} />}
       <LoadMore hasMore={more} loading={meta.loadingMore} failed={meta.moreError} onLoadMore={list.loadMore} />
     </Box>
   );

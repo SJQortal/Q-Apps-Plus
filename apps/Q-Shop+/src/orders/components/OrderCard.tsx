@@ -32,6 +32,28 @@ const cardSx = {
 } as const;
 
 /**
+ * A row of a seller's list whose order opened but names another seller: a
+ * shop with the same id under another name. Not a button: it isn't this
+ * seller's order to handle or to update.
+ */
+export function ForeignOrderCard({ item }: { item: OrderListItem }) {
+  const date = formatOrderDate(item.row.created);
+  return (
+    <Box sx={cardSx}>
+      <Box sx={{ flexShrink: 0 }}>
+        <NameAvatar name={item.row.user} size={40} />
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{item.row.user}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          This order names another seller, so it isn't yours to handle.{date && ` · ${date}`}
+        </Typography>
+      </Box>
+    </Box>
+  );
+}
+
+/**
  * One order in a list. Opened: the whole card is a button that opens the
  * order. Still opening: the card's shape with placeholders. Not on the node
  * yet: "Fetching from peers…". Failed: "Couldn't open this order" and Retry.

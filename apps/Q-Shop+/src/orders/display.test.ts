@@ -11,7 +11,7 @@ import {
   orderTotal,
 } from "./format";
 import { paymentSummary, paymentWarnings } from "./payment";
-import { visibleItems } from "./listView";
+import { sellerRowKind, sellerStatusCounts, splitSellerItems, visibleItems } from "./listView";
 import { orderJson } from "./testing";
 import type { OrderListItem } from "./selectors";
 
@@ -183,5 +183,49 @@ describe("list filters", () => {
     expect(visibleItems(items, { filter: "all", role: "buyer" }).map((i) => i.row.id)).toEqual(["1", "2", "3", "4"]);
     expect(visibleItems(items, { filter: "Received", role: "seller" }).map((i) => i.row.id)).toEqual(["2"]);
     expect(visibleItems(items, { filter: "all", role: "seller", search: " d" }).map((i) => i.row.id)).toEqual(["4"]);
+  });
+
+  it("counts as To handle only opened orders naming the seller; rows it can't open or another seller's stay apart", () => {
+    const SELLER = "Seller Name";
+    const opened = (id: string, status: string | null, sellerName: string | undefined = SELLER): OrderListItem => ({
+      ...item(id, "Buyer", status),
+      order: { id, user: "Buyer", created: 1, updated: 1, sellerName },
+    });
+    const rows: OrderListItem[] = [
+      opened("mine-received", "Received"),
+      opened("mine-shipped", "Shipped"),
+      // Same short id under another owner: the order opens but names them (status "Received": no document).
+      opened("foreign", "Received", "Other Owner"),
+      { ...opened("nameless", "Received"), order: { id: "nameless", user: "Buyer", created: 1, updated: 1 } },
+      // Not decryptable or not on the node.
+      { ...item("unreadable", "X", "Received"), openState: "unreadable" },
+      { ...item("unavailable", "Y", "Received"), openState: "unavailable" },
+      // Not opened yet: the seller's own Refunded settles it; a bare "Received" waits for the order.
+      item("pending-refunded", "Z", "Refunded"),
+      item("pending-received", "W", "Received"),
+      opened("mine-other-case", "Received", "seller name"),
+    ];
+    expect(sellerRowKind(rows[0], SELLER)).toBe("mine");
+    expect(sellerRowKind(rows[2], SELLER)).toBe("other");
+    expect(sellerRowKind(rows[7], SELLER)).toBe("pending");
+    const { main, others } = splitSellerItems(rows, SELLER);
+    expect(others.map((i) => i.row.id)).toEqual(["foreign", "nameless", "unreadable", "unavailable"]);
+    expect(sellerStatusCounts(main, SELLER)).toEqual({
+      counts: { Received: 2, Shipped: 1, Refunded: 1, unknown: 1 },
+      loading: true,
+    });
+    expect(visibleItems(main, { filter: "Received", role: "seller", seller: SELLER }).map((i) => i.row.id)).toEqual([
+      "mine-received",
+      "mine-other-case",
+    ]);
+    expect(visibleItems(main, { filter: "Refunded", role: "seller", seller: SELLER }).map((i) => i.row.id)).toEqual([
+      "pending-refunded",
+    ]);
+    // Once the last pending order opens, nothing is left undecided.
+    const settled = main.map((i) => (i.row.id === "pending-received" ? opened("pending-received", "Received") : i));
+    expect(sellerStatusCounts(settled, SELLER)).toEqual({
+      counts: { Received: 3, Shipped: 1, Refunded: 1, unknown: 0 },
+      loading: false,
+    });
   });
 });

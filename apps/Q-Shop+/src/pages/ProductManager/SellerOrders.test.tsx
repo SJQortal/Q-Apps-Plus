@@ -27,6 +27,18 @@ function world(): World {
   return w;
 }
 
+/**
+ * Two newer rows the shop's search also finds that aren't this seller's orders: one from
+ * another owner's shop with the same id (it opens, and names that owner), and one that
+ * can't be read (spam, or encrypted to someone else).
+ */
+function withUncounted(w: World): World {
+  addOrder(w, "F0", 2010, { buyer: "Gina", seller: "Other Owner", storeName: "Other shop" });
+  addOrder(w, "U0", 2011, { buyer: "Hank" });
+  w.orders.find((o) => o.identifier === "q-store-order-my-shop-U0")!.json = { not: "an order" };
+  return w;
+}
+
 function sellerStore() {
   const store = createAppStore();
   store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
@@ -96,14 +108,17 @@ describe("the seller's Orders tab", () => {
     hostile.json = {
       ...hostile.json,
       storeName: { evil: true },
-      sellerName: 42,
       payment: { total: { x: 1 }, currency: 7, transactionSignature: ["s"], arrrAddressUsed: 9, foreignTxid: {} },
       details: { totalPrice: [], junk: "text", [`p`]: { product: { title: { t: 1 }, images: [{}] }, quantity: "2", pricePerUnit: "x" } },
     };
+    // Its seller's name isn't text either: it doesn't name this seller, so it isn't counted as theirs.
+    const nameless = w.orders.find((o) => o.identifier === "q-store-order-my-shop-S0")!;
+    nameless.json = { ...hostile.json, sellerName: 42 };
     installMockNode(w);
     renderWithProviders(<OrdersTab />, { store: sellerStore() });
     const list = await screen.findByRole("list", { name: "Orders received" });
     await waitFor(() => expect(names(list)).toContain("Dave"));
+    expect(await screen.findByText("Orders not counted (1)")).toBeInTheDocument();
     const dave = within(list)
       .getAllByRole("button")
       .find((b) => b.textContent?.includes("Dave"))!;
@@ -112,6 +127,29 @@ describe("the seller's Orders tab", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Order from Dave")).toBeInTheDocument();
     expect(within(dialog).getByText("Not recorded in this order.")).toBeInTheDocument();
+  });
+
+  it("keeps orders it can't open, and orders naming another seller, out of To handle and the filters", async () => {
+    const w = withUncounted(world());
+    installMockNode(w);
+    renderWithProviders(<OrdersTab />, { store: sellerStore() });
+    const list = await screen.findByRole("list", { name: "Orders received" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "To handle · 3" })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "All · 6" })).toBeInTheDocument();
+    await waitFor(() => expect(names(list)).toEqual(["Dave", "Bob", "Alice", "Frank", "Erin", "Carol"]));
+    fireEvent.click(screen.getByRole("button", { name: "To handle · 3" }));
+    await waitFor(() => expect(names(screen.getByRole("list", { name: "Orders received" }))).toEqual(["Dave", "Bob", "Alice"]));
+
+    // Shown apart, folded.
+    expect(screen.getByText("Orders not counted (2)")).toBeInTheDocument();
+    expect(screen.queryByText("Gina")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show" }));
+    const apart = screen.getByRole("list", { name: "Orders not counted" });
+    expect(within(apart).getByText("Gina")).toBeInTheDocument();
+    expect(within(apart).getByText(/This order names another seller/)).toBeInTheDocument();
+    expect(within(apart).getByText("Hank")).toBeInTheDocument();
+    expect(within(apart).getByText("Couldn't open this order")).toBeInTheDocument();
+    expect(within(apart).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   it("loads again when the list is reset while it shows (another shop picked)", async () => {
@@ -200,6 +238,20 @@ describe("the seller overview", () => {
     expect(onOpenTab).toHaveBeenLastCalledWith("products");
     fireEvent.click(screen.getByRole("button", { name: "Reviews" }));
     expect(onOpenTab).toHaveBeenLastCalledWith("reviews");
+  });
+
+  it("doesn't count orders it can't open, or orders naming another seller", async () => {
+    installMockNode(withUncounted(world()));
+    renderWithProviders(<SellerOverview storeId={STORE_ID} onOpenTab={vi.fn()} />, { store: sellerStore() });
+    await waitFor(() => expect(screen.getByRole("button", { name: /3\s*To handle/ })).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /2\s*Shipped/ })).toBeInTheDocument();
+    expect(
+      await screen.findByText("2 orders under your shop's id couldn't be opened or name another seller. They aren't counted.")
+    ).toBeInTheDocument();
+    const latest = screen.getByRole("list", { name: "Latest orders" });
+    await waitFor(() => expect(within(latest).getAllByRole("button")).toHaveLength(5));
+    expect(within(latest).queryByText("Gina")).not.toBeInTheDocument();
+    expect(within(latest).queryByText("Hank")).not.toBeInTheDocument();
   });
 
   it("doesn't say there are no orders when other shops' orders filled the pages it read", async () => {

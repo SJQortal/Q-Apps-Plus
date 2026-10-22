@@ -11,6 +11,8 @@ import { selectItems, type OrderListItem } from "./selectors";
 export interface OrderList {
   items: OrderListItem[];
   meta: OrderListMeta;
+  /** A seller's list: the shop owner's name (rows naming another seller aren't theirs). "" for the buyer's list. */
+  seller: string;
   loadMore: () => Promise<boolean>;
   refresh: () => Promise<boolean>;
   retry: (row: Order) => Promise<boolean>;
@@ -61,7 +63,8 @@ function useOrderList(owner: ListOwner | null): OrderList {
   const refresh = useCallback(() => (owner ? loadOrders(store, owner, "refresh") : Promise.resolve(false)), [store, owner]);
   const retry = useCallback((row: Order) => (owner ? retryOrder(store, owner, row) : Promise.resolve(false)), [store, owner]);
 
-  return { items: mine ? items : NO_ITEMS, meta: mine ? meta : IDLE, loadMore, refresh, retry };
+  const seller = owner?.kind === "seller" ? owner.seller : "";
+  return { items: mine ? items : NO_ITEMS, meta: mine ? meta : IDLE, seller, loadMore, refresh, retry };
 }
 
 /** The orders the signed-in name placed (My orders). */
