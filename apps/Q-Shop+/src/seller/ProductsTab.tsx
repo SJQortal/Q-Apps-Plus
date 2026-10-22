@@ -67,7 +67,17 @@ const dateFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "
 
 export function StatusChip({ status }: { status: string }) {
   const s = statusOf({ status });
-  return <Chip size="small" variant="outlined" color={STATUS_COLOR[s]} label={STATUS_LABEL[s]} sx={{ fontWeight: 600 }} />;
+  // The status colour is the border; the text stays text.primary, because
+  // orange (and blue) text on white is under 4.5:1 in the light themes.
+  const tone = STATUS_COLOR[s];
+  return (
+    <Chip
+      size="small"
+      variant="outlined"
+      label={STATUS_LABEL[s]}
+      sx={{ fontWeight: 600, color: "text.primary", ...(tone === "default" ? {} : { borderColor: `${tone}.main` }) }}
+    />
+  );
 }
 
 interface ProductsTabProps {
@@ -459,7 +469,9 @@ const ProductRow = memo(function ProductRow({ row, details, load, edited, openin
               <AmountTag value={row.priceQort} coin="QORT" size="small" />
             </Box>
             {row.category && <span>{row.category}</span>}
-            {edited && <Chip size="small" color="info" variant="outlined" label="Edited, not published" />}
+            {edited && (
+              <Chip size="small" variant="outlined" label="Edited, not published" sx={{ color: "text.primary", borderColor: "info.main" }} />
+            )}
             {opening && <span role="status">Opening…</span>}
           </Box>
         </Box>
