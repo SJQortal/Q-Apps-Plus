@@ -120,7 +120,7 @@ export const ProductForm = ({ values, onChange, coins, shop, categories, editing
           />
         )}
         <Typography variant="body2" color="text.secondary">
-          Up to {MAX_PRODUCT_IMAGES} images. The first is the one buyers see in lists.
+          The first image is the one buyers see in lists.
         </Typography>
       </Box>
 

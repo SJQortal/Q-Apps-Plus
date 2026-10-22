@@ -71,9 +71,11 @@ interface ProductsTabProps {
   onEdit: (product: Record<string, any> & { id: string }) => void;
   /** The product index is loaded and belongs to the current shop. */
   ready: boolean;
+  /** Not ready yet, and still loading (else the status card above says why). */
+  loading?: boolean;
 }
 
-export function ProductsTab({ onAdd, onEdit, ready }: ProductsTabProps) {
+export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsTabProps) {
   const phone = usePhoneLayout();
   const owner = useSelector((state: RootState) => state.global.currentStore?.owner || state.auth.user?.name);
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
@@ -166,6 +168,9 @@ export function ProductsTab({ onAdd, onEdit, ready }: ProductsTabProps) {
     </TextField>
   );
 
+  if (!ready && !loading) {
+    return <EmptyState title="Your products show here once your product list loads" description="See the note above." />;
+  }
   if (!ready) {
     return (
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }} aria-busy="true" aria-label="Loading products">

@@ -213,9 +213,8 @@ export const ProductManager = () => {
             onChange={(_, value) => setTab(value)}
             variant="scrollable"
             scrollButtons="auto"
-            allowScrollButtonsMobile
             aria-label="Seller tools"
-            sx={{ "& .MuiTab-root": { minHeight: 48, textTransform: "none", fontWeight: 600 } }}
+            sx={{ "& .MuiTab-root": { minHeight: 48, minWidth: 0, px: { xs: 1.5, sm: 2 }, textTransform: "none", fontWeight: 600 } }}
           >
             {SELLER_TABS.map((t) => (
               <Tab key={t} value={t} label={TAB_LABEL[t]} id={`seller-tab-${t}`} aria-controls={`seller-panel-${t}`} />
@@ -224,7 +223,14 @@ export const ProductManager = () => {
         </Box>
         <Box role="tabpanel" id={`seller-panel-${tab}`} aria-labelledby={`seller-tab-${tab}`} sx={{ minWidth: 0 }}>
           {tab === "overview" && <SellerOverview {...overviewProps} />}
-          {tab === "products" && <ProductsTab ready={ready} onAdd={openAdd} onEdit={openEdit} />}
+          {tab === "products" && (
+            <ProductsTab
+              ready={ready}
+              loading={ownShopStatus === "idle" || ownShopStatus === "loading" || ownShopStatus === "ready"}
+              onAdd={openAdd}
+              onEdit={openEdit}
+            />
+          )}
           {tab === "orders" && <OrdersTab />}
           {tab === "reviews" && (
             <ReviewsPanel storeId={currentStore.id} storeTitle={currentStore.title} storeImage={currentStore.logo || ""} />
