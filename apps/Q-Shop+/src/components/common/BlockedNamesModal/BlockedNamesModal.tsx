@@ -15,7 +15,7 @@ import PersonOffOutlinedIcon from "@mui/icons-material/PersonOffOutlined";
 import { ResponsiveDialog } from "../mobile/ResponsiveDialog";
 import { EmptyState } from "../EmptyState";
 import { setNotification } from "../../../state/features/notificationsSlice";
-import { HUB_DIALOG_GRACE_MS, errorMessage, isHubDecline, isHubTimeout } from "../../../qdn/hubErrors";
+import { HUB_DIALOG_GRACE_MS, isHubDecline, isHubTimeout, isPublicNodeRefusal } from "../../../qdn/hubErrors";
 
 /** The list the original Q-Shop reads and writes (shared with Q-Blog). */
 export const BLOCKED_NAMES_LIST = "blockedNames_q-blog";
@@ -27,14 +27,7 @@ export const BLOCKED_NAMES_LIST = "blockedNames_q-blog";
  */
 export const RECHECK_AFTER_TIMEOUT_MS = HUB_DIALOG_GRACE_MS;
 
-// Hub's no_action_public_node string in its twelve languages (Q-Mail+ utils/hubErrors.ts).
-const PUBLIC_NODE =
-  /public node|öffentlichen node|nodo p[uú]b+lico|avaliku|julkisen solmun|n[oœ]e?ud public|パブリックノード|nó público|публичн|公共节点|نود عام/i;
-
-/** True when Hub refused a list action because the node is a public one. */
-export function isPublicNodeRefusal(error: unknown): boolean {
-  return PUBLIC_NODE.test(errorMessage(error, ""));
-}
+export { isPublicNodeRefusal };
 
 export const PUBLIC_NODE_TEXT = "Not available on a public node";
 

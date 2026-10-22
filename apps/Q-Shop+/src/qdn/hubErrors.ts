@@ -36,3 +36,15 @@ export function isHubTimeout(error: unknown): boolean {
  * long, when the dialog is gone either way.
  */
 export const HUB_DIALOG_GRACE_MS = 35_000;
+
+// Hub's no_action_public_node string in its twelve languages (Q-Mail+ utils/hubErrors.ts).
+const PUBLIC_NODE =
+  /public node|öffentlichen node|nodo p[uú]b+lico|avaliku|julkisen solmun|n[oœ]e?ud public|パブリックノード|nó público|публичн|公共节点|نود عام/i;
+
+/**
+ * True when Hub refused a list action (GET/ADD/DELETE_LIST_ITEMS) because it
+ * runs on a public node (docs/QORTAL.md → pitfall 13): handle it quietly.
+ */
+export function isPublicNodeRefusal(error: unknown): boolean {
+  return PUBLIC_NODE.test(errorMessage(error, ""));
+}
