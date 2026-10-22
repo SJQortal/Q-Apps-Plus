@@ -355,7 +355,13 @@ The same-identifier question ("can another name's shop with the same id get mixe
 
 ## Follow-ups
 
-**New questions (round 5)**
+**Answered on 2026-10-22, second batch (14–20); three to build next:**
+- **14 → build:** a collection opens in the order the seller picked its products (the collection's `products` array order), as the default sort inside a collection; buyers can still choose Newest, Oldest or a price sort. A product can stay in several collections.
+- **15 → build:** the product page names the product's collections ("In: Gifts for friends"), each linked to `?collection=<id>`; one small read of the shop's collections document (cached; only when the product list points at one).
+- **19 → build:** the product form offers a short shared category list first (e.g. Art, Books, Clothing, Digital, Electronics, Food & drink, Health & beauty, Home & garden, Services, Other), then the shop's own earlier categories; sellers can still type their own. Still the same plain-text `category` field, so the original keeps working; the Products page's categories then group better.
+- **16, 17, 18, 20 → keep as built:** Automatic stays the default view; Products prices stay in QORT; Settings stays a gear in the phone header (bar: Shops, Products, Cart, Orders, Sell); the Products search keeps its cap of 30 catalogues.
+
+**Round 5 questions, as they were asked**
 
 14. **Collections:** a product can be in several collections, and inside a collection the products follow the shop's sort (newest first) rather than the order you picked them in. Keep, or show a collection in your picked order?
 15. **Collections elsewhere:** they show on the shop page only. Also show them in the product page ("In collection: Gifts") or on the home page?
