@@ -15,7 +15,7 @@
  *   `container-missing` (confirmed by a search), and the seller page offers
  *   to create it; an index that exists but can't be read is `unavailable`.
  */
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "../state/store";
 import {
@@ -86,21 +86,29 @@ export async function findOwnShops(name: string, fresh = false): Promise<Store[]
 }
 
 /** Loads one of the user's shops as the current one: its JSON and its product index. */
-export async function loadOwnShop(dispatch: AppDispatch, shop: Store, options: { fresh?: boolean } = {}) {
+export async function loadOwnShop(
+  dispatch: AppDispatch,
+  shop: Store,
+  options: { fresh?: boolean; isCurrent?: () => boolean } = {}
+) {
+  // A name switch while this loads must not let the old name's shop land.
+  const current = options.isCurrent ?? (() => true);
   dispatch(setOwnShopStatus("loading"));
   try {
     const json = await fetchQdnJson("STORE", shop.owner, shop.id, options);
+    if (!current()) return;
     if (checkStructureStore(json)) {
       dispatch(addToHashMapStores({ ...shop, ...json, owner: shop.owner, id: shop.id, isValid: true }));
     }
     dispatch(setCurrentStore(currentStoreFrom(shop.id, shop.owner, json, shop)));
   } catch {
-    dispatch(setOwnShopStatus("unavailable"));
+    if (current()) dispatch(setOwnShopStatus("unavailable"));
     return;
   }
   const containerId = dataContainerIdentifier(shop.id);
   try {
     const container = await fetchQdnJson("DOCUMENT", shop.owner, containerId, options);
+    if (!current()) return;
     if (container && typeof container === "object" && (container as { products?: unknown }).products) {
       dispatch(setDataContainer({ ...(container as object), id: containerId }));
       dispatch(setOwnShopStatus("ready"));
@@ -109,7 +117,7 @@ export async function loadOwnShop(dispatch: AppDispatch, shop: Store, options: {
     throw new Error("Not a product index");
   } catch {
     const exists = await resourceExists("DOCUMENT", shop.owner, containerId, { fresh: true }).catch(() => true);
-    dispatch(setOwnShopStatus(exists ? "unavailable" : "container-missing"));
+    if (current()) dispatch(setOwnShopStatus(exists ? "unavailable" : "container-missing"));
   }
 }
 
@@ -121,20 +129,27 @@ export function useOwnShops(): { reload: () => void } {
   const currentStoreId = useSelector((state: RootState) => state.global.currentStore?.id);
   const myStores = useSelector((state: RootState) => state.store.myStores);
 
+  const activeName = useRef(name);
+  useEffect(() => {
+    activeName.current = name;
+  }, [name]);
+
   const load = useCallback(
     async (fresh = false) => {
       if (!name) return;
+      const isCurrent = () => activeName.current === name;
       dispatch(setOwnShopStatus("loading"));
       try {
         const shops = await findOwnShops(name, fresh);
+        if (!isCurrent()) return;
         dispatch(setAllMyStores(shops));
         if (shops.length === 0) {
           dispatch(setOwnShopStatus("none"));
           return;
         }
-        await loadOwnShop(dispatch, shops[0], { fresh });
+        await loadOwnShop(dispatch, shops[0], { fresh, isCurrent });
       } catch {
-        dispatch(setOwnShopStatus("error"));
+        if (isCurrent()) dispatch(setOwnShopStatus("error"));
       }
     },
     [dispatch, name]
@@ -148,7 +163,7 @@ export function useOwnShops(): { reload: () => void } {
   useEffect(() => {
     if (!recentlyVisitedStoreId || recentlyVisitedStoreId === currentStoreId) return;
     const shop = myStores.find((s) => s.id === recentlyVisitedStoreId);
-    if (shop) loadOwnShop(dispatch, shop);
+    if (shop) loadOwnShop(dispatch, shop, { isCurrent: () => activeName.current === shop.owner });
   }, [recentlyVisitedStoreId, currentStoreId, myStores, dispatch]);
 
   return { reload: () => load(true) };
