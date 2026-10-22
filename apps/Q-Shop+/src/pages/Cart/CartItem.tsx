@@ -71,6 +71,7 @@ export function CartItem({
   onQuantity,
   onRemove,
   onRetry,
+  quiet = false,
 }: {
   line: CartViewLine;
   owner: string;
@@ -85,6 +86,8 @@ export function CartItem({
   onQuantity: (quantity: number) => void;
   onRemove: () => void;
   onRetry: () => void;
+  /** Its shop was deleted: the shop's own note says so, once, so the line has none. */
+  quiet?: boolean;
 }) {
   if (line.state === "loading" || line.state === "fetching") {
     return <CartItemSkeleton fetching={line.state === "fetching"} />;
@@ -150,7 +153,7 @@ export function CartItem({
         {line.state === "unavailable" && (
           <LineNote>{product?.status === "OUT_OF_STOCK" ? "Out of stock" : "No longer sold"}: left out of checkout</LineNote>
         )}
-        {line.state === "gone" && <LineNote>The seller removed this product: left out of checkout</LineNote>}
+        {line.state === "gone" && !quiet && <LineNote>The seller removed this product: left out of checkout</LineNote>}
         {line.state === "failed" && <LineNote>Not available on your node right now: left out of checkout</LineNote>}
 
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1, mt: 1 }}>

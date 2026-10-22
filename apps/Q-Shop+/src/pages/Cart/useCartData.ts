@@ -4,8 +4,11 @@
  * the lines were added from.
  *
  * - A shop already in `hashMapStores` from its JSON (a shop page or the home
- *   list loaded it) is used as is; otherwise its STORE JSON is read through
- *   the session cache (fetchQdnJson), by owner and identifier.
+ *   list loaded it) shows at once; every cart's shop is also read once,
+ *   fresh, each time the cart page opens (fetchQdnJson, by owner and
+ *   identifier), so a shop deleted since (round 5) can't be paid, and a
+ *   changed payout address is the one paid. A deleted shop is also known
+ *   from the home list and the shop page (discovery/shopDetails).
  * - A catalogue already in `catalogueHashMap` (for this owner) is used as is;
  *   otherwise it is fetched with the app's catalogue reader and kept here by
  *   owner + identifier. That map is keyed by identifier only, and another
@@ -24,6 +27,8 @@ import type { Cart } from "../../state/features/cartSlice";
 import { setCatalogueHashMap, type Catalogue } from "../../state/features/globalSlice";
 import { addToHashMapStores, type Store } from "../../state/features/storeSlice";
 import { QdnDeletedError, fetchQdnJson } from "../../qdn/search";
+import { useShopDetailsSnapshot } from "../../discovery/shopDetails";
+import { shopKey as listedShopKey } from "../../discovery/shopIndex";
 import { isJsonFromBeforeDelete } from "../../qdn/deleted";
 import { fetchAndEvaluateCatalogues } from "../../utils/fetchCatalogues";
 import { checkStructureStore } from "../../utils/checkStructure";
@@ -91,20 +96,21 @@ export function useCartData(carts: Record<string, Cart>): {
     [hashMapStores, readShops]
   );
 
+  // Every cart's shop, read once per visit (a known copy shows meanwhile).
   const shopJobs = useMemo(() => {
     const jobs: LoadJob<ShopJob>[] = [];
     for (const cart of cartList) {
-      if (!cart.storeOwner || !cart.storeId || shopOf(cart)) continue;
+      if (!cart.storeOwner || !cart.storeId) continue;
       jobs.push({ key: shopKey(cart.storeOwner, cart.storeId), item: { storeId: cart.storeId, owner: cart.storeOwner } });
     }
     return jobs;
-  }, [cartList, shopOf]);
+  }, [cartList]);
 
   const loadShop = useCallback(
     async ({ storeId, owner }: ShopJob): Promise<boolean | "gone"> => {
       let json: unknown;
       try {
-        json = await fetchQdnJson("STORE", owner, storeId);
+        json = await fetchQdnJson("STORE", owner, storeId, { fresh: true });
       } catch (error) {
         // Its owner deleted the shop: its items can't be bought, and asking again won't change that.
         if (error instanceof QdnDeletedError) return "gone";
@@ -135,7 +141,17 @@ export function useCartData(carts: Record<string, Cart>): {
     [catalogueHashMap, readCatalogues]
   );
 
-  const { phaseOf: shopPhaseOf, retry: retryShopLoad } = useRetryingLoads(shopJobs, loadShop);
+  const { phaseOf: loadPhaseOf, retry: retryShopLoad } = useRetryingLoads(shopJobs, loadShop);
+  // Deleted as this page read it, or as the home list or a shop page did.
+  const details = useShopDetailsSnapshot();
+  const shopPhaseOf = useCallback(
+    (owner: string, storeId: string) => {
+      const listed = details.get(listedShopKey(owner, storeId));
+      if (listed?.status === "ready" && listed.deleted) return "gone" as const;
+      return loadPhaseOf(shopKey(owner, storeId));
+    },
+    [details, loadPhaseOf]
+  );
 
   const catalogueJobs = useMemo(() => {
     const jobs: LoadJob<CatalogueJob>[] = [];
@@ -144,7 +160,7 @@ export function useCartData(carts: Record<string, Cart>): {
       const owner = cart.storeOwner;
       if (!owner) continue;
       // A deleted shop's products are gone with it: nothing to read.
-      if (cart.storeId && shopPhaseOf(shopKey(owner, cart.storeId)) === "gone") continue;
+      if (cart.storeId && shopPhaseOf(owner, cart.storeId) === "gone") continue;
       for (const order of Object.values(cart.orders)) {
         const key = shopKey(owner, order.catalogueId);
         if (seen.has(key) || catalogueOf(owner, order.catalogueId)) continue;
@@ -175,8 +191,9 @@ export function useCartData(carts: Record<string, Cart>): {
       cartEntries.map(([key, cart]): ShopCartView => {
         const storeId = cart.storeId ?? "";
         const owner = cart.storeOwner;
-        const shop = shopOf(cart);
-        const shopPhase = owner ? shopPhaseOf(shopKey(owner, storeId)) : "failed";
+        const shopPhase = owner ? shopPhaseOf(owner, storeId) : "failed";
+        // A deleted shop is gone, whatever copy the session still holds.
+        const shop = shopPhase === "gone" ? null : shopOf(cart);
         return {
           key,
           storeId,

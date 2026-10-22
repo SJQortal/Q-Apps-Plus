@@ -7,6 +7,7 @@ import { useShopCoin } from "../../money/useShopCoin";
 import { coinLabel } from "../../money/coins";
 import type { CartLine } from "../../money/order";
 import { storePath } from "../../qdn/links";
+import { shortStoreIdOf } from "../../qdn/identifiers";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { CartItem } from "./CartItem";
 import { CoinPicker } from "./CoinPicker";
@@ -27,7 +28,8 @@ function ShopLogo({ src, title }: { src?: string; title: string }) {
 /**
  * One shop's cart on the cart page: the shop, its lines, the coin to pay
  * with, the subtotal, and Check out. Lines that can't be bought are flagged
- * and left out of checkout.
+ * and left out of checkout. A shop its owner deleted shows plainly: its
+ * name, the items, and Remove items, with nothing to check out.
  */
 export function ShopCart({
   view,
@@ -52,7 +54,8 @@ export function ShopCart({
   const headingId = useId();
   const { coins, coin, rate, rateLoading, rateError, setCoin } = useShopCoin(view.shop);
   const { shop, owner, storeId } = view;
-  const title = shop?.title || view.knownTitle || "Shop";
+  const gone = view.shopPhase === "gone";
+  const title = shop?.title || view.knownTitle || (gone ? shortStoreIdOf(storeId) : "") || "Shop";
   const lines = checkoutLinesOf(view.lines);
   const leftOut = view.lines.filter(isLeftOut).length;
   const loading = view.lines.some(isLoadingLine);
@@ -80,14 +83,14 @@ export function ShopCart({
       sx={{ p: { xs: 1.5, sm: 2.5 }, borderRadius: 2, mb: 2, [`@media ${PHONE_MEDIA}`]: { p: 1.5 } }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 0.5 }}>
-        {shop || view.knownTitle ? (
+        {shop || view.knownTitle || gone ? (
           <ShopLogo src={shop?.logo} title={title} />
         ) : (
           <Skeleton variant="rounded" width={44} height={44} />
         )}
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography id={headingId} component="h2" sx={{ fontSize: 17, fontWeight: 700, lineHeight: 1.3 }}>
-            {owner && storeId ? (
+            {owner && storeId && !gone ? (
               <Link component={RouterLink} to={storePath(owner, storeId)} underline="hover" color="text.primary" sx={{ overflowWrap: "anywhere" }}>
                 {shop || view.knownTitle ? title : <Skeleton width={160} />}
               </Link>
@@ -143,6 +146,7 @@ export function ShopCart({
         {view.lines.map((line) => (
           <CartItem
             key={line.productId}
+            quiet={gone}
             line={line}
             owner={owner ?? ""}
             storeId={storeId}
@@ -158,51 +162,53 @@ export function ShopCart({
         ))}
       </Box>
 
-      <Box sx={{ borderTop: 1, borderColor: "divider", pt: 2, display: "grid", gap: 1.5 }}>
-        {shop && <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />}
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-          <Typography sx={{ fontWeight: 700, fontSize: 16 }}>Subtotal</Typography>
-          {priced.ok ? (
-            <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} />
-          ) : (
-            <Typography color="text.secondary">—</Typography>
-          )}
-        </Box>
-        {!priced.ok && priced.reason === "price" && priced.missing.length > 0 && (
-          <Typography variant="body2" color="text.secondary">
-            {priced.missing.join(", ")} {priced.missing.length === 1 ? "has" : "have"} no price in {coinLabel(coin, shop)}.
-          </Typography>
-        )}
-        {!priced.ok && priced.reason === "no-rate" && (
-          <Typography variant="body2" color="text.secondary">
-            Your node has no {coin} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {coin}. Pick
-            another coin, or remove {priced.missing.length === 1 ? "it" : "them"} to pay in {coin}.
-          </Typography>
-        )}
-        {leftOut > 0 && (
-          <Typography variant="body2" color="text.secondary">
-            {leftOut === 1 ? "1 item can't be bought now and is" : `${leftOut} items can't be bought now and are`} left out of checkout.
-          </Typography>
-        )}
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: { xs: "stretch", sm: "flex-end" }, gap: 0.75 }}>
-          <Button
-            variant="contained"
-            size="large"
-            onClick={() => onCheckout(view, lines, leftOut)}
-            disabled={blocked !== undefined}
-            aria-describedby={blocked ? `${headingId}-why` : undefined}
-            aria-label={`Check out ${title}`}
-            sx={{ minHeight: 48, minWidth: { sm: 200 } }}
-          >
-            Check out
-          </Button>
-          {blocked && (
-            <Typography id={`${headingId}-why`} variant="body2" color="text.secondary">
-              {blocked}
+      {!gone && (
+        <Box sx={{ borderTop: 1, borderColor: "divider", pt: 2, display: "grid", gap: 1.5 }}>
+          {shop && <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />}
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+            <Typography sx={{ fontWeight: 700, fontSize: 16 }}>Subtotal</Typography>
+            {priced.ok ? (
+              <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} />
+            ) : (
+              <Typography color="text.secondary">—</Typography>
+            )}
+          </Box>
+          {!priced.ok && priced.reason === "price" && priced.missing.length > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {priced.missing.join(", ")} {priced.missing.length === 1 ? "has" : "have"} no price in {coinLabel(coin, shop)}.
             </Typography>
           )}
+          {!priced.ok && priced.reason === "no-rate" && (
+            <Typography variant="body2" color="text.secondary">
+              Your node has no {coin} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {coin}. Pick
+              another coin, or remove {priced.missing.length === 1 ? "it" : "them"} to pay in {coin}.
+            </Typography>
+          )}
+          {leftOut > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {leftOut === 1 ? "1 item can't be bought now and is" : `${leftOut} items can't be bought now and are`} left out of checkout.
+            </Typography>
+          )}
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: { xs: "stretch", sm: "flex-end" }, gap: 0.75 }}>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => onCheckout(view, lines, leftOut)}
+              disabled={blocked !== undefined}
+              aria-describedby={blocked ? `${headingId}-why` : undefined}
+              aria-label={`Check out ${title}`}
+              sx={{ minHeight: 48, minWidth: { sm: 200 } }}
+            >
+              Check out
+            </Button>
+            {blocked && (
+              <Typography id={`${headingId}-why`} variant="body2" color="text.secondary">
+                {blocked}
+              </Typography>
+            )}
+          </Box>
         </Box>
-      </Box>
+      )}
     </Paper>
   );
 }

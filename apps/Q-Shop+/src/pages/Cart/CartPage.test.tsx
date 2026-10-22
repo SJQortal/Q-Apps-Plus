@@ -244,9 +244,10 @@ describe("cart page", () => {
     );
     renderCart(store);
     expect(await screen.findByText("Its owner deleted this shop, so these items can't be bought.")).toBeInTheDocument();
-    expect(screen.getByText("The seller removed this product: left out of checkout")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Check out/ })).toBeDisabled();
-    expect(screen.getByText("This shop was deleted.")).toBeInTheDocument();
+    // Said once, plainly: the shop's id as its name, no note on each line, nothing to check out.
+    expect(screen.getByRole("heading", { level: 2, name: shop.shortStoreId })).toBeInTheDocument();
+    expect(screen.queryByText("The seller removed this product: left out of checkout")).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Check out/ })).toBeNull();
     await new Promise((resolve) => setTimeout(resolve, 100));
     // One read of the shop and one of its catalogue (they start together); neither is retried.
     expect(node.summary().resources).toEqual({ STORE: 1 });
@@ -255,6 +256,23 @@ describe("cart page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Remove items" }));
     expect(await screen.findByText("Your cart is empty")).toBeInTheDocument();
     expect(cartFor(store.getState().cart.carts, shop.owner, storeId)).toBeUndefined();
+  });
+
+  it("re-reads a shop it already knows, so one deleted since it was viewed can't be paid", async () => {
+    const world = makeWorld({ shops: 3 });
+    const shop = world.shops[0];
+    const storeId = `q-store-general-${shop.shortStoreId}`;
+    const store = newStore();
+    // Viewed earlier in the session: Redux holds its JSON.
+    store.dispatch(addToHashMapStores({ ...viewedStore, id: storeId, owner: shop.owner, isValid: true }));
+    store.dispatch(
+      setProductToCart({ productId: shop.products[1].id, catalogueId: `q-store-catalogue-${shop.shortStoreId}-CAT0000000`, storeId, storeOwner: shop.owner })
+    );
+    world.shops[0].deleted = "marked";
+    installMockNode(world);
+    renderCart(store);
+    expect(await screen.findByText("Its owner deleted this shop, so these items can't be bought.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Check out/ })).toBeNull();
   });
 
   it("knows a shop this browser just deleted is gone while the node still serves the old one", async () => {
