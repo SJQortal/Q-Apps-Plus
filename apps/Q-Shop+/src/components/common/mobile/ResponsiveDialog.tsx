@@ -17,6 +17,11 @@ export interface ResponsiveDialogProps {
   keepMounted?: boolean;
   /** Let clicks outside / Escape close it (default true). */
   dismissible?: boolean;
+  /**
+   * Something is running that must not be walked away from (a payment, a
+   * publish): Back/Close are hidden, and outside clicks and Escape do nothing.
+   */
+  busy?: boolean;
 }
 
 /**
@@ -34,12 +39,13 @@ export function ResponsiveDialog({
   maxWidth = "sm",
   keepMounted,
   dismissible = true,
+  busy = false,
 }: ResponsiveDialogProps) {
   const phone = usePhoneLayout();
   // Listeners only while a phone dialog is open: closed dialogs cost nothing.
   const viewport = useVisualViewport(open && phone);
   const titleId = useId();
-  const handleClose = dismissible ? onClose : undefined;
+  const handleClose = dismissible && !busy ? onClose : undefined;
 
   if (phone) {
     return (
@@ -82,14 +88,26 @@ export function ResponsiveDialog({
             borderColor: "divider",
           }}
         >
-          <IconButton aria-label="Back" onClick={onClose} sx={{ minWidth: 44, minHeight: 44 }}>
-            <ArrowBackIcon />
-          </IconButton>
+          {busy ? (
+            <Box sx={{ width: 44, height: 44, flexShrink: 0 }} />
+          ) : (
+            <IconButton aria-label="Back" onClick={onClose} sx={{ minWidth: 44, minHeight: 44 }}>
+              <ArrowBackIcon />
+            </IconButton>
+          )}
           <Typography id={titleId} component="h2" noWrap sx={{ flex: 1, fontSize: 18, fontWeight: 700 }}>
             {title}
           </Typography>
         </Box>
-        <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2 }}>{children}</Box>
+        {/* Focusable, so the keyboard can scroll it (axe scrollable-region-focusable). */}
+        <Box
+          tabIndex={0}
+          role="region"
+          aria-labelledby={titleId}
+          sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" } }}
+        >
+          {children}
+        </Box>
         {actions ? (
           <Box
             sx={{
@@ -119,11 +137,15 @@ export function ResponsiveDialog({
         <Box component="span" sx={{ flex: 1, minWidth: 0, fontWeight: 700 }}>
           {title}
         </Box>
-        <IconButton aria-label="Close" onClick={onClose}>
-          <CloseIcon />
-        </IconButton>
+        {!busy && (
+          <IconButton aria-label="Close" onClick={onClose}>
+            <CloseIcon />
+          </IconButton>
+        )}
       </DialogTitle>
-      <DialogContent dividers>{children}</DialogContent>
+      <DialogContent dividers tabIndex={0} role="region" aria-labelledby={titleId} sx={{ "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" } }}>
+        {children}
+      </DialogContent>
       {actions ? <DialogActions sx={{ p: 2 }}>{actions}</DialogActions> : null}
     </Dialog>
   );

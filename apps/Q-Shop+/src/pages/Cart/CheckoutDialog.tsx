@@ -440,7 +440,7 @@ export function CheckoutDialog({
   }
 
   return (
-    <ResponsiveDialog open onClose={close} title={title} actions={actions} dismissible={!running} maxWidth="sm">
+    <ResponsiveDialog open onClose={close} title={title} actions={actions} dismissible={!running} busy={running} maxWidth="sm">
       <Box ref={stepStart} tabIndex={-1} role="group" aria-label={title} sx={{ "&:focus": { outline: "none" } }}>
         {step !== "result" && step !== "running" && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
