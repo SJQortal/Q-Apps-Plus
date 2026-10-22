@@ -29,7 +29,8 @@ export const STATUS_LABEL: Record<string, string> = {
   RETIRED: "Retired",
 };
 
-export const PRODUCT_TYPES = ["digital", "physical"] as const;
+/** Physical first: the default for a new product (Simon, 2026-10-22). */
+export const PRODUCT_TYPES = ["physical", "digital"] as const;
 export const TYPE_LABEL: Record<string, string> = { digital: "Digital", physical: "Physical" };
 
 /** The original's limits: 3 images, a 180-character title. */
@@ -330,7 +331,7 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
       title: "",
       description: "",
       images: [],
-      type: "digital",
+      type: "physical",
       category: "",
       status: "AVAILABLE",
       prices: initialPriceText(null, coins),
@@ -343,7 +344,8 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
     title: typeof product.title === "string" ? product.title : "",
     description: typeof product.description === "string" ? product.description : "",
     images: Array.isArray(product.images) ? product.images.filter((i: unknown) => typeof i === "string") : [],
-    type: product.type === "physical" ? "physical" : "digital",
+    // As checkout reads it (money/order.ts): only "digital" skips the delivery address.
+    type: product.type === "digital" ? "digital" : "physical",
     category: typeof product.category === "string" ? product.category : "",
     status: (PRODUCT_STATUSES as readonly string[]).includes(product.status) ? product.status : "AVAILABLE",
     prices: initialPriceText(product as { price?: { currency: string; value: number }[] }, coins),

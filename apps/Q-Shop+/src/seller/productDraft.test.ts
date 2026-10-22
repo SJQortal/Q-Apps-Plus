@@ -172,7 +172,8 @@ describe("editing a product (bug 3: prices are kept)", () => {
       description: "",
       images: ["data:image/webp;base64,SU1H"],
       mainImageIndex: 0,
-      type: "digital",
+      // The row has no type: physical, as checkout reads a product without one.
+      type: "physical",
       isUpdate: true,
     });
     // No usable price in the row: the field starts empty.

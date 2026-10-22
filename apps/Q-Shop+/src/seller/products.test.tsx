@@ -239,11 +239,16 @@ describe("the products tab", () => {
     expect(cat.products[lamp.id]).toMatchObject({ title: "Lamp", catalogueId: CATALOGUE_ID, price: [{ currency: "qort", value: 3 }] });
   });
 
-  it("Add product puts a new product in Ready to publish, in the original's shape", async () => {
+  it("Add product puts a new product in Ready to publish, in the original's shape (physical by default)", async () => {
     stubNode();
     const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
     fireEvent.click(screen.getByRole("button", { name: "Add product" }));
     const dialog = await screen.findByRole("dialog", { name: "Add product" });
+    const types = within(within(dialog).getByRole("group", { name: "Type" })).getAllByRole("button");
+    expect(types.map((b) => [b.textContent, b.getAttribute("aria-pressed")])).toEqual([
+      ["Physical", "true"],
+      ["Digital", "false"],
+    ]);
     fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
     expect(await within(dialog).findByText("Add at least one image")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
@@ -272,7 +277,7 @@ describe("the products tab", () => {
     expect(added).toMatchObject({
       title: "Tea cup",
       images: ["data:image/webp;base64,TkVX"],
-      type: "digital",
+      type: "physical",
       price: [{ currency: "qort", value: 2.5 }],
       storeId: STORE_ID,
       shortStoreId: SHORT_STORE_ID,
