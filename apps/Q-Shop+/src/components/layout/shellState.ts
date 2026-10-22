@@ -11,6 +11,7 @@ import { allCartsItemCount } from "../../state/features/cartSlice";
 import { toggleCreateStoreModal, updateRecentlyVisitedStoreId } from "../../state/features/globalSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { listPendingOrders, subscribePendingOrders } from "../../money/pendingOrders";
+import { isEmbeddedFrame } from "../../utils/hubFrame";
 
 export interface ShellActions {
   /** Sign in with Hub, or explain how to get Qortal on a web gateway. */
@@ -32,12 +33,14 @@ export function useShellActions(): ShellActions {
 }
 
 /**
- * The original's test for a web gateway (its Authenticate button opened the
- * "Download Qortal" dialog there): the app is served over https. Hub and GO
- * serve it from the node, over http.
+ * A web gateway, where there is no Hub to sign in with (the original's
+ * Authenticate button opened the "Download Qortal" dialog there). The
+ * original tested for https only; Hub and GO can reach a node over https
+ * too, but they always show the app in a frame, and a gateway shows it as
+ * the page itself. So: https, and not in a frame.
  */
 export function isWebGateway(win: Window = window): boolean {
-  return win.location.protocol === "https:";
+  return win.location.protocol === "https:" && !isEmbeddedFrame(win);
 }
 
 /** Items in every shop's cart. */

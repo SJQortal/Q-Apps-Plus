@@ -94,9 +94,16 @@ describe("AppShell on desktop", () => {
     expect(screen.queryByRole("button", { name: "Sign in" })).toBeNull();
   });
 
-  it("tells a web gateway (https) from Hub and GO (http)", () => {
-    expect(isWebGateway({ location: { protocol: "https:" } } as Window)).toBe(true);
-    expect(isWebGateway({ location: { protocol: "http:" } } as Window)).toBe(false);
+  it("tells a web gateway (https, the page itself) from Hub and GO (in a frame, over http or https)", () => {
+    const page = (protocol: string, framed: boolean): Window => {
+      const win: { location: { protocol: string }; parent?: unknown } = { location: { protocol } };
+      win.parent = framed ? {} : win;
+      return win as unknown as Window;
+    };
+    expect(isWebGateway(page("https:", false))).toBe(true);
+    expect(isWebGateway(page("https:", true))).toBe(false);
+    expect(isWebGateway(page("http:", true))).toBe(false);
+    expect(isWebGateway(page("http:", false))).toBe(false);
   });
 
   it("counts every shop's cart items on the cart button", () => {
