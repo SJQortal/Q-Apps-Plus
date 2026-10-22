@@ -6,7 +6,6 @@ import { RootState } from "../../state/store";
 import { Box, Grid, useTheme } from "@mui/material";
 import LazyLoad from "../../components/common/LazyLoad";
 import { NewProduct } from "./NewProduct/NewProduct";
-import { ShowOrder } from "./ShowOrder/ShowOrder";
 import { SimpleTable } from "./ProductTable/ProductTable";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { objectToBase64 } from "../../utils/toBase64";
@@ -41,7 +40,7 @@ import {
   ProductManagerContainer,
   ProductsCol,
 } from "./ProductManager-styles";
-import { OrderTable } from "./OrderTable/OrderTable";
+import { OrdersTab } from "./OrdersTab";
 import { BackToStorefrontButton } from "../Store/Store/Store-styles";
 import { QortalSVG } from "../../assets/svgs/QortalSVG";
 import { CategorySVG } from "../../assets/svgs/CategorySVG";
@@ -89,8 +88,6 @@ export const ProductManager = () => {
 
   const { products: dataContainerProducts } = listProducts;
 
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [order, setOrder] = useState<any>(null);
   const [valueTab, setValueTab] = React.useState(0);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [openAddProduct, setOpenAddProduct] = useState<boolean>(false);
@@ -269,11 +266,7 @@ export const ProductManager = () => {
   };
 
   // Get products & orders from Redux
-  const { getOrders, getProducts } = useFetchOrders();
-
-  const handleGetOrders = React.useCallback(async () => {
-    await getOrders();
-  }, [getOrders]);
+  const { getProducts } = useFetchOrders();
 
   const handleGetProducts = React.useCallback(async () => {
     await getProducts();
@@ -453,21 +446,7 @@ export const ProductManager = () => {
         <LazyLoad onLoadMore={handleGetProducts}></LazyLoad>
       </TabPanel>
       <TabPanel value={valueTab} index={1}>
-        <ShowOrder
-          isOpen={isOpen}
-          setIsOpen={setIsOpen}
-          order={order}
-          from="ProductManager"
-        />
-        <OrderTable
-          openOrder={order => {
-            setOrder(order);
-            setIsOpen(true);
-          }}
-          data={orders}
-          from="ProductManager"
-        ></OrderTable>
-        <LazyLoad onLoadMore={handleGetOrders}></LazyLoad>
+        <OrdersTab />
       </TabPanel>
 
       {/* Confirm Remove Product from productsToSave in global state */}

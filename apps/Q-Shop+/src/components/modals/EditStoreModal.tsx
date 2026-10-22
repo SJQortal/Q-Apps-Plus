@@ -51,7 +51,7 @@ import { ARRRSVG } from "../../assets/svgs/ARRRSVG";
 import { ReusableModal } from "./ReusableModal";
 import { DATA_CONTAINER_BASE } from "../../constants/identifiers";
 import { objectToBase64 } from "../../utils/toBase64";
-import { ShortDataContainer } from "../../wrappers/GlobalWrapper";
+import { buildRecreateDataContainerPublish } from "../../qdn/payloads";
 import { setNotification } from "../../state/features/notificationsSlice";
 
 interface ForeignCoins {
@@ -198,22 +198,12 @@ const MyModal: React.FC<MyModalProps> = ({ open, onClose, onPublish }) => {
       return;
     }
     try {
-      const shortStoreId = currentStore?.shortStoreId;
-      const dataContainer: ShortDataContainer = {
+      const { dataContainer, request } = buildRecreateDataContainerPublish({
+        name: user.name,
         storeId: currentStore.id,
-        shortStoreId: shortStoreId,
-        owner: user.name,
-        products: {},
-      };
-      const dataContainerToBase64 = await objectToBase64(dataContainer);
-
-      const dataContainerCreated = await qortalRequest({
-        action: "PUBLISH_QDN_RESOURCE",
-        name: user?.name,
-        service: "DOCUMENT",
-        data64: dataContainerToBase64,
-        identifier: `${currentStore.id}-${DATA_CONTAINER_BASE}`,
+        shortStoreId: currentStore?.shortStoreId,
       });
+      const dataContainerCreated = await qortalRequest(request);
       if (dataContainerCreated && !dataContainerCreated.error) {
         dispatch(
           setDataContainer({

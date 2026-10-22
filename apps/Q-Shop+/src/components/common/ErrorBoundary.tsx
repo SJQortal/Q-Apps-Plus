@@ -2,6 +2,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react";
 import { Box } from "@mui/material";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { EmptyState } from "./EmptyState";
+import { APP_NAME } from "../../constants/plus";
 
 interface Props {
   children: ReactNode;
@@ -23,7 +24,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: unknown, info: ErrorInfo): void {
-    console.error("Q-Share+ crashed while rendering:", error, info.componentStack);
+    console.error(`${APP_NAME} crashed while rendering:`, error, info.componentStack);
   }
 
   private reload = () => {

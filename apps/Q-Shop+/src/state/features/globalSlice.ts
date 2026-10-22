@@ -17,6 +17,8 @@ interface ForeignCoins {
 }
 export interface CurrentStore {
   created: number;
+  /** + app, additive: Qortal assets the shop accepts. */
+  acceptedAssets?: { id: number; name: string }[];
   id: string;
   title: string;
   description: string;
@@ -47,7 +49,15 @@ export interface Catalogue {
   products: Record<string, Product>;
   user?: string;
 }
+/**
+ * Where loading the signed-in name's own shop stands (useOwnShops):
+ * none = no shop yet; container-missing = the shop has no product index on
+ * QDN (confirmed by a search); unavailable = it exists but couldn't be read.
+ */
+export type OwnShopStatus = "idle" | "loading" | "ready" | "none" | "container-missing" | "unavailable" | "error";
+
 interface GlobalState {
+  ownShopStatus: OwnShopStatus;
   isOpenCreateStoreModal: boolean;
   isLoadingCurrentBlog: boolean;
   isLoadingGlobal: boolean;
@@ -70,6 +80,7 @@ interface GlobalState {
 }
 
 const initialState: GlobalState = {
+  ownShopStatus: "idle",
   isOpenCreateStoreModal: false,
   isLoadingCurrentBlog: true,
   isLoadingGlobal: false,
@@ -95,6 +106,9 @@ export const globalSlice = createSlice({
   name: "global",
   initialState,
   reducers: {
+    setOwnShopStatus: (state, action) => {
+      state.ownShopStatus = action.payload;
+    },
     toggleCreateStoreModal: (state, action) => {
       state.isOpenCreateStoreModal = action.payload;
     },
@@ -221,6 +235,7 @@ export const globalSlice = createSlice({
 });
 
 export const {
+  setOwnShopStatus,
   toggleCreateStoreModal,
   setCurrentStore,
   setDataContainer,
