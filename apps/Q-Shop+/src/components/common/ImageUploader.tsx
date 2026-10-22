@@ -125,7 +125,7 @@ const ImageUploader = ({ onPick, label, max = 1, disabled = false, onError, chil
         {busy ? "Preparing…" : label}
       </Button>
       <Typography variant="body2" color="text.secondary">
-        {max > 1 ? `Up to ${max} more. ` : ""}Images are made smaller (WebP, {maxWidth} px wide) before they&apos;re published.
+        {max > 1 ? `Up to ${max} more. ` : ""}Images are made smaller (WebP, at most {maxWidth} px wide) before they&apos;re published.
       </Typography>
       {children}
     </Box>
