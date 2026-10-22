@@ -331,7 +331,8 @@ describe("home page", () => {
       const first = renderHome({ world, path: "/?pay=assets", allInView: true });
       // 24 shop reads: under a busy test run this takes longer than waitFor's default second.
       await waitFor(() => expect(cardTitles()).toEqual(["Shop number 4"]), { timeout: 8000 });
-      expect(first.node.summary().resources.STORE).toBe(24);
+      // Shop 4 can show before the other reads have landed: wait for all 24.
+      await waitFor(() => expect(first.node.summary().resources.STORE).toBe(24), { timeout: 8000 });
       first.unmount();
 
       // Shop 7 starts taking an asset; the index (read again after a pull to

@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { installQortalMock } from './qortalMock';
 import { resetQdnCaches } from '../qdn/search';
 import { resetRates } from '../money/rates';
@@ -14,6 +14,10 @@ import { resetDeletedShops } from '../qdn/deleted';
 import { resetProductView } from '../utils/productView';
 import { resetListWrite } from '../seller/listWrite';
 import { resetSentCollections } from '../seller/useCollections';
+
+// waitFor/findBy wait up to 3 s (1 s by default): the whole suite runs ~90 files at once, and on a
+// busy machine a page's first render can take longer than 1 s. Passing tests don't wait longer.
+configure({ asyncUtilTimeout: 3000 });
 
 // localStorage: jsdom has one, but a plain object store is easier to inspect.
 const localStorageStore: Record<string, string> = {};
