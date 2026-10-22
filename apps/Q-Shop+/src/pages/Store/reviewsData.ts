@@ -145,19 +145,26 @@ export async function fetchReviewersWithOrders(shortStoreId: string, names: stri
  */
 export async function hasOrderAtShop(shortStoreId: string, name: string, options: { fresh?: boolean } = {}): Promise<boolean> {
   if (!shortStoreId || !name) return false;
-  const rows = await searchQdn(
-    {
-      service: "DOCUMENT_PRIVATE",
-      identifier: shopOrdersPrefix(shortStoreId),
-      prefix: true,
-      name,
-      exactmatchnames: true,
-      includemetadata: false,
-      limit: 20,
-    },
-    options
-  );
-  return rows.some((row) => row.name === name && shortStoreIdOfOrder(row.identifier) === shortStoreId);
+  // The prefix also matches longer shop ids ("art" finds "art-prints"), whose
+  // newer orders can fill a whole page: look a few pages deep.
+  for (let page = 0; page < 5; page++) {
+    const rows = await searchQdn(
+      {
+        service: "DOCUMENT_PRIVATE",
+        identifier: shopOrdersPrefix(shortStoreId),
+        prefix: true,
+        name,
+        exactmatchnames: true,
+        includemetadata: false,
+        limit: 20,
+        offset: page * 20,
+      },
+      options
+    );
+    if (rows.some((row) => row.name === name && shortStoreIdOfOrder(row.identifier) === shortStoreId)) return true;
+    if (rows.length < 20) return false;
+  }
+  return false;
 }
 
 /** After a review is published: drop cached review searches so the next read is fresh. */
