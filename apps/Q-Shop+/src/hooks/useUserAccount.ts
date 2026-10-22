@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useDispatch } from "react-redux";
-import { addUser } from "../state/features/authSlice";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState } from "../state/store";
+import { addUser, setActiveName } from "../state/features/authSlice";
+import {
+  clearDataCotainer,
+  resetListProducts,
+  resetProducts,
+  setCurrentStore,
+  setOwnShopStatus,
+  updateRecentlyVisitedStoreId,
+} from "../state/features/globalSlice";
+import { setAllMyStores } from "../state/features/storeSlice";
+import { resetOrders } from "../state/features/orderSlice";
 import { getAccountNames, getPrimaryAccountName } from "../utils/qortalRequestFunctions";
 import { HUB_DIALOG_GRACE_MS, errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
 import { ACTIVE_NAME_STORAGE_KEY } from "../constants/plus";
@@ -37,6 +48,37 @@ export function rememberActiveName(address: string, name: string): void {
   } catch {
     // The choice still applies for this visit.
   }
+}
+
+/**
+ * Switch the name the app acts as (the header's name switcher and
+ * Settings). The choice is remembered per account, and everything that
+ * belonged to the previous name's shop is dropped at once: its shop, product
+ * index, unsaved product drafts, received orders and the list of its shops,
+ * so Sell and the seller pages never act on the old name's shop while
+ * useOwnShops loads the new name's (it reloads when the name changes).
+ * Only names the account owns are accepted.
+ */
+export function useSwitchActiveName(): (name: string) => void {
+  const dispatch = useDispatch();
+  const user = useSelector((state: RootState) => state.auth.user);
+  return useCallback(
+    (name: string) => {
+      if (!user || !name || user.name === name) return;
+      if (!user.names?.some((n) => n.name === name)) return;
+      rememberActiveName(user.address, name);
+      dispatch(setActiveName(name));
+      dispatch(setCurrentStore(null));
+      dispatch(clearDataCotainer());
+      dispatch(resetListProducts());
+      dispatch(resetProducts());
+      dispatch(resetOrders());
+      dispatch(setAllMyStores([]));
+      dispatch(updateRecentlyVisitedStoreId(""));
+      dispatch(setOwnShopStatus("loading"));
+    },
+    [dispatch, user]
+  );
 }
 
 /**
