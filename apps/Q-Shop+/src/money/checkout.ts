@@ -38,7 +38,9 @@ import {
   type PaymentRecord,
 } from "./order";
 import {
+  paymentsUsedByOtherOrders,
   pendingDelivery,
+  rememberUsedPayment,
   removePendingOrder,
   savePendingOrder,
   type PendingOrder,
@@ -196,6 +198,15 @@ export async function isOrderRecorded(pending: PendingOrder): Promise<boolean> {
 }
 
 /**
+ * The order is on QDN: it leaves the pending list, and its payment is
+ * remembered as used, so "Check again" never gives it to another order.
+ */
+function orderRecorded(pending: PendingOrder): void {
+  rememberUsedPayment(pending.buyer.name, pending.orderUid, pending.payment?.transactionSignature);
+  removePendingOrder(pending.buyer.name, pending.orderUid);
+}
+
+/**
  * Publishes a paid order. Checks QDN first unless `skipCheck` (a first
  * attempt right after paying). Removes the pending order once it's there.
  */
@@ -208,14 +219,14 @@ export async function recordOrder(
     if (!options.skipCheck) {
       options.onStep?.("checking");
       if (await isOrderRecorded(pending).catch(() => false)) {
-        removePendingOrder(pending.buyer.name, pending.orderUid);
+        orderRecorded(pending);
         return { kind: "done", orderUid: pending.orderUid };
       }
     }
     options.onStep?.("recording");
     const request = publishOrderRequest(pending, delivery);
     await qortalRequestWithTimeout(request, PUBLISH_TIMEOUT_MS);
-    removePendingOrder(pending.buyer.name, pending.orderUid);
+    orderRecorded(pending);
     invalidateQdnSearches((url) => url.includes("DOCUMENT_PRIVATE"));
     return { kind: "done", orderUid: pending.orderUid };
   } catch (error) {
@@ -323,29 +334,65 @@ export async function startCheckout(args: StartCheckoutArgs): Promise<CheckoutRe
 }
 
 /**
+ * How long after the checkout started a payment can still be this order's.
+ * Hub signs it when the buyer accepts its dialog, which closes a minute or so
+ * after Hub stopped answering; this leaves ample room without matching a
+ * same-amount payment made much later for something else.
+ */
+export const PAYMENT_MATCH_WINDOW_MS = 30 * 60_000;
+
+/** A payment that could be the one Hub didn't confirm. */
+export interface PaymentCandidate {
+  signature: string;
+  timestamp: number;
+}
+
+export type PaymentSearch =
+  | { kind: "none" }
+  | { kind: "found"; signature: string }
+  /** More than one payment fits: the buyer picks; none is taken on its own. */
+  | { kind: "several"; candidates: PaymentCandidate[] };
+
+/**
  * For a payment Hub didn't confirm: looks through the buyer's latest QORT
  * payments or asset transfers for one to the recipient, for the amount,
- * made after the checkout started. Foreign coins can't be checked from here.
+ * signed at or after the checkout started (Hub signs on the same clock,
+ * after the Pay press) and within PAYMENT_MATCH_WINDOW_MS, whose signature
+ * no other order uses (recorded from this device, or still pending). Foreign
+ * coins can't be checked from here. Rejects when the node can't answer.
  */
-export async function findUnconfirmedPayment(pending: PendingOrder): Promise<{ signature: string } | null> {
+export async function findUnconfirmedPayment(pending: PendingOrder): Promise<PaymentSearch> {
   const assetId = assetIdOf(pending.coin);
-  if (pending.coin !== "QORT" && assetId === null) return null;
+  if (pending.coin !== "QORT" && assetId === null) return { kind: "none" };
   const txType = assetId === null ? "PAYMENT" : "TRANSFER_ASSET";
   const url = `/transactions/search?txType=${txType}&address=${encodeURIComponent(
     pending.buyer.address
   )}&confirmationStatus=BOTH&limit=20&reverse=true`;
   const response = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
-  if (!response.ok) return null;
-  const rows: any[] = await response.json().catch(() => []);
-  if (!Array.isArray(rows)) return null;
-  const match = rows.find(
-    (tx) =>
+  if (!response.ok) throw new Error(`the node answered ${response.status}`);
+  const rows: unknown = await response.json().catch(() => []);
+  if (!Array.isArray(rows)) return { kind: "none" };
+  const used = paymentsUsedByOtherOrders(pending.buyer.name, pending.orderUid);
+  const candidates: PaymentCandidate[] = [];
+  for (const tx of rows) {
+    const signature = typeof tx?.signature === "string" ? tx.signature : "";
+    const timestamp = Number(tx?.timestamp);
+    if (
+      signature &&
+      !used.has(signature) &&
+      !candidates.some((c) => c.signature === signature) &&
       tx?.recipient === pending.recipient &&
       Number(tx?.amount) === Number(pending.amount) &&
       (assetId === null || Number(tx?.assetId) === assetId) &&
-      Number(tx?.timestamp) >= pending.created - 120_000
-  );
-  return match?.signature ? { signature: String(match.signature) } : null;
+      timestamp >= pending.created &&
+      timestamp <= pending.created + PAYMENT_MATCH_WINDOW_MS
+    ) {
+      candidates.push({ signature, timestamp });
+    }
+  }
+  if (candidates.length === 0) return { kind: "none" };
+  if (candidates.length === 1) return { kind: "found", signature: candidates[0].signature };
+  return { kind: "several", candidates: candidates.sort((a, b) => a.timestamp - b.timestamp) };
 }
 
 /** Marks an unconfirmed payment as paid (found on chain, or confirmed by the buyer for foreign coins). */

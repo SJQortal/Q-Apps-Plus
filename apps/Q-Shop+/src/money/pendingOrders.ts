@@ -13,7 +13,7 @@
  * one browser origin, so the address a buyer typed stays in memory only; after
  * a reload a physical order asks for it again.
  */
-import { PENDING_ORDERS_STORAGE_KEY } from "../constants/plus";
+import { PENDING_ORDERS_STORAGE_KEY, STORAGE_PREFIX } from "../constants/plus";
 import type { DeliveryInput, OrderDetails, PaymentRecord } from "./order";
 
 export type PendingState =
@@ -154,8 +154,85 @@ export function subscribePendingOrders(listener: () => void): () => void {
   };
 }
 
+/*
+ * Payments already used by an order recorded from this device. "Check again"
+ * looks for a payment Hub didn't confirm among the buyer's latest
+ * transactions; without this list it could take the payment of an order
+ * already recorded (same seller, same amount) and record a second order with
+ * it. Browser-only and additive (a new key under the app's storage prefix),
+ * per buyer name, newest last, capped.
+ */
+export const USED_PAYMENTS_STORAGE_KEY = `${STORAGE_PREFIX}used-payments`;
+const MAX_USED_PAYMENTS = 100;
+
+interface UsedPayment {
+  signature: string;
+  orderUid: string;
+  at: number;
+}
+
+let usedMemory: Record<string, UsedPayment[]> | null = null;
+
+function readUsed(): Record<string, UsedPayment[]> {
+  const out: Record<string, UsedPayment[]> = {};
+  try {
+    const raw = localStorage.getItem(USED_PAYMENTS_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      for (const [name, list] of Object.entries(parsed as Record<string, unknown>)) {
+        if (!Array.isArray(list)) continue;
+        out[name] = list.filter(
+          (item): item is UsedPayment => typeof item?.signature === "string" && item.signature !== "" && typeof item?.orderUid === "string"
+        );
+      }
+    }
+  } catch {
+    // Unreadable: start empty (pending orders still exclude their own signatures).
+  }
+  return out;
+}
+
+/** Kept in memory too, so a full or blocked localStorage still remembers them for this visit. */
+function loadUsed(): Record<string, UsedPayment[]> {
+  if (!usedMemory) usedMemory = readUsed();
+  return usedMemory;
+}
+
+/** Remembers that `signature` paid for this buyer's order `orderUid` (it is on QDN now). */
+export function rememberUsedPayment(buyerName: string, orderUid: string, signature: string | null | undefined): void {
+  if (!signature) return;
+  const all = { ...loadUsed() };
+  const list = (all[buyerName] ?? []).filter((p) => p.signature !== signature);
+  all[buyerName] = [...list, { signature, orderUid, at: Date.now() }].slice(-MAX_USED_PAYMENTS);
+  usedMemory = all;
+  try {
+    localStorage.setItem(USED_PAYMENTS_STORAGE_KEY, JSON.stringify(all));
+  } catch {
+    // Kept in memory for this visit.
+  }
+}
+
+/**
+ * Signatures this buyer's other orders already use: those recorded from this
+ * device, and those of other pending orders. Never a payment for `orderUid`.
+ */
+export function paymentsUsedByOtherOrders(buyerName: string, orderUid: string): Set<string> {
+  const used = new Set<string>();
+  // This visit's list, plus what other tabs have stored since.
+  for (const p of [...(loadUsed()[buyerName] ?? []), ...(readUsed()[buyerName] ?? [])]) {
+    if (p.orderUid !== orderUid) used.add(p.signature);
+  }
+  const stored = read()[buyerName];
+  for (const o of [...(load()[buyerName] ?? []), ...(Array.isArray(stored) ? stored : [])]) {
+    const signature = o?.payment?.transactionSignature;
+    if (o?.orderUid !== orderUid && typeof signature === "string" && signature) used.add(signature);
+  }
+  return used;
+}
+
 /** For tests. */
 export function resetPendingOrders(): void {
   memory = null;
+  usedMemory = null;
   deliveries.clear();
 }

@@ -224,6 +224,28 @@ describe("orders to finish", () => {
     expect(await screen.findByText(`Order recorded for ${STORE_TITLE}.`)).toBeInTheDocument();
   });
 
+  it("lets the buyer pick when several payments fit, and never takes one on its own", async () => {
+    savePendingOrder(pendingOrder({ state: "unconfirmed", payment: null }));
+    transactions = [
+      { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW + 9_000, signature: "SECONDSIGxxxxxxxxxxxxxxxxxxxxxxx" },
+      { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW + 3_000, signature: "FIRSTSIGxxxxxxxxxxxxxxxxxxxxxxxx" },
+      // Signed before the checkout started: not a candidate.
+      { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW - 1_000, signature: "EARLIERxxxxxxxxxxxxxxxxxxxxxxxxx" },
+    ];
+    render();
+    fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
+    expect(await screen.findByText(/More than one payment of/)).toBeInTheDocument();
+    const picks = screen.getAllByRole("button", { name: /^Paid / });
+    expect(picks).toHaveLength(2);
+    expect(picks[0]).toHaveTextContent("FIRSTSIG…xxxxxx");
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+
+    fireEvent.click(picks[1]);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(published().order.payment.transactionSignature).toBe("SECONDSIGxxxxxxxxxxxxxxxxxxxxxxx");
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
   it("says so when no payment is found, and removes the order only after asking", async () => {
     savePendingOrder(pendingOrder({ state: "unconfirmed", payment: null }));
     render();

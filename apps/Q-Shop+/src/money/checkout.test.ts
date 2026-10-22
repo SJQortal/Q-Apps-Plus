@@ -28,6 +28,7 @@ import {
   findUnconfirmedPayment,
   recordOrder,
   startCheckout,
+  PAYMENT_MATCH_WINDOW_MS,
   PUBLISH_TIMEOUT_MS,
   type StartCheckoutArgs,
 } from "./checkout";
@@ -208,6 +209,7 @@ describe("startCheckout", () => {
       vi.fn(async () => ({
         ok: true,
         json: async () => [
+          // Signed before this checkout started: another purchase.
           { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW - 5_000, signature: "OLD" },
           { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW + 4_000, signature: "LATE" },
         ],
@@ -217,10 +219,86 @@ describe("startCheckout", () => {
     expect((globalThis.fetch as any).mock.calls[0][0]).toBe(
       `/transactions/search?txType=PAYMENT&address=${BUYER_ADDRESS}&confirmationStatus=BOTH&limit=20&reverse=true`
     );
-    expect(found).toEqual({ signature: "OLD" });
-    const paid = confirmPendingPayment(pending, shop, found!);
+    expect(found).toEqual({ kind: "found", signature: "LATE" });
+    const paid = confirmPendingPayment(pending, shop, { signature: "LATE" });
     expect(paid.state).toBe("paid");
-    expect(paid.payment?.transactionSignature).toBe("OLD");
+    expect(paid.payment?.transactionSignature).toBe("LATE");
+  });
+
+  it("never gives \"Check again\" a payment another order already uses, and never picks one of several", async () => {
+    const payment = (signature: string, at: number) => ({
+      type: "PAYMENT",
+      recipient: SELLER_ADDRESS,
+      amount: "3.10000000",
+      timestamp: at,
+      signature,
+    });
+    let rows: unknown[] = [];
+    const stubRows = () =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => ({
+          ok: true,
+          status: 200,
+          json: async () => (String(url).startsWith("/transactions/") ? rows : []),
+          text: async () => "[]",
+        }))
+      );
+
+    // Order 1 is paid (S1) and recorded.
+    sellerHandlers({ SEND_COIN: async () => ({ signature: "S1" }) });
+    stubRows();
+    expect(await startCheckout(args({ orderUid: "ORDER00001", now: NOW }))).toEqual({ kind: "done", orderUid: "ORDER00001" });
+
+    // A minute later, the same 3.1 QORT to the same seller: Hub doesn't answer, and nothing is sent.
+    sellerHandlers({
+      SEND_COIN: async () => {
+        throw "The request timed out";
+      },
+    });
+    await startCheckout(args({ orderUid: "ORDER00002", now: NOW + 60_000 }));
+    const second = getPendingOrder(BUYER, "ORDER00002")!;
+    // S1 paid for order 1, which is recorded: even when its time would fit order 2, it isn't order 2's.
+    rows = [payment("S1", NOW + 61_000)];
+    expect(await findUnconfirmedPayment(second)).toEqual({ kind: "none" });
+
+    // Another unconfirmed order whose payment was found keeps its signature to itself.
+    await startCheckout(args({ orderUid: "ORDER00003", now: NOW + 120_000 }));
+    const third = getPendingOrder(BUYER, "ORDER00003")!;
+    rows = [payment("S3", NOW + 121_000)];
+    expect(await findUnconfirmedPayment(third)).toEqual({ kind: "found", signature: "S3" });
+    confirmPendingPayment(third, shop, { signature: "S3" });
+    expect(await findUnconfirmedPayment(second)).toEqual({ kind: "none" });
+
+    // Remembered across a reload.
+    resetPendingOrders();
+    rows = [payment("S1", NOW + 61_000), payment("S3", NOW + 121_000)];
+    expect(await findUnconfirmedPayment(getPendingOrder(BUYER, "ORDER00002")!)).toEqual({ kind: "none" });
+
+    // Two fresh payments that both fit: the buyer picks, nothing is taken on its own.
+    rows = [payment("B", NOW + 200_000), payment("A", NOW + 190_000)];
+    expect(await findUnconfirmedPayment(second)).toEqual({
+      kind: "several",
+      candidates: [
+        { signature: "A", timestamp: NOW + 190_000 },
+        { signature: "B", timestamp: NOW + 200_000 },
+      ],
+    });
+
+    // Much later than the checkout: not this order's.
+    rows = [payment("MUCH-LATER", NOW + 60_000 + PAYMENT_MATCH_WINDOW_MS + 1)];
+    expect(await findUnconfirmedPayment(second)).toEqual({ kind: "none" });
+  });
+
+  it("says the node didn't answer instead of \"no payment\"", async () => {
+    sellerHandlers({
+      SEND_COIN: async () => {
+        throw "The request timed out";
+      },
+    });
+    await startCheckout(args());
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })));
+    await expect(findUnconfirmedPayment(getPendingOrder(BUYER, "ORDERxxxx1")!)).rejects.toThrow("503");
   });
 
   it("stops before paying when the shop has no address for the coin, or a price is missing", async () => {

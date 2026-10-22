@@ -7,8 +7,9 @@
  * - paid → Finish order (recordOrder; a physical order asks for the address
  *   again after a reload, since addresses are never stored);
  * - unconfirmed, QORT or an asset → Check again: the buyer's recent payments
- *   are searched (findUnconfirmedPayment), and a match is confirmed and
- *   recorded;
+ *   are searched (findUnconfirmedPayment, which leaves out payments other
+ *   orders use), and a single match is confirmed and recorded; when several
+ *   fit, the buyer picks one;
  * - unconfirmed, another coin (the node can't see it) → "I paid — record the
  *   order", behind a confirmation;
  * - unconfirmed → "I wasn't charged — remove", behind a confirmation.
@@ -20,7 +21,13 @@ import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import { AmountTag } from "../../components/money/PriceTag";
 import { ResponsiveDialog } from "../../components/common/mobile";
 import { assetIdOf, isForeignTicker, type ShopCoinSettings } from "../../money/coins";
-import { confirmPendingPayment, findUnconfirmedPayment, recordOrder } from "../../money/checkout";
+import {
+  confirmPendingPayment,
+  findUnconfirmedPayment,
+  recordOrder,
+  type PaymentCandidate,
+  type PaymentSearch,
+} from "../../money/checkout";
 import { digitalDelivery, missingDeliveryFields, orderLines, type DeliveryInput } from "../../money/order";
 import {
   pendingDelivery,
@@ -155,6 +162,8 @@ export function PendingOrderCard({
   const [note, setNote] = useState<Note>(null);
   const [addressFor, setAddressFor] = useState<PendingOrder | null>(null);
   const [confirming, setConfirming] = useState<"paid" | "remove" | null>(null);
+  /** Payments that could each be this order's, for the buyer to pick from. */
+  const [choices, setChoices] = useState<PaymentCandidate[] | null>(null);
 
   const settings = pendingShopSettings(order);
   const paid = order.state === "paid";
@@ -189,23 +198,34 @@ export function PendingOrderCard({
   const checkAgain = async () => {
     setBusy("searching");
     setNote(null);
-    let found: { signature: string } | null;
+    setChoices(null);
+    let search: PaymentSearch;
     try {
-      found = await findUnconfirmedPayment(order);
+      search = await findUnconfirmedPayment(order);
     } catch (error) {
       setBusy(null);
       setNote({ severity: "error", text: `Couldn't look up your payments: ${errorMessage(error, "the node didn't answer")}. Try again.` });
       return;
     }
     setBusy(null);
-    if (!found) {
+    if (search.kind === "none") {
       setNote({
         severity: "info",
         text: "No matching payment yet. If Hub showed it as sent, check again in a minute. Don't pay again.",
       });
       return;
     }
-    finish(confirmPendingPayment(order, settings, found));
+    if (search.kind === "several") {
+      // Never one picked on its own: it may be another order's payment.
+      setChoices(search.candidates);
+      return;
+    }
+    finish(confirmPendingPayment(order, settings, { signature: search.signature }));
+  };
+
+  const pickCandidate = (candidate: PaymentCandidate) => {
+    setChoices(null);
+    finish(confirmPendingPayment(order, settings, { signature: candidate.signature }));
   };
 
   const confirmPaid = () => {
@@ -256,6 +276,21 @@ export function PendingOrderCard({
               {order.lastError}
             </Typography>
           ) : null}
+          {choices && !busy && (
+            <Box sx={{ mt: 1.5 }}>
+              <Alert severity="info">
+                More than one payment of {amount} to {seller} was made after this checkout
+                started. Pick the one that paid for this order; your wallet's history shows the time of each.
+              </Alert>
+              <Stack sx={{ mt: 1, gap: 1, "& .MuiButton-root": { minHeight: 44, justifyContent: "flex-start", textAlign: "left" } }}>
+                {choices.map((candidate) => (
+                  <Button key={candidate.signature} variant="outlined" onClick={() => pickCandidate(candidate)}>
+                    Paid {formatDate(candidate.timestamp)} · {shortAddress(candidate.signature)}
+                  </Button>
+                ))}
+              </Stack>
+            </Box>
+          )}
           <Stack direction="row" sx={{ mt: 1.5, flexWrap: "wrap", gap: 1, "& .MuiButton-root": { minHeight: 44 } }}>
             {paid && (
               <Button variant="contained" onClick={() => finish(order)} disabled={busy !== null}>
