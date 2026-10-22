@@ -19,7 +19,8 @@ export interface LoadJob<T> {
  * Loads each job once, five at a time. A load that fails (resolves false or
  * throws) is tried again after 2, 4 and 8 s, then marked failed until
  * `retry(key)`. The caller keeps what was loaded and drops the job from
- * `jobs` once it has it, so a listed job without a phase is loading.
+ * `jobs` once it has it, so a listed job without a phase is loading. A key
+ * is loaded once per mount (plus each `retry`), even if it is listed again.
  * No polling: nothing runs once every job has loaded or failed, and pending
  * retries stop when the component unmounts.
  */
@@ -58,8 +59,10 @@ export function useRetryingLoads<T>(
       }
       if (!alive.current) return;
       if (ok) {
-        // Should the caller list it again later (its copy was replaced), it loads again.
-        started.current.delete(job.key);
+        // Loaded: it stays started, so a job the caller lists again (say,
+        // because what it loaded was replaced elsewhere) is not loaded again
+        // on its own, which could repeat for as long as the page is open.
+        // Only retry(key) loads a key a second time.
         setPhases((current) => {
           if (!(job.key in current)) return current;
           const next = { ...current };

@@ -62,16 +62,23 @@ export function catalogueFor(
   return catalogue;
 }
 
-/** The cart's lines in the cart's order, which is also the order's line order. */
+/**
+ * The cart's lines in the cart's order, which is also the order's line order.
+ * `catalogues` is a map by identifier (checked against the cart's owner), or
+ * a lookup that already returns the owner's own copy.
+ */
 export function cartViewLines(
   cart: Cart,
-  catalogues: Record<string, Catalogue>,
+  catalogues: Record<string, Catalogue> | ((catalogueId: string) => Catalogue | null),
   phaseOf: (catalogueId: string) => LoadPhase
 ): CartViewLine[] {
   return Object.keys(cart.orders).map((key) => {
     const order = cart.orders[key];
     const base = { productId: order.productId, catalogueId: order.catalogueId, quantity: order.quantity };
-    const catalogue = catalogueFor(catalogues, order.catalogueId, cart.storeOwner);
+    const catalogue =
+      typeof catalogues === "function"
+        ? catalogues(order.catalogueId)
+        : catalogueFor(catalogues, order.catalogueId, cart.storeOwner);
     if (!catalogue) {
       const phase = cart.storeOwner ? phaseOf(order.catalogueId) : "failed";
       const state: LineState = phase === "failed" ? "failed" : phase === "retrying" ? "fetching" : "loading";

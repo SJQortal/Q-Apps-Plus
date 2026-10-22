@@ -226,6 +226,37 @@ describe("cart page", () => {
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
   });
 
+  it("fetches each owner's copy of a catalogue once, even when two names publish the same identifier", async () => {
+    // Another name can publish a catalogue under the seller's identifier (docs/QORTAL.md → pitfall 15).
+    const OTHER = "Mallory";
+    const OTHER_STORE = "q-store-general-mallory";
+    const copyMug = { ...mug, id: "q-store-product-mallory-COPYxxxxxx", title: "Mallory mug" };
+    const q = installQortalMock({
+      FETCH_QDN_RESOURCE: async (p) => {
+        await new Promise((r) => setTimeout(r, 5));
+        if (p.name === SELLER) return { ...catalogue };
+        if (p.name === OTHER) return { id: CATALOGUE_ID, products: { [copyMug.id]: copyMug } };
+        throw { error: 1401, message: "Not found" };
+      },
+    });
+    const store = newStore();
+    store.dispatch(addToHashMapStores({ ...viewedStore, owner: SELLER, isValid: true }));
+    store.dispatch(addToHashMapStores({ ...viewedStore, id: OTHER_STORE, title: "Mallory's shop", owner: OTHER, isValid: true }));
+    store.dispatch(setProductToCart({ productId: mug.id, catalogueId: CATALOGUE_ID, storeId: STORE_ID, storeOwner: SELLER }));
+    store.dispatch(setProductToCart({ productId: copyMug.id, catalogueId: CATALOGUE_ID, storeId: OTHER_STORE, storeOwner: OTHER }));
+    renderCart(store);
+
+    expect(await screen.findByRole("link", { name: "Mug" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Mallory mug" })).toBeInTheDocument();
+    // Long enough for a load that evicted the other's copy to start the other's fetch again, several times.
+    await new Promise((r) => setTimeout(r, 150));
+    expect(q.callsFor("FETCH_QDN_RESOURCE").map((c) => c.name).sort()).toEqual([OTHER, SELLER]);
+    expect(screen.getByRole("link", { name: "Mug" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Mallory mug" })).toBeInTheDocument();
+    // The shared map keeps the first copy it got; the other never replaces it.
+    expect(store.getState().global.catalogueHashMap[CATALOGUE_ID]?.user).toBeDefined();
+  });
+
   it("explains a product without a price in the chosen coin, and won't go on", async () => {
     const store = newStore();
     withFixtureShop(store, [{ product: mug, qty: 1 }], { acceptedAssets: [{ id: 81, name: "Gold Bar" }] });

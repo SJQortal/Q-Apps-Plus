@@ -82,4 +82,29 @@ describe("useRetryingLoads", () => {
     await vi.advanceTimersByTimeAsync(30_000);
     expect(load).toHaveBeenCalledTimes(1);
   });
+
+  it("doesn't load a key again on its own after it loaded, even when it is listed again", async () => {
+    const load = vi.fn(async () => true);
+    const { rerender, result } = renderHook(({ list }) => useRetryingLoads(list, load), {
+      initialProps: { list: [job("alice"), job("mallory")] },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(load).toHaveBeenCalledTimes(2);
+    // Two copies that keep replacing each other elsewhere list the other key again, and again.
+    for (const list of [[job("alice")], [job("mallory")], [job("alice")], [job("mallory")]]) {
+      rerender({ list });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+    }
+    expect(load).toHaveBeenCalledTimes(2);
+    // Retry still loads it again.
+    await act(async () => {
+      result.current.retry("mallory");
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(load).toHaveBeenCalledTimes(3);
+  });
 });
