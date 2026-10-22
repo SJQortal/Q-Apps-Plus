@@ -6,6 +6,11 @@
  * the original did. The shop's JSON comes from the session cache for the
  * coin picker and the shop link. A deep link no longer bounces to the shop
  * page first. The description is plain text (never HTML).
+ *
+ * The collections the product is in are named under its price, each a link
+ * to that collection on the shop page (Follow-up 15): the shop's product
+ * list (cached from the shop page) says whether it has collections, and only
+ * then is its collections document read, once per session.
  */
 import { useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
@@ -25,9 +30,10 @@ import { GALLERY_LANDSCAPE_WIDTH, ImageGallery } from "../../components/common/T
 import { LANDSCAPE_PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { PriceTag } from "../../components/money/PriceTag";
 import { useShopCoin } from "../../money/useShopCoin";
-import { decodeParam, productLink, storePath } from "../../qdn/links";
+import { collectionPath, decodeParam, productLink, storePath } from "../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
 import { useCatalogue, useViewedShop } from "../Store/useShopData";
+import { useShopCollections } from "../Store/useShopCollections";
 import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
 import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../Store/CartBits";
@@ -138,8 +144,10 @@ function stockLine(status: string | undefined) {
 function ProductView({ owner, storeId, productId, catalogueId }: { owner: string; storeId: string; productId: string; catalogueId: string }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { shop, shopStatus, isOwner } = useViewedShop(owner, storeId, { products: false });
+  const { shop, shopStatus, isOwner, index } = useViewedShop(owner, storeId);
   const { catalogue, status, retry } = useCatalogue(owner, catalogueId);
+  const shopCollections = useShopCollections(owner, storeId, index);
+  const inCollections = shopCollections.collections.filter((c) => c.products.includes(productId));
   const shopCoin = useShopCoin(shop);
   const [quantityText, setQuantityText] = useState("1");
   const [added, setAdded] = useState<AddedNotice | null>(null);
@@ -215,6 +223,24 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             <CoinPicker shop={shop} shopCoin={shopCoin} id="product-coin" />
           </Box>
           <RateNote shopCoin={shopCoin} />
+          {inCollections.length > 0 && (
+            <Box component="nav" aria-label="Collections" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                In:
+              </Typography>
+              {inCollections.map((c) => (
+                <Chip
+                  key={c.id}
+                  component={RouterLink}
+                  to={collectionPath(owner, storeId, c.id)}
+                  clickable
+                  variant="outlined"
+                  label={c.title}
+                  sx={{ minHeight: 36, maxWidth: "100%", "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" } }}
+                />
+              ))}
+            </Box>
+          )}
           {stockLine(product.status)}
           {isOwner ? (
             <Alert

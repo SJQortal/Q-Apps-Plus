@@ -47,7 +47,7 @@ function renderProduct(world: World, path: string, me: string | null = world.me?
 }
 
 describe("product page", { timeout: 20_000 }, () => {
-  it("opens from a deep link: the catalogue and the shop JSON, no search and no product index", async () => {
+  it("opens from a deep link: the catalogue, the shop JSON and its product list, no search", async () => {
     const { node } = renderProduct(makeWorld(), pathOf(P11));
     expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
     expect(screen.getByText("12.00")).toBeInTheDocument();
@@ -58,8 +58,26 @@ describe("product page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAttribute("href", `/Seller%20Name/${STORE_ID}`));
     expect(node.fetchCalls.filter((u) => u.includes("resources/search"))).toEqual([]);
     expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toHaveLength(1);
-    expect(node.fetchCalls.filter((u) => u.endsWith("-datacontainer"))).toHaveLength(0);
+    // The product list, for its collections pointer; a shop without collections reads nothing more.
+    await waitFor(() => expect(node.fetchCalls.filter((u) => u.endsWith("-datacontainer"))).toHaveLength(1));
+    expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toEqual([]);
     expect(node.q.calls.filter((c) => c.action === "FETCH_QDN_RESOURCE")).toHaveLength(0);
+    expect(screen.queryByRole("navigation", { name: "Collections" })).toBeNull();
+  });
+
+  it("names the collections the product is in, each linked to it on the shop page (Follow-up 15)", async () => {
+    const world = makeWorld();
+    world.shops[0].collections = [
+      { id: "GIFTSxxxx1", title: "Gifts for friends", products: [P11] },
+      { id: "OTHERxxxx2", title: "Not this one", products: ["q-store-product-my-shop-P000000003"] },
+      { id: "HOMExxxxx3", title: "Home", products: ["q-store-product-my-shop-P000000004", P11] },
+    ];
+    const { node } = renderProduct(world, pathOf(P11));
+    const nav = await screen.findByRole("navigation", { name: "Collections" });
+    expect(screen.getByRole("link", { name: "Gifts for friends" })).toHaveAttribute("href", `/Seller%20Name/${STORE_ID}?collection=GIFTSxxxx1`);
+    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", `/Seller%20Name/${STORE_ID}?collection=HOMExxxxx3`);
+    expect(nav.textContent).not.toContain("Not this one");
+    expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toHaveLength(1);
   });
 
   it("uses a catalogue a list already read, without fetching it", async () => {
