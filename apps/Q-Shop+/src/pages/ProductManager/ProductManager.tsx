@@ -2,7 +2,8 @@
  * The seller's page for one of their shops (route `/product-manager/:store`,
  * the original's): a header with the shop's title, View shop and Copy link;
  * "Ready to publish" when there are drafts; and tabs, scrollable on phones:
- * Overview, Products, Orders, Reviews and Shop. The tab is kept in `?tab=`.
+ * Overview, Products, Collections, Orders, Reviews and Shop. The tab is kept
+ * in `?tab=`.
  *
  * Publishing products: seller/usePublishProducts.ts builds the original's
  * catalogues and product index, seller/PublishProductsDialog.tsx sends them
@@ -35,16 +36,18 @@ import { ReviewsPanel } from "../Store/StoreReviews/ReviewsPanel";
 import { ProductsTab } from "../../seller/ProductsTab";
 import { DraftsCard } from "../../seller/DraftsCard";
 import { ShopTab } from "../../seller/ShopTab";
+import { CollectionsTab } from "../../seller/CollectionsTab";
 import { ProductListStatus } from "../../seller/ProductListStatus";
 import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteProductsDialog";
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
 
-export const SELLER_TABS = ["overview", "products", "orders", "reviews", "shop"] as const;
+export const SELLER_TABS = ["overview", "products", "collections", "orders", "reviews", "shop"] as const;
 export type SellerTab = (typeof SELLER_TABS)[number];
 const TAB_LABEL: Record<SellerTab, string> = {
   overview: "Overview",
   products: "Products",
+  collections: "Collections",
   orders: "Orders",
   reviews: "Reviews",
   shop: "Shop",
@@ -292,6 +295,12 @@ export const ProductManager = () => {
               onAdd={openAdd}
               onEdit={openEdit}
               onDelete={askDelete}
+            />
+          )}
+          {tab === "collections" && (
+            <CollectionsTab
+              ready={ready}
+              loading={ownShopStatus === "idle" || ownShopStatus === "loading" || ownShopStatus === "ready"}
             />
           )}
           {tab === "orders" && <OrdersTab />}

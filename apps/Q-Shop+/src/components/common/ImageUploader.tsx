@@ -26,12 +26,12 @@ function readAsDataUrl(file: Blob): Promise<string> {
   });
 }
 
-/** One image as a compressed WebP data URL. */
-export function compressImage(file: File): Promise<string> {
+/** One image as a compressed WebP data URL, at most `maxWidth` px wide. */
+export function compressImage(file: File, maxWidth = IMAGE_MAX_WIDTH): Promise<string> {
   return new Promise((resolve, reject) => {
     new Compressor(file, {
       quality: IMAGE_QUALITY,
-      maxWidth: IMAGE_MAX_WIDTH,
+      maxWidth,
       mimeType: "image/webp",
       success(result) {
         readAsDataUrl(new File([result], "name", { type: "image/webp" })).then(resolve, reject);
@@ -54,9 +54,11 @@ interface ImageUploaderProps {
   onError?: (message: string) => void;
   /** Extra content inside the drop area, under the button. */
   children?: ReactNode;
+  /** Widest the image may stay, in px (default 1200, the original's). */
+  maxWidth?: number;
 }
 
-const ImageUploader = ({ onPick, label, max = 1, disabled = false, onError, children }: ImageUploaderProps) => {
+const ImageUploader = ({ onPick, label, max = 1, disabled = false, onError, children, maxWidth = IMAGE_MAX_WIDTH }: ImageUploaderProps) => {
   const [busy, setBusy] = useState(false);
 
   const onDrop = useCallback(
@@ -68,7 +70,7 @@ const ImageUploader = ({ onPick, label, max = 1, disabled = false, onError, chil
       try {
         for (const file of files) {
           try {
-            onPick(await compressImage(file));
+            onPick(await compressImage(file, maxWidth));
           } catch {
             failed += 1;
           }
@@ -83,7 +85,7 @@ const ImageUploader = ({ onPick, label, max = 1, disabled = false, onError, chil
         onError?.(`Only ${max} more ${max === 1 ? "image fits" : "images fit"}.`);
       }
     },
-    [max, onPick, onError]
+    [max, maxWidth, onPick, onError]
   );
 
   const { getRootProps, getInputProps, open, isDragActive } = useDropzone({
@@ -123,7 +125,7 @@ const ImageUploader = ({ onPick, label, max = 1, disabled = false, onError, chil
         {busy ? "Preparing…" : label}
       </Button>
       <Typography variant="body2" color="text.secondary">
-        {max > 1 ? `Up to ${max} more. ` : ""}Images are made smaller (WebP, 1200 px wide) before they're published.
+        {max > 1 ? `Up to ${max} more. ` : ""}Images are made smaller (WebP, {maxWidth} px wide) before they&apos;re published.
       </Typography>
       {children}
     </Box>

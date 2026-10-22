@@ -169,6 +169,8 @@ export interface PublishProductsDialogProps {
   verb?: Verb;
   /** Under a result that isn't complete: what the shop shows meanwhile. */
   settledNote?: string;
+  /** What a publish sends, for its title ("Publishing products"). */
+  what?: string;
 }
 
 export function PublishProductsDialog({
@@ -181,6 +183,7 @@ export function PublishProductsDialog({
   order = "index-last",
   verb = "publish",
   settledNote = "Your shop shows the changes once its product list is published. Until then your drafts stay in Ready to publish.",
+  what = "products",
 }: PublishProductsDialogProps) {
   const batched = resources.length > RESOURCES_PER_BATCH;
   const indexLast = order === "index-last";
@@ -427,7 +430,7 @@ export function PublishProductsDialog({
             ? `${words.doing} batch ${batch.index + 1} of ${batch.count}`
             : verb === "delete"
               ? "Deleting"
-              : "Publishing products"
+              : `Publishing ${what}`
           : phase === "checking"
             ? "Checking QDN"
             : unknownCount > 0
