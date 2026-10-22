@@ -83,7 +83,9 @@ export default {
     { key: 'real-product', path: '/2r0y/q-store-general-qortal-goldback-store/q-store-product-qortal-goldback-store-VOleukZkOY/q-store-catalogue-qortal-goldback-store-IR6VGvcT3x', after: async (page) => page.waitForTimeout(5000) },
     { key: 'real-reviews', path: '/2r0y/q-store-general-qortal-goldback-store', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(4000); await page.getByRole('button', { name: /review/i }).first().click({ timeout: 3000 }); await page.waitForTimeout(2500); } },
     { key: 'real-products', path: '/products', after: async (page) => page.waitForTimeout(6000) },
-    { key: 'real-products-categories', path: '/products', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(3000); await page.getByRole('button', { name: /^(Categories|Filters)/ }).first().click({ timeout: 3000 }); await page.getByRole('checkbox').first().waitFor({ timeout: 15000 }); await page.waitForTimeout(800); } },
+    { key: 'real-products-categories', path: '/products', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(3000); await page.getByRole('button', { name: /^(Categories|Filters)/ }).first().click({ timeout: 3000 }); await page.getByRole('checkbox').first().waitFor({ timeout: 15000 }); await page.waitForTimeout(800); },
+      // Categories read every shop's product list; the node lists TanteEmma's (shop "1") but can't serve it (404), and the page leaves it out.
+      expectErrors: /404|Failed to load resource/ },
     { key: 'real-cart', path: '/cart', after: async (page) => page.waitForTimeout(2000) },
     { key: 'real-settings', path: '/settings' },
   ],
