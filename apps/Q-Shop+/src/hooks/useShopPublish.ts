@@ -36,16 +36,19 @@ export interface CreateShopInput extends StoreFields {
 }
 
 export function validateShopFields(fields: StoreFields): string | null {
-  if (!fields.title.trim()) return "A title is required";
-  if (!fields.description.trim()) return "A description is required";
-  if (!fields.location.trim()) return "A location is required";
-  if (!fields.shipsTo.trim()) return "Ships to is required";
-  if (!fields.logo) return "A logo is required";
+  if (!fields.title.trim()) return "Add a title";
+  if (!fields.description.trim()) return "Add a description";
+  if (!fields.location.trim()) return "Add a location";
+  if (!fields.shipsTo.trim()) return "Say where the shop ships to";
+  if (!fields.logo) return "Add a shop logo";
   for (const coin of fields.supportedCoins) {
-    if (coin !== "QORT" && !fields.foreignCoins[coin]?.trim()) return `Please add a ${coin} address`;
+    if (coin !== "QORT" && !fields.foreignCoins[coin]?.trim()) return `Add your ${coin} payout address, or switch ${coin} off`;
   }
   return null;
 }
+
+const NO_NAME_TEXT = "Sign in with a Qortal name to publish your shop.";
+const NO_SHOP_TEXT = "Your shop isn't loaded yet. Try again in a moment.";
 
 /** What to say when Hub didn't answer in time: the publish may still land. */
 const TIMEOUT_TEXT = "Hub didn't answer in time. It may still be publishing, so check again in a minute before you try again.";
@@ -66,11 +69,11 @@ export function useShopPublish() {
    */
   const createShop = useCallback(
     async (input: CreateShopInput): Promise<string | null> => {
-      if (!userName) throw new ShopFormError("Cannot publish: you do not have a Qortal name");
+      if (!userName) throw new ShopFormError(NO_NAME_TEXT);
       const invalid = validateShopFields(input);
       if (invalid) throw new ShopFormError(invalid);
       const shortStoreId = finalizeShortStoreId(input.shortStoreId.trim());
-      if (!shortStoreId) throw new ShopFormError("Please insert a valid store id");
+      if (!shortStoreId) throw new ShopFormError("Pick a shop id: letters, numbers and dashes.");
       const name = userName;
       const identifier = storeIdentifier(shortStoreId);
       setBusy(true);
@@ -120,7 +123,7 @@ export function useShopPublish() {
   /** Resolves true when published; false when the seller declined in Hub. Throws ShopFormError otherwise. */
   const editShop = useCallback(
     async (fields: StoreFields): Promise<boolean> => {
-      if (!userName || !currentStore?.id) throw new ShopFormError("Cannot publish: you do not have a Qortal name");
+      if (!userName || !currentStore?.id) throw new ShopFormError(userName ? NO_SHOP_TEXT : NO_NAME_TEXT);
       const invalid = validateShopFields(fields);
       if (invalid) throw new ShopFormError(invalid);
       setBusy(true);
@@ -154,7 +157,7 @@ export function useShopPublish() {
    * when published, false when declined; throws ShopFormError otherwise.
    */
   const recreateProductList = useCallback(async (): Promise<boolean> => {
-    if (!userName || !currentStore?.id) throw new ShopFormError("Error! Missing shop data or name");
+    if (!userName || !currentStore?.id) throw new ShopFormError(userName ? NO_SHOP_TEXT : NO_NAME_TEXT);
     const storeId = currentStore.id;
     setBusy(true);
     try {

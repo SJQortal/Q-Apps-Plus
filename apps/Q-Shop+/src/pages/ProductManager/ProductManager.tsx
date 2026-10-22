@@ -126,6 +126,8 @@ export const ProductManager = () => {
     await loadOwnShop(dispatch, routedShop as Store, { fresh: true });
   }, [userName, ownShopStatus, routedShop, storeId, dispatch]);
 
+  const onReload = useCallback(() => void reload(), [reload]);
+
   const copyLink = async () => {
     if (!currentStore) return;
     const link = storeLink(currentStore.owner || user?.name || "", currentStore.id);
@@ -143,16 +145,26 @@ export const ProductManager = () => {
   }
 
   if (!isCurrent) {
-    const settled = !["idle", "loading"].includes(ownShopStatus) && !routedShop;
+    const loading = ownShopStatus === "idle" || ownShopStatus === "loading";
+    // One of the seller's shops that couldn't be read (its JSON isn't on the node).
+    const routedFailed = !!routedShop && (ownShopStatus === "unavailable" || ownShopStatus === "error");
+    const settled = !loading && (!routedShop || routedFailed);
     return (
       <Page width="grid">
-        <PageHeader title="Your shop" back />
+        <PageHeader title={routedShop?.title || "Your shop"} back />
         {!settled ? (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }} aria-busy="true" aria-label="Loading your shop">
             <Skeleton variant="rounded" height={48} />
             <Skeleton variant="rounded" height={72} />
             <Skeleton variant="rounded" height={72} />
           </Box>
+        ) : routedFailed ? (
+          <EmptyState
+            title="Couldn't load this shop from your node"
+            description="It may still be on its way from peers."
+            actionLabel="Retry"
+            onAction={onReload}
+          />
         ) : ownShopStatus === "none" ? (
           <EmptyState
             title="You don't have a shop yet"
@@ -205,7 +217,7 @@ export const ProductManager = () => {
     <Page width="grid">
       <PageHeader title={currentStore.title || "Your shop"} subtitle="Your shop" back backTo={shopUrl} actions={actions} />
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {!ready && <ProductListStatus status={ownShopStatus} onReload={() => void reload()} />}
+        {!ready && <ProductListStatus status={ownShopStatus} onReload={onReload} />}
         <DraftsCard onEdit={openEdit} onPublish={() => void publish.prepare()} preparing={publish.preparing} error={publish.error} />
         <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tabs

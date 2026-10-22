@@ -9,7 +9,8 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { createAppStore } from "../state/store";
 import { addUser } from "../state/features/authSlice";
-import { setCurrentStore, setDataContainer, setProductsToSave } from "../state/features/globalSlice";
+import { setCurrentStore, setDataContainer, setOwnShopStatus, setProductsToSave } from "../state/features/globalSlice";
+import { setAllMyStores } from "../state/features/storeSlice";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { installQortalMock, type QortalHandler } from "../test/qortalMock";
 import { installVisibleIntersectionObserver } from "../test/mockNode";
@@ -190,6 +191,51 @@ describe("the products tab", () => {
     });
     expect(added.id).toMatch(new RegExp(`^q-store-product-${SHORT_STORE_ID}-.{10}$`));
     expect(screen.getByRole("heading", { name: "Ready to publish: 1 product" })).toBeInTheDocument();
+  });
+});
+
+describe("the page's states", () => {
+  it("another of the seller's shops loads as the current one; if the node can't read it, says so with Retry", async () => {
+    stubNode();
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
+    store.dispatch(setDataContainer(dataContainer));
+    store.dispatch(
+      setAllMyStores([
+        { id: STORE_ID, owner: SELLER, title: viewedStore.title, description: "", created: 1 },
+        { id: "q-store-general-other", owner: SELLER, title: "Other shop", description: "", created: 2 },
+      ])
+    );
+    installQortalMock();
+    renderWithProviders(
+      <Routes>
+        <Route path="/product-manager/:store" element={<ProductManager />} />
+      </Routes>,
+      { store, initialEntries: ["/product-manager/q-store-general-other"] }
+    );
+    expect(await screen.findByText("Couldn't load this shop from your node")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "Other shop" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("a shop without a product list on QDN offers to create one, and shows no endless skeleton", async () => {
+    stubNode();
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
+    store.dispatch(setOwnShopStatus("container-missing"));
+    installQortalMock();
+    renderWithProviders(
+      <Routes>
+        <Route path="/product-manager/:store" element={<ProductManager />} />
+      </Routes>,
+      { store, initialEntries: [`/product-manager/${STORE_ID}?tab=products`] }
+    );
+    expect(screen.getByText("Your shop has no product list on QDN yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create product list" })).toBeInTheDocument();
+    expect(screen.getByText("Your products show here once your product list loads")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Loading products")).toBeNull();
   });
 });
 
