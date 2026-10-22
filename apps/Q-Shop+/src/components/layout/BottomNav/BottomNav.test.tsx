@@ -70,7 +70,7 @@ describe("BottomNav", () => {
     renderNav({ path: "/products" });
     const nav = screen.getByRole("navigation", { name: "Main" });
     const labels = Array.from(nav.querySelectorAll("button")).map((b) => b.textContent);
-    expect(labels).toEqual(["Shops", "Products", "Cart", "Orders", "Manage Shop"]);
+    expect(labels).toEqual(["Shops", "Products", "Cart", "Orders", "Manage"]);
     expect(screen.getByRole("button", { name: "Products" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Shops" })).not.toHaveAttribute("aria-current");
   });

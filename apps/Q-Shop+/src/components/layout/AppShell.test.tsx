@@ -242,8 +242,10 @@ describe("AppShell on a phone", () => {
       "Products",
       "Cart",
       "Orders",
-      "Manage Shop",
+      "Manage",
     ]);
+    // The bar shows "Manage"; it is named "Manage Shop", as the header calls it.
+    expect(within(nav).getByRole("button", { name: "Manage Shop" })).toBeInTheDocument();
     expect(screen.getAllByRole("navigation")).toHaveLength(1);
     // Five items fill the bar: Settings is in the header.
     fireEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Settings" }));

@@ -149,6 +149,8 @@ export function CartBadgeIcon({ items, pending }: { items: number; pending: numb
 }
 
 interface NavItem {
+  /** Its name when the label shown is shorter. */
+  name?: string;
   key: NavSection;
   label: string;
   /**
@@ -184,7 +186,8 @@ export function BottomNav() {
       onClick: () => navigate("/cart"),
     },
     { key: "orders", label: "Orders", icon: <ReceiptLongOutlinedIcon />, onClick: () => navigate("/my-orders") },
-    { key: "sell", label: "Manage Shop", icon: <SellOutlinedIcon />, onClick: sell },
+    // "Manage Shop" (Simon) doesn't fit a fifth of a 360 px phone: "Manage" shows, screen readers hear it whole.
+    { key: "sell", label: "Manage", name: "Manage Shop", icon: <SellOutlinedIcon />, onClick: sell },
   ];
 
   return (
@@ -198,6 +201,7 @@ export function BottomNav() {
             compact={compact}
             active={active}
             aria-current={active ? "page" : undefined}
+            aria-label={item.name}
             onClick={item.onClick}
           >
             <span className={INDICATOR_CLASS} aria-hidden>
