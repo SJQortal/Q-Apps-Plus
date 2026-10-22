@@ -38,6 +38,7 @@ import { CollectionEditor } from "./CollectionEditor";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import { FormError } from "./FormError";
 import { useCollections } from "./useCollections";
+import { visuallyHiddenSx } from "../pages/Store/a11y";
 
 /** Products a buyer can see: listed, not retired. */
 function isShown(row: SellerRow | undefined): boolean {
@@ -297,7 +298,8 @@ export function CollectionsTab({ ready, loading = false }: { ready: boolean; loa
         </Box>
       )}
       {/* Moves are said out loud: the rows change places without moving the focus out of them. */}
-      <Box role="status" aria-live="polite" sx={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" }}>
+      {/* visuallyHiddenSx: in sx a width of 1 is 100%, and this one stuck out of the page sideways. */}
+      <Box role="status" aria-live="polite" sx={visuallyHiddenSx}>
         {announcement}
       </Box>
 
