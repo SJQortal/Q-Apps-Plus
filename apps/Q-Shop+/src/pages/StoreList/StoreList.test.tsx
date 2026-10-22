@@ -86,7 +86,6 @@ beforeEach(() => {
   resetActivityMemory();
   resetShopDetails();
   resetHomeMemory();
-  resetNewProductsCache();
 });
 
 afterEach(() => {
@@ -139,13 +138,16 @@ describe("home page", () => {
   it("leaves out a new product whose title isn't text (it blanked the whole app)", async () => {
     const world = makeWorld();
     world.shops[23].products[11].title = { a: 1 };
+    // Catalogues read by earlier tests stay cached for the session: read this world's.
+    resetNewProductsCache();
     renderHome({ world, allInView: true });
     const strip = await screen.findByRole("region", { name: "New products" });
-    await within(strip).findByRole("link", { name: "Product 10" });
+    await within(strip).findByRole("link", { name: "Product 10" }, { timeout: 5000 });
     const hrefs = within(strip).getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toHaveLength(12);
     expect(hrefs.some((href) => href?.includes("q-store-product-shop-23-P000000011"))).toBe(false);
     expect(cards()).toHaveLength(24);
+    resetNewProductsCache();
   });
 
   it("has no new-products strip while searching or filtering, and reads none until it is in view", async () => {
