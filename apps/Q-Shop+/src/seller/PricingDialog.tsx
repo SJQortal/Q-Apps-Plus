@@ -23,6 +23,7 @@ import {
   fiatPriceOf,
   fiatPricingOf,
   parseFiat,
+  priceChanges,
   qortPriceOf,
   rateToText,
   sanitizeFiatInput,
@@ -90,11 +91,12 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const q = parseFiat(qortRate, RATE_DECIMALS);
   const a = arrrRate.trim() ? parseFiat(arrrRate, RATE_DECIMALS) : undefined;
   const rates: FiatRates | null = Number.isNaN(q) || (a !== undefined && Number.isNaN(a)) ? null : { QORT: q, ...(a !== undefined && { ARRR: a }) };
-  const ratesChanged =
-    !current ||
-    current.currency !== currency ||
-    rateToText(current.rates.QORT) !== qortRate.trim() ||
-    rateToText(current.rates.ARRR) !== arrrRate.trim();
+  // A shop without pricing yet: only what was typed counts as a change.
+  const ratesChanged = current
+    ? current.currency !== currency ||
+      rateToText(current.rates.QORT) !== qortRate.trim() ||
+      rateToText(current.rates.ARRR) !== arrrRate.trim()
+    : !!qortRate.trim() || !!arrrRate.trim();
   const productsChanged = rows.some((row) => textOf(row) !== initialText(row));
   const changed = ratesChanged || productsChanged;
   const priced = rows.filter((row) => !Number.isNaN(parseFiat(textOf(row)))).length;
@@ -119,17 +121,19 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const publish = async () => {
     setFormError(null);
     if (!rates) return setFormError(`Type how much one QORT is worth in ${currency}${takesArrr ? " (and one ARRR, if you like)" : ""}.`);
-    const prices: Record<string, number | null> = {};
+    const wanted: { productId: string; product: Record<string, unknown> | undefined; value: number | null }[] = [];
     for (const row of rows) {
       const text = textOf(row).trim();
       const value = parseFiat(text);
       if (text && Number.isNaN(value)) {
         return setFormError(`Check the price of ${titleOf(details(row)) || "a product"}: a number above 0, with at most 2 decimals.`);
       }
-      if (!Number.isNaN(value)) prices[row.productId] = value;
-      else if (details(row)?.fiatPrice) prices[row.productId] = null;
+      wanted.push({ productId: row.productId, product: details(row), value: Number.isNaN(value) ? null : value });
     }
-    await p.prepare({ pricing: { currency, rates }, prices });
+    // Only the products whose prices change: their catalogues alone are read again and sent.
+    const pricing = { currency, rates };
+    const prices = Object.fromEntries(priceChanges(wanted, pricing, takesArrr).map((c) => [c.productId, c.value]));
+    await p.prepare({ pricing, prices });
   };
 
   const requestClose = () => (changed ? setConfirmDiscard(true) : onClose());

@@ -199,6 +199,50 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? "null";
 }
 
+export interface PriceChange {
+  productId: string;
+  /** The product's price in the currency, or null: it stops following it. */
+  value: number | null;
+  before: { qort?: number; arrr?: number };
+  after: { qort?: number; arrr?: number };
+}
+
+const arrrOf = (product: { price?: unknown } | null | undefined): number | undefined => {
+  const list = Array.isArray(product?.price) ? (product.price as { currency?: unknown; value?: unknown }[]) : [];
+  const value = list.find((p) => p?.currency === "ARRR")?.value;
+  return positive(value) ? value : undefined;
+};
+
+/**
+ * What publishing would change, worked out from the products as the page
+ * holds them: each product given a price in the currency whose priced copy
+ * differs from it, and each product that stops following one (`null`, only
+ * when it has a `fiatPrice`). Unchanged products are left out, so their
+ * catalogues aren't read or sent again. (The product list is read fresh
+ * before publishing: a price changed on another device changes it, and
+ * stops the publish.)
+ */
+export function priceChanges(
+  products: { productId: string; product: Record<string, unknown> | undefined; value: number | null }[],
+  pricing: Pick<FiatPricing, "currency" | "rates">,
+  takesArrr: boolean
+): PriceChange[] {
+  const out: PriceChange[] = [];
+  for (const { productId, product, value } of products) {
+    if (!product) continue;
+    if (value === null && !("fiatPrice" in product)) continue;
+    const next = value !== null ? productPricedInFiat(product, value, pricing, takesArrr) : withoutFiatPrice(product);
+    if (canonical(next) === canonical(product)) continue;
+    out.push({
+      productId,
+      value,
+      before: { qort: qortPriceOf(product), arrr: arrrOf(product) },
+      after: { qort: qortPriceOf(next), arrr: arrrOf(next) },
+    });
+  }
+  return out;
+}
+
 /** A price missing from the catalogues the publish needs (couldn't be read). */
 export class MissingPriceCatalogueError extends Error {
   readonly catalogueId: string;

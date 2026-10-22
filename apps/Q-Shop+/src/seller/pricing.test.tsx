@@ -171,6 +171,31 @@ describe("prices in a currency", () => {
     expect(cat.products[poster.id]).toEqual(priced.products[poster.id]);
   });
 
+  it("reads and sends no catalogue when no product's price changes (new rates for products not priced yet)", async () => {
+    const { q } = setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
+    const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
+    await waitFor(() => expect(priceField(dialog, "Mug")).toBeEnabled());
+    const reads = q.callsFor("FETCH_QDN_RESOURCE").length;
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "0.18" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish prices" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    expect(sent.map((r: any) => r.identifier)).toEqual([DATA_CONTAINER_ID]);
+    expect(q.callsFor("FETCH_QDN_RESOURCE")).toHaveLength(reads);
+  });
+
+  it("closes untouched without asking, and offers Publish only once something is typed", async () => {
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
+    const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
+    await waitFor(() => expect(priceField(dialog, "Mug")).toBeEnabled());
+    expect(within(dialog).getByRole("button", { name: "Publish prices" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Prices in a currency" })).toBeNull());
+    expect(screen.queryByRole("dialog", { name: "Discard your changes?" })).toBeNull();
+  });
+
   it("publishes nothing while the shop has drafts, and says why", async () => {
     const { store, q } = setup();
     store.dispatch(setProductsToSave({ ...mug, title: "Mug (draft)", isUpdate: true }));

@@ -6,6 +6,7 @@ import {
   fiatPriceOf,
   fiatPricingOf,
   parseFiat,
+  priceChanges,
   priceListFromFiat,
   productPricedInFiat,
   rateToText,
@@ -155,5 +156,27 @@ describe("publishing prices", () => {
     expect(() =>
       buildPricesPublish({ name: SELLER, dataContainer: dc, catalogues: {}, prices: { [mug.id]: 10 }, pricing: usd, takesArrr: true, now: 1 })
     ).toThrow(MissingPriceCatalogueError);
+  });
+});
+
+describe("what publishing prices would change", () => {
+  it("lists only products whose prices change, with before and after, and those that stop following", () => {
+    const following = productPricedInFiat({ ...mug } as Record<string, unknown>, 10, usd, true);
+    const changes = priceChanges(
+      [
+        { productId: mug.id, product: following, value: 10 },
+        { productId: poster.id, product: { ...poster } as Record<string, unknown>, value: 1 },
+        { productId: chair.id, product: { ...chair } as Record<string, unknown>, value: null },
+        { productId: "unread", product: undefined, value: 5 },
+      ],
+      usd,
+      true
+    );
+    // The mug already has these prices; the chair never followed a currency; the unread one can't be priced.
+    expect(changes).toEqual([
+      { productId: poster.id, value: 1, before: { qort: 0.1, arrr: 0.25 }, after: { qort: 5.56, arrr: 4 } },
+    ]);
+    const stop = priceChanges([{ productId: mug.id, product: following, value: null }], usd, true);
+    expect(stop).toEqual([{ productId: mug.id, value: null, before: { qort: 55.56, arrr: 40 }, after: { qort: 55.56, arrr: 40 } }]);
   });
 });
