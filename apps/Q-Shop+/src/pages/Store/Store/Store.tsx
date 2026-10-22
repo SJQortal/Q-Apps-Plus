@@ -66,6 +66,7 @@ import { StoreDetails } from "../StoreDetails/StoreDetails";
 import { ReviewsPanel } from "../StoreReviews/ReviewsPanel";
 import { CoinPicker, RateNote } from "../CoinPicker";
 import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../CartBits";
+import { visuallyHiddenSx } from "../a11y";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -75,18 +76,6 @@ export enum CoinFilter {
 
 const FETCHING_NOTE = "Fetching from peers…";
 
-/** Read by screen readers, not shown. */
-const visuallyHiddenSx = {
-  position: "absolute",
-  width: 1,
-  height: 1,
-  p: 0,
-  m: "-1px",
-  overflow: "hidden",
-  clip: "rect(0 0 0 0)",
-  whiteSpace: "nowrap",
-  border: 0,
-} as const;
 
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);

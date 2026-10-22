@@ -1,0 +1,145 @@
+/**
+ * The product page against the mock node: deep links, what it reads, the
+ * quantity stepper and Add to cart, share link, own and unavailable
+ * products, and not-found.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { Route, Routes } from "react-router-dom";
+import { renderWithProviders } from "../../test/renderWithProviders";
+import { installMockNode, makeWorld, type World } from "../../test/mockNode";
+import { addUser } from "../../state/features/authSlice";
+import { setCatalogueHashMap } from "../../state/features/globalSlice";
+import { createAppStore } from "../../state/store";
+import { setPeerRetryDelaysForTests } from "../Store/peerRetry";
+import { clampQuantity, ProductPage } from "./ProductPage";
+
+const copyText = vi.fn(async (_text: string) => true);
+vi.mock("../../utils/clipboard", () => ({ copyText: (text: string) => copyText(text) }));
+
+const STORE_ID = "q-store-general-my-shop";
+const P11 = "q-store-product-my-shop-P000000011";
+const CAT1 = "q-store-catalogue-my-shop-CAT0000001";
+const pathOf = (product: string, catalogue = CAT1) => `/Seller%20Name/${STORE_ID}/${product}/${catalogue}`;
+
+let restore: (() => void) | null = null;
+beforeEach(() => {
+  copyText.mockClear();
+  restore = setPeerRetryDelaysForTests([10, 10, 10]);
+});
+afterEach(() => {
+  restore?.();
+  vi.unstubAllGlobals();
+});
+
+function renderProduct(world: World, path: string, me: string | null = world.me?.name ?? null, store = createAppStore()) {
+  const node = installMockNode(world);
+  if (me) store.dispatch(addUser({ address: "QAddr", publicKey: "pk", name: me }));
+  const view = renderWithProviders(
+    <Routes>
+      <Route path="/:user/:store/:product/:catalogue" element={<ProductPage />} />
+      <Route path="/:user/:store" element={<div>Shop page</div>} />
+      <Route path="/cart" element={<div>Cart page</div>} />
+    </Routes>,
+    { initialEntries: [path], store }
+  );
+  return { node, ...view };
+}
+
+describe("product page", { timeout: 20_000 }, () => {
+  it("opens from a deep link: the catalogue and the shop JSON, no search and no product index", async () => {
+    const { node } = renderProduct(makeWorld(), pathOf(P11));
+    expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
+    expect(screen.getByText("12.00")).toBeInTheDocument();
+    expect(screen.getByText("Digital")).toBeInTheDocument();
+    expect(screen.getByText("Art")).toBeInTheDocument();
+    expect(screen.getByText("In stock")).toBeInTheDocument();
+    expect(screen.getByText("Description of product 11")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAttribute("href", `/Seller%20Name/${STORE_ID}`));
+    expect(node.fetchCalls.filter((u) => u.includes("resources/search"))).toEqual([]);
+    expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toHaveLength(1);
+    expect(node.fetchCalls.filter((u) => u.endsWith("-datacontainer"))).toHaveLength(0);
+    expect(node.q.calls.filter((c) => c.action === "FETCH_QDN_RESOURCE")).toHaveLength(0);
+  });
+
+  it("uses a catalogue a list already read, without fetching it", async () => {
+    const world = makeWorld();
+    const store = createAppStore();
+    const { catalogueOf } = await import("../../test/mockNode");
+    store.dispatch(setCatalogueHashMap({ ...catalogueOf(world.shops[0], CAT1), user: "Seller Name", isValid: true }));
+    const { node } = renderProduct(world, pathOf(P11), null, store);
+    expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
+    expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toHaveLength(0);
+  });
+
+  it("adds the chosen quantity to the cart, 1 to 99", async () => {
+    const { store } = renderProduct(makeWorld(), pathOf(P11));
+    await screen.findByRole("heading", { level: 1, name: "Product 11" });
+    const input = screen.getByRole("textbox", { name: "Quantity" });
+    expect(input).toHaveAttribute("inputmode", "numeric");
+    expect(screen.getByRole("button", { name: "Decrease quantity" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    expect(input).toHaveValue("3");
+    fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));
+    expect(store.getState().cart.carts[STORE_ID]).toMatchObject({
+      storeId: STORE_ID,
+      storeOwner: "Seller Name",
+      orders: { [P11]: { productId: P11, catalogueId: CAT1, quantity: 3 } },
+    });
+    expect(await screen.findByText("Added to cart · 3 × Product 11")).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: "1x50" } });
+    expect(input).toHaveValue("15");
+    fireEvent.change(input, { target: { value: "0" } });
+    fireEvent.blur(input);
+    expect(input).toHaveValue("1");
+  });
+
+  it("copies the product's link", async () => {
+    renderProduct(makeWorld(), pathOf(P11));
+    fireEvent.click(await screen.findByRole("button", { name: "Share" }));
+    await waitFor(() =>
+      expect(copyText).toHaveBeenCalledWith(`qortal://APP/Q-Shop+/Seller%20Name/${STORE_ID}/${P11}/${CAT1}`)
+    );
+  });
+
+  it("offers no Add to cart for an out-of-stock product, nor your own", async () => {
+    renderProduct(makeWorld(), pathOf("q-store-product-my-shop-P000000005", "q-store-catalogue-my-shop-CAT0000000"));
+    expect(await screen.findByText(/Out of stock/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add to cart" })).toBeNull();
+  });
+
+  it("tells the owner it's their product", async () => {
+    renderProduct(makeWorld(), pathOf(P11), "Seller Name");
+    expect(await screen.findByText("This is your product.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add to cart" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Cart/ })).toBeNull();
+  });
+
+  it("says plainly when the product isn't there (no template text)", async () => {
+    renderProduct(makeWorld(), pathOf("q-store-product-my-shop-GONE000000"));
+    expect(await screen.findByRole("heading", { level: 1, name: "Product not found" })).toBeInTheDocument();
+    expect(screen.getByText("This product isn't in the shop any more")).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("${");
+    fireEvent.click(screen.getByRole("button", { name: "Go to the shop" }));
+    expect(await screen.findByText("Shop page")).toBeInTheDocument();
+  });
+
+  it("says not found when the catalogue doesn't exist, after one limit-1 search", async () => {
+    const { node } = renderProduct(makeWorld(), pathOf(P11, "q-store-catalogue-my-shop-NOPE000000"));
+    expect(await screen.findByRole("heading", { level: 1, name: "Product not found" })).toBeInTheDocument();
+    const searches = node.fetchCalls.filter((u) => u.includes("resources/search"));
+    expect(searches).toHaveLength(1);
+    expect(searches[0]).toContain("limit=1");
+  });
+});
+
+describe("clampQuantity", () => {
+  it("keeps quantities whole and between 1 and 99", () => {
+    expect(clampQuantity("")).toBe(1);
+    expect(clampQuantity("0")).toBe(1);
+    expect(clampQuantity("2.7")).toBe(2);
+    expect(clampQuantity(150)).toBe(99);
+    expect(clampQuantity("abc")).toBe(1);
+  });
+});

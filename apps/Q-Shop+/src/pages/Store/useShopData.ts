@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../../state/store";
-import { setCatalogueHashMap, updateRecentlyVisitedStoreId, type CurrentStore } from "../../state/features/globalSlice";
+import { setCatalogueHashMap, updateRecentlyVisitedStoreId, type Catalogue, type CurrentStore } from "../../state/features/globalSlice";
 import {
   addToHashMapStores,
   setCurrentViewedStore,
@@ -31,7 +31,7 @@ import { dataContainerIdentifier, shortStoreIdOf } from "../../qdn/identifiers";
 import { fetchQdnJson, mapWithConcurrency, resourceExists } from "../../qdn/search";
 import { currentStoreFrom } from "../../hooks/useOwnShops";
 import { checkStructureStore } from "../../utils/checkStructure";
-import { CATALOGUE_CONCURRENCY, fetchCatalogue } from "../../utils/fetchCatalogues";
+import { CATALOGUE_CONCURRENCY, fetchCatalogue, type LoadedCatalogue } from "../../utils/fetchCatalogues";
 import { RetryCancelled, withPeerRetries } from "./peerRetry";
 import { fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
 
@@ -54,11 +54,12 @@ async function readOrMissing<T>(
   service: string,
   name: string,
   identifier: string,
-  options: { fresh: boolean; isAlive: () => boolean; onRetry: () => void }
+  options: { fresh: boolean; isAlive: () => boolean; onRetry: () => void; read?: () => Promise<T> }
 ): Promise<ReadResult<T>> {
   let missing = false;
+  const read = options.read ?? (() => fetchQdnJson<T>(service, name, identifier, { fresh: options.fresh }));
   try {
-    const value = await withPeerRetries(() => fetchQdnJson<T>(service, name, identifier, { fresh: options.fresh }), {
+    const value = await withPeerRetries(read, {
       isAlive: options.isAlive,
       onRetry: options.onRetry,
       shouldRetry: async (_error, attempt) => {
@@ -284,6 +285,45 @@ export function useCatalogueLoader(owner: string) {
   }, [load, setStatus, statuses]);
 
   return { catalogues, statuses, load, retryFailed };
+}
+
+/**
+ * One catalogue, for the product page: from the shared map when a list
+ * already read it, else fetched (as the original did), with the peer
+ * retries; `missing` when it doesn't exist at all.
+ */
+export function useCatalogue(owner: string, catalogueId: string): { catalogue: Catalogue | undefined; status: LoadStatus; retry: () => void } {
+  const dispatch = useDispatch();
+  const catalogue = useSelector((state: RootState) => state.global.catalogueHashMap[catalogueId]);
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<{ key: string; status: LoadStatus } | null>(null);
+  const key = `${owner}\n${catalogueId}\n${attempt}`;
+  const have = !!catalogue;
+
+  useEffect(() => {
+    if (have || !owner || !catalogueId) return;
+    let alive = true;
+    readOrMissing<LoadedCatalogue>("DOCUMENT", owner, catalogueId, {
+      fresh: attempt > 0,
+      isAlive: () => alive,
+      onRetry: () => setResult({ key, status: "fetching" }),
+      read: () => fetchCatalogue(owner, catalogueId, { fresh: attempt > 0 }),
+    }).then(
+      (read) => {
+        if (!alive) return;
+        if (read.kind === "ok") dispatch(setCatalogueHashMap(read.value));
+        setResult({ key, status: read.kind === "ok" ? "ready" : read.kind });
+      },
+      () => {}
+    );
+    return () => {
+      alive = false;
+    };
+  }, [attempt, catalogueId, dispatch, have, key, owner]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  const status: LoadStatus = have ? "ready" : result?.key === key ? result.status : "loading";
+  return { catalogue, status, retry };
 }
 
 export interface ShopReviews {
