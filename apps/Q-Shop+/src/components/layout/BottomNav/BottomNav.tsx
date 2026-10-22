@@ -184,7 +184,7 @@ export function BottomNav() {
       onClick: () => navigate("/cart"),
     },
     { key: "orders", label: "Orders", icon: <ReceiptLongOutlinedIcon />, onClick: () => navigate("/my-orders") },
-    { key: "sell", label: "Sell", icon: <SellOutlinedIcon />, onClick: sell },
+    { key: "sell", label: "Manage Shop", icon: <SellOutlinedIcon />, onClick: sell },
   ];
 
   return (

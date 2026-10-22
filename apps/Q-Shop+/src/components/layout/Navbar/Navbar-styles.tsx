@@ -107,7 +107,7 @@ export const AppTitle = styled("span")(({ theme }) => ({
   [`@media ${PHONE_MEDIA}`]: { display: "inline" },
 }));
 
-/** Shops, Orders and Sell on desktop. */
+/** Shops, Orders and Manage Shop on desktop. */
 export const DesktopNav = styled("nav")(({ theme }) => ({
   display: "flex",
   alignItems: "center",

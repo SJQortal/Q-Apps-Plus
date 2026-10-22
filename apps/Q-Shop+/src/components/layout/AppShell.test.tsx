@@ -71,7 +71,7 @@ describe("AppShell on desktop", () => {
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("main")).toContainElement(screen.getByTestId("where"));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Orders", "Sell"]);
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Orders", "Manage Shop"]);
     expect(within(nav).getByRole("button", { name: "Orders" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(nav).getByRole("button", { name: "Products" }));
     expect(where()).toBe("/products");
@@ -242,7 +242,7 @@ describe("AppShell on a phone", () => {
       "Products",
       "Cart",
       "Orders",
-      "Sell",
+      "Manage Shop",
     ]);
     expect(screen.getAllByRole("navigation")).toHaveLength(1);
     // Five items fill the bar: Settings is in the header.

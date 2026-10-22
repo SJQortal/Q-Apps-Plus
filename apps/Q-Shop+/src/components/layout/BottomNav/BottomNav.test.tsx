@@ -70,7 +70,7 @@ describe("BottomNav", () => {
     renderNav({ path: "/products" });
     const nav = screen.getByRole("navigation", { name: "Main" });
     const labels = Array.from(nav.querySelectorAll("button")).map((b) => b.textContent);
-    expect(labels).toEqual(["Shops", "Products", "Cart", "Orders", "Sell"]);
+    expect(labels).toEqual(["Shops", "Products", "Cart", "Orders", "Manage Shop"]);
     expect(screen.getByRole("button", { name: "Products" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("button", { name: "Shops" })).not.toHaveAttribute("aria-current");
   });
@@ -80,7 +80,7 @@ describe("BottomNav", () => {
     expect(screen.getByRole("button", { name: "Shops" })).toHaveAttribute("aria-current", "page");
     unmount();
     renderNav({ path: "/product-manager/q-store-general-my-shop" });
-    expect(screen.getByRole("button", { name: "Sell" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("button", { name: "Manage Shop" })).toHaveAttribute("aria-current", "page");
   });
 
   it("navigates to shops, products, cart and orders", () => {
@@ -124,10 +124,10 @@ describe("BottomNav", () => {
     expect(container.querySelectorAll(".MuiBadge-dot:not(.MuiBadge-invisible)")).toHaveLength(0);
   });
 
-  describe("Sell", () => {
+  describe("Manage Shop", () => {
     it("asks to sign in when signed out", () => {
       const { actions } = renderNav();
-      fireEvent.click(screen.getByRole("button", { name: "Sell" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
       expect(actions.signIn).toHaveBeenCalledTimes(1);
       expect(where()).toBe("/");
     });
@@ -137,7 +137,7 @@ describe("BottomNav", () => {
       store.dispatch(setCurrentStore({ id: "q-store-general-my-shop", owner: "Buyer+One" }));
       store.dispatch(setOwnShopStatus("ready"));
       renderNav({ store });
-      fireEvent.click(screen.getByRole("button", { name: "Sell" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
       expect(where()).toBe("/product-manager/q-store-general-my-shop");
     });
 
@@ -146,7 +146,7 @@ describe("BottomNav", () => {
       store.dispatch(setAllMyStores([{ id: "q-store-general-other", owner: "Buyer+One", title: "Other" }]));
       store.dispatch(setOwnShopStatus("unavailable"));
       renderNav({ store });
-      fireEvent.click(screen.getByRole("button", { name: "Sell" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
       expect(where()).toBe("/product-manager/q-store-general-other");
       expect(store.getState().global.recentlyVisitedStoreId).toBe("q-store-general-other");
     });
@@ -155,7 +155,7 @@ describe("BottomNav", () => {
       const store = signedIn();
       store.dispatch(setOwnShopStatus("none"));
       renderNav({ store });
-      fireEvent.click(screen.getByRole("button", { name: "Sell" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
       expect(store.getState().global.isOpenCreateStoreModal).toBe(true);
       expect(where()).toBe("/");
     });
@@ -164,7 +164,7 @@ describe("BottomNav", () => {
       const store = signedIn();
       store.dispatch(setOwnShopStatus("loading"));
       const { actions } = renderNav({ store });
-      fireEvent.click(screen.getByRole("button", { name: "Sell" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
       expect(store.getState().global.isOpenCreateStoreModal).toBe(false);
       expect(store.getState().notifications.alertTypes.alertInfo).toMatch(/Loading your shops/);
       expect(actions.reloadOwnShops).not.toHaveBeenCalled();
@@ -172,7 +172,7 @@ describe("BottomNav", () => {
       act(() => {
         store.dispatch(setOwnShopStatus("error"));
       });
-      fireEvent.click(screen.getByRole("button", { name: "Sell" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
       expect(actions.reloadOwnShops).toHaveBeenCalledTimes(1);
       expect(store.getState().global.isOpenCreateStoreModal).toBe(false);
     });
@@ -181,7 +181,7 @@ describe("BottomNav", () => {
       const store = createAppStore();
       store.dispatch(addUser({ address: "QNoName", publicKey: "pk", name: "", names: [{ name: "", owner: "QNoName" }] }));
       const { actions } = renderNav({ store });
-      fireEvent.click(screen.getByRole("button", { name: "Sell" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
       expect(actions.signIn).not.toHaveBeenCalled();
       expect(store.getState().notifications.alertTypes.alertInfo).toMatch(/Register a Qortal name/);
     });

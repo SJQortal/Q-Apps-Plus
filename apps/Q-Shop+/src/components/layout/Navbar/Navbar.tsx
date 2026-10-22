@@ -1,6 +1,6 @@
 /**
  * The sticky header (docs/DESIGN.md → Layout): the logo and the app's name
- * (home), Shops / Products / Orders / Sell and the cart on desktop, Settings,
+ * (home), Shops / Products / Orders / Manage Shop (Simon, 2026-10-22: was "Sell") and the cart on desktop, Settings,
  * and the account menu or Sign in. On phones it slides away when you scroll
  * down and comes back when you scroll up; the navigation lives in BottomNav
  * there, and Settings stays up here (the bar takes five items).
@@ -127,7 +127,7 @@ const NavBar: React.FC = () => {
               onClick={sell}
             >
               <SellOutlinedIcon aria-hidden />
-              Sell
+              Manage Shop
             </NavLinkButton>
           </DesktopNav>
         )}
