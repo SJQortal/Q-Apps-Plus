@@ -113,7 +113,7 @@ describe("Restore", () => {
     expect(await fetchSettingsFromQdn("")).toEqual({ kind: "none" });
   });
 
-  it("says nothing is saved when the fetch fails and one exact search, limit 1, finds nothing", async () => {
+  it("says nothing is saved when the fetch fails and one exact existence search finds nothing", async () => {
     const urls = stubFetch((url) =>
       url.startsWith("/arbitrary/resources/search")
         ? { body: [] }
@@ -126,8 +126,8 @@ describe("Restore", () => {
     expect(params.get("identifier")).toBe(SETTINGS_SYNC_IDENTIFIER);
     expect(params.get("name")).toBe("Buyer+One");
     expect(params.get("exactmatchnames")).toBe("true");
-    expect(params.get("limit")).toBe("1");
-    expect(params.get("prefix")).toBeNull();
+    expect(params.get("limit")).toBe("50");
+    expect(params.get("prefix")).toBe("true");
   });
 
   it("tells a save the node hasn't got yet apart from no save", async () => {

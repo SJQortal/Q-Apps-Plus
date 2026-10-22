@@ -220,7 +220,11 @@ function search(world: World, params: URLSearchParams): Row[] {
   const reverse = params.get("reverse") === "true";
   const withMeta = params.get("includemetadata") === "true";
   let rows = allRows(world).filter((r) => !service || r.service === service);
-  if (identifier) rows = rows.filter((r) => (prefix ? r.identifier.startsWith(identifier) : r.identifier === identifier));
+  // As Core: a prefix with prefix=true, otherwise anywhere in the identifier; both ignore case.
+  if (identifier) {
+    const needle = identifier.toLowerCase();
+    rows = rows.filter((r) => (prefix ? r.identifier.toLowerCase().startsWith(needle) : r.identifier.toLowerCase().includes(needle)));
+  }
   if (query)
     rows = rows.filter(
       (r) =>

@@ -192,12 +192,12 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(catalogueFetches(node)).toHaveLength(30);
   });
 
-  it("says when a shop doesn't exist, after one limit-1 search", async () => {
+  it("says when a shop doesn't exist, after one exact existence search", async () => {
     const { node } = renderShop(makeWorld(), "/Nobody/q-store-general-nothing");
     expect(await screen.findByText("Shop not found")).toBeInTheDocument();
     const exists = searchUrls(node).filter((u) => u.includes("service=STORE"));
     expect(exists).toHaveLength(1);
-    expect(exists[0]).toContain("limit=1");
+    expect(exists[0]).toContain("prefix=true");
     expect(exists[0]).toContain("identifier=q-store-general-nothing");
   });
 

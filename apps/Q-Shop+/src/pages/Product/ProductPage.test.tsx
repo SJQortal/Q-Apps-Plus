@@ -125,12 +125,12 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(await screen.findByText("Shop page")).toBeInTheDocument();
   });
 
-  it("says not found when the catalogue doesn't exist, after one limit-1 search", async () => {
+  it("says not found when the catalogue doesn't exist, after one exact existence search", async () => {
     const { node } = renderProduct(makeWorld(), pathOf(P11, "q-store-catalogue-my-shop-NOPE000000"));
     expect(await screen.findByRole("heading", { level: 1, name: "Product not found" })).toBeInTheDocument();
     const searches = node.fetchCalls.filter((u) => u.includes("resources/search"));
     expect(searches).toHaveLength(1);
-    expect(searches[0]).toContain("limit=1");
+    expect(searches[0]).toContain("prefix=true");
   });
 });
 

@@ -137,16 +137,21 @@ export async function searchQdnAll(
   return { rows, complete: false };
 }
 
-/** Does `name` hold a resource with exactly this identifier? One row at most. */
+/**
+ * Does `name` hold a resource with exactly this identifier? Core matches
+ * `identifier` anywhere in the id (case-insensitively) unless `prefix` is set,
+ * and as a prefix otherwise, so "q-store-general-shop" also finds
+ * "q-store-general-shop-2": ask for the prefix and compare exactly here.
+ */
 export async function resourceExists(
   service: string,
   name: string,
   identifier: string,
   options: { fresh?: boolean } = {}
 ): Promise<boolean> {
-  const rows = await searchQdn(
-    { service, name, identifier, prefix: false, exactmatchnames: true, limit: 1, includemetadata: false },
-    options
+  const { rows } = await searchQdnAll(
+    { service, name, identifier, prefix: true, exactmatchnames: true, includemetadata: false },
+    { pageSize: 50, maxPages: 4, fresh: options.fresh }
   );
   return rows.some((row) => row.identifier === identifier && row.name === name);
 }

@@ -24,29 +24,15 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname + location.search}</output>;
 }
 
-/**
- * Core matches `identifier` anywhere in the identifier unless `prefix=true`
- * (HSQLDBArbitraryRepository); the mock node matches it exactly. Every STORE
- * identifier in the mock world contains `q-store-general-`, so the text
- * search's identifier is dropped on the way to the mock, which then answers
- * as Core would. Returns the URLs as the app asked for them.
- */
-function coreIdentifierMatch(): string[] {
+/** Records the URLs as the app asked for them (the mock node matches identifiers as Core does). */
+function recordFetches(): string[] {
   const nodeFetch = globalThis.fetch;
   const asked: string[] = [];
-  const search = "/arbitrary/resources/search?";
   vi.stubGlobal(
     "fetch",
     vi.fn((input: string) => {
-      const url = String(input);
-      asked.push(url);
-      if (!url.startsWith(search)) return nodeFetch(url);
-      const params = new URLSearchParams(url.slice(search.length));
-      if (params.get("identifier") && params.get("prefix") !== "true") {
-        params.delete("identifier");
-        return nodeFetch(`${search}${params}`);
-      }
-      return nodeFetch(url);
+      asked.push(String(input));
+      return nodeFetch(String(input));
     })
   );
   return asked;
@@ -72,7 +58,7 @@ function renderHome(
 ) {
   if (options.allInView) installVisibleIntersectionObserver();
   const node = installMockNode(options.world ?? makeWorld());
-  const asked = coreIdentifierMatch();
+  const asked = recordFetches();
   const store = createAppStore();
   if (options.user) store.dispatch(addUser({ address: "QAddress", publicKey: "pk", name: options.user }));
   if (options.myStores) store.dispatch(setAllMyStores(options.myStores));

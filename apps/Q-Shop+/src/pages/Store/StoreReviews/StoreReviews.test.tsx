@@ -195,7 +195,7 @@ describe("review dialog", { timeout: 20_000 }, () => {
     fill();
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1);
-    expect(String(fetchMock.mock.calls[0][0])).toContain("limit=1");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("prefix=true");
     expect(store.getState().store.storeReviews[0].title).toBe("Good");
   });
 
