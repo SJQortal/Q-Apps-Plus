@@ -23,7 +23,7 @@ import { CoinIcon } from "../components/money/CoinIcon";
 import { COINS, FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
 import { isHubDecline } from "../qdn/hubErrors";
 import { AssetPicker } from "./AssetPicker";
-import { MAX_SHOP_TITLE, addressWarning, type ShopFormValues } from "./shopFields";
+import { MAX_META_DESCRIPTION, MAX_SHOP_TITLE, addressWarning, type ShopFormValues } from "./shopFields";
 
 export const SectionTitle = ({ children, as = "h3" }: { children: string; as?: "h2" | "h3" }) => (
   <Typography
@@ -87,6 +87,17 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           multiline
           minRows={3}
           maxRows={10}
+        />
+        <TextField
+          label="Meta description"
+          value={values.metaDescription}
+          onChange={(e) => set("metaDescription", e.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={4}
+          slotProps={{ htmlInput: { maxLength: MAX_META_DESCRIPTION } }}
+          helperText={`Shown under your shop in the Shops list, and found by its search. Left empty, the list shows the start of the description. ${values.metaDescription.length}/${MAX_META_DESCRIPTION}`}
         />
         <TextField label="Location" value={values.location} onChange={(e) => set("location", e.target.value)} required fullWidth />
         <TextField

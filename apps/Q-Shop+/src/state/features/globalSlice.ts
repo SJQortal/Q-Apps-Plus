@@ -19,6 +19,8 @@ export interface CurrentStore {
   created: number;
   /** + app, additive: Qortal assets the shop accepts. */
   acceptedAssets?: { id: number; name: string }[];
+  /** + app, additive: the shop's short text for lists (qdn/payloads.ts StoreFields). */
+  metaDescription?: string;
   id: string;
   title: string;
   description: string;

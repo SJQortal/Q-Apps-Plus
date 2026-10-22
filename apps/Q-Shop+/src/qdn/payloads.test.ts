@@ -102,6 +102,27 @@ describe("shop publishes (the original's shapes)", () => {
     expect("acceptedAssets" in without.storeObj).toBe(false);
   });
 
+  it("writes a meta description into the shop and its QDN description, and leaves it out when empty (additive data)", () => {
+    const meta = "Ghee, tallow and sleep gear from Reykjavík.";
+    const created = buildCreateStorePublish({ name: SELLER, shortStoreId: SHORT_STORE_ID, fields: { ...fields, metaDescription: meta }, created: 1 });
+    expect(created.storeObj).toMatchObject({ description: fields.description, metaDescription: meta });
+    expect(created.request.resources[0].description).toBe("**coins:QORTtrue,ARRRtrue**" + meta);
+    const long = "x".repeat(200);
+    expect(buildCreateStorePublish({ name: SELLER, shortStoreId: SHORT_STORE_ID, fields: { ...fields, metaDescription: long }, created: 1 }).request.resources[0].description).toBe(
+      "**coins:QORTtrue,ARRRtrue**" + "x".repeat(180)
+    );
+    const empty = buildCreateStorePublish({ name: SELLER, shortStoreId: SHORT_STORE_ID, fields: { ...fields, metaDescription: "  " }, created: 1 });
+    expect("metaDescription" in empty.storeObj).toBe(false);
+    expect(empty.request.resources[0].description).toBe("**coins:QORTtrue,ARRRtrue**" + fields.description.slice(0, 180));
+    // An edit that empties it takes it out of the shop again.
+    const edited = buildEditStorePublish({ name: SELLER, currentStore: { ...viewedStore, metaDescription: meta }, fields: { ...fields, metaDescription: "" } });
+    expect("metaDescription" in edited.storeObj).toBe(false);
+    expect(edited.request.description).toBe("**coins:QORTtrue,ARRRtrue**" + fields.description.slice(0, 180));
+    const kept = buildEditStorePublish({ name: SELLER, currentStore: viewedStore, fields: { ...fields, metaDescription: meta } });
+    expect(kept.storeObj).toMatchObject({ metaDescription: meta });
+    expect(kept.request.description).toBe("**coins:QORTtrue,ARRRtrue**" + meta);
+  });
+
   it("edits by republishing the in-memory store with the new fields", () => {
     const current = { ...viewedStore, shortStoreId: undefined as unknown as string, category: "x", tags: [] };
     const { request, storeObj } = buildEditStorePublish({

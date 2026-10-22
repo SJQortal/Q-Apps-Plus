@@ -75,6 +75,7 @@ export function currentStoreFrom(storeId: string, owner: string, json: any, row?
     supportedCoins: json?.supportedCoins || [],
     foreignCoins: json?.foreignCoins || {},
     acceptedAssets: Array.isArray(json?.acceptedAssets) ? json.acceptedAssets : undefined,
+    metaDescription: typeof json?.metaDescription === "string" ? json.metaDescription : undefined,
     owner,
   } as unknown as CurrentStore;
 }

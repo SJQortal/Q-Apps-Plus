@@ -58,11 +58,32 @@ export interface StoreFields {
   supportedCoins: string[];
   /** + app, additive: Qortal assets the shop accepts. Omitted when empty. */
   acceptedAssets?: { id: number; name: string }[];
+  /**
+   * + app, additive: the shop's short text for lists (Simon's "Meta
+   * description"), stored in the shop's JSON and used for the QDN metadata
+   * description instead of the description's start. Omitted when empty.
+   */
+  metaDescription?: string;
 }
 
-/** QDN metadata description of a shop, exactly as the original writes it. */
-export function storeMetaDescription(description: string, supportedCoins: string[]): string {
-  return `**coins:QORTtrue,ARRR${supportedCoins.includes("ARRR")}**` + description.slice(0, 180);
+/**
+ * QDN metadata description of a shop as the original writes it: its coins
+ * marker and the first 180 characters of the description, or of the meta
+ * description when the seller wrote one. Every shop list (the original's
+ * too) shows this text under the shop.
+ */
+export function storeMetaDescription(description: string, supportedCoins: string[], metaDescription?: string): string {
+  const text = metaDescription?.trim() || description;
+  return `**coins:QORTtrue,ARRR${supportedCoins.includes("ARRR")}**` + text.slice(0, 180);
+}
+
+/** The shop object with `metaDescription` set, or without it when there is none. */
+function withMetaDescription<T extends Record<string, any>>(obj: T, metaDescription: string | undefined): T {
+  if (metaDescription === undefined) return obj;
+  if (metaDescription.trim()) return { ...obj, metaDescription: metaDescription.trim() };
+  const rest = { ...obj };
+  delete rest.metaDescription;
+  return rest;
 }
 
 function withAssets<T extends object>(obj: T, assets: StoreFields["acceptedAssets"]): T {
@@ -86,19 +107,22 @@ export function buildCreateStorePublish(args: {
 }) {
   const { name, shortStoreId, fields, created } = args;
   const identifier = storeIdentifier(shortStoreId);
-  const storeObj = withAssets(
-    {
-      title: fields.title,
-      description: fields.description,
-      location: fields.location,
-      shipsTo: fields.shipsTo,
-      created,
-      shortStoreId,
-      logo: fields.logo,
-      foreignCoins: fields.foreignCoins,
-      supportedCoins: fields.supportedCoins,
-    },
-    fields.acceptedAssets
+  const storeObj = withMetaDescription(
+    withAssets(
+      {
+        title: fields.title,
+        description: fields.description,
+        location: fields.location,
+        shipsTo: fields.shipsTo,
+        created,
+        shortStoreId,
+        logo: fields.logo,
+        foreignCoins: fields.foreignCoins,
+        supportedCoins: fields.supportedCoins,
+      },
+      fields.acceptedAssets
+    ),
+    fields.metaDescription
   );
   const dataContainer = emptyDataContainer(identifier, shortStoreId, name);
   const resourceStore: PublishResource = {
@@ -108,7 +132,7 @@ export function buildCreateStorePublish(args: {
     data64: jsonToBase64(storeObj),
     filename: "store.json",
     title: fields.title,
-    description: storeMetaDescription(fields.description, fields.supportedCoins),
+    description: storeMetaDescription(fields.description, fields.supportedCoins, fields.metaDescription),
     identifier,
   };
   const resourceDataContainer: PublishResource = {
@@ -161,6 +185,7 @@ export function buildEditStorePublish(args: {
       storeObj = rest;
     }
   }
+  storeObj = withMetaDescription(storeObj, fields.metaDescription);
   return {
     storeObj,
     request: {
@@ -170,7 +195,7 @@ export function buildEditStorePublish(args: {
       data64: jsonToBase64(storeObj),
       filename: "store.json",
       title: fields.title,
-      description: storeMetaDescription(fields.description, fields.supportedCoins),
+      description: storeMetaDescription(fields.description, fields.supportedCoins, fields.metaDescription),
       identifier: currentStore.id,
     },
   };

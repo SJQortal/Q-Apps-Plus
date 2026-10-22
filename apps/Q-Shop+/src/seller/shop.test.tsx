@@ -280,7 +280,7 @@ describe("create shop over a deleted one", () => {
 });
 
 describe("edit shop", () => {
-  function setup(handlers: Record<string, (p: any) => unknown> = {}, shop: Partial<typeof viewedStore> = {}) {
+  function setup(handlers: Record<string, (p: any) => unknown> = {}, shop: Partial<typeof viewedStore> & { metaDescription?: string } = {}) {
     stubNode();
     const q = installQortalMock({ PUBLISH_QDN_RESOURCE: async () => true, ...handlers });
     const store = sellerStore();
@@ -313,6 +313,17 @@ describe("edit shop", () => {
     expect(req).toEqual(expected.request);
     expect(decodeData64(req.data64).foreignCoins).toEqual({ ARRR: ARRR_ADDRESS });
     expect(req.description.startsWith("**coins:QORTtrue,ARRRtrue**")).toBe(true);
+  });
+
+  it("keeps the shop's meta description and publishes a new one as the text under the shop in lists", async () => {
+    const { q, onClose } = setup({}, { metaDescription: "Old short text" });
+    expect(field(/^Meta description/)).toHaveValue("Old short text");
+    fireEvent.change(field(/^Meta description/), { target: { value: "  Ghee, tallow and sleep gear.  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const [req] = q.callsFor("PUBLISH_QDN_RESOURCE") as any[];
+    expect(decodeData64(req.data64)).toMatchObject({ description: viewedStore.description, metaDescription: "Ghee, tallow and sleep gear." });
+    expect(req.description).toBe("**coins:QORTtrue,ARRRtrue**Ghee, tallow and sleep gear.");
   });
 
   it("adds ARRR from the wallet and an asset by name, the asset as additive data", async () => {

@@ -3,8 +3,8 @@
  * the StoreFields the payload builders take (qdn/payloads.ts). The shapes are
  * the original's (docs/apps/Q-Shop+.md → Data contract): `supportedCoins`
  * starts with QORT; `foreignCoins` always carries `ARRR` (an empty string when
- * there is none, as the original wrote it); `acceptedAssets` is the + app's
- * additive list.
+ * there is none, as the original wrote it); `acceptedAssets` and
+ * `metaDescription` are the + app's additive fields.
  */
 import { FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
 import type { StoreFields } from "../qdn/payloads";
@@ -13,6 +13,8 @@ export interface ShopFormValues {
   logo: string | null;
   title: string;
   description: string;
+  /** The short text under the shop in lists (empty: the start of the description). */
+  metaDescription: string;
   location: string;
   shipsTo: string;
   /** Coins the shop takes besides QORT. */
@@ -26,6 +28,8 @@ export interface ShopFormValues {
 export const MAX_SHOP_TITLE = 50;
 /** The original's limit for a shop id. */
 export const MAX_SHOP_ID = 25;
+/** What the original puts of a description into the shop's QDN metadata, and so the most a list shows. */
+export const MAX_META_DESCRIPTION = 180;
 
 function perTicker<T>(make: (t: ForeignTicker) => T): Record<ForeignTicker, T> {
   return Object.fromEntries(FOREIGN_TICKERS.map((t) => [t, make(t)])) as Record<ForeignTicker, T>;
@@ -36,6 +40,7 @@ export function shopFormValues(store?: {
   logo?: string;
   title?: string;
   description?: string;
+  metaDescription?: unknown;
   location?: string;
   shipsTo?: string;
   supportedCoins?: string[];
@@ -47,6 +52,7 @@ export function shopFormValues(store?: {
     logo: store?.logo || null,
     title: store?.title ?? "",
     description: store?.description ?? "",
+    metaDescription: typeof store?.metaDescription === "string" ? store.metaDescription : "",
     location: store?.location ?? "",
     shipsTo: store?.shipsTo ?? "",
     coins: perTicker((t) => supported.includes(t)),
@@ -64,6 +70,7 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
   return {
     title: values.title.trim(),
     description: values.description.trim(),
+    metaDescription: values.metaDescription.trim(),
     location: values.location.trim(),
     shipsTo: values.shipsTo.trim(),
     logo: values.logo ?? "",
