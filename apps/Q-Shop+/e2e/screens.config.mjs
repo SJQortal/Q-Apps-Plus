@@ -185,6 +185,7 @@ function rows() {
   reviews.forEach((r, i) => out.push({ name: r.name, service: 'DOCUMENT', identifier: `q-store-review-${r.short}-${r.uid}-${r.rating * 10}`, created: now - i * DAY, updated: now - i * DAY, size: 200, metadata: { title: r.title, description: r.description } }));
   for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
   statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
+  out.push({ name: 'Gold Issuer', service: 'IMAGE', identifier: 'asset81_Gold Bar_aavatar', created: now - DAY, updated: now - DAY, size: 2000 });
   return out;
 }
 
@@ -260,7 +261,7 @@ export default {
     window.__qplusAnswer = async (p) => {
       switch (p.action) {
         case 'GET_USER_ACCOUNT': return { address: '${ME_ADDRESS}', publicKey: 'SellerPublicKey' };
-        case 'GET_ACCOUNT_NAMES': return [{ name: '${ME}', owner: '${ME_ADDRESS}' }];
+        case 'GET_ACCOUNT_NAMES': return [{ name: '${ME}', owner: '${ME_ADDRESS}' }, { name: 'Zoë Ålund', owner: '${ME_ADDRESS}' }];
         case 'GET_PRIMARY_NAME': return '${ME}';
         case 'GET_QDN_RESOURCE_URL': return '/arbitrary/' + p.service + '/' + encodeURIComponent(p.name) + '/' + p.identifier;
         case 'FETCH_QDN_RESOURCE': {
@@ -290,6 +291,7 @@ export default {
     const p = decodeURIComponent(url.pathname);
     const sp = url.searchParams;
     if (p.endsWith('/arbitrary/resources/search')) return json(route, search(sp)).then(() => true);
+    if (p === '/names/primary/QOwner') return json(route, { name: 'Gold Issuer', owner: 'QOwner' }).then(() => true);
     if (p.startsWith('/crosschain/price/')) return route.fulfill({ status: 200, contentType: 'text/plain', body: '25000000' }).then(() => true);
     if (p.startsWith('/transactions/')) return json(route, []).then(() => true);
     if (p.startsWith('/assets')) return json(route, p.includes('/info') ? { assetId: 81, name: 'Gold Bar', owner: 'QOwner', quantity: 1000, isDivisible: true, isUnspendable: false } : [{ assetId: 0, name: 'QORT', description: 'QORTAL coin', isDivisible: true }, { assetId: 81, name: 'Gold Bar', description: 'A test asset', isDivisible: true }, { assetId: 82, name: 'Silver', description: '', isDivisible: true }, { assetId: 83, name: 'Gold Seats', description: 'Whole seats only', isDivisible: false }, { assetId: 84, name: 'Golden Locked', description: '', isDivisible: true, isUnspendable: true }]).then(() => true);
@@ -297,6 +299,7 @@ export default {
     if (m) {
       const [, service, name, id] = m;
       if (service === 'THUMBNAIL') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
+      if (service === 'IMAGE' && id === 'asset81_Gold Bar_aavatar' && name === 'Gold Issuer') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
       if (service === 'DOCUMENT' && id.startsWith('q-store-collections-')) {
         const owned = shops.find((s) => s.owner === name && id === `q-store-collections-${s.short}`);
         const doc = owned && collectionsOf(owned);
@@ -349,6 +352,8 @@ export default {
     { key: 'seller-arrange', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Arrange', exact: true }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Arrange your shop' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(900); } },
     { key: 'seller-pricing', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Change rates and prices' }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Prices in USD' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(1200); } },
     { key: 'seller-category-search', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Add product' }).click({ timeout: 2500 }); const dialog = page.getByRole('dialog', { name: 'Add product' }); await dialog.getByRole('textbox', { name: /^Title/ }).fill('Blue Light Blocking Glasses | Night'); const box = dialog.getByRole('combobox', { name: /^Category/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.click(); await box.fill('glasses'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    { key: 'shop-sort-menu', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(800); await page.getByRole('combobox', { name: /^Sort/ }).click({ timeout: 2500 }); await page.getByRole('listbox').waitFor({ timeout: 3000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-currency-menu', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Change rates and prices' }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Prices in USD' }).getByRole('combobox', { name: /^Currency/ }).click({ timeout: 4000 }); await page.getByRole('listbox').waitFor({ timeout: 3000 }); await page.waitForTimeout(400); } },
     { key: 'seller-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
