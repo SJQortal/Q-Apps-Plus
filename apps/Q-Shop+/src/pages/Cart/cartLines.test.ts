@@ -94,4 +94,28 @@ describe("cart lines", () => {
     expect(shortAddress("zs1arrrpayoutaddressxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe("zs1arrrp…xxxxxx");
     expect(shortAddress("short")).toBe("short");
   });
+
+  it("drops a store's fields of the wrong type instead of rendering or paying to them", () => {
+    expect(
+      cartShopFrom(STORE_ID, SELLER, {
+        title: { text: "T" },
+        supportedCoins: ["QORT", 5, "ARRR"],
+        foreignCoins: { ARRR: 5, BTC: "bc1" },
+        acceptedAssets: [{ id: 1, name: { x: 1 } }, "y"],
+        logo: 7,
+      })
+    ).toEqual({
+      id: STORE_ID,
+      title: undefined,
+      owner: SELLER,
+      supportedCoins: ["QORT", "ARRR"],
+      foreignCoins: { BTC: "bc1" },
+      acceptedAssets: [{ id: 1, name: "" }],
+      logo: undefined,
+    });
+    expect(cartShopFrom(STORE_ID, SELLER, { foreignCoins: ["zs1"], acceptedAssets: {} })).toMatchObject({
+      foreignCoins: undefined,
+      acceptedAssets: undefined,
+    });
+  });
 });

@@ -7,7 +7,13 @@
  *   list loaded it) is used as is; otherwise its STORE JSON is read through
  *   the session cache (fetchQdnJson), by owner and identifier.
  * - A catalogue already in `catalogueHashMap` (for this owner) is used as is;
- *   otherwise it is fetched with the app's catalogue reader and added there.
+ *   otherwise it is fetched with the app's catalogue reader and kept here by
+ *   owner + identifier. That map is keyed by identifier only, and another
+ *   name can publish a catalogue under the same identifier (docs/QORTAL.md →
+ *   pitfall 15): a copy loaded for one cart must never evict the copy another
+ *   cart needs, or each load would send the other cart to fetch again, for
+ *   as long as the page is open. A copy is added to the shared map only when
+ *   the map has none of another name's under that identifier.
  * - At most five loads at once; each is tried again at 2, 4 and 8 s
  *   ("Fetching from peers…"), then waits for Retry. No polling.
  */
@@ -15,7 +21,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import type { RootState } from "../../state/store";
 import type { Cart } from "../../state/features/cartSlice";
-import { setCatalogueHashMap } from "../../state/features/globalSlice";
+import { setCatalogueHashMap, type Catalogue } from "../../state/features/globalSlice";
 import { addToHashMapStores, type Store } from "../../state/features/storeSlice";
 import { fetchQdnJson } from "../../qdn/search";
 import { fetchAndEvaluateCatalogues } from "../../utils/fetchCatalogues";
@@ -24,6 +30,8 @@ import { useRetryingLoads, type LoadJob, type LoadPhase } from "./useRetryingLoa
 import { cartShopFrom, cartViewLines, catalogueFor, type CartShop, type CartViewLine } from "./cartLines";
 
 export interface ShopCartView {
+  /** The cart's key in Redux: unique per owner + shop id (React key; never parse it). */
+  key: string;
   storeId: string;
   owner: string | null;
   cart: Cart;
@@ -65,9 +73,12 @@ export function useCartData(carts: Record<string, Cart>): {
   const catalogueHashMap = useSelector((state: RootState) => state.global.catalogueHashMap);
   /** Shops read here whose JSON Redux doesn't keep (it lacks a field the store map requires). */
   const [readShops, setReadShops] = useState<Record<string, CartShop>>({});
+  /** Catalogues read here, by owner + identifier. */
+  const [readCatalogues, setReadCatalogues] = useState<Record<string, Catalogue>>({});
 
   // Newest cart first: Object key order is the order the carts were started in.
-  const cartList = useMemo(() => Object.values(carts).reverse(), [carts]);
+  const cartEntries = useMemo(() => Object.entries(carts).reverse(), [carts]);
+  const cartList = useMemo(() => cartEntries.map(([, cart]) => cart), [cartEntries]);
 
   const shopOf = useCallback(
     (cart: Cart): CartShop | null => {
@@ -105,6 +116,15 @@ export function useCartData(carts: Record<string, Cart>): {
     [dispatch, store]
   );
 
+  /** This owner's copy of a catalogue: the shared map's when it is theirs, else the one read here. */
+  const catalogueOf = useCallback(
+    (owner: string | null, catalogueId: string): Catalogue | null => {
+      if (!owner) return null;
+      return catalogueFor(catalogueHashMap, catalogueId, owner) ?? readCatalogues[shopKey(owner, catalogueId)] ?? null;
+    },
+    [catalogueHashMap, readCatalogues]
+  );
+
   const catalogueJobs = useMemo(() => {
     const jobs: LoadJob<CatalogueJob>[] = [];
     const seen = new Set<string>();
@@ -113,22 +133,25 @@ export function useCartData(carts: Record<string, Cart>): {
       if (!owner) continue;
       for (const order of Object.values(cart.orders)) {
         const key = shopKey(owner, order.catalogueId);
-        if (seen.has(key) || catalogueFor(catalogueHashMap, order.catalogueId, owner)) continue;
+        if (seen.has(key) || catalogueOf(owner, order.catalogueId)) continue;
         seen.add(key);
         jobs.push({ key, item: { catalogueId: order.catalogueId, owner } });
       }
     }
     return jobs;
-  }, [cartList, catalogueHashMap]);
+  }, [cartList, catalogueOf]);
 
   const loadCatalogue = useCallback(
     async ({ catalogueId, owner }: CatalogueJob): Promise<boolean> => {
       const catalogue = await fetchAndEvaluateCatalogues({ user: owner, catalogueId });
       if (!catalogue?.isValid || !catalogue.products || typeof catalogue.products !== "object") return false;
-      dispatch(setCatalogueHashMap(catalogue));
+      setReadCatalogues((current) => ({ ...current, [shopKey(owner, catalogueId)]: catalogue }));
+      // Shared with the other pages, unless that would replace another name's copy.
+      const shared = store.getState().global.catalogueHashMap[catalogueId];
+      if (!shared || shared.user === owner) dispatch(setCatalogueHashMap(catalogue));
       return true;
     },
-    [dispatch]
+    [dispatch, store]
   );
 
   const { phaseOf: shopPhaseOf, retry: retryShopLoad } = useRetryingLoads(shopJobs, loadShop);
@@ -136,21 +159,26 @@ export function useCartData(carts: Record<string, Cart>): {
 
   const views = useMemo(
     () =>
-      cartList.map((cart): ShopCartView => {
+      cartEntries.map(([key, cart]): ShopCartView => {
         const storeId = cart.storeId ?? "";
         const owner = cart.storeOwner;
         const shop = shopOf(cart);
         return {
+          key,
           storeId,
           owner,
           cart,
           shop,
           shopPhase: owner ? shopPhaseOf(shopKey(owner, storeId)) : "failed",
           knownTitle: hashMapStores[storeId]?.owner === owner ? (hashMapStores[storeId]?.title ?? "") : "",
-          lines: cartViewLines(cart, catalogueHashMap, (catalogueId) => cataloguePhaseOf(shopKey(owner ?? "", catalogueId))),
+          lines: cartViewLines(
+            cart,
+            (catalogueId) => catalogueOf(owner, catalogueId),
+            (catalogueId) => cataloguePhaseOf(shopKey(owner ?? "", catalogueId))
+          ),
         };
       }),
-    [cartList, shopOf, shopPhaseOf, cataloguePhaseOf, catalogueHashMap, hashMapStores]
+    [cartEntries, shopOf, shopPhaseOf, cataloguePhaseOf, catalogueOf, hashMapStores]
   );
 
   const retryShop = useCallback(

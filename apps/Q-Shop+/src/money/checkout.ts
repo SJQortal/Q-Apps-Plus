@@ -22,9 +22,9 @@
  * TRANSFER_ASSET.
  */
 import { isHubDecline, isHubTimeout, errorMessage } from "../qdn/hubErrors";
-import { orderIdentifier, shortStoreIdOf } from "../qdn/identifiers";
-import { resourceExists, invalidateQdnSearches } from "../qdn/search";
-import { assetIdOf, coinLabel, isForeignTicker, type ShopCoinSettings } from "./coins";
+import { orderIdentifier, orderMailIdentifier, shortStoreIdOf } from "../qdn/identifiers";
+import { fetchQdnJson, resourceExists, invalidateQdnSearches } from "../qdn/search";
+import { assetIdOf, coinLabel, isForeignTicker, payoutAddress, type ShopCoinSettings } from "./coins";
 import {
   buildOrder,
   buildOrderDetails,
@@ -32,15 +32,21 @@ import {
   buildOrderMailHtml,
   buildOrderPublish,
   digitalDelivery,
+  orderLines,
   type CartLine,
   type DeliveryInput,
   type OrderDetails,
   type PaymentRecord,
 } from "./order";
 import {
+  paymentsUsedByOtherOrders,
   pendingDelivery,
+  rememberUsedPayment,
   removePendingOrder,
+  runningRecording,
   savePendingOrder,
+  trackRecording,
+  type OrderPart,
   type PendingOrder,
 } from "./pendingOrders";
 
@@ -98,7 +104,7 @@ export function paymentRequest(coin: string, amount: string, sellerAddress: stri
     };
   }
   if (isForeignTicker(coin)) {
-    const address = shop.foreignCoins?.[coin]?.trim();
+    const address = payoutAddress(shop, coin);
     if (!address) throw new Error(`This shop has not set a ${coin} address`);
     return {
       recipient: address,
@@ -195,36 +201,137 @@ export async function isOrderRecorded(pending: PendingOrder): Promise<boolean> {
   );
 }
 
+/** Is the seller's Q-Mail about this pending order already on QDN? */
+export async function isOrderMailSent(pending: PendingOrder): Promise<boolean> {
+  return resourceExists(
+    "MAIL_PRIVATE",
+    pending.buyer.name,
+    orderMailIdentifier(pending.store.owner, pending.seller.address, pending.mailUid),
+    { fresh: true }
+  );
+}
+
+/** The two resources of an order's publish, in the order they are sent. */
+const ORDER_PARTS: OrderPart[] = ["order", "mail"];
+
 /**
- * Publishes a paid order. Checks QDN first unless `skipCheck` (a first
- * attempt right after paying). Removes the pending order once it's there.
+ * What Hub says didn't publish: `{error: {unsuccessfulPublishes: [{identifier,
+ * reason}]}}`, as a rejection (or, defensively, as an answer).
  */
-export async function recordOrder(
+function unsuccessfulPublishes(value: unknown): { identifier: string; reason: string }[] {
+  const list = (value as { error?: { unsuccessfulPublishes?: unknown } } | null)?.error?.unsuccessfulPublishes;
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((item) => typeof item?.identifier === "string")
+    .map((item) => ({ identifier: item.identifier as string, reason: typeof item?.reason === "string" ? item.reason : "" }));
+}
+
+/**
+ * A pending order stored without its product pictures (localStorage was
+ * full, pendingOrders.ts) gets them back from the seller's catalogues before
+ * it is published, so the seller sees the pictures as in every other order.
+ * Only `images` is put back, from the product as its catalogue holds it now.
+ * Best effort: a catalogue that can't be read leaves those lines without
+ * pictures, and the paid order is published anyway.
+ */
+export async function withImagesRefilled(pending: PendingOrder): Promise<PendingOrder> {
+  if (!pending.imagesStripped) return pending;
+  const details: Record<string, unknown> = { ...pending.details };
+  const catalogues = new Map<string, Promise<any>>();
+  for (const [productId, line] of orderLines(pending.details)) {
+    const product = line?.product;
+    if (!product || typeof product !== "object" || !line.catalogueId) continue;
+    if (Array.isArray(product.images) && product.images.length > 0) continue;
+    if (!catalogues.has(line.catalogueId)) {
+      catalogues.set(line.catalogueId, fetchQdnJson("DOCUMENT", pending.store.owner, line.catalogueId).catch(() => null));
+    }
+    const catalogue = await catalogues.get(line.catalogueId);
+    const images: unknown = catalogue?.products?.[productId]?.images;
+    if (Array.isArray(images) && images.length > 0 && images.every((image) => typeof image === "string")) {
+      details[productId] = { ...line, product: { ...product, images } };
+    }
+  }
+  return { ...pending, details: details as OrderDetails };
+}
+
+/**
+ * The order is on QDN: it leaves the pending list, and its payment is
+ * remembered as used, so "Check again" never gives it to another order.
+ */
+function orderRecorded(pending: PendingOrder): void {
+  rememberUsedPayment(pending.buyer.name, pending.orderUid, pending.payment?.transactionSignature);
+  removePendingOrder(pending.buyer.name, pending.orderUid);
+}
+
+/**
+ * Publishes a paid order: the order and the seller's Q-Mail. Checks QDN
+ * first unless `skipCheck` (a first attempt right after paying), and sends
+ * only the part that isn't there yet: when Hub published one of the two and
+ * not the other, Finish sends the missing one (the same identifier and JSON
+ * as before), so the seller always gets the mail as well as the order.
+ * Removes the pending order once both are there.
+ *
+ * One recording per order at a time: while one runs (until Hub answers, up
+ * to its 30 minutes), another call for the same order gets the running one's
+ * result instead of a second publish (isRecordingOrder tells the cards).
+ */
+export function recordOrder(
   pending: PendingOrder,
   delivery: DeliveryInput,
   options: { skipCheck?: boolean; onStep?: (step: CheckoutStep) => void } = {}
 ): Promise<CheckoutResult> {
+  const running = runningRecording<CheckoutResult>(pending.orderUid);
+  if (running) return running;
+  return trackRecording(pending.orderUid, recordOrderNow(pending, delivery, options));
+}
+
+async function recordOrderNow(
+  pending: PendingOrder,
+  delivery: DeliveryInput,
+  options: { skipCheck?: boolean; onStep?: (step: CheckoutStep) => void }
+): Promise<CheckoutResult> {
+  const done = (): CheckoutResult => {
+    orderRecorded(pending);
+    return { kind: "done", orderUid: pending.orderUid };
+  };
+  // What Hub already reported published (a partial publish) needn't go again.
+  let parts = ORDER_PARTS.filter((part) => !pending.published?.includes(part));
+  let sent: { part: OrderPart; identifier: string }[] = [];
   try {
+    if (parts.length === 0) return done();
     if (!options.skipCheck) {
       options.onStep?.("checking");
-      if (await isOrderRecorded(pending).catch(() => false)) {
-        removePendingOrder(pending.buyer.name, pending.orderUid);
-        return { kind: "done", orderUid: pending.orderUid };
-      }
+      const onQdn = await Promise.all(
+        parts.map((part) => (part === "order" ? isOrderRecorded(pending) : isOrderMailSent(pending)).catch(() => false))
+      );
+      parts = parts.filter((_, i) => !onQdn[i]);
+      if (parts.length === 0) return done();
     }
     options.onStep?.("recording");
-    const request = publishOrderRequest(pending, delivery);
-    await qortalRequestWithTimeout(request, PUBLISH_TIMEOUT_MS);
-    removePendingOrder(pending.buyer.name, pending.orderUid);
-    invalidateQdnSearches((url) => url.includes("DOCUMENT_PRIVATE"));
-    return { kind: "done", orderUid: pending.orderUid };
+    const request = publishOrderRequest(parts.includes("order") ? await withImagesRefilled(pending) : pending, delivery);
+    const resources = request.resources.filter((_, i) => parts.includes(ORDER_PARTS[i]));
+    sent = resources.map((resource) => ({ part: ORDER_PARTS[request.resources.indexOf(resource)], identifier: resource.identifier }));
+    const answer = await qortalRequestWithTimeout({ ...request, resources }, PUBLISH_TIMEOUT_MS);
+    // A failure Hub answers instead of rejecting is still a failure.
+    if (answer && typeof answer === "object" && !Array.isArray(answer) && (answer as { error?: unknown }).error) throw answer;
+    invalidateQdnSearches((url) => url.includes("DOCUMENT_PRIVATE") || url.includes("MAIL_PRIVATE"));
+    return done();
   } catch (error) {
-    const message = isHubDecline(error)
-      ? "You declined recording the order. Your payment went through: finish the order to send it to the seller."
-      : isHubTimeout(error)
-        ? "Hub didn't confirm the order in time. It may still arrive; check again before publishing it again."
-        : `The order couldn't be recorded: ${errorMessage(error, "unknown error")}. Your payment went through; try again.`;
-    savePendingOrder({ ...pending, lastError: message }, delivery);
+    // Hub names what it couldn't publish; the rest of what was sent is on QDN
+    // (unless the buyer cancelled: Hub then removes what it had published).
+    const failed = isHubDecline(error) ? [] : unsuccessfulPublishes(error);
+    const landed = failed.length > 0 ? sent.filter((s) => !failed.some((f) => f.identifier === s.identifier)).map((s) => s.part) : [];
+    const published = [...new Set([...(pending.published ?? []), ...landed])];
+    const mailReason = failed.find((f) => sent.some((s) => s.part === "mail" && s.identifier === f.identifier))?.reason;
+    const message =
+      published.includes("order") && !published.includes("mail")
+        ? `Your order was recorded, but the seller's Q-Mail about it wasn't sent${mailReason ? ` (${mailReason})` : ""}. Finish the order to send it; you won't pay again.`
+        : isHubDecline(error)
+          ? "You declined recording the order. Your payment went through: finish the order to send it to the seller."
+          : isHubTimeout(error)
+            ? "Hub didn't confirm the order in time. It may still arrive; check again before publishing it again."
+            : `The order couldn't be recorded: ${errorMessage(error, "unknown error")}. Your payment went through; try again.`;
+    savePendingOrder({ ...pending, ...(published.length > 0 ? { published } : {}), lastError: message }, delivery);
     return { kind: "not-recorded", orderUid: pending.orderUid, message };
   }
 }
@@ -323,29 +430,65 @@ export async function startCheckout(args: StartCheckoutArgs): Promise<CheckoutRe
 }
 
 /**
+ * How long after the checkout started a payment can still be this order's.
+ * Hub signs it when the buyer accepts its dialog, which closes a minute or so
+ * after Hub stopped answering; this leaves ample room without matching a
+ * same-amount payment made much later for something else.
+ */
+export const PAYMENT_MATCH_WINDOW_MS = 30 * 60_000;
+
+/** A payment that could be the one Hub didn't confirm. */
+export interface PaymentCandidate {
+  signature: string;
+  timestamp: number;
+}
+
+export type PaymentSearch =
+  | { kind: "none" }
+  | { kind: "found"; signature: string }
+  /** More than one payment fits: the buyer picks; none is taken on its own. */
+  | { kind: "several"; candidates: PaymentCandidate[] };
+
+/**
  * For a payment Hub didn't confirm: looks through the buyer's latest QORT
  * payments or asset transfers for one to the recipient, for the amount,
- * made after the checkout started. Foreign coins can't be checked from here.
+ * signed at or after the checkout started (Hub signs on the same clock,
+ * after the Pay press) and within PAYMENT_MATCH_WINDOW_MS, whose signature
+ * no other order uses (recorded from this device, or still pending). Foreign
+ * coins can't be checked from here. Rejects when the node can't answer.
  */
-export async function findUnconfirmedPayment(pending: PendingOrder): Promise<{ signature: string } | null> {
+export async function findUnconfirmedPayment(pending: PendingOrder): Promise<PaymentSearch> {
   const assetId = assetIdOf(pending.coin);
-  if (pending.coin !== "QORT" && assetId === null) return null;
+  if (pending.coin !== "QORT" && assetId === null) return { kind: "none" };
   const txType = assetId === null ? "PAYMENT" : "TRANSFER_ASSET";
   const url = `/transactions/search?txType=${txType}&address=${encodeURIComponent(
     pending.buyer.address
   )}&confirmationStatus=BOTH&limit=20&reverse=true`;
   const response = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
-  if (!response.ok) return null;
-  const rows: any[] = await response.json().catch(() => []);
-  if (!Array.isArray(rows)) return null;
-  const match = rows.find(
-    (tx) =>
+  if (!response.ok) throw new Error(`the node answered ${response.status}`);
+  const rows: unknown = await response.json().catch(() => []);
+  if (!Array.isArray(rows)) return { kind: "none" };
+  const used = paymentsUsedByOtherOrders(pending.buyer.name, pending.orderUid);
+  const candidates: PaymentCandidate[] = [];
+  for (const tx of rows) {
+    const signature = typeof tx?.signature === "string" ? tx.signature : "";
+    const timestamp = Number(tx?.timestamp);
+    if (
+      signature &&
+      !used.has(signature) &&
+      !candidates.some((c) => c.signature === signature) &&
       tx?.recipient === pending.recipient &&
       Number(tx?.amount) === Number(pending.amount) &&
       (assetId === null || Number(tx?.assetId) === assetId) &&
-      Number(tx?.timestamp) >= pending.created - 120_000
-  );
-  return match?.signature ? { signature: String(match.signature) } : null;
+      timestamp >= pending.created &&
+      timestamp <= pending.created + PAYMENT_MATCH_WINDOW_MS
+    ) {
+      candidates.push({ signature, timestamp });
+    }
+  }
+  if (candidates.length === 0) return { kind: "none" };
+  if (candidates.length === 1) return { kind: "found", signature: candidates[0].signature };
+  return { kind: "several", candidates: candidates.sort((a, b) => a.timestamp - b.timestamp) };
 }
 
 /** Marks an unconfirmed payment as paid (found on chain, or confirmed by the buyer for foreign coins). */

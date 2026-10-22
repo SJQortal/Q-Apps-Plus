@@ -10,7 +10,7 @@ import type { Product } from "../../state/features/storeSlice";
 import type { CartLine, OrderDetails } from "../../money/order";
 import { priceCheckout, type CheckoutShop } from "../../money/checkout";
 import { unitPrice } from "../../money/pricing";
-import type { ShopAsset } from "../../money/coins";
+import { shopAssets, type ShopAsset } from "../../money/coins";
 import type { LoadPhase } from "./useRetryingLoads";
 
 export type LineState =
@@ -62,16 +62,23 @@ export function catalogueFor(
   return catalogue;
 }
 
-/** The cart's lines in the cart's order, which is also the order's line order. */
+/**
+ * The cart's lines in the cart's order, which is also the order's line order.
+ * `catalogues` is a map by identifier (checked against the cart's owner), or
+ * a lookup that already returns the owner's own copy.
+ */
 export function cartViewLines(
   cart: Cart,
-  catalogues: Record<string, Catalogue>,
+  catalogues: Record<string, Catalogue> | ((catalogueId: string) => Catalogue | null),
   phaseOf: (catalogueId: string) => LoadPhase
 ): CartViewLine[] {
   return Object.keys(cart.orders).map((key) => {
     const order = cart.orders[key];
     const base = { productId: order.productId, catalogueId: order.catalogueId, quantity: order.quantity };
-    const catalogue = catalogueFor(catalogues, order.catalogueId, cart.storeOwner);
+    const catalogue =
+      typeof catalogues === "function"
+        ? catalogues(order.catalogueId)
+        : catalogueFor(catalogues, order.catalogueId, cart.storeOwner);
     if (!catalogue) {
       const phase = cart.storeOwner ? phaseOf(order.catalogueId) : "failed";
       const state: LineState = phase === "failed" ? "failed" : phase === "retrying" ? "fetching" : "loading";
@@ -109,15 +116,25 @@ export function itemCount(lines: { quantity: number }[]): number {
   return lines.reduce((sum, line) => sum + line.quantity, 0);
 }
 
-/** A store as Redux or QDN holds it, as checkout's shop (the fields the original passed, plus assets). */
+/**
+ * A store as Redux or QDN holds it, as checkout's shop (the fields the
+ * original passed, plus assets). Anyone can publish a STORE, so fields of the
+ * wrong type are dropped here rather than rendered or paid to.
+ */
 export function cartShopFrom(storeId: string, owner: string, store: any): CartShop {
-  const assets: ShopAsset[] | undefined = Array.isArray(store?.acceptedAssets) ? store.acceptedAssets : undefined;
+  const assets: ShopAsset[] | undefined = Array.isArray(store?.acceptedAssets) ? shopAssets(store) : undefined;
+  const foreign: unknown = store?.foreignCoins;
   return {
     id: storeId,
-    title: store?.title,
+    title: typeof store?.title === "string" ? store.title : undefined,
     owner,
-    supportedCoins: Array.isArray(store?.supportedCoins) ? store.supportedCoins : undefined,
-    foreignCoins: store?.foreignCoins && typeof store.foreignCoins === "object" ? store.foreignCoins : undefined,
+    supportedCoins: Array.isArray(store?.supportedCoins)
+      ? store.supportedCoins.filter((coin: unknown): coin is string => typeof coin === "string")
+      : undefined,
+    foreignCoins:
+      foreign && typeof foreign === "object" && !Array.isArray(foreign)
+        ? Object.fromEntries(Object.entries(foreign).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+        : undefined,
     acceptedAssets: assets,
     logo: typeof store?.logo === "string" ? store.logo : undefined,
   };
@@ -125,21 +142,31 @@ export function cartShopFrom(storeId: string, owner: string, store: any): CartSh
 
 export type PricedLines =
   | { ok: true; amount: string; details: OrderDetails }
-  | { ok: false; reason: "empty" | "rate" | "price"; missing: string[] };
+  /**
+   * empty: nothing to buy; rate: the coin's rate is on its way; no-rate: the
+   * node has no rate for the coin; price: a line has no price in the coin.
+   */
+  | { ok: false; reason: "empty" | "rate" | "no-rate" | "price"; missing: string[] };
 
 /**
  * The total checkout would charge for `lines` in `coin`, from the checkout
  * service itself (money/checkout.ts priceCheckout: the amount Hub is asked
- * to send). When a line has no price in the coin, says which ones, or that
- * the coin's rate is still on its way.
+ * to send). When a line has no price in the coin, says which ones, and
+ * whether the coin's rate is still on its way or not to be had.
  */
-export function priceLines(lines: CartLine[], coin: string, rate: number | null, rateLoading: boolean): PricedLines {
+export function priceLines(
+  lines: CartLine[],
+  coin: string,
+  rate: number | null,
+  rateLoading: boolean,
+  rateError = false
+): PricedLines {
   if (lines.length === 0) return { ok: false, reason: "empty", missing: [] };
   const missing = lines
     // Checkout stops on a missing or zero price (money/order.ts buildOrderDetails); name those lines.
     .filter((line) => !unitPrice(line.product, coin, rate))
     .map((line) => String(line.product?.title ?? "An item"));
-  if (missing.length > 0) return { ok: false, reason: rateLoading ? "rate" : "price", missing };
+  if (missing.length > 0) return { ok: false, reason: rateLoading ? "rate" : rateError ? "no-rate" : "price", missing };
   try {
     const { amount, details } = priceCheckout(lines, coin, rate);
     return { ok: true, amount, details };

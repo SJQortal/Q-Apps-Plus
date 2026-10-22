@@ -34,7 +34,7 @@ import { CoinPicker } from "./CoinPicker";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing } from "./delivery";
 import { PendingOrderCard } from "./PendingOrders";
-import { usePendingOrders } from "./usePendingOrders";
+import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
@@ -100,7 +100,7 @@ export function CheckoutDialog({
   onPaid: () => void;
 }) {
   const navigate = useNavigate();
-  const { coins, coin, rate, rateLoading, setCoin } = useShopCoin(shop);
+  const { coins, coin, rate, rateLoading, rateError, setCoin } = useShopCoin(shop);
   const isDigital = isDigitalOnly(lines);
   const [step, setStep] = useState<Step>("review");
   const [delivery, setDelivery] = useState<DeliveryInput>(() => emptyDelivery(buyer.name));
@@ -119,16 +119,18 @@ export function CheckoutDialog({
     stepStart.current?.focus();
   }, [step]);
 
-  const priced = priceLines(lines, coin, rate, rateLoading);
+  const priced = priceLines(lines, coin, rate, rateLoading, rateError);
   const label = coinLabel(coin, shop);
   const running = step === "running";
+  // The result step's card is finishing the order: stay until Hub has answered (no Later, no Back).
+  const recordingNow = useRecordingOrder(step === "result" && outcome && "orderUid" in outcome ? outcome.orderUid : null);
 
   const close = () => {
-    if (!paying.current) onClose();
+    if (!paying.current && !recordingNow) onClose();
   };
 
   const toConfirm = () => {
-    const now = priceLines(lines, coin, rate, rateLoading);
+    const now = priceLines(lines, coin, rate, rateLoading, rateError);
     if (!now.ok) {
       setStep("review");
       return;
@@ -265,6 +267,12 @@ export function CheckoutDialog({
             <CircularProgress size={16} />
             <Typography variant="body2">Getting the {label} rate from your node…</Typography>
           </Box>
+        )}
+        {!priced.ok && priced.reason === "no-rate" && (
+          <Alert severity="warning">
+            Your node has no {label} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {label}.{" "}
+            {coins.length > 1 ? "Pick another coin, or remove it from your cart." : "Remove it from your cart to check out."}
+          </Alert>
         )}
         {!priced.ok && priced.reason === "price" && (
           <Alert severity="warning">
@@ -435,12 +443,24 @@ export function CheckoutDialog({
           Orders to finish in your cart. Don't pay again.
         </Alert>
       );
-      actions = <Button onClick={onClose}>Later</Button>;
+      actions = (
+        <Button onClick={close} disabled={recordingNow}>
+          Later
+        </Button>
+      );
     }
   }
 
   return (
-    <ResponsiveDialog open onClose={close} title={title} actions={actions} dismissible={!running} busy={running} maxWidth="sm">
+    <ResponsiveDialog
+      open
+      onClose={close}
+      title={title}
+      actions={actions}
+      dismissible={!running && !recordingNow}
+      busy={running || recordingNow}
+      maxWidth="sm"
+    >
       <Box ref={stepStart} tabIndex={-1} role="group" aria-label={title} sx={{ "&:focus": { outline: "none" } }}>
         {step !== "result" && step !== "running" && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

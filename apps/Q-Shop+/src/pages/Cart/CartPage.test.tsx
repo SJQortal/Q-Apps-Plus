@@ -11,7 +11,7 @@ import { createAppStore } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
 import { addToHashMapStores, setPreferredCoin } from "../../state/features/storeSlice";
 import { setCatalogueHashMap } from "../../state/features/globalSlice";
-import { setIsOpen, setProductToCart } from "../../state/features/cartSlice";
+import { cartFor, setIsOpen, setProductToCart } from "../../state/features/cartSlice";
 import { installQortalMock, type QortalMock } from "../../test/qortalMock";
 import { installMockNode, makeWorld } from "../../test/mockNode";
 import { renderWithProviders } from "../../test/renderWithProviders";
@@ -226,6 +226,112 @@ describe("cart page", () => {
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
   });
 
+  it("fetches each owner's copy of a catalogue once, even when two names publish the same identifier", async () => {
+    // Another name can publish a catalogue under the seller's identifier (docs/QORTAL.md → pitfall 15).
+    const OTHER = "Mallory";
+    const OTHER_STORE = "q-store-general-mallory";
+    const copyMug = { ...mug, id: "q-store-product-mallory-COPYxxxxxx", title: "Mallory mug" };
+    const q = installQortalMock({
+      FETCH_QDN_RESOURCE: async (p) => {
+        await new Promise((r) => setTimeout(r, 5));
+        if (p.name === SELLER) return { ...catalogue };
+        if (p.name === OTHER) return { id: CATALOGUE_ID, products: { [copyMug.id]: copyMug } };
+        throw { error: 1401, message: "Not found" };
+      },
+    });
+    const store = newStore();
+    store.dispatch(addToHashMapStores({ ...viewedStore, owner: SELLER, isValid: true }));
+    store.dispatch(addToHashMapStores({ ...viewedStore, id: OTHER_STORE, title: "Mallory's shop", owner: OTHER, isValid: true }));
+    store.dispatch(setProductToCart({ productId: mug.id, catalogueId: CATALOGUE_ID, storeId: STORE_ID, storeOwner: SELLER }));
+    store.dispatch(setProductToCart({ productId: copyMug.id, catalogueId: CATALOGUE_ID, storeId: OTHER_STORE, storeOwner: OTHER }));
+    renderCart(store);
+
+    expect(await screen.findByRole("link", { name: "Mug" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Mallory mug" })).toBeInTheDocument();
+    // Long enough for a load that evicted the other's copy to start the other's fetch again, several times.
+    await new Promise((r) => setTimeout(r, 150));
+    expect(q.callsFor("FETCH_QDN_RESOURCE").map((c) => c.name).sort()).toEqual([OTHER, SELLER]);
+    expect(screen.getByRole("link", { name: "Mug" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Mallory mug" })).toBeInTheDocument();
+    // The shared map keeps the first copy it got; the other never replaces it.
+    expect(store.getState().global.catalogueHashMap[CATALOGUE_ID]?.user).toBeDefined();
+  });
+
+  it("keeps two owners' shops with the same shop id apart, and pays each owner for their own", async () => {
+    // Shop ids are the seller's choice: "Shop+Plus" runs a copy under Seller Name's id.
+    const world = makeWorld({ shops: 2 });
+    const [real, copy] = world.shops;
+    copy.shortStoreId = real.shortStoreId;
+    copy.title = "Copycat shop";
+    copy.products = copy.products.map((p: any, i: number) => ({ ...p, title: `Copy ${i}` }));
+    const node = installMockNode(world);
+    node.q.on("SEND_COIN", async () => ({ signature: "PAYSIG" }));
+    node.q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    const storeId = `q-store-general-${real.shortStoreId}`;
+    const cat = `q-store-catalogue-${real.shortStoreId}-CAT0000000`;
+    const store = newStore();
+    store.dispatch(setProductToCart({ productId: real.products[1].id, catalogueId: cat, storeId, storeOwner: real.owner }));
+    store.dispatch(setProductToCart({ productId: copy.products[2].id, catalogueId: cat, storeId, storeOwner: copy.owner }));
+    renderCart(store);
+
+    const realShop = await screen.findByRole("region", { name: real.title });
+    const copyShop = await screen.findByRole("region", { name: "Copycat shop" });
+    expect(await within(realShop).findByRole("link", { name: "Product 1" })).toBeInTheDocument();
+    expect(await within(copyShop).findByRole("link", { name: "Copy 2" })).toBeInTheDocument();
+    expect(within(realShop).queryByRole("link", { name: "Copy 2" })).toBeNull();
+    expect(screen.getByText("2 items from 2 shops")).toBeInTheDocument();
+
+    await openCheckout("Copycat shop");
+    await press("Continue");
+    await press(/^Pay /);
+    expect(await screen.findByText("Order placed", { selector: "p" })).toBeInTheDocument();
+    expect(node.q.callsFor("GET_NAME_DATA").map((c) => c.name)).toEqual([copy.owner]);
+    expect(node.q.callsFor("SEND_COIN")[0]).toMatchObject({ coin: "QORT", destinationAddress: "QShopPlusAddress", amount: "3.00000000" });
+    // Only the copy's cart was bought; Seller Name's stays.
+    expect(cartFor(store.getState().cart.carts, copy.owner, storeId)).toBeUndefined();
+    expect(Object.keys(cartFor(store.getState().cart.carts, real.owner, storeId)!.orders)).toEqual([real.products[1].id]);
+  });
+
+  it("keeps the buyer's coin when the node has no rate for it, and pays what the seller priced in it", async () => {
+    // The node answers no ARRR rate (no recent trades): every fetch but the order search fails.
+    const q = sellerMock({ SEND_COIN: async () => "arrr-txid" });
+    const store = newStore();
+    withFixtureShop(store, [
+      { product: mug, qty: 1 },
+      { product: poster, qty: 2 },
+    ]);
+    store.dispatch(setPreferredCoin("ARRR"));
+    renderCart(store);
+
+    // The poster has the seller's own ARRR price; the mug would be converted from QORT.
+    expect(await screen.findByText("No ARRR rate on your node right now")).toBeInTheDocument();
+    expect(screen.getByText(/Your node has no ARRR exchange rate right now, so Mug can't be paid in ARRR/)).toBeInTheDocument();
+    const posterRow = screen.getAllByRole("listitem")[1];
+    expect(within(posterRow).getByText("0.50")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Check out ${STORE_TITLE}` })).toBeEnabled();
+    // The choice stays ARRR (and so the saved Settings preference isn't rewritten to QORT).
+    expect(store.getState().store.preferredCoin).toBe("ARRR");
+    expect(within(screen.getByRole("region", { name: STORE_TITLE })).getByRole("button", { name: "ARRR" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    const dialog = await openCheckout();
+    expect(within(dialog).getByText(/so Mug can't be paid in ARRR/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Continue" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // Without the mug, the poster is paid in ARRR at the seller's own price.
+    fireEvent.click(screen.getByRole("button", { name: "Remove Mug" }));
+    await openCheckout();
+    await press("Continue");
+    await press(/^Pay 0\.50 /);
+    expect(await screen.findByText("Order placed", { selector: "p" })).toBeInTheDocument();
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ coin: "ARRR", amount: "0.50000000" });
+    expect(store.getState().store.preferredCoin).toBe("ARRR");
+  });
+
   it("explains a product without a price in the chosen coin, and won't go on", async () => {
     const store = newStore();
     withFixtureShop(store, [{ product: mug, qty: 1 }], { acceptedAssets: [{ id: 81, name: "Gold Bar" }] });
@@ -290,6 +396,41 @@ describe("cart page", () => {
     expect(listPendingOrders(BUYER)).toEqual([]);
     await press("View my orders");
     expect(await screen.findByText("My orders page")).toBeInTheDocument();
+  });
+
+  it("stays open while its card finishes the order, so the cart's card can't publish it a second time", async () => {
+    let publishes = 0;
+    let answer: (value: unknown) => void = () => {};
+    const q = sellerMock({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: () => {
+        publishes++;
+        if (publishes === 1) return Promise.reject({ error: "User declined request" });
+        return new Promise((resolve) => (answer = resolve));
+      },
+    });
+    const store = newStore();
+    withFixtureShop(store, [{ product: mug, qty: 1 }]);
+    renderCart(store);
+    await openCheckout();
+    await press("Continue");
+    await press(/^Pay /);
+    await press("Finish order");
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
+
+    // Hub is publishing: no Later, no Back, and the cart page's own card for it is busy too.
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Later" })).toBeDisabled();
+    expect(within(dialog).queryByRole("button", { name: "Close" })).toBeNull();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const cartCards = screen.getAllByRole("button", { name: "Finish order", hidden: true });
+    expect(cartCards).toHaveLength(2);
+    expect(cartCards.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+
+    answer(true);
+    expect(await screen.findByText(`${STORE_TITLE} has your order and a Q-Mail about it. Follow it in My orders.`)).toBeInTheDocument();
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2);
+    expect(q.callsFor("SEND_COIN")).toHaveLength(1);
   });
 
   it("stops before paying when the seller can't be found, and says nothing was paid", async () => {

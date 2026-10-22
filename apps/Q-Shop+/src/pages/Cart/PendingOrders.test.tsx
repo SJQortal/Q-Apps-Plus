@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createAppStore } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
+import { cartFor, setProductToCart } from "../../state/features/cartSlice";
 import { installQortalMock, type QortalMock } from "../../test/qortalMock";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import {
@@ -27,11 +28,14 @@ import {
   poster,
 } from "../../test/fixtures/shop";
 import { buildOrderDetails } from "../../money/order";
+import { orderMailIdentifier } from "../../qdn/identifiers";
 import { listPendingOrders, resetPendingOrders, savePendingOrder, type PendingOrder } from "../../money/pendingOrders";
 import { CartPage } from "./CartPage";
+import { PendingOrderCard } from "./PendingOrders";
 
 const NOW = 1761000000000;
 const ORDER_ID = `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`;
+const MAIL_ID = orderMailIdentifier(SELLER, SELLER_ADDRESS, "MAILx1");
 
 function pendingOrder(over: Partial<PendingOrder> = {}): PendingOrder {
   const lines = over.isDigital === false
@@ -91,7 +95,12 @@ beforeEach(() => {
     vi.fn(async (url: string) => {
       const u = String(url);
       if (u.startsWith("/arbitrary/resources/search")) {
-        const rows = orderOnQdn ? [{ name: BUYER, service: "DOCUMENT_PRIVATE", identifier: ORDER_ID }] : [];
+        const rows = orderOnQdn
+          ? [
+              { name: BUYER, service: "DOCUMENT_PRIVATE", identifier: ORDER_ID },
+              { name: BUYER, service: "MAIL_PRIVATE", identifier: MAIL_ID },
+            ]
+          : [];
         return { ok: true, status: 200, json: async () => rows, text: async () => JSON.stringify(rows) };
       }
       if (u.startsWith("/transactions/search")) {
@@ -144,6 +153,24 @@ describe("orders to finish", () => {
     expect(listPendingOrders(BUYER)).toEqual([]);
   });
 
+  it("sends only the seller's Q-Mail when the order itself was recorded", async () => {
+    savePendingOrder(
+      pendingOrder({
+        published: ["order"],
+        lastError: "Your order was recorded, but the seller's Q-Mail about it wasn't sent. Finish the order to send it; you won't pay again.",
+      })
+    );
+    render();
+    expect(await screen.findByText(/the seller's Q-Mail about it wasn't sent/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Finish order" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const call = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
+    expect(call.resources.map((r: any) => [r.service, r.identifier])).toEqual([["MAIL_PRIVATE", MAIL_ID]]);
+    expect(decodeData64(call.resources[0].data64).recipient).toBe(SELLER);
+    expect(await screen.findByText(`Order recorded for ${STORE_TITLE}.`)).toBeInTheDocument();
+    expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
   it("asks for the address again after a reload (addresses are never stored), then records it", async () => {
     savePendingOrder(pendingOrder({ isDigital: false }));
     resetPendingOrders(); // a reload: the order comes back from storage, the address doesn't
@@ -186,6 +213,34 @@ describe("orders to finish", () => {
     expect(listPendingOrders(BUYER)).toEqual([]);
   });
 
+  it("shows an order another card is recording as recording, and offers no second Finish", async () => {
+    const order = pendingOrder();
+    savePendingOrder(order);
+    let answer: (value: unknown) => void = () => {};
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", () => new Promise((resolve) => (answer = resolve)));
+    const onRecorded = vi.fn();
+    // Two cards for one order: the checkout dialog's and the cart page's.
+    renderWithProviders(
+      <>
+        <PendingOrderCard order={order} onRecorded={onRecorded} />
+        <PendingOrderCard order={order} onRecorded={onRecorded} />
+      </>
+    );
+    const [first, second] = screen.getAllByRole("button", { name: "Finish order" });
+    fireEvent.click(first);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    // Both cards say it is being recorded; neither offers Finish meanwhile.
+    expect(screen.getAllByText("Recording your order: confirm in Hub…")).toHaveLength(2);
+    expect(second).toBeDisabled();
+    fireEvent.click(second);
+    fireEvent.click(first);
+
+    answer(true);
+    await waitFor(() => expect(onRecorded).toHaveBeenCalled());
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1);
+    expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
   it("keeps the order when recording is declined, and says the payment went through", async () => {
     savePendingOrder(pendingOrder());
     q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => {
@@ -222,6 +277,50 @@ describe("orders to finish", () => {
       arrrAddressUsed: "",
     });
     expect(await screen.findByText(`Order recorded for ${STORE_TITLE}.`)).toBeInTheDocument();
+  });
+
+  it("lets the buyer pick when several payments fit, and never takes one on its own", async () => {
+    savePendingOrder(pendingOrder({ state: "unconfirmed", payment: null }));
+    transactions = [
+      { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW + 9_000, signature: "SECONDSIGxxxxxxxxxxxxxxxxxxxxxxx" },
+      { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW + 3_000, signature: "FIRSTSIGxxxxxxxxxxxxxxxxxxxxxxxx" },
+      // Signed before the checkout started: not a candidate.
+      { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW - 1_000, signature: "EARLIERxxxxxxxxxxxxxxxxxxxxxxxxx" },
+    ];
+    render();
+    fireEvent.click(await screen.findByRole("button", { name: "Check again" }));
+    expect(await screen.findByText(/More than one payment of/)).toBeInTheDocument();
+    const picks = screen.getAllByRole("button", { name: /^Paid / });
+    expect(picks).toHaveLength(2);
+    expect(picks[0]).toHaveTextContent("FIRSTSIG…xxxxxx");
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+
+    fireEvent.click(picks[1]);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(published().order.payment.transactionSignature).toBe("SECONDSIGxxxxxxxxxxxxxxxxxxxxxxx");
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
+  it("puts the items back in the cart when the buyer wasn't charged", async () => {
+    savePendingOrder(pendingOrder({ state: "unconfirmed", payment: null }));
+    const store = createAppStore();
+    store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
+    // Checkout emptied the cart; the buyer has since added the poster again.
+    store.dispatch(setProductToCart({ storeId: STORE_ID, storeOwner: SELLER, productId: poster.id, catalogueId: CATALOGUE_ID, quantity: 3 }));
+    renderWithProviders(<CartPage />, { store, initialEntries: ["/cart"] });
+
+    fireEvent.click(await screen.findByRole("button", { name: "I wasn't charged — remove" }));
+    const dialog = await screen.findByRole("dialog", { name: "Remove this order?" });
+    expect(within(dialog).getByText(/Its items go back in your cart/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+
+    await waitFor(() => expect(listPendingOrders(BUYER)).toEqual([]));
+    const cart = cartFor(store.getState().cart.carts, SELLER, STORE_ID);
+    expect(cart?.orders).toEqual({
+      [poster.id]: { productId: poster.id, catalogueId: CATALOGUE_ID, quantity: 3 },
+      [mug.id]: { productId: mug.id, catalogueId: CATALOGUE_ID, quantity: 2 },
+    });
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
 
   it("says so when no payment is found, and removes the order only after asking", async () => {

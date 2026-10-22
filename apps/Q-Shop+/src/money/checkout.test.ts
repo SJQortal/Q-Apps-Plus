@@ -17,6 +17,7 @@ import {
   SHORT_STORE_ID,
   STORE_ID,
   STORE_TITLE,
+  catalogue,
   chair,
   decodeData64,
   mug,
@@ -28,14 +29,26 @@ import {
   findUnconfirmedPayment,
   recordOrder,
   startCheckout,
+  withImagesRefilled,
+  PAYMENT_MATCH_WINDOW_MS,
   PUBLISH_TIMEOUT_MS,
   type StartCheckoutArgs,
 } from "./checkout";
-import { getPendingOrder, listPendingOrders, pendingDelivery, resetPendingOrders } from "./pendingOrders";
+import {
+  getPendingOrder,
+  isRecordingOrder,
+  listPendingOrders,
+  pendingDelivery,
+  resetPendingOrders,
+  type PendingOrder,
+} from "./pendingOrders";
 import { digitalDelivery } from "./order";
 import { PENDING_ORDERS_STORAGE_KEY } from "../constants/plus";
+import { orderMailIdentifier } from "../qdn/identifiers";
 
 const NOW = 1761000000000;
+const ORDER_ID = `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`;
+const MAIL_ID = orderMailIdentifier(SELLER, SELLER_ADDRESS, "MAILx1");
 const shop = {
   id: STORE_ID,
   title: STORE_TITLE,
@@ -167,6 +180,30 @@ describe("startCheckout", () => {
     expect(listPendingOrders(BUYER)).toEqual([]);
   });
 
+  it("publishes one order once at a time: a second Finish waits for the running one", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw { error: "User declined request" };
+      },
+    });
+    await startCheckout(args());
+    const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    let answer: (value: unknown) => void = () => {};
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", () => new Promise((resolve) => (answer = resolve)));
+    q.reset();
+
+    expect(isRecordingOrder("ORDERxxxx1")).toBe(false);
+    const first = recordOrder(pending, digitalDelivery(BUYER));
+    expect(isRecordingOrder("ORDERxxxx1")).toBe(true);
+    const second = recordOrder(pending, digitalDelivery(BUYER));
+    await vi.waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    answer(true);
+    expect(await first).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    expect(await second).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1);
+    expect(isRecordingOrder("ORDERxxxx1")).toBe(false);
+  });
+
   it("doesn't publish again when the timed-out order did land on QDN", async () => {
     sellerHandlers({
       PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
@@ -181,13 +218,146 @@ describe("startCheckout", () => {
       vi.fn(async () => ({
         ok: true,
         status: 200,
-        json: async () => [{ name: BUYER, identifier: `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`, service: "DOCUMENT_PRIVATE" }],
+        json: async () => [
+          { name: BUYER, identifier: ORDER_ID, service: "DOCUMENT_PRIVATE" },
+          { name: BUYER, identifier: MAIL_ID, service: "MAIL_PRIVATE" },
+        ],
       }))
     );
     q.reset();
     expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
     expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
+  it("sends the seller's Q-Mail on Finish when Hub published the order but not the mail", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw { error: { unsuccessfulPublishes: [{ identifier: MAIL_ID, reason: "upload failed" }] }, message: "Failed to publish" };
+      },
+    });
+    const first = await startCheckout(args());
+    expect(first).toEqual({
+      kind: "not-recorded",
+      orderUid: "ORDERxxxx1",
+      message: "Your order was recorded, but the seller's Q-Mail about it wasn't sent (upload failed). Finish the order to send it; you won't pay again.",
+    });
+    const firstPublish = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
+    const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    expect(pending.published).toEqual(["order"]);
+
+    // Finish: QDN may not list the order yet, but Hub said it landed; only the mail goes, exactly as before.
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => [{ signature: "x" }]);
+    q.reset();
+    expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    const mailOnly = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    expect(mailOnly).toHaveLength(1);
+    expect(mailOnly[0]).toEqual({ ...firstPublish, resources: [firstPublish.resources[1]] });
+    expect(mailOnly[0].resources[0]).toMatchObject({ service: "MAIL_PRIVATE", identifier: MAIL_ID, name: BUYER });
+    expect(mailOnly[0].encrypt).toBe(true);
+    expect(mailOnly[0].publicKeys).toEqual([SELLER_PK, BUYER_PK]);
+    expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
+  it("on Finish, publishes only the part QDN doesn't have yet", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw "The request timed out";
+      },
+    });
+    await startCheckout(args());
+    const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    // The timed-out publish landed the order; the mail never arrived.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        status: 200,
+        json: async () =>
+          String(url).includes("DOCUMENT_PRIVATE") ? [{ name: BUYER, identifier: ORDER_ID, service: "DOCUMENT_PRIVATE" }] : [],
+      }))
+    );
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => [{ signature: "x" }]);
+    q.reset();
+    expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    expect(pub).toHaveLength(1);
+    expect(pub[0].resources.map((r: any) => r.identifier)).toEqual([MAIL_ID]);
+  });
+
+  it("puts back the product pictures a full localStorage dropped before publishing the order", async () => {
+    // All Q-Apps on a node share one origin's storage: the order with its pictures doesn't fit.
+    const setItem = vi.mocked(localStorage.setItem);
+    const original = setItem.getMockImplementation()!;
+    setItem.mockImplementation((key: string, value: string) => {
+      if (key === PENDING_ORDERS_STORAGE_KEY && value.includes("data:image")) throw new Error("QuotaExceededError");
+      original(key, value);
+    });
+    try {
+      sellerHandlers({
+        PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+          throw { error: "User declined request" };
+        },
+      });
+      await startCheckout(args());
+      const firstOrder = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+      expect(localStorage.getItem(PENDING_ORDERS_STORAGE_KEY)).not.toContain("data:image");
+
+      resetPendingOrders(); // a reload: the order comes back from storage, without its pictures
+      const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+      expect(pending.imagesStripped).toBe(true);
+      expect((pending.details[mug.id] as any).product.images).toEqual([]);
+
+      const catalogueUrl = `/arbitrary/DOCUMENT/${encodeURIComponent(SELLER)}/${encodeURIComponent(CATALOGUE_ID)}`;
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) =>
+          String(url) === catalogueUrl
+            ? { ok: true, status: 200, text: async () => JSON.stringify(catalogue), json: async () => catalogue }
+            : { ok: true, status: 200, text: async () => "[]", json: async () => [] }
+        )
+      );
+      q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+      q.reset();
+      expect(await recordOrder(pending, digitalDelivery(BUYER))).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+      const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+      expect(order.details[mug.id].product.images).toEqual(mug.images);
+      // Exactly the order the first attempt sent.
+      expect(order).toEqual(firstOrder);
+    } finally {
+      setItem.mockImplementation(original);
+    }
+  });
+
+  it("still publishes a paid order whose pictures can't be read back", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw { error: "User declined request" };
+      },
+    });
+    await startCheckout(args());
+    const saved = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    const pending = {
+      ...saved,
+      imagesStripped: true,
+      details: { ...saved.details, [mug.id]: { ...(saved.details[mug.id] as any), product: { ...mug, images: [] } } },
+    } as PendingOrder;
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 404, text: async () => "{}", json: async () => ({}) })));
+    expect(await withImagesRefilled(pending)).toMatchObject({ details: { [mug.id]: { product: { images: [] } } } });
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    q.reset();
+    expect(await recordOrder(pending, digitalDelivery(BUYER), { skipCheck: true })).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details[mug.id].product.images).toEqual([]);
+  });
+
+  it("treats a failure Hub answers instead of throwing as a failure", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => ({ message: "Publish cancelled", error: { cancelled: true, unsuccessfulPublishes: [] } }),
+    });
+    const result = await startCheckout(args());
+    expect(result.kind).toBe("not-recorded");
+    expect(getPendingOrder(BUYER, "ORDERxxxx1")?.state).toBe("paid");
   });
 
   it("marks a payment Hub didn't answer as unconfirmed and finds it among the buyer's payments", async () => {
@@ -208,6 +378,7 @@ describe("startCheckout", () => {
       vi.fn(async () => ({
         ok: true,
         json: async () => [
+          // Signed before this checkout started: another purchase.
           { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW - 5_000, signature: "OLD" },
           { type: "PAYMENT", recipient: SELLER_ADDRESS, amount: "3.10000000", timestamp: NOW + 4_000, signature: "LATE" },
         ],
@@ -217,10 +388,86 @@ describe("startCheckout", () => {
     expect((globalThis.fetch as any).mock.calls[0][0]).toBe(
       `/transactions/search?txType=PAYMENT&address=${BUYER_ADDRESS}&confirmationStatus=BOTH&limit=20&reverse=true`
     );
-    expect(found).toEqual({ signature: "OLD" });
-    const paid = confirmPendingPayment(pending, shop, found!);
+    expect(found).toEqual({ kind: "found", signature: "LATE" });
+    const paid = confirmPendingPayment(pending, shop, { signature: "LATE" });
     expect(paid.state).toBe("paid");
-    expect(paid.payment?.transactionSignature).toBe("OLD");
+    expect(paid.payment?.transactionSignature).toBe("LATE");
+  });
+
+  it("never gives \"Check again\" a payment another order already uses, and never picks one of several", async () => {
+    const payment = (signature: string, at: number) => ({
+      type: "PAYMENT",
+      recipient: SELLER_ADDRESS,
+      amount: "3.10000000",
+      timestamp: at,
+      signature,
+    });
+    let rows: unknown[] = [];
+    const stubRows = () =>
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (url: string) => ({
+          ok: true,
+          status: 200,
+          json: async () => (String(url).startsWith("/transactions/") ? rows : []),
+          text: async () => "[]",
+        }))
+      );
+
+    // Order 1 is paid (S1) and recorded.
+    sellerHandlers({ SEND_COIN: async () => ({ signature: "S1" }) });
+    stubRows();
+    expect(await startCheckout(args({ orderUid: "ORDER00001", now: NOW }))).toEqual({ kind: "done", orderUid: "ORDER00001" });
+
+    // A minute later, the same 3.1 QORT to the same seller: Hub doesn't answer, and nothing is sent.
+    sellerHandlers({
+      SEND_COIN: async () => {
+        throw "The request timed out";
+      },
+    });
+    await startCheckout(args({ orderUid: "ORDER00002", now: NOW + 60_000 }));
+    const second = getPendingOrder(BUYER, "ORDER00002")!;
+    // S1 paid for order 1, which is recorded: even when its time would fit order 2, it isn't order 2's.
+    rows = [payment("S1", NOW + 61_000)];
+    expect(await findUnconfirmedPayment(second)).toEqual({ kind: "none" });
+
+    // Another unconfirmed order whose payment was found keeps its signature to itself.
+    await startCheckout(args({ orderUid: "ORDER00003", now: NOW + 120_000 }));
+    const third = getPendingOrder(BUYER, "ORDER00003")!;
+    rows = [payment("S3", NOW + 121_000)];
+    expect(await findUnconfirmedPayment(third)).toEqual({ kind: "found", signature: "S3" });
+    confirmPendingPayment(third, shop, { signature: "S3" });
+    expect(await findUnconfirmedPayment(second)).toEqual({ kind: "none" });
+
+    // Remembered across a reload.
+    resetPendingOrders();
+    rows = [payment("S1", NOW + 61_000), payment("S3", NOW + 121_000)];
+    expect(await findUnconfirmedPayment(getPendingOrder(BUYER, "ORDER00002")!)).toEqual({ kind: "none" });
+
+    // Two fresh payments that both fit: the buyer picks, nothing is taken on its own.
+    rows = [payment("B", NOW + 200_000), payment("A", NOW + 190_000)];
+    expect(await findUnconfirmedPayment(second)).toEqual({
+      kind: "several",
+      candidates: [
+        { signature: "A", timestamp: NOW + 190_000 },
+        { signature: "B", timestamp: NOW + 200_000 },
+      ],
+    });
+
+    // Much later than the checkout: not this order's.
+    rows = [payment("MUCH-LATER", NOW + 60_000 + PAYMENT_MATCH_WINDOW_MS + 1)];
+    expect(await findUnconfirmedPayment(second)).toEqual({ kind: "none" });
+  });
+
+  it("says the node didn't answer instead of \"no payment\"", async () => {
+    sellerHandlers({
+      SEND_COIN: async () => {
+        throw "The request timed out";
+      },
+    });
+    await startCheckout(args());
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })));
+    await expect(findUnconfirmedPayment(getPendingOrder(BUYER, "ORDERxxxx1")!)).rejects.toThrow("503");
   });
 
   it("stops before paying when the shop has no address for the coin, or a price is missing", async () => {

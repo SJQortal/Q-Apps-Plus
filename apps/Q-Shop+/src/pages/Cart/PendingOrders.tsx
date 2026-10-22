@@ -7,20 +7,29 @@
  * - paid → Finish order (recordOrder; a physical order asks for the address
  *   again after a reload, since addresses are never stored);
  * - unconfirmed, QORT or an asset → Check again: the buyer's recent payments
- *   are searched (findUnconfirmedPayment), and a match is confirmed and
- *   recorded;
+ *   are searched (findUnconfirmedPayment, which leaves out payments other
+ *   orders use), and a single match is confirmed and recorded; when several
+ *   fit, the buyer picks one;
  * - unconfirmed, another coin (the node can't see it) → "I paid — record the
  *   order", behind a confirmation;
  * - unconfirmed → "I wasn't charged — remove", behind a confirmation.
  */
 import { useId, useState, type ReactNode } from "react";
+import { useDispatch } from "react-redux";
+import { restoreCartItem } from "../../state/features/cartSlice";
 import { Alert, Box, Button, CircularProgress, Paper, Stack, Typography } from "@mui/material";
 import HourglassEmptyIcon from "@mui/icons-material/HourglassEmpty";
 import HelpOutlineIcon from "@mui/icons-material/HelpOutlined";
 import { AmountTag } from "../../components/money/PriceTag";
 import { ResponsiveDialog } from "../../components/common/mobile";
 import { assetIdOf, isForeignTicker, type ShopCoinSettings } from "../../money/coins";
-import { confirmPendingPayment, findUnconfirmedPayment, recordOrder } from "../../money/checkout";
+import {
+  confirmPendingPayment,
+  findUnconfirmedPayment,
+  recordOrder,
+  type PaymentCandidate,
+  type PaymentSearch,
+} from "../../money/checkout";
 import { digitalDelivery, missingDeliveryFields, orderLines, type DeliveryInput } from "../../money/order";
 import {
   pendingDelivery,
@@ -32,6 +41,7 @@ import { errorMessage } from "../../qdn/hubErrors";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing } from "./delivery";
 import { itemCount, shortAddress } from "./cartLines";
+import { useRecordingOrder } from "./usePendingOrders";
 
 /**
  * The coin settings a pending order's payment record needs: only an asset's
@@ -151,10 +161,16 @@ export function PendingOrderCard({
   onRecorded: (order: PendingOrder) => void;
 }) {
   const titleId = useId();
-  const [busy, setBusy] = useState<Busy>(null);
+  const dispatch = useDispatch();
+  const [ownBusy, setBusy] = useState<Busy>(null);
+  // Another card (or the checkout) may be recording this order: show it, and offer nothing meanwhile.
+  const recordingNow = useRecordingOrder(order.orderUid);
+  const busy: Busy = ownBusy ?? (recordingNow ? "recording" : null);
   const [note, setNote] = useState<Note>(null);
   const [addressFor, setAddressFor] = useState<PendingOrder | null>(null);
   const [confirming, setConfirming] = useState<"paid" | "remove" | null>(null);
+  /** Payments that could each be this order's, for the buyer to pick from. */
+  const [choices, setChoices] = useState<PaymentCandidate[] | null>(null);
 
   const settings = pendingShopSettings(order);
   const paid = order.state === "paid";
@@ -189,23 +205,34 @@ export function PendingOrderCard({
   const checkAgain = async () => {
     setBusy("searching");
     setNote(null);
-    let found: { signature: string } | null;
+    setChoices(null);
+    let search: PaymentSearch;
     try {
-      found = await findUnconfirmedPayment(order);
+      search = await findUnconfirmedPayment(order);
     } catch (error) {
       setBusy(null);
       setNote({ severity: "error", text: `Couldn't look up your payments: ${errorMessage(error, "the node didn't answer")}. Try again.` });
       return;
     }
     setBusy(null);
-    if (!found) {
+    if (search.kind === "none") {
       setNote({
         severity: "info",
         text: "No matching payment yet. If Hub showed it as sent, check again in a minute. Don't pay again.",
       });
       return;
     }
-    finish(confirmPendingPayment(order, settings, found));
+    if (search.kind === "several") {
+      // Never one picked on its own: it may be another order's payment.
+      setChoices(search.candidates);
+      return;
+    }
+    finish(confirmPendingPayment(order, settings, { signature: search.signature }));
+  };
+
+  const pickCandidate = (candidate: PaymentCandidate) => {
+    setChoices(null);
+    finish(confirmPendingPayment(order, settings, { signature: candidate.signature }));
   };
 
   const confirmPaid = () => {
@@ -213,8 +240,25 @@ export function PendingOrderCard({
     finish(confirmPendingPayment(order, settings, {}));
   };
 
+  /**
+   * "I wasn't charged": checkout took the items out of the cart when Hub
+   * didn't answer, so they go back in (to the shop's cart, after anything
+   * there; a product already back in the cart is left as it is).
+   */
   const remove = () => {
     setConfirming(null);
+    if (!paid) {
+      for (const [productId, line] of lines) {
+        dispatch(
+          restoreCartItem({
+            storeId: order.store.id,
+            storeOwner: order.store.owner,
+            order: { productId, catalogueId: line?.catalogueId, quantity: line?.quantity },
+            index: Number.MAX_SAFE_INTEGER,
+          })
+        );
+      }
+    }
     removePendingOrder(order.buyer.name, order.orderUid);
   };
 
@@ -256,6 +300,21 @@ export function PendingOrderCard({
               {order.lastError}
             </Typography>
           ) : null}
+          {choices && !busy && (
+            <Box sx={{ mt: 1.5 }}>
+              <Alert severity="info">
+                More than one payment of {amount} to {seller} was made after this checkout
+                started. Pick the one that paid for this order; your wallet's history shows the time of each.
+              </Alert>
+              <Stack sx={{ mt: 1, gap: 1, "& .MuiButton-root": { minHeight: 44, justifyContent: "flex-start", textAlign: "left" } }}>
+                {choices.map((candidate) => (
+                  <Button key={candidate.signature} variant="outlined" onClick={() => pickCandidate(candidate)}>
+                    Paid {formatDate(candidate.timestamp)} · {shortAddress(candidate.signature)}
+                  </Button>
+                ))}
+              </Stack>
+            </Box>
+          )}
           <Stack direction="row" sx={{ mt: 1.5, flexWrap: "wrap", gap: 1, "& .MuiButton-root": { minHeight: 44 } }}>
             {paid && (
               <Button variant="contained" onClick={() => finish(order)} disabled={busy !== null}>
@@ -320,7 +379,7 @@ export function PendingOrderCard({
             Only if your wallet shows no payment of {amount} to {foreign ? shortAddress(order.recipient) : seller}.
           </Typography>
           <Typography variant="body2" sx={{ mt: 1.5 }}>
-            If you did pay, {seller} won't hear about this order once it's removed.
+            If you did pay, {seller} won't hear about this order once it's removed. Its items go back in your cart.
           </Typography>
         </ConfirmDialog>
       )}
