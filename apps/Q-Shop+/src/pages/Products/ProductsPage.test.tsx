@@ -171,7 +171,8 @@ describe("Products", () => {
     world.shops[2].products[2].status = "RETIRED";
     renderProducts({ world });
     await waitFor(() => expect(screen.getByText("That's every product.")).toBeInTheDocument());
-    expect(cards()).toHaveLength(8);
+    // The cards fill in as their catalogues land (placeholders until then): wait for them, not just the end note.
+    await waitFor(() => expect(cards()).toHaveLength(8));
     expect(cards().some((card) => within(card).queryByRole("link", { name: shopLink("Shop number 3") }))).toBe(false);
   });
 
