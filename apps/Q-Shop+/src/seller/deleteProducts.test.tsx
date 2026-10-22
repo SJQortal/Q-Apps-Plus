@@ -82,7 +82,7 @@ async function selectAndDelete(titles: string[]) {
   const list = await screen.findByRole("list", { name: "Products" });
   for (const title of titles) await within(list).findByText(title);
   fireEvent.click(screen.getByRole("button", { name: "Select" }));
-  for (const title of titles) fireEvent.click(within(list).getByRole("checkbox", { name: `Select ${title}` }));
+  for (const title of titles) fireEvent.click(within(list).getByRole("checkbox", { name: new RegExp(`^Select ${title}\\b`) }));
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
   const ask = await screen.findByRole("dialog", { name: titles.length === 1 ? "Delete this product?" : `Delete ${titles.length} products?` });
   fireEvent.click(within(ask).getByRole("button", { name: titles.length === 1 ? "Delete product" : `Delete ${titles.length} products` }));
@@ -113,10 +113,10 @@ describe("deleting products", () => {
     await within(list).findByText("Poster");
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
     expect(screen.getByRole("toolbar", { name: "Selected products" })).toBeInTheDocument();
-    fireEvent.click(within(list).getByRole("checkbox", { name: "Select Poster" }));
-    fireEvent.click(within(list).getByRole("checkbox", { name: "Select Mug" }));
-    expect(within(list).getByRole("checkbox", { name: "Select Mug" })).toHaveAttribute("aria-checked", "true");
-    expect(within(list).getByRole("checkbox", { name: "Select Chair" })).toHaveAttribute("aria-checked", "false");
+    fireEvent.click(within(list).getByRole("checkbox", { name: /^Select Poster\b/ }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: /^Select Mug\b/ }));
+    expect(within(list).getByRole("checkbox", { name: /^Select Mug\b/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(list).getByRole("checkbox", { name: /^Select Chair\b/ })).toHaveAttribute("aria-checked", "false");
     expect(screen.getByText("2 selected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
@@ -171,7 +171,7 @@ describe("deleting products", () => {
     expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Select" })).toHaveFocus());
     // Tapping a product opens it again.
-    fireEvent.click(within(list).getByRole("button", { name: "Edit Chair" }));
+    fireEvent.click(within(list).getByRole("button", { name: /^Edit Chair\b/ }));
     expect(await screen.findByRole("dialog", { name: "Edit product" })).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
@@ -182,8 +182,8 @@ describe("deleting products", () => {
     const list = await screen.findByRole("list", { name: "Products" });
     await within(list).findByText("Chair");
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
-    fireEvent.click(within(list).getByRole("checkbox", { name: "Select Mug" }));
-    fireEvent.click(within(list).getByRole("checkbox", { name: "Select Chair" }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: /^Select Mug\b/ }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: /^Select Chair\b/ }));
     fireEvent.change(screen.getByRole("searchbox", { name: "Search your products" }), { target: { value: "chair" } });
     expect(await screen.findByText("2 selected, 1 hidden by the search or filters")).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("button", { name: "Select none" }), { key: "Escape" });
@@ -194,7 +194,7 @@ describe("deleting products", () => {
   it("deletes from the product form, which stays open until it's deleted", async () => {
     stubNode();
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Mug" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Mug\b/ }));
     const form = await screen.findByRole("dialog", { name: "Edit product" });
     fireEvent.click(within(form).getByRole("button", { name: "Delete" }));
     const ask = await screen.findByRole("dialog", { name: "Delete this product?" });

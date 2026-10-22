@@ -19,7 +19,7 @@
  * while the list scrolls, says how many chosen products the filters hide,
  * takes the keyboard focus, and Escape leaves it.
  */
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import {
   Badge,
@@ -47,11 +47,11 @@ import SwapVertIcon from "@mui/icons-material/SwapVert";
 import { useInView } from "react-intersection-observer";
 import type { RootState } from "../state/store";
 import { AmountTag } from "../components/money/PriceTag";
-import { formatPrice } from "../money/pricing";
 import { EmptyState } from "../components/common/EmptyState";
 import { BottomSheet } from "../components/common/mobile";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
 import { stickyBelowHeader } from "../components/layout/Navbar/Navbar-styles";
+import { visuallyHiddenSx } from "../pages/Store/a11y";
 import { STATUS_LABEL, productForEdit, productFromIndexRow } from "./productDraft";
 import {
   DEFAULT_FILTERS,
@@ -508,15 +508,6 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
 
 const ROW_COLUMNS_MD = "56px minmax(0, 1fr) 150px 130px 120px 24px";
 
-const VISUALLY_HIDDEN = {
-  position: "absolute",
-  width: 1,
-  height: 1,
-  overflow: "hidden",
-  clip: "rect(0 0 0 0)",
-  whiteSpace: "nowrap",
-} as const;
-
 interface ProductRowProps {
   row: SellerRow;
   details: Record<string, any> | undefined;
@@ -549,7 +540,6 @@ const ProductRow = memo(function ProductRow({
   onToggle,
 }: ProductRowProps) {
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px", fallbackInView: true });
-  const metaId = useId();
   useEffect(() => {
     if (inView) onVisible([row.catalogueId]);
   }, [inView, row.catalogueId, onVisible]);
@@ -572,8 +562,6 @@ const ProductRow = memo(function ProductRow({
         onClick={() => (selecting ? onToggle?.(row) : onEdit(row))}
         role={selecting ? "checkbox" : undefined}
         aria-checked={selecting ? selected : undefined}
-        aria-label={selecting ? (title ? `Select ${title}` : "Select product") : title ? `Edit ${title}` : "Edit product"}
-        aria-describedby={metaId}
         aria-busy={opening || undefined}
         sx={{
           flex: 1,
@@ -594,6 +582,14 @@ const ProductRow = memo(function ProductRow({
           "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 2 },
         }}
       >
+        {/*
+          The row is named by what it shows (its title, status, price, category, date), after a
+          word for what a tap does: WCAG 2.5.3 wants the visible text in the name, and the
+          columns differ by width.
+        */}
+        <Box component="span" sx={visuallyHiddenSx}>
+          {selecting ? "Select" : "Edit"}
+        </Box>
         <Box
           sx={{
             width: 56,
@@ -659,19 +655,6 @@ const ProductRow = memo(function ProductRow({
         ) : (
           <CheckBoxOutlineBlankIcon sx={{ color: "text.secondary" }} />
         )}
-        {/* What the row shows, for screen readers (the columns differ by width). */}
-        <Box component="span" id={metaId} sx={VISUALLY_HIDDEN}>
-          {[
-            missing && "missing from its catalogue",
-            STATUS_LABEL[statusOf(row)],
-            `${formatPrice(Number(row.priceQort))} QORT`,
-            row.category,
-            created && `added ${created}`,
-            edited && "edited, not published",
-          ]
-            .filter(Boolean)
-            .join(", ")}
-        </Box>
       </ButtonBase>
       {load === "failed" && (
         <Button variant="outlined" onClick={() => onRetry(row.catalogueId)} sx={{ minHeight: 44, alignSelf: "center" }}>

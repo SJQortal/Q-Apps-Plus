@@ -162,7 +162,7 @@ describe("the products tab", () => {
     installVisibleIntersectionObserver();
     stubNode();
     const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Poster" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
     const dialog = await screen.findByRole("dialog", { name: "Edit product" });
     expect(within(dialog).getByRole("textbox", { name: /^Price in QORT/ })).toHaveValue("0.1");
     expect(within(dialog).getByRole("textbox", { name: /^Price in Pirate Chain/ })).toHaveValue("0.25");
@@ -204,7 +204,7 @@ describe("the products tab", () => {
     // Read once more, fresh, before it counts as missing; then never again.
     expect(q.callsFor("FETCH_QDN_RESOURCE").filter((c) => c.identifier === CATALOGUE_ID)).toHaveLength(2);
 
-    fireEvent.click(within(list).getByRole("button", { name: "Edit product" }));
+    fireEvent.click(within(list).getByRole("button", { name: /^Edit Missing from its catalogue/ }));
     const dialog = await screen.findByRole("dialog", { name: "Edit product" });
     expect(screen.queryByText("Opening…")).toBeNull();
     expect(within(dialog).getByRole("textbox", { name: /^Price in QORT/ })).toHaveValue("3");
@@ -310,7 +310,7 @@ describe("the products tab", () => {
       { FETCH_QDN_RESOURCE: async () => ({ ...structuredClone(catalogue), products: { ...catalogue.products, [poster.id]: { ...poster, category: "Art " } } }) },
       `/product-manager/${STORE_ID}?tab=products`
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Poster" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
     const dialog = await screen.findByRole("dialog", { name: "Edit product" });
     expect((within(dialog).getByRole("combobox", { name: /^Category/ }) as HTMLSelectElement).value).toBe("Art");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
@@ -321,7 +321,7 @@ describe("the products tab", () => {
     installVisibleIntersectionObserver();
     stubNode();
     const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Poster" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
     const dialog = await screen.findByRole("dialog", { name: "Edit product" });
     const category = within(dialog).getByRole("combobox", { name: /^Category/ }) as HTMLSelectElement;
     // The fixture's "Art" isn't one of the list: it is offered as the product's own, and selected.
@@ -331,7 +331,7 @@ describe("the products tab", () => {
     await waitFor(() => expect(store.getState().global.productsToSave[poster.id]).toBeDefined());
     expect(store.getState().global.productsToSave[poster.id].category).toBe("Art");
     // Picking one of the list replaces it.
-    fireEvent.click(await screen.findByRole("button", { name: "Edit Poster" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
     const again = await screen.findByRole("dialog", { name: "Edit product" });
     fireEvent.change(within(again).getByRole("combobox", { name: /^Category/ }), { target: { value: "Collectibles & Art" } });
     fireEvent.click(within(again).getByRole("button", { name: "Save to drafts" }));
