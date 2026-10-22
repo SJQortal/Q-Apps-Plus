@@ -31,6 +31,7 @@ import {
 } from "../test/fixtures/shop";
 import { ProductManager } from "../pages/ProductManager/ProductManager";
 import { roomTiming } from "../qdn/publishBatches";
+import { isDraftOfShop } from "./shopDrafts";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
 
 vi.mock("../components/common/ImageUploader", () => ({
@@ -253,6 +254,28 @@ describe("publishing", () => {
     expect(state.listProducts.products).toHaveLength(4);
     expect(state.catalogueHashMap[CATALOGUE_ID].products[draft(1).id]).toEqual({ ...draft(1), catalogueId: CATALOGUE_ID });
     expect(screen.queryByRole("heading", { name: /Ready to publish/ })).toBeNull();
+  });
+
+  it("publishes only this shop's drafts; another shop's stay in the list, untouched", async () => {
+    stubNode();
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    const other = { ...draft(2), storeId: "q-store-general-my-shop-2", shortStoreId: "my-shop-2", id: "q-store-product-my-shop-2-OTHERxxxx1" };
+    store.dispatch(setProductsToSave(draft(1)));
+    store.dispatch(setProductsToSave(other));
+    expect(await screen.findByRole("heading", { name: "Ready to publish: 1 product" })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toEqual([other.id]));
+    const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
+    const cat = decodeData64(call.resources[0].data64);
+    expect(Object.keys(cat.products)).toContain(draft(1).id);
+    expect(Object.keys(cat.products)).not.toContain(other.id);
+  });
+
+  it("matches drafts without a shop id by their product id, exactly", () => {
+    expect(isDraftOfShop({ id: `q-store-product-${SHORT_STORE_ID}-ABCDEFGHIJ` }, STORE_ID)).toBe(true);
+    expect(isDraftOfShop({ id: `q-store-product-${SHORT_STORE_ID}-2-ABCDEFGHIJ` }, STORE_ID)).toBe(false);
+    expect(isDraftOfShop({ id: "x", storeId: STORE_ID }, STORE_ID)).toBe(true);
+    expect(isDraftOfShop({ id: `q-store-product-${SHORT_STORE_ID}-ABCDEFGHIJ`, storeId: "q-store-general-other" }, STORE_ID)).toBe(false);
   });
 
   it("sends more than 20 resources in batches of 20, waiting for room, with the product list last", async () => {

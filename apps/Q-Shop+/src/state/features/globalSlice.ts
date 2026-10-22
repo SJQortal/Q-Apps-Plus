@@ -162,6 +162,10 @@ export const globalSlice = createSlice({
       // Return the updated state with the removed object
       state.productsToSave = updatedProductsToSave;
     },
+    /** + app: drop the drafts one publish sent (other shops' drafts stay). */
+    removeManyFromProductsToSave: (state, action: { payload: string[] }) => {
+      for (const id of action.payload) delete state.productsToSave[id];
+    },
     setProductsToSave: (state, action) => {
       const product = action.payload;
       state.productsToSave[product.id] = product;
@@ -246,6 +250,7 @@ export const {
   updateDownloads,
   setUserAvatarHash,
   removeFromProductsToSave,
+  removeManyFromProductsToSave,
   setProductsToSave,
   setCatalogueHashMap,
   updateCatalogueHashMap,

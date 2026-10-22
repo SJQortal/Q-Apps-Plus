@@ -1,21 +1,21 @@
 /**
- * "Ready to publish": the products added or edited since the last publish
- * (`global.productsToSave`), shown above the seller's tabs so they are never
+ * "Ready to publish": this shop's products added or edited since the last
+ * publish (`global.productsToSave`), shown above the seller's tabs so they are never
  * forgotten. Review lists them with Edit and Remove; Publish sends them all.
  */
 import { useId, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import { Alert, Box, Button, Chip, CircularProgress, Collapse, IconButton, Tooltip, Typography } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
-import type { RootState } from "../state/store";
 import { removeFromProductsToSave } from "../state/features/globalSlice";
 import { AmountTag } from "../components/money/PriceTag";
 import { qortPrice } from "../money/pricing";
 import useConfirmationModal from "../hooks/useConfirmModal";
 import { primarySoft } from "../hub-theme";
+import { useShopDrafts } from "./shopDrafts";
 
 interface DraftsCardProps {
   onEdit: (product: Record<string, any> & { id: string }) => void;
@@ -26,7 +26,7 @@ interface DraftsCardProps {
 
 export function DraftsCard({ onEdit, onPublish, preparing, error }: DraftsCardProps) {
   const dispatch = useDispatch();
-  const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
+  const productsToSave = useShopDrafts();
   const [open, setOpen] = useState(false);
   const listId = useId();
   const { dialog, showModal } = useConfirmationModal({

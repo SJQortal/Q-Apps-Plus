@@ -11,6 +11,7 @@ import ShortUniqueId from "short-unique-id";
 import type { AppDispatch, RootState } from "../state/store";
 import {
   clearAllProductsToSave,
+  removeManyFromProductsToSave,
   setDataContainer,
   setProducts,
   updateCatalogueHashMap,
@@ -27,6 +28,7 @@ import {
 } from "../qdn/payloads";
 import { invalidateQdnJson, invalidateQdnSearches } from "../qdn/search";
 import { errorMessage } from "../qdn/hubErrors";
+import { draftsOfShop } from "./shopDrafts";
 
 const uid = new ShortUniqueId({ length: 10 });
 
@@ -39,6 +41,8 @@ export interface PublishJob {
   dataContainer: DataContainerDoc;
   storeId: string;
   name: string;
+  /** The drafts this publish sends. */
+  draftIds: string[];
 }
 
 export function usePublishProducts() {
@@ -46,7 +50,7 @@ export function usePublishProducts() {
   const user = useSelector((state: RootState) => state.auth.user);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
-  const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
+  const allDrafts = useSelector((state: RootState) => state.global.productsToSave);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<PublishJob | null>(null);
@@ -60,8 +64,10 @@ export function usePublishProducts() {
     if (!dataContainer?.products || dataContainer.storeId !== currentStore.id) {
       return setError("Your shop's product list isn't loaded yet. Try again in a moment.");
     }
-    if (Object.keys(productsToSave).length === 0) return;
     const storeId = currentStore.id;
+    // Only this shop's drafts: the list is shared by every shop of the seller.
+    const productsToSave = draftsOfShop(allDrafts, storeId);
+    if (Object.keys(productsToSave).length === 0) return;
     // A catalogue holding a product being edited must be read, or the edit
     // would be lost; the last catalogue, only topped up, may be skipped (new
     // products then open a new catalogue, as the original did).
@@ -105,19 +111,21 @@ export function usePublishProducts() {
         labels[cat.id] = `Catalogue ${i + 1} · ${n === 1 ? "1 product" : `${n} products`}`;
       });
       labels[built.dataContainer.id] = "Product list";
-      setJob({ ...built, labels, storeId, name });
+      setJob({ ...built, labels, storeId, name, draftIds: Object.keys(productsToSave) });
     } catch (e) {
       setError(e instanceof PrepareError ? e.message : errorMessage(e, "Couldn't prepare the publish. Try again."));
     } finally {
       setPreparing(false);
     }
-  }, [user, currentStore, dataContainer, productsToSave]);
+  }, [user, currentStore, dataContainer, allDrafts]);
 
   /** Everything is on QDN: the original's Redux updates, then fresh reads. */
   const done = useCallback(() => {
     if (!job) return;
-    const { dataContainer: dc, catalogues, storeId, name, resources } = job;
-    dispatch(clearAllProductsToSave());
+    const { dataContainer: dc, catalogues, storeId, name, resources, draftIds } = job;
+    // As the original: every draft goes. Drafts for the seller's other shops stay.
+    if (draftIds.length === Object.keys(allDrafts).length) dispatch(clearAllProductsToSave());
+    else dispatch(removeManyFromProductsToSave(draftIds));
     dispatch(setDataContainer({ ...dc, id: dataContainerIdentifier(storeId) }));
     dispatch(setProducts(Object.keys(dc.products).map((key) => ({ ...dc.products[key], id: key }))));
     const map: Record<string, Catalogue> = {};
@@ -127,7 +135,7 @@ export function usePublishProducts() {
     invalidateQdnSearches((url) => url.includes("service=DOCUMENT"));
     dispatch(setNotification({ msg: "Products published", alertType: "success" }));
     setJob(null);
-  }, [job, dispatch]);
+  }, [job, allDrafts, dispatch]);
 
   /** Closed before everything landed: the drafts stay, so publishing again finishes it. */
   const closed = useCallback(
