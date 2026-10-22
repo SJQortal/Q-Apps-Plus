@@ -8,7 +8,7 @@
  * catalogues and product index, seller/PublishProductsDialog.tsx sends them
  * (in batches past 20). Nothing is ever published without the seller asking.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Box, Button, IconButton, Skeleton, Tab, Tabs, Tooltip } from "@mui/material";
@@ -16,7 +16,7 @@ import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { AppDispatch, RootState } from "../../state/store";
 import { setAllMyStores, type Store } from "../../state/features/storeSlice";
-import { setOwnShopStatus, toggleCreateStoreModal } from "../../state/features/globalSlice";
+import { setOwnShopStatus, toggleCreateStoreModal, updateRecentlyVisitedStoreId } from "../../state/features/globalSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
 import { resetOrders } from "../../state/features/orderSlice";
 import { Page, PageHeader } from "../../components/layout/Page";
@@ -75,13 +75,16 @@ export const ProductManager = () => {
   const ready = isCurrent && !!dataContainer && dataContainer.storeId === storeId;
 
   // The routed shop is one of the seller's but not the current one: make it
-  // current (once; if it can't be read, the status card says so).
-  const asked = useRef<string | null>(null);
+  // current the way the rest of the app does, through the recently visited
+  // shop that useOwnShops follows. Asked again whenever the current shop
+  // moves away from it (Back from another of the seller's shops); if it
+  // can't be read, the status card says so.
+  const routedId = routedShop?.id;
+  const currentId = currentStore?.id;
   useEffect(() => {
-    if (isCurrent || !routedShop || asked.current === routedShop.id) return;
-    asked.current = routedShop.id;
-    void loadOwnShop(dispatch, routedShop);
-  }, [isCurrent, routedShop, dispatch]);
+    if (!routedId || routedId === currentId) return;
+    dispatch(updateRecentlyVisitedStoreId(routedId));
+  }, [routedId, currentId, dispatch]);
 
   // Leaving the seller page forgets the received orders, as the original did.
   useEffect(() => {

@@ -15,6 +15,7 @@ import {
   setCurrentStore,
   setDataContainer,
   setOwnShopStatus,
+  updateRecentlyVisitedStoreId,
 } from "../state/features/globalSlice";
 import { addToAllMyStores, addToHashMapStores, addToStores } from "../state/features/storeSlice";
 import { setNotification } from "../state/features/notificationsSlice";
@@ -106,6 +107,9 @@ export function useShopPublish() {
         );
         dispatch(setDataContainer({ ...dataContainer, id: dataContainerIdentifier(identifier) }));
         dispatch(setOwnShopStatus("ready"));
+        // The new shop is the one the seller is on now (useOwnShops follows this id),
+        // so an earlier shop doesn't take its place, and visiting that one again counts.
+        dispatch(updateRecentlyVisitedStoreId(identifier));
         invalidateQdnSearches((url) => url.includes("service=STORE"));
         dispatch(setNotification({ msg: "Shop created", alertType: "success" }));
         return identifier;

@@ -14,6 +14,15 @@
  * - nothing is ever published here: a missing index is reported as
  *   `container-missing` (confirmed by a search), and the seller page offers
  *   to create it; an index that exists but can't be read is `unavailable`.
+ *
+ * Which shop is current follows `global.recentlyVisitedStoreId`, as in the
+ * original: the shop page, the account menu, Sell, the seller page and a new
+ * shop set it, and this hook makes that shop current when it is one of the
+ * name's. It reacts only when that id changes (the last one handled is
+ * kept), never merely because the current shop changed, so creating a second
+ * shop or going back and forth between two never flips back to an older one.
+ * Only the shop asked for last may land, and a shop lands whole (its JSON and
+ * index together), so a load overtaken by another leaves nothing behind.
  */
 import { useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -23,6 +32,7 @@ import {
   setDataContainer,
   setOwnShopStatus,
   type CurrentStore,
+  type OwnShopStatus,
 } from "../state/features/globalSlice";
 import { addToHashMapStores, setAllMyStores, type Store } from "../state/features/storeSlice";
 import { dataContainerIdentifier, isStoreIdentifier, STORE_BASE, shortStoreIdOf } from "../qdn/identifiers";
@@ -85,40 +95,43 @@ export async function findOwnShops(name: string, fresh = false): Promise<Store[]
   return rows.filter((row) => isStoreIdentifier(row.identifier) && row.name === name).map(storeFromRow);
 }
 
-/** Loads one of the user's shops as the current one: its JSON and its product index. */
+/**
+ * Loads one of the user's shops as the current one: its JSON and its product
+ * index. Both are read first and land together, and only while `isCurrent`
+ * holds, so a load overtaken by another (or by a name switch) changes nothing.
+ */
 export async function loadOwnShop(
   dispatch: AppDispatch,
   shop: Store,
   options: { fresh?: boolean; isCurrent?: () => boolean } = {}
 ) {
-  // A name switch while this loads must not let the old name's shop land.
   const current = options.isCurrent ?? (() => true);
   dispatch(setOwnShopStatus("loading"));
+  let json: any;
   try {
-    const json = await fetchQdnJson("STORE", shop.owner, shop.id, options);
-    if (!current()) return;
-    if (checkStructureStore(json)) {
-      dispatch(addToHashMapStores({ ...shop, ...json, owner: shop.owner, id: shop.id, isValid: true }));
-    }
-    dispatch(setCurrentStore(currentStoreFrom(shop.id, shop.owner, json, shop)));
+    json = await fetchQdnJson("STORE", shop.owner, shop.id, options);
   } catch {
     if (current()) dispatch(setOwnShopStatus("unavailable"));
     return;
   }
   const containerId = dataContainerIdentifier(shop.id);
+  let container: object | null = null;
+  let status: OwnShopStatus = "ready";
   try {
-    const container = await fetchQdnJson("DOCUMENT", shop.owner, containerId, options);
-    if (!current()) return;
-    if (container && typeof container === "object" && (container as { products?: unknown }).products) {
-      dispatch(setDataContainer({ ...(container as object), id: containerId }));
-      dispatch(setOwnShopStatus("ready"));
-      return;
-    }
-    throw new Error("Not a product index");
+    const body = await fetchQdnJson("DOCUMENT", shop.owner, containerId, options);
+    if (!body || typeof body !== "object" || !(body as { products?: unknown }).products) throw new Error("Not a product index");
+    container = body as object;
   } catch {
     const exists = await resourceExists("DOCUMENT", shop.owner, containerId, { fresh: true }).catch(() => true);
-    if (current()) dispatch(setOwnShopStatus(exists ? "unavailable" : "container-missing"));
+    status = exists ? "unavailable" : "container-missing";
   }
+  if (!current()) return;
+  if (checkStructureStore(json)) {
+    dispatch(addToHashMapStores({ ...shop, ...json, owner: shop.owner, id: shop.id, isValid: true }));
+  }
+  dispatch(setCurrentStore(currentStoreFrom(shop.id, shop.owner, json, shop)));
+  if (container) dispatch(setDataContainer({ ...container, id: containerId }));
+  dispatch(setOwnShopStatus(status));
 }
 
 /** Mount once (GlobalWrapper): loads the signed-in name's shops and its current shop. */
@@ -130,9 +143,32 @@ export function useOwnShops(): { reload: () => void } {
   const myStores = useSelector((state: RootState) => state.store.myStores);
 
   const activeName = useRef(name);
+  const visited = useRef(recentlyVisitedStoreId);
+  const current = useRef(currentStoreId);
+  // The last recently visited id acted on; the shop asked for last; the shop being loaded.
+  const handled = useRef("");
+  const wanted = useRef<string | null>(null);
+  const loading = useRef<string | null>(null);
   useEffect(() => {
     activeName.current = name;
-  }, [name]);
+    visited.current = recentlyVisitedStoreId;
+    current.current = currentStoreId;
+  }, [name, recentlyVisitedStoreId, currentStoreId]);
+
+  /** Makes one of the name's shops current, unless another is asked for before it lands. */
+  const loadShop = useCallback(
+    async (shop: Store, fresh = false) => {
+      wanted.current = shop.id;
+      loading.current = shop.id;
+      const isCurrent = () => activeName.current === shop.owner && wanted.current === shop.id;
+      try {
+        await loadOwnShop(dispatch, shop, { fresh, isCurrent });
+      } finally {
+        if (loading.current === shop.id) loading.current = null;
+      }
+    },
+    [dispatch]
+  );
 
   const load = useCallback(
     async (fresh = false) => {
@@ -142,17 +178,21 @@ export function useOwnShops(): { reload: () => void } {
       try {
         const shops = await findOwnShops(name, fresh);
         if (!isCurrent()) return;
+        // The shop the seller is on (a link, the seller page) or works on; else the oldest, as the original.
+        const shop =
+          shops.find((s) => s.id === visited.current) ?? shops.find((s) => s.id === current.current) ?? shops[0];
+        if (shop && shop.id === visited.current) handled.current = shop.id;
         dispatch(setAllMyStores(shops));
-        if (shops.length === 0) {
+        if (!shop) {
           dispatch(setOwnShopStatus("none"));
           return;
         }
-        await loadOwnShop(dispatch, shops[0], { fresh, isCurrent });
+        await loadShop(shop, fresh);
       } catch {
         if (isCurrent()) dispatch(setOwnShopStatus("error"));
       }
     },
-    [dispatch, name]
+    [dispatch, name, loadShop]
   );
 
   useEffect(() => {
@@ -160,11 +200,21 @@ export function useOwnShops(): { reload: () => void } {
   }, [load]);
 
   // Visiting another of your own shops makes it the current one (as the original did).
+  // Only a new id counts: the current shop changing is never a reason to load another.
   useEffect(() => {
-    if (!recentlyVisitedStoreId || recentlyVisitedStoreId === currentStoreId) return;
-    const shop = myStores.find((s) => s.id === recentlyVisitedStoreId);
-    if (shop) loadOwnShop(dispatch, shop, { isCurrent: () => activeName.current === shop.owner });
-  }, [recentlyVisitedStoreId, currentStoreId, myStores, dispatch]);
+    const id = recentlyVisitedStoreId;
+    if (!id) {
+      handled.current = "";
+      return;
+    }
+    if (id === handled.current) return;
+    // Someone else's shop, or the name's shops aren't known yet (this runs again when they are).
+    const shop = myStores.find((s) => s.id === id);
+    if (!shop) return;
+    handled.current = id;
+    // Already current, unless a load of another shop is still out: that one must not land.
+    if (id !== current.current || (loading.current !== null && loading.current !== id)) void loadShop(shop);
+  }, [recentlyVisitedStoreId, myStores, loadShop]);
 
   return { reload: () => load(true) };
 }

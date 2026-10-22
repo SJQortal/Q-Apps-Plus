@@ -31,6 +31,7 @@ import {
   viewedStore,
 } from "../test/fixtures/shop";
 import { ProductManager } from "../pages/ProductManager/ProductManager";
+import { useOwnShops } from "../hooks/useOwnShops";
 import { roomTiming } from "../qdn/publishBatches";
 import { isDraftOfShop } from "./shopDrafts";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
@@ -43,24 +44,43 @@ vi.mock("../components/common/ImageUploader", () => ({
   ),
 }));
 
-/** Core answers: room on the account (or the counts given), the unit fee, and published resources by content. */
-function stubNode(opts: { unconfirmed?: number[]; served?: Map<string, unknown> } = {}) {
+type ShopRow = { identifier: string; title: string };
+
+/**
+ * Core answers: room on the account (or the counts given), the unit fee,
+ * published resources by content, and the seller's shops for a search.
+ */
+function stubNode(opts: { unconfirmed?: number[]; served?: Map<string, unknown>; shops?: ShopRow[] } = {}) {
   const calls: string[] = [];
   const counts = [...(opts.unconfirmed ?? [])];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: string): Promise<{ ok: boolean; status: number; text: () => Promise<string> }> => {
+    vi.fn(async (input: string) => {
       const url = String(input);
       calls.push(url);
-      const ok = (body: unknown) => ({ ok: true, status: 200, text: async (): Promise<string> => JSON.stringify(body) });
+      const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body });
+      if (url.startsWith("/arbitrary/resources/search") && opts.shops) {
+        const rows = opts.shops.map((s, i) => ({ name: SELLER, service: "STORE", identifier: s.identifier, created: i + 1, metadata: { title: s.title } }));
+        return ok(rows);
+      }
       if (url.startsWith("/transactions/unconfirmed")) return ok(Array.from({ length: counts.shift() ?? 0 }, () => ({ type: "ARBITRARY" })));
       if (url.startsWith("/transactions/unitfee")) return ok("1000000");
       const m = url.match(/^\/arbitrary\/DOCUMENT\/([^/]+)\/([^/?]+)$/);
       if (m && opts.served?.has(decodeURIComponent(m[2]))) return ok(opts.served.get(decodeURIComponent(m[2])));
-      return { ok: false, status: 404, text: async () => '{"error":1401}' };
+      return { ok: false, status: 404, text: async () => '{"error":1401}', json: async () => ({ error: 1401 }) };
     })
   );
   return calls;
+}
+
+/** The seller page as GlobalWrapper mounts it: with the hook that loads the seller's shops. */
+function SellerPage() {
+  useOwnShops();
+  return (
+    <Routes>
+      <Route path="/product-manager/:store" element={<ProductManager />} />
+    </Routes>
+  );
 }
 
 function draft(n: number) {
@@ -254,7 +274,12 @@ describe("the products tab", () => {
 
 describe("the page's states", () => {
   it("another of the seller's shops loads as the current one; if the node can't read it, says so with Retry", async () => {
-    stubNode();
+    stubNode({
+      shops: [
+        { identifier: STORE_ID, title: viewedStore.title },
+        { identifier: "q-store-general-other", title: "Other shop" },
+      ],
+    });
     const store = createAppStore();
     store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
     store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
@@ -266,12 +291,7 @@ describe("the page's states", () => {
       ])
     );
     installQortalMock();
-    renderWithProviders(
-      <Routes>
-        <Route path="/product-manager/:store" element={<ProductManager />} />
-      </Routes>,
-      { store, initialEntries: ["/product-manager/q-store-general-other"] }
-    );
+    renderWithProviders(<SellerPage />, { store, initialEntries: ["/product-manager/q-store-general-other"] });
     expect(await screen.findByText("Couldn't load this shop from your node")).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "Other shop" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
