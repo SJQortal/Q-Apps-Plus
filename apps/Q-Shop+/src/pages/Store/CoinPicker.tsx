@@ -32,8 +32,15 @@ export function CoinPicker({ shop, shopCoin, id = "shop-coin" }: { shop: ShopCoi
 
 /** "1 QORT ≈ 0.25 ARRR · Trade Portal rate" while prices are converted from QORT. */
 export function RateNote({ shopCoin }: { shopCoin: ShopCoin }) {
-  const { coin, rate, rateLoading } = shopCoin;
+  const { coin, rate, rateLoading, rateError } = shopCoin;
   if (!isForeignTicker(coin)) return null;
+  if (rateError) {
+    return (
+      <Typography variant="body2" color="text.secondary" role="status">
+        Your node has no {coin} exchange rate right now. Prices the seller set in {coin} still show.
+      </Typography>
+    );
+  }
   return (
     <Typography variant="body2" color="text.secondary" role="status">
       {rateLoading || !rate
