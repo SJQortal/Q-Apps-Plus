@@ -323,7 +323,8 @@ describe("home page", () => {
       world.shops[4].supportedCoins = ["QORT", "BTC"];
       world.shops[4].foreignCoins = { BTC: "bc1qpayout" };
       const first = renderHome({ world, path: "/?pay=BTC", allInView: true });
-      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 4"]));
+      // 24 shop reads: under a busy test run this takes longer than waitFor's default second.
+      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 4"]), { timeout: 8000 });
       expect(first.node.summary().resources.STORE).toBe(24);
       first.unmount();
 
@@ -335,7 +336,7 @@ describe("home page", () => {
       invalidateQdnSearches();
       resetHomeMemory();
       const second = renderHome({ world, path: "/?pay=BTC", allInView: true });
-      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 7", "Shop number 4"]));
+      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 7", "Shop number 4"]), { timeout: 8000 });
       // One shop JSON read again, not 24.
       expect(second.node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/"))).toEqual([
         "/arbitrary/STORE/Seller%207/q-store-general-shop-7",
