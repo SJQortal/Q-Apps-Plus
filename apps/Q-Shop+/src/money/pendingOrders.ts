@@ -13,7 +13,7 @@
  * one browser origin, so the address a buyer typed stays in memory only; after
  * a reload a physical order asks for it again.
  */
-import { PENDING_ORDERS_STORAGE_KEY, STORAGE_PREFIX } from "../constants/plus";
+import { PENDING_ORDERS_STORAGE_KEY, USED_PAYMENTS_STORAGE_KEY } from "../constants/plus";
 import type { DeliveryInput, OrderDetails, PaymentRecord } from "./order";
 
 export type PendingState =
@@ -216,7 +216,7 @@ export function isRecordingOrder(orderUid: string): boolean {
  * it. Browser-only and additive (a new key under the app's storage prefix),
  * per buyer name, newest last, capped.
  */
-export const USED_PAYMENTS_STORAGE_KEY = `${STORAGE_PREFIX}used-payments`;
+export { USED_PAYMENTS_STORAGE_KEY };
 const MAX_USED_PAYMENTS = 100;
 
 interface UsedPayment {

@@ -61,6 +61,12 @@ export const CART_STORAGE_KEY = `${STORAGE_PREFIX}cart`;
  */
 export const PENDING_ORDERS_STORAGE_KEY = `${STORAGE_PREFIX}pending-orders`;
 
+/**
+ * Payment signatures already used by orders recorded from this device, so
+ * "Check again" never attaches one payment to two orders.
+ */
+export const USED_PAYMENTS_STORAGE_KEY = `${STORAGE_PREFIX}used-payments`;
+
 /** The name picked in the name switcher, per account address. */
 export const ACTIVE_NAME_STORAGE_KEY = `${STORAGE_PREFIX}active-name`;
 
