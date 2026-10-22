@@ -44,6 +44,8 @@ vi.mock("../components/common/ImageUploader", () => ({
 }));
 
 let served: Record<string, unknown> = dataContainer;
+/** Identifiers a search finds under the seller's name (resourceExists). */
+let listed: string[] = [];
 
 function stubNode() {
   vi.stubGlobal(
@@ -53,15 +55,19 @@ function stubNode() {
       const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body });
       if (path.startsWith("/transactions/unconfirmed")) return ok([]);
       if (path.startsWith("/transactions/unitfee")) return ok("1000000");
-      if (path === "/arbitrary/resources/search") return ok([]);
+      if (path === "/arbitrary/resources/search") return ok(listed.map((identifier) => ({ name: SELLER, service: "DOCUMENT", identifier })));
       if (path === `/arbitrary/DOCUMENT/${encodeURIComponent(SELLER)}/${DATA_CONTAINER_ID}`) return ok(served);
       return { ok: false, status: 404, text: async () => '{"error":1401}', json: async () => ({ error: 1401 }) };
     })
   );
 }
 
-function setup(opts: { index?: Record<string, unknown>; tab?: string; catalogue?: unknown } = {}, handlers: Record<string, QortalHandler> = {}) {
+function setup(
+  opts: { index?: Record<string, unknown>; tab?: string; catalogue?: unknown; listed?: string[] } = {},
+  handlers: Record<string, QortalHandler> = {}
+) {
   served = opts.index ?? dataContainer;
+  listed = opts.listed ?? [];
   stubNode();
   const store = createAppStore();
   store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
@@ -266,7 +272,8 @@ describe("prices with a product that can't be read", () => {
   it("publishes nothing until every product is read, and says why", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      setup({}, { FETCH_QDN_RESOURCE: async () => ({ error: 1401 }) });
+      // The catalogue is on QDN (a search lists it) but can't be read now.
+      setup({ listed: [CATALOGUE_ID] }, { FETCH_QDN_RESOURCE: async () => ({ error: 1401 }) });
       fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
       const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
       fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "0.18" } });
@@ -274,6 +281,38 @@ describe("prices with a product that can't be read", () => {
       await vi.advanceTimersByTimeAsync(15_000);
       expect(await within(dialog).findByText(/nothing can be\s+published until they are/)).toBeInTheDocument();
       expect(within(dialog).getByRole("button", { name: "Publish prices" })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("prices with a catalogue that never landed", () => {
+  it("names its products as missing, and doesn't stop the rest", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      // The list names a second catalogue that isn't on QDN at all (a publish that didn't finish).
+      const C2 = "q-store-catalogue-my-shop-LOSTxxxxx1";
+      const vase = "q-store-product-my-shop-VASExxxxx4";
+      const index = {
+        ...dataContainer,
+        products: { ...dataContainer.products, [vase]: { created: 5, priceQort: 4, category: "Home & Garden", catalogueId: C2, status: "AVAILABLE" } },
+        catalogues: [...dataContainer.catalogues, { id: C2, products: { [vase]: true } }],
+      };
+      const { q } = setup({ index }, {
+        FETCH_QDN_RESOURCE: async (p: any) => (p.identifier === C2 ? { error: 1401 } : structuredClone(catalogue)),
+      });
+      fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
+      const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
+      fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "0.18" } });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await within(dialog).findByText(/1 product is missing from its catalogue/)).toBeInTheDocument();
+      fireEvent.change(priceField(dialog, "Mug"), { target: { value: "10" } });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Publish prices" }));
+      fireEvent.click(within(await screen.findByRole("dialog", { name: "Publish new prices?" })).getByRole("button", { name: "Publish" }));
+      await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+      const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+      expect(sent.map((r: any) => r.identifier)).toEqual([CATALOGUE_ID, DATA_CONTAINER_ID]);
     } finally {
       vi.useRealTimers();
     }

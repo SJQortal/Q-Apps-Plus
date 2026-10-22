@@ -11,7 +11,7 @@
  * prices. The rates are the seller's numbers: nothing is fetched from
  * outside Qortal.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { Alert, Box, Button, InputAdornment, Skeleton, TextField, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
@@ -34,6 +34,7 @@ import {
   type PriceChange,
 } from "../money/fiatPricing";
 import { formatPrice } from "../money/pricing";
+import { resourceExists } from "../qdn/search";
 import { FormError } from "./FormError";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import type { SellerRow } from "./productList";
@@ -110,6 +111,28 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const loads = catalogueIds.map(statusOf);
   const failed = catalogueIds.filter((_, i) => loads[i] === "failed");
   const loading = loads.some((l) => l !== "ready" && l !== "failed");
+  // A catalogue that can't be read: is it on QDN at all? One that never landed (a publish that
+  // didn't finish) holds nothing to price, so it doesn't stop the others; one that exists does.
+  const [absent, setAbsent] = useState<Record<string, boolean>>({});
+  const asked = useRef(new Set<string>());
+  const failedKey = failed.join("|");
+  useEffect(() => {
+    if (!owner || !failedKey) return;
+    let alive = true;
+    for (const id of failedKey.split("|")) {
+      if (asked.current.has(id)) continue;
+      asked.current.add(id);
+      resourceExists("DOCUMENT", owner, id, { fresh: true }).then(
+        (exists) => alive && setAbsent((prev) => ({ ...prev, [id]: !exists })),
+        () => alive && setAbsent((prev) => ({ ...prev, [id]: false }))
+      );
+    }
+    return () => {
+      alive = false;
+    };
+  }, [failedKey, owner]);
+  const blocking = failed.filter((id) => absent[id] !== true);
+  const missingProducts = rows.filter((row) => failed.includes(row.catalogueId) && absent[row.catalogueId] === true).length;
 
   const details = (row: SellerRow) => productOf(row.catalogueId, row.productId);
   const initialText = (row: SellerRow) => {
@@ -196,7 +219,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
               Cancel
             </Button>
             {/* Every product must be read: a new rate reprices those it can't show too. */}
-            <Button variant="contained" onClick={() => void publish()} disabled={busy || loading || failed.length > 0 || !changed}>
+            <Button variant="contained" onClick={() => void publish()} disabled={busy || loading || blocking.length > 0 || !changed}>
               Publish prices
             </Button>
           </>
@@ -297,11 +320,27 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                 sx={{ "& .MuiInputBase-root": { minHeight: 44 } }}
               />
             )}
-            {failed.length > 0 && (
+            {missingProducts > 0 && (
+              <Alert severity="info">
+                {missingProducts === 1 ? "1 product is" : `${missingProducts} products are`} missing from {missingProducts === 1 ? "its catalogue" : "their catalogues"} (a
+                publish that didn&apos;t finish), so {missingProducts === 1 ? "its price" : "their prices"} can&apos;t be set here. Open{" "}
+                {missingProducts === 1 ? "it" : "them"} in the Products tab to save {missingProducts === 1 ? "it" : "them"} again.
+              </Alert>
+            )}
+            {blocking.length > 0 && (
               <Alert
                 severity="warning"
                 action={
-                  <Button color="inherit" onClick={() => failed.forEach(retry)} sx={{ minHeight: 44 }}>
+                  <Button
+                    color="inherit"
+                    onClick={() =>
+                      blocking.forEach((id) => {
+                        asked.current.delete(id);
+                        retry(id);
+                      })
+                    }
+                    sx={{ minHeight: 44 }}
+                  >
                     Retry
                   </Button>
                 }
