@@ -11,7 +11,7 @@
  * starts fitted.
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Box, IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, IconButton, Typography } from "@mui/material";
 import ZoomInOutlinedIcon from "@mui/icons-material/ZoomInOutlined";
 import ZoomOutOutlinedIcon from "@mui/icons-material/ZoomOutOutlined";
 import FitScreenOutlinedIcon from "@mui/icons-material/FitScreenOutlined";
@@ -209,29 +209,19 @@ export function ZoomableImage({
           borderColor: "divider",
         }}
       >
-        <Tooltip title="Zoom out (−)">
-          <span>
-            <IconButton aria-label="Zoom out" onClick={() => zoomTo(view.scale / STEP)} disabled={!zoomed} sx={{ width: 44, height: 44 }}>
+        <IconButton title="Zoom out (−)" aria-label="Zoom out" onClick={() => zoomTo(view.scale / STEP)} disabled={!zoomed} sx={{ width: 44, height: 44 }}>
               <ZoomOutOutlinedIcon />
             </IconButton>
-          </span>
-        </Tooltip>
         <Typography variant="body2" aria-live="polite" sx={{ minWidth: 44, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
           {percent} %
         </Typography>
-        <Tooltip title="Zoom in (+)">
-          <span>
-            <IconButton aria-label="Zoom in" onClick={() => zoomTo(view.scale * STEP)} disabled={view.scale >= MAX_ZOOM} sx={{ width: 44, height: 44 }}>
+        <IconButton title="Zoom in (+)" aria-label="Zoom in" onClick={() => zoomTo(view.scale * STEP)} disabled={view.scale >= MAX_ZOOM} sx={{ width: 44, height: 44 }}>
               <ZoomInOutlinedIcon />
             </IconButton>
-          </span>
-        </Tooltip>
         {zoomed && (
-          <Tooltip title="Fit (0)">
-            <IconButton aria-label="Fit the picture" onClick={() => setView(FIT)} sx={{ width: 44, height: 44 }}>
+          <IconButton title="Fit (0)" aria-label="Fit the picture" onClick={() => setView(FIT)} sx={{ width: 44, height: 44 }}>
               <FitScreenOutlinedIcon />
             </IconButton>
-          </Tooltip>
         )}
       </Box>
     </Box>

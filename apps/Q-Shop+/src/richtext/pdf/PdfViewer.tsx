@@ -10,12 +10,13 @@
  * Loaded on its own (with pdf.js) when a buyer first opens a PDF preview.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Button, CircularProgress, IconButton, Tooltip, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, IconButton, Typography } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ZoomInOutlinedIcon from "@mui/icons-material/ZoomInOutlined";
 import ZoomOutOutlinedIcon from "@mui/icons-material/ZoomOutOutlined";
 import FitScreenOutlinedIcon from "@mui/icons-material/FitScreenOutlined";
+import { visuallyHiddenSx } from "../../pages/Store/a11y";
 import { canvasPixelRatio, copyPdfBytes, loadPdfJs, type PdfJsDocument, type PdfJsLoadingTask } from "./pdfJsHub";
 
 const ZOOM_STEPS = [50, 75, 100, 125, 150, 200, 300, 400];
@@ -147,48 +148,30 @@ export default function PdfViewer({ data, title }: { data: ArrayBuffer; title: s
         aria-label="PDF"
         sx={{ display: "flex", alignItems: "center", justifyContent: "center", flexWrap: "wrap", gap: 0.5 }}
       >
-        <Tooltip title="Previous page (←)">
-          <span>
-            <IconButton aria-label="Previous page" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading} sx={{ width: 44, height: 44 }}>
+        <IconButton title="Previous page (←)" aria-label="Previous page" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading} sx={{ width: 44, height: 44 }}>
               <ChevronLeftIcon />
             </IconButton>
-          </span>
-        </Tooltip>
-        <Typography variant="body2" aria-live="polite" sx={{ minWidth: 72, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
-          {numPages ? `Page ${page} of ${numPages}` : "…"}
+        <Typography variant="body2" aria-live="polite" sx={{ minWidth: 48, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
+          <Box component="span" aria-hidden>
+            {numPages ? `${page} / ${numPages}` : "…"}
+          </Box>
+          {numPages > 0 && <Box component="span" sx={visuallyHiddenSx}>{`Page ${page} of ${numPages}`}</Box>}
         </Typography>
-        <Tooltip title="Next page (→)">
-          <span>
-            <IconButton aria-label="Next page" onClick={() => setPage((p) => Math.min(numPages || 1, p + 1))} disabled={page >= numPages || loading} sx={{ width: 44, height: 44 }}>
+        <IconButton title="Next page (→)" aria-label="Next page" onClick={() => setPage((p) => Math.min(numPages || 1, p + 1))} disabled={page >= numPages || loading} sx={{ width: 44, height: 44 }}>
               <ChevronRightIcon />
             </IconButton>
-          </span>
-        </Tooltip>
-        <Box sx={{ width: 12 }} aria-hidden />
-        <Tooltip title="Zoom out (−)">
-          <span>
-            <IconButton aria-label="Zoom out" onClick={() => setZoom((z) => stepZoom(z, -1))} disabled={zoom <= ZOOM_STEPS[0] || loading} sx={{ width: 44, height: 44 }}>
+        <IconButton title="Zoom out (−)" aria-label="Zoom out" onClick={() => setZoom((z) => stepZoom(z, -1))} disabled={zoom <= ZOOM_STEPS[0] || loading} sx={{ width: 44, height: 44 }}>
               <ZoomOutOutlinedIcon />
             </IconButton>
-          </span>
-        </Tooltip>
         <Typography variant="body2" sx={{ minWidth: 48, textAlign: "center", fontVariantNumeric: "tabular-nums" }}>
           {zoom} %
         </Typography>
-        <Tooltip title="Zoom in (+)">
-          <span>
-            <IconButton aria-label="Zoom in" onClick={() => setZoom((z) => stepZoom(z, 1))} disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1] || loading} sx={{ width: 44, height: 44 }}>
+        <IconButton title="Zoom in (+)" aria-label="Zoom in" onClick={() => setZoom((z) => stepZoom(z, 1))} disabled={zoom >= ZOOM_STEPS[ZOOM_STEPS.length - 1] || loading} sx={{ width: 44, height: 44 }}>
               <ZoomInOutlinedIcon />
             </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title="Fit the width (0)">
-          <span>
-            <IconButton aria-label="Fit the width" onClick={() => setZoom(100)} disabled={zoom === 100 || loading} sx={{ width: 44, height: 44 }}>
+        <IconButton title="Fit the width (0)" aria-label="Fit the width" onClick={() => setZoom(100)} disabled={zoom === 100 || loading} sx={{ width: 44, height: 44 }}>
               <FitScreenOutlinedIcon />
             </IconButton>
-          </span>
-        </Tooltip>
       </Box>
       <Box
         ref={stageRef}
