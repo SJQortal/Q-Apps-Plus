@@ -1,9 +1,11 @@
 /**
  * New collection / Edit collection (full screen on phones): its title,
  * description and picture (made 640 px wide: it shows as a card), and which
- * of the shop's products it holds, picked from a searchable list. Done puts
- * it in the Collections tab's working copy; nothing is published until the
- * seller publishes the collections there.
+ * of the shop's products it holds, picked from a searchable list. Buyers see
+ * them in the order they were picked (the collection's "Featured" sort,
+ * Follow-up 14), which Arrange changes. Done puts it in the Collections
+ * tab's working copy; nothing is published until the seller publishes the
+ * collections there.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
@@ -20,6 +22,7 @@ import {
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import SwapVertIcon from "@mui/icons-material/SwapVert";
 import ShortUniqueId from "short-unique-id";
 import type { RootState } from "../state/store";
 import { ResponsiveDialog } from "../components/common/mobile";
@@ -35,6 +38,7 @@ import { FormError } from "./FormError";
 import type { SellerRow } from "./productList";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 import { StatusChip } from "./ProductsTab";
+import { ArrangeDialog } from "./ArrangeDialog";
 
 const uid = new ShortUniqueId({ length: 10 });
 
@@ -68,6 +72,7 @@ export function CollectionEditor({
   const [error, setError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const changed =
     title !== (collection?.title ?? "") ||
@@ -77,6 +82,11 @@ export function CollectionEditor({
   const requestClose = () => (changed ? setConfirmDiscard(true) : onClose());
 
   const pickedSet = useMemo(() => new Set(picked), [picked]);
+  // The picks this page lists, in their order (one from another device it doesn't list yet keeps its place at the end).
+  const pickedRows = useMemo(() => {
+    const byId = new Map(rows.map((row) => [row.productId, row]));
+    return picked.map((id) => byId.get(id)).filter((row): row is SellerRow => !!row);
+  }, [picked, rows]);
   const needle = query.trim().toLowerCase();
   const details = (row: SellerRow) => productOf(row.catalogueId, row.productId);
   const matching = rows.filter((row) => {
@@ -204,14 +214,26 @@ export function CollectionEditor({
         </Box>
 
         <Box component="section" aria-labelledby="collection-products-heading">
-          <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1, mb: 1 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1, mb: 1 }}>
             <Typography id="collection-products-heading" component="h3" sx={{ fontWeight: 700 }}>
               Products
             </Typography>
-            <Typography variant="body2" color="text.secondary" role="status">
-              {picked.length === 1 ? "1 selected" : `${picked.length} selected`}
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, ml: "auto" }}>
+              <Typography variant="body2" color="text.secondary" role="status">
+                {picked.length === 1 ? "1 selected" : `${picked.length} selected`}
+              </Typography>
+              {pickedRows.length > 1 && (
+                <Button variant="outlined" startIcon={<SwapVertIcon />} onClick={() => setArranging(true)} sx={{ minHeight: 44 }}>
+                  Arrange
+                </Button>
+              )}
+            </Box>
           </Box>
+          {picked.length > 1 && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Buyers see them in the order you picked them. Arrange changes it.
+            </Typography>
+          )}
           {rows.length === 0 ? (
             <Typography color="text.secondary">Your shop has no products yet. Add some, then put them in collections.</Typography>
           ) : (
@@ -310,6 +332,19 @@ export function CollectionEditor({
         <FormError message={error} />
       </Box>
     </ResponsiveDialog>
+    {arranging && (
+      <ArrangeDialog
+        title="Arrange this collection"
+        intro="Buyers see the collection's products in this order (the Featured sort), and can still sort by newest or price."
+        rows={pickedRows}
+        onDone={(order) => {
+          const shown = new Set(order);
+          setPicked((prev) => [...order, ...prev.filter((id) => !shown.has(id))]);
+          setArranging(false);
+        }}
+        onClose={() => setArranging(false)}
+      />
+    )}
     <ResponsiveDialog
       open={confirmDiscard}
       onClose={() => setConfirmDiscard(false)}

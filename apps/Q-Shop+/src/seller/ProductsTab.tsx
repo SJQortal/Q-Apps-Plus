@@ -11,6 +11,8 @@
  * been read again, fresh, and opens from its index row, as the original did:
  * saving puts it back into its catalogue.
  *
+ * Arrange opens seller/ArrangeShop.tsx: the order buyers see as "Featured".
+ *
  * Select turns the list into checkboxes: Select all (everything the filters
  * show), then Delete, which the seller page asks about first
  * (seller/DeleteProductsDialog.tsx). The selection bar stays at the top
@@ -41,6 +43,7 @@ import CheckBoxIcon from "@mui/icons-material/CheckBox";
 import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
 import ChecklistOutlinedIcon from "@mui/icons-material/ChecklistOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import SwapVertIcon from "@mui/icons-material/SwapVert";
 import { useInView } from "react-intersection-observer";
 import type { RootState } from "../state/store";
 import { AmountTag } from "../components/money/PriceTag";
@@ -64,6 +67,7 @@ import {
   type StatusFilter,
 } from "./productList";
 import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
+import { ArrangeShop } from "./ArrangeShop";
 
 export const PRODUCTS_PAGE = 24;
 
@@ -120,6 +124,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   const [pendingEdit, setPendingEdit] = useState<string | null>(null);
   const openedFor = useRef<string | null>(null);
   const [selecting, setSelecting] = useState(false);
+  const [arranging, setArranging] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   // Focus follows select mode: into its bar when it starts, back to Select when it ends.
   const selectButton = useRef<HTMLButtonElement>(null);
@@ -333,6 +338,11 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
             {rows.length === 1 ? "1 product" : `${rows.length} products`}
             {counts.OUT_OF_STOCK > 0 ? ` · ${counts.OUT_OF_STOCK} out of stock` : ""}
           </Typography>
+          {rows.filter((row) => row.status !== "RETIRED").length > 1 && (
+            <Button variant="outlined" startIcon={<SwapVertIcon />} onClick={() => setArranging(true)} sx={{ minHeight: 44 }}>
+              Arrange
+            </Button>
+          )}
           {onDelete && rows.length > 0 && (
             <Button
               ref={selectButton}
@@ -485,6 +495,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
           </Box>
         </BottomSheet>
       )}
+      {arranging && <ArrangeShop onClose={() => setArranging(false)} />}
     </Box>
   );
 }
