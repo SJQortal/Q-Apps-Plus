@@ -1,12 +1,15 @@
 /**
  * The seller's Shop tab: the shop as buyers see its details, the coins and
  * assets it takes with their payout addresses, Edit shop (the same dialog as
- * on the shop page), and Advanced → Recreate shop data and Delete shop.
+ * on the shop page), Prices (prices in a currency at the seller's own
+ * rates: seller/PricingDialog.tsx), and Advanced → Recreate shop data and
+ * Delete shop.
  */
 import { useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import CurrencyExchangeOutlinedIcon from "@mui/icons-material/CurrencyExchangeOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import type { RootState } from "../state/store";
 import EditStoreModal from "../components/modals/EditStoreModal";
@@ -14,6 +17,8 @@ import { CoinIcon } from "../components/money/CoinIcon";
 import { COINS, FOREIGN_TICKERS, assetCoinId } from "../money/coins";
 import { SectionTitle } from "./ShopForm";
 import { RecreateShopDataDialog } from "./RecreateShopDataDialog";
+import { PricingDialog } from "./PricingDialog";
+import { fiatPricingOf, rateToText } from "../money/fiatPricing";
 import { DeleteShopDialog } from "./DeleteShopDialog";
 
 /** `zs1abcd…wxyz`: enough to recognise an address without a line of its own. */
@@ -43,6 +48,10 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
 
 export function ShopTab() {
   const store = useSelector((state: RootState) => state.global.currentStore);
+  const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
+  const listReady = !!store && !!dataContainer && dataContainer.storeId === store.id;
+  const pricing = listReady ? fiatPricingOf(dataContainer) : null;
+  const [pricingOpen, setPricingOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [recreateOpen, setRecreateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -111,6 +120,44 @@ export function ShopTab() {
       </Box>
 
       <Box>
+        <SectionTitle as="h2">Prices</SectionTitle>
+        <Card label="Prices">
+          {pricing ? (
+            <>
+              <Typography sx={{ fontWeight: 600 }}>{`Prices in ${pricing.currency}`}</Typography>
+              <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <Typography component="li">{`1 QORT = ${rateToText(pricing.rates.QORT)} ${pricing.currency}`}</Typography>
+                {coins.includes("ARRR") && (
+                  <Typography component="li">
+                    {pricing.rates.ARRR ? `1 ARRR = ${rateToText(pricing.rates.ARRR)} ${pricing.currency}` : "ARRR at your node's rate"}
+                  </Typography>
+                )}
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Change a rate and every product priced in {pricing.currency} gets its new QORT{coins.includes("ARRR") ? " and ARRR" : ""} price.
+              </Typography>
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              Set your prices in a currency like USD, with exchange rates you type in: the app works out every product&apos;s
+              QORT{coins.includes("ARRR") ? " and ARRR" : ""} price, and when you change a rate, they all follow.
+            </Typography>
+          )}
+          <Box>
+            <Button
+              variant="outlined"
+              startIcon={<CurrencyExchangeOutlinedIcon />}
+              onClick={() => setPricingOpen(true)}
+              disabled={!listReady}
+              sx={{ minHeight: 44 }}
+            >
+              {pricing ? "Change rates and prices" : "Price in a currency"}
+            </Button>
+          </Box>
+        </Card>
+      </Box>
+
+      <Box>
         <SectionTitle as="h2">Advanced</SectionTitle>
         <Card label="Advanced">
           <Typography variant="body2" color="text.secondary">
@@ -139,6 +186,7 @@ export function ShopTab() {
         </Card>
       </Box>
 
+      {pricingOpen && <PricingDialog onClose={() => setPricingOpen(false)} />}
       {editOpen && <EditStoreModal open={editOpen} storeId={store.id} onClose={() => setEditOpen(false)} />}
       {recreateOpen && <RecreateShopDataDialog open={recreateOpen} onClose={() => setRecreateOpen(false)} />}
       {deleteOpen && <DeleteShopDialog onClose={() => setDeleteOpen(false)} />}
