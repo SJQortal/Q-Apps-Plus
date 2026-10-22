@@ -292,6 +292,46 @@ describe("cart page", () => {
     expect(Object.keys(cartFor(store.getState().cart.carts, real.owner, storeId)!.orders)).toEqual([real.products[1].id]);
   });
 
+  it("keeps the buyer's coin when the node has no rate for it, and pays what the seller priced in it", async () => {
+    // The node answers no ARRR rate (no recent trades): every fetch but the order search fails.
+    const q = sellerMock({ SEND_COIN: async () => "arrr-txid" });
+    const store = newStore();
+    withFixtureShop(store, [
+      { product: mug, qty: 1 },
+      { product: poster, qty: 2 },
+    ]);
+    store.dispatch(setPreferredCoin("ARRR"));
+    renderCart(store);
+
+    // The poster has the seller's own ARRR price; the mug would be converted from QORT.
+    expect(await screen.findByText("No ARRR rate on your node right now")).toBeInTheDocument();
+    expect(screen.getByText(/Your node has no ARRR exchange rate right now, so Mug can't be paid in ARRR/)).toBeInTheDocument();
+    const posterRow = screen.getAllByRole("listitem")[1];
+    expect(within(posterRow).getByText("0.50")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Check out ${STORE_TITLE}` })).toBeEnabled();
+    // The choice stays ARRR (and so the saved Settings preference isn't rewritten to QORT).
+    expect(store.getState().store.preferredCoin).toBe("ARRR");
+    expect(within(screen.getByRole("region", { name: STORE_TITLE })).getByRole("button", { name: "ARRR" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+
+    const dialog = await openCheckout();
+    expect(within(dialog).getByText(/so Mug can't be paid in ARRR/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Continue" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // Without the mug, the poster is paid in ARRR at the seller's own price.
+    fireEvent.click(screen.getByRole("button", { name: "Remove Mug" }));
+    await openCheckout();
+    await press("Continue");
+    await press(/^Pay 0\.50 /);
+    expect(await screen.findByText("Order placed", { selector: "p" })).toBeInTheDocument();
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ coin: "ARRR", amount: "0.50000000" });
+    expect(store.getState().store.preferredCoin).toBe("ARRR");
+  });
+
   it("explains a product without a price in the chosen coin, and won't go on", async () => {
     const store = newStore();
     withFixtureShop(store, [{ product: mug, qty: 1 }], { acceptedAssets: [{ id: 81, name: "Gold Bar" }] });

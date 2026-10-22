@@ -66,6 +66,7 @@ export function CartItem({
   coin,
   rate,
   rateLoading,
+  rateError = false,
   shop,
   onQuantity,
   onRemove,
@@ -78,6 +79,8 @@ export function CartItem({
   rate: number | null;
   /** The coin's rate is on its way, so converted prices aren't known yet. */
   rateLoading: boolean;
+  /** The node has no rate for the coin: only the seller's own prices in it are known. */
+  rateError?: boolean;
   shop: ShopCoinSettings | null;
   onQuantity: (quantity: number) => void;
   onRemove: () => void;
@@ -131,6 +134,8 @@ export function CartItem({
             {unit === undefined ? (
               rateLoading ? (
                 "Getting the price…"
+              ) : rateError ? (
+                `No ${coin} rate on your node right now`
               ) : (
                 `No price in ${coinLabel(coin, shop)}`
               )

@@ -142,21 +142,31 @@ export function cartShopFrom(storeId: string, owner: string, store: any): CartSh
 
 export type PricedLines =
   | { ok: true; amount: string; details: OrderDetails }
-  | { ok: false; reason: "empty" | "rate" | "price"; missing: string[] };
+  /**
+   * empty: nothing to buy; rate: the coin's rate is on its way; no-rate: the
+   * node has no rate for the coin; price: a line has no price in the coin.
+   */
+  | { ok: false; reason: "empty" | "rate" | "no-rate" | "price"; missing: string[] };
 
 /**
  * The total checkout would charge for `lines` in `coin`, from the checkout
  * service itself (money/checkout.ts priceCheckout: the amount Hub is asked
- * to send). When a line has no price in the coin, says which ones, or that
- * the coin's rate is still on its way.
+ * to send). When a line has no price in the coin, says which ones, and
+ * whether the coin's rate is still on its way or not to be had.
  */
-export function priceLines(lines: CartLine[], coin: string, rate: number | null, rateLoading: boolean): PricedLines {
+export function priceLines(
+  lines: CartLine[],
+  coin: string,
+  rate: number | null,
+  rateLoading: boolean,
+  rateError = false
+): PricedLines {
   if (lines.length === 0) return { ok: false, reason: "empty", missing: [] };
   const missing = lines
     // Checkout stops on a missing or zero price (money/order.ts buildOrderDetails); name those lines.
     .filter((line) => !unitPrice(line.product, coin, rate))
     .map((line) => String(line.product?.title ?? "An item"));
-  if (missing.length > 0) return { ok: false, reason: rateLoading ? "rate" : "price", missing };
+  if (missing.length > 0) return { ok: false, reason: rateLoading ? "rate" : rateError ? "no-rate" : "price", missing };
   try {
     const { amount, details } = priceCheckout(lines, coin, rate);
     return { ok: true, amount, details };

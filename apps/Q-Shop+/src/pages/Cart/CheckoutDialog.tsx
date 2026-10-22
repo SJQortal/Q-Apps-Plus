@@ -100,7 +100,7 @@ export function CheckoutDialog({
   onPaid: () => void;
 }) {
   const navigate = useNavigate();
-  const { coins, coin, rate, rateLoading, setCoin } = useShopCoin(shop);
+  const { coins, coin, rate, rateLoading, rateError, setCoin } = useShopCoin(shop);
   const isDigital = isDigitalOnly(lines);
   const [step, setStep] = useState<Step>("review");
   const [delivery, setDelivery] = useState<DeliveryInput>(() => emptyDelivery(buyer.name));
@@ -119,7 +119,7 @@ export function CheckoutDialog({
     stepStart.current?.focus();
   }, [step]);
 
-  const priced = priceLines(lines, coin, rate, rateLoading);
+  const priced = priceLines(lines, coin, rate, rateLoading, rateError);
   const label = coinLabel(coin, shop);
   const running = step === "running";
 
@@ -128,7 +128,7 @@ export function CheckoutDialog({
   };
 
   const toConfirm = () => {
-    const now = priceLines(lines, coin, rate, rateLoading);
+    const now = priceLines(lines, coin, rate, rateLoading, rateError);
     if (!now.ok) {
       setStep("review");
       return;
@@ -265,6 +265,12 @@ export function CheckoutDialog({
             <CircularProgress size={16} />
             <Typography variant="body2">Getting the {label} rate from your node…</Typography>
           </Box>
+        )}
+        {!priced.ok && priced.reason === "no-rate" && (
+          <Alert severity="warning">
+            Your node has no {label} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {label}.{" "}
+            {coins.length > 1 ? "Pick another coin, or remove it from your cart." : "Remove it from your cart to check out."}
+          </Alert>
         )}
         {!priced.ok && priced.reason === "price" && (
           <Alert severity="warning">

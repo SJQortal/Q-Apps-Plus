@@ -47,13 +47,13 @@ export function ShopCart({
   onRetryLines: (view: ShopCartView) => void;
 }) {
   const headingId = useId();
-  const { coins, coin, rate, rateLoading, setCoin } = useShopCoin(view.shop);
+  const { coins, coin, rate, rateLoading, rateError, setCoin } = useShopCoin(view.shop);
   const { shop, owner, storeId } = view;
   const title = shop?.title || view.knownTitle || "Shop";
   const lines = checkoutLinesOf(view.lines);
   const leftOut = view.lines.filter(isLeftOut).length;
   const loading = view.lines.some(isLoadingLine);
-  const priced = priceLines(lines, coin, rate, rateLoading);
+  const priced = priceLines(lines, coin, rate, rateLoading, rateError);
 
   const blocked = !gate.allowed
     ? gate.reason
@@ -129,6 +129,7 @@ export function ShopCart({
             coin={coin}
             rate={rate}
             rateLoading={rateLoading}
+            rateError={rateError}
             shop={shop}
             onQuantity={(quantity) => onQuantity(view, line, quantity)}
             onRemove={() => onRemove(view, line)}
@@ -150,6 +151,12 @@ export function ShopCart({
         {!priced.ok && priced.reason === "price" && priced.missing.length > 0 && (
           <Typography variant="body2" color="text.secondary">
             {priced.missing.join(", ")} {priced.missing.length === 1 ? "has" : "have"} no price in {coinLabel(coin, shop)}.
+          </Typography>
+        )}
+        {!priced.ok && priced.reason === "no-rate" && (
+          <Typography variant="body2" color="text.secondary">
+            Your node has no {coin} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {coin}. Pick
+            another coin, or remove {priced.missing.length === 1 ? "it" : "them"} to pay in {coin}.
           </Typography>
         )}
         {leftOut > 0 && (
