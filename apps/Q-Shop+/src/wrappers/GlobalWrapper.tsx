@@ -24,6 +24,7 @@ import PageLoader from "../components/common/PageLoader";
 import { setNotification } from "../state/features/notificationsSlice";
 import ConsentModal from "../components/modals/ConsentModal";
 import { objectToBase64 } from "../utils/toBase64";
+import { buildCreateStorePublish, buildEditStorePublish } from "../qdn/payloads";
 import { Cart } from "../pages/Cart/Cart";
 import {
   Store,
@@ -313,49 +314,17 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       if (doesExist) {
         throw new Error("The store identifier already exists");
       }
-      // Store Object to send to QDN
-      const storeObj = {
-        title,
-        description,
-        location,
-        shipsTo,
-        created: Date.now(),
-        shortStoreId: formatStoreIdentifier,
-        logo,
-        foreignCoins,
-        supportedCoins,
-      };
-      if (!storeObj.shortStoreId) {
+      if (!formatStoreIdentifier) {
         throw new Error("Please insert a valid store id");
       }
-      // Store Data Container to send to QDN (this will allow easier querying of products afterwards. Think of it as a database in the redux global state for the current store. Max 1 per store). At first there's no products, but they will be added later. We store this in the state so we can reuse it easily if our data container fails to publish.
       try {
-        const storeToBase64 = await objectToBase64(storeObj);
-
-        // Publish Store to QDN
-        const metadescription =
-          `**coins:QORTtrue,ARRR${supportedCoins.includes("ARRR")}**` +
-          description.slice(0, 180);
-
-        const resourceStore = {
-          action: "PUBLISH_QDN_RESOURCE",
-          name: name,
-          service: "STORE",
-          data64: storeToBase64,
-          filename: "store.json",
-          title,
-          description: metadescription,
-          identifier: identifier,
-        }
-     
-        
           const createdAt = Date.now();
-          const dataContainer = {
-            storeId: identifier,
+          const { storeObj, dataContainer, request: multiplePublish } = buildCreateStorePublish({
+            name,
             shortStoreId: formatStoreIdentifier,
-            owner: name,
-            products: {},
-          };
+            fields: { title, description, location, shipsTo, logo, foreignCoins, supportedCoins },
+            created: createdAt,
+          });
           // Store data (other than the raw data or metadata) to add to Redux
           const storeData = {
             title: title,
@@ -374,22 +343,6 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
             owner: name,
             created: createdAt,
             updated: createdAt,
-          };
-
-          const dataContainerToBase64 = await objectToBase64(dataContainer);
-      // Publish Data Container to QDN
-      const resourceDatacontainer = {
-        action: "PUBLISH_QDN_RESOURCE",
-        name: name,
-        service: "DOCUMENT",
-        data64: dataContainerToBase64,
-        identifier: `${identifier}-${DATA_CONTAINER_BASE}`,
-        filename: "datacontainer.json",
-      }
-
-          const multiplePublish = {
-            action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
-            resources: [resourceStore, resourceDatacontainer],
           };
           setPublishes(multiplePublish)
           await show()
@@ -468,35 +421,14 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
       const parts: string[] = currentStore.id.split(`${STORE_BASE}-`);
       const shortStoreId: string = parts[1];
 
-      // Add shortStoreId to the store object if it doesn't exist. This was added because of a previous bug where we weren't adding
-      const storeObj = {
-        ...currentStore,
-        title,
-        description,
-        location,
-        shipsTo,
-        logo,
-        shortStoreId: currentStore.shortStoreId ?? shortStoreId,
-        foreignCoins,
-        supportedCoins,
-      };
+      const { storeObj, request } = buildEditStorePublish({
+        name,
+        currentStore: currentStore as unknown as Record<string, any> & { id: string },
+        fields: { title, description, location, shipsTo, logo, foreignCoins, supportedCoins },
+      });
 
       try {
-        const storeToBase64 = await objectToBase64(storeObj);
-
-        const metadescription =
-          `**coins:QORTtrue,ARRR${supportedCoins.includes("ARRR")}**` +
-          description.slice(0, 180);
-        const resourceResponse = await qortalRequest({
-          action: "PUBLISH_QDN_RESOURCE",
-          name: name,
-          service: "STORE",
-          data64: storeToBase64,
-          filename: "store.json",
-          title,
-          description: metadescription,
-          identifier: currentStore.id,
-        });
+        await qortalRequest(request);
 
         await new Promise<void>((res, rej) => {
           setTimeout(() => {

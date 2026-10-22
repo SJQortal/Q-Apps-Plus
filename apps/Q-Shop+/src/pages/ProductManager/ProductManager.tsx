@@ -50,11 +50,9 @@ import useConfirmationModal from "../../hooks/useConfirmModal";
 import { CreateButton } from "../../components/modals/CreateStoreModal-styles";
 import { ReusableModal } from "../../components/modals/ReusableModal";
 import { useParams } from "react-router-dom";
-import {
-  CATALOGUE_BASE,
-  DATA_CONTAINER_BASE,
-  STORE_BASE,
-} from "../../constants/identifiers";
+import { DATA_CONTAINER_BASE } from "../../constants/identifiers";
+import { shortStoreIdOf } from "../../qdn/identifiers";
+import { buildProductPublish, type DataContainerDoc, type ProductDraft } from "../../qdn/payloads";
 import { resetOrders } from "../../state/features/orderSlice";
 import { useModal } from "../../components/common/useModal";
 import { MultiplePublish } from "../../components/common/MultiplePublish/MultiplePublish";
@@ -155,207 +153,26 @@ export const ProductManager = () => {
     try {
       const storeId: string = currentStore?.id;
       if (!storeId) throw new Error("Could not find your store");
-      const parts = storeId.split(`${STORE_BASE}-`);
-      const shortStoreId = parts[1];
-
-      if (!currentStore) throw new Error("Could not find your store");
-      // Get last index catalogue inside data container catalogues array
-      const lastCatalogue: CatalogueDataContainer | undefined =
-        dataContainer?.catalogues?.at(-1);
-      let catalogue = null;
-      const listOfCataloguesToPublish: Catalogue[] = [];
-      // Initialize dataContainer to publish
-      const dataContainerToPublish: DataContainer = {
-        ...dataContainer,
-        products: structuredClone(dataContainer.products),
-        catalogues: structuredClone(dataContainer.catalogues),
-      };
-
-      if (lastCatalogue && Object.keys(lastCatalogue?.products)?.length < 10) {
-        // fetch last catalogue on QDN
-        const catalogueResponse = await qortalRequest({
-          action: "FETCH_QDN_RESOURCE",
-          name: name,
-          service: "DOCUMENT",
-          identifier: lastCatalogue.id,
-        });
-        if (catalogueResponse && !catalogueResponse?.error)
-          catalogue = catalogueResponse;
-      }
-      // If catalogue was found on QDN, add it to the list of catalogues to publish when it has less than 10 products
-      if (catalogue) listOfCataloguesToPublish.push(catalogue);
-
-      // Loop through productsToSave and add them to the catalogue if it has less than 10 products, otherwise create a new catalogue. Also add new products to global redux store.
-      Object.keys(productsToSave)
-        .filter(item => !productsToSave[item]?.isUpdate)
-        .forEach(key => {
-          const product = productsToSave[key];
-          const priceInQort = product?.price?.find(
-            (item: Price) => item?.currency === "qort"
-          )?.value;
-          if (!priceInQort)
-            throw new Error("Cannot find price for one of your products");
-          const lastCatalogueInList = listOfCataloguesToPublish.at(-1);
-          if (
-            lastCatalogueInList &&
-            Object.keys(lastCatalogueInList?.products)?.length < 10
-          ) {
-            const copyLastCatalogue = { ...lastCatalogueInList };
-            // Add catalogueId to the product here (!important)
-            copyLastCatalogue.products[key] = {
-              ...product,
-              catalogueId: copyLastCatalogue.id,
-            };
-            dataContainerToPublish.products[key] = {
-              created: product.created,
-              priceQort: priceInQort,
-              category: product?.category || "",
-              catalogueId: copyLastCatalogue.id,
-              status: AVAILABLE,
-            };
-            if (!dataContainerToPublish.catalogues)
-              dataContainerToPublish.catalogues = [];
-            // Determine if data container's catalogue has products
-            const findCatalogueInDataContainer =
-              dataContainerToPublish.catalogues.findIndex(
-                item => item.id === copyLastCatalogue.id
-              );
-            if (findCatalogueInDataContainer >= 0) {
-              dataContainerToPublish.catalogues[
-                findCatalogueInDataContainer
-              ].products[key] = true;
-            } else {
-              dataContainerToPublish.catalogues = [
-                ...dataContainerToPublish.catalogues,
-                {
-                  id: copyLastCatalogue.id,
-                  products: {
-                    [key]: true,
-                  },
-                },
-              ];
-            }
-          } else {
-            // Create new catalogue
-            const uidGenerator = uid();
-            const catalogueId = `${CATALOGUE_BASE}-${shortStoreId}-${uidGenerator}`;
-            // Add catalogueId to the product here (!important)
-            listOfCataloguesToPublish.push({
-              id: catalogueId,
-              products: {
-                [key]: { ...product, catalogueId: catalogueId },
-              },
-            });
-            try {
-              dataContainerToPublish.products[key] = {
-                created: product.created,
-                priceQort: priceInQort,
-                category: product?.category || "",
-                catalogueId,
-                status: AVAILABLE,
-              };
-            } catch (error) {
-              console.error(error);
-            }
-
-            if (!dataContainerToPublish.catalogues)
-              dataContainerToPublish.catalogues = [];
-
-            const findCatalogueInDataContainer =
-              dataContainerToPublish.catalogues.findIndex(
-                item => item.id === catalogueId
-              );
-            // Determine if data container's catalogue has products
-            if (findCatalogueInDataContainer >= 0) {
-              dataContainerToPublish.catalogues[
-                findCatalogueInDataContainer
-              ].products[key] = true;
-            } else {
-              dataContainerToPublish.catalogues = [
-                ...dataContainerToPublish.catalogues,
-                {
-                  id: catalogueId,
-                  products: {
-                    [key]: true,
-                  },
-                },
-              ];
-            }
-          }
-        });
-      // Update products when sending productsToSave inside existing data container
-      const productsToUpdate = Object.keys(productsToSave)
-        .filter(item => !!productsToSave[item]?.isUpdate)
-        .map(key => productsToSave[key]);
-      for (const product of productsToUpdate) {
-        const priceInQort = product?.price?.find(
-          (item: Price) => item?.currency === "qort"
-        )?.value;
-        if (!priceInQort)
-          throw new Error("Cannot find price for one of your products");
-        if (priceInQort <= 0)
-          throw new Error("Price cannot be less than or equal to 0");
-        dataContainerToPublish.products[product.id] = {
-          created: product.created,
-          priceQort: priceInQort,
-          category: product?.category || "",
-          catalogueId: product.catalogueId,
-          status: product?.status || "",
-        };
-        // Replace product from listOfCataloguesToPublish with updated product
-        const findCatalogueFromExistingList =
-          listOfCataloguesToPublish.findIndex(
-            cat => cat.id === product.catalogueId
-          );
-        if (findCatalogueFromExistingList >= 0) {
-          listOfCataloguesToPublish[findCatalogueFromExistingList].products[
-            product.id
-          ] = product;
-        } else {
-          // Otherwise fetch catalogue from QDN and add product to it
-          const catalogueResponse = await qortalRequest({
-            action: "FETCH_QDN_RESOURCE",
-            name: name,
-            service: "DOCUMENT",
-            identifier: product.catalogueId,
-          });
-          if (catalogueResponse && !catalogueResponse?.error) {
-            const copiedCatalogue = structuredClone(catalogueResponse);
-            copiedCatalogue.products[product.id] = product;
-            listOfCataloguesToPublish.push(copiedCatalogue);
-          }
-        }
-      }
-
-      if (!currentStore) return;
-      const publishMultipleCatalogues = [];
-      // Loop through listOfCataloguesToPublish and publish the base64 converted object to QDN
-      for (const catalogue of listOfCataloguesToPublish) {
-        const catalogueToBase64 = await objectToBase64(catalogue);
-        const publish = {
+      const shortStoreId = shortStoreIdOf(storeId);
+      const { catalogues: listOfCataloguesToPublish, dataContainer: dataContainerToPublish, resources } =
+        await buildProductPublish({
           name,
-          service: "DOCUMENT",
-          identifier: catalogue.id,
-          filename: "catalogue.json",
-          data64: catalogueToBase64,
-        };
-        publishMultipleCatalogues.push(publish);
-      }
-      // Convert dataContainer being published to base64
-      const dataContainerToBase64 = await objectToBase64(
-        dataContainerToPublish
-      );
-      const publishDataContainer = {
-        name,
-        service: "DOCUMENT",
-        identifier: dataContainerToPublish.id,
-        filename: "datacontainer.json",
-        data64: dataContainerToBase64,
-      };
+          shortStoreId,
+          dataContainer: dataContainer as unknown as DataContainerDoc,
+          productsToSave: productsToSave as unknown as Record<string, ProductDraft>,
+          fetchCatalogue: async (catalogueId) =>
+            qortalRequest({
+              action: "FETCH_QDN_RESOURCE",
+              name: name,
+              service: "DOCUMENT",
+              identifier: catalogueId,
+            }),
+          newUid: () => uid(),
+        });
       // Publish the catalogues and the data container to QDN. Remember that there can be multiple catalogues because each catalogue holds a maximum of 10 products. Therefore, if you're publishing multiple products, you will possibly fill up the last catalogue, before then creating a new one.
       const multiplePublish = {
         action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
-        resources: [...publishMultipleCatalogues, publishDataContainer],
+        resources,
       };
       setPublishes(multiplePublish)
       await show()

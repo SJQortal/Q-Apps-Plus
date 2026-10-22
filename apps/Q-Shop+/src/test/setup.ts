@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, vi } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import { installQortalMock } from './qortalMock';
+import { resetQdnCaches } from '../qdn/search';
 
 // localStorage: jsdom has one, but a plain object store is easier to inspect.
 const localStorageStore: Record<string, string> = {};
@@ -85,6 +86,7 @@ vi.mock('localforage', () => {
 beforeEach(() => {
   installQortalMock();
   localStorageMock.clear();
+  resetQdnCaches();
 });
 
 afterEach(() => {

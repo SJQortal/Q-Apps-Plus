@@ -7,7 +7,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../../state/store";
 import {
   base64ToUint8Array,
-  objectToBase64,
   uint8ArrayToObject,
 } from "../../../utils/toBase64";
 import {
@@ -46,6 +45,7 @@ import {
   TotalPriceRow,
 } from "./ShowOrder-styles";
 import moment from "moment";
+import { buildStatusPublish } from "../../../qdn/payloads";
 import { DialogsSVG } from "../../../assets/svgs/DialogsSVG";
 import { Order, addToHashMap } from "../../../state/features/orderSlice";
 import { QortalSVG } from "../../../assets/svgs/QortalSVG";
@@ -114,12 +114,6 @@ export const ShowOrder: FC<ShowOrderProps> = ({
 
   const updateStatus = async () => {
     try {
-      const orderStateObject: any = {
-        status: selectedStatus,
-        note,
-      };
-      const orderStatusToBase64 = await objectToBase64(orderStateObject);
-
       const res = await qortalRequest({
         action: "GET_NAME_DATA",
         name: order?.user,
@@ -130,19 +124,14 @@ export const ShowOrder: FC<ShowOrderProps> = ({
         address: address,
       });
       if (!resAddress?.publicKey) throw new Error("Cannot find store owner");
-      const string = order?.id;
-
-      const identifier = string.replace(/(q-store)(-order)/, "$1-status$2");
-      const productRequestBody = {
-        action: "PUBLISH_QDN_RESOURCE",
-        identifier: identifier,
-        name: username,
-        service: "DOCUMENT_PRIVATE",
-        filename: `${order?.id}_status.json`,
-        data64: orderStatusToBase64,
-        encrypt: true,
-        publicKeys: [resAddress.publicKey, usernamePublicKey],
-      };
+      const productRequestBody = buildStatusPublish({
+        orderId: order?.id,
+        seller: username as string,
+        status: selectedStatus,
+        note,
+        buyerPublicKey: resAddress.publicKey,
+        sellerPublicKey: usernamePublicKey as string,
+      });
       await qortalRequest(productRequestBody);
       dispatch(
         setNotification({

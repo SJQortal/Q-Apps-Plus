@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
 import { FC, useState } from "react";
 import {
   AddReviewContainer,
@@ -20,12 +19,12 @@ import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../../../state/store";
 import ShortUniqueId from "short-unique-id";
 import { setNotification } from "../../../../state/features/notificationsSlice";
-import { objectToBase64 } from "../../../../utils/toBase64";
 import {
   addToHashMapStoreReviews,
   addToReviews
 } from "../../../../state/features/storeSlice";
-import { REVIEW_BASE, STORE_BASE } from "../../../../constants/identifiers";
+import { shortStoreIdOf } from "../../../../qdn/identifiers";
+import { buildReviewPublish } from "../../../../qdn/payloads";
 
 /* Reviews notes
   Prevent them from adding a review to their own store
@@ -114,13 +113,16 @@ export const AddReview: FC<AddReviewProps> = ({
       );
       throw new Error(errorMsg);
     }
-    const parts = storeId.split(`${STORE_BASE}-`);
-    const shortStoreId = parts[1];
-    const uidGenerator = uid();
-    // Create identifier for the review
-    const reviewId = `${REVIEW_BASE}-${shortStoreId}-${uidGenerator}-${
-      Number(rating) * 10
-    }`;
+    const built = buildReviewPublish({
+      name,
+      shortStoreId: shortStoreIdOf(storeId),
+      uid: uid(),
+      rating: Number(rating),
+      title: reviewTitle,
+      description: reviewDescription,
+      created: Date.now(),
+    });
+    const reviewId = built.identifier;
     // Check if review identifier already exists
     const doesExist = await verifyIfReviewIdExists(name, reviewId);
     if (doesExist) {
@@ -128,29 +130,9 @@ export const AddReview: FC<AddReviewProps> = ({
         "The review identifier already exists! Try changing your review's title"
       );
     }
-
-    // Resource raw data
-    const reviewObj = {
-      title: reviewTitle,
-      description: reviewDescription,
-      rating: rating,
-      created: Date.now()
-    };
-
-    const reviewToBase64 = await objectToBase64(reviewObj);
     try {
       // Publish Review to QDN
-      const resourceResponse = await qortalRequest({
-        action: "PUBLISH_QDN_RESOURCE",
-        name: name,
-        service: "DOCUMENT",
-        identifier: reviewId,
-        data64: reviewToBase64,
-        filename: "review.json",
-        // Resource metadata down here
-        title: reviewTitle.slice(0, 60),
-        description: reviewDescription.slice(0, 150)
-      });
+      await qortalRequest(built.request);
       setOpenLeaveReview(false);
       dispatch(
         addToReviews({
