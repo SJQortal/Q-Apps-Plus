@@ -2,6 +2,14 @@ import type { ThemeOptions } from "@mui/material/styles";
 
 // Q-Shop's original look. The + app shows it as the "Q-Shop Classic" (Hub 2.0)
 // theme through the hub-theme kit; the other three themes come from the kit.
+//
+// Kept from the original: the fonts and type sizes, the 4 px corners, the
+// off-white / near-black surfaces, the cards, tooltips and scrollbars. Changed
+// for contrast (docs/DESIGN.md asks for 4.5:1 on text and controls): the blue
+// accent is "primary" in both modes, a step darker in light and a step lighter
+// in dark than the original #417Ed4. The original's own light/dark options
+// replaced its shared `components` (a MuiButton override), so that override
+// never applied and is left out here too.
 
 const commonThemeOptions: ThemeOptions = {
   typography: {
@@ -61,38 +69,30 @@ const commonThemeOptions: ThemeOptions = {
       xl: 1536,
     },
   },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          backgroundColor: "inherit",
-          transition: "filter 0.3s ease-in-out",
-          "&:hover": {
-            filter: "brightness(1.1)",
-          },
-        },
-      },
-      defaultProps: {
-        disableElevation: true,
-        disableRipple: true,
-      },
-    },
-  },
 };
 
 const lightThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "light",
+    // The original used a white "primary" as a surface colour and its blue as
+    // "secondary". MUI components (and the + app's shell) colour every
+    // control from primary, so the blue is primary here, and the whites live
+    // on as the backgrounds below. #417Ed4 read at 3.7:1 on the paper; this
+    // reads at 5.4:1 as text, and white on it at 5.9:1. The original blue
+    // stays as "light".
     primary: {
-      main: "#ffffff",
-      dark: "#F5F5F5",
-      light: "#FCFCFC",
+      main: "#2f63b0",
+      dark: "#264f8d",
+      light: "#417Ed4",
     },
     secondary: {
-      main: "#417Ed4",
-      dark: "#3e74c1",
+      main: "#2f63b0",
+      dark: "#264f8d",
+      light: "#417Ed4",
     },
+    // Fills take black or white text only when it reads at 4.5:1.
+    contrastThreshold: 4.5,
     background: {
       default: "#fcfcfc",
       paper: "#F5F5F5",
@@ -100,6 +100,11 @@ const lightThemeOptions: ThemeOptions = {
     text: {
       primary: "#000000",
       secondary: "#525252",
+    },
+    // Unselected toggle buttons and icons use action.active; MUI's default
+    // 54 % black read at 4.2:1 on the paper.
+    action: {
+      active: "rgba(0, 0, 0, 0.72)",
     },
   },
   components: {
@@ -169,20 +174,28 @@ const lightThemeOptions: ThemeOptions = {
     },
   },
 };
+
 const darkThemeOptions: ThemeOptions = {
   ...commonThemeOptions,
   palette: {
     mode: "dark",
+    // The original's dark primary was its navy (#2e3d60), which reads at
+    // 1.8:1 on the near-black page, and its blue (#417Ed4, secondary) read at
+    // 4.2:1 on the paper. The blue, one step lighter, is primary here: 5.5:1
+    // on the paper as text, with black text on it at 6.7:1. The navy stays on
+    // the scrollbar, the original blue as "dark".
     primary: {
-      main: "#2e3d60",
-      dark: "#1a2744",
-      light: "#353535",
+      main: "#5b93e3",
+      dark: "#417Ed4",
+      light: "#7fadeb",
     },
     secondary: {
-      main: "#417Ed4",
-      dark: "#3e74c1",
+      main: "#5b93e3",
+      dark: "#417Ed4",
+      light: "#7fadeb",
     },
-
+    // Fills take black or white text only when it reads at 4.5:1.
+    contrastThreshold: 4.5,
     background: {
       default: "#111111",
       paper: "#1A1C1E",
