@@ -7,12 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within, configure } from "@testing-library/react";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { installQortalMock } from "../../../test/qortalMock";
+import { installMockNode, makeWorld } from "../../../test/mockNode";
 import { createAppStore } from "../../../state/store";
 import { addUser } from "../../../state/features/authSlice";
 import { statusesLoaded } from "../../../state/features/orderSlice";
 import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, poster } from "../../../test/fixtures/shop";
-import { resetOrderReadCaches } from "../../../orders/reads";
-import { orderId, orderJson } from "../../../orders/testing";
+import { fetchRetry, resetOrderReadCaches } from "../../../orders/reads";
+import { addStatus, orderId, orderJson } from "../../../orders/testing";
 import { ShowOrder } from "./ShowOrder";
 
 const ID = orderId("ORDERxxxx1");
@@ -37,10 +38,12 @@ configure({ asyncUtilTimeout: 5_000 });
 
 beforeEach(() => {
   resetOrderReadCaches();
+  fetchRetry.delaysMs = [0, 0, 0];
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  fetchRetry.delaysMs = [2000, 4000, 8000];
 });
 
 describe("payment details", () => {
@@ -180,6 +183,36 @@ describe("the rest of the order", () => {
     expect(chip).toBeInTheDocument();
     expect(chip?.textContent).toBe("Refunded");
     expect(screen.getByText("Out of stock, refunded")).toBeInTheDocument();
+  });
+
+  it("doesn't offer Received over a status it couldn't read: Retry, or an explicit choice", async () => {
+    const world = makeWorld({ shops: 1, me: { name: SELLER, address: SELLER_ADDRESS, publicKey: SELLER_PK } });
+    addStatus(world, "ORDERxxxx1", "Shipped", "Tracking 7");
+    const node = installMockNode(world);
+    // The list's status read failed (not on the node after the retries, or not decryptable).
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(statusesLoaded([{ orderId: ID, info: { state: "error", status: "", note: "", updated: 0 } }]));
+    const order: any = { ...orderJson(), user: BUYER, id: ID, created: 1761000000000, updated: 2, isValid: true };
+    renderWithProviders(<ShowOrder open onClose={() => {}} order={order} role="seller" />, { store });
+
+    expect(await screen.findByText(/Couldn't read this order's current status/)).toBeInTheDocument();
+    const group = screen.getByRole("group", { name: "Order status" });
+    for (const button of within(group).getAllByRole("button")) expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
+    // A note alone doesn't make an update: the seller has to choose a status.
+    fireEvent.change(screen.getByLabelText("Note for the buyer"), { target: { value: "Posted" } });
+    expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
+    fireEvent.click(within(group).getByRole("button", { name: "Refunded" }));
+    expect(screen.getByRole("button", { name: "Update status" })).toBeEnabled();
+
+    // Retry reads it again from the node, and the form starts from what it says.
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(within(group).getByRole("button", { name: "Shipped" })).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByLabelText("Note for the buyer")).toHaveValue("Tracking 7");
+    expect(screen.queryByText(/Couldn't read this order's current status/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
+    expect(node.q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(0);
   });
 
   it("stays quiet and keeps the old status when the seller declines in Hub", async () => {

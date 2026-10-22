@@ -15,7 +15,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import { Link as RouterLink } from "react-router-dom";
-import { Box, Button, Divider, Link, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, Divider, Link, Skeleton, Typography } from "@mui/material";
 import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { RootState } from "../../../state/store";
@@ -135,17 +135,19 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
     if (open && order && sellerName) void ensureOrderStatus(store, order, sellerName);
   }, [open, order, sellerName, store]);
 
-  // The seller's draft starts from the status as read, and again whenever it is read anew.
+  // The seller's draft starts from the status as read, and again whenever it is read anew. A status
+  // that couldn't be read pre-selects nothing: "Received" there would put a real Shipped or Refunded
+  // (and its note) back to Received with one tap, so the seller retries or chooses explicitly.
   const draftKey = status ? `${status.state}:${status.updated}` : "loading";
   const [draftState, setDraftState] = useState<{ key: string; orderId: string; draft: StatusDraft } | null>(null);
   const draft: StatusDraft =
     draftState && draftState.key === draftKey && draftState.orderId === order?.id
       ? draftState.draft
-      : {
-          status: status?.state === "known" ? normalizeStatus(status.status) ?? "Received" : "Received",
-          note: status?.note ?? "",
-        };
+      : status?.state === "known"
+        ? { status: normalizeStatus(status.status) ?? "Received", note: status.note }
+        : { status: "", note: "" };
   const setDraft = (next: StatusDraft) => setDraftState({ key: draftKey, orderId: order?.id ?? "", draft: next });
+  const [retrying, setRetrying] = useState(false);
 
   if (!order) return null;
 
@@ -159,7 +161,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const sending = !!status?.sending;
 
   const update = async () => {
-    if (sending || !me?.name || !me.publicKey) return;
+    if (sending || !me?.name || !me.publicKey || normalizeStatus(draft.status) === null) return;
     const result = await sendOrderStatus(store, {
       order,
       seller: me.name,
@@ -179,8 +181,21 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
       dispatch(setNotification({ alertType: "error", msg: "Couldn't update the status. Try again." }));
   };
 
+  // Reads the status document again from the node (the list's read, or the dialog's, failed).
+  const retryStatus = async () => {
+    if (retrying || !sellerName) return;
+    setRetrying(true);
+    try {
+      await ensureOrderStatus(store, order, sellerName, true);
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   const title = role === "seller" ? `Order from ${order.user}` : `Order at ${order.storeName || order.sellerName || "a shop"}`;
-  const canUpdate = role === "seller" && !!status && !sending && !sameDraft(draft, status);
+  const statusUnreadable = role === "seller" && status?.state === "error";
+  const canUpdate =
+    role === "seller" && !!status && !sending && normalizeStatus(draft.status) !== null && !sameDraft(draft, status);
 
   return (
     <ResponsiveDialog
@@ -239,7 +254,27 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         <Section title="Status">
           {role === "seller" ? (
             status ? (
-              <StatusEditor draft={draft} onChange={setDraft} disabled={sending} />
+              <>
+                {statusUnreadable && (
+                  <Alert
+                    severity="warning"
+                    action={
+                      <Button
+                        color="inherit"
+                        onClick={() => void retryStatus()}
+                        aria-disabled={retrying || undefined}
+                        sx={{ minHeight: 44, fontWeight: 700 }}
+                      >
+                        {retrying ? "Retrying…" : "Retry"}
+                      </Button>
+                    }
+                  >
+                    Couldn't read this order's current status. Retry, or choose a status below: updating replaces what
+                    the buyer sees now.
+                  </Alert>
+                )}
+                <StatusEditor draft={draft} onChange={setDraft} disabled={sending} />
+              </>
             ) : (
               <Box role="status" aria-label="Loading the status">
                 <Skeleton variant="rounded" height={44} />
