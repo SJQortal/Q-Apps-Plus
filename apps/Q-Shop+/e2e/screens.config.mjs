@@ -86,6 +86,8 @@ function product(s, p) {
   };
 }
 const RICH = {
+  // As Q-Shop+ writes it: the plain description is the formatted one's text (richtext/plainText.ts).
+  description: "Hand-thrown, glazed by hand\nEvery mug is one of a kind: the glaze runs its own way in the kiln.\n• Holds 350 ml\n• Food-safe glaze\nSee the rest of the set at our shop (qortal://APP/Q-Shop+/Seller%203/q-store-general-shop-3).\nVideo: Throwing the mug (qortal://VIDEO/Seller%203/q-store-video-MUGVIDEO01)\nPDF: Mug care guide (qortal://APP/Q-Share/share/Seller%203/qshare_file_care_def456_metadata)\nqortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz",
   htmlDescription:
     '<h2>Hand-thrown, glazed by hand</h2><p>Every mug is <strong>one of a kind</strong>: the glaze runs its own way in the kiln.</p><ul><li>Holds 350 ml</li><li>Food-safe glaze</li></ul>' +
     '<p>See the rest of the set at <a href="qortal://APP/Q-Shop+/Seller%203/q-store-general-shop-3">our shop</a>.</p>' +
