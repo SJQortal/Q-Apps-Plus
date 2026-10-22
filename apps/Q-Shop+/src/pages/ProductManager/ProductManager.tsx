@@ -229,7 +229,13 @@ export const ProductManager = () => {
             sx={{ "& .MuiTab-root": { minHeight: 48, minWidth: 0, px: { xs: 1.5, sm: 2 }, textTransform: "none", fontWeight: 600 } }}
           >
             {SELLER_TABS.map((t) => (
-              <Tab key={t} value={t} label={TAB_LABEL[t]} id={`seller-tab-${t}`} aria-controls={`seller-panel-${t}`} />
+              <Tab
+                key={t}
+                value={t}
+                label={TAB_LABEL[t]}
+                id={`seller-tab-${t}`}
+                aria-controls={t === tab ? `seller-panel-${t}` : undefined}
+              />
             ))}
           </Tabs>
         </Box>

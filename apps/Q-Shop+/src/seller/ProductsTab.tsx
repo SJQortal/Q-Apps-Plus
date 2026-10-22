@@ -246,7 +246,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsT
                   color={selected ? "primary" : "default"}
                   variant={selected ? "filled" : "outlined"}
                   aria-pressed={selected}
-                  sx={{ minHeight: 36, fontWeight: selected ? 700 : 500 }}
+                  sx={{ height: { xs: 44, sm: 36 }, borderRadius: 999, fontWeight: selected ? 700 : 500 }}
                 />
               );
             })}

@@ -213,7 +213,7 @@ function BrowseAssets({ accepted, onClose, onPick }: { accepted: ShopAsset[]; on
                     disabled={taken || asset.isUnspendable}
                     onClick={() => onPick(asset)}
                     aria-label={taken ? `${asset.assetName} is accepted` : `Accept ${asset.assetName}`}
-                    sx={{ minHeight: 40 }}
+                    sx={{ minHeight: 44 }}
                   >
                     {taken ? "Accepted" : asset.isUnspendable ? "Can't be paid" : "Accept"}
                   </Button>
