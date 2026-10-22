@@ -1,3 +1,4 @@
+/* Fonts for the Q-Shop Classic (Hub 2.0) theme. Inter comes from hub-theme/fonts.css. */
 @font-face {
   font-family: "Cambon Light";
   src: url("./styles/fonts/Cambon-Light.ttf") format("truetype");
@@ -20,52 +21,30 @@
   padding: 0px;
   margin: 0px;
   box-sizing: border-box;
+  /* The Hub/GO frame's height, kept fresh by utils/hubFrame.ts (AppShell);
+     100dvh until it runs. Use it, never 100vh (docs/QORTAL.md, pitfall 3). */
+  --qshare-app-height: 100dvh;
 }
 
-.line-clamp {
-  height: 100px;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 5; /* number of lines to show */
-  -webkit-box-orient: vertical;
-  text-overflow: ellipsis;
+/* clip, not hidden: overflow-x: hidden on html or body makes body a scroll
+   container that never scrolls, and the sticky header and sub-headers stop
+   sticking (docs/QORTAL.md, pitfall 2). */
+html,
+body {
+  overflow-x: clip;
 }
 
-.edit-btn:hover {
-  opacity: 0.75;
-  transition: 0.2s all;
+body {
+  margin: 0;
 }
 
-.post-image {
-  max-width: 100%;
-  border-radius: 5px;
-  width: 100%;
-  height: 100%;
+#root {
+  min-height: var(--qshare-app-height);
 }
 
-.grid-item {
-  /* Other styles */
-  /* overflow: auto; */
-}
-
-.grid-item-view {
-  /* Other styles */
-  /* overflow: auto; */
-}
-
-.test-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  min-height: 25px;
-}
-
-.test-grid-item {
-  border: 1px solid powderblue;
+:focus-visible {
+  outline: 2px solid var(--qp-primary);
+  outline-offset: 2px;
 }
 
 body::-webkit-scrollbar-track {
@@ -79,18 +58,18 @@ body::-webkit-scrollbar-track:hover {
 body::-webkit-scrollbar {
   width: 16px;
   height: 10px;
-  background-color: white;
+  background-color: transparent;
 }
 
 body::-webkit-scrollbar-thumb {
-  background-color: #838eee;
+  background-color: var(--qp-divider);
   border-radius: 8px;
   background-clip: content-box;
   border: 4px solid transparent;
 }
 
 body::-webkit-scrollbar-thumb:hover {
-  background-color: #6270f0;
+  background-color: var(--qp-text-secondary);
 }
 
 .MuiList-root::-webkit-scrollbar-track {
@@ -103,42 +82,18 @@ body::-webkit-scrollbar-thumb:hover {
 .MuiList-root::-webkit-scrollbar {
   width: 14px;
   height: 10px;
-  background-color: white;
+  background-color: transparent;
 }
 
 .MuiList-root::-webkit-scrollbar-thumb {
-  background-color: lightgray;
+  background-color: var(--qp-divider);
   border-radius: 8px;
   background-clip: content-box;
   border: 4px solid transparent;
 }
 
 .MuiList-root::-webkit-scrollbar-thumb:hover {
-  background-color: lightslategray;
-}
-
-.my-masonry-grid {
-  display: -webkit-box; /* Not needed if autoprefixing */
-  display: -ms-flexbox; /* Not needed if autoprefixing */
-  display: flex;
-  margin-left: -20px; /* gutter size offset */
-  width: auto;
-  padding: 15px 20px;
-}
-
-.my-masonry-grid_column {
-  padding-left: 20px; /* gutter size */
-  background-clip: padding-box;
-}
-
-/* Style your items */
-.my-masonry-grid_column > li {
-  /* change div to reference your elements you put in <Masonry> */
-  margin-bottom: 30px;
-}
-
-.my-svg path {
-  fill: red;
+  background-color: var(--qp-text-secondary);
 }
 
 .qortal-link {
@@ -146,6 +101,18 @@ body::-webkit-scrollbar-thumb:hover {
   color: inherit; /* Inherits the color of the parent element */
 }
 .qortal-link:hover,
-a:focus {
+a:focus-visible {
   text-decoration: underline; /* Adds underline on hover and focus for accessibility */
+}
+
+/* Short and cheap motion only, and none for those who ask (docs/DESIGN.md → Motion). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
