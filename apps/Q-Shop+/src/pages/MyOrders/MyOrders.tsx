@@ -58,12 +58,7 @@ export const MyOrders = () => {
           flexDirection: "column"
         }}
       >
-        <ShowOrder
-          from="myOrders"
-          isOpen={isOpen}
-          setIsOpen={setIsOpen}
-          order={order}
-        />
+        <ShowOrder open={isOpen} onClose={() => setIsOpen(false)} order={order} role="buyer" />
         <OrderTable
           openOrder={(order) => {
             setOrder(order);

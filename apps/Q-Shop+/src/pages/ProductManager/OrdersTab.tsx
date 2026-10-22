@@ -20,7 +20,7 @@ export function OrdersTab() {
   }, [getOrders]);
   return (
     <>
-      <ShowOrder isOpen={isOpen} setIsOpen={setIsOpen} order={order} from="ProductManager" />
+      <ShowOrder open={isOpen} onClose={() => setIsOpen(false)} order={order} role="seller" />
       <OrderTable
         openOrder={(o) => {
           setOrder(o);
