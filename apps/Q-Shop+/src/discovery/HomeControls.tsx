@@ -26,6 +26,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { BottomSheet } from "../components/common/mobile/BottomSheet";
 import { PHONE_MEDIA } from "../hooks/usePhoneLayout";
 import { PAY_FILTERS, SHOP_SORTS, parsePay, parseSort, type PayFilter, type ShopSort } from "./sortFilter";
+import { selectMenuProps } from "../components/common/menuStyle";
 
 export const SEARCH_DEBOUNCE_MS = 300;
 /** The search text is capped like Hub caps a name search; Core matches substrings. */
@@ -137,6 +138,7 @@ export function SortFilterRow({ sort, pay, mine, canFilterMine, onSort, onPay, o
         label="Sort by"
         value={sort}
         onChange={(event) => onSort(parseSort(event.target.value))}
+        slotProps={{ select: { MenuProps: selectMenuProps } }}
         sx={{ minWidth: 190 }}
       >
         {SHOP_SORTS.map((option) => (
@@ -151,6 +153,7 @@ export function SortFilterRow({ sort, pay, mine, canFilterMine, onSort, onPay, o
         label="Pays in"
         value={pay || ANY}
         onChange={(event) => onPay(parsePay(event.target.value === ANY ? "" : event.target.value))}
+        slotProps={{ select: { MenuProps: selectMenuProps } }}
         sx={{ minWidth: 190 }}
       >
         {PAY_FILTERS.map((option) => (

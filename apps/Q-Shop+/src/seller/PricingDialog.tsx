@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
-import { Alert, Box, Button, InputAdornment, Skeleton, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, InputAdornment, Skeleton, TextField, Typography, MenuItem } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import type { RootState } from "../state/store";
 import { ResponsiveDialog } from "../components/common/mobile";
@@ -46,6 +46,7 @@ import type { SellerRow } from "./productList";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 import { PRICES_DRAFTS_TEXT, useShopPricing } from "./useShopPricing";
 import { draftsOfShop } from "./shopDrafts";
+import { selectMenuProps } from "../components/common/menuStyle";
 
 /** Products listed at a time. */
 export const PRICING_PAGE = 30;
@@ -259,15 +260,15 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                   value={choice}
                   onChange={(e) => setChoice(e.target.value)}
                   disabled={busy}
-                  slotProps={{ select: { native: true } }}
+                  slotProps={{ select: { MenuProps: selectMenuProps } }}
                   sx={{ "& .MuiInputBase-root": { minHeight: 44 } }}
                 >
                   {FIAT_CURRENCIES.map((c) => (
-                    <option key={c} value={c}>
+                    <MenuItem key={c} value={c}>
                       {c}
-                    </option>
+                    </MenuItem>
                   ))}
-                  <option value="custom">Other: type a ticker</option>
+                  <MenuItem value="custom">Other: type a ticker</MenuItem>
                 </TextField>
                 {choice === "custom" && (
                   <TextField

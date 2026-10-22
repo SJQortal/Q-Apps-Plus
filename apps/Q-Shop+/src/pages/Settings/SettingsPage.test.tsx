@@ -14,6 +14,7 @@ import { ACTIVE_NAME_STORAGE_KEY } from "../../constants/plus";
 import { ShellContext, type ShellActions } from "../../components/layout/shellState";
 import { SettingsPage, shortAddress } from "./SettingsPage";
 import { getProductView, resetProductView } from "../../utils/productView";
+import { chooseOption, optionNames, selectField, selectValue } from "../../test/select";
 
 const ADDRESS = "QBuyeRAddressxxxxxxxxxxxxxxxx7b1d0e";
 
@@ -127,9 +128,9 @@ describe("SettingsPage", () => {
   describe("Shopping", () => {
     it("offers QORT and ARRR and keeps the choice between visits", () => {
       renderSettings({ store: appStore });
-      const select = screen.getByRole("combobox", { name: "Coin" }) as HTMLSelectElement;
-      expect(Array.from(select.options).map((o) => o.value)).toEqual(["QORT", "ARRR"]);
-      fireEvent.change(select, { target: { value: "ARRR" } });
+      const select = selectField("Coin");
+      expect(optionNames(select)).toEqual(["QORT", "Pirate Chain (ARRR)"]);
+      chooseOption(select, "Pirate Chain (ARRR)");
       expect(appStore.getState().store.preferredCoin).toBe("ARRR");
       expect(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || "{}")).toEqual({ preferredCoin: "ARRR" });
       act(() => {
@@ -141,9 +142,9 @@ describe("SettingsPage", () => {
       const store = createAppStore();
       store.dispatch(setPreferredCoin("ASSET:7"));
       renderSettings({ store });
-      const select = screen.getByRole("combobox", { name: "Coin" }) as HTMLSelectElement;
-      expect(select.value).toBe("ASSET:7");
-      expect(Array.from(select.options).map((o) => o.textContent)).toContain("Asset #7");
+      const select = selectField("Coin");
+      expect(selectValue(select)).toBe("ASSET:7");
+      expect(optionNames(select)).toContain("Asset #7");
     });
 
     it("opens the blocked names list (shared with the original)", async () => {
@@ -288,9 +289,9 @@ describe("Settings: product lists", () => {
     localStorage.removeItem(SETTINGS_STORAGE_KEY);
     resetProductView();
     renderWithProviders(<SettingsPage />, { store: createAppStore() });
-    const select = within(screen.getByRole("region", { name: "Appearance" })).getByRole("combobox", { name: "Show as" });
-    expect(select).toHaveValue("auto");
-    fireEvent.change(select, { target: { value: "list" } });
+    const select = selectField("Show as", screen.getByRole("region", { name: "Appearance" }));
+    expect(selectValue(select)).toBe("auto");
+    chooseOption(select, "List");
     expect(getProductView()).toBe("list");
     expect(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY)!)).toMatchObject({ productView: "list" });
     resetProductView();

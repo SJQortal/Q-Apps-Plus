@@ -18,6 +18,7 @@ import { noteDeletedShop, resetDeletedShops } from "../../../qdn/deleted";
 import { resetProductView } from "../../../utils/productView";
 import { SETTINGS_STORAGE_KEY } from "../../../constants/plus";
 import { Store } from "./Store";
+import { chooseOption, optionNames, selectField, selectValue } from "../../../test/select";
 
 const copyText = vi.fn(async (_text: string) => true);
 vi.mock("../../../utils/clipboard", () => ({ copyText: (text: string) => copyText(text) }));
@@ -143,11 +144,11 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(cardTitles()).toEqual(["Product 11", "Product 9", "Product 7", "Product 5", "Product 3", "Product 1"]);
     fireEvent.click(screen.getByLabelText("In stock only"));
     await waitFor(() => expect(cardTitles()).not.toContain("Product 5"));
-    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "price-asc" } });
+    chooseOption(selectField("Sort"), "Price: low to high");
     await waitFor(() => expect(cardTitles()).toEqual(["Product 1", "Product 3", "Product 7", "Product 9", "Product 11"]));
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     fireEvent.click(screen.getByLabelText("In stock only"));
-    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "price-desc" } });
+    chooseOption(selectField("Sort"), "Price: high to low");
     await waitFor(() => expect(cardTitles()[0]).toBe("Product 11"));
     expect(cardTitles()[11]).toMatch(/^A product with a long title/);
     // Filtering and sorting read no more catalogues than the 12 products need.
@@ -211,7 +212,7 @@ describe("shop page", { timeout: 20_000 }, () => {
   it("shows prices in the picked coin with the node's rate", async () => {
     renderShop(makeWorld());
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
-    fireEvent.change(screen.getByRole("combobox", { name: "Prices in" }), { target: { value: "ARRR" } });
+    chooseOption(selectField("Prices in"), "ARRR");
     expect(await screen.findByText("1 QORT ≈ 0.25 ARRR · Trade Portal rate")).toBeInTheDocument();
     // Product 11 costs 12 QORT: 3 ARRR at 0.25.
     const card = screen.getByRole("heading", { level: 3, name: "Product 11" }).closest("article")!;
@@ -274,8 +275,8 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(gifts).toHaveAttribute("aria-current", "page");
     // In the order the seller picked them (Follow-up 14), which buyers can change.
     await waitFor(() => expect(cardTitles()).toEqual(["Product 1", "Product 2"]));
-    expect(screen.getByRole("combobox", { name: "Sort" })).toHaveValue("featured");
-    fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "newest" } });
+    expect(selectValue(selectField("Sort"))).toBe("featured");
+    chooseOption(selectField("Sort"), "Newest");
     await waitFor(() => expect(cardTitles()).toEqual(["Product 2", "Product 1"]));
     fireEvent.click(screen.getByRole("button", { name: "Share collection" }));
     await waitFor(() => expect(copyText).toHaveBeenCalledWith("qortal://APP/Q-Shop+/Seller%20Name/q-store-general-my-shop?collection=GIFTSxxxx1"));
@@ -292,9 +293,9 @@ describe("shop page", { timeout: 20_000 }, () => {
     world.shops[0].productOrder = [ids[3], "q-store-product-my-shop-GONExxxxx1", ids[0], ids[7]];
     renderShop(world);
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
-    const sort = screen.getByRole("combobox", { name: "Sort" });
-    expect(sort).toHaveValue("featured");
-    expect(within(sort).getAllByRole("option").map((o) => o.textContent)).toEqual([
+    const sort = selectField("Sort");
+    expect(selectValue(sort)).toBe("featured");
+    expect(optionNames(sort)).toEqual([
       "Featured",
       "Newest",
       "Oldest",
@@ -303,7 +304,7 @@ describe("shop page", { timeout: 20_000 }, () => {
     ]);
     // Then the rest, newest first.
     expect(cardTitles().slice(0, 5)).toEqual(["Product 3", expect.stringMatching(/^A product with a long title/), "Product 7", "Product 11", "Product 10"]);
-    fireEvent.change(sort, { target: { value: "oldest" } });
+    chooseOption(selectField("Sort"), "Oldest");
     await waitFor(() => expect(cardTitles()[1]).toBe("Product 1"));
     expect(cardTitles()[0]).toMatch(/^A product with a long title/);
   });
@@ -311,9 +312,9 @@ describe("shop page", { timeout: 20_000 }, () => {
   it("offers no Featured sort for a shop its seller hasn't arranged", async () => {
     renderShop(makeWorld());
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
-    const sort = screen.getByRole("combobox", { name: "Sort" });
-    expect(sort).toHaveValue("newest");
-    expect(within(sort).queryByRole("option", { name: "Featured" })).toBeNull();
+    const sort = selectField("Sort");
+    expect(selectValue(sort)).toBe("newest");
+    expect(optionNames(sort)).not.toContain("Featured");
   });
 
   it("offers Retry when the shop's collections can't be read for a collection link", async () => {

@@ -20,6 +20,7 @@ import { ResponsiveDialog } from "../components/common/mobile";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
 import type { SellerRow } from "./productList";
 import { useCatalogueLoader } from "./useCatalogueLoader";
+import { dropdownPaperSx } from "../components/common/menuStyle";
 
 /** Products listed at a time. */
 export const ARRANGE_PAGE = 30;
@@ -258,7 +259,7 @@ export function ArrangeDialog({
         )}
         {footer}
       </Box>
-      <Menu anchorEl={menu?.anchor ?? null} open={!!menu} onClose={() => setMenu(null)}>
+      <Menu anchorEl={menu?.anchor ?? null} open={!!menu} onClose={() => setMenu(null)} slotProps={{ paper: { sx: dropdownPaperSx } }}>
         <MenuItem
           disabled={!menu || order.indexOf(menu.id) === 0}
           onClick={() => {

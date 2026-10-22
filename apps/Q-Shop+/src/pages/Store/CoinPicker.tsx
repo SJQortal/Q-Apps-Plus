@@ -3,10 +3,11 @@
  * used when a price is converted from QORT. The coin, the rate and the
  * conversion all come from money/ (useShopCoin, pricing); this only shows them.
  */
-import { TextField, Typography } from "@mui/material";
+import { TextField, Typography, MenuItem } from "@mui/material";
 import { coinLabel, isForeignTicker, type ShopCoinSettings } from "../../money/coins";
 import { formatPrice } from "../../money/pricing";
 import type { ShopCoin } from "../../money/useShopCoin";
+import { selectMenuProps } from "../../components/common/menuStyle";
 
 export function CoinPicker({ shop, shopCoin, id = "shop-coin" }: { shop: ShopCoinSettings | null | undefined; shopCoin: ShopCoin; id?: string }) {
   if (shopCoin.coins.length <= 1) return null;
@@ -18,13 +19,13 @@ export function CoinPicker({ shop, shopCoin, id = "shop-coin" }: { shop: ShopCoi
       label="Prices in"
       value={shopCoin.coin}
       onChange={(event) => shopCoin.setCoin(event.target.value)}
-      slotProps={{ select: { native: true } }}
+      slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 120, "& .MuiInputBase-root": { minHeight: 44 } }}
     >
       {shopCoin.coins.map((coin) => (
-        <option key={coin} value={coin}>
+        <MenuItem key={coin} value={coin}>
           {coinLabel(coin, shop)}
-        </option>
+        </MenuItem>
       ))}
     </TextField>
   );

@@ -35,6 +35,7 @@ import { resetPublishedIndexes } from "./productIndex";
 import { resetSentCatalogues } from "./sentCatalogues";
 import { PRICES_DRAFTS_TEXT } from "./useShopPricing";
 import { pickCategory } from "../test/categories";
+import { chooseOption, optionNames, selectField, selectValue } from "../test/select";
 
 vi.mock("../components/common/ImageUploader", () => ({
   default: ({ label, onPick }: { label: string; onPick: (img: string) => void }) => (
@@ -108,7 +109,7 @@ describe("prices in a currency", () => {
     const { store, q } = setup();
     fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
     const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
-    expect(within(dialog).getByRole("combobox", { name: "Currency" })).toHaveValue("USD");
+    expect(selectValue(selectField("Currency", dialog))).toBe("USD");
     fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "0,18" } });
     fireEvent.change(within(dialog).getByRole("textbox", { name: /1 ARRR is worth/ }), { target: { value: "0.25" } });
     await waitFor(() => expect(priceField(dialog, "Mug")).toBeEnabled());
@@ -195,10 +196,9 @@ describe("prices in a currency", () => {
     const { q } = setup();
     fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
     const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
-    const currency = within(dialog).getByRole("combobox", { name: "Currency" });
-    expect(within(currency).getByRole("option", { name: "PLN" })).toBeInTheDocument();
-    expect(within(currency).getByRole("option", { name: "ISK" })).toBeInTheDocument();
-    fireEvent.change(currency, { target: { value: "custom" } });
+    const currency = selectField("Currency", dialog);
+    expect(optionNames(currency)).toEqual(expect.arrayContaining(["PLN", "ISK", "Other: type a ticker"]));
+    chooseOption(currency, "Other: type a ticker");
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^Ticker/ }), { target: { value: "xau" } });
     expect(within(dialog).getByRole("textbox", { name: /^Ticker/ })).toHaveValue("XAU");
     // 1 QORT = 0.0001 XAU: a price of 0.0012 XAU is 12 QORT.
@@ -218,7 +218,7 @@ describe("prices in a currency", () => {
     setup();
     fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
     const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Currency" }), { target: { value: "custom" } });
+    chooseOption(selectField("Currency", dialog), "Other: type a ticker");
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^Ticker/ }), { target: { value: "qort" } });
     expect(within(dialog).getByText("2 to 10 letters or digits, not QORT or ARRR")).toBeInTheDocument();
     fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "1" } });

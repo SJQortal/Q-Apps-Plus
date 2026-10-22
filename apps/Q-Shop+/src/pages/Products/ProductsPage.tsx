@@ -40,7 +40,7 @@ import {
   Popover,
   Switch,
   TextField,
-  Typography,
+  Typography, MenuItem
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
@@ -82,6 +82,7 @@ import {
   type AllProductRow,
   type CategoryOption,
 } from "../../discovery/allProducts";
+import { selectMenuProps } from "../../components/common/menuStyle";
 
 function parseProductSort(value: string | null): ProductSort {
   return PRODUCT_SORTS.some((s) => s.value === value) ? (value as ProductSort) : "newest";
@@ -411,13 +412,13 @@ export function ProductsPage() {
       label="Sort"
       value={sort}
       onChange={(event) => update({ sort: event.target.value as ProductSort })}
-      slotProps={{ select: { native: true } }}
+      slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 170, flex: { xs: "1 1 150px", sm: "0 0 auto" }, "& .MuiInputBase-root": { minHeight: 44 } }}
     >
       {PRODUCT_SORTS.map((option) => (
-        <option key={option.value} value={option.value}>
+        <MenuItem key={option.value} value={option.value}>
           {option.label}
-        </option>
+        </MenuItem>
       ))}
     </TextField>
   );

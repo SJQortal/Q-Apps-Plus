@@ -17,6 +17,7 @@ import { setNotification } from "../state/features/notificationsSlice";
 import { copyText } from "../utils/clipboard";
 import { ManualCopyDialog } from "./ManualCopyDialog";
 import type { ShopEntry } from "./shopIndex";
+import { dropdownPaperSx } from "../components/common/menuStyle";
 
 export interface ShopMenuTarget {
   shop: ShopEntry;
@@ -94,7 +95,7 @@ export function ShopMenu({
           onClose={onClose}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{ list: { "aria-label": `${shop?.title ?? "Shop"}: more` } }}
+          slotProps={{ list: { "aria-label": `${shop?.title ?? "Shop"}: more` }, paper: { sx: dropdownPaperSx } }}
         >
           <MenuItem onClick={open}>
             <ListItemIcon>

@@ -36,6 +36,7 @@ import {
   ASSET_PAGE,
   type CoreAsset,
 } from "../qdn/assets";
+import { autocompletePaperProps } from "../components/common/menuStyle";
 
 /** "Can't be paid", "Already accepted", "Whole units only", or nothing: shown beside a suggestion. */
 function assetNote(asset: CoreAsset, accepted: ShopAsset[]): string | null {
@@ -147,6 +148,7 @@ export function AssetPicker({ assets, onChange }: AssetPickerProps) {
           freeSolo
           // The suggestions stay inside the dialog (its landmark), not at the end of the page.
           disablePortal
+          slotProps={{ paper: autocompletePaperProps }}
           sx={{ flex: "1 1 200px", minWidth: 0 }}
           options={suggestions}
           // The suggestions are already ranked (qdn/assets.ts suggestAssets).

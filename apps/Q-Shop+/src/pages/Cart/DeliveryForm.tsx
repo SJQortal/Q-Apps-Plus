@@ -12,6 +12,7 @@ import { useEffect, useState, type FocusEvent } from "react";
 import { Autocomplete, Box, TextField } from "@mui/material";
 import { US, missingDeliveryFields, type DeliveryInput } from "../../money/order";
 import { deliveryFieldId } from "./delivery";
+import { autocompletePaperProps } from "../../components/common/menuStyle";
 
 interface PlaceOption {
   text: string;
@@ -104,6 +105,7 @@ export function DeliveryForm({
       onChange={(_, next) => onChange({ ...value, [field]: next ?? "" })}
       autoHighlight
       fullWidth
+      slotProps={{ paper: autocompletePaperProps }}
       renderInput={(params) => (
         <TextField
           {...params}

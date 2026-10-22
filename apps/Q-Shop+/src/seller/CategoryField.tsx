@@ -10,6 +10,7 @@ import { Autocomplete, Box, InputAdornment, TextField, Typography } from "@mui/m
 import { SHOP_CATEGORIES } from "../constants/categories";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { searchCategories } from "../utils/categoryMatch";
+import { autocompletePaperProps } from "../components/common/menuStyle";
 
 export function CategoryField({
   value,
@@ -37,6 +38,7 @@ export function CategoryField({
     <Autocomplete<string, false, true, false>
       // The list stays inside the dialog (its landmark).
       disablePortal
+      slotProps={{ paper: autocompletePaperProps }}
       options={options}
       value={value || null!}
       disableClearable

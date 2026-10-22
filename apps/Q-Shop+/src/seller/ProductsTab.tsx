@@ -69,6 +69,7 @@ import {
 } from "./productList";
 import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
 import { ArrangeShop } from "./ArrangeShop";
+import { selectMenuProps } from "../components/common/menuStyle";
 
 export const PRODUCTS_PAGE = 24;
 
@@ -233,6 +234,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
       label="Category"
       value={filters.category}
       onChange={(e) => update({ category: e.target.value })}
+      slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 180 }}
       fullWidth={phone}
     >
@@ -250,6 +252,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
       label="Sort"
       value={filters.sort}
       onChange={(e) => update({ sort: e.target.value as SellerSort })}
+      slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 190 }}
       fullWidth={phone}
     >

@@ -9,6 +9,7 @@ import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import { useDispatch } from "react-redux";
 import { setNotification } from "../../../state/features/notificationsSlice";
 import { copyText } from "../../../utils/clipboard";
+import { dropdownPaperSx } from "../menuStyle";
 
 export default function ContextMenuResource({
   children,
@@ -45,7 +46,7 @@ export default function ContextMenuResource({
     <div onContextMenu={open} style={{ width: "100%", height: "100%" }}>
       {children}
       {position && (
-        <Menu open onClose={() => setPosition(null)} anchorReference="anchorPosition" anchorPosition={position}>
+        <Menu open onClose={() => setPosition(null)} anchorReference="anchorPosition" anchorPosition={position} slotProps={{ paper: { sx: dropdownPaperSx } }}>
           <MenuItem onClick={copy} sx={{ gap: 1, minHeight: 44 }}>
             <LinkOutlinedIcon fontSize="small" />
             Copy link

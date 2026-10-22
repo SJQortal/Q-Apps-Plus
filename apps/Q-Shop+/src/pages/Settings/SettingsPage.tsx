@@ -5,7 +5,7 @@
  */
 import { useId, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Box, Button, Dialog, DialogTitle, IconButton, TextField, Tooltip, Typography } from "@mui/material";
+import { Box, Button, Dialog, DialogTitle, IconButton, TextField, Tooltip, Typography, MenuItem } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
@@ -39,6 +39,7 @@ import { useSwitchActiveName } from "../../hooks/useUserAccount";
 import { copyText } from "../../utils/clipboard";
 import { collectSettingsSnapshot, fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settingsQdn";
 import { isProductView, setProductView, useProductView } from "../../utils/productView";
+import { selectMenuProps } from "../../components/common/menuStyle";
 
 /** The coins a buyer can prefer, in the order the shops offer them. */
 export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR"];
@@ -314,12 +315,12 @@ export function SettingsPage() {
             label="Show as"
             value={productView}
             onChange={(event) => isProductView(event.target.value) && setProductView(event.target.value)}
-            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-            sx={{ minWidth: 200, [`@media ${PHONE_MEDIA}`]: { "& select": { minHeight: 27, py: "8.5px" } } }}
+            slotProps={{ select: { MenuProps: selectMenuProps } }}
+            sx={{ minWidth: 200 }}
           >
-            <option value="auto">Automatic</option>
-            <option value="grid">Grid</option>
-            <option value="list">List</option>
+            <MenuItem value="auto">Automatic</MenuItem>
+            <MenuItem value="grid">Grid</MenuItem>
+            <MenuItem value="list">List</MenuItem>
           </TextField>
         </Row>
       </Section>
@@ -336,13 +337,13 @@ export function SettingsPage() {
             label="Coin"
             value={preferredCoin}
             onChange={(event) => dispatch(setPreferredCoin(event.target.value))}
-            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
-            sx={{ minWidth: 200, [`@media ${PHONE_MEDIA}`]: { "& select": { minHeight: 27, py: "8.5px" } } }}
+            slotProps={{ select: { MenuProps: selectMenuProps } }}
+            sx={{ minWidth: 200 }}
           >
             {coinOptions.map((coin) => (
-              <option key={coin} value={coin}>
+              <MenuItem key={coin} value={coin}>
                 {COINS[coin as CoinTicker]?.label ?? coinLabel(coin)}
-              </option>
+              </MenuItem>
             ))}
           </TextField>
         </Row>

@@ -32,7 +32,7 @@ import {
   Skeleton,
   Switch,
   TextField,
-  Typography,
+  Typography, MenuItem
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
@@ -84,6 +84,7 @@ import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
 import { useShopCollections, type ShopCollections } from "../useShopCollections";
 import { CollectionCards, CollectionHeader } from "../ShopCollections";
 import { useOrderCount } from "../orderCount";
+import { selectMenuProps } from "../../../components/common/menuStyle";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -229,13 +230,13 @@ function ShopProducts({
       label="Sort"
       value={sort}
       onChange={(event) => setPickedSort(event.target.value as ShopSort)}
-      slotProps={{ select: { native: true } }}
+      slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 170, flex: { xs: "1 1 150px", sm: "0 0 auto" }, "& .MuiInputBase-root": { minHeight: 44 } }}
     >
       {sortOptions.map((option) => (
-        <option key={option.value} value={option.value}>
+        <MenuItem key={option.value} value={option.value}>
           {option.label}
-        </option>
+        </MenuItem>
       ))}
     </TextField>
   );
