@@ -9,6 +9,9 @@
  * (12 products in two catalogues, one out of stock, one physical) and has
  * bought from two other shops; buyers' orders to "my-shop" with statuses;
  * reviews; a cart with items from two shops; a paid order still to record.
+ * "my-shop" prices four products in USD at the seller's rates; Shop+Plus has
+ * arranged its products (Featured) and both have collections. Categories are
+ * the fixed list's, plus one from before it ("Paper").
  */
 const ME = 'Seller Name';
 const ME_ADDRESS = 'QSeLLeRNameAddressxxxxxxxxxxxx9f3c2a';
@@ -66,12 +69,15 @@ function product(s, p) {
     price: s.arrr && p % 2 === 0 ? [{ currency: 'qort', value: 1.5 + p }, { currency: 'ARRR', value: 0.25 + p / 10 }] : [{ currency: 'qort', value: 1.5 + p }],
     storeId: s.id,
     shortStoreId: s.short,
-    category: ['Kitchen', 'Art', 'Paper'][p % 3],
+    category: ['Home & Garden', 'Collectibles & Art', 'Paper'][p % 3],
     id: productId(s, p),
     status: p === 5 ? 'OUT_OF_STOCK' : 'AVAILABLE',
     user: s.owner,
+    // The seller's shop prices some products in USD (money/fiatPricing.ts).
+    ...(s.short === 'my-shop' && USD_PRICED.includes(p) && { fiatPrice: { currency: 'USD', value: Math.round((1.5 + p) * 18) / 100, qort: 1.5 + p } }),
   };
 }
+const USD_PRICED = [1, 3, 7, 11];
 function catalogue(s, c) {
   const products = {};
   for (let p = c * 10; p < Math.min(s.products, c * 10 + 10); p++) products[productId(s, p)] = { ...product(s, p), catalogueId: catalogueId(s, c) };
@@ -107,6 +113,8 @@ function dataContainer(s) {
     catalogues,
     id: `${s.id}-datacontainer`,
     ...(collectionsOf(s) && { collectionsId: `q-store-collections-${s.short}` }),
+    ...(s.short === 'shop-1' && { productOrder: [productId(s, 3), productId(s, 0), productId(s, 7)] }),
+    ...(s.short === 'my-shop' && { fiatPricing: { currency: 'USD', rates: { QORT: 0.18, ARRR: 0.25 }, updated: now - DAY } }),
   };
 }
 const storeJson = (s) => ({
@@ -318,10 +326,11 @@ export default {
     { key: 'home-filters', path: '/', mobileOnly: true, overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /filter|sort/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'products', path: '/products', after: async (page) => page.waitForTimeout(900) },
     { key: 'products-categories', path: '/products', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^(Categories|Filters)/ }).first().click({ timeout: 2500 }); await page.getByRole('checkbox').first().waitFor({ timeout: 4000 }); await page.waitForTimeout(600); } },
-    { key: 'products-chosen', path: '/products?category=art&category=paper&sort=price-asc', after: async (page) => page.waitForTimeout(900) },
+    { key: 'products-chosen', path: `/products?category=${encodeURIComponent('collectibles & art')}&category=paper&sort=price-asc`, after: async (page) => page.waitForTimeout(900) },
     { key: 'shop', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => page.waitForTimeout(900) },
     { key: 'shop-own', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
     { key: 'product', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'product-collections', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 2)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('navigation', { name: 'Collections' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); } },
     { key: 'cart', path: '/cart', after: async (page) => page.waitForTimeout(900) },
     { key: 'checkout', path: '/cart', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /check ?out/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'orders', path: '/my-orders', after: async (page) => page.waitForTimeout(900) },
@@ -335,7 +344,11 @@ export default {
     { key: 'shop-grid', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Grid', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'shop-list', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'List', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'seller-collections', path: `/product-manager/q-store-general-my-shop?tab=collections`, after: async (page) => page.waitForTimeout(900) },
-    { key: 'seller-collection-editor', path: `/product-manager/q-store-general-my-shop?tab=collections`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit Gifts for friends' }).click({ timeout: 2500 }); await page.waitForTimeout(700); } },
+    { key: 'seller-collection-editor', path: `/product-manager/q-store-general-my-shop?tab=collections`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit: Gifts for friends', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(700); } },
+    { key: 'seller-collection-arrange', path: `/product-manager/q-store-general-my-shop?tab=collections`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit: Gifts for friends', exact: true }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Edit collection' }).getByRole('button', { name: 'Arrange' }).click({ timeout: 4000 }); await page.getByRole('dialog', { name: 'Arrange this collection' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(700); } },
+    { key: 'seller-arrange', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Arrange', exact: true }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Arrange your shop' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(900); } },
+    { key: 'seller-pricing', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Change rates and prices' }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Prices in USD' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(1200); } },
+    { key: 'seller-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, after: async (page) => page.waitForTimeout(900) },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11$/ }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'settings', path: '/settings' },
