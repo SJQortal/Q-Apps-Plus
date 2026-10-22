@@ -257,6 +257,14 @@ describe("a price in the shop's currency (money/fiatPricing.ts)", () => {
     expect(kept).toHaveProperty("fiatPrice");
   });
 
+  it("takes up to 8 decimals for a ticker of the seller's own", () => {
+    const xau = { currency: "XAU", rates: { QORT: 0.0001 }, updated: 1 };
+    expect(validateProductForm(values({ fiat: "0.00012", prices: { QORT: "" } }), coins, { pricing: xau })).toBeNull();
+    const draft = newProductDraft({ values: values({ fiat: "0.0012" }), coins, storeId: STORE_ID, name: SELLER, uid: "UIDxxxxxx1", now: 1, pricing: xau });
+    expect((draft as Record<string, unknown>).fiatPrice).toEqual({ currency: "XAU", value: 0.0012, qort: 12 });
+    expect(formValuesFor({ ...draft }, coins, xau).fiat).toBe("0.0012");
+  });
+
   it("asks for a valid price in the currency, and then no QORT price", () => {
     expect(validateProductForm(values({ fiat: "12.345", prices: { QORT: "" } }), coins, { pricing })).toBe("Check the USD price");
     expect(validateProductForm(values({ fiat: "12.34", prices: { QORT: "" } }), coins, { pricing })).toBeNull();

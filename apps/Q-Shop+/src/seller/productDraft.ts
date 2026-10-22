@@ -13,7 +13,7 @@
 import { assetIdOf, priceCurrencyKey } from "../money/coins";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { isListedCategory } from "../constants/categories";
-import { fiatPriceOf, parseFiat, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
+import { fiatPriceOf, fiatToText, parseFiat, priceDecimals, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
 
 export interface PriceEntry {
   currency: string;
@@ -64,7 +64,7 @@ export interface FormPricing {
 /** The form's price in the currency, when the shop prices in one and it is filled in properly. */
 export function typedFiat(values: ProductFormValues, pricing: FiatPricing | null | undefined): number | null {
   if (!pricing) return null;
-  const n = parseFiat(values.fiat ?? "");
+  const n = parseFiat(values.fiat ?? "", priceDecimals(pricing.currency));
   return Number.isNaN(n) ? null : n;
 }
 
@@ -335,7 +335,7 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
   }
   const fiat = pricing ? fiatPriceOf(product, pricing.currency) : null;
   return {
-    ...(pricing && { fiat: fiat ? fiat.value.toFixed(2) : "" }),
+    ...(pricing && { fiat: fiat ? fiatToText(fiat.value, pricing.currency) : "" }),
     title: typeof product.title === "string" ? product.title : "",
     description: typeof product.description === "string" ? product.description : "",
     images: Array.isArray(product.images) ? product.images.filter((i: unknown) => typeof i === "string") : [],

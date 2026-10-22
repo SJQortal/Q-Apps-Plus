@@ -190,6 +190,42 @@ describe("prices in a currency", () => {
     expect(cat.products[poster.id]).toEqual(priced.products[poster.id]);
   });
 
+  it("prices in a ticker of the seller's own, with up to 8 decimals", async () => {
+    const { q } = setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
+    const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
+    const currency = within(dialog).getByRole("combobox", { name: "Currency" });
+    expect(within(currency).getByRole("option", { name: "PLN" })).toBeInTheDocument();
+    expect(within(currency).getByRole("option", { name: "ISK" })).toBeInTheDocument();
+    fireEvent.change(currency, { target: { value: "custom" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Ticker/ }), { target: { value: "xau" } });
+    expect(within(dialog).getByRole("textbox", { name: /^Ticker/ })).toHaveValue("XAU");
+    // 1 QORT = 0.0001 XAU: a price of 0.0012 XAU is 12 QORT.
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "0.0001" } });
+    await waitFor(() => expect(within(dialog).getByRole("textbox", { name: "Price of Mug in XAU" })).toBeEnabled());
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Price of Mug in XAU" }), { target: { value: "0.0012" } });
+    expect(within(dialog).getByText("= 12 QORT · ARRR at the node's rate")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish prices" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Publish new prices?" })).getByRole("button", { name: "Publish" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    expect(decodeData64(sent[0].data64).products[mug.id].fiatPrice).toEqual({ currency: "XAU", value: 0.0012, qort: 12 });
+    expect(decodeData64(sent[1].data64).fiatPricing).toMatchObject({ currency: "XAU", rates: { QORT: 0.0001 } });
+  });
+
+  it("asks for a usable ticker", async () => {
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));
+    const dialog = await screen.findByRole("dialog", { name: "Prices in a currency" });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Currency" }), { target: { value: "custom" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Ticker/ }), { target: { value: "qort" } });
+    expect(within(dialog).getByText("2 to 10 letters or digits, not QORT or ARRR")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "1" } });
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Publish prices" })).toBeEnabled());
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish prices" }));
+    expect(await within(dialog).findByText("Type the currency's ticker: 2 to 10 letters or digits (not QORT or ARRR).")).toBeInTheDocument();
+  });
+
   it("reads and sends no catalogue when no product's price changes (new rates for products not priced yet)", async () => {
     const { q } = setup();
     fireEvent.click(await screen.findByRole("button", { name: "Price in a currency" }));

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  FIAT_CURRENCIES,
   MissingPriceCatalogueError,
+  fiatToText,
+  formatFiat,
+  isValidTicker,
+  normalizeTicker,
+  priceDecimals,
   buildPricesPublish,
   coinPriceFromFiat,
   fiatPriceOf,
@@ -178,5 +184,39 @@ describe("what publishing prices would change", () => {
     ]);
     const stop = priceChanges([{ productId: mug.id, product: following, value: null }], usd, true);
     expect(stop).toEqual([{ productId: mug.id, value: null, before: { qort: 55.56, arrr: 40 }, after: { qort: 55.56, arrr: 40 } }]);
+  });
+});
+
+describe("currencies and tickers", () => {
+  it("offers PLN and ISK with the others, USD first", () => {
+    expect(FIAT_CURRENCIES[0]).toBe("USD");
+    expect(FIAT_CURRENCIES).toContain("PLN");
+    expect(FIAT_CURRENCIES).toContain("ISK");
+  });
+
+  it("takes a ticker of the seller's own: 2 to 10 letters or digits, not QORT or ARRR", () => {
+    expect(normalizeTicker(" xau ")).toBe("XAU");
+    expect(normalizeTicker("us-dt!")).toBe("USDT");
+    expect(normalizeTicker("ABCDEFGHIJKL")).toBe("ABCDEFGHIJ");
+    expect(isValidTicker("XAU")).toBe(true);
+    expect(isValidTicker("SATS")).toBe(true);
+    expect(isValidTicker("X")).toBe(false);
+    expect(isValidTicker("QORT")).toBe(false);
+    expect(isValidTicker("ARRR")).toBe(false);
+  });
+
+  it("prices the offered currencies in cents, a ticker of the seller's own with up to 8 decimals", () => {
+    expect(priceDecimals("PLN")).toBe(2);
+    expect(priceDecimals("XAU")).toBe(8);
+    expect(fiatToText(12.5, "ISK")).toBe("12.50");
+    expect(fiatToText(0.00012, "XAU")).toBe("0.00012");
+    expect(formatFiat(0.00012, "XAU")).toBe("0.00012 XAU");
+    expect(parseFiat("0.00012", priceDecimals("XAU"))).toBe(0.00012);
+    expect(parseFiat("0.00012", priceDecimals("USD"))).toBeNaN();
+  });
+
+  it("reads a shop's pricing in a ticker of its own", () => {
+    expect(fiatPricingOf({ fiatPricing: { currency: "XAU", rates: { QORT: 0.0001 }, updated: 1 } })?.currency).toBe("XAU");
+    expect(fiatPricingOf({ fiatPricing: { currency: "QORT", rates: { QORT: 1 } } })).toBeNull();
   });
 });

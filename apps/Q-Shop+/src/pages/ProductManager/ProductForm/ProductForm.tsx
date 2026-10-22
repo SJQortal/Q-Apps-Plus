@@ -20,7 +20,15 @@ import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
 import { CoinIcon } from "../../../components/money/CoinIcon";
 import { SHOP_CATEGORIES } from "../../../constants/categories";
-import { coinPriceFromFiat, formatFiat, rateToText, sanitizeFiatInput, staleFiatPriceOf, type FiatPricing } from "../../../money/fiatPricing";
+import {
+  coinPriceFromFiat,
+  formatFiat,
+  priceDecimals,
+  rateToText,
+  sanitizeFiatInput,
+  staleFiatPriceOf,
+  type FiatPricing,
+} from "../../../money/fiatPricing";
 import { COINS, assetIdOf, coinLabel, isCoinTicker, type ShopCoinSettings } from "../../../money/coins";
 import {
   MAX_PRODUCT_IMAGES,
@@ -232,7 +240,7 @@ export const ProductForm = ({ values, onChange, coins, shop, oldCategory, pricin
           <TextField
             label={`Price in ${pricing.currency}`}
             value={values.fiat ?? ""}
-            onChange={(e) => onChange((prev) => ({ ...prev, fiat: sanitizeFiatInput(e.target.value) }))}
+            onChange={(e) => onChange((prev) => ({ ...prev, fiat: sanitizeFiatInput(e.target.value, priceDecimals(pricing.currency)) }))}
             fullWidth
             helperText={
               fiat !== null

@@ -23,8 +23,55 @@
 import { jsonToBase64, type CatalogueDoc, type DataContainerDoc, type PublishResource } from "../qdn/payloads";
 import { dataContainerIdentifier } from "../qdn/identifiers";
 
-/** The currencies offered: the most traded, USD first. Any 3-letter code reads, should another app write one. */
-export const FIAT_CURRENCIES = ["USD", "EUR", "GBP", "CAD", "AUD", "CHF", "JPY", "CNY", "INR", "BRL", "MXN", "ZAR", "SEK", "NZD"] as const;
+/**
+ * The currencies offered, USD first (PLN and ISK: Simon, 2026-10-22). The
+ * seller can also type a ticker of their own (`isValidTicker`: XAU, USDT,
+ * SATS…), priced with up to 8 decimals.
+ */
+export const FIAT_CURRENCIES = [
+  "USD",
+  "EUR",
+  "GBP",
+  "CAD",
+  "AUD",
+  "CHF",
+  "PLN",
+  "SEK",
+  "ISK",
+  "JPY",
+  "CNY",
+  "INR",
+  "BRL",
+  "MXN",
+  "ZAR",
+  "NZD",
+] as const;
+
+/** One of the offered currencies (prices with 2 decimals), as opposed to a ticker the seller typed. */
+export function isListedCurrency(currency: string): boolean {
+  return (FIAT_CURRENCIES as readonly string[]).includes(currency);
+}
+
+/** A ticker as typed, cleaned: upper case, letters and digits only, at most 10. */
+export function normalizeTicker(text: string): string {
+  return text.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
+}
+
+/** A currency the app can price in: 2 to 10 letters or digits, not the coins it works out (QORT, ARRR). */
+export function isValidTicker(ticker: string): boolean {
+  return /^[A-Z0-9]{2,10}$/.test(ticker) && ticker !== "QORT" && ticker !== "ARRR";
+}
+
+/** Decimals a price in the currency takes: 2 for the offered currencies, 8 for a ticker of the seller's own (0.00012 BTC). */
+export function priceDecimals(currency: string): number {
+  return isListedCurrency(currency) ? 2 : 8;
+}
+
+/** A price in the currency as a field starts with: "12.50", or for a ticker of the seller's own "0.00012". */
+export function fiatToText(value: number, currency: string): string {
+  if (isListedCurrency(currency)) return value.toFixed(2);
+  return value.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
+}
 
 export interface FiatRates {
   /** One QORT in the currency. */
@@ -47,7 +94,7 @@ export interface FiatPrice {
 }
 
 const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
-const isCurrency = (value: unknown): value is string => typeof value === "string" && /^[A-Z]{3}$/.test(value);
+const isCurrency = (value: unknown): value is string => typeof value === "string" && isValidTicker(value);
 
 /** The shop's pricing as its product index holds it, or null (none, stopped, or malformed). */
 export function fiatPricingOf(index: object | null | undefined): FiatPricing | null {
@@ -127,8 +174,9 @@ export function sanitizeFiatInput(text: string, decimals = 2): string {
 /** Rates are typed with up to 8 decimals (one QORT may be worth less than a cent). */
 export const RATE_DECIMALS = 8;
 
-/** "$12.50", "€3.00", "¥1,200" (the browser's own currency names; nothing is fetched). */
+/** "$12.50", "€3.00", "¥1,200" (the browser's own currency names; nothing is fetched); "0.00012 XAU" for a ticker of the seller's own. */
 export function formatFiat(value: number, currency: string): string {
+  if (!isListedCurrency(currency)) return `${fiatToText(value, currency)} ${currency}`;
   try {
     return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
   } catch {

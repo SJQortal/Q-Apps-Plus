@@ -21,6 +21,11 @@ import { shopCoins } from "../money/coins";
 import {
   FIAT_CURRENCIES,
   RATE_DECIMALS,
+  fiatToText,
+  isListedCurrency,
+  isValidTicker,
+  normalizeTicker,
+  priceDecimals,
   coinPriceFromFiat,
   fiatPriceOf,
   fiatPricingOf,
@@ -90,7 +95,13 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const current = useMemo(() => fiatPricingOf(dataContainer), [dataContainer]);
   const takesArrr = shopCoins(currentStore).includes("ARRR");
 
-  const [currency, setCurrency] = useState(current?.currency ?? "USD");
+  // One of the offered currencies, or "custom": a ticker the seller types (XAU, USDT, SATS…).
+  const [choice, setChoice] = useState(current ? (isListedCurrency(current.currency) ? current.currency : "custom") : "USD");
+  const [ticker, setTicker] = useState(current && !isListedCurrency(current.currency) ? current.currency : "");
+  const currency = choice === "custom" ? ticker : choice;
+  const tickerOk = choice !== "custom" || isValidTicker(ticker);
+  // 2 for the offered currencies, 8 for a ticker of the seller's own.
+  const decimals = priceDecimals(currency);
   const [qortRate, setQortRate] = useState(rateToText(current?.rates.QORT));
   const [arrrRate, setArrrRate] = useState(rateToText(current?.rates.ARRR));
   const [typed, setTyped] = useState<Record<string, string>>({});
@@ -137,7 +148,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const details = (row: SellerRow) => productOf(row.catalogueId, row.productId);
   const initialText = (row: SellerRow) => {
     const fiat = fiatPriceOf(details(row), currency);
-    return fiat ? fiat.value.toFixed(2) : "";
+    return fiat ? fiatToText(fiat.value, currency) : "";
   };
   const textOf = (row: SellerRow) => typed[row.productId] ?? initialText(row);
 
@@ -152,7 +163,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
     : !!qortRate.trim() || !!arrrRate.trim();
   const productsChanged = rows.some((row) => textOf(row) !== initialText(row));
   const changed = ratesChanged || productsChanged;
-  const priced = rows.filter((row) => !Number.isNaN(parseFiat(textOf(row)))).length;
+  const priced = rows.filter((row) => !Number.isNaN(parseFiat(textOf(row), decimals))).length;
 
   const needle = find.trim().toLowerCase();
   const matching = needle ? rows.filter((row) => titleOf(details(row)).toLowerCase().includes(needle)) : rows;
@@ -165,7 +176,10 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
       for (const row of rows) {
         if (textOf(row).trim()) continue;
         const qort = qortPriceOf(details(row)) ?? row.priceQort;
-        if (typeof qort === "number" && qort > 0) next[row.productId] = (Math.round(qort * rates.QORT * 100) / 100).toFixed(2);
+        if (typeof qort !== "number" || !(qort > 0)) continue;
+        const factor = 10 ** decimals;
+        const value = Math.round(qort * rates.QORT * factor) / factor;
+        if (value > 0) next[row.productId] = fiatToText(value, currency);
       }
       return next;
     });
@@ -173,14 +187,15 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
 
   const publish = async () => {
     setFormError(null);
+    if (!tickerOk) return setFormError("Type the currency's ticker: 2 to 10 letters or digits (not QORT or ARRR).");
     if (!rates) return setFormError(`Type how much one QORT is worth in ${currency}${takesArrr ? " (and one ARRR, if you like)" : ""}.`);
     if (currentStore?.id && Object.keys(draftsOfShop(allDrafts, currentStore.id)).length > 0) return setFormError(PRICES_DRAFTS_TEXT);
     const wanted: { productId: string; product: Record<string, unknown> | undefined; value: number | null }[] = [];
     for (const row of rows) {
       const text = textOf(row).trim();
-      const value = parseFiat(text);
+      const value = parseFiat(text, decimals);
       if (text && Number.isNaN(value)) {
-        return setFormError(`Check the price of ${titleOf(details(row)) || "a product"}: a number above 0, with at most 2 decimals.`);
+        return setFormError(`Check the price of ${titleOf(details(row)) || "a product"}: a number above 0, with at most ${decimals} decimals.`);
       }
       wanted.push({ productId: row.productId, product: details(row), value: Number.isNaN(value) ? null : value });
     }
@@ -237,21 +252,36 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
               Currency and rates
             </Typography>
             <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: takesArrr ? "160px 1fr 1fr" : "160px 1fr" } }}>
-              <TextField
-                select
-                label="Currency"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                disabled={busy}
-                slotProps={{ select: { native: true } }}
-                sx={{ "& .MuiInputBase-root": { minHeight: 44 } }}
-              >
-                {[...new Set([...FIAT_CURRENCIES, currency])].map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </TextField>
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+                <TextField
+                  select
+                  label="Currency"
+                  value={choice}
+                  onChange={(e) => setChoice(e.target.value)}
+                  disabled={busy}
+                  slotProps={{ select: { native: true } }}
+                  sx={{ "& .MuiInputBase-root": { minHeight: 44 } }}
+                >
+                  {FIAT_CURRENCIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                  <option value="custom">Other: type a ticker</option>
+                </TextField>
+                {choice === "custom" && (
+                  <TextField
+                    label="Ticker"
+                    value={ticker}
+                    onChange={(e) => setTicker(normalizeTicker(e.target.value))}
+                    disabled={busy}
+                    required
+                    error={!!ticker && !isValidTicker(ticker)}
+                    helperText={!!ticker && !isValidTicker(ticker) ? "2 to 10 letters or digits, not QORT or ARRR" : "e.g. XAU, USDT, SATS"}
+                    slotProps={{ htmlInput: { autoCapitalize: "characters", autoComplete: "off", spellCheck: false, maxLength: 10 } }}
+                  />
+                )}
+              </Box>
               <TextField
                 label="1 QORT is worth"
                 value={qortRate}
@@ -261,7 +291,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                 error={!!qortRate.trim() && Number.isNaN(q)}
                 slotProps={{
                   htmlInput: { inputMode: "decimal", autoComplete: "off" },
-                  input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
+                  input: { endAdornment: <InputAdornment position="end">{currency || "…"}</InputAdornment> },
                 }}
               />
               {takesArrr && (
@@ -274,7 +304,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                   error={!!arrrRate.trim() && Number.isNaN(a ?? NaN)}
                   slotProps={{
                     htmlInput: { inputMode: "decimal", autoComplete: "off" },
-                    input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
+                    input: { endAdornment: <InputAdornment position="end">{currency || "…"}</InputAdornment> },
                   }}
                 />
               )}
@@ -355,7 +385,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                 const name = titleOf(d);
                 const load = statusOf(row.catalogueId);
                 const text = textOf(row);
-                const value = parseFiat(text);
+                const value = parseFiat(text, decimals);
                 const invalid = !!text.trim() && Number.isNaN(value);
                 const stale = !text.trim() ? staleFiatPriceOf(d, currency) : null;
                 const nowQort = qortPriceOf(d) ?? row.priceQort;
@@ -401,20 +431,20 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                       </Typography>
                       {stale !== null && (
                         <Typography variant="body2" color="text.secondary">
-                          {`Was ${stale.toFixed(2)} ${currency} until its QORT price was changed elsewhere.`}
+                          {`Was ${fiatToText(stale, currency)} ${currency} until its QORT price was changed elsewhere.`}
                         </Typography>
                       )}
                     </Box>
                     <TextField
                       size="small"
                       value={text}
-                      onChange={(e) => setTyped((prev) => ({ ...prev, [row.productId]: sanitizeFiatInput(e.target.value) }))}
+                      onChange={(e) => setTyped((prev) => ({ ...prev, [row.productId]: sanitizeFiatInput(e.target.value, decimals) }))}
                       disabled={busy || !d}
                       error={invalid}
                       helperText={invalid ? "A number above 0" : result || " "}
                       slotProps={{
-                        htmlInput: { inputMode: "decimal", autoComplete: "off", "aria-label": `Price of ${label} in ${currency}` },
-                        input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
+                        htmlInput: { inputMode: "decimal", autoComplete: "off", "aria-label": `Price of ${label} in ${currency || "the currency"}` },
+                        input: { endAdornment: <InputAdornment position="end">{currency || "…"}</InputAdornment> },
                       }}
                       sx={{ flex: { xs: "1 1 100%", sm: "0 0 220px" }, "& .MuiInputBase-root": { minHeight: 44 } }}
                     />
