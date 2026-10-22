@@ -4,10 +4,12 @@
  * original's NewProduct.addProduct did; the seller publishes all drafts
  * together from "Ready to publish". The objects come from
  * seller/productDraft.ts (the original's shapes; ProductManager.pin pins them).
+ * A published product also has Delete, which the seller page asks about first.
  */
 import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import ShortUniqueId from "short-unique-id";
 import type { RootState } from "../../../state/store";
 import { addProductsToSaveCategory, setProductsToSave } from "../../../state/features/globalSlice";
@@ -33,13 +35,15 @@ export interface ProductDialogProps {
    * productForEdit merges it, or a draft. Null adds a new product.
    */
   product: (Record<string, any> & { id: string }) | null;
+  /** Delete this (published) product; the form stays open until it is deleted. */
+  onDelete?: (product: { id: string; title: string }) => void;
 }
 
 function sameValues(a: ProductFormValues, b: ProductFormValues): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
+export function ProductDialog({ open, onClose, product, onDelete }: ProductDialogProps) {
   const dispatch = useDispatch();
   const name = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
@@ -60,6 +64,8 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const editingPublished = !!product && (!!product.isUpdate || !!product.catalogueId);
+  // In the shop's product list (not just a draft): it can be deleted.
+  const listed = !!product && !!dataContainer?.products?.[product.id];
 
   const requestClose = () => {
     if (!sameValues(values, initial)) setConfirmDiscard(true);
@@ -93,6 +99,16 @@ export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
         dismissible={false}
         actions={
           <>
+            {onDelete && listed && product && (
+              <Button
+                color="error"
+                startIcon={<DeleteOutlineOutlinedIcon />}
+                onClick={() => onDelete({ id: product.id, title: String(product.title || values.title || "This product").trim() })}
+                sx={{ mr: "auto" }}
+              >
+                Delete
+              </Button>
+            )}
             <Button color="inherit" onClick={requestClose}>
               Cancel
             </Button>

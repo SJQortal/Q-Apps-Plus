@@ -6,7 +6,9 @@
  *
  * Publishing products: seller/usePublishProducts.ts builds the original's
  * catalogues and product index, seller/PublishProductsDialog.tsx sends them
- * (in batches past 20). Nothing is ever published without the seller asking.
+ * (in batches past 20). Deleting products (select mode in the Products tab,
+ * or Delete in a product's form): seller/DeleteProductsDialog.tsx asks, then
+ * sends the same way. Nothing is ever published without the seller asking.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -34,6 +36,7 @@ import { ProductsTab } from "../../seller/ProductsTab";
 import { DraftsCard } from "../../seller/DraftsCard";
 import { ShopTab } from "../../seller/ShopTab";
 import { ProductListStatus } from "../../seller/ProductListStatus";
+import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteProductsDialog";
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
 
@@ -52,6 +55,7 @@ function isSellerTab(value: string | null): value is SellerTab {
 }
 
 type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null } | null;
+type DeleteRequest = { key: number; products: ProductToDelete[]; onDeleted?: () => void } | null;
 
 export const ProductManager = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -70,6 +74,7 @@ export const ProductManager = () => {
   const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
   const myStores = useSelector((state: RootState) => state.store.myStores);
   const [productDialog, setProductDialog] = useState<ProductDialogState>(null);
+  const [deleteRequest, setDeleteRequest] = useState<DeleteRequest>(null);
   const publish = usePublishProducts();
 
   const isCurrent = !!currentStore && currentStore.id === storeId;
@@ -109,6 +114,15 @@ export const ProductManager = () => {
   const openEdit = useCallback(
     (product: Record<string, any> & { id: string }) => setProductDialog({ key: Date.now(), product }),
     []
+  );
+  const askDelete = useCallback(
+    (products: ProductToDelete[], onDeleted?: () => void) => setDeleteRequest({ key: Date.now(), products, onDeleted }),
+    []
+  );
+  // From the product form: the form closes once the product is deleted.
+  const askDeleteFromForm = useCallback(
+    (product: ProductToDelete) => askDelete([product], () => setProductDialog(null)),
+    [askDelete]
   );
 
   /** Reads the shop and its product index again, fresh from the node. */
@@ -277,6 +291,7 @@ export const ProductManager = () => {
               loading={ownShopStatus === "idle" || ownShopStatus === "loading" || ownShopStatus === "ready"}
               onAdd={openAdd}
               onEdit={openEdit}
+              onDelete={askDelete}
             />
           )}
           {tab === "orders" && <OrdersTab />}
@@ -288,7 +303,21 @@ export const ProductManager = () => {
       </Box>
 
       {productDialog && (
-        <ProductDialog key={productDialog.key} open product={productDialog.product} onClose={() => setProductDialog(null)} />
+        <ProductDialog
+          key={productDialog.key}
+          open
+          product={productDialog.product}
+          onClose={() => setProductDialog(null)}
+          onDelete={askDeleteFromForm}
+        />
+      )}
+      {deleteRequest && (
+        <DeleteProductsDialog
+          key={deleteRequest.key}
+          products={deleteRequest.products}
+          onClose={() => setDeleteRequest(null)}
+          onDeleted={deleteRequest.onDeleted}
+        />
       )}
       {publish.job && (
         <PublishProductsDialog

@@ -21,7 +21,6 @@ import type { AppDispatch, RootState } from "../state/store";
 import {
   clearAllProductsToSave,
   removeManyFromProductsToSave,
-  setCatalogueHashMap,
   setDataContainer,
   setProducts,
   updateCatalogueHashMap,
@@ -36,44 +35,15 @@ import {
   type ProductDraft,
   type PublishResource,
 } from "../qdn/payloads";
-import { QdnFetchError, fetchQdnJson, invalidateQdnJson, invalidateQdnSearches, mapWithConcurrency } from "../qdn/search";
+import { invalidateQdnJson, invalidateQdnSearches } from "../qdn/search";
 import { errorMessage } from "../qdn/hubErrors";
 import { draftsOfShop } from "./shopDrafts";
-import {
-  changedCatalogueIds,
-  indexKey,
-  isOwnPublishNotServedYet,
-  isProductIndexDoc,
-  mergeProductIndexes,
-  notePublishedIndex,
-} from "./productIndex";
-import { CATALOGUE_CONCURRENCY, fetchCatalogue, isOwnCatalogue } from "./useCatalogueLoader";
+import { indexKey, notePublishedIndex } from "./productIndex";
+import { INDEX_CHANGED_TEXT, PrepareError, newerIndexOnQdn, useShowNewerIndex } from "./freshIndex";
+
+export { INDEX_CHANGED_TEXT, INDEX_UNREADABLE_TEXT } from "./freshIndex";
 
 const uid = new ShortUniqueId({ length: 10 });
-
-class PrepareError extends Error {}
-
-export const INDEX_UNREADABLE_TEXT =
-  "Couldn't read your product list from your node, so nothing was published. It may still be on its way from peers: try again in a minute.";
-export const INDEX_CHANGED_TEXT =
-  "Your product list on QDN changed since this page loaded, perhaps from another device. It's updated here now: check your products, then publish again.";
-
-/**
- * The product index as the node serves it now, or null when the node can't
- * be asked at all (no answer). Throws PrepareError when the node answers but
- * can't serve it (not on the node yet, or not an index).
- */
-async function readFreshIndex(name: string, storeId: string): Promise<DataContainerDoc | null> {
-  let body: unknown;
-  try {
-    body = await fetchQdnJson("DOCUMENT", name, dataContainerIdentifier(storeId), { fresh: true });
-  } catch (error) {
-    if (error instanceof QdnFetchError) throw new PrepareError(INDEX_UNREADABLE_TEXT);
-    return null;
-  }
-  if (!isProductIndexDoc(body)) throw new PrepareError(INDEX_UNREADABLE_TEXT);
-  return body;
-}
 
 export interface PublishJob {
   resources: PublishResource[];
@@ -94,31 +64,11 @@ export function usePublishProducts() {
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const allDrafts = useSelector((state: RootState) => state.global.productsToSave);
-  const catalogueHashMap = useSelector((state: RootState) => state.global.catalogueHashMap);
+  const showNewerIndex = useShowNewerIndex();
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [job, setJob] = useState<PublishJob | null>(null);
-
-  /**
-   * The index on QDN names products or changes the page hasn't seen: show
-   * them (the merged index; page-held catalogues of what changed are read
-   * again) and say so.
-   */
-  const showNewerIndex = useCallback(
-    async (seen: DataContainerDoc, merged: DataContainerDoc, storeId: string, name: string) => {
-      const containerId = dataContainerIdentifier(storeId);
-      dispatch(setDataContainer({ ...merged, id: containerId }));
-      dispatch(setProducts(Object.keys(merged.products).map((key) => ({ ...merged.products[key], id: key }))));
-      const held = changedCatalogueIds(seen, merged).filter((id) => isOwnCatalogue(catalogueHashMap[id], name));
-      await mapWithConcurrency(held, CATALOGUE_CONCURRENCY, async (id) => {
-        const catalogue = await fetchCatalogue(name, id).catch(() => null);
-        if (catalogue) dispatch(setCatalogueHashMap(catalogue));
-      });
-      setNotice(INDEX_CHANGED_TEXT);
-    },
-    [catalogueHashMap, dispatch]
-  );
 
   const prepare = useCallback(async () => {
     setError(null);
@@ -147,18 +97,11 @@ export function usePublishProducts() {
       // The publish builds on the page's copy only once it holds everything the
       // index on QDN names now; otherwise the page shows what's new first.
       const seen = dataContainer as unknown as DataContainerDoc;
-      const seenKey = indexKey(seen);
-      const fresh = await readFreshIndex(name, storeId);
-      if (fresh) {
-        const freshKey = indexKey(fresh);
-        if (freshKey !== seenKey && !isOwnPublishNotServedYet(storeId, seenKey, freshKey)) {
-          const merged = mergeProductIndexes(seen, fresh);
-          if (indexKey(merged) !== seenKey) {
-            await showNewerIndex(seen, merged, storeId, name);
-            return;
-          }
-          // Otherwise the node's copy names nothing the page hasn't seen: it lags behind.
-        }
+      const newer = await newerIndexOnQdn(name, storeId, seen);
+      if (newer) {
+        await showNewerIndex(seen, newer, storeId, name);
+        setNotice(INDEX_CHANGED_TEXT);
+        return;
       }
       const base = seen;
       const built = await buildProductPublish({

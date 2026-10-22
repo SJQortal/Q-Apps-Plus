@@ -10,8 +10,12 @@
  * the catalogue failed and the index landed) says so once its catalogue has
  * been read again, fresh, and opens from its index row, as the original did:
  * saving puts it back into its catalogue.
+ *
+ * Select turns the list into checkboxes: Select all (everything the filters
+ * show), then Delete, which the seller page asks about first
+ * (seller/DeleteProductsDialog.tsx).
  */
-import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import {
   Badge,
@@ -31,6 +35,10 @@ import SearchIcon from "@mui/icons-material/Search";
 import TuneOutlinedIcon from "@mui/icons-material/TuneOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import CheckBoxIcon from "@mui/icons-material/CheckBox";
+import CheckBoxOutlineBlankIcon from "@mui/icons-material/CheckBoxOutlineBlank";
+import ChecklistOutlinedIcon from "@mui/icons-material/ChecklistOutlined";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import { useInView } from "react-intersection-observer";
 import type { RootState } from "../state/store";
 import { AmountTag } from "../components/money/PriceTag";
@@ -89,9 +97,11 @@ interface ProductsTabProps {
   ready: boolean;
   /** Not ready yet, and still loading (else the status card above says why). */
   loading?: boolean;
+  /** Delete these products (the seller page asks first); `onDeleted` runs once they are gone. */
+  onDelete?: (products: { id: string; title: string }[], onDeleted: () => void) => void;
 }
 
-export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsTabProps) {
+export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }: ProductsTabProps) {
   const phone = usePhoneLayout();
   const owner = useSelector((state: RootState) => state.global.currentStore?.owner || state.auth.user?.name);
   const storeId = useSelector((state: RootState) => state.global.currentStore?.id ?? "");
@@ -106,6 +116,8 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsT
   // The product the seller tapped before its catalogue had loaded; its form opens once it lands.
   const [pendingEdit, setPendingEdit] = useState<string | null>(null);
   const openedFor = useRef<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
 
   const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId);
   const filtered = filterSellerProducts(rows, filters, detailsOf);
@@ -155,6 +167,34 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsT
       onEdit(productFromIndexRow(pendingRow, storeId));
     }
   }, [pendingRow, pendingDetails, pendingLoad, storeId, onEdit]);
+
+  const toggle = useCallback((row: SellerRow) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(row.productId)) next.delete(row.productId);
+      else next.add(row.productId);
+      return next;
+    });
+  }, []);
+  // Only products still listed count (a delete or a reload may have removed some).
+  const chosen = rows.filter((row) => selected.has(row.productId));
+  const allChosen = filtered.length > 0 && filtered.every((row) => selected.has(row.productId));
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  const titleOf = (row: SellerRow) => {
+    const title = detailsOf(row)?.title;
+    if (typeof title === "string" && title.trim()) return title.trim();
+    return row.created ? `A product added ${dateFormat.format(new Date(row.created))}` : "A product";
+  };
+  const askDelete = () => {
+    if (!onDelete || chosen.length === 0) return;
+    onDelete(
+      chosen.map((row) => ({ id: row.productId, title: titleOf(row) })),
+      stopSelecting
+    );
+  };
 
   const update = (patch: Partial<SellerFilters>) => {
     setFilters((prev) => ({ ...prev, ...patch }));
@@ -211,15 +251,48 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsT
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-        <Typography sx={{ flex: 1, minWidth: 0, color: "text.secondary" }}>
-          {rows.length === 1 ? "1 product" : `${rows.length} products`}
-          {counts.OUT_OF_STOCK > 0 ? ` · ${counts.OUT_OF_STOCK} out of stock` : ""}
-        </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={onAdd} sx={{ minHeight: 44 }}>
-          Add product
-        </Button>
-      </Box>
+      {selecting ? (
+        <Box role="toolbar" aria-label="Selected products" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <Typography role="status" sx={{ flex: phone ? "1 1 100%" : 1, minWidth: 0, fontWeight: 600 }}>
+            {chosen.length === 0 ? "Tap products to select them" : chosen.length === 1 ? "1 selected" : `${chosen.length} selected`}
+          </Typography>
+          <Button
+            onClick={() => setSelected(allChosen ? new Set() : new Set([...selected, ...filtered.map((row) => row.productId)]))}
+            disabled={filtered.length === 0}
+            sx={{ minHeight: 44 }}
+          >
+            {allChosen ? "Select none" : "Select all"}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<DeleteOutlineOutlinedIcon />}
+            onClick={askDelete}
+            disabled={chosen.length === 0}
+            sx={{ minHeight: 44 }}
+          >
+            Delete
+          </Button>
+          <Button color="inherit" onClick={stopSelecting} sx={{ minHeight: 44 }}>
+            Cancel
+          </Button>
+        </Box>
+      ) : (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <Typography sx={{ flex: 1, minWidth: 0, color: "text.secondary" }}>
+            {rows.length === 1 ? "1 product" : `${rows.length} products`}
+            {counts.OUT_OF_STOCK > 0 ? ` · ${counts.OUT_OF_STOCK} out of stock` : ""}
+          </Typography>
+          {onDelete && rows.length > 0 && (
+            <Button variant="outlined" startIcon={<ChecklistOutlinedIcon />} onClick={() => setSelecting(true)} sx={{ minHeight: 44 }}>
+              Select
+            </Button>
+          )}
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onAdd} sx={{ minHeight: 44 }}>
+            Add product
+          </Button>
+        </Box>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState
@@ -324,6 +397,9 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false }: ProductsT
                     onRetry={retry}
                     onMissing={refresh}
                     onEdit={edit}
+                    selecting={selecting}
+                    selected={selected.has(row.productId)}
+                    onToggle={toggle}
                   />
                 ))}
               </Box>
@@ -379,9 +455,26 @@ interface ProductRowProps {
   /** The catalogue is loaded but lacks this product: read it again (once). */
   onMissing: (catalogueId: string) => void;
   onEdit: (row: SellerRow) => void;
+  /** Select mode: a tap selects the product instead of opening it. */
+  selecting?: boolean;
+  selected?: boolean;
+  onToggle?: (row: SellerRow) => void;
 }
 
-const ProductRow = memo(function ProductRow({ row, details, load, edited, opening, onVisible, onRetry, onMissing, onEdit }: ProductRowProps) {
+const ProductRow = memo(function ProductRow({
+  row,
+  details,
+  load,
+  edited,
+  opening,
+  onVisible,
+  onRetry,
+  onMissing,
+  onEdit,
+  selecting = false,
+  selected = false,
+  onToggle,
+}: ProductRowProps) {
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px", fallbackInView: true });
   const metaId = useId();
   useEffect(() => {
@@ -403,8 +496,10 @@ const ProductRow = memo(function ProductRow({ row, details, load, edited, openin
   return (
     <Box component="li" ref={ref} sx={{ display: "flex", alignItems: "stretch", gap: 1 }}>
       <ButtonBase
-        onClick={() => onEdit(row)}
-        aria-label={title ? `Edit ${title}` : "Edit product"}
+        onClick={() => (selecting ? onToggle?.(row) : onEdit(row))}
+        role={selecting ? "checkbox" : undefined}
+        aria-checked={selecting ? selected : undefined}
+        aria-label={selecting ? (title ? `Select ${title}` : "Select product") : title ? `Edit ${title}` : "Edit product"}
         aria-describedby={metaId}
         aria-busy={opening || undefined}
         sx={{
@@ -419,8 +514,8 @@ const ProductRow = memo(function ProductRow({ row, details, load, edited, openin
           textAlign: "left",
           borderRadius: 1,
           border: 1,
-          borderColor: "divider",
-          bgcolor: "background.paper",
+          borderColor: selected ? "primary.main" : "divider",
+          bgcolor: selected ? "action.selected" : "background.paper",
           transition: "background-color 150ms ease",
           "&:hover": { bgcolor: "action.hover" },
           "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 2 },
@@ -484,7 +579,13 @@ const ProductRow = memo(function ProductRow({ row, details, load, edited, openin
         <Typography variant="body2" color="text.secondary" sx={{ display: { xs: "none", md: "block" } }}>
           {created}
         </Typography>
-        <ChevronRightIcon sx={{ color: "text.secondary" }} />
+        {!selecting ? (
+          <ChevronRightIcon sx={{ color: "text.secondary" }} />
+        ) : selected ? (
+          <CheckBoxIcon color="primary" />
+        ) : (
+          <CheckBoxOutlineBlankIcon sx={{ color: "text.secondary" }} />
+        )}
         {/* What the row shows, for screen readers (the columns differ by width). */}
         <Box component="span" id={metaId} sx={VISUALLY_HIDDEN}>
           {[
