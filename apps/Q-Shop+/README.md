@@ -4,7 +4,8 @@ This is the **+** version of [Qortal's Q-Shop](https://github.com/Qortal/q-shop)
 
 What it adds:
 
-- **Finding things:** search across shops (owner, title, description), sorts (Newest, Recently active, Most products, Top rated, A–Z), filters by coin, shop pages that filter and sort every product without downloading the catalogues first, search within a shop, product galleries, share links (`qortal://APP/Q-Shop+/…`).
+- **Finding things:** search across shops (owner, title, description), sorts (Newest, Recently active, Most products, Top rated, A–Z), filters by coin, shop pages that filter and sort every product without downloading the catalogues first, search within a shop, products as a grid or a list, product galleries, share links (`qortal://APP/Q-Shop+/…`).
+- **Collections:** sellers group products into collections with a picture and a description; buyers browse them at the top of a shop, and each has its own link (`…?collection=<id>`).
 - **Buying safely:** a cart for every shop that survives a reload, a step-by-step checkout (review, delivery, confirm) with the amount frozen at Confirm, and paid orders kept until they are recorded on QDN, so a declined or timed-out recording is finished later without paying again.
 - **More ways to pay:** QORT and ARRR as before, BTC, LTC, DOGE, DGB and RVN through Hub, and Qortal assets (Q-Assets) through Hub's asset transfer, set per shop by the seller.
 - **Orders and selling:** My orders with status filters and counts; a seller page with an overview, products, orders, reviews and shop settings; payment details checked against the chain; batched publishing for big catalogues (Core allows 25 unconfirmed transactions per account); deleting products (one or several at once) and whole shops.
@@ -36,7 +37,8 @@ The QDN identifiers and JSON shapes are the original's (`src/qdn/identifiers.ts`
 - shops may list more coins in `supportedCoins`/`foreignCoins` and Qortal assets in `acceptedAssets`;
 - products may carry their own price per coin (`{currency: "BTC" | "ASSET:<id>", value}`);
 - orders paid in another coin add `payment.foreignAddressUsed`/`foreignTxid`, or `assetId`/`assetName` for assets;
-- settings sync is a DOCUMENT `qshopplus_settings` under the user's name;
+- collections are a DOCUMENT `q-store-collections-<shortStoreId>` under the seller's name, and the product index gains a `collectionsId` field pointing at it (both apps' product publishes keep it);
+- settings sync is a DOCUMENT `qshopplus_settings` under the user's name (theme, preferred coin, product view);
 - deletes use the marker other Qortal apps use: a deleted shop's STORE, product list and catalogues are republished as `"D"` (titled and tagged `deleted`), and deleted products leave the product list and their catalogues, which keep the original's shapes. The original hides a shop whose JSON it can't read.
 
 Browser storage uses the `qshopplus-` prefix (`src/constants/plus.ts`), so it never mixes with the original app's.
