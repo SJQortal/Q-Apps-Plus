@@ -201,6 +201,10 @@ export const cartSlice = createSlice({
     setIsOpen: (state, action) => {
       state.isOpen = action.payload;
     },
+    /** Every cart at once, as another tab saved them (store.ts syncs tabs). */
+    replaceCarts: (state, action: PayloadAction<Record<string, Cart>>) => {
+      state.carts = action.payload;
+    },
     addQuantityToCart: (state, action: PayloadAction<CartLineRef>) => {
       const { storeId, storeOwner, productId } = action.payload;
       const key = cartKeyOf(state.carts, storeOwner, storeId);
@@ -271,6 +275,7 @@ export const cartSlice = createSlice({
 export const {
   setProductToCart,
   setIsOpen,
+  replaceCarts,
   addQuantityToCart,
   subtractQuantityFromCart,
   setCartQuantity,
