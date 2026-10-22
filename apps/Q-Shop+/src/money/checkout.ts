@@ -24,7 +24,7 @@
 import { isHubDecline, isHubTimeout, errorMessage } from "../qdn/hubErrors";
 import { orderIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { resourceExists, invalidateQdnSearches } from "../qdn/search";
-import { assetIdOf, coinLabel, isForeignTicker, type ShopCoinSettings } from "./coins";
+import { assetIdOf, coinLabel, isForeignTicker, payoutAddress, type ShopCoinSettings } from "./coins";
 import {
   buildOrder,
   buildOrderDetails,
@@ -98,7 +98,7 @@ export function paymentRequest(coin: string, amount: string, sellerAddress: stri
     };
   }
   if (isForeignTicker(coin)) {
-    const address = shop.foreignCoins?.[coin]?.trim();
+    const address = payoutAddress(shop, coin);
     if (!address) throw new Error(`This shop has not set a ${coin} address`);
     return {
       recipient: address,

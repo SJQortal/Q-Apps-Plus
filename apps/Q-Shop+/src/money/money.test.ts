@@ -13,7 +13,8 @@ import {
   missingDeliveryFields,
   MissingPriceError,
 } from "./order";
-import { assetCoinId, assetIdOf, priceCurrencyKey, shopCoins } from "./coins";
+import { assetCoinId, assetIdOf, coinLabel, payoutAddress, priceCurrencyKey, shopCoins } from "./coins";
+import { paymentRequest } from "./checkout";
 import { CATALOGUE_ID, chair, mug, poster } from "../test/fixtures/shop";
 
 describe("pricing (the original's rules)", () => {
@@ -54,6 +55,33 @@ describe("pricing (the original's rules)", () => {
       })
     ).toEqual(["QORT", "ARRR", "LTC", "ASSET:81"]);
     expect(shopCoins(null)).toEqual(["QORT"]);
+  });
+
+  it("never throws on a shop JSON with mistyped coin fields (anyone can publish one)", () => {
+    const bad = (shop: object) => shop as any;
+    // Each of these threw a TypeError during the home page's render.
+    expect(shopCoins(bad({ supportedCoins: 1 }))).toEqual(["QORT"]);
+    expect(shopCoins(bad({ supportedCoins: "ARRR", foreignCoins: { ARRR: "zs1" } }))).toEqual(["QORT"]);
+    expect(shopCoins(bad({ supportedCoins: ["ARRR", 7, null], foreignCoins: { ARRR: 5 } }))).toEqual(["QORT"]);
+    expect(shopCoins(bad({ supportedCoins: ["ARRR"], foreignCoins: ["zs1"] }))).toEqual(["QORT"]);
+    expect(shopCoins(bad({ acceptedAssets: {} }))).toEqual(["QORT"]);
+    expect(shopCoins(bad({ acceptedAssets: 81 }))).toEqual(["QORT"]);
+    expect(
+      shopCoins(bad({ acceptedAssets: [null, 5, { id: "81" }, { id: 81, name: { x: 1 } }, { id: 81, name: "Again" }, { id: 82 }] }))
+    ).toEqual(["QORT", "ASSET:81", "ASSET:82"]);
+    expect(payoutAddress(bad({ foreignCoins: { BTC: " bc1 " } }), "BTC")).toBe("bc1");
+    expect(payoutAddress(bad({ foreignCoins: "bc1" }), "BTC")).toBe("");
+
+    // Labels are always text, never an object React can't render.
+    expect(coinLabel("ASSET:81", bad({ acceptedAssets: {} }))).toBe("Asset #81");
+    expect(coinLabel("ASSET:81", bad({ acceptedAssets: [{ id: 81, name: { en: "Gold" } }] }))).toBe("Asset #81");
+    expect(coinLabel("ASSET:81", bad({ acceptedAssets: [{ id: 81, name: " Gold " }] }))).toBe("Gold");
+    expect(coinLabel("ARRR", bad({ acceptedAssets: "x" }))).toBe("ARRR");
+
+    // Checkout says the address is missing instead of crashing on it.
+    expect(() => paymentRequest("ARRR", "1.00000000", "Qseller", bad({ foreignCoins: { ARRR: 5 } }))).toThrow(
+      "This shop has not set a ARRR address"
+    );
   });
 });
 

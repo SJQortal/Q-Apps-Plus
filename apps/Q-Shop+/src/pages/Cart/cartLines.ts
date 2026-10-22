@@ -10,7 +10,7 @@ import type { Product } from "../../state/features/storeSlice";
 import type { CartLine, OrderDetails } from "../../money/order";
 import { priceCheckout, type CheckoutShop } from "../../money/checkout";
 import { unitPrice } from "../../money/pricing";
-import type { ShopAsset } from "../../money/coins";
+import { shopAssets, type ShopAsset } from "../../money/coins";
 import type { LoadPhase } from "./useRetryingLoads";
 
 export type LineState =
@@ -109,15 +109,25 @@ export function itemCount(lines: { quantity: number }[]): number {
   return lines.reduce((sum, line) => sum + line.quantity, 0);
 }
 
-/** A store as Redux or QDN holds it, as checkout's shop (the fields the original passed, plus assets). */
+/**
+ * A store as Redux or QDN holds it, as checkout's shop (the fields the
+ * original passed, plus assets). Anyone can publish a STORE, so fields of the
+ * wrong type are dropped here rather than rendered or paid to.
+ */
 export function cartShopFrom(storeId: string, owner: string, store: any): CartShop {
-  const assets: ShopAsset[] | undefined = Array.isArray(store?.acceptedAssets) ? store.acceptedAssets : undefined;
+  const assets: ShopAsset[] | undefined = Array.isArray(store?.acceptedAssets) ? shopAssets(store) : undefined;
+  const foreign: unknown = store?.foreignCoins;
   return {
     id: storeId,
-    title: store?.title,
+    title: typeof store?.title === "string" ? store.title : undefined,
     owner,
-    supportedCoins: Array.isArray(store?.supportedCoins) ? store.supportedCoins : undefined,
-    foreignCoins: store?.foreignCoins && typeof store.foreignCoins === "object" ? store.foreignCoins : undefined,
+    supportedCoins: Array.isArray(store?.supportedCoins)
+      ? store.supportedCoins.filter((coin: unknown): coin is string => typeof coin === "string")
+      : undefined,
+    foreignCoins:
+      foreign && typeof foreign === "object" && !Array.isArray(foreign)
+        ? Object.fromEntries(Object.entries(foreign).filter((entry): entry is [string, string] => typeof entry[1] === "string"))
+        : undefined,
     acceptedAssets: assets,
     logo: typeof store?.logo === "string" ? store.logo : undefined,
   };
