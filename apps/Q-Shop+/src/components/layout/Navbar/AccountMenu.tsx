@@ -1,7 +1,8 @@
 /**
  * The header's account menu: a popover on desktop, a bottom sheet on phones.
- * The name switcher (several names), My shops (switch the seller pages to
- * another of the name's shops), Open a new shop, Messages in Q-Mail (the
+ * The name switcher (several names), My shops (the shops of every name the
+ * account holds: the active name's first; one of another name's switches to
+ * that name and opens its seller page), Open a new shop, Messages in Q-Mail (the
  * original's Q-Mail link), Blocked names and Settings.
  *
  * Loaded the first time the menu opens (Navbar), so the name switcher's
@@ -24,6 +25,8 @@ import { MAIL_APP_NAME } from "../../../constants/plus";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
 import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { useSwitchActiveName } from "../../../hooks/useUserAccount";
+import { useShopsOfNames } from "../../../hooks/useShopsOfNames";
+import type { Store } from "../../../state/features/storeSlice";
 import { BottomSheet } from "../../common/mobile/BottomSheet";
 import { NameSwitcher } from "../NameSwitcher";
 import { navSection, sellerPath } from "../shellState";
@@ -61,9 +64,20 @@ export function AccountMenu({ phone, open, anchorEl, onClose, onOpenBlockedNames
 
   const userName = user?.name || "";
   const names = (user?.names ?? []).filter((n) => n.name);
+  // Every name's shops (one search when the menu opens): the active name's come from useOwnShops.
+  const allShops = useShopsOfNames(names.map((n) => n.name));
+  const otherShops: Store[] = (allShops ?? []).filter((shop) => shop.owner !== userName);
+  const shops: Store[] = [...myStores, ...otherShops];
 
-  const openShop = (shopId: string) => {
+  const openShop = (shopId: string, owner?: string) => {
     onClose();
+    // Another name's shop: that name becomes the active one, then its shop the current one.
+    if (owner && owner !== userName) {
+      switchName(owner);
+      dispatch(updateRecentlyVisitedStoreId(shopId));
+      navigate(sellerPath(shopId));
+      return;
+    }
     if (shopId !== currentStoreId) {
       // As the original's "My Stores" menu: the other shop's orders and drafts don't carry over.
       dispatch(resetOrders());
@@ -116,21 +130,22 @@ export function AccountMenu({ phone, open, anchorEl, onClose, onOpenBlockedNames
           />
         </>
       )}
-      {myStores.length > 0 && (
+      {shops.length > 0 && (
         <>
           <MenuSectionTitle>My shops</MenuSectionTitle>
           <MenuList aria-label="My shops" disablePadding sx={{ maxHeight: 240, overflowY: "auto" }}>
-            {myStores.map((shop) => {
+            {shops.map((shop) => {
               const title = shop.title || hashMapStores[shop.id]?.title || shortStoreIdOf(shop.id);
-              const current = shop.id === currentStoreId;
+              const current = shop.id === currentStoreId && shop.owner === userName;
+              const otherName = shop.owner !== userName ? shop.owner : null;
               return (
-                <MenuItem key={shop.id} onClick={() => openShop(shop.id)} sx={MENU_ROW_SX}>
+                <MenuItem key={`${shop.owner}\n${shop.id}`} onClick={() => openShop(shop.id, shop.owner)} sx={MENU_ROW_SX}>
                   <ListItemIcon sx={MENU_LEAD_SX}>
                     <StorefrontOutlinedIcon fontSize="small" />
                   </ListItemIcon>
                   <ListItemText
                     primary={title}
-                    secondary={current ? "Selling now" : undefined}
+                    secondary={current ? "Selling now" : otherName ? `As ${otherName}` : undefined}
                     slotProps={{ primary: { noWrap: true } }}
                   />
                   {current && <CheckIcon fontSize="small" sx={{ color: "primary.main", ml: 1, flexShrink: 0 }} />}

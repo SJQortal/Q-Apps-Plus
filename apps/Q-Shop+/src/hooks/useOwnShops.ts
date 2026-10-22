@@ -100,6 +100,44 @@ export async function findOwnShops(name: string, fresh = false): Promise<Store[]
     .map(storeFromRow);
 }
 
+/** Names per search for findShopsOfNames: one `name=` each, so the request stays short (50 names ≈ 1 kB). */
+export const NAMES_PER_SHOP_SEARCH = 50;
+
+/**
+ * The shops of every name the account holds (the account menu's My shops,
+ * so shops under another name than the active one show too): one search per
+ * 50 names, by identifier prefix and exact names, with titles; deleted shops
+ * left out. Oldest first within each name.
+ */
+export async function findShopsOfNames(names: string[], fresh = false): Promise<Store[]> {
+  const wanted = [...new Set(names.filter(Boolean))];
+  const out: Store[] = [];
+  for (let i = 0; i < wanted.length; i += NAMES_PER_SHOP_SEARCH) {
+    const chunk = wanted.slice(i, i + NAMES_PER_SHOP_SEARCH);
+    const rows = await searchQdn(
+      {
+        service: "STORE",
+        identifier: `${STORE_BASE}-`,
+        prefix: true,
+        names: chunk,
+        exactmatchnames: true,
+        includemetadata: true,
+        reverse: false,
+        limit: 100,
+      },
+      { fresh }
+    );
+    const inChunk = new Set(chunk);
+    out.push(
+      ...rows
+        .filter((row) => isStoreIdentifier(row.identifier) && inChunk.has(row.name))
+        .filter((row) => !isDeletedRow(row) && !isRowFromBeforeDelete(row))
+        .map(storeFromRow)
+    );
+  }
+  return out;
+}
+
 /**
  * Loads one of the user's shops as the current one: its JSON and its product
  * index. Both are read first and land together, and only while `isCurrent`

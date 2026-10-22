@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { installQortalMock } from "../../test/qortalMock";
@@ -152,6 +152,45 @@ describe("AppShell on desktop", () => {
       fireEvent.click(within(shops).getByRole("menuitem", { name: "other" }));
       expect(where()).toBe("/product-manager/q-store-general-other");
       expect(store.getState().global.recentlyVisitedStoreId).toBe("q-store-general-other");
+    });
+
+    it("lists the shops of the account's other names too, and opens one as that name", async () => {
+      restore = mockViewport(DESKTOP);
+      const searches: string[] = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string) => {
+          const url = String(input);
+          if (url.startsWith("/arbitrary/resources/search")) searches.push(url);
+          const rows = url.startsWith("/arbitrary/resources/search")
+            ? [
+                { name: "Seller Name", service: "STORE", identifier: "q-store-general-my-shop", created: 1, metadata: { title: "Seller's Shop" } },
+                { name: "Second Name", service: "STORE", identifier: "q-store-general-second", created: 2, metadata: { title: "Second's Shop" } },
+              ]
+            : [];
+          return { ok: true, status: 200, json: async () => rows, text: async () => JSON.stringify(rows) };
+        })
+      );
+      const store = sellerStore();
+      renderShell({ store });
+      openAccountMenu();
+      const menu = await screen.findByRole("dialog", { name: "Account menu for Seller Name" });
+      const shops = within(menu).getByRole("menu", { name: "My shops" });
+      await waitFor(() =>
+        expect(within(shops).getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
+          "Seller's ShopSelling now",
+          "other",
+          "Second's ShopAs Second Name",
+        ])
+      );
+      // One search for every name.
+      expect(searches).toHaveLength(1);
+      expect(new URL(searches[0], "http://x").searchParams.getAll("name").sort()).toEqual(["Second Name", "Seller Name"]);
+      fireEvent.click(within(shops).getByRole("menuitem", { name: /^Second's Shop/ }));
+      expect(store.getState().auth.user?.name).toBe("Second Name");
+      expect(store.getState().global.recentlyVisitedStoreId).toBe("q-store-general-second");
+      expect(where()).toBe("/product-manager/q-store-general-second");
+      vi.unstubAllGlobals();
     });
 
     it("opens Create shop, Settings and Messages in Q-Mail", async () => {
