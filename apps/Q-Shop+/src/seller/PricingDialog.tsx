@@ -3,7 +3,9 @@
  * exchange rates for QORT and ARRR, and every product's price in the
  * currency, with the QORT and ARRR prices they give (money/fiatPricing.ts).
  * "Fill from QORT prices" turns the products' current QORT prices into the
- * currency at the typed rate, for a first setup. Publishing sends the
+ * currency at the typed rate, for a first setup. Publish first lists what
+ * changes, old → new, biggest first, and warns when a price moves by more
+ * than half (a rate typed as 1.8 for 0.18). Publishing sends the
  * products whose prices change and the product list
  * (seller/useShopPricing.ts); products left empty keep their QORT and ARRR
  * prices. The rates are the seller's numbers: nothing is fetched from
@@ -29,13 +31,15 @@ import {
   sanitizeFiatInput,
   staleFiatPriceOf,
   type FiatRates,
+  type PriceChange,
 } from "../money/fiatPricing";
 import { formatPrice } from "../money/pricing";
 import { FormError } from "./FormError";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import type { SellerRow } from "./productList";
 import { useCatalogueLoader } from "./useCatalogueLoader";
-import { useShopPricing } from "./useShopPricing";
+import { PRICES_DRAFTS_TEXT, useShopPricing } from "./useShopPricing";
+import { draftsOfShop } from "./shopDrafts";
 
 /** Products listed at a time. */
 export const PRICING_PAGE = 30;
@@ -50,11 +54,35 @@ function arrrPriceOf(product: Record<string, any> | undefined): number | undefin
   return typeof value === "number" && value > 0 ? value : undefined;
 }
 
+/** The coin prices stay as they are (only `fiatPrice` changes). */
+function sameCoinPrices(c: PriceChange): boolean {
+  return c.before.qort === c.after.qort && c.before.arrr === c.after.arrr;
+}
+
+/** How far the QORT price moves, as a share of the old one (1 = doubles or halves… or more). */
+export function priceMove(c: PriceChange): number {
+  const { qort: a } = c.before;
+  const { qort: b } = c.after;
+  if (!a || !b) return 0;
+  return Math.abs(b - a) / a;
+}
+
+/** Above this share a price change is called out before publishing. */
+export const BIG_PRICE_MOVE = 0.5;
+
+/** "1.50 → 2.00 QORT", "ARRR 0.25 → none (node's rate)". */
+function moveText(before: number | undefined, after: number | undefined, coin: string): string | null {
+  if (before === after) return null;
+  const fmt = (v: number | undefined) => (v === undefined ? (coin === "ARRR" ? "the node's rate" : "none") : `${formatPrice(v)} ${coin}`);
+  return `${fmt(before)} → ${fmt(after)}`;
+}
+
 export function PricingDialog({ onClose }: { onClose: () => void }) {
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
+  const allDrafts = useSelector((state: RootState) => state.global.productsToSave);
   const owner = currentStore?.owner || "";
   const { request, retry, statusOf, productOf } = useCatalogueLoader(owner);
   const p = useShopPricing();
@@ -69,6 +97,8 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const [shown, setShown] = useState(PRICING_PAGE);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmStop, setConfirmStop] = useState(false);
+  // The changes Publish would make, waiting for the seller's OK.
+  const [review, setReview] = useState<{ pricing: { currency: string; rates: FiatRates }; changes: PriceChange[] } | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // Every product's catalogue: their prices in the currency are kept there.
@@ -121,6 +151,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const publish = async () => {
     setFormError(null);
     if (!rates) return setFormError(`Type how much one QORT is worth in ${currency}${takesArrr ? " (and one ARRR, if you like)" : ""}.`);
+    if (currentStore?.id && Object.keys(draftsOfShop(allDrafts, currentStore.id)).length > 0) return setFormError(PRICES_DRAFTS_TEXT);
     const wanted: { productId: string; product: Record<string, unknown> | undefined; value: number | null }[] = [];
     for (const row of rows) {
       const text = textOf(row).trim();
@@ -132,8 +163,14 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
     }
     // Only the products whose prices change: their catalogues alone are read again and sent.
     const pricing = { currency, rates };
-    const prices = Object.fromEntries(priceChanges(wanted, pricing, takesArrr).map((c) => [c.productId, c.value]));
-    await p.prepare({ pricing, prices });
+    const changes = priceChanges(wanted, pricing, takesArrr);
+    if (changes.some((c) => !sameCoinPrices(c))) setReview({ pricing, changes });
+    else await send(pricing, changes);
+  };
+
+  const send = async (pricing: { currency: string; rates: FiatRates }, changes: PriceChange[]) => {
+    setReview(null);
+    await p.prepare({ pricing, prices: Object.fromEntries(changes.map((c) => [c.productId, c.value])) });
   };
 
   const requestClose = () => (changed ? setConfirmDiscard(true) : onClose());
@@ -359,6 +396,71 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
           <FormError message={formError ?? p.error} />
         </Box>
       </ResponsiveDialog>
+
+      {review && (
+        <ResponsiveDialog
+          open
+          onClose={() => setReview(null)}
+          title="Publish new prices?"
+          maxWidth="sm"
+          actions={
+            <>
+              <Button color="inherit" onClick={() => setReview(null)}>
+                Back
+              </Button>
+              <Button variant="contained" onClick={() => void send(review.pricing, review.changes)}>
+                Publish
+              </Button>
+            </>
+          }
+        >
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+            {(() => {
+              const moved = review.changes.filter((c) => !sameCoinPrices(c)).sort((a, b) => priceMove(b) - priceMove(a));
+              const big = moved.filter((c) => priceMove(c) > BIG_PRICE_MOVE).length;
+              const shown = moved.slice(0, 8);
+              const byId = new Map(rows.map((row) => [row.productId, row]));
+              return (
+                <>
+                  <Typography>
+                    {moved.length === 1 ? "1 product gets a new price" : `${moved.length} products get new prices`}, at 1 QORT ={" "}
+                    {rateToText(review.pricing.rates.QORT)} {review.pricing.currency}
+                    {review.pricing.rates.ARRR ? ` and 1 ARRR = ${rateToText(review.pricing.rates.ARRR)} ${review.pricing.currency}` : ""}.
+                  </Typography>
+                  {big > 0 && (
+                    <Alert severity="warning">
+                      {big === 1 ? "1 price changes" : `${big} prices change`} by more than half. Check your rates before publishing.
+                    </Alert>
+                  )}
+                  <Box component="ul" aria-label="Price changes" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+                    {shown.map((c) => {
+                      const row = byId.get(c.productId);
+                      const name = (row && titleOf(details(row))) || "Product";
+                      return (
+                        <Box component="li" key={c.productId} sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{name}</Typography>
+                          {[moveText(c.before.qort, c.after.qort, "QORT"), moveText(c.before.arrr, c.after.arrr, "ARRR")]
+                            .filter(Boolean)
+                            .map((line) => (
+                              <Typography key={line} variant="body2" color="text.secondary">
+                                {line}
+                              </Typography>
+                            ))}
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                  {moved.length > shown.length && (
+                    <Typography variant="body2" color="text.secondary">
+                      {`and ${moved.length - shown.length} more`}
+                    </Typography>
+                  )}
+                </>
+              );
+            })()}
+          </Box>
+        </ResponsiveDialog>
+      )}
 
       <ResponsiveDialog
         open={confirmStop}

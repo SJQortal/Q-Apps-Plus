@@ -115,6 +115,14 @@ describe("prices in a currency", () => {
     expect(within(dialog).getByText("3 of 3 priced in USD")).toBeInTheDocument();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Publish prices" }));
+    // First what changes, old → new, biggest move first; the mug's price grows by more than half.
+    const review = await screen.findByRole("dialog", { name: "Publish new prices?" });
+    expect(within(review).getByText("3 products get new prices", { exact: false })).toBeInTheDocument();
+    expect(within(review).getByText("1 price changes by more than half. Check your rates before publishing.")).toBeInTheDocument();
+    const changes = within(review).getByRole("list", { name: "Price changes" });
+    expect(within(changes).getAllByRole("listitem")[0]).toHaveTextContent("Mug1.50 QORT → 55.56 QORTthe node's rate → 40.00 ARRR");
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+    fireEvent.click(within(review).getByRole("button", { name: "Publish" }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
     expect(sent.map((r: any) => [r.identifier, r.filename])).toEqual([
@@ -161,6 +169,11 @@ describe("prices in a currency", () => {
     expect(within(dialog).getByText("Was 2.00 USD until its QORT price was changed elsewhere.")).toBeInTheDocument();
     fireEvent.change(within(dialog).getByRole("textbox", { name: /1 QORT is worth/ }), { target: { value: "0.20" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Publish prices" }));
+    const review = await screen.findByRole("dialog", { name: "Publish new prices?" });
+    // 55.56 → 50 QORT is a small move: no warning. The chair only stops following: its prices don't move.
+    expect(within(review).getByText("1 product gets a new price", { exact: false })).toBeInTheDocument();
+    expect(within(review).queryByText(/by more than half/)).toBeNull();
+    fireEvent.click(within(review).getByRole("button", { name: "Publish" }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
     const cat = decodeData64(sent[0].data64);
