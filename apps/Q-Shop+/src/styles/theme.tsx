@@ -1,4 +1,5 @@
 import type { ThemeOptions } from "@mui/material/styles";
+import { PHONE_MEDIA } from "../hooks/usePhoneLayout";
 
 // Q-Shop's original look. The + app shows it as the "Q-Shop Classic" (Hub 2.0)
 // theme through the hub-theme kit; the other three themes come from the kit.
@@ -7,7 +8,10 @@ import type { ThemeOptions } from "@mui/material/styles";
 // off-white / near-black surfaces, the cards, tooltips and scrollbars. Changed
 // for contrast (docs/DESIGN.md asks for 4.5:1 on text and controls): the blue
 // accent is "primary" in both modes, a step darker in light and a step lighter
-// in dark than the original #417Ed4. The original's own light/dark options
+// in dark than the original #417Ed4. On phones (and phones held sideways) the
+// body text is smaller, 16 px and 14 px instead of 23 px and 18 px, which the
+// original never sized for (Simon, 2026-10-22); desktop keeps it exactly.
+// The original's own light/dark options
 // replaced its shared `components` (a MuiButton override), so that override
 // never applied and is left out here too.
 
@@ -46,6 +50,7 @@ const commonThemeOptions: ThemeOptions = {
       fontWeight: 400,
       lineHeight: 1.5,
       letterSpacing: "0.5px",
+      [`@media ${PHONE_MEDIA}`]: { fontSize: "16px", letterSpacing: "0.15px" },
     },
 
     body2: {
@@ -54,6 +59,7 @@ const commonThemeOptions: ThemeOptions = {
       fontWeight: 400,
       lineHeight: 1.4,
       letterSpacing: "0.2px",
+      [`@media ${PHONE_MEDIA}`]: { fontSize: "14px", letterSpacing: "0.1px" },
     },
   },
   spacing: 8,
