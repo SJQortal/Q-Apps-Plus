@@ -261,6 +261,15 @@ export function invalidateQdnJson(service: string, name: string, identifier: str
   jsonCache.delete(resourcePath(service, name, identifier));
 }
 
+/**
+ * What this session just published, as the next reads should see it: right
+ * after a publish the node may still serve the version before it for a
+ * while (until the session cache's TTL, later reads ask the node again).
+ */
+export function primeQdnJson(service: string, name: string, identifier: string, value: unknown): void {
+  jsonCache.set(resourcePath(service, name, identifier), { value, expires: Date.now() + QDN_SEARCH_TTL_MS });
+}
+
 /** Run `task` over `items` with at most `concurrency` in flight, keeping result order. */
 export async function mapWithConcurrency<T, R>(
   items: T[],

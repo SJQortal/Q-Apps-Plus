@@ -5,7 +5,7 @@
  * it in the Collections tab's working copy; nothing is published until the
  * seller publishes the collections there.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import {
   Box,
@@ -66,6 +66,15 @@ export function CollectionEditor({
   const [onlyPicked, setOnlyPicked] = useState(false);
   const [shown, setShown] = useState(PICKER_PAGE);
   const [error, setError] = useState<string | null>(null);
+  const [titleError, setTitleError] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const changed =
+    title !== (collection?.title ?? "") ||
+    description !== (collection?.description ?? "") ||
+    image !== collection?.image ||
+    JSON.stringify(picked) !== JSON.stringify(collection?.products ?? []);
+  const requestClose = () => (changed ? setConfirmDiscard(true) : onClose());
 
   const pickedSet = useMemo(() => new Set(picked), [picked]);
   const needle = query.trim().toLowerCase();
@@ -89,15 +98,20 @@ export function CollectionEditor({
 
   const submit = () => {
     const cleanTitle = title.trim();
-    if (!cleanTitle) return setError("Give the collection a title.");
+    if (!cleanTitle) {
+      setTitleError(true);
+      titleRef.current?.focus();
+      return;
+    }
     const now = Date.now();
-    const listed = new Set(rows.map((row) => row.productId));
     onSave({
       id: collection?.id ?? uid(),
       title: cleanTitle.slice(0, MAX_COLLECTION_TITLE),
       description: description.trim().slice(0, MAX_COLLECTION_DESCRIPTION),
       ...(image && { image }),
-      products: picked.filter((id) => listed.has(id)),
+      // Every pick stays, also one this page's product list doesn't show yet (another device's):
+      // publishing leaves out only what the product list on QDN no longer has.
+      products: picked,
       created: collection?.created || now,
       updated: now,
     });
@@ -106,15 +120,16 @@ export function CollectionEditor({
   const loadingTitles = needle && rows.some((row) => statusOf(row.catalogueId) !== "ready" && statusOf(row.catalogueId) !== "failed");
 
   return (
+    <>
     <ResponsiveDialog
       open
-      onClose={onClose}
+      onClose={requestClose}
       title={collection ? "Edit collection" : "New collection"}
       maxWidth="sm"
       dismissible={false}
       actions={
         <>
-          <Button color="inherit" onClick={onClose}>
+          <Button color="inherit" onClick={requestClose}>
             Cancel
           </Button>
           <Button variant="contained" onClick={submit}>
@@ -127,10 +142,15 @@ export function CollectionEditor({
         <TextField
           label="Title"
           value={title}
-          onChange={(e) => setTitle(e.target.value.slice(0, MAX_COLLECTION_TITLE))}
+          onChange={(e) => {
+            setTitle(e.target.value.slice(0, MAX_COLLECTION_TITLE));
+            if (e.target.value.trim()) setTitleError(false);
+          }}
           required
           fullWidth
-          helperText={`${title.length}/${MAX_COLLECTION_TITLE}`}
+          inputRef={titleRef}
+          error={titleError}
+          helperText={titleError ? "Give the collection a title." : `${title.length}/${MAX_COLLECTION_TITLE}`}
         />
         <TextField
           label="Description"
@@ -290,5 +310,31 @@ export function CollectionEditor({
         <FormError message={error} />
       </Box>
     </ResponsiveDialog>
+    <ResponsiveDialog
+      open={confirmDiscard}
+      onClose={() => setConfirmDiscard(false)}
+      title="Discard changes?"
+      maxWidth="xs"
+      actions={
+        <>
+          <Button color="inherit" onClick={() => setConfirmDiscard(false)}>
+            Keep editing
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              setConfirmDiscard(false);
+              onClose();
+            }}
+          >
+            Discard
+          </Button>
+        </>
+      }
+    >
+      <Typography>What you changed in this collection will be lost.</Typography>
+    </ResponsiveDialog>
+    </>
   );
 }

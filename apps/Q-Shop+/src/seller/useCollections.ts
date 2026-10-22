@@ -3,19 +3,27 @@
  * fresh by the document's exact id (also when the product list doesn't
  * point at it, say after "Recreate shop data"), edited as a working copy
  * (new, edit, move, remove), then published together: the document, and the
- * product list with its pointer when it doesn't point at it yet. That list
- * publish follows the rules of every product-list publish
- * (seller/freshIndex.ts): a change from another device is shown first and
- * nothing goes out; right after this tab's own publish it waits a minute.
- * Products the shop no longer lists are left out when publishing.
+ * product list with its pointer when it doesn't point at it yet.
  *
- * Collections made on another device must never be overwritten unseen: a
- * document that exists but can't be read yet is "unavailable" (no editing),
- * and the document is read again before publishing; if it changed since the
- * page loaded, the page shows it as it is now and nothing is published.
+ * - The working copy lives for the session per name and document
+ *   (switching tabs or leaving the seller page keeps it), and can't change
+ *   while a publish is being prepared or sent.
+ * - Before publishing, the product list is read fresh like before every
+ *   list write (seller/freshIndex.ts): a change from another device is shown
+ *   first and nothing goes out. Only then are products the shop no longer
+ *   lists left out of the collections, so a product another device just
+ *   added (and put in a collection) is never dropped.
+ * - Collections made on another device are never overwritten unseen: a
+ *   document that exists but can't be read yet is "unavailable" (no
+ *   editing), and the document is read again before publishing; if it
+ *   changed since the page loaded (and isn't one of this session's own
+ *   versions the node hasn't caught up with), the page shows it as it is
+ *   now and nothing is published.
+ * - A publish that adds the pointer writes the product list, so it takes
+ *   the list lock (seller/listWrite.ts) like every list write.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import type { AppDispatch, RootState } from "../state/store";
 import { setDataContainer } from "../state/features/globalSlice";
 import { setNotification } from "../state/features/notificationsSlice";
@@ -25,21 +33,26 @@ import {
   collectionsPointer,
   normalizeCollections,
   pruneCollections,
+  type CollectionsDoc,
   type ShopCollection,
 } from "../qdn/collections";
 import type { DataContainerDoc, PublishResource } from "../qdn/payloads";
-import { QdnDeletedError, QdnFetchError, fetchQdnJson, invalidateQdnJson, resourceExists } from "../qdn/search";
+import { QdnDeletedError, QdnFetchError, fetchQdnJson, invalidateQdnJson, primeQdnJson, resourceExists } from "../qdn/search";
 import { errorMessage } from "../qdn/hubErrors";
 import { indexKey, notePublishedIndex } from "./productIndex";
-import { INDEX_CHANGED_TEXT, PrepareError, indexOnQdn, useShowNewerIndex } from "./freshIndex";
-import { DELETE_NODE_BEHIND_TEXT } from "./useDeleteProducts";
+import { INDEX_CHANGED_TEXT, INDEX_UNREADABLE_TEXT, PrepareError, indexOnQdn, useShowNewerIndex } from "./freshIndex";
+import { LIST_BUSY_TEXT, LIST_CHANGED_TEXT, releaseListWrite, takeListWrite, useListWriteOwner } from "./listWrite";
 
 export type CollectionsLoad = "loading" | "ready" | "unavailable";
 
 export interface CollectionsJob {
   resources: PublishResource[];
   labels: Record<string, string>;
+  doc: CollectionsDoc;
+  /** What goes out: the working copy without products the shop no longer lists. */
   collections: ShopCollection[];
+  /** The working copy it was built from. */
+  working: ShopCollection[];
   /** The product list with its pointer, when this publish adds it. */
   dataContainer: DataContainerDoc | null;
   storeId: string;
@@ -47,7 +60,6 @@ export interface CollectionsJob {
   baseKey: string;
 }
 
-const NODE_BEHIND_TEXT = DELETE_NODE_BEHIND_TEXT.replace("nothing was deleted", "nothing was published");
 export const COLLECTIONS_CHANGED_TEXT =
   "Your collections changed on QDN since this page loaded, perhaps from another device. They're shown as they are now: make your changes again.";
 export const COLLECTIONS_UNREADABLE_TEXT =
@@ -69,27 +81,60 @@ async function readPublished(name: string, docId: string): Promise<ShopCollectio
   }
 }
 
-const same = (a: ShopCollection[], b: ShopCollection[]) => JSON.stringify(a) === JSON.stringify(b);
+const json = (list: ShopCollection[]) => JSON.stringify(list);
+const same = (a: ShopCollection[], b: ShopCollection[]) => json(a) === json(b);
 
 /**
- * What this session last published per collections document: the version it
- * replaced and the one it sent. Right after a publish the node may still
- * serve the one it replaced; that isn't a change from another device.
+ * What this session published per collections document: every version its
+ * publishes replaced, and the one it sent last. Right after a publish the
+ * node may still serve a version from before it (even several publishes
+ * back); that isn't a change from another device.
  */
-const lastSent = new Map<string, { before: string; sent: string }>();
+const sentChain = new Map<string, { replaced: Set<string>; latest: string }>();
+
+function noteSent(docId: string, before: ShopCollection[], sent: ShopCollection[]): void {
+  const previous = sentChain.get(docId);
+  const entry = previous ?? { replaced: new Set<string>(), latest: json(sent) };
+  if (previous) entry.replaced.add(previous.latest);
+  entry.replaced.add(json(before));
+  entry.replaced.delete(json(sent));
+  entry.latest = json(sent);
+  sentChain.set(docId, entry);
+}
 
 function isOwnPublishNotServedYet(docId: string, now: ShopCollection[], published: ShopCollection[]): boolean {
-  const last = lastSent.get(docId);
-  return !!last && last.before === JSON.stringify(now) && last.sent === JSON.stringify(published);
+  const entry = sentChain.get(docId);
+  return !!entry && entry.latest === json(published) && entry.replaced.has(json(now));
+}
+
+/** The working copies, per name and document, for the session. */
+const drafts = new Map<string, ShopCollection[]>();
+const draftListeners = new Set<() => void>();
+
+function setDraftFor(draftKey: string, list: ShopCollection[] | null): void {
+  if (list === null) drafts.delete(draftKey);
+  else drafts.set(draftKey, list);
+  for (const listener of [...draftListeners]) listener();
+}
+
+function subscribeDrafts(listener: () => void): () => void {
+  draftListeners.add(listener);
+  return () => {
+    draftListeners.delete(listener);
+  };
 }
 
 /** For tests. */
 export function resetSentCollections(): void {
-  lastSent.clear();
+  sentChain.clear();
+  drafts.clear();
+  for (const listener of [...draftListeners]) listener();
 }
 
 export function useCollections() {
   const dispatch = useDispatch<AppDispatch>();
+  const store = useStore<RootState>();
+  const lock = useListWriteOwner();
   const user = useSelector((state: RootState) => state.auth.user);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
@@ -97,15 +142,16 @@ export function useCollections() {
   const name = user?.name ?? "";
   const storeId = currentStore?.id ?? "";
   const docId = storeId ? collectionsIdentifier(shortStoreIdOf(storeId)) : "";
+  const draftKey = `${name}\n${docId}`;
 
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; status: CollectionsLoad; published: ShopCollection[] } | null>(null);
-  const [draft, setDraft] = useState<{ key: string; collections: ShopCollection[] } | null>(null);
+  const draft = useSyncExternalStore(subscribeDrafts, () => drafts.get(draftKey) ?? null);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [job, setJob] = useState<CollectionsJob | null>(null);
-  const key = `${name}\n${docId}\n${attempt}`;
+  const key = `${draftKey}\n${attempt}`;
 
   useEffect(() => {
     if (!name || !docId) return;
@@ -120,23 +166,35 @@ export function useCollections() {
 
   const status: CollectionsLoad = loaded?.key === key ? loaded.status : "loading";
   const published = useMemo(() => (loaded?.key === key ? loaded.published : []), [loaded, key]);
-  const collections = draft?.key === key ? draft.collections : published;
-  const dirty = draft?.key === key && !same(draft.collections, published);
+  const collections = draft ?? published;
+  const dirty = !!draft && !same(draft, published);
+  // A publish is being prepared or sent: the working copy stays as it is until it ends.
+  const busy = preparing || !!job;
   // The product list doesn't point at the document: publishing adds the pointer, even with nothing changed.
   const pointerMissing =
     status === "ready" && published.length > 0 && !!dataContainer && dataContainer.storeId === storeId && !collectionsPointer(dataContainer, storeId);
 
   const edit = useCallback(
     (next: (list: ShopCollection[]) => ShopCollection[]) => {
-      setDraft({ key, collections: next(collections) });
+      if (busy) return;
+      setDraftFor(draftKey, next(collections));
       setError(null);
       setNotice(null);
     },
-    [collections, key]
+    [busy, collections, draftKey]
   );
 
-  const save = useCallback((c: ShopCollection) => edit((list) => (list.some((x) => x.id === c.id) ? list.map((x) => (x.id === c.id ? c : x)) : [...list, c])), [edit]);
+  const save = useCallback(
+    (c: ShopCollection) => edit((list) => (list.some((x) => x.id === c.id) ? list.map((x) => (x.id === c.id ? c : x)) : [...list, c])),
+    [edit]
+  );
   const remove = useCallback((id: string) => edit((list) => list.filter((x) => x.id !== id)), [edit]);
+  /** Puts back a collection Remove took out, where it was. */
+  const restore = useCallback(
+    (c: ShopCollection, at: number) =>
+      edit((list) => (list.some((x) => x.id === c.id) ? list : [...list.slice(0, at), c, ...list.slice(at)])),
+    [edit]
+  );
   const move = useCallback(
     (id: string, by: -1 | 1) =>
       edit((list) => {
@@ -150,10 +208,11 @@ export function useCollections() {
     [edit]
   );
   const discard = useCallback(() => {
-    setDraft(null);
+    if (busy) return;
+    setDraftFor(draftKey, null);
     setError(null);
     setNotice(null);
-  }, []);
+  }, [busy, draftKey]);
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
 
   /** Resolves true when the publish is ready to send (`job`). */
@@ -169,9 +228,13 @@ export function useCollections() {
       return false;
     }
     const seen = dataContainer as unknown as DataContainerDoc;
-    const listed = (id: string) => !!seen.products[id];
-    const toPublish = pruneCollections(collections, listed);
-    const needsPointer = toPublish.length > 0 && !collectionsPointer(seen, storeId);
+    const working = collections;
+    const needsPointer = working.length > 0 && !collectionsPointer(seen, storeId);
+    if (needsPointer && !takeListWrite(lock)) {
+      setError(LIST_BUSY_TEXT);
+      return false;
+    }
+    let handedOver = false;
     setPreparing(true);
     try {
       // Never over another device's changes: the document must be what this page loaded.
@@ -179,64 +242,91 @@ export function useCollections() {
       if (!now) throw new PrepareError(COLLECTIONS_UNREADABLE_TEXT);
       if (!same(now, published) && !isOwnPublishNotServedYet(docId, now, published)) {
         setLoaded({ key, status: "ready", published: now });
-        setDraft(null);
+        setDraftFor(draftKey, null);
         setNotice(COLLECTIONS_CHANGED_TEXT);
         return false;
       }
-      if (needsPointer) {
-        const state = await indexOnQdn(name, storeId, seen);
-        if (state.kind === "newer") {
-          await showNewerIndex(seen, state.merged, storeId, name);
-          setNotice(INDEX_CHANGED_TEXT);
-          return false;
-        }
-        if (state.kind === "behind") throw new PrepareError(NODE_BEHIND_TEXT);
+      // The product list as QDN has it now, before anything is left out against it.
+      const onQdn = await indexOnQdn(name, storeId, seen);
+      if (onQdn.kind === "newer") {
+        await showNewerIndex(seen, onQdn.merged, storeId, name);
+        setNotice(INDEX_CHANGED_TEXT);
+        return false;
       }
+      if (onQdn.kind === "unknown") throw new PrepareError(INDEX_UNREADABLE_TEXT);
+      // Same, or behind this tab's own last publish: the page's copy is the newest.
+      if (store.getState().global.dataContainer !== dataContainer) throw new PrepareError(LIST_CHANGED_TEXT);
+      const toPublish = pruneCollections(working, (id) => !!seen.products[id]);
       const built = buildCollectionsPublish({ name, storeId, collections: toPublish, dataContainer: needsPointer ? seen : null });
       const labels: Record<string, string> = {
         [built.identifier]: toPublish.length === 1 ? "Collections · 1 collection" : `Collections · ${toPublish.length} collections`,
         [dataContainerIdentifier(storeId)]: "Product list (points at your collections)",
       };
-      setJob({ resources: built.resources, labels, collections: toPublish, dataContainer: built.dataContainer, storeId, name, baseKey: indexKey(seen) });
+      setJob({
+        resources: built.resources,
+        labels,
+        doc: built.doc,
+        collections: toPublish,
+        working,
+        dataContainer: built.dataContainer,
+        storeId,
+        name,
+        baseKey: indexKey(seen),
+      });
+      handedOver = true;
       return true;
     } catch (e) {
       setError(e instanceof PrepareError ? e.message : errorMessage(e, "Couldn't prepare the publish. Try again."));
       return false;
     } finally {
       setPreparing(false);
+      if (needsPointer && !handedOver) releaseListWrite(lock);
     }
-  }, [name, storeId, docId, key, dataContainer, collections, published, showNewerIndex]);
+  }, [name, storeId, docId, key, draftKey, dataContainer, collections, published, showNewerIndex, lock, store]);
 
-  /** Everything landed: the published copy is the new starting point. */
+  /** The parts of `current` in `sent` landed: the page follows them. */
+  const apply = useCallback(
+    (current: CollectionsJob, sent: Set<string>) => {
+      const id = collectionsIdentifier(shortStoreIdOf(current.storeId));
+      if (sent.has(id)) {
+        noteSent(id, published, current.collections);
+        // Shop pages read it from here, not from a node that may still serve the version before.
+        primeQdnJson("DOCUMENT", current.name, id, current.doc);
+        setLoaded({ key, status: "ready", published: current.collections });
+        // The working copy that went out is done; one changed since (it can't be, while busy) would stay.
+        const left = drafts.get(draftKey);
+        if (!left || same(left, current.working)) setDraftFor(draftKey, null);
+      }
+      const listId = dataContainerIdentifier(current.storeId);
+      if (current.dataContainer && sent.has(listId)) {
+        notePublishedIndex(current.storeId, current.baseKey, indexKey(current.dataContainer));
+        dispatch(setDataContainer({ ...current.dataContainer, id: listId }));
+        invalidateQdnJson("DOCUMENT", current.name, listId);
+      }
+    },
+    [dispatch, draftKey, key, published]
+  );
+
+  /** Everything landed. */
   const done = useCallback(() => {
     if (!job) return;
-    const id = collectionsIdentifier(shortStoreIdOf(job.storeId));
-    lastSent.set(id, { before: JSON.stringify(published), sent: JSON.stringify(job.collections) });
-    invalidateQdnJson("DOCUMENT", job.name, id);
-    if (job.dataContainer) {
-      notePublishedIndex(job.storeId, job.baseKey, indexKey(job.dataContainer));
-      dispatch(setDataContainer({ ...job.dataContainer, id: dataContainerIdentifier(job.storeId) }));
-      invalidateQdnJson("DOCUMENT", job.name, dataContainerIdentifier(job.storeId));
-    }
-    setLoaded({ key, status: "ready", published: job.collections });
-    setDraft(null);
+    apply(job, new Set(job.resources.map((r) => r.identifier)));
     dispatch(setNotification({ msg: "Collections published", alertType: "success" }));
     setJob(null);
-  }, [job, key, published, dispatch]);
+    releaseListWrite(lock);
+  }, [job, apply, dispatch, lock]);
 
-  /** Closed before everything landed: the changes stay, so publishing again finishes it. */
+  /** Closed before everything landed: what did is applied, the rest stays to publish again. */
   const closed = useCallback(
     (sent: string[]) => {
       if (job && sent.length > 0) {
-        if (sent.includes(job.resources[0].identifier)) {
-          lastSent.set(job.resources[0].identifier, { before: JSON.stringify(published), sent: JSON.stringify(job.collections) });
-          setLoaded({ key, status: "ready", published: job.collections });
-        }
+        apply(job, new Set(sent));
         dispatch(setNotification({ msg: "Not everything was published. Publish again to finish.", alertType: "info" }));
       }
       setJob(null);
+      releaseListWrite(lock);
     },
-    [job, key, published, dispatch]
+    [job, apply, dispatch, lock]
   );
 
   return {
@@ -244,8 +334,10 @@ export function useCollections() {
     collections,
     dirty,
     pointerMissing,
+    busy,
     save,
     remove,
+    restore,
     move,
     discard,
     reload,
