@@ -55,14 +55,14 @@ function ProductTile({ item }: { item: NewProduct }) {
     <Box component="li" sx={{ scrollSnapAlign: "start", minWidth: 0 }}>
       <Tile
         to={productPath(item.owner, item.storeId, product.id, item.catalogueId)}
-        aria-labelledby={titleId}
         aria-describedby={detailId}
       >
         <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", bgcolor: accentWash(theme, 0.08) })}>
           <Box
             component="img"
             src={item.image}
-            alt={product.title}
+            // The title is the next text in the link, so the picture adds nothing to its name.
+            alt=""
             decoding="async"
             sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
           />

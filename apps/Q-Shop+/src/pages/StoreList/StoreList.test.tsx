@@ -125,7 +125,7 @@ describe("home page", () => {
   it("shows the newest products after the first rows, linking to their pages, once the strip is in view", async () => {
     const { node } = renderHome({ allInView: true });
     const strip = await screen.findByRole("region", { name: "New products" });
-    const link = await within(strip).findByRole("link", { name: "Product 11" });
+    const link = await within(strip).findByRole("link", { name: /^Product 11\b/ });
     expect(link).toHaveAttribute(
       "href",
       "/Seller%2023/q-store-general-shop-23/q-store-product-shop-23-P000000011/q-store-catalogue-shop-23-CAT0000001"
@@ -143,7 +143,7 @@ describe("home page", () => {
     resetNewProductsCache();
     renderHome({ world, allInView: true });
     const strip = await screen.findByRole("region", { name: "New products" });
-    await within(strip).findByRole("link", { name: "Product 10" }, { timeout: 5000 });
+    await within(strip).findByRole("link", { name: /^Product 10\b/ }, { timeout: 5000 });
     const hrefs = within(strip).getAllByRole("link").map((link) => link.getAttribute("href"));
     expect(hrefs).toHaveLength(12);
     expect(hrefs.some((href) => href?.includes("q-store-product-shop-23-P000000011"))).toBe(false);
