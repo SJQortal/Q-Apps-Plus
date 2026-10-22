@@ -15,7 +15,7 @@
  * as the original did.
  */
 import { useCallback, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import ShortUniqueId from "short-unique-id";
 import type { AppDispatch, RootState } from "../state/store";
 import {
@@ -41,6 +41,7 @@ import { draftsOfShop } from "./shopDrafts";
 import { indexKey, notePublishedIndex } from "./productIndex";
 import { INDEX_CHANGED_TEXT, PrepareError, indexOnQdn, useShowNewerIndex } from "./freshIndex";
 import { isCatalogueBehind, noteSentCatalogue, sentCatalogue } from "./sentCatalogues";
+import { LIST_BUSY_TEXT, LIST_CHANGED_TEXT, releaseListWrite, takeListWrite, useListWriteOwner } from "./listWrite";
 
 export const CATALOGUE_BEHIND_TEXT =
   "Your last change hasn't reached your node yet, so nothing was published. Try again in a minute.";
@@ -64,6 +65,8 @@ export interface PublishJob {
 
 export function usePublishProducts() {
   const dispatch = useDispatch<AppDispatch>();
+  const store = useStore<RootState>();
+  const lock = useListWriteOwner();
   const user = useSelector((state: RootState) => state.auth.user);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
@@ -96,6 +99,8 @@ export function usePublishProducts() {
         .filter((p) => p?.isUpdate)
         .map((p) => p.catalogueId)
     );
+    if (!takeListWrite(lock)) return setError(LIST_BUSY_TEXT);
+    let handedOver = false;
     setPreparing(true);
     try {
       // The publish builds on the page's copy only once it holds everything the
@@ -154,13 +159,17 @@ export function usePublishProducts() {
         labels[cat.id] = `Catalogue ${i + 1} · ${n === 1 ? "1 product" : `${n} products`}`;
       });
       labels[built.dataContainer.id] = "Product list";
+      // The page's list changed while this read the node (say, a reload): build again on the new one.
+      if (store.getState().global.dataContainer !== dataContainer) throw new PrepareError(LIST_CHANGED_TEXT);
       setJob({ ...built, labels, storeId, name, draftIds: Object.keys(productsToSave), baseKey: indexKey(base) });
+      handedOver = true;
     } catch (e) {
       setError(e instanceof PrepareError ? e.message : errorMessage(e, "Couldn't prepare the publish. Try again."));
     } finally {
       setPreparing(false);
+      if (!handedOver) releaseListWrite(lock);
     }
-  }, [user, currentStore, dataContainer, allDrafts, showNewerIndex]);
+  }, [user, currentStore, dataContainer, allDrafts, showNewerIndex, lock, store]);
 
   /** Everything is on QDN: the original's Redux updates, then fresh reads. */
   const done = useCallback(() => {
@@ -182,7 +191,8 @@ export function usePublishProducts() {
     invalidateQdnSearches((url) => url.includes("service=DOCUMENT"));
     dispatch(setNotification({ msg: "Products published", alertType: "success" }));
     setJob(null);
-  }, [job, allDrafts, dispatch]);
+    releaseListWrite(lock);
+  }, [job, allDrafts, dispatch, lock]);
 
   /** Closed before everything landed: the drafts stay, so publishing again finishes it. */
   const closed = useCallback(
@@ -196,8 +206,9 @@ export function usePublishProducts() {
         );
       }
       setJob(null);
+      releaseListWrite(lock);
     },
-    [dispatch]
+    [dispatch, lock]
   );
 
   return { prepare, preparing, error, notice, clearError: () => setError(null), job, done, closed };

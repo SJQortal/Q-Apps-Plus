@@ -37,6 +37,7 @@ import { markShopDeleted } from "../discovery/shopDetails";
 import { loadOwnShop } from "../hooks/useOwnShops";
 import { indexKey, isProductIndexDoc, notePublishedIndex } from "./productIndex";
 import { isDraftOfShop } from "./shopDrafts";
+import { LIST_BUSY_TEXT, releaseListWrite, takeListWrite, useListWriteOwner } from "./listWrite";
 
 /** Catalogue search pages (of 100) read at most: 10,000 products. */
 export const CATALOGUE_SEARCH_PAGES = 10;
@@ -61,6 +62,7 @@ function catalogueIdsOf(index: Pick<DataContainerDoc, "products" | "catalogues">
 
 export function useDeleteShop() {
   const dispatch = useDispatch<AppDispatch>();
+  const lock = useListWriteOwner();
   const store = useStore<RootState>();
   const user = useSelector((state: RootState) => state.auth.user);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
@@ -83,6 +85,11 @@ export function useDeleteShop() {
     }
     const storeId = currentStore.id;
     const short = currentStore.shortStoreId || shortStoreIdOf(storeId);
+    if (!takeListWrite(lock)) {
+      setError(LIST_BUSY_TEXT);
+      return false;
+    }
+    let handedOver = false;
     setPreparing(true);
     try {
       const ids = new Set<string>();
@@ -140,14 +147,16 @@ export function useDeleteShop() {
         labels[id] = `Catalogue ${i + 1}`;
       });
       setJob({ resources, labels, storeId, name });
+      handedOver = true;
       return true;
     } catch (e) {
       setError(errorMessage(e, "Couldn't prepare the delete. Try again."));
       return false;
     } finally {
       setPreparing(false);
+      if (!handedOver) releaseListWrite(lock);
     }
-  }, [user, currentStore, dataContainer]);
+  }, [user, currentStore, dataContainer, lock]);
 
   /** The shop itself is gone: it leaves the seller's shops and every list, and another shop becomes current. */
   const forgetShop = useCallback(
@@ -192,7 +201,8 @@ export function useDeleteShop() {
     forgetShop(job);
     dispatch(setNotification({ msg: "Shop deleted", alertType: "success" }));
     setJob(null);
-  }, [job, forgetShop, dispatch]);
+    releaseListWrite(lock);
+  }, [job, forgetShop, dispatch, lock]);
 
   /**
    * Closed before everything landed. Resolves true when the shop itself is
@@ -216,9 +226,10 @@ export function useDeleteShop() {
         );
       }
       setJob(null);
+      releaseListWrite(lock);
       return shopGone;
     },
-    [job, forgetShop, dispatch]
+    [job, forgetShop, dispatch, lock]
   );
 
   return { prepare, preparing, error, job, done, closed };

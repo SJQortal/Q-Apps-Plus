@@ -23,7 +23,7 @@
  * keep their own copy of each product, so nothing changes for them.
  */
 import { useCallback, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch, useSelector, useStore } from "react-redux";
 import type { AppDispatch, RootState } from "../state/store";
 import {
   removeManyFromProductsToSave,
@@ -55,6 +55,7 @@ import {
 import { CATALOGUE_CONCURRENCY } from "./useCatalogueLoader";
 import { isCatalogueBehind, noteSentCatalogue } from "./sentCatalogues";
 import { notePendingDelete } from "./pendingDeletes";
+import { LIST_BUSY_TEXT, LIST_CHANGED_TEXT, releaseListWrite, takeListWrite, useListWriteOwner } from "./listWrite";
 
 export const DELETE_NODE_BEHIND_TEXT =
   "Your last change hasn't reached your node yet, so nothing was deleted. Try again in a minute.";
@@ -102,6 +103,8 @@ export async function readCataloguesFresh(
 
 export function useDeleteProducts() {
   const dispatch = useDispatch<AppDispatch>();
+  const store = useStore<RootState>();
+  const lock = useListWriteOwner();
   const user = useSelector((state: RootState) => state.auth.user);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
@@ -133,6 +136,11 @@ export function useDeleteProducts() {
         setError("These products aren't in your product list.");
         return false;
       }
+      if (!takeListWrite(lock)) {
+        setError(LIST_BUSY_TEXT);
+        return false;
+      }
+      let handedOver = false;
       setPreparing(true);
       try {
         const state = await indexOnQdn(name, storeId, seen, DELETE_INDEX_UNREADABLE_TEXT);
@@ -153,16 +161,19 @@ export function useDeleteProducts() {
           const left = Object.keys(cat.products ?? {}).length;
           labels[cat.id] = `Catalogue ${i + 1} · ${left === 0 ? "now empty" : left === 1 ? "1 product left" : `${left} products left`}`;
         });
+        if (store.getState().global.dataContainer !== dataContainer) throw new PrepareError(LIST_CHANGED_TEXT);
         setJob({ ...built, labels, storeId, name, baseKey: indexKey(seen) });
+        handedOver = true;
         return true;
       } catch (e) {
         setError(e instanceof PrepareError ? e.message : errorMessage(e, "Couldn't prepare the delete. Try again."));
         return false;
       } finally {
         setPreparing(false);
+        if (!handedOver) releaseListWrite(lock);
       }
     },
-    [user, currentStore, dataContainer, showNewerIndex]
+    [user, currentStore, dataContainer, showNewerIndex, lock, store]
   );
 
   /**
@@ -204,7 +215,8 @@ export function useDeleteProducts() {
     const n = job.removed.length;
     dispatch(setNotification({ msg: n === 1 ? "Product deleted" : `${n} products deleted`, alertType: "success" }));
     setJob(null);
-  }, [job, apply, dispatch]);
+    releaseListWrite(lock);
+  }, [job, apply, dispatch, lock]);
 
   /** Closed before everything landed: the page follows what did, and says what that means. */
   const closed = useCallback(
@@ -222,8 +234,9 @@ export function useDeleteProducts() {
         );
       }
       setJob(null);
+      releaseListWrite(lock);
     },
-    [job, apply, dispatch]
+    [job, apply, dispatch, lock]
   );
 
   return { prepare, preparing, error, notice, job, done, closed, clear: () => (setError(null), setNotice(null)) };

@@ -12,6 +12,7 @@ import { resetSentCatalogues } from '../seller/sentCatalogues';
 import { resetPendingDeletes } from '../seller/pendingDeletes';
 import { resetDeletedShops } from '../qdn/deleted';
 import { resetProductView } from '../utils/productView';
+import { resetListWrite } from '../seller/listWrite';
 
 // localStorage: jsdom has one, but a plain object store is easier to inspect.
 const localStorageStore: Record<string, string> = {};
@@ -106,6 +107,7 @@ beforeEach(() => {
   resetPendingDeletes();
   resetDeletedShops();
   resetProductView();
+  resetListWrite();
 });
 
 afterEach(() => {

@@ -37,6 +37,7 @@ import { indexKey, notePublishedIndex, resetPublishedIndexes } from "./productIn
 import { DELETE_INDEX_CHANGED_TEXT } from "./freshIndex";
 import { DELETE_CATALOGUES_UNREADABLE_TEXT, DELETE_NODE_BEHIND_TEXT } from "./useDeleteProducts";
 import { noteSentCatalogue, resetSentCatalogues } from "./sentCatalogues";
+import { LIST_BUSY_TEXT } from "./listWrite";
 import { resetPendingDeletes } from "./pendingDeletes";
 
 /** The node: the product list (`index`, the fixture's unless given) and the catalogue (unless `catalogue: null`). */
@@ -251,7 +252,7 @@ describe("deleting products", () => {
     stubNode();
     let fail = true;
     const { store, q } = setup({
-      PUBLISH_MULTIPLE_QDN_RESOURCES: async (p: any) => {
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
         if (fail) {
           fail = false;
           throw { error: { unsuccessfulPublishes: [{ identifier: CATALOGUE_ID }] } };
@@ -286,5 +287,34 @@ describe("deleting products", () => {
     const ask = await selectAndDelete(["Mug"]);
     expect(await within(ask).findByText(DELETE_NODE_BEHIND_TEXT)).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+  });
+
+  it("one product-list write at a time: a delete started while a publish prepares is refused", async () => {
+    // The node answers the product list slowly, so the publish is still preparing.
+    let answer: (() => void) | null = null;
+    const slow = new Promise<void>((resolve) => (answer = resolve));
+    const ok = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.startsWith("/transactions/")) return ok([]);
+        if (url.includes(DATA_CONTAINER_ID)) {
+          await slow;
+          return ok(dataContainer);
+        }
+        if (url.includes(CATALOGUE_ID)) return ok(catalogue);
+        return { ok: false, status: 404, text: async () => "{}", json: async () => ({}) };
+      })
+    );
+    const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    store.dispatch(setProductsToSave({ ...mug, id: "q-store-product-my-shop-NEWxxxxxx1", title: "New", isUpdate: false, storeId: STORE_ID }));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    const ask = await selectAndDelete(["Mug"]);
+    expect(await within(ask).findByText(LIST_BUSY_TEXT)).toBeInTheDocument();
+    answer!();
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    // Only the publish went out; the mug is still listed.
+    expect(Object.keys(store.getState().global.dataContainer!.products)).toContain(mug.id);
   });
 });

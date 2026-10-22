@@ -27,6 +27,7 @@ import {
   type StoreFields,
 } from "../qdn/payloads";
 import { indexKey, notePublishedIndex } from "../seller/productIndex";
+import { LIST_BUSY_TEXT, releaseListWrite, takeListWrite, useListWriteOwner } from "../seller/listWrite";
 import { dataContainerIdentifier, finalizeShortStoreId, shortStoreIdOf, storeIdentifier } from "../qdn/identifiers";
 import { invalidateQdnJson, invalidateQdnSearches, resourceExists } from "../qdn/search";
 import { forgetDeletedShop, isShopDeleted } from "../qdn/deleted";
@@ -67,6 +68,7 @@ export function useShopPublish() {
   const userName = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const ownIndex = useSelector((state: RootState) => state.global.dataContainer);
+  const lock = useListWriteOwner();
   const [busy, setBusy] = useState(false);
 
   /**
@@ -180,6 +182,7 @@ export function useShopPublish() {
     const storeId = currentStore.id;
     // The list this replaces, if the page holds this shop's.
     const before = ownIndex && ownIndex.storeId === storeId ? indexKey(ownIndex as unknown as DataContainerDoc) : null;
+    if (!takeListWrite(lock)) throw new ShopFormError(LIST_BUSY_TEXT);
     setBusy(true);
     try {
       const { dataContainer, request } = buildRecreateDataContainerPublish({
@@ -204,8 +207,9 @@ export function useShopPublish() {
       throw publishError(error, "Couldn't publish the product list. Please try again.");
     } finally {
       setBusy(false);
+      releaseListWrite(lock);
     }
-  }, [currentStore, ownIndex, dispatch, userName]);
+  }, [currentStore, ownIndex, dispatch, userName, lock]);
 
   return { createShop, editShop, recreateProductList, busy };
 }
