@@ -4,7 +4,7 @@
  * without the owner's own. "Verified buyer" comes from one order search per
  * page of names. Everything reads the same cached search as the shop header.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Box, Button, IconButton, LinearProgress, Rating, Skeleton, Typography } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import RateReviewOutlinedIcon from "@mui/icons-material/RateReviewOutlined";
@@ -98,6 +98,7 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
   const [rightNonce, setRightNonce] = useState(0);
   const [verified, setVerified] = useState<Set<string>>(() => new Set());
   const asked = useRef(new Set<string>());
+  const mounted = useRef(true);
 
   const name = user?.name ?? "";
   const isOwner = !!name && name === owner;
@@ -123,26 +124,29 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
   const canReview = right?.name === name ? right.state : "checking";
 
   // "Verified buyer": one search per page of reviewer names not asked about yet.
-  const pageNames = useMemo(() => [...new Set(shown.map((review) => review.name))], [shown]);
+  // Keyed by the names (not the array, which is new every render), and an
+  // answer is kept for as long as the panel is open, even after a re-render.
+  const pageNamesKey = [...new Set(shown.map((review) => review.name))].join("\n");
   useEffect(() => {
-    const todo = pageNames.filter((n) => !asked.current.has(n));
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    const todo = pageNamesKey ? pageNamesKey.split("\n").filter((n) => !asked.current.has(n)) : [];
     if (todo.length === 0 || !shortStoreId) return;
     todo.forEach((n) => asked.current.add(n));
-    let alive = true;
-    const batches: string[][] = [];
-    for (let i = 0; i < todo.length; i += REVIEWS_PAGE) batches.push(todo.slice(i, i + REVIEWS_PAGE));
-    for (const batch of batches) {
+    for (let i = 0; i < todo.length; i += REVIEWS_PAGE) {
+      const batch = todo.slice(i, i + REVIEWS_PAGE);
       fetchVerifiedBuyers(shortStoreId, batch).then(
         (found) => {
-          if (alive && found.size) setVerified((prev) => new Set([...prev, ...found]));
+          if (mounted.current && found.size) setVerified((prev) => new Set([...prev, ...found]));
         },
         () => batch.forEach((n) => asked.current.delete(n))
       );
     }
-    return () => {
-      alive = false;
-    };
-  }, [pageNames, shortStoreId]);
+  }, [pageNamesKey, shortStoreId]);
 
   let writeArea: ReactNode = null;
   if (!name) {

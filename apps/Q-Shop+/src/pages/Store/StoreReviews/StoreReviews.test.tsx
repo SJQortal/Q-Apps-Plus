@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { createAppStore } from "../../../state/store";
 import { addUser } from "../../../state/features/authSlice";
+import { addToReviews } from "../../../state/features/storeSlice";
 import { installMockNode, makeWorld, type World } from "../../../test/mockNode";
 import { installQortalMock } from "../../../test/qortalMock";
 import { renderWithProviders } from "../../../test/renderWithProviders";
@@ -79,6 +80,27 @@ describe("reviews panel", { timeout: 20_000 }, () => {
     expect(params.get("identifier")).toBe("q-store-order-my-shop-");
     expect(params.get("prefix")).toBe("true");
     expect(params.getAll("name").sort()).toEqual(["Reviewer 0", "Reviewer 1", "Reviewer 2", "Reviewer 3", "Reviewer 4", "Reviewer 5"]);
+  });
+
+  it("keeps a verified-buyer answer that lands after the panel re-rendered", async () => {
+    const world = worldWithReviews();
+    const { store, node } = renderPanel(world, null);
+    const realFetch = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("service=DOCUMENT_PRIVATE")) await gate;
+        return realFetch(url);
+      })
+    );
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(6));
+    // Something else changes the list while the order search is out.
+    store.dispatch(addToReviews({ id: "q-store-review-other-shop-ZZZZZZZZZZ-50", name: "Elsewhere", created: 1, title: "x", description: "y", rating: 5 }));
+    release();
+    await waitFor(() => expect(screen.getAllByText("Verified buyer")).toHaveLength(1));
+    expect(node.fetchCalls.filter((u) => u.includes("service=DOCUMENT_PRIVATE"))).toHaveLength(1);
   });
 
   it("reads the full review on Read more", async () => {
