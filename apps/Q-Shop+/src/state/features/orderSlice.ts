@@ -118,6 +118,8 @@ export interface OrderListMeta {
   moreError: boolean;
   /** Bumped by every reset, so loads started before it drop their answers. */
   generation: number;
+  /** When page one last landed (ms; 0: never). A list read long ago is read again when it shows. */
+  loadedAt: number;
 }
 
 interface OrderState {
@@ -133,7 +135,17 @@ interface OrderState {
 }
 
 function emptyMeta(owner = "", generation = 0): OrderListMeta {
-  return { owner, offset: 0, hasMore: true, phase: "idle", loadingMore: false, refreshing: false, moreError: false, generation };
+  return {
+    owner,
+    offset: 0,
+    hasMore: true,
+    phase: "idle",
+    loadingMore: false,
+    refreshing: false,
+    moreError: false,
+    generation,
+    loadedAt: 0,
+  };
 }
 
 const initialState: OrderState = {
@@ -221,12 +233,15 @@ export const orderSlice = createSlice({
         read: number;
         hasMore: boolean;
         first: boolean;
+        /** When it was read (ms), for page one. */
+        at?: number;
       }>
     ) => {
-      const { kind, owner, generation, rows, read, hasMore, first } = action.payload;
+      const { kind, owner, generation, rows, read, hasMore, first, at } = action.payload;
       const meta = state[kind];
       if (meta.owner !== owner || meta.generation !== generation) return;
       setRows(state, kind, mergeOrderRows(first ? [] : rowsOf(state, kind), rows));
+      if (first && at !== undefined) meta.loadedAt = at;
       meta.offset = (first ? 0 : meta.offset) + read;
       meta.hasMore = hasMore;
       meta.phase = "ready";
@@ -245,6 +260,22 @@ export const orderSlice = createSlice({
         meta.phase = "ready";
         meta.moreError = !first;
       }
+    },
+    /**
+     * The list on the node has changed since it was read (the buyer's order
+     * was just recorded): page one is read again the next time the list shows
+     * (or now, if it shows). The rows stay on screen until it lands, and
+     * answers to loads started before this are dropped.
+     */
+    listStale: (state, action: PayloadAction<{ kind: OrderListKind; owner: string }>) => {
+      const { kind, owner } = action.payload;
+      const meta = state[kind];
+      if (meta.owner !== owner || meta.phase === "idle") return;
+      meta.phase = "idle";
+      meta.generation += 1;
+      meta.loadingMore = false;
+      meta.refreshing = false;
+      meta.moreError = false;
     },
     /** Decrypted orders. */
     ordersOpened: (state, action: PayloadAction<Order[]>) => {
@@ -318,6 +349,7 @@ export const {
   listLoading,
   listPage,
   listFailed,
+  listStale,
   ordersOpened,
   orderOpenState,
   statusesLoaded,

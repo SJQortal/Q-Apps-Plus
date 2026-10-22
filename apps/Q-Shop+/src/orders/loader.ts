@@ -15,7 +15,16 @@
  * (another name, another shop) makes the answers of older loads stale.
  */
 import type { Order, OrderListKind, OrderStatusInfo } from "../state/features/orderSlice";
-import { listFailed, listLoading, listPage, orderOpenState, ordersOpened, statusesLoaded } from "../state/features/orderSlice";
+import {
+  listFailed,
+  listLoading,
+  listPage,
+  listStale,
+  orderOpenState,
+  ordersOpened,
+  statusesLoaded,
+} from "../state/features/orderSlice";
+import { listPendingOrders, subscribePendingOrders } from "../money/pendingOrders";
 import type { RootState } from "../state/store";
 import {
   OPEN_CONCURRENCY,
@@ -32,7 +41,7 @@ import {
   type StatusIndex,
   type StatusTarget,
 } from "./reads";
-import { mapWithConcurrency } from "../qdn/search";
+import { invalidateQdnSearches, mapWithConcurrency } from "../qdn/search";
 import { NO_STATUS_DOCUMENT } from "./status";
 
 /** The parts of the Redux store the loader needs (the app's store, or a test's). */
@@ -121,7 +130,9 @@ async function runPage(store: OrderStore, owner: ListOwner, mode: LoadMode): Pro
     return false;
   }
   if (!isCurrent(store, kind, key, generation)) return false;
-  store.dispatch(listPage({ kind, owner: key, generation, rows: page.rows, read: page.read, hasMore: page.hasMore, first }));
+  store.dispatch(
+    listPage({ kind, owner: key, generation, rows: page.rows, read: page.read, hasMore: page.hasMore, first, at: Date.now() })
+  );
 
   const live = () => isCurrent(store, kind, key, generation);
   if (owner.kind === "seller") {
@@ -266,6 +277,38 @@ export async function retryOrder(store: OrderStore, owner: ListOwner, row: Order
   if (!order) return false;
   if (owner.kind === "buyer") buyerOrderOpenedLate(store, order, live);
   return true;
+}
+
+const watchedStores = new WeakSet<OrderStore>();
+
+/**
+ * Marks the buyer's list stale whenever one of their paid orders leaves the
+ * pending list (money/pendingOrders.ts): the checkout recorded it on QDN, or
+ * the buyer finished or dropped it from the cart. My orders then reads page
+ * one again the next time it shows, so "Follow it in My orders" finds the
+ * order there even when the list was read earlier in the visit. Installed
+ * once per store, for the app's lifetime (the list stays in Redux while My
+ * orders isn't mounted, which is when checkouts happen).
+ */
+export function watchRecordedOrders(store: OrderStore): void {
+  if (watchedStores.has(store)) return;
+  watchedStores.add(store);
+  const seen = new Map<string, Set<string>>();
+  const buyerName = () => store.getState().order.buyer.owner || store.getState().auth.user?.name || "";
+  const snapshot = (name: string) => new Set(listPendingOrders(name).map((o) => o.orderUid));
+  const first = buyerName();
+  if (first) seen.set(first, snapshot(first));
+  subscribePendingOrders(() => {
+    const name = buyerName();
+    if (!name) return;
+    const before = seen.get(name);
+    const now = snapshot(name);
+    seen.set(name, now);
+    if (!before || ![...before].some((uid) => !now.has(uid))) return;
+    // The order may be on the node now: the next read must not come from the search cache.
+    invalidateQdnSearches((url) => url.includes("service=DOCUMENT_PRIVATE"));
+    store.dispatch(listStale({ kind: "buyer", owner: name }));
+  });
 }
 
 const statusChecks = new WeakMap<OrderStore, Map<string, Promise<void>>>();

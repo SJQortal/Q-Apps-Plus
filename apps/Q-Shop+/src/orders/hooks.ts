@@ -4,7 +4,8 @@ import type { RootState } from "../state/store";
 import type { Order, OrderListMeta } from "../state/features/orderSlice";
 import { shortStoreIdOf } from "../qdn/identifiers";
 import { listPendingOrders, subscribePendingOrders } from "../money/pendingOrders";
-import { loadOrders, ownerKey, retryOrder, type ListOwner, type OrderStore } from "./loader";
+import { QDN_SEARCH_TTL_MS } from "../qdn/search";
+import { loadOrders, ownerKey, retryOrder, watchRecordedOrders, type ListOwner, type OrderStore } from "./loader";
 import { selectItems, type OrderListItem } from "./selectors";
 
 export interface OrderList {
@@ -24,7 +25,11 @@ const IDLE: OrderListMeta = {
   refreshing: false,
   moreError: false,
   generation: 0,
+  loadedAt: 0,
 };
+
+/** A list shown again after this long is read again: the session cache's lifetime (docs/QORTAL.md). */
+export const LIST_REREAD_AFTER_MS = QDN_SEARCH_TTL_MS;
 
 const NO_ITEMS: OrderListItem[] = [];
 
@@ -43,6 +48,15 @@ function useOrderList(owner: ListOwner | null): OrderList {
     if (owner && needsLoad) void loadOrders(store, owner, "first");
   }, [store, owner, needsLoad]);
 
+  // A list read longer ago than the search cache lasts is read again when it shows (new orders,
+  // statuses the seller published since); the rows stay on screen meanwhile.
+  useEffect(() => {
+    if (!owner) return;
+    const current = store.getState().order[owner.kind];
+    if (current.owner !== ownerKey(owner) || current.phase !== "ready" || current.refreshing) return;
+    if (Date.now() - current.loadedAt > LIST_REREAD_AFTER_MS) void loadOrders(store, owner, "refresh");
+  }, [store, owner]);
+
   const loadMore = useCallback(() => (owner ? loadOrders(store, owner, "more") : Promise.resolve(false)), [store, owner]);
   const refresh = useCallback(() => (owner ? loadOrders(store, owner, "refresh") : Promise.resolve(false)), [store, owner]);
   const retry = useCallback((row: Order) => (owner ? retryOrder(store, owner, row) : Promise.resolve(false)), [store, owner]);
@@ -52,8 +66,11 @@ function useOrderList(owner: ListOwner | null): OrderList {
 
 /** The orders the signed-in name placed (My orders). */
 export function useBuyerOrders(): OrderList & { name: string } {
+  const store: OrderStore = useStore<RootState>();
   const name = useSelector((state: RootState) => state.auth.user?.name ?? "");
   const owner = useMemo<ListOwner | null>(() => (name ? { kind: "buyer", name } : null), [name]);
+  // From now on, an order recorded at checkout marks this list for a new read (loader.ts).
+  useEffect(() => watchRecordedOrders(store), [store]);
   return { ...useOrderList(owner), name };
 }
 
