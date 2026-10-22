@@ -37,17 +37,18 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const [showDownloadModal, setShowDownloadModal] = useState<boolean>(false);
 
   // "Open the cart" (cart.isOpen turning on) from anywhere goes to the cart
-  // page. Leaving the cart page any other way (the bottom bar, the header)
-  // turns it off again, so the next "open" is seen and nothing pulls the user
-  // back to /cart.
+  // page. Leaving the cart pages (/cart and anything under it) any other way,
+  // such as the bottom bar or the header, turns it off again, so the next
+  // "open" is seen and nothing pulls the user back to /cart.
   const wasOpen = useRef(cartOpen);
   const lastPath = useRef(pathname);
   useEffect(() => {
+    const inCart = (path: string) => path === "/cart" || path.startsWith("/cart/");
     const opened = cartOpen && !wasOpen.current;
-    const leftCart = lastPath.current === "/cart" && pathname !== "/cart";
+    const leftCart = inCart(lastPath.current) && !inCart(pathname);
     wasOpen.current = cartOpen;
     lastPath.current = pathname;
-    if (opened && pathname !== "/cart") navigate("/cart");
+    if (opened && !inCart(pathname)) navigate("/cart");
     else if (leftCart && cartOpen) dispatch(setIsOpen(false));
   }, [cartOpen, pathname, navigate, dispatch]);
 

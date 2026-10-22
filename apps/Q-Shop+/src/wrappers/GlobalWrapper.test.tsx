@@ -19,6 +19,9 @@ function Where() {
       <button type="button" onClick={() => navigate("/")}>
         Go home
       </button>
+      <button type="button" onClick={() => navigate("/cart/checkout")}>
+        Go to checkout
+      </button>
     </>
   );
 }
@@ -57,7 +60,12 @@ describe("GlobalWrapper", () => {
     });
     expect(where()).toBe("/cart");
 
-    // Leaving the cart another way (the header, the bottom bar) closes it…
+    // A page under /cart is still the cart…
+    fireEvent.click(screen.getByRole("button", { name: "Go to checkout" }));
+    expect(where()).toBe("/cart/checkout");
+    expect(store.getState().cart.isOpen).toBe(true);
+
+    // …and leaving the cart another way (the header, the bottom bar) closes it…
     fireEvent.click(screen.getByRole("button", { name: "Go home" }));
     expect(where()).toBe("/");
     expect(store.getState().cart.isOpen).toBe(false);
