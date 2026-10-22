@@ -23,7 +23,9 @@ export interface ResourceStatus {
 }
 
 /** Statuses after which asking again won't help. */
-const FAILED = new Set(["NOT_PUBLISHED", "MISSING_DATA", "BLOCKED", "UNSUPPORTED", "FAILED_TO_DOWNLOAD"]);
+const FAILED = new Set(["NOT_PUBLISHED", "MISSING_DATA", "BLOCKED", "UNSUPPORTED", "FAILED_TO_DOWNLOAD", "BUILD_FAILED"]);
+/** How long to wait for the node before saying it can't get it now (docs/QORTAL.md, pitfall 14). */
+export const MAX_WAIT_MS = 5 * 60_000;
 
 export function resourceUrl(ref: ResourceRef): string {
   return `/arbitrary/${ref.service}/${encodeURIComponent(ref.name)}/${encodeURIComponent(ref.identifier)}`;
@@ -58,11 +60,15 @@ function visible(): Promise<void> {
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => {
+    const stop = () => {
       clearTimeout(timer);
       reject(new DOMException("Stopped", "AbortError"));
-    });
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", stop, { once: true });
   });
 }
 
@@ -76,9 +82,11 @@ export async function waitForResource(
   options: { signal?: AbortSignal; onStatus?: (status: ResourceStatus) => void; check?: typeof resourceStatus } = {}
 ): Promise<void> {
   const check = options.check ?? resourceStatus;
+  const started = Date.now();
   let errors = 0;
   for (let attempt = 0; ; attempt++) {
     if (options.signal?.aborted) throw new DOMException("Stopped", "AbortError");
+    if (Date.now() - started > MAX_WAIT_MS) throw new ResourceUnavailableError("TIMEOUT");
     await visible();
     try {
       const status = await check(ref, true);
@@ -97,7 +105,13 @@ export async function waitForResource(
 export class ResourceUnavailableError extends Error {
   readonly status: string;
   constructor(status: string) {
-    super(status === "NOT_PUBLISHED" ? "It isn't on QDN (deleted, or never published)." : `Your node can't get it right now (${status}).`);
+    super(
+      status === "NOT_PUBLISHED"
+        ? "It isn't on QDN (deleted, or never published)."
+        : status === "TIMEOUT"
+          ? "Your node is taking long to get it from peers. Try again later."
+          : `Your node can't get it right now (${status}).`
+    );
     this.name = "ResourceUnavailableError";
     this.status = status;
   }

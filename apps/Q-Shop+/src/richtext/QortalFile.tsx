@@ -35,6 +35,8 @@ function PdfPreview({ embed, onClose }: { embed: FileEmbed; onClose: () => void 
     const ref = { service: "FILE" as const, name: embed.name, identifier: embed.identifier };
     void (async () => {
       try {
+        // Known too big: not fetched at all (the node would download it first).
+        if (embed.size && embed.size > MAX_PDF_BYTES) throw new Error("too big");
         await waitForResource(ref, {
           signal: controller.signal,
           onStatus: (s) => {
@@ -61,7 +63,7 @@ function PdfPreview({ embed, onClose }: { embed: FileEmbed; onClose: () => void 
       }
     })();
     return () => controller.abort();
-  }, [embed.name, embed.identifier, attempt]);
+  }, [embed.name, embed.identifier, embed.size, attempt]);
 
   return (
     <ResponsiveDialog open onClose={onClose} title={title} maxWidth="lg">
