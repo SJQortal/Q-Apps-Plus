@@ -1,67 +1,41 @@
 /**
- * The Create shop and Edit shop dialogs, mounted once by GlobalWrapper and
- * opened through Redux (toggleCreateStoreModal / toggleEditStoreModal). The
- * publishing lives in hooks/useShopPublish.ts.
+ * The Create shop and Edit shop dialogs, mounted by GlobalWrapper and opened
+ * from anywhere through Redux (toggleCreateStoreModal / toggleEditStoreModal).
+ * Each mounts only while open. A new shop opens its seller page.
  */
-import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import type { RootState } from "../../state/store";
-import { toggleEditStoreModal } from "../../state/features/globalSlice";
-import CreateStoreModal, { type onPublishParam } from "./CreateStoreModal";
-import EditStoreModal, { type onPublishParamEdit } from "./EditStoreModal";
-import { useShopPublish } from "../../hooks/useShopPublish";
+import { toggleCreateStoreModal, toggleEditStoreModal } from "../../state/features/globalSlice";
+import CreateStoreModal from "./CreateStoreModal";
+import EditStoreModal from "./EditStoreModal";
 
 export function ShopDialogs() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const userName = useSelector((state: RootState) => state.auth.user?.name);
   const isOpenCreate = useSelector((state: RootState) => state.global.isOpenCreateStoreModal);
   const isOpenEdit = useSelector((state: RootState) => state.global.isOpenEditStoreModal);
-  const { createShop, editShop } = useShopPublish();
-  const [closeCreate, setCloseCreate] = useState(false);
-
-  const onCreate = async (p: onPublishParam) => {
-    const done = await createShop({
-      title: p.title,
-      description: p.description,
-      location: p.location,
-      shipsTo: p.shipsTo,
-      logo: p.logo,
-      foreignCoins: p.foreignCoins,
-      supportedCoins: p.supportedCoins,
-      shortStoreId: p.storeIdentifier,
-    });
-    if (done) setCloseCreate(true);
-  };
-
-  const onEdit = async (p: onPublishParamEdit) => {
-    await editShop({
-      title: p.title,
-      description: p.description,
-      location: p.location,
-      shipsTo: p.shipsTo,
-      logo: p.logo,
-      foreignCoins: p.foreignCoins,
-      supportedCoins: p.supportedCoins,
-    });
-  };
+  const viewedStoreId = useSelector((state: RootState) => state.store.storeId);
+  const myStores = useSelector((state: RootState) => state.store.myStores);
+  // Edit shop opened on one of the seller's shop pages edits that shop.
+  const editStoreId = viewedStoreId && myStores.some((s) => s.id === viewedStoreId) ? viewedStoreId : null;
 
   return (
     <>
       {isOpenCreate && userName && (
         <CreateStoreModal
           open={isOpenCreate}
-          closeCreateStoreModal={closeCreate}
-          setCloseCreateStoreModal={setCloseCreate}
-          onPublish={onCreate}
-          username={userName}
+          onClose={() => dispatch(toggleCreateStoreModal(false))}
+          onCreated={(storeId) => {
+            dispatch(toggleCreateStoreModal(false));
+            navigate(`/product-manager/${encodeURIComponent(storeId)}?tab=products`);
+          }}
         />
       )}
-      <EditStoreModal
-        open={isOpenEdit}
-        onClose={() => dispatch(toggleEditStoreModal(false))}
-        onPublish={onEdit}
-        username={userName || ""}
-      />
+      {isOpenEdit && userName && (
+        <EditStoreModal open={isOpenEdit} storeId={editStoreId} onClose={() => dispatch(toggleEditStoreModal(false))} />
+      )}
     </>
   );
 }

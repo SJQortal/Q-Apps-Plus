@@ -1,18 +1,32 @@
 /**
- * Create and edit a shop (moved out of GlobalWrapper). The payloads come from
- * qdn/payloads.ts and match the original's (payloads.test.ts); the publish
- * gets Hub's 30-minute budget and a decline is a quiet cancel.
+ * Create and edit a shop, and publish a new, empty product index for it
+ * (moved out of GlobalWrapper and the original's Edit shop dialog). The
+ * payloads come from qdn/payloads.ts and match the original's
+ * (payloads.test.ts); each publish gets Hub's 30-minute budget, a decline is
+ * a quiet cancel, and a timeout says the publish may still land instead of
+ * inviting a second fee.
  */
 import { useCallback, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "../state/store";
-import { setCurrentStore, setDataContainer, setOwnShopStatus } from "../state/features/globalSlice";
+import {
+  resetListProducts,
+  resetProducts,
+  setCurrentStore,
+  setDataContainer,
+  setOwnShopStatus,
+} from "../state/features/globalSlice";
 import { addToAllMyStores, addToHashMapStores, addToStores } from "../state/features/storeSlice";
 import { setNotification } from "../state/features/notificationsSlice";
-import { buildCreateStorePublish, buildEditStorePublish, type StoreFields } from "../qdn/payloads";
-import { dataContainerIdentifier, finalizeShortStoreId, storeIdentifier } from "../qdn/identifiers";
+import {
+  buildCreateStorePublish,
+  buildEditStorePublish,
+  buildRecreateDataContainerPublish,
+  type StoreFields,
+} from "../qdn/payloads";
+import { dataContainerIdentifier, finalizeShortStoreId, shortStoreIdOf, storeIdentifier } from "../qdn/identifiers";
 import { invalidateQdnJson, invalidateQdnSearches, resourceExists } from "../qdn/search";
-import { errorMessage, isHubDecline } from "../qdn/hubErrors";
+import { errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
 
 export class ShopFormError extends Error {}
@@ -33,15 +47,25 @@ export function validateShopFields(fields: StoreFields): string | null {
   return null;
 }
 
+/** What to say when Hub didn't answer in time: the publish may still land. */
+const TIMEOUT_TEXT = "Hub didn't answer in time. It may still be publishing, so check again in a minute before you try again.";
+
+function publishError(error: unknown, fallback: string): ShopFormError {
+  return new ShopFormError(isHubTimeout(error) ? TIMEOUT_TEXT : errorMessage(error, fallback));
+}
+
 export function useShopPublish() {
   const dispatch = useDispatch<AppDispatch>();
   const userName = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const [busy, setBusy] = useState(false);
 
-  /** Resolves true when published; false when the seller declined in Hub. Throws ShopFormError with a message otherwise. */
+  /**
+   * Resolves the new shop's id when published, or null when the seller
+   * declined in Hub. Throws ShopFormError with a message otherwise.
+   */
   const createShop = useCallback(
-    async (input: CreateShopInput): Promise<boolean> => {
+    async (input: CreateShopInput): Promise<string | null> => {
       if (!userName) throw new ShopFormError("Cannot publish: you do not have a Qortal name");
       const invalid = validateShopFields(input);
       if (invalid) throw new ShopFormError(invalid);
@@ -52,7 +76,7 @@ export function useShopPublish() {
       setBusy(true);
       try {
         if (await resourceExists("STORE", name, identifier, { fresh: true })) {
-          throw new ShopFormError("The store identifier already exists");
+          throw new ShopFormError("You already have a shop with this id. Pick another id.");
         }
         const created = Date.now();
         const { storeObj, dataContainer, request } = buildCreateStorePublish({
@@ -81,11 +105,11 @@ export function useShopPublish() {
         dispatch(setOwnShopStatus("ready"));
         invalidateQdnSearches((url) => url.includes("service=STORE"));
         dispatch(setNotification({ msg: "Shop created", alertType: "success" }));
-        return true;
+        return identifier;
       } catch (error) {
         if (error instanceof ShopFormError) throw error;
-        if (isHubDecline(error)) return false;
-        throw new ShopFormError(errorMessage(error, "Failed to create the shop"));
+        if (isHubDecline(error)) return null;
+        throw publishError(error, "Failed to create the shop");
       } finally {
         setBusy(false);
       }
@@ -93,6 +117,7 @@ export function useShopPublish() {
     [dispatch, userName]
   );
 
+  /** Resolves true when published; false when the seller declined in Hub. Throws ShopFormError otherwise. */
   const editShop = useCallback(
     async (fields: StoreFields): Promise<boolean> => {
       if (!userName || !currentStore?.id) throw new ShopFormError("Cannot publish: you do not have a Qortal name");
@@ -114,7 +139,7 @@ export function useShopPublish() {
         return true;
       } catch (error) {
         if (isHubDecline(error)) return false;
-        throw new ShopFormError(errorMessage(error, "Failed to update the shop"));
+        throw publishError(error, "Failed to update the shop");
       } finally {
         setBusy(false);
       }
@@ -122,5 +147,38 @@ export function useShopPublish() {
     [currentStore, dispatch, userName]
   );
 
-  return { createShop, editShop, busy };
+  /**
+   * Publishes a new, empty product index for the current shop: the
+   * original's "Recreate shop data", and the fix when a shop has none on QDN.
+   * It hides every product of the shop, so callers ask first. Resolves true
+   * when published, false when declined; throws ShopFormError otherwise.
+   */
+  const recreateProductList = useCallback(async (): Promise<boolean> => {
+    if (!userName || !currentStore?.id) throw new ShopFormError("Error! Missing shop data or name");
+    const storeId = currentStore.id;
+    setBusy(true);
+    try {
+      const { dataContainer, request } = buildRecreateDataContainerPublish({
+        name: userName,
+        storeId,
+        shortStoreId: currentStore.shortStoreId || shortStoreIdOf(storeId),
+      });
+      await qortalRequestWithTimeout(request, PUBLISH_TIMEOUT_MS);
+      dispatch(setDataContainer({ ...dataContainer, id: dataContainerIdentifier(storeId) }));
+      dispatch(resetListProducts());
+      dispatch(resetProducts());
+      dispatch(setOwnShopStatus("ready"));
+      invalidateQdnJson("DOCUMENT", userName, dataContainerIdentifier(storeId));
+      invalidateQdnSearches((url) => url.includes("service=DOCUMENT"));
+      dispatch(setNotification({ msg: "Product list published", alertType: "success" }));
+      return true;
+    } catch (error) {
+      if (isHubDecline(error)) return false;
+      throw publishError(error, "Couldn't publish the product list. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }, [currentStore, dispatch, userName]);
+
+  return { createShop, editShop, recreateProductList, busy };
 }
