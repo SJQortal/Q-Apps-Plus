@@ -31,6 +31,7 @@ import { dataContainerIdentifier, finalizeShortStoreId, shortStoreIdOf, storeIde
 import { invalidateQdnJson, invalidateQdnSearches, resourceExists } from "../qdn/search";
 import { errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
+import { primeShopDetails } from "../discovery/shopDetails";
 
 export class ShopFormError extends Error {}
 
@@ -144,6 +145,8 @@ export function useShopPublish() {
         dispatch(setCurrentStore(storeObj));
         dispatch(addToHashMapStores({ ...storeObj, owner: userName, isValid: true }));
         invalidateQdnJson("STORE", userName, currentStore.id);
+        // The home page's card for this shop shows the edit at once.
+        primeShopDetails(userName, currentStore.id, storeObj);
         invalidateQdnSearches((url) => url.includes("service=STORE"));
         dispatch(setNotification({ msg: "Shop updated", alertType: "success" }));
         return true;
