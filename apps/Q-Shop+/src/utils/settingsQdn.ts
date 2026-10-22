@@ -1,6 +1,6 @@
 /**
  * Settings sync to QDN, after Q-Share+'s utils/settingsQdn.ts (and Torq's):
- * the chosen theme and preferred coin are published as one small DOCUMENT
+ * the chosen theme, preferred coin and product view are published as one small DOCUMENT
  * under the active name, and restored from it on another device. Additive
  * data with its own identifier (constants/plus.ts); the original Q-Shop
  * never reads it.
@@ -13,6 +13,7 @@ import { isUiThemeId, type UiThemeId } from "../hub-theme";
 import { jsonToBase64 } from "../qdn/payloads";
 import { fetchQdnJson, invalidateQdnJson, invalidateQdnSearches, resourceExists } from "../qdn/search";
 import { isPreferredCoin } from "./settingsStorage";
+import { isProductView, type ProductView } from "./productView";
 
 export { SETTINGS_SYNC_IDENTIFIER };
 export const SETTINGS_SERVICE = "DOCUMENT";
@@ -20,13 +21,15 @@ export const SETTINGS_FILENAME = "settings.json";
 export const SETTINGS_TITLE = `${APP_NAME} settings`;
 export const SETTINGS_SNAPSHOT_VERSION = 1;
 
-/** What is stored: `{version: 1, theme, preferredCoin}`. */
+/** What is stored: `{version: 1, theme, preferredCoin, productView?}`. */
 export interface SettingsSnapshot {
   version: number;
   /** null when the stored theme is unknown to this build. */
   theme: UiThemeId | null;
   /** null when the stored coin is unknown to this build. */
   preferredCoin: string | null;
+  /** Round 5, additive: how shops show products (utils/productView.ts); absent in older saves. */
+  productView?: ProductView | null;
 }
 
 /** A type, not an interface, so it fits qortalRequest's open options type. */
@@ -40,11 +43,12 @@ export type SettingsPublishRequest = {
   filename: string;
 };
 
-export function collectSettingsSnapshot(theme: unknown, preferredCoin: unknown): SettingsSnapshot {
+export function collectSettingsSnapshot(theme: unknown, preferredCoin: unknown, productView?: unknown): SettingsSnapshot {
   return {
     version: SETTINGS_SNAPSHOT_VERSION,
     theme: isUiThemeId(theme) ? theme : null,
     preferredCoin: isPreferredCoin(preferredCoin) ? preferredCoin : null,
+    ...(productView !== undefined && { productView: isProductView(productView) ? productView : null }),
   };
 }
 
@@ -71,7 +75,12 @@ function decodeStored(value: unknown): Record<string, unknown> | null {
 }
 
 function looksLikeSettings(record: Record<string, unknown>): boolean {
-  return typeof record.version === "number" || record.theme !== undefined || record.preferredCoin !== undefined;
+  return (
+    typeof record.version === "number" ||
+    record.theme !== undefined ||
+    record.preferredCoin !== undefined ||
+    record.productView !== undefined
+  );
 }
 
 /**
@@ -87,7 +96,7 @@ export function normalizeSettingsSnapshot(value: unknown): SettingsSnapshot | nu
   if (nested) candidates.push(nested);
   const payload = candidates.find(looksLikeSettings);
   if (!payload) return null;
-  return collectSettingsSnapshot(payload.theme, payload.preferredCoin);
+  return collectSettingsSnapshot(payload.theme, payload.preferredCoin, payload.productView);
 }
 
 /** The publish request; Hub asks the user to confirm it. Pinned by settingsQdn.test.ts. */

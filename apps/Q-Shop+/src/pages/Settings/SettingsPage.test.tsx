@@ -13,6 +13,7 @@ import { base64ToJson } from "../../qdn/payloads";
 import { ACTIVE_NAME_STORAGE_KEY } from "../../constants/plus";
 import { ShellContext, type ShellActions } from "../../components/layout/shellState";
 import { SettingsPage, shortAddress } from "./SettingsPage";
+import { getProductView, resetProductView } from "../../utils/productView";
 
 const ADDRESS = "QBuyeRAddressxxxxxxxxxxxxxxxx7b1d0e";
 
@@ -177,7 +178,8 @@ describe("SettingsPage", () => {
         identifier: SETTINGS_SYNC_IDENTIFIER,
         filename: "settings.json",
       });
-      expect(base64ToJson(String(calls[0].data64))).toEqual({ version: 1, theme: "white", preferredCoin: "ARRR" });
+      // Round 5: the product view is saved too (additive).
+      expect(base64ToJson(String(calls[0].data64))).toEqual({ version: 1, theme: "white", preferredCoin: "ARRR", productView: "auto" });
       expect(q.calls.map((c) => c.action)).toEqual(["PUBLISH_QDN_RESOURCE"]);
     });
 
@@ -224,6 +226,21 @@ describe("SettingsPage", () => {
       expect(q.calls).toHaveLength(0);
     });
 
+    it("Restore also applies a saved product view", async () => {
+      resetProductView();
+      installQortalMock();
+      stubFetch((url) =>
+        url.startsWith(`/arbitrary/DOCUMENT/Buyer%2BOne/${SETTINGS_SYNC_IDENTIFIER}`)
+          ? { version: 1, theme: "black", preferredCoin: "LTC", productView: "grid" }
+          : []
+      );
+      renderSettings({ store: signedInStore() });
+      fireEvent.click(screen.getByRole("button", { name: /Restore/ }));
+      expect(await screen.findByText("Restored your theme, preferred coin and product view from QDN.")).toBeInTheDocument();
+      expect(getProductView()).toBe("grid");
+      resetProductView();
+    });
+
     it("Restore tells nothing saved apart from not on this node yet", async () => {
       let rows: unknown[] = [];
       stubFetch((url) =>
@@ -249,5 +266,20 @@ describe("SettingsPage", () => {
       expect(screen.getByRole("button", { name: "Copy the source link" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Copy the upstream link" })).toBeInTheDocument();
     });
+  });
+});
+
+describe("Settings: products in a shop", () => {
+  it("chooses how shops show products, Automatic until changed", () => {
+    localStorage.removeItem(SETTINGS_STORAGE_KEY);
+    resetProductView();
+    renderWithProviders(<SettingsPage />, { store: createAppStore() });
+    const select = screen.getByRole("combobox", { name: "Show as" });
+    expect(select).toHaveValue("auto");
+    fireEvent.change(select, { target: { value: "list" } });
+    expect(getProductView()).toBe("list");
+    expect(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY)!)).toMatchObject({ productView: "list" });
+    resetProductView();
+    localStorage.removeItem(SETTINGS_STORAGE_KEY);
   });
 });

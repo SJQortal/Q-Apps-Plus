@@ -38,6 +38,7 @@ import { PHONE_MEDIA, usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { useSwitchActiveName } from "../../hooks/useUserAccount";
 import { copyText } from "../../utils/clipboard";
 import { collectSettingsSnapshot, fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settingsQdn";
+import { isProductView, setProductView, useProductView } from "../../utils/productView";
 
 /** The coins a buyer can prefer, in the order the shops offer them (QORT, then Hub's SEND_COIN order). */
 export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR", "BTC", "LTC", "DOGE", "DGB", "RVN"];
@@ -114,6 +115,7 @@ export function SettingsPage() {
   const { signIn, authenticating } = useShellActions();
   const user = useSelector((state: RootState) => state.auth.user);
   const preferredCoin = useSelector((state: RootState) => state.store.preferredCoin);
+  const productView = useProductView();
   const { uiTheme, setUiTheme } = useHubTheme();
   const switchName = useSwitchActiveName();
   const [blockedOpen, setBlockedOpen] = useState(false);
@@ -123,6 +125,7 @@ export function SettingsPage() {
   const [syncNote, setSyncNote] = useState<string | null>(null);
   const [copyFailed, setCopyFailed] = useState<string | null>(null);
   const coinFieldId = useId();
+  const viewFieldId = useId();
 
   const name = user?.name || "";
   const names = (user?.names ?? []).map((n) => n.name).filter(Boolean);
@@ -143,7 +146,7 @@ export function SettingsPage() {
     if (!name) return;
     setSyncBusy("save");
     try {
-      await publishSettingsToQdn(name, collectSettingsSnapshot(uiTheme, preferredCoin));
+      await publishSettingsToQdn(name, collectSettingsSnapshot(uiTheme, preferredCoin, productView));
       setSyncNote(`Saved to QDN under ${name}.`);
       dispatch(setNotification({ msg: "Settings saved to QDN", alertType: "success" }));
     } catch (error) {
@@ -176,14 +179,17 @@ export function SettingsPage() {
         setSyncNote("Couldn't reach your node. Try again in a moment.");
         return;
       }
-      const { theme, preferredCoin: coin } = result.snapshot;
-      if (!theme && !coin) {
+      const { theme, preferredCoin: coin, productView: view } = result.snapshot;
+      if (!theme && !coin && !view) {
         setSyncNote("The saved settings are from a newer version; nothing here changed.");
         return;
       }
       if (theme) setUiTheme(theme);
       if (coin) dispatch(setPreferredCoin(coin));
-      setSyncNote("Restored your theme and preferred coin from QDN.");
+      if (view) setProductView(view);
+      const restored = [theme && "theme", coin && "preferred coin", view && "product view"].filter(Boolean) as string[];
+      const list = restored.length > 1 ? `${restored.slice(0, -1).join(", ")} and ${restored.at(-1)}` : restored[0];
+      setSyncNote(`Restored your ${list} from QDN.`);
       dispatch(setNotification({ msg: "Settings restored from QDN", alertType: "success" }));
     } finally {
       setSyncBusy(null);
@@ -321,6 +327,25 @@ export function SettingsPage() {
           </TextField>
         </Row>
         <Row>
+          <RowLabel title="Products in a shop" id={`${viewFieldId}-title`}>
+            A grid of pictures, or a list with more of each product. Automatic shows a list on phones and a grid elsewhere.
+          </RowLabel>
+          <TextField
+            select
+            size="small"
+            id={viewFieldId}
+            label="Show as"
+            value={productView}
+            onChange={(event) => isProductView(event.target.value) && setProductView(event.target.value)}
+            slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+            sx={{ minWidth: 200, [`@media ${PHONE_MEDIA}`]: { "& select": { minHeight: 27, py: "8.5px" } } }}
+          >
+            <option value="auto">Automatic</option>
+            <option value="grid">Grid</option>
+            <option value="list">List</option>
+          </TextField>
+        </Row>
+        <Row>
           <RowLabel title="Blocked names">The block list Q-Shop shares with Q-Blog.</RowLabel>
           <Buttons>
             <Button
@@ -338,7 +363,7 @@ export function SettingsPage() {
       <Section title="Sync">
         <Row>
           <RowLabel title="Settings on QDN">
-            Save your theme and preferred coin under your name, so another device can restore them. Saving publishes a
+            Save your theme, preferred coin and product view under your name, so another device can restore them. Saving publishes a
             small document: Hub asks you to confirm, and the usual fee applies.
           </RowLabel>
           <Buttons>

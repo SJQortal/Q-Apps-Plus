@@ -15,6 +15,8 @@ import { setPeerRetryDelaysForTests } from "../peerRetry";
 import { getShopDetails, resetShopDetails } from "../../../discovery/shopDetails";
 import { shopKey } from "../../../discovery/shopIndex";
 import { noteDeletedShop, resetDeletedShops } from "../../../qdn/deleted";
+import { resetProductView } from "../../../utils/productView";
+import { SETTINGS_STORAGE_KEY } from "../../../constants/plus";
 import { Store } from "./Store";
 
 const copyText = vi.fn(async (_text: string) => true);
@@ -28,6 +30,8 @@ beforeEach(() => {
   copyText.mockClear();
   resetShopDetails();
   resetDeletedShops();
+  localStorage.removeItem(SETTINGS_STORAGE_KEY);
+  resetProductView();
   restoreDelays = setPeerRetryDelaysForTests([30, 30, 30]);
 });
 afterEach(() => {
@@ -264,6 +268,23 @@ describe("shop page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
     expect(node.fetchCalls.filter((u) => u.includes("q-store-collections-"))).toEqual([]);
     expect(screen.queryByRole("region", { name: "Collections" })).toBeNull();
+  });
+
+  it("shows products as a grid or a list, as the buyer chooses, and remembers it", async () => {
+    renderShop(makeWorld());
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    const grid = screen.getByRole("button", { name: "Grid" });
+    // Automatic is tiles on a wide screen: no description in the cards.
+    expect(grid).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText("Description of product 3")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    expect(screen.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
+    // Rows show the start of each description.
+    expect(screen.getByText("Description of product 3")).toBeInTheDocument();
+    expect(cardTitles()).toHaveLength(12);
+    expect(JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY)!)).toMatchObject({ productView: "list" });
+    fireEvent.click(grid);
+    expect(screen.queryByText("Description of product 3")).toBeNull();
   });
 
   it("says when its owner deleted the shop, from one read: no retries, no existence search, gone from home", async () => {

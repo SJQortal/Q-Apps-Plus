@@ -9,6 +9,8 @@ export { SETTINGS_STORAGE_KEY };
 
 export interface StoredSettings {
   preferredCoin?: string;
+  /** How a shop shows its products (utils/productView.ts). */
+  productView?: string;
 }
 
 /**

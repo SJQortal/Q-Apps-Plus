@@ -13,6 +13,8 @@
  * A shop with collections (qdn/collections.ts) shows them as a row of cards
  * above the products; `?collection=<id>` shows one collection's products,
  * under its picture, title and description, with the same filters and sorts.
+ * Products show as a grid of tiles or a list of rows (utils/productView.ts:
+ * the buyer's choice, kept in Settings; by default rows on phones).
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -27,8 +29,12 @@ import {
   Skeleton,
   Switch,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
+import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
+import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import SearchIcon from "@mui/icons-material/Search";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
@@ -64,7 +70,8 @@ import {
   type ProductSort,
 } from "../shopData";
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
-import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
+import { ProductCard, ProductCardSkeleton, type ProductCardLayout } from "../ProductCard/ProductCard";
+import { productLayout, setProductView, useProductView } from "../../../utils/productView";
 import { ShopHeader, ShopHeaderSkeleton } from "../ShopHeader";
 import { StoreDetails } from "../StoreDetails/StoreDetails";
 import { ReviewsPanel } from "../StoreReviews/ReviewsPanel";
@@ -138,19 +145,23 @@ function CategoryChips({
   );
 }
 
-function ProductGridSkeleton({ count, note }: { count: number; note?: string }) {
+function ProductGridSkeleton({ count, note, layout = "tile" }: { count: number; note?: string; layout?: ProductCardLayout }) {
   return (
-    <ProductGrid aria-busy>
+    <ProductGrid aria-busy layout={layout}>
       {Array.from({ length: count }, (_, i) => (
         <li key={i}>
-          <ProductCardSkeleton note={i === 0 ? note : undefined} />
+          <ProductCardSkeleton note={i === 0 ? note : undefined} layout={layout} />
         </li>
       ))}
     </ProductGrid>
   );
 }
 
-function ProductGrid({ children, ...rest }: { children: ReactNode; "aria-busy"?: boolean }) {
+/**
+ * Tiles: as many columns as fit (two on a phone). Rows: one column (two side
+ * by side on a phone held sideways).
+ */
+function ProductGrid({ children, layout, ...rest }: { children: ReactNode; layout: ProductCardLayout; "aria-busy"?: boolean }) {
   return (
     <Box
       component="ul"
@@ -161,16 +172,40 @@ function ProductGrid({ children, ...rest }: { children: ReactNode; "aria-busy"?:
         p: 0,
         display: "grid",
         gap: { xs: 1.5, sm: 2 },
-        gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 200px), 1fr))",
-        // Phones: one column of rows (two side by side in landscape).
+        gridTemplateColumns: layout === "tile" ? "repeat(auto-fill, minmax(min(100%, 200px), 1fr))" : "minmax(0, 1fr)",
         [`@media ${PHONE_MEDIA}`]: {
-          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 320px), 1fr))",
+          gridTemplateColumns:
+            layout === "tile"
+              ? "repeat(auto-fill, minmax(min(100%, 148px), 1fr))"
+              : "repeat(auto-fill, minmax(min(100%, 320px), 1fr))",
         },
         "& > li": { minWidth: 0 },
       }}
     >
       {children}
     </Box>
+  );
+}
+
+/** Grid or List: the buyer's choice for every shop (utils/productView.ts). */
+function ProductViewToggle({ layout }: { layout: ProductCardLayout }) {
+  return (
+    <ToggleButtonGroup
+      exclusive
+      size="small"
+      value={layout === "tile" ? "grid" : "list"}
+      onChange={(_event, next: "grid" | "list" | null) => next && setProductView(next)}
+      aria-label="Show products as"
+      sx={{ "& .MuiToggleButton-root": { minHeight: 44, minWidth: 44, px: 1.25 } }}
+    >
+      {/* ToggleButtonGroup clones its direct children, so no Tooltip wrappers: a title does the job. */}
+      <ToggleButton value="grid" aria-label="Grid" title="Grid">
+        <GridViewOutlinedIcon fontSize="small" />
+      </ToggleButton>
+      <ToggleButton value="list" aria-label="List" title="List">
+        <ViewAgendaOutlinedIcon fontSize="small" />
+      </ToggleButton>
+    </ToggleButtonGroup>
   );
 }
 
@@ -202,6 +237,7 @@ function ShopProducts({
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const phone = usePhoneLayout();
+  const layout = productLayout(useProductView(), phone);
   const shopCoin = useShopCoin(shop);
   const { catalogues, statuses, load, retryFailed } = useCatalogueLoader(owner);
   const [query, setQuery] = useState<ProductQuery>(DEFAULT_PRODUCT_QUERY);
@@ -323,7 +359,7 @@ function ShopProducts({
 
   let body: ReactNode;
   if (productsStatus === "loading" || productsStatus === "fetching" || (productsStatus === "ready" && waitingForCollection)) {
-    body = <ProductGridSkeleton count={phone ? 4 : 8} note={productsStatus === "fetching" ? FETCHING_NOTE : undefined} />;
+    body = <ProductGridSkeleton count={phone ? 4 : 8} note={productsStatus === "fetching" ? FETCHING_NOTE : undefined} layout={layout} />;
   } else if (productsStatus === "missing") {
     body = isOwner ? (
       <EmptyState
@@ -380,11 +416,11 @@ function ShopProducts({
       />
     );
   } else if (searching && results.length === 0) {
-    body = <ProductGridSkeleton count={phone ? 2 : 4} />;
+    body = <ProductGridSkeleton count={phone ? 2 : 4} layout={layout} />;
   } else {
     body = (
       <>
-        <ProductGrid>
+        <ProductGrid layout={layout}>
           {shown.map((row) => {
             const product = productOf(row, catalogues);
             const state = statuses[row.catalogueId];
@@ -407,11 +443,14 @@ function ShopProducts({
                       rate={shopCoin.rate}
                       isOwnProduct={isOwner}
                       onAddToCart={() => addToCart(row)}
+                      layout={layout}
+                      compact={layout === "tile" && phone}
                     />
                   </LocalBoundary>
                 ) : (
                   <ProductCardSkeleton
                     note={state === "fetching" ? FETCHING_NOTE : state === "failed" ? "Not available on your node right now" : undefined}
+                    layout={layout}
                   />
                 )}
               </li>
@@ -502,6 +541,7 @@ function ShopProducts({
                 }}
               />
               {sortSelect}
+              <ProductViewToggle layout={layout} />
               <CoinPicker shop={shop} shopCoin={shopCoin} />
               {phone && (
                 <Button
