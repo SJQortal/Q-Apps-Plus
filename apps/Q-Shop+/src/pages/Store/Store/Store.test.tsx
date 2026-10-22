@@ -9,6 +9,7 @@ import { Route, Routes } from "react-router-dom";
 import { renderWithProviders } from "../../../test/renderWithProviders";
 import { installMockNode, makeWorld, type World } from "../../../test/mockNode";
 import { addUser } from "../../../state/features/authSlice";
+import { setCatalogueHashMap } from "../../../state/features/globalSlice";
 import { createAppStore } from "../../../state/store";
 import { setPeerRetryDelaysForTests } from "../peerRetry";
 import { Store } from "./Store";
@@ -317,6 +318,35 @@ describe("shop page", { timeout: 20_000 }, () => {
     } finally {
       error.mockRestore();
     }
+  });
+
+  it("shows the owner's products, not another name's copies published under the same catalogue ids", async () => {
+    const world = makeWorld();
+    const node = installMockNode(world);
+    const store = createAppStore();
+    store.dispatch(
+      setCatalogueHashMap({
+        id: "q-store-catalogue-my-shop-CAT0000001",
+        user: "Mallory",
+        isValid: true,
+        products: {
+          "q-store-product-my-shop-P000000011": { title: "Pay me directly", price: [{ currency: "qort", value: 1 }], status: "AVAILABLE" },
+          "q-store-product-my-shop-P000000010": { title: "Pay me directly too", price: [{ currency: "qort", value: 1 }], status: "AVAILABLE" },
+        },
+      })
+    );
+    renderWithProviders(
+      <Routes>
+        <Route path="/:user/:store" element={<Store />} />
+      </Routes>,
+      { initialEntries: [SHOP_PATH], store }
+    );
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    expect(cardTitles()).toContain("Product 11");
+    expect(cardTitles()).not.toContain("Pay me directly");
+    expect(catalogueFetches(node).filter((u) => u.includes("CAT0000001"))).toEqual([
+      "/arbitrary/DOCUMENT/Seller%20Name/q-store-catalogue-my-shop-CAT0000001",
+    ]);
   });
 
   it("tells a buyer the shop has no products, and the owner how to add some", async () => {

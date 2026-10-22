@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { Provider } from "react-redux";
 import { createAppStore } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
-import { setCurrentStore, setDataContainer } from "../../state/features/globalSlice";
+import { setCatalogueHashMap, setCurrentStore, setDataContainer } from "../../state/features/globalSlice";
 import { addToReviews } from "../../state/features/storeSlice";
 import { installMockNode, makeWorld } from "../../test/mockNode";
 import { currentStoreFrom } from "../../hooks/useOwnShops";
 import { DATA_CONTAINER_ID, SELLER, STORE_ID, dataContainer, storeJson } from "../../test/fixtures/shop";
-import { useCatalogueLoader, useShopReviews, useViewedShop } from "./useShopData";
+import { useCatalogue, useCatalogueLoader, useShopReviews, useViewedShop } from "./useShopData";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -76,6 +76,66 @@ describe("useCatalogueLoader", () => {
     expect(store.getState().global.catalogueHashMap[ids[0]]).toMatchObject({ id: ids[0], user: SELLER, isValid: true });
     result.current.load(ids);
     expect(node.fetchCalls.filter((u) => u.includes("q-store-catalogue-"))).toHaveLength(2);
+  });
+});
+
+describe("catalogues of the right owner only", () => {
+  const CAT = "q-store-catalogue-my-shop-CAT0000001";
+  const P11 = "q-store-product-my-shop-P000000011";
+  /** Another name's copy under the seller's catalogue identifier (pitfall 15). */
+  const mallorys = (user: string | null = "Mallory") => ({
+    id: CAT,
+    ...(user ? { user } : {}),
+    isValid: true,
+    products: { [P11]: { title: "Pay me directly", price: [{ currency: "qort", value: 1 }], status: "AVAILABLE" } },
+  });
+
+  it("reads a catalogue again under the owner's name when the shared map holds another name's copy", async () => {
+    const node = installMockNode(makeWorld());
+    const store = createAppStore();
+    store.dispatch(setCatalogueHashMap(mallorys()));
+    const { result } = renderHook(() => useCatalogueLoader(SELLER), { wrapper: wrapperFor(store) });
+    expect(result.current.catalogues[CAT]).toBeUndefined();
+    act(() => result.current.load([CAT]));
+    await waitFor(() => expect(result.current.catalogues[CAT]?.products[P11]?.title).toBe("Product 11"));
+    expect(node.fetchCalls.filter((u) => u.includes(CAT))).toEqual([`/arbitrary/DOCUMENT/Seller%20Name/${CAT}`]);
+    expect(store.getState().global.catalogueHashMap[CAT]).toMatchObject({ user: SELLER });
+    // Another screen puts the other copy back in the shared map: this page keeps the owner's.
+    act(() => {
+      store.dispatch(setCatalogueHashMap(mallorys()));
+    });
+    expect(result.current.catalogues[CAT]?.products[P11]?.title).toBe("Product 11");
+    act(() => result.current.load([CAT]));
+    expect(node.fetchCalls.filter((u) => u.includes(CAT))).toHaveLength(1);
+  });
+
+  it("counts an entry without a publisher (the seller's own publish) only on the signed-in seller's shop", async () => {
+    const node = installMockNode(makeWorld());
+    const store = createAppStore();
+    store.dispatch(setCatalogueHashMap(mallorys(null)));
+    const visitor = renderHook(() => useCatalogueLoader(SELLER), { wrapper: wrapperFor(store) });
+    expect(visitor.result.current.catalogues[CAT]).toBeUndefined();
+    visitor.unmount();
+    store.dispatch(addUser({ address: "Q", publicKey: "pk", name: SELLER }));
+    const seller = renderHook(() => useCatalogueLoader(SELLER), { wrapper: wrapperFor(store) });
+    expect(seller.result.current.catalogues[CAT]?.products[P11]?.title).toBe("Pay me directly");
+    act(() => seller.result.current.load([CAT]));
+    expect(node.fetchCalls.filter((u) => u.includes(CAT))).toHaveLength(0);
+  });
+
+  it("the product page reads the owner's catalogue instead of another name's copy", async () => {
+    const node = installMockNode(makeWorld());
+    const store = createAppStore();
+    store.dispatch(setCatalogueHashMap(mallorys()));
+    const { result } = renderHook(() => useCatalogue(SELLER, CAT), { wrapper: wrapperFor(store) });
+    expect(result.current.catalogue).toBeUndefined();
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(result.current.catalogue?.products[P11]?.title).toBe("Product 11");
+    expect(node.fetchCalls.filter((u) => u.includes(CAT))).toEqual([`/arbitrary/DOCUMENT/Seller%20Name/${CAT}`]);
+    act(() => {
+      store.dispatch(setCatalogueHashMap(mallorys()));
+    });
+    expect(result.current.catalogue?.products[P11]?.title).toBe("Product 11");
   });
 });
 

@@ -72,6 +72,22 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toHaveLength(0);
   });
 
+  it("shows the owner's product, not another name's copy published under the same catalogue id", async () => {
+    const store = createAppStore();
+    store.dispatch(
+      setCatalogueHashMap({
+        id: CAT1,
+        user: "Mallory",
+        isValid: true,
+        products: { [P11]: { title: "Pay me directly", description: "Send QORT to Mallory", price: [{ currency: "qort", value: 1 }], status: "AVAILABLE" } },
+      })
+    );
+    const { node } = renderProduct(makeWorld(), pathOf(P11), null, store);
+    expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
+    expect(screen.queryByText("Send QORT to Mallory")).toBeNull();
+    expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toEqual([`/arbitrary/DOCUMENT/Seller%20Name/${CAT1}`]);
+  });
+
   it("adds the chosen quantity to the cart, 1 to 99", async () => {
     const { store } = renderProduct(makeWorld(), pathOf(P11));
     await screen.findByRole("heading", { level: 1, name: "Product 11" });
