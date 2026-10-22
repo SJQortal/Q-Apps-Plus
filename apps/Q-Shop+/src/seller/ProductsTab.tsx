@@ -13,7 +13,9 @@
  *
  * Select turns the list into checkboxes: Select all (everything the filters
  * show), then Delete, which the seller page asks about first
- * (seller/DeleteProductsDialog.tsx).
+ * (seller/DeleteProductsDialog.tsx). The selection bar stays at the top
+ * while the list scrolls, says how many chosen products the filters hide,
+ * takes the keyboard focus, and Escape leaves it.
  */
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
@@ -46,6 +48,7 @@ import { formatPrice } from "../money/pricing";
 import { EmptyState } from "../components/common/EmptyState";
 import { BottomSheet } from "../components/common/mobile";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
+import { stickyBelowHeader } from "../components/layout/Navbar/Navbar-styles";
 import { STATUS_LABEL, productForEdit, productFromIndexRow } from "./productDraft";
 import {
   DEFAULT_FILTERS,
@@ -118,6 +121,15 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   const openedFor = useRef<string | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  // Focus follows select mode: into its bar when it starts, back to Select when it ends.
+  const selectButton = useRef<HTMLButtonElement>(null);
+  const selectAllButton = useRef<HTMLButtonElement>(null);
+  const focusNext = useRef<"bar" | "select" | null>(null);
+  useEffect(() => {
+    if (focusNext.current === "bar" && selecting) selectAllButton.current?.focus();
+    if (focusNext.current === "select" && !selecting) selectButton.current?.focus();
+    focusNext.current = null;
+  }, [selecting]);
 
   const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId);
   const filtered = filterSellerProducts(rows, filters, detailsOf);
@@ -179,7 +191,15 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   // Only products still listed count (a delete or a reload may have removed some).
   const chosen = rows.filter((row) => selected.has(row.productId));
   const allChosen = filtered.length > 0 && filtered.every((row) => selected.has(row.productId));
+  // Chosen, then hidden by a search or a filter: they still go, so the bar says so.
+  const shownIds = new Set(filtered.map((row) => row.productId));
+  const hiddenChosen = chosen.filter((row) => !shownIds.has(row.productId)).length;
+  const startSelecting = () => {
+    focusNext.current = "bar";
+    setSelecting(true);
+  };
   const stopSelecting = () => {
+    focusNext.current = "select";
     setSelecting(false);
     setSelected(new Set());
   };
@@ -249,13 +269,43 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+    <Box
+      sx={{ display: "flex", flexDirection: "column", gap: 2 }}
+      onKeyDown={
+        selecting
+          ? (event) => {
+              if (event.key !== "Escape") return;
+              event.stopPropagation();
+              stopSelecting();
+            }
+          : undefined
+      }
+    >
       {selecting ? (
-        <Box role="toolbar" aria-label="Selected products" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <Box
+          role="toolbar"
+          aria-label="Selected products"
+          sx={(theme) => ({
+            ...stickyBelowHeader(theme, "8px"),
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            flexWrap: "wrap",
+            pb: 1,
+            bgcolor: "background.default",
+            borderBottom: 1,
+            borderColor: "divider",
+          })}
+        >
           <Typography role="status" sx={{ flex: phone ? "1 1 100%" : 1, minWidth: 0, fontWeight: 600 }}>
-            {chosen.length === 0 ? "Tap products to select them" : chosen.length === 1 ? "1 selected" : `${chosen.length} selected`}
+            {chosen.length === 0
+              ? "Select the products to delete"
+              : `${chosen.length === 1 ? "1 selected" : `${chosen.length} selected`}${
+                  hiddenChosen > 0 ? `, ${hiddenChosen} hidden by the search or filters` : ""
+                }`}
           </Typography>
           <Button
+            ref={selectAllButton}
             onClick={() => setSelected(allChosen ? new Set() : new Set([...selected, ...filtered.map((row) => row.productId)]))}
             disabled={filtered.length === 0}
             sx={{ minHeight: 44 }}
@@ -278,12 +328,19 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
         </Box>
       ) : (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          <Typography sx={{ flex: 1, minWidth: 0, color: "text.secondary" }}>
+          {/* On phones the count has its own line, so the buttons never squeeze it. */}
+          <Typography sx={{ flex: phone ? "1 1 100%" : 1, minWidth: 0, color: "text.secondary" }}>
             {rows.length === 1 ? "1 product" : `${rows.length} products`}
             {counts.OUT_OF_STOCK > 0 ? ` · ${counts.OUT_OF_STOCK} out of stock` : ""}
           </Typography>
           {onDelete && rows.length > 0 && (
-            <Button variant="outlined" startIcon={<ChecklistOutlinedIcon />} onClick={() => setSelecting(true)} sx={{ minHeight: 44 }}>
+            <Button
+              ref={selectButton}
+              variant="outlined"
+              startIcon={<ChecklistOutlinedIcon />}
+              onClick={startSelecting}
+              sx={{ minHeight: 44 }}
+            >
               Select
             </Button>
           )}

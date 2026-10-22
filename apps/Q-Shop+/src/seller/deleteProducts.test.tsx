@@ -161,16 +161,34 @@ describe("deleting products", () => {
     await within(list).findByText("Chair");
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
     expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+    // The keyboard follows: into the bar.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Select all" })).toHaveFocus());
     fireEvent.click(screen.getByRole("button", { name: "Select all" }));
     expect(screen.getByText("3 selected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Select none" }));
-    expect(screen.getByText("Tap products to select them")).toBeInTheDocument();
+    expect(screen.getByText("Select the products to delete")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Select" })).toHaveFocus());
     // Tapping a product opens it again.
     fireEvent.click(within(list).getByRole("button", { name: "Edit Chair" }));
     expect(await screen.findByRole("dialog", { name: "Edit product" })).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+  });
+
+  it("says when the search hides chosen products, and Escape leaves select mode", async () => {
+    stubNode();
+    setup();
+    const list = await screen.findByRole("list", { name: "Products" });
+    await within(list).findByText("Chair");
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: "Select Mug" }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: "Select Chair" }));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search your products" }), { target: { value: "chair" } });
+    expect(await screen.findByText("2 selected, 1 hidden by the search or filters")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Select none" }), { key: "Escape" });
+    expect(screen.queryByRole("toolbar", { name: "Selected products" })).toBeNull();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Select" })).toHaveFocus());
   });
 
   it("deletes from the product form, which stays open until it's deleted", async () => {
