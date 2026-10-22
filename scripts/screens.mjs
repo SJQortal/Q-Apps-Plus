@@ -196,7 +196,7 @@ try {
         await page.route(/^https?:\/\/[^/]+\/assets(?:\/[^/?.]+(?:\/[^?]*)?)?(?:\?.*)?$/, answerCore);
         let ok = true;
         try {
-          await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=${MODE}`, { waitUntil: 'load', timeout: 12000 });
+          await page.goto(`http://127.0.0.1:${PORT}${screen.path}${screen.path.includes("?") ? "&" : "?"}theme=${MODE}`, { waitUntil: 'load', timeout: 12000 });
           await page.waitForSelector('#root > *', { timeout: 8000 }).catch(() => {});
           for (const label of config.dismiss ?? []) {
             const b = page.getByRole('button', { name: label });
