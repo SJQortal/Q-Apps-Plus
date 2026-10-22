@@ -1,493 +1,275 @@
-/* eslint-disable @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
-import React, { useMemo, useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+/**
+ * The seller's page for one of their shops (route `/product-manager/:store`,
+ * the original's): a header with the shop's title, View shop and Copy link;
+ * "Ready to publish" when there are drafts; and tabs, scrollable on phones:
+ * Overview, Products, Orders, Reviews and Shop. The tab is kept in `?tab=`.
+ *
+ * Publishing products: seller/usePublishProducts.ts builds the original's
+ * catalogues and product index, seller/PublishProductsDialog.tsx sends them
+ * (in batches past 20). Nothing is ever published without the seller asking.
+ */
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../state/store";
-import { Box, Grid, useTheme } from "@mui/material";
-import LazyLoad from "../../components/common/LazyLoad";
-import { NewProduct } from "./NewProduct/NewProduct";
-import { SimpleTable } from "./ProductTable/ProductTable";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Box, Button, IconButton, Skeleton, Tab, Tabs, Tooltip } from "@mui/material";
+import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import type { AppDispatch, RootState } from "../../state/store";
+import { setAllMyStores, type Store } from "../../state/features/storeSlice";
+import { setOwnShopStatus, toggleCreateStoreModal } from "../../state/features/globalSlice";
 import { setNotification } from "../../state/features/notificationsSlice";
-import { objectToBase64 } from "../../utils/toBase64";
-import ShortUniqueId from "short-unique-id";
-import {
-  Catalogue,
-  CatalogueDataContainer,
-  DataContainer,
-  clearAllProductsToSave,
-  removeFromProductsToSave,
-  setDataContainer,
-  setProducts,
-  updateCatalogueHashMap,
-} from "../../state/features/globalSlice";
-import { Price, Product } from "../../state/features/storeSlice";
-import { useFetchOrders } from "../../hooks/useFetchOrders";
-import { AVAILABLE } from "../../constants/product-status";
-import {
-  TabsContainer,
-  StyledTabs,
-  StyledTab,
-  ProductsToSaveCard,
-  ProductToSaveCard,
-  CardHeader,
-  Bulletpoints,
-  TimesIcon,
-  CardButtonRow,
-  AddMoreButton,
-  MinimizeIcon,
-  DockedMinimizeIcon,
-  DockedProductsToSaveCard,
-  ProductManagerContainer,
-  ProductsCol,
-} from "./ProductManager-styles";
-import { OrdersTab } from "./OrdersTab";
-import { BackToStorefrontButton } from "../Store/Store/Store-styles";
-import { QortalSVG } from "../../assets/svgs/QortalSVG";
-import { CategorySVG } from "../../assets/svgs/CategorySVG";
-import { LoyaltySVG } from "../../assets/svgs/LoyaltySVG";
-import useConfirmationModal from "../../hooks/useConfirmModal";
-import { CreateButton } from "../../components/modals/CreateStoreModal-styles";
-import { ReusableModal } from "../../components/modals/ReusableModal";
-import { useParams } from "react-router-dom";
-import { DATA_CONTAINER_BASE } from "../../constants/identifiers";
-import { shortStoreIdOf } from "../../qdn/identifiers";
-import { buildProductPublish, type DataContainerDoc, type ProductDraft } from "../../qdn/payloads";
 import { resetOrders } from "../../state/features/orderSlice";
-import { useModal } from "../../components/common/useModal";
-import { MultiplePublish } from "../../components/common/MultiplePublish/MultiplePublish";
+import { Page, PageHeader } from "../../components/layout/Page";
+import { EmptyState } from "../../components/common/EmptyState";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { findOwnShops, loadOwnShop } from "../../hooks/useOwnShops";
+import { decodeParam, storeLink, storePath } from "../../qdn/links";
+import { copyText } from "../../utils/clipboard";
+import { ProductDialog } from "./NewProduct/NewProduct";
+import { SellerOverview } from "./SellerOverview";
+import { OrdersTab } from "./OrdersTab";
+import { ReviewsPanel } from "../Store/StoreReviews/ReviewsPanel";
+import { ProductsTab } from "../../seller/ProductsTab";
+import { DraftsCard } from "../../seller/DraftsCard";
+import { ShopTab } from "../../seller/ShopTab";
+import { ProductListStatus } from "../../seller/ProductListStatus";
+import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
+import { usePublishProducts } from "../../seller/usePublishProducts";
 
-const uid = new ShortUniqueId({ length: 10 });
+export const SELLER_TABS = ["overview", "products", "orders", "reviews", "shop"] as const;
+export type SellerTab = (typeof SELLER_TABS)[number];
+const TAB_LABEL: Record<SellerTab, string> = {
+  overview: "Overview",
+  products: "Products",
+  orders: "Orders",
+  reviews: "Reviews",
+  shop: "Shop",
+};
+
+function isSellerTab(value: string | null): value is SellerTab {
+  return !!value && (SELLER_TABS as readonly string[]).includes(value);
+}
+
+type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null } | null;
 
 export const ProductManager = () => {
-  const {isShow, onCancel, onOk, show} = useModal()
-  const [publishes, setPublishes] = useState<any>(null);
-
-  const theme = useTheme();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-
-  // Get store id from url
-  const { store } = useParams();
+  const phone = usePhoneLayout();
+  const { store: storeParam } = useParams();
+  const storeId = decodeParam(storeParam);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const tab: SellerTab = isSellerTab(tabParam) ? tabParam : "overview";
 
   const user = useSelector((state: RootState) => state.auth.user);
-  const productsToSave = useSelector(
-    (state: RootState) => state.global.productsToSave
-  );
-  const currentStore = useSelector(
-    (state: RootState) => state.global.currentStore
-  );
-  const dataContainer = useSelector(
-    (state: RootState) => state.global.dataContainer
-  );
-  const orders = useSelector((state: RootState) => state.order.orders);
-  const listProducts = useSelector(
-    (state: RootState) => state.global.listProducts
-  );
-  // Products to map
-  const products = useSelector((state: RootState) => state.global.products);
+  const currentStore = useSelector((state: RootState) => state.global.currentStore);
+  const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
+  const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
+  const myStores = useSelector((state: RootState) => state.store.myStores);
+  const [productDialog, setProductDialog] = useState<ProductDialogState>(null);
+  const publish = usePublishProducts();
 
-  const { products: dataContainerProducts } = listProducts;
+  const isCurrent = !!currentStore && currentStore.id === storeId;
+  const routedShop = myStores.find((s) => s.id === storeId);
+  const ready = isCurrent && !!dataContainer && dataContainer.storeId === storeId;
 
-  const [valueTab, setValueTab] = React.useState(0);
-  const [productToEdit, setProductToEdit] = useState<Product | null>(null);
-  const [openAddProduct, setOpenAddProduct] = useState<boolean>(false);
-  const [dockProductsToSave, setDockProductsToSave] = useState<boolean>(false);
-
-  // Get authenticated user's name
-  const userName = useMemo(() => {
-    if (!user?.name) return "";
-    return user.name;
-  }, [user]);
-
-
-  // Redirect to Store page if they're hot reloading
-
-
-  // Publish productsToSave to QDN
-  async function publishQDNResource() {
-    let address: string = "";
-    let name: string = "";
-    let errorMsg = "";
-
-    address = user?.address || "";
-    name = user?.name || "";
-
-    // Validation
-    if (!address) {
-      errorMsg = "Cannot send: your address isn't available";
-    }
-    if (!name) {
-      errorMsg = "Cannot send a message without a access to your name";
-    }
-
-    if (!currentStore) {
-      errorMsg = "Cannot create a product without having a store";
-    }
-
-    if (!dataContainer) {
-      errorMsg = "Cannot create a product without having a data-container";
-    }
-
-    // Add validation to make sure the dataContainer has the same store id as the current store
-    if (currentStore?.id !== dataContainer?.storeId) {
-      errorMsg = "Cannot create a product without having a data-container";
-    }
-
-    if (errorMsg) {
-      dispatch(
-        setNotification({
-          msg: errorMsg,
-          alertType: "error",
-        })
-      );
-      throw new Error(errorMsg);
-    }
-
-    if (!currentStore?.id) throw new Error("Cannot find store id");
-    if (!dataContainer?.products)
-      throw new Error("Cannot find data-container products");
-
-    try {
-      const storeId: string = currentStore?.id;
-      if (!storeId) throw new Error("Could not find your store");
-      const shortStoreId = shortStoreIdOf(storeId);
-      const { catalogues: listOfCataloguesToPublish, dataContainer: dataContainerToPublish, resources } =
-        await buildProductPublish({
-          name,
-          shortStoreId,
-          dataContainer: dataContainer as unknown as DataContainerDoc,
-          productsToSave: productsToSave as unknown as Record<string, ProductDraft>,
-          fetchCatalogue: async (catalogueId) =>
-            qortalRequest({
-              action: "FETCH_QDN_RESOURCE",
-              name: name,
-              service: "DOCUMENT",
-              identifier: catalogueId,
-            }),
-          newUid: () => uid(),
-        });
-      // Publish the catalogues and the data container to QDN. Remember that there can be multiple catalogues because each catalogue holds a maximum of 10 products. Therefore, if you're publishing multiple products, you will possibly fill up the last catalogue, before then creating a new one.
-      const multiplePublish = {
-        action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
-        resources,
-      };
-      setPublishes(multiplePublish)
-      await show()
-      // await qortalRequest(multiplePublish);
-
-      // Clear productsToSave from Redux store
-      dispatch(clearAllProductsToSave());
-
-      // Replace dataContainer in the store
-      dispatch(
-        setDataContainer({
-          ...dataContainerToPublish,
-          id: `${storeId}-${DATA_CONTAINER_BASE}`,
-        })
-      );
-
-      const newProductsArray = Object.keys(dataContainerToPublish.products).map(
-        key => {
-          const product = dataContainerToPublish.products[key];
-          return {
-            ...product,
-            id: key,
-          };
-        }
-      );
-
-      // Reset products to first 20 in the array of listProducts
-      dispatch(setProducts(newProductsArray));
-
-      const newCatalogueHashMapFunc = () => {
-        const newCatalogueHashMap: Record<string, Catalogue> = {};
-
-        listOfCataloguesToPublish.forEach(catalogue => {
-          newCatalogueHashMap[catalogue.id] = catalogue;
-        });
-        return newCatalogueHashMap;
-      };
-
-      const catalogueHashMapToDispatch = newCatalogueHashMapFunc();
-      dispatch(updateCatalogueHashMap(catalogueHashMapToDispatch));
-
-      // Toast
-      dispatch(
-        setNotification({
-          msg: "Products saved",
-          alertType: "success",
-        })
-      );
-
-      // Error handling
-    } catch (error: any) {
-      let notificationObj = null;
-      if (typeof error === "string") {
-        notificationObj = {
-          msg: error || "Failed to send message",
-          alertType: "error",
-        };
-      } else if (typeof error?.error === "string") {
-        notificationObj = {
-          msg: error?.error || "Failed to send message",
-          alertType: "error",
-        };
-      } else {
-        notificationObj = {
-          msg: error?.message || "Failed to send message",
-          alertType: "error",
-        };
-      }
-      if (!notificationObj) return;
-      dispatch(setNotification(notificationObj));
-
-      throw new Error("Failed to send message");
-    } finally {
-      setPublishes(null)
-    }
-  }
-
-  const handleChange = (event: React.SyntheticEvent, newValue: number) => {
-    setValueTab(newValue);
-  };
-
-  // Confirmation to delete product from productsToSave
-  const { Modal, showModal } = useConfirmationModal({
-    title: "Remove Product from List To Save to the Shop",
-    message: "Are you sure you want to proceed?",
-  });
-
-  const handleRemoveConfirmation = async (key: string) => {
-    const userConfirmed = await showModal();
-    if (userConfirmed) {
-      // User confirmed action
-      dispatch(removeFromProductsToSave(key));
-    }
-  };
-
-  // Get products & orders from Redux
-  const { getProducts } = useFetchOrders();
-
-  const handleGetProducts = React.useCallback(async () => {
-    await getProducts();
-  }, [getProducts]);
-
-  // Fetch products from hashMap if listProducts changes
+  // The routed shop is one of the seller's but not the current one: make it
+  // current (once; if it can't be read, the status card says so).
+  const asked = useRef<string | null>(null);
   useEffect(() => {
-    handleGetProducts();
-  }, [dataContainerProducts]);
+    if (isCurrent || !routedShop || asked.current === routedShop.id) return;
+    asked.current = routedShop.id;
+    void loadOwnShop(dispatch, routedShop);
+  }, [isCurrent, routedShop, dispatch]);
 
-  useEffect(() => {
-    if (
-      (!dataContainer || Object.keys(dataContainer).length === 0) &&
-      userName
-    ) {
-      navigate(`/${userName}/${store}`);
-    } else {
-      return;
-    }
-  }, [userName, dataContainer]);
-
-  // Cleanup orders when they leave ProductManager
+  // Leaving the seller page forgets the received orders, as the original did.
   useEffect(() => {
     return () => {
       dispatch(resetOrders());
+    };
+  }, [dispatch]);
+
+  const setTab = useCallback(
+    (next: string) => {
+      if (!isSellerTab(next)) return;
+      const params = new URLSearchParams(searchParams);
+      params.set("tab", next);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams]
+  );
+
+  const openAdd = useCallback(() => setProductDialog({ key: Date.now(), product: null }), []);
+  const openEdit = useCallback(
+    (product: Record<string, any> & { id: string }) => setProductDialog({ key: Date.now(), product }),
+    []
+  );
+
+  /** Reads the shop and its product index again, fresh from the node. */
+  const userName = user?.name;
+  const reload = useCallback(async () => {
+    if (!userName) return;
+    if (ownShopStatus === "error" || !routedShop) {
+      dispatch(setOwnShopStatus("loading"));
+      try {
+        const shops = await findOwnShops(userName, true);
+        dispatch(setAllMyStores(shops));
+        const shop = shops.find((s) => s.id === storeId) ?? shops[0];
+        if (shop) await loadOwnShop(dispatch, shop, { fresh: true });
+        else dispatch(setOwnShopStatus("none"));
+      } catch {
+        dispatch(setOwnShopStatus("error"));
+      }
+      return;
     }
-  }, [])
+    await loadOwnShop(dispatch, routedShop as Store, { fresh: true });
+  }, [userName, ownShopStatus, routedShop, storeId, dispatch]);
+
+  const onReload = useCallback(() => void reload(), [reload]);
+
+  const copyLink = async () => {
+    if (!currentStore) return;
+    const link = storeLink(currentStore.owner || user?.name || "", currentStore.id);
+    const ok = await copyText(link);
+    dispatch(setNotification(ok ? { alertType: "success", msg: "Link copied" } : { alertType: "info", msg: link }));
+  };
+
+  if (!user?.name) {
+    return (
+      <Page width="list">
+        <PageHeader title="Your shop" back />
+        <EmptyState title="Sign in to manage your shop" description="Use Sign in at the top to load your Qortal name." />
+      </Page>
+    );
+  }
+
+  if (!isCurrent) {
+    const loading = ownShopStatus === "idle" || ownShopStatus === "loading";
+    // One of the seller's shops that couldn't be read (its JSON isn't on the node).
+    const routedFailed = !!routedShop && (ownShopStatus === "unavailable" || ownShopStatus === "error");
+    const settled = !loading && (!routedShop || routedFailed);
+    return (
+      <Page width="grid">
+        <PageHeader title={routedShop?.title || "Your shop"} back />
+        {!settled ? (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }} aria-busy="true" aria-label="Loading your shop">
+            <Skeleton variant="rounded" height={48} />
+            <Skeleton variant="rounded" height={72} />
+            <Skeleton variant="rounded" height={72} />
+          </Box>
+        ) : routedFailed ? (
+          <EmptyState
+            title="Couldn't load this shop from your node"
+            description="It may still be on its way from peers."
+            actionLabel="Retry"
+            onAction={onReload}
+          />
+        ) : ownShopStatus === "none" ? (
+          <EmptyState
+            title="You don't have a shop yet"
+            description="Create one to start selling. It's published under your name."
+            actionLabel="Create your shop"
+            onAction={() => dispatch(toggleCreateStoreModal(true))}
+          />
+        ) : ownShopStatus === "error" ? (
+          <EmptyState title="Couldn't load your shops" description="Your node didn't answer." actionLabel="Retry" onAction={() => void reload()} />
+        ) : (
+          <EmptyState
+            title="This isn't one of your shops"
+            description="Only the shop's owner can manage it."
+            actionLabel={currentStore ? "Go to your shop" : undefined}
+            onAction={currentStore ? () => navigate(`/product-manager/${encodeURIComponent(currentStore.id)}`) : undefined}
+          />
+        )}
+      </Page>
+    );
+  }
+
+  const owner = currentStore.owner || user.name;
+  const shopUrl = storePath(owner, currentStore.id);
+  const actions = phone ? (
+    <>
+      <Tooltip title="View shop">
+        <IconButton aria-label="View shop" onClick={() => navigate(shopUrl)} sx={{ width: 44, height: 44 }}>
+          <StorefrontOutlinedIcon />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Copy link">
+        <IconButton aria-label="Copy shop link" onClick={() => void copyLink()} sx={{ width: 44, height: 44 }}>
+          <LinkOutlinedIcon />
+        </IconButton>
+      </Tooltip>
+    </>
+  ) : (
+    <>
+      <Button variant="outlined" startIcon={<StorefrontOutlinedIcon />} onClick={() => navigate(shopUrl)} sx={{ minHeight: 44 }}>
+        View shop
+      </Button>
+      <Button color="inherit" startIcon={<LinkOutlinedIcon />} onClick={() => void copyLink()} sx={{ minHeight: 44 }}>
+        Copy link
+      </Button>
+    </>
+  );
+  const overviewProps = { storeId: currentStore.id, onOpenTab: setTab };
 
   return (
-    <ProductManagerContainer>
-      <TabsContainer>
-        <BackToStorefrontButton
-          onClick={() => {
-            navigate(`/${userName}/${currentStore?.id}`);
-          }}
-        >
-          Back To Storefront
-        </BackToStorefrontButton>
-        <StyledTabs
-          value={valueTab}
-          onChange={handleChange}
-          aria-label="basic tabs example"
-        >
-          <StyledTab
-            sx={{
-              "&.Mui-selected": {
-                color: theme.palette.text.primary,
-                fontWeight: theme.typography.fontWeightMedium,
-              },
-            }}
-            label="Products"
-          />
-          <StyledTab
-            sx={{
-              "&.Mui-selected": {
-                color: theme.palette.text.primary,
-                fontWeight: theme.typography.fontWeightMedium,
-              },
-            }}
-            label="Orders"
-          />
-        </StyledTabs>
-      </TabsContainer>
-
-      {/* productsToSave card inside Product Manager */}
-      {dockProductsToSave ? (
-        <DockedProductsToSaveCard>
-          Products Ready To Be Listed
-          <DockedMinimizeIcon
-            color={theme.palette.text.primary}
-            height={"22"}
-            width={"22"}
-            onClickFunc={() => {
-              setDockProductsToSave(false);
-            }}
-          />
-        </DockedProductsToSaveCard>
-      ) : (
-        <ReusableModal
-          customStyles={{ top: "5%", backgroundColor: "transparent" }}
-          open={Object.keys(productsToSave).length > 0}
-        >
-          <ProductsToSaveCard>
-            <ProductsCol container spacing={1}>
-              {Object.keys(productsToSave).map((key: string) => {
-                const product = productsToSave[key];
-                const { id } = product;
-                return (
-                  <Grid
-                    style={{ maxWidth: "100%", flexGrow: 1 }}
-                    key={product?.id}
-                    size={{
-                      xs: 12,
-                      sm: 3
-                    }}>
-                    <ProductToSaveCard>
-                      <CardHeader>{product?.title}</CardHeader>
-                      <Bulletpoints>
-                        <QortalSVG
-                          color={"#000000"}
-                          height={"22"}
-                          width={"22"}
-                        />{" "}
-                        Price: {product?.price && product?.price[0].value} QORT
-                      </Bulletpoints>
-                      <Bulletpoints>
-                        <LoyaltySVG
-                          color={"#000000"}
-                          height={"22"}
-                          width={"22"}
-                        />
-                        Type: {product?.type}
-                      </Bulletpoints>
-                      <Bulletpoints>
-                        <CategorySVG
-                          color={"#000000"}
-                          height={"22"}
-                          width={"22"}
-                        />
-                        Category: {product?.category}
-                      </Bulletpoints>
-                      <TimesIcon
-                        onClickFunc={() => handleRemoveConfirmation(id)}
-                        color={"#000000"}
-                        height={"22"}
-                        width={"22"}
-                      />
-                    </ProductToSaveCard>
-                  </Grid>
-                );
-              })}
-            </ProductsCol>
-            <CardButtonRow>
-              <AddMoreButton onClick={() => setOpenAddProduct(true)}>
-                Add Another Product
-              </AddMoreButton>
-              <CreateButton onClick={publishQDNResource}>
-                Save Products
-              </CreateButton>
-            </CardButtonRow>
-            <MinimizeIcon
-              color={theme.palette.text.primary}
-              height={"22"}
-              width={"22"}
-              onClickFunc={() => {
-                setDockProductsToSave(true);
-              }}
-            />
-          </ProductsToSaveCard>
-        </ReusableModal>
-      )}
-      <TabPanel value={valueTab} index={0}>
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            width: "100%",
-          }}
-        >
-          <NewProduct
-            editProduct={productToEdit}
-            onClose={() => {
-              setProductToEdit(null);
-            }}
-            openAddProduct={openAddProduct}
-            setOpenAddProduct={(val: boolean) => setOpenAddProduct(val)}
-          />
+    <Page width="grid">
+      <PageHeader title={currentStore.title || "Your shop"} subtitle="Your shop" back backTo={shopUrl} actions={actions} />
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {!ready && <ProductListStatus status={ownShopStatus} onReload={onReload} />}
+        <DraftsCard onEdit={openEdit} onPublish={() => void publish.prepare()} preparing={publish.preparing} error={publish.error} />
+        <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+          <Tabs
+            value={tab}
+            onChange={(_, value) => setTab(value)}
+            variant="scrollable"
+            scrollButtons="auto"
+            aria-label="Seller tools"
+            sx={{ "& .MuiTab-root": { minHeight: 48, minWidth: 0, px: { xs: 1.5, sm: 2 }, textTransform: "none", fontWeight: 600 } }}
+          >
+            {SELLER_TABS.map((t) => (
+              <Tab
+                key={t}
+                value={t}
+                label={TAB_LABEL[t]}
+                id={`seller-tab-${t}`}
+                aria-controls={t === tab ? `seller-panel-${t}` : undefined}
+              />
+            ))}
+          </Tabs>
         </Box>
-        <SimpleTable
-          // editProduct gets changed here, as what comes from the ProductManager only contains id, status, created, user & catalogueId. After this you'll have all the metadata as well.
-          openProduct={product => {
-            setProductToEdit(product);
-          }}
-          data={products}
-        ></SimpleTable>
-        <LazyLoad onLoadMore={handleGetProducts}></LazyLoad>
-      </TabPanel>
-      <TabPanel value={valueTab} index={1}>
-        <OrdersTab />
-      </TabPanel>
+        <Box role="tabpanel" id={`seller-panel-${tab}`} aria-labelledby={`seller-tab-${tab}`} sx={{ minWidth: 0 }}>
+          {tab === "overview" && <SellerOverview {...overviewProps} />}
+          {tab === "products" && (
+            <ProductsTab
+              ready={ready}
+              loading={ownShopStatus === "idle" || ownShopStatus === "loading" || ownShopStatus === "ready"}
+              onAdd={openAdd}
+              onEdit={openEdit}
+            />
+          )}
+          {tab === "orders" && <OrdersTab />}
+          {tab === "reviews" && (
+            <ReviewsPanel storeId={currentStore.id} storeTitle={currentStore.title} storeImage={currentStore.logo || ""} />
+          )}
+          {tab === "shop" && <ShopTab />}
+        </Box>
+      </Box>
 
-      {/* Confirm Remove Product from productsToSave in global state */}
-      <Modal />
-      {isShow && (
-        <MultiplePublish
-          isOpen={isShow}
-          onError={(messageNotification)=> {
-            onCancel()
-          }}
-          onSubmit={() => {
-            onOk()
-          }}
-          publishes={publishes}
+      {productDialog && (
+        <ProductDialog key={productDialog.key} open product={productDialog.product} onClose={() => setProductDialog(null)} />
+      )}
+      {publish.job && (
+        <PublishProductsDialog
+          open
+          resources={publish.job.resources}
+          labels={publish.job.labels}
+          publicKey={user.publicKey}
+          onDone={publish.done}
+          onClose={publish.closed}
         />
       )}
-    </ProductManagerContainer>
+    </Page>
   );
 };
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-export function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`mail-tabs-${index}`}
-      aria-labelledby={`mail-tabs-${index}`}
-      {...other}
-      style={{
-        width: "100%",
-      }}
-    >
-      {value === index && children}
-    </div>
-  );
-}

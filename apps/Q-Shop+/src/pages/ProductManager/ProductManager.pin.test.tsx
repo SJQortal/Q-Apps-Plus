@@ -3,7 +3,9 @@
  * catalogue is topped up to 10 products, then new catalogues are opened, and
  * the data container (the shop's product index) goes last in one
  * PUBLISH_MULTIPLE_QDN_RESOURCES. Written against the upstream code before any
- * change (docs/apps/Q-Shop+.md → Data contract).
+ * change (docs/apps/Q-Shop+.md → Data contract). Ported to the redesigned
+ * seller page on night 1: only the button it presses changed ("Save Products"
+ * became "Publish" in Ready to publish); every expectation is the original's.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -93,7 +95,7 @@ describe("publishing products (pinned)", () => {
     const edited = { ...mug, title: "Big mug", price: [{ currency: "qort", value: 2 }], isUpdate: true, status: "OUT_OF_STOCK" };
     store.dispatch(setProductsToSave(edited));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Save Products" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
 
     // The last catalogue is read once (it has fewer than 10 products).
@@ -158,7 +160,7 @@ describe("publishing products (pinned)", () => {
     store.dispatch(setProductsToSave(newProduct(1)));
     store.dispatch(setProductsToSave(newProduct(2)));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Save Products" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
     const newCatId = `q-store-catalogue-${SHORT_STORE_ID}-NEWCATxxx1`;

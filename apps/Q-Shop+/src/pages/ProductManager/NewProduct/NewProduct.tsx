@@ -1,217 +1,150 @@
-/* eslint-disable react-hooks/exhaustive-deps -- upstream code, cleaned up when this file is rewritten (docs/apps/Q-Shop+.md) */
-import { useEffect } from "react";
-import { Box, Modal } from "@mui/material";
-import ShortUniqueId from "short-unique-id";
+/**
+ * Add product and Edit product: a dialog (full screen on phones) around
+ * ProductForm. Saving puts the product in `global.productsToSave`, as the
+ * original's NewProduct.addProduct did; the seller publishes all drafts
+ * together from "Ready to publish". The objects come from
+ * seller/productDraft.ts (the original's shapes; ProductManager.pin pins them).
+ */
+import { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../../state/store";
-import { setNotification } from "../../../state/features/notificationsSlice";
+import { Box, Button, Typography } from "@mui/material";
+import ShortUniqueId from "short-unique-id";
+import type { RootState } from "../../../state/store";
+import { addProductsToSaveCategory, setProductsToSave } from "../../../state/features/globalSlice";
+import { ResponsiveDialog } from "../../../components/common/mobile";
+import { shopCoins } from "../../../money/coins";
 import { ProductForm } from "../ProductForm/ProductForm";
-import { setProductsToSave } from "../../../state/features/globalSlice";
-import { Product } from "../../../state/features/storeSlice";
-import { CreateProductButton } from "./NewProduct-styles";
-import { AddSVG } from "../../../assets/svgs/AddSVG";
-import { ModalBody } from "../../../components/modals/CreateStoreModal-styles";
-import { PRODUCT_BASE, STORE_BASE } from "../../../constants/identifiers";
+import { FormError } from "../../../seller/FormError";
+import {
+  editedProductDraft,
+  formValuesFor,
+  newProductDraft,
+  validateProductForm,
+  type ProductFormValues,
+} from "../../../seller/productDraft";
 
 const uid = new ShortUniqueId({ length: 10 });
-interface ProductPrice {
-  currency: string;
-  value: number;
-}
-export interface PublishProductParams {
-  title?: string;
-  description?: string;
-  type: string;
-  images: string[];
-  price: ProductPrice[];
-  mainImageIndex: number;
-  category: string;
-  status?: string;
-}
-interface NewMessageProps {
-  editProduct?: Product | null;
+
+export interface ProductDialogProps {
+  open: boolean;
   onClose: () => void;
-  openAddProduct: boolean;
-  setOpenAddProduct: (value: boolean) => void;
+  /**
+   * The product to edit: a published one as seller/productDraft's
+   * productForEdit merges it, or a draft. Null adds a new product.
+   */
+  product: (Record<string, any> & { id: string }) | null;
 }
 
-export const NewProduct = ({
-  editProduct,
-  onClose,
-  openAddProduct,
-  setOpenAddProduct,
-}: NewMessageProps) => {
-  const { user } = useSelector((state: RootState) => state.auth);
+function sameValues(a: ProductFormValues, b: ProductFormValues): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
-  const currentStore = useSelector(
-    (state: RootState) => state.global.currentStore
-  );
-  const dataContainer = useSelector(
-    (state: RootState) => state.global.dataContainer
-  );
-
+export function ProductDialog({ open, onClose, product }: ProductDialogProps) {
   const dispatch = useDispatch();
+  const name = useSelector((state: RootState) => state.auth.user?.name);
+  const currentStore = useSelector((state: RootState) => state.global.currentStore);
+  const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
+  const listCategories = useSelector((state: RootState) => state.global.listProducts.categories);
+  const draftCategories = useSelector((state: RootState) => state.global.productsToSaveCategories);
+  const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
 
-  const openModal = () => {
-    setOpenAddProduct(true);
+  const coins = useMemo(() => shopCoins(currentStore) as string[], [currentStore]);
+  const categories = useMemo(() => {
+    const all = new Set<string>([...listCategories, ...draftCategories]);
+    for (const draft of Object.values(productsToSave)) if (draft?.category) all.add(draft.category);
+    return [...all].filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [listCategories, draftCategories, productsToSave]);
+
+  const [initial] = useState<ProductFormValues>(() => formValuesFor(product, coins));
+  const [values, setValues] = useState<ProductFormValues>(initial);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const editingPublished = !!product && (!!product.isUpdate || !!product.catalogueId);
+
+  const requestClose = () => {
+    if (!sameValues(values, initial)) setConfirmDiscard(true);
+    else onClose();
   };
 
-  const closeModal = () => {
-    setOpenAddProduct(false);
+  const submit = () => {
+    setError(null);
+    if (!name) return setError("Sign in with your Qortal name to add products.");
+    if (!currentStore?.id || !dataContainer || dataContainer.storeId !== currentStore.id) {
+      return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
+    }
+    const invalid = validateProductForm(values, coins);
+    if (invalid) return setError(invalid);
+    const trimmed = { ...values, title: values.title.trim(), category: values.category.trim() };
+    const draft = product
+      ? editedProductDraft({ base: product, values: trimmed, coins, name })
+      : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now: Date.now() });
+    dispatch(setProductsToSave(draft));
+    if (!categories.includes(trimmed.category)) dispatch(addProductsToSaveCategory(trimmed.category));
     onClose();
   };
 
-  useEffect(() => {
-    if (editProduct) {
-      setOpenAddProduct(true);
-    }
-  }, [editProduct]);
-
-  // Adding products to save (before publishing to QDN)
-  async function addProduct({
-    title,
-    description,
-    type,
-    images,
-    price,
-    mainImageIndex,
-    category,
-    status,
-  }: PublishProductParams) {
-    let address: string = "";
-    let name: string = "";
-    let errorMsg = "";
-
-    address = user?.address || "";
-    name = user?.name || "";
-
-    if (!address) {
-      errorMsg = "Cannot send: your address isn't available";
-    }
-    if (!name) {
-      errorMsg = "Cannot add or edit a product without a access to your name";
-    }
-    if (images.length === 0) {
-      errorMsg = "Missing images";
-    }
-    if (!currentStore) {
-      errorMsg = "Cannot create a product without having a store";
-    }
-    if (!dataContainer) {
-      errorMsg = "Cannot create a product without having a data-container";
-    }
-
-    if (errorMsg) {
-      dispatch(
-        setNotification({
-          msg: errorMsg,
-          alertType: "error",
-        })
-      );
-      return;
-    }
-
-    try {
-      if (!currentStore?.id) throw new Error("Cannot find store id");
-      if (!dataContainer?.products)
-        throw new Error("Cannot find data-container products");
-      const storeId: string = currentStore?.id;
-
-      const parts = storeId.split(`${STORE_BASE}-`);
-      const shortStoreId = parts[1];
-      const productId = uid();
-      if (!currentStore) return;
-      // Edit Product
-      if (editProduct) {
-        const productObject: any = {
-          ...editProduct,
-          title,
-          description,
-          images,
-          mainImageIndex,
-          type,
-          price,
-          category,
-          isUpdate: true,
-          status,
-          user: name,
-        };
-
-        dispatch(setProductsToSave(productObject));
-      } else {
-        const id = `${PRODUCT_BASE}-${shortStoreId}-${productId}`;
-        const productObject: any = {
-          title,
-          description,
-          created: Date.now(),
-          version: 1,
-          images,
-          mainImageIndex,
-          type,
-          price,
-          storeId,
-          shortStoreId,
-          category,
-          id,
-          status: "AVAILABLE",
-          user: name,
-        };
-        // Add Product to productsToSave object in Global Slice Redux Store
-        dispatch(setProductsToSave(productObject));
-      }
-
-      closeModal();
-    } catch (error: any) {
-      let notificationObj = null;
-      if (typeof error === "string") {
-        notificationObj = {
-          msg: error || "Failed to send message",
-          alertType: "error",
-        };
-      } else if (typeof error?.error === "string") {
-        notificationObj = {
-          msg: error?.error || "Failed to send message",
-          alertType: "error",
-        };
-      } else {
-        notificationObj = {
-          msg: error?.message || "Failed to send message",
-          alertType: "error",
-        };
-      }
-      if (!notificationObj) return;
-      dispatch(setNotification(notificationObj));
-
-      throw new Error("Failed to send message");
-    }
-  }
-
   return (
-    <Box
-      sx={{
-        display: "flex",
-        padding: "5px 15px",
-      }}
-    >
-      <CreateProductButton onClick={openModal}>
-        <AddSVG color={"#ffffff"} height={"22"} width={"22"} />
-        Add Product
-      </CreateProductButton>
-
-      <Modal
-        open={openAddProduct}
-        onClose={closeModal}
-        aria-labelledby="modal-title"
-        aria-describedby="modal-description"
+    <>
+      <ResponsiveDialog
+        open={open}
+        onClose={requestClose}
+        title={product ? "Edit product" : "Add product"}
+        maxWidth="sm"
+        dismissible={false}
+        actions={
+          <>
+            <Button color="inherit" onClick={requestClose}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={submit}>
+              {product ? "Save to drafts" : "Add to drafts"}
+            </Button>
+          </>
+        }
       >
-        <ModalBody>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {editingPublished
+              ? "Changes wait in Ready to publish until you publish them."
+              : "New products wait in Ready to publish, so you can add several and publish them together."}
+          </Typography>
           <ProductForm
-            onClose={closeModal}
-            editProduct={editProduct}
-            onSubmit={addProduct}
+            values={values}
+            onChange={setValues}
+            coins={coins}
+            shop={currentStore}
+            categories={categories}
+            editing={editingPublished}
+            onImageError={setError}
           />
-        </ModalBody>
-      </Modal>
-    </Box>
+          <FormError message={error} />
+        </Box>
+      </ResponsiveDialog>
+      <ResponsiveDialog
+        open={confirmDiscard}
+        onClose={() => setConfirmDiscard(false)}
+        title="Discard changes?"
+        maxWidth="xs"
+        actions={
+          <>
+            <Button color="inherit" onClick={() => setConfirmDiscard(false)}>
+              Keep editing
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => {
+                setConfirmDiscard(false);
+                onClose();
+              }}
+            >
+              Discard
+            </Button>
+          </>
+        }
+      >
+        <Typography>What you typed in this form will be lost.</Typography>
+      </ResponsiveDialog>
+    </>
   );
-};
+}
