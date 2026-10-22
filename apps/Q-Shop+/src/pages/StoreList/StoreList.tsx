@@ -27,10 +27,14 @@ import { StoreCard } from "../Store/StoreCard/StoreCard";
 import { ShopGridList, ShopGridSkeleton } from "../../discovery/ShopGrid";
 import { ShopMenu, type ShopMenuTarget } from "../../discovery/ShopMenu";
 import { LoadMoreSentinel } from "../../discovery/LoadMoreSentinel";
+import { NewProductsStrip } from "../../discovery/NewProductsStrip";
 import { ShopSearchField, SortFilterRow, SortFilterSheet, type SortFilterProps } from "../../discovery/HomeControls";
 import { HOME_PAGE_SIZE, useHomeShops, type HomeShops } from "../../discovery/useHomeShops";
 import { SHOP_INDEX_LIMIT, shopKey, type ShopEntry } from "../../discovery/shopIndex";
 import { parsePay, parseSort, payLabel, payNeedsDetails, SHOP_SORTS, type PayFilter, type ShopSort } from "../../discovery/sortFilter";
+
+/** Shop cards before the new-products strip: two rows on a wide screen. */
+const STRIP_AFTER = 8;
 
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
@@ -144,6 +148,11 @@ export const StoreList = () => {
     [prepareOpen, navigate]
   );
   const onMenu = useCallback((shop: ShopEntry, anchor: HTMLElement) => setMenu({ shop, anchor }), []);
+
+  // New products show only from shops in the index, under the name that published them.
+  const listed = useMemo(() => new Set(home.indexShops.map((shop) => shop.key)), [home.indexShops]);
+  const isListedShop = useCallback((owner: string, storeId: string) => listed.has(shopKey(owner, storeId)), [listed]);
+
   const { pull, refreshing } = usePullToRefresh(home.refresh, phone);
 
   // Back from a shop: once the list is there again, scroll to where it was.
@@ -251,14 +260,20 @@ export const StoreList = () => {
         onMenu={onMenu}
       />
     );
+    // The plain list carries the new-products strip after its first rows.
+    const strip = !q && !filtersOn && home.shops.length > 0;
+    const first = strip ? home.shops.slice(0, STRIP_AFTER) : home.shops;
+    const rest = strip ? home.shops.slice(STRIP_AFTER) : [];
     content = (
       <>
         {home.searching && <LinearProgress aria-label="Searching" />}
-        {home.shops.length > 0 && (
+        {first.length > 0 && (
           <ShopGridList aria-label={q ? `Shops matching ${q}` : "Shops"} aria-busy={home.searching || undefined}>
-            {home.shops.map(card)}
+            {first.map(card)}
           </ShopGridList>
         )}
+        {strip && <NewProductsStrip isListedShop={isListedShop} />}
+        {rest.length > 0 && <ShopGridList aria-label="More shops">{rest.map(card)}</ShopGridList>}
         {home.more && !home.busy && (
           <LoadMoreSentinel
             key={`${home.more}:${home.shops.length}:${home.total}:${home.checked?.done ?? 0}`}

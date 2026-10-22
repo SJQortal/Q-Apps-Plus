@@ -134,6 +134,30 @@ describe("home page", () => {
     expect(screen.getByText("That's every shop.")).toBeInTheDocument();
   });
 
+  it("shows the newest products after the first rows, linking to their pages, once the strip is in view", async () => {
+    const { node } = renderHome({ allInView: true });
+    const strip = await screen.findByRole("region", { name: "New products" });
+    const link = await within(strip).findByRole("link", { name: "Product 11" });
+    expect(link).toHaveAttribute(
+      "href",
+      "/Seller%2023/q-store-general-shop-23/q-store-product-shop-23-P000000011/q-store-catalogue-shop-23-CAT0000001"
+    );
+    expect(within(strip).getAllByRole("link")).toHaveLength(12);
+    const catalogues = searchParams(node.fetchCalls).filter((p) => p.get("identifier") === "q-store-catalogue-");
+    expect(catalogues).toHaveLength(1);
+    expect(catalogues[0].get("limit")).toBe("4");
+  });
+
+  it("has no new-products strip while searching or filtering, and reads none until it is in view", async () => {
+    const { node } = renderHome();
+    await waitFor(() => expect(cards()).toHaveLength(20));
+    expect(screen.getByRole("region", { name: "New products" })).toBeInTheDocument();
+    expect(node.q.callsFor("FETCH_QDN_RESOURCE")).toHaveLength(0);
+    fireEvent.change(screen.getByRole("textbox", { name: "Search shops" }), { target: { value: "number 1" } });
+    await waitFor(() => expect(cards()).toHaveLength(11));
+    expect(screen.queryByRole("region", { name: "New products" })).not.toBeInTheDocument();
+  });
+
   it("reads a card's shop JSON when it is in view: the logo replaces the initial, a broken shop goes", async () => {
     const world = makeWorld();
     // Shop 22's JSON fails the original's check (no description).

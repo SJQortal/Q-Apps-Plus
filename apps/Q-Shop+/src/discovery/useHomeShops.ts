@@ -77,6 +77,8 @@ export interface HomeShops {
   searchFailed: boolean;
   /** The cards to show, in order. */
   shops: ShopEntry[];
+  /** Every shop in the index (whatever the search and filters), for checks such as "is this a listed shop?". */
+  indexShops: ShopEntry[];
   /** Every shop that matches so far (before the 20-at-a-time cut). */
   total: number;
   filtered: FilteredShops;
@@ -358,6 +360,7 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     searching: searching && phase === "ready",
     searchFailed,
     shops: visible,
+    indexShops: index.status === "ready" ? index.data.shops : EMPTY,
     total: sorted.length,
     filtered,
     indexIncomplete: !q && index.status === "ready" && !index.data.complete,
