@@ -1,12 +1,17 @@
 /**
- * One review: who wrote it (and whether they bought here), the stars from the
- * identifier, the date, and the title and text from the search metadata,
- * which keeps at most 60 and 150 characters. "Read more" fetches the full
- * review then, once. Text is shown as plain text.
+ * One review: who wrote it (and whether they have an order at the shop), the
+ * stars from the identifier, the date, and the title and text from the
+ * search metadata, which keeps at most 60 and 150 characters. "Read more"
+ * fetches the full review then, once. Text is shown as plain text.
+ *
+ * "Ordered here" says exactly what is checked: an order resource for this
+ * shop exists under the reviewer's name. It isn't "Verified buyer": anyone
+ * can publish an order identifier for one publish fee, without paying the
+ * seller, and nothing here can see the payment or the seller's status note.
  */
 import { useState } from "react";
 import { Box, Button, Chip, Rating, Typography } from "@mui/material";
-import VerifiedOutlinedIcon from "@mui/icons-material/VerifiedOutlined";
+import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import { NameAvatar } from "../../../components/common/NameAvatar";
 import { useFetchStoreReviews } from "../../../hooks/useFetchStoreReviews";
 import { RetryCancelled, withPeerRetries } from "../peerRetry";
@@ -24,7 +29,7 @@ export function formatReviewDate(time: number | undefined): string {
 
 type FullState = "idle" | "loading" | "fetching" | "failed";
 
-export function StoreReviewCard({ review, verified }: { review: ShopReview; verified: boolean }) {
+export function StoreReviewCard({ review, orderedHere }: { review: ShopReview; orderedHere: boolean }) {
   const { getReview, hashMapStoreReviews } = useFetchStoreReviews();
   const full = hashMapStoreReviews[review.id];
   const [state, setState] = useState<FullState>("idle");
@@ -60,15 +65,7 @@ export function StoreReviewCard({ review, verified }: { review: ShopReview; veri
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <NameAvatar name={review.name} size={32} />
         <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{review.name}</Typography>
-        {verified && (
-          <Chip
-            size="small"
-            variant="outlined"
-            icon={<VerifiedOutlinedIcon />}
-            label="Verified buyer"
-            sx={{ "& .MuiChip-icon": { color: "success.main" } }}
-          />
-        )}
+        {orderedHere && <Chip size="small" variant="outlined" icon={<ShoppingBagOutlinedIcon />} label="Ordered here" />}
       </Box>
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 1 }}>
         <Rating value={review.rating} precision={0.5} readOnly size="small" />

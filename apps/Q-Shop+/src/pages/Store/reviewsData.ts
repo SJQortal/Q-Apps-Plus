@@ -112,12 +112,14 @@ export async function fetchReviewRows(shortStoreId: string, options: { fresh?: b
 }
 
 /**
- * Which of these reviewers have an order at the shop ("Verified buyer"): one
+ * Which of these reviewers have an order at the shop ("Ordered here"): one
  * search for a page of names. A buyer's orders are DOCUMENT_PRIVATE
  * `q-store-order-<shortStoreId>-<uid>` under their own name; the shop is
- * re-checked because the prefix also matches longer shop ids.
+ * re-checked because the prefix also matches longer shop ids. That is all
+ * it shows: the order is encrypted, so neither the payment nor which
+ * owner's shop of that short id it was for can be checked here.
  */
-export async function fetchVerifiedBuyers(shortStoreId: string, names: string[]): Promise<Set<string>> {
+export async function fetchReviewersWithOrders(shortStoreId: string, names: string[]): Promise<Set<string>> {
   const wanted = [...new Set(names.filter(Boolean))];
   if (!shortStoreId || wanted.length === 0) return new Set();
   const rows = await searchQdn({
@@ -129,11 +131,11 @@ export async function fetchVerifiedBuyers(shortStoreId: string, names: string[])
     includemetadata: false,
     limit: 100,
   });
-  const verified = new Set<string>();
+  const ordered = new Set<string>();
   for (const row of rows) {
-    if (wanted.includes(row.name) && shortStoreIdOfOrder(row.identifier) === shortStoreId) verified.add(row.name);
+    if (wanted.includes(row.name) && shortStoreIdOfOrder(row.identifier) === shortStoreId) ordered.add(row.name);
   }
-  return verified;
+  return ordered;
 }
 
 /**

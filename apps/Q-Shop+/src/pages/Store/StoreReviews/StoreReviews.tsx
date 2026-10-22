@@ -1,7 +1,7 @@
 /**
  * A shop's reviews: the summary (average, count, how the stars spread), who
  * may write one, and the list, 20 at a time, newest first, one per reviewer,
- * without the owner's own. "Verified buyer" comes from one order search per
+ * without the owner's own. "Ordered here" comes from one order search per
  * page of names. Everything reads the same cached search as the shop header.
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -12,7 +12,7 @@ import { useSelector } from "react-redux";
 import type { RootState } from "../../../state/store";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
-import { fetchVerifiedBuyers, hasOrderAtShop, REVIEWS_PAGE, REVIEW_SEARCH_CAP, roundToHalf, type ReviewSummary } from "../reviewsData";
+import { fetchReviewersWithOrders, hasOrderAtShop, REVIEWS_PAGE, REVIEW_SEARCH_CAP, roundToHalf, type ReviewSummary } from "../reviewsData";
 import { useShopReviews } from "../useShopData";
 import { StoreReviewCard } from "./StoreReviewCard";
 import { AddReview } from "./AddReview/AddReview";
@@ -97,7 +97,7 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
   const [writing, setWriting] = useState(false);
   const [right, setRight] = useState<ReviewRight | null>(null);
   const [rightNonce, setRightNonce] = useState(0);
-  const [verified, setVerified] = useState<Set<string>>(() => new Set());
+  const [orderedHere, setOrderedHere] = useState<Set<string>>(() => new Set());
   const asked = useRef(new Set<string>());
   const mounted = useRef(true);
 
@@ -124,7 +124,7 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
   }, [isOwner, name, rightNonce, shortStoreId]);
   const canReview = right?.name === name ? right.state : "checking";
 
-  // "Verified buyer": one search per page of reviewer names not asked about yet.
+  // "Ordered here": one search per page of reviewer names not asked about yet.
   // Keyed by the names (not the array, which is new every render), and an
   // answer is kept for as long as the panel is open, even after a re-render.
   const pageNamesKey = [...new Set(shown.map((review) => review.name))].join("\n");
@@ -140,9 +140,9 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
     todo.forEach((n) => asked.current.add(n));
     for (let i = 0; i < todo.length; i += REVIEWS_PAGE) {
       const batch = todo.slice(i, i + REVIEWS_PAGE);
-      fetchVerifiedBuyers(shortStoreId, batch).then(
+      fetchReviewersWithOrders(shortStoreId, batch).then(
         (found) => {
-          if (mounted.current && found.size) setVerified((prev) => new Set([...prev, ...found]));
+          if (mounted.current && found.size) setOrderedHere((prev) => new Set([...prev, ...found]));
         },
         () => batch.forEach((n) => asked.current.delete(n))
       );
@@ -224,7 +224,7 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
       <>
         <Box>
           {shown.map((review) => (
-            <StoreReviewCard key={review.id} review={review} verified={verified.has(review.name)} />
+            <StoreReviewCard key={review.id} review={review} orderedHere={orderedHere.has(review.name)} />
           ))}
         </Box>
         {shown.length < reviews.length && (

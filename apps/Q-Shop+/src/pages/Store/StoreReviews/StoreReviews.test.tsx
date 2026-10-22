@@ -1,5 +1,5 @@
 /**
- * The reviews panel and the review dialog: summary, list, verified buyers,
+ * The reviews panel and the review dialog: summary, list, "Ordered here",
  * who may review, Read more, and what happens around the (pinned) publish.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -69,10 +69,12 @@ describe("reviews panel", { timeout: 20_000 }, () => {
     expect(screen.getByText("Sign in to review this shop.")).toBeInTheDocument();
   });
 
-  it("marks verified buyers from one order search for the page's reviewers", async () => {
+  it("marks reviewers with an order at the shop from one order search, without claiming more", async () => {
     const { node } = renderPanel(worldWithReviews(), null);
-    await waitFor(() => expect(screen.getAllByText("Verified buyer")).toHaveLength(1));
-    const article = screen.getByText("Verified buyer").closest("article")!;
+    await waitFor(() => expect(screen.getAllByText("Ordered here")).toHaveLength(1));
+    // An order identifier is all that is checked: anyone can publish one, so it isn't "verified".
+    expect(screen.queryByText(/verified/i)).toBeNull();
+    const article = screen.getByText("Ordered here").closest("article")!;
     expect(within(article).getByText("Reviewer 1")).toBeInTheDocument();
     const orderSearches = node.fetchCalls.filter((u) => u.includes("service=DOCUMENT_PRIVATE"));
     expect(orderSearches).toHaveLength(1);
@@ -82,7 +84,7 @@ describe("reviews panel", { timeout: 20_000 }, () => {
     expect(params.getAll("name").sort()).toEqual(["Reviewer 0", "Reviewer 1", "Reviewer 2", "Reviewer 3", "Reviewer 4", "Reviewer 5"]);
   });
 
-  it("keeps a verified-buyer answer that lands after the panel re-rendered", async () => {
+  it("keeps an Ordered here answer that lands after the panel re-rendered", async () => {
     const world = worldWithReviews();
     const { store, node } = renderPanel(world, null);
     const realFetch = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
@@ -99,7 +101,7 @@ describe("reviews panel", { timeout: 20_000 }, () => {
     // Something else changes the list while the order search is out.
     store.dispatch(addToReviews({ id: "q-store-review-other-shop-ZZZZZZZZZZ-50", name: "Elsewhere", created: 1, title: "x", description: "y", rating: 5 }));
     release();
-    await waitFor(() => expect(screen.getAllByText("Verified buyer")).toHaveLength(1));
+    await waitFor(() => expect(screen.getAllByText("Ordered here")).toHaveLength(1));
     expect(node.fetchCalls.filter((u) => u.includes("service=DOCUMENT_PRIVATE"))).toHaveLength(1);
   });
 
