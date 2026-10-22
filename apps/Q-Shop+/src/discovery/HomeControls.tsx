@@ -241,7 +241,8 @@ export function SortFilterSheet(props: SortFilterProps) {
                   color={pay === option.value ? "primary" : "default"}
                   variant={pay === option.value ? "filled" : "outlined"}
                   aria-pressed={pay === option.value}
-                  aria-label={option.label}
+                  // Starts with the visible ticker (WCAG 2.5.3): "ARRR, Pirate Chain".
+                  aria-label={option.label.endsWith(`(${option.short})`) ? `${option.short}, ${option.label.replace(` (${option.short})`, "")}` : option.label}
                   sx={chip}
                 />
               ))}

@@ -420,7 +420,7 @@ describe("home page", () => {
       fireEvent.click(screen.getByRole("button", { name: "Sort & filter" }));
       const sheet = await screen.findByRole("dialog", { name: "Sort and filter" });
       fireEvent.click(within(sheet).getByRole("radio", { name: "A–Z" }));
-      fireEvent.click(within(sheet).getByRole("button", { name: "Pirate Chain (ARRR)" }));
+      fireEvent.click(within(sheet).getByRole("button", { name: "ARRR, Pirate Chain" }));
       await waitFor(() => expect(location()).toBe("/?sort=az&pay=ARRR"));
       fireEvent.click(within(sheet).getByRole("button", { name: "Done" }));
       // The page is aria-hidden until the sheet has slid away.
