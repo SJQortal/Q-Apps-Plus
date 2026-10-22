@@ -104,7 +104,8 @@ function ProductTile({ item }: { item: NewProduct }) {
             {product.title}
           </Typography>
           <Box id={detailId} sx={{ mt: "auto", display: "flex", flexDirection: "column", gap: 0.25 }}>
-            <PriceTag product={product} coin="QORT" rate={null} size="small" />
+            {/* Medium: the coin name beside a small price would be under 13 px. */}
+            <PriceTag product={product} coin="QORT" rate={null} />
             <Typography variant="body2" color="text.secondary" noWrap>
               {outOfStock ? `Out of stock · ${item.owner}` : item.owner}
             </Typography>
