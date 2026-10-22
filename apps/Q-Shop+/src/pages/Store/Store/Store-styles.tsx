@@ -120,9 +120,3 @@ export const AcceptedCoinRow = styled(Box)({
   gap: "7px",
 });
 
-/** The original reviews dialog's title column (until the reviews panel is rewritten). */
-export const StoreTitleCol = styled(Box)({
-  display: "flex",
-  alignItems: "center",
-  flexDirection: "column",
-});

@@ -1,16 +1,16 @@
 /**
  * Pins how the original app publishes a shop review: the rating ×10 is the
  * last part of the identifier (lists read it from there without fetching),
- * the JSON holds the full text and the metadata a short copy.
+ * the JSON holds the full text and the metadata a short copy. Ported to the
+ * redesigned dialog (Title, Your review, Publish review) with the same
+ * expectations for every qortalRequest.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { Provider } from "react-redux";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { createAppStore } from "../../../../state/store";
-import { HubThemeProvider } from "../../../../hub-theme";
-import { THEME_STORAGE_KEY, themeConfig } from "../../../../theme/qplus-theme";
 import { addUser } from "../../../../state/features/authSlice";
 import { installQortalMock } from "../../../../test/qortalMock";
+import { renderWithProviders } from "../../../../test/renderWithProviders";
 import { BUYER, BUYER_ADDRESS, BUYER_PK, SHORT_STORE_ID, STORE_ID, decodeData64 } from "../../../../test/fixtures/shop";
 import { AddReview } from "./AddReview";
 
@@ -35,19 +35,13 @@ describe("adding a review (pinned)", () => {
       LIST_QDN_RESOURCES: async () => ({ resources: [] }),
       PUBLISH_QDN_RESOURCE: async () => ({ signature: "x" }),
     });
-    render(
-      <Provider store={store}>
-        <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
-          <AddReview storeId={STORE_ID} storeTitle="Shop" setOpenLeaveReview={() => {}} />
-        </HubThemeProvider>
-      </Provider>
-    );
+    renderWithProviders(<AddReview open storeId={STORE_ID} storeTitle="Shop" onClose={() => {}} />, { store });
     const longTitle = "Great shop! ".repeat(8);
     const longText = "Fast delivery and a lovely mug. ".repeat(8);
     fireEvent.click(screen.getByLabelText("4.5 Stars"));
-    fireEvent.change(screen.getByLabelText(/Shop Review Title/), { target: { value: longTitle } });
-    fireEvent.change(screen.getByPlaceholderText("Write a shop review..."), { target: { value: longText } });
-    fireEvent.click(screen.getByRole("button", { name: "Add Review" }));
+    fireEvent.change(screen.getByLabelText(/^Title/), { target: { value: longTitle } });
+    fireEvent.change(screen.getByLabelText(/^Your review/), { target: { value: longText } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish review" }));
 
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     const id = `q-store-review-${SHORT_STORE_ID}-REVIEWxxx1-45`;

@@ -1,6 +1,6 @@
 /**
- * A shop's reviews as a panel, for the seller's Reviews tab and the shop
- * page. Round 2 rewrites it; this first version wraps the original dialog body.
+ * A shop's reviews as a panel, for the shop page's reviews dialog and the
+ * seller's Reviews tab. The props are the ones the seller page passes.
  */
 import { StoreReviews } from "./StoreReviews";
 
@@ -18,8 +18,9 @@ export function ReviewsPanel(props: {
       storeId={props.storeId}
       storeTitle={props.storeTitle}
       storeImage={props.storeImage}
+      storeOwner={props.storeOwner}
       averageStoreRating={props.averageStoreRating ?? null}
-      setOpenStoreReviews={() => props.onClose?.()}
+      onClose={props.onClose}
     />
   );
 }

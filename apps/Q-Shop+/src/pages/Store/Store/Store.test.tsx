@@ -265,11 +265,18 @@ describe("shop page", () => {
   });
 
   it("opens shop details and the reviews", async () => {
-    renderShop(makeWorld());
+    const { node } = renderShop(makeWorld());
     fireEvent.click(await screen.findByRole("button", { name: "Details" }));
     const details = await screen.findByRole("dialog", { name: "Shop details" });
     expect(within(details).getByText("Everything shop 0 sells")).toBeInTheDocument();
     expect(within(details).getByText("Lisbon")).toBeInTheDocument();
+    fireEvent.click(within(details).getByRole("button", { name: "Close" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Rated 3\.5 out of 5/ }));
+    const reviews = await screen.findByRole("dialog", { name: "Reviews · Seller's Shop" });
+    await waitFor(() => expect(within(reviews).getAllByRole("article")).toHaveLength(6));
+    // The panel reuses the header's review search.
+    expect(searchUrls(node).filter((u) => u.includes("q-store-review-"))).toHaveLength(1);
   });
 });
 
