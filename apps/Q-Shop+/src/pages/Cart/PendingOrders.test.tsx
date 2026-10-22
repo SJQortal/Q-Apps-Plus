@@ -29,6 +29,7 @@ import {
 import { buildOrderDetails } from "../../money/order";
 import { listPendingOrders, resetPendingOrders, savePendingOrder, type PendingOrder } from "../../money/pendingOrders";
 import { CartPage } from "./CartPage";
+import { PendingOrderCard } from "./PendingOrders";
 
 const NOW = 1761000000000;
 const ORDER_ID = `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`;
@@ -183,6 +184,34 @@ describe("orders to finish", () => {
         deliveryNote: "",
       },
     });
+    expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
+  it("shows an order another card is recording as recording, and offers no second Finish", async () => {
+    const order = pendingOrder();
+    savePendingOrder(order);
+    let answer: (value: unknown) => void = () => {};
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", () => new Promise((resolve) => (answer = resolve)));
+    const onRecorded = vi.fn();
+    // Two cards for one order: the checkout dialog's and the cart page's.
+    renderWithProviders(
+      <>
+        <PendingOrderCard order={order} onRecorded={onRecorded} />
+        <PendingOrderCard order={order} onRecorded={onRecorded} />
+      </>
+    );
+    const [first, second] = screen.getAllByRole("button", { name: "Finish order" });
+    fireEvent.click(first);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    // Both cards say it is being recorded; neither offers Finish meanwhile.
+    expect(screen.getAllByText("Recording your order: confirm in Hub…")).toHaveLength(2);
+    expect(second).toBeDisabled();
+    fireEvent.click(second);
+    fireEvent.click(first);
+
+    answer(true);
+    await waitFor(() => expect(onRecorded).toHaveBeenCalled());
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1);
     expect(listPendingOrders(BUYER)).toEqual([]);
   });
 

@@ -34,7 +34,7 @@ import { CoinPicker } from "./CoinPicker";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing } from "./delivery";
 import { PendingOrderCard } from "./PendingOrders";
-import { usePendingOrders } from "./usePendingOrders";
+import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
@@ -122,9 +122,11 @@ export function CheckoutDialog({
   const priced = priceLines(lines, coin, rate, rateLoading, rateError);
   const label = coinLabel(coin, shop);
   const running = step === "running";
+  // The result step's card is finishing the order: stay until Hub has answered (no Later, no Back).
+  const recordingNow = useRecordingOrder(step === "result" && outcome && "orderUid" in outcome ? outcome.orderUid : null);
 
   const close = () => {
-    if (!paying.current) onClose();
+    if (!paying.current && !recordingNow) onClose();
   };
 
   const toConfirm = () => {
@@ -441,12 +443,24 @@ export function CheckoutDialog({
           Orders to finish in your cart. Don't pay again.
         </Alert>
       );
-      actions = <Button onClick={onClose}>Later</Button>;
+      actions = (
+        <Button onClick={close} disabled={recordingNow}>
+          Later
+        </Button>
+      );
     }
   }
 
   return (
-    <ResponsiveDialog open onClose={close} title={title} actions={actions} dismissible={!running} busy={running} maxWidth="sm">
+    <ResponsiveDialog
+      open
+      onClose={close}
+      title={title}
+      actions={actions}
+      dismissible={!running && !recordingNow}
+      busy={running || recordingNow}
+      maxWidth="sm"
+    >
       <Box ref={stepStart} tabIndex={-1} role="group" aria-label={title} sx={{ "&:focus": { outline: "none" } }}>
         {step !== "result" && step !== "running" && (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

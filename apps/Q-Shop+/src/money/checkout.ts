@@ -42,7 +42,9 @@ import {
   pendingDelivery,
   rememberUsedPayment,
   removePendingOrder,
+  runningRecording,
   savePendingOrder,
+  trackRecording,
   type PendingOrder,
 } from "./pendingOrders";
 
@@ -209,11 +211,25 @@ function orderRecorded(pending: PendingOrder): void {
 /**
  * Publishes a paid order. Checks QDN first unless `skipCheck` (a first
  * attempt right after paying). Removes the pending order once it's there.
+ *
+ * One recording per order at a time: while one runs (until Hub answers, up
+ * to its 30 minutes), another call for the same order gets the running one's
+ * result instead of a second publish (isRecordingOrder tells the cards).
  */
-export async function recordOrder(
+export function recordOrder(
   pending: PendingOrder,
   delivery: DeliveryInput,
   options: { skipCheck?: boolean; onStep?: (step: CheckoutStep) => void } = {}
+): Promise<CheckoutResult> {
+  const running = runningRecording<CheckoutResult>(pending.orderUid);
+  if (running) return running;
+  return trackRecording(pending.orderUid, recordOrderNow(pending, delivery, options));
+}
+
+async function recordOrderNow(
+  pending: PendingOrder,
+  delivery: DeliveryInput,
+  options: { skipCheck?: boolean; onStep?: (step: CheckoutStep) => void }
 ): Promise<CheckoutResult> {
   try {
     if (!options.skipCheck) {

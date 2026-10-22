@@ -39,6 +39,7 @@ import { errorMessage } from "../../qdn/hubErrors";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing } from "./delivery";
 import { itemCount, shortAddress } from "./cartLines";
+import { useRecordingOrder } from "./usePendingOrders";
 
 /**
  * The coin settings a pending order's payment record needs: only an asset's
@@ -158,7 +159,10 @@ export function PendingOrderCard({
   onRecorded: (order: PendingOrder) => void;
 }) {
   const titleId = useId();
-  const [busy, setBusy] = useState<Busy>(null);
+  const [ownBusy, setBusy] = useState<Busy>(null);
+  // Another card (or the checkout) may be recording this order: show it, and offer nothing meanwhile.
+  const recordingNow = useRecordingOrder(order.orderUid);
+  const busy: Busy = ownBusy ?? (recordingNow ? "recording" : null);
   const [note, setNote] = useState<Note>(null);
   const [addressFor, setAddressFor] = useState<PendingOrder | null>(null);
   const [confirming, setConfirming] = useState<"paid" | "remove" | null>(null);

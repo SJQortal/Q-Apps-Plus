@@ -155,6 +155,40 @@ export function subscribePendingOrders(listener: () => void): () => void {
 }
 
 /*
+ * Orders being recorded right now, in this tab. One order is published at
+ * most once at a time: a second Finish (another card for the same order, a
+ * double tap, the checkout dialog's card after Later) waits for the running
+ * publish instead of sending Hub a second one, with a second fee. Every card
+ * and the checkout dialog read this to show "Recording…".
+ */
+const recordings = new Map<string, Promise<unknown>>();
+
+function changed(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENT));
+}
+
+/** The publish running for this order, if any. */
+export function runningRecording<T>(orderUid: string): Promise<T> | undefined {
+  return recordings.get(orderUid) as Promise<T> | undefined;
+}
+
+/** Notes that `run` records `orderUid` until it settles (subscribers hear both). */
+export function trackRecording<T>(orderUid: string, run: Promise<T>): Promise<T> {
+  recordings.set(orderUid, run);
+  changed();
+  const done = () => {
+    if (recordings.get(orderUid) === run) recordings.delete(orderUid);
+    changed();
+  };
+  run.then(done, done);
+  return run;
+}
+
+export function isRecordingOrder(orderUid: string): boolean {
+  return recordings.has(orderUid);
+}
+
+/*
  * Payments already used by an order recorded from this device. "Check again"
  * looks for a payment Hub didn't confirm among the buyer's latest
  * transactions; without this list it could take the payment of an order
@@ -235,4 +269,5 @@ export function resetPendingOrders(): void {
   memory = null;
   usedMemory = null;
   deliveries.clear();
+  recordings.clear();
 }

@@ -398,6 +398,41 @@ describe("cart page", () => {
     expect(await screen.findByText("My orders page")).toBeInTheDocument();
   });
 
+  it("stays open while its card finishes the order, so the cart's card can't publish it a second time", async () => {
+    let publishes = 0;
+    let answer: (value: unknown) => void = () => {};
+    const q = sellerMock({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: () => {
+        publishes++;
+        if (publishes === 1) return Promise.reject({ error: "User declined request" });
+        return new Promise((resolve) => (answer = resolve));
+      },
+    });
+    const store = newStore();
+    withFixtureShop(store, [{ product: mug, qty: 1 }]);
+    renderCart(store);
+    await openCheckout();
+    await press("Continue");
+    await press(/^Pay /);
+    await press("Finish order");
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
+
+    // Hub is publishing: no Later, no Back, and the cart page's own card for it is busy too.
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Later" })).toBeDisabled();
+    expect(within(dialog).queryByRole("button", { name: "Close" })).toBeNull();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const cartCards = screen.getAllByRole("button", { name: "Finish order", hidden: true });
+    expect(cartCards).toHaveLength(2);
+    expect(cartCards.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+
+    answer(true);
+    expect(await screen.findByText(`${STORE_TITLE} has your order and a Q-Mail about it. Follow it in My orders.`)).toBeInTheDocument();
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2);
+    expect(q.callsFor("SEND_COIN")).toHaveLength(1);
+  });
+
   it("stops before paying when the seller can't be found, and says nothing was paid", async () => {
     const q = sellerMock({
       GET_ACCOUNT_DATA: async () => ({ address: SELLER_ADDRESS }),

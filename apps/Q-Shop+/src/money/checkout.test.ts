@@ -32,7 +32,7 @@ import {
   PUBLISH_TIMEOUT_MS,
   type StartCheckoutArgs,
 } from "./checkout";
-import { getPendingOrder, listPendingOrders, pendingDelivery, resetPendingOrders } from "./pendingOrders";
+import { getPendingOrder, isRecordingOrder, listPendingOrders, pendingDelivery, resetPendingOrders } from "./pendingOrders";
 import { digitalDelivery } from "./order";
 import { PENDING_ORDERS_STORAGE_KEY } from "../constants/plus";
 
@@ -166,6 +166,30 @@ describe("startCheckout", () => {
     expect(pub.resources[0].identifier).toBe(`q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`);
     expect(decodeData64(pub.resources[0].data64).payment.transactionSignature).toBe("PAYSIG");
     expect(listPendingOrders(BUYER)).toEqual([]);
+  });
+
+  it("publishes one order once at a time: a second Finish waits for the running one", async () => {
+    sellerHandlers({
+      PUBLISH_MULTIPLE_QDN_RESOURCES: async () => {
+        throw { error: "User declined request" };
+      },
+    });
+    await startCheckout(args());
+    const pending = getPendingOrder(BUYER, "ORDERxxxx1")!;
+    let answer: (value: unknown) => void = () => {};
+    q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", () => new Promise((resolve) => (answer = resolve)));
+    q.reset();
+
+    expect(isRecordingOrder("ORDERxxxx1")).toBe(false);
+    const first = recordOrder(pending, digitalDelivery(BUYER));
+    expect(isRecordingOrder("ORDERxxxx1")).toBe(true);
+    const second = recordOrder(pending, digitalDelivery(BUYER));
+    await vi.waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    answer(true);
+    expect(await first).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    expect(await second).toEqual({ kind: "done", orderUid: "ORDERxxxx1" });
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1);
+    expect(isRecordingOrder("ORDERxxxx1")).toBe(false);
   });
 
   it("doesn't publish again when the timed-out order did land on QDN", async () => {
