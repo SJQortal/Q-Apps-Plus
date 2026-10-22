@@ -18,11 +18,16 @@
  *   and assets the buyer's recent transactions are searched for it;
  * - declines are quiet, and nothing throws outside the flow.
  *
- * New, additive: Qortal assets through TRANSFER_ASSET.
+ * New, additive: Qortal assets through TRANSFER_ASSET. Before an asset is
+ * paid, its info is read from the node (qdn/assets.ts, cached): an asset the
+ * node doesn't know, one that can't be transferred, or a total that isn't a
+ * whole number of an indivisible asset stops the checkout before Hub is
+ * asked for anything (Core would refuse the transfer).
  */
 import { isHubDecline, isHubTimeout, errorMessage } from "../qdn/hubErrors";
 import { orderIdentifier, orderMailIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { fetchQdnJson, resourceExists, invalidateQdnSearches } from "../qdn/search";
+import { assetInfo, isWholeAmount } from "../qdn/assets";
 import { assetIdOf, coinLabel, isForeignTicker, payoutAddress, type ShopCoinSettings } from "./coins";
 import {
   buildOrder,
@@ -354,6 +359,24 @@ export interface StartCheckoutArgs {
 }
 
 /** The order's details and amount, before anything is sent (throws MissingPriceError). */
+/**
+ * Why an asset payment can't go through, from the node's info on the asset,
+ * or null (also when the node can't be asked: Hub then has the last word).
+ */
+export async function assetPaymentProblem(coin: string, amount: string, shop: ShopCoinSettings): Promise<string | null> {
+  const assetId = assetIdOf(coin);
+  if (assetId === null) return null;
+  const label = coinLabel(coin, shop);
+  const info = await assetInfo({ id: assetId }).catch(() => undefined);
+  if (info === undefined) return null;
+  if (info === null) return `${label} (asset #${assetId}) isn't on your node, so it can't be paid. Pick another coin.`;
+  if (info.isUnspendable) return `${label} can't be transferred, so it can't be paid. Pick another coin.`;
+  if (info.isDivisible === false && !isWholeAmount(amount)) {
+    return `${label} can only be paid in whole units, and this order comes to ${Number(amount)}. Change the quantities or pick another coin.`;
+  }
+  return null;
+}
+
 export function priceCheckout(lines: CartLine[], coin: string, rate: number | null): { details: OrderDetails; amount: string } {
   const details = buildOrderDetails(lines, coin, rate);
   return { details, amount: details.totalPrice };
@@ -381,6 +404,8 @@ export async function startCheckout(args: StartCheckoutArgs): Promise<CheckoutRe
   } catch (error) {
     return { kind: "failed", message: errorMessage(error, "Cannot find the store owner") };
   }
+  const assetProblem = await assetPaymentProblem(coin, amount, shop);
+  if (assetProblem) return { kind: "failed", message: assetProblem };
 
   const pending: PendingOrder = {
     version: 1,

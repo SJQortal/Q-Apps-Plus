@@ -45,6 +45,7 @@ import {
 import { digitalDelivery } from "./order";
 import { PENDING_ORDERS_STORAGE_KEY } from "../constants/plus";
 import { orderMailIdentifier } from "../qdn/identifiers";
+import { resetAssetCache } from "../qdn/assets";
 
 const NOW = 1761000000000;
 const ORDER_ID = `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`;
@@ -95,11 +96,28 @@ function args(over: Partial<StartCheckoutArgs> = {}): StartCheckoutArgs {
 }
 
 beforeEach(() => {
+  resetAssetCache();
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => ({ ok: true, status: 200, json: async () => [], text: async () => "[]" }))
   );
 });
+
+/** The node knows these assets (Core's shape: the name is `name`), by /assets/info?assetId=. */
+function stubAssets(assets: Record<number, { name: string; isDivisible?: boolean; isUnspendable?: boolean }>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: string) => {
+      const m = String(input).match(/^\/assets\/info\?assetId=(\d+)$/);
+      if (m) {
+        const a = assets[Number(m[1])];
+        const body = a ? { assetId: Number(m[1]), isDivisible: true, isUnspendable: false, ...a } : { error: 601 };
+        return { ok: !!a, status: a ? 200 : 400, json: async (): Promise<unknown> => body, text: async (): Promise<string> => JSON.stringify(body) };
+      }
+      return { ok: true, status: 200, json: async (): Promise<unknown> => [], text: async (): Promise<string> => "[]" };
+    })
+  );
+}
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -518,6 +536,7 @@ describe("ARRR and assets", () => {
   });
 
   it("pays an asset with TRANSFER_ASSET to the seller's address at the seller's asset price", async () => {
+    stubAssets({ 81: { name: "Gold Bar" } });
     sellerHandlers();
     const goldMug = { ...mug, price: [...mug.price, { currency: "ASSET:81", value: 4 }] };
     const result = await startCheckout(
@@ -541,6 +560,44 @@ describe("ARRR and assets", () => {
     });
     const mail = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[1].data64);
     expect(mail.htmlContent).toContain("Gold Bar");
+  });
+
+  it("stops before paying when an indivisible asset's total isn't whole, or the asset can't be paid", async () => {
+    const seatMug = { ...mug, price: [...mug.price, { currency: "ASSET:90", value: 1.5 }] };
+    const line = (quantity: number) => [{ productId: mug.id, catalogueId: CATALOGUE_ID, quantity, product: seatMug }];
+    stubAssets({ 90: { name: "Seats", isDivisible: false }, 82: { name: "Locked", isUnspendable: true } });
+    sellerHandlers();
+    const assetShop = { ...shop, acceptedAssets: [{ id: 90, name: "Seats" }, { id: 82, name: "Locked" }, { id: 99, name: "Gone" }] };
+    const odd = await startCheckout(args({ coin: "ASSET:90", shop: assetShop, lines: line(1) }));
+    expect(odd).toEqual({
+      kind: "failed",
+      message: "Seats can only be paid in whole units, and this order comes to 1.5. Change the quantities or pick another coin.",
+    });
+    // Two of them come to 3 seats: whole, so it pays.
+    expect((await startCheckout(args({ coin: "ASSET:90", shop: assetShop, lines: line(2), orderUid: "ORDERxxxx2", mailUid: "MAILx2" }))).kind).toBe("done");
+    expect(q.callsFor("TRANSFER_ASSET")).toHaveLength(1);
+    const lockedMug = { ...mug, price: [...mug.price, { currency: "ASSET:82", value: 1 }, { currency: "ASSET:99", value: 1 }] };
+    const lockedLine = [{ productId: mug.id, catalogueId: CATALOGUE_ID, quantity: 1, product: lockedMug }];
+    expect(await startCheckout(args({ coin: "ASSET:82", shop: assetShop, lines: lockedLine }))).toEqual({
+      kind: "failed",
+      message: "Locked can't be transferred, so it can't be paid. Pick another coin.",
+    });
+    expect(await startCheckout(args({ coin: "ASSET:99", shop: assetShop, lines: lockedLine }))).toEqual({
+      kind: "failed",
+      message: "Gone (asset #99) isn't on your node, so it can't be paid. Pick another coin.",
+    });
+    expect(q.callsFor("TRANSFER_ASSET")).toHaveLength(1);
+  });
+
+  it("pays an asset as before when the node can't be asked about it (Hub has the last word)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("Failed to fetch"))));
+    sellerHandlers();
+    const goldMug = { ...mug, price: [...mug.price, { currency: "ASSET:81", value: 4 }] };
+    const result = await startCheckout(
+      args({ coin: "ASSET:81", lines: [{ productId: mug.id, catalogueId: CATALOGUE_ID, quantity: 1, product: goldMug }] })
+    );
+    expect(q.callsFor("TRANSFER_ASSET")).toHaveLength(1);
+    expect(result.kind).not.toBe("failed");
   });
 });
 
