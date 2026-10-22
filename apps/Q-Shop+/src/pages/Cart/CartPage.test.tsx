@@ -226,6 +226,36 @@ describe("cart page", () => {
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(2);
   });
 
+  it("says when a shop in the cart was deleted, without retrying, and removes its items in one tap", async () => {
+    const world = makeWorld({ shops: 3 });
+    world.shops[0].deleted = "plain";
+    const node = installMockNode(world);
+    const shop = world.shops[0];
+    const storeId = `q-store-general-${shop.shortStoreId}`;
+    const store = newStore();
+    store.dispatch(
+      setProductToCart({
+        productId: shop.products[1].id,
+        catalogueId: `q-store-catalogue-${shop.shortStoreId}-CAT0000000`,
+        storeId,
+        storeOwner: shop.owner,
+      })
+    );
+    renderCart(store);
+    expect(await screen.findByText("Its owner deleted this shop, so these items can't be bought.")).toBeInTheDocument();
+    expect(screen.getByText("The seller removed this product: left out of checkout")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Check out/ })).toBeDisabled();
+    expect(screen.getByText("This shop was deleted.")).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // One read of the shop and one of its catalogue (they start together); neither is retried.
+    expect(node.summary().resources).toEqual({ STORE: 1 });
+    expect(node.summary().hub).toEqual({ "FETCH q-store-catalogue": 1 });
+
+    fireEvent.click(screen.getByRole("button", { name: "Remove items" }));
+    expect(await screen.findByText("Your cart is empty")).toBeInTheDocument();
+    expect(cartFor(store.getState().cart.carts, shop.owner, storeId)).toBeUndefined();
+  });
+
   it("fetches each owner's copy of a catalogue once, even when two names publish the same identifier", async () => {
     // Another name can publish a catalogue under the seller's identifier (docs/QORTAL.md → pitfall 15).
     const OTHER = "Mallory";

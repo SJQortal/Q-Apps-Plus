@@ -23,7 +23,7 @@ import type { RootState } from "../../state/store";
 import type { Cart } from "../../state/features/cartSlice";
 import { setCatalogueHashMap, type Catalogue } from "../../state/features/globalSlice";
 import { addToHashMapStores, type Store } from "../../state/features/storeSlice";
-import { fetchQdnJson } from "../../qdn/search";
+import { QdnDeletedError, fetchQdnJson } from "../../qdn/search";
 import { fetchAndEvaluateCatalogues } from "../../utils/fetchCatalogues";
 import { checkStructureStore } from "../../utils/checkStructure";
 import { useRetryingLoads, type LoadJob, type LoadPhase } from "./useRetryingLoads";
@@ -100,8 +100,15 @@ export function useCartData(carts: Record<string, Cart>): {
   }, [cartList, shopOf]);
 
   const loadShop = useCallback(
-    async ({ storeId, owner }: ShopJob): Promise<boolean> => {
-      const json = await fetchQdnJson("STORE", owner, storeId);
+    async ({ storeId, owner }: ShopJob): Promise<boolean | "gone"> => {
+      let json: unknown;
+      try {
+        json = await fetchQdnJson("STORE", owner, storeId);
+      } catch (error) {
+        // Its owner deleted the shop: its items can't be bought, and asking again won't change that.
+        if (error instanceof QdnDeletedError) return "gone";
+        throw error;
+      }
       if (!json || typeof json !== "object" || Array.isArray(json)) return false;
       const shop = cartShopFrom(storeId, owner, json);
       setReadShops((current) => ({ ...current, [shopKey(owner, storeId)]: shop }));
@@ -125,12 +132,16 @@ export function useCartData(carts: Record<string, Cart>): {
     [catalogueHashMap, readCatalogues]
   );
 
+  const { phaseOf: shopPhaseOf, retry: retryShopLoad } = useRetryingLoads(shopJobs, loadShop);
+
   const catalogueJobs = useMemo(() => {
     const jobs: LoadJob<CatalogueJob>[] = [];
     const seen = new Set<string>();
     for (const cart of cartList) {
       const owner = cart.storeOwner;
       if (!owner) continue;
+      // A deleted shop's products are gone with it: nothing to read.
+      if (cart.storeId && shopPhaseOf(shopKey(owner, cart.storeId)) === "gone") continue;
       for (const order of Object.values(cart.orders)) {
         const key = shopKey(owner, order.catalogueId);
         if (seen.has(key) || catalogueOf(owner, order.catalogueId)) continue;
@@ -139,7 +150,7 @@ export function useCartData(carts: Record<string, Cart>): {
       }
     }
     return jobs;
-  }, [cartList, catalogueOf]);
+  }, [cartList, catalogueOf, shopPhaseOf]);
 
   const loadCatalogue = useCallback(
     async ({ catalogueId, owner }: CatalogueJob): Promise<boolean> => {
@@ -154,7 +165,6 @@ export function useCartData(carts: Record<string, Cart>): {
     [dispatch, store]
   );
 
-  const { phaseOf: shopPhaseOf, retry: retryShopLoad } = useRetryingLoads(shopJobs, loadShop);
   const { phaseOf: cataloguePhaseOf, retry: retryCatalogueLoad } = useRetryingLoads(catalogueJobs, loadCatalogue);
 
   const views = useMemo(
@@ -163,18 +173,20 @@ export function useCartData(carts: Record<string, Cart>): {
         const storeId = cart.storeId ?? "";
         const owner = cart.storeOwner;
         const shop = shopOf(cart);
+        const shopPhase = owner ? shopPhaseOf(shopKey(owner, storeId)) : "failed";
         return {
           key,
           storeId,
           owner,
           cart,
           shop,
-          shopPhase: owner ? shopPhaseOf(shopKey(owner, storeId)) : "failed",
+          shopPhase,
           knownTitle: hashMapStores[storeId]?.owner === owner ? (hashMapStores[storeId]?.title ?? "") : "",
           lines: cartViewLines(
             cart,
             (catalogueId) => catalogueOf(owner, catalogueId),
-            (catalogueId) => cataloguePhaseOf(shopKey(owner ?? "", catalogueId))
+            // A deleted shop's products went with it.
+            (catalogueId) => (shopPhase === "gone" ? "gone" : cataloguePhaseOf(shopKey(owner ?? "", catalogueId)))
           ),
         };
       }),

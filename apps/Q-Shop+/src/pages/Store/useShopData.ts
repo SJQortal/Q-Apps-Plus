@@ -28,29 +28,32 @@ import {
   type StoreReview,
 } from "../../state/features/storeSlice";
 import { dataContainerIdentifier, shortStoreIdOf } from "../../qdn/identifiers";
-import { fetchQdnJson, mapWithConcurrency, resourceExists } from "../../qdn/search";
+import { QdnDeletedError, fetchQdnJson, mapWithConcurrency, resourceExists } from "../../qdn/search";
 import { currentStoreFrom } from "../../hooks/useOwnShops";
 import { checkStructureStore } from "../../utils/checkStructure";
 import { CATALOGUE_CONCURRENCY, fetchCatalogue, type LoadedCatalogue } from "../../utils/fetchCatalogues";
 import { normalizeShopJson } from "../../discovery/shopJson";
-import { primeShopDetails } from "../../discovery/shopDetails";
+import { markShopDeleted, primeShopDetails } from "../../discovery/shopDetails";
 import { RetryCancelled, withPeerRetries } from "./peerRetry";
 import { fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
 
-/** loading → (fetching →) ready, or not there: missing (doesn't exist) / unavailable (exists, can't be read now). */
-export type LoadStatus = "loading" | "fetching" | "ready" | "missing" | "unavailable";
+/**
+ * loading → (fetching →) ready, or not there: missing (doesn't exist) /
+ * unavailable (exists, can't be read now) / deleted (its publisher deleted it).
+ */
+export type LoadStatus = "loading" | "fetching" | "ready" | "missing" | "unavailable" | "deleted";
 
 export interface ShopIndex {
   products: Record<string, unknown>;
   [key: string]: unknown;
 }
 
-type ReadResult<T> = { kind: "ok"; value: T } | { kind: "missing" } | { kind: "unavailable" };
+type ReadResult<T> = { kind: "ok"; value: T } | { kind: "missing" } | { kind: "unavailable" } | { kind: "deleted" };
 
 /**
  * Reads a resource's JSON. On the first failure one search (limit 1) asks
  * whether it exists at all; if it does, the read is retried while the node
- * fetches it from peers.
+ * fetches it from peers. A deleted resource (the delete marker) isn't retried.
  */
 async function readOrMissing<T>(
   service: string,
@@ -64,7 +67,8 @@ async function readOrMissing<T>(
     const value = await withPeerRetries(read, {
       isAlive: options.isAlive,
       onRetry: options.onRetry,
-      shouldRetry: async (_error, attempt) => {
+      shouldRetry: async (error, attempt) => {
+        if (error instanceof QdnDeletedError) return false;
         if (attempt > 0) return true;
         const exists = await resourceExists(service, name, identifier, { fresh: true }).catch(() => true);
         missing = !exists;
@@ -74,6 +78,7 @@ async function readOrMissing<T>(
     return { kind: "ok", value };
   } catch (error) {
     if (error instanceof RetryCancelled) throw error;
+    if (error instanceof QdnDeletedError) return { kind: "deleted" };
     return missing ? { kind: "missing" } : { kind: "unavailable" };
   }
 }
@@ -157,6 +162,12 @@ export function useViewedShop(owner: string, storeId: string, options: { product
         onRetry: () => patch({ shopStatus: "fetching" }),
       });
       if (!alive) return;
+      if (result.kind === "deleted") {
+        patch({ shopStatus: "deleted" });
+        // The home list leaves it out at once.
+        markShopDeleted(owner, storeId);
+        return;
+      }
       // Fields of the wrong type are dropped before anything renders them (discovery/shopJson.ts).
       const json = result.kind === "ok" ? normalizeShopJson(result.value) : null;
       if (!json) {
@@ -182,7 +193,8 @@ export function useViewedShop(owner: string, storeId: string, options: { product
       });
       if (!alive) return;
       if (result.kind !== "ok") {
-        patch({ productsStatus: result.kind });
+        // A deleted product list lists nothing, as one that was never published.
+        patch({ productsStatus: result.kind === "deleted" ? "missing" : result.kind });
         return;
       }
       const index: ShopIndex = isIndex(result.value)

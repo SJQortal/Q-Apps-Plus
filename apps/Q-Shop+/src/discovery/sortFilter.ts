@@ -84,7 +84,10 @@ export interface FilteredShops {
 
 /**
  * Applies the filters, and drops shops whose JSON turned out not to be a
- * shop (the original only lists shops that pass its structure check).
+ * shop (the original only lists shops that pass its structure check), or
+ * that their owner deleted. Such a shop comes back only when the index says
+ * it changed since it was read: its card reads it again (say, a shop created
+ * again under a deleted one's id).
  */
 export function filterShops(
   shops: ShopEntry[],
@@ -98,7 +101,7 @@ export function filterShops(
   for (const shop of shops) {
     if (filters.mine && !filters.mine.has(shop.key)) continue;
     const state = details(shop.key);
-    if (state?.status === "ready" && !state.valid) continue;
+    if (state?.status === "ready" && !state.valid && !(typeof state.updated === "number" && state.updated < shop.updated)) continue;
     considered += 1;
     const match = payMatch(shop, filters.pay, state);
     if (match === "yes") kept.push(shop);

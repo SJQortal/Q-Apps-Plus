@@ -12,6 +12,8 @@ import { addUser } from "../../../state/features/authSlice";
 import { setCatalogueHashMap } from "../../../state/features/globalSlice";
 import { createAppStore } from "../../../state/store";
 import { setPeerRetryDelaysForTests } from "../peerRetry";
+import { getShopDetails, resetShopDetails } from "../../../discovery/shopDetails";
+import { shopKey } from "../../../discovery/shopIndex";
 import { Store } from "./Store";
 
 const copyText = vi.fn(async (_text: string) => true);
@@ -23,6 +25,7 @@ const STORE_ID = "q-store-general-my-shop";
 let restoreDelays: (() => void) | null = null;
 beforeEach(() => {
   copyText.mockClear();
+  resetShopDetails();
   restoreDelays = setPeerRetryDelaysForTests([30, 30, 30]);
 });
 afterEach(() => {
@@ -200,6 +203,20 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(exists).toHaveLength(1);
     expect(exists[0]).toContain("prefix=true");
     expect(exists[0]).toContain("identifier=q-store-general-nothing");
+  });
+
+  it("says when its owner deleted the shop, from one read: no retries, no existence search, gone from home", async () => {
+    const world = makeWorld();
+    world.shops[0].deleted = "plain";
+    const { node } = renderShop(world);
+    expect(await screen.findByText("This shop was deleted")).toBeInTheDocument();
+    expect(screen.getByText("Seller Name deleted this shop. Orders you placed there stay in My orders.")).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/"))).toHaveLength(1);
+    expect(searchUrls(node).filter((u) => u.includes("service=STORE"))).toEqual([]);
+    expect(screen.queryByText(/Fetching from peers/)).not.toBeInTheDocument();
+    expect(getShopDetails(shopKey("Seller Name", STORE_ID))).toMatchObject({ status: "ready", valid: false, deleted: true });
+    fireEvent.click(screen.getByRole("button", { name: "Browse shops" }));
   });
 
   it("says Fetching from peers while the node gets the shop, then shows it", async () => {

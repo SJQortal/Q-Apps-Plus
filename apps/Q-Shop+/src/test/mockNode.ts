@@ -26,6 +26,12 @@ export interface WorldShop {
   foreignCoins: Record<string, string>;
   products: any[];
   logo?: string;
+  /**
+   * Its owner deleted it: the shop, its product list and its catalogues serve
+   * the delete marker "D". "marked" also retitles the shop's search row
+   * "deleted" (Q-Shop+'s delete); "plain" leaves the old metadata (other tools).
+   */
+  deleted?: "plain" | "marked";
 }
 
 export interface WorldReview {
@@ -173,8 +179,11 @@ function allRows(world: World): Row[] {
       identifier: storeId,
       created: s.created,
       updated: s.updated,
-      size: 2000,
-      metadata: { title: s.title, description: `**coins:QORTtrue,ARRR${s.supportedCoins.includes("ARRR")}**${s.description}` },
+      size: s.deleted ? 32 : 2000,
+      metadata:
+        s.deleted === "marked"
+          ? { title: "deleted", description: "deleted", tags: ["deleted"] }
+          : { title: s.title, description: `**coins:QORTtrue,ARRR${s.supportedCoins.includes("ARRR")}**${s.description}` },
     });
     rows.push({
       name: s.owner,
@@ -285,10 +294,12 @@ export function installMockNode(world: World): MockNode {
       const id = decodeURIComponent(rawId);
       if (service === "STORE") {
         const shop = findShop(name, id);
+        if (shop?.deleted) return json("D");
         return shop ? json(storeJsonOf(shop)) : json({ error: 1401, message: "not found" }, 404);
       }
       if (service === "DOCUMENT" && id.endsWith("-datacontainer")) {
         const shop = findShop(name, id.replace(/-datacontainer$/, ""));
+        if (shop?.deleted) return json("D");
         return shop ? json(dataContainerOf(shop)) : json({ error: 1401, message: "not found" }, 404);
       }
       if (service === "DOCUMENT" && id.startsWith("q-store-review-")) {
@@ -298,6 +309,7 @@ export function installMockNode(world: World): MockNode {
       if (service === "DOCUMENT" && id.startsWith("q-store-catalogue-")) {
         const shop = world.shops.find((s) => s.owner === name);
         const cat = shop ? catalogueOf(shop, id) : null;
+        if (cat && shop?.deleted) return json("D");
         return cat ? json(cat) : json({ error: 1401 }, 404);
       }
       if (service === "THUMBNAIL") return json({ error: 1401 }, 404);
@@ -327,7 +339,8 @@ export function installMockNode(world: World): MockNode {
       const id = String(p.identifier);
       if (id.startsWith("q-store-catalogue-")) {
         const shop = world.shops.find((s) => s.owner === name);
-        return shop ? catalogueOf(shop, id) : null;
+        const cat = shop ? catalogueOf(shop, id) : null;
+        return cat && shop?.deleted ? "D" : cat;
       }
       const order = world.orders.find((o) => o.identifier === id && o.buyer === name);
       if (order) return `ENC:${id}`;

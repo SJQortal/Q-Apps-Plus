@@ -171,6 +171,27 @@ export class QdnFetchError extends Error {
   }
 }
 
+/**
+ * The body a delete leaves: Q-Shop+, qapp-core and Torq republish the
+ * resource as "D", some tools with an empty body. QDN can't erase a
+ * resource, so this marker is how Qortal apps delete.
+ */
+export function isDeleteMarker(text: string): boolean {
+  const body = text.trim();
+  return body === "D" || body === "";
+}
+
+/**
+ * The publisher deleted the resource: the node serves the delete marker. It
+ * won't come back by asking again, unlike a resource not on the node yet.
+ */
+export class QdnDeletedError extends QdnFetchError {
+  constructor(url: string) {
+    super(`Deleted by its publisher: ${url}`, 200);
+    this.name = "QdnDeletedError";
+  }
+}
+
 const jsonCache = new Map<string, { value: unknown; expires: number }>();
 const jsonInflight = new Map<string, Promise<unknown>>();
 
@@ -178,7 +199,8 @@ const jsonInflight = new Map<string, Promise<unknown>>();
  * A resource's JSON, cached for the session by service, name and identifier
  * (docs/QORTAL.md → pitfall 15: another name can publish the same
  * identifier). A Core `{ error }` body or an HTTP error rejects with a
- * QdnFetchError and isn't cached.
+ * QdnFetchError and isn't cached; the delete marker rejects with a
+ * QdnDeletedError.
  */
 export async function fetchQdnJson<T = any>(
   service: string,
@@ -198,6 +220,7 @@ export async function fetchQdnJson<T = any>(
   const request = (async () => {
     const response = await fetch(url, { method: "GET", headers: { "Content-Type": "application/json" } });
     const text = await response.text();
+    if (response.ok && isDeleteMarker(text)) throw new QdnDeletedError(url);
     let body: unknown;
     try {
       body = JSON.parse(text);

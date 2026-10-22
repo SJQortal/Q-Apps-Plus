@@ -5,6 +5,7 @@ import {
   forgetFailedShopDetails,
   forgetShopDetails,
   getShopDetails,
+  markShopDeleted,
   primeShopDetails,
   requestShopDetails,
   resetShopDetails,
@@ -225,5 +226,27 @@ describe("a shop's details", () => {
     await checkShopDetails(shops);
     expect(most).toBe(DETAIL_CHECK_CONCURRENCY);
     expect(shops.every((s) => getShopDetails(s.key)?.status === "ready")).toBe(true);
+  });
+});
+
+describe("a deleted shop", () => {
+  it("is settled from one read of the delete marker: no retries, and not a valid shop", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, text: async () => "D", json: async () => "D" }));
+    vi.stubGlobal("fetch", fetchMock);
+    const details = await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 5 });
+    expect(details).toEqual({ status: "ready", shop: {}, valid: false, deleted: true, updated: 5 });
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Asked again (a card scrolling into view): no new read.
+    await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 5 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("can be marked deleted by the page that found out, keeping the version it was read for", async () => {
+    stubFetch(() => ({ status: 200, body: validShop }));
+    await requestShopDetails("Seller Name", "q-store-general-my-shop", { updated: 7 });
+    markShopDeleted("Seller Name", "q-store-general-my-shop");
+    expect(getShopDetails(KEY)).toEqual({ status: "ready", shop: {}, valid: false, deleted: true, updated: 7 });
   });
 });

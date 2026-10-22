@@ -5,7 +5,7 @@
  * `global.catalogueHashMap` as `{ ...json, id, user, isValid: true }`.
  */
 import type { Catalogue } from "../state/features/globalSlice";
-import { fetchQdnJson } from "../qdn/search";
+import { QdnDeletedError, fetchQdnJson, isDeleteMarker } from "../qdn/search";
 
 /** Catalogue fetches in flight at once, across every screen. */
 export const CATALOGUE_CONCURRENCY = 5;
@@ -37,14 +37,25 @@ export function isCatalogueJson(json: unknown): json is { products: Record<strin
     typeof (json as { products?: unknown }).products === "object";
 }
 
+/** A catalogue its owner deleted (the delete marker): it holds no products, so its products show as gone. */
+export function deletedCatalogue(owner: string, catalogueId: string): LoadedCatalogue {
+  return { id: catalogueId, products: {}, user: owner, isValid: true };
+}
+
 /**
  * One catalogue, through the session cache (one request per catalogue,
  * shared by every screen). The id and owner are the ones asked for, never
  * the body's (docs/QORTAL.md → pitfall 15). Rejects when the node can't give
- * it or it isn't a catalogue.
+ * it or it isn't a catalogue; a deleted one is empty.
  */
 export async function fetchCatalogue(owner: string, catalogueId: string, options: { fresh?: boolean } = {}): Promise<LoadedCatalogue> {
-  const json = await withSlot(() => fetchQdnJson("DOCUMENT", owner, catalogueId, options));
+  let json: unknown;
+  try {
+    json = await withSlot(() => fetchQdnJson("DOCUMENT", owner, catalogueId, options));
+  } catch (error) {
+    if (error instanceof QdnDeletedError) return deletedCatalogue(owner, catalogueId);
+    throw error;
+  }
   if (!isCatalogueJson(json)) throw new Error("Not a catalogue");
   return { ...(json as object), products: json.products as Catalogue["products"], user: owner, id: catalogueId, isValid: true };
 }
@@ -64,6 +75,8 @@ export const fetchAndEvaluateCatalogues = async (data: any) => {
       identifier: catalogueId,
     });
     if (!catalogue) return { isValid: false };
+    // + app: Hub hands a deleted catalogue back as the marker's text.
+    if (typeof catalogue === "string" && isDeleteMarker(catalogue)) return deletedCatalogue(user, catalogueId);
     return { ...catalogue, user, id: catalogueId, isValid: true };
   } catch (error) {
     console.error(error);

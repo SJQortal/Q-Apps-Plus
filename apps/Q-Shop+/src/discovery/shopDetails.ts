@@ -17,7 +17,7 @@
  * product pages also hand over every shop JSON they read (primeShopDetails).
  */
 import { useSyncExternalStore } from "react";
-import { fetchQdnJson, mapWithConcurrency } from "../qdn/search";
+import { QdnDeletedError, fetchQdnJson, mapWithConcurrency } from "../qdn/search";
 import { checkStructureStore } from "../utils/checkStructure";
 import { shopKey, type ShopEntry } from "./shopIndex";
 import { normalizeShopJson, type ShopJson } from "./shopJson";
@@ -31,9 +31,10 @@ export type ShopDetails =
   /**
    * `valid` is the original's check (title, created, description, shipsTo,
    * shortStoreId). `updated`: the shop's QDN `updated` (from the index) this
-   * copy was read for, when known.
+   * copy was read for, when known. `deleted`: its owner deleted it (the node
+   * serves the delete marker); it is not valid, so lists leave it out.
    */
-  | { status: "ready"; shop: ShopJson; valid: boolean; updated?: number }
+  | { status: "ready"; shop: ShopJson; valid: boolean; updated?: number; deleted?: true }
   /** `final`: the retries are spent; otherwise a single check failed and a card may try again. */
   | { status: "failed"; final: boolean };
 
@@ -100,6 +101,11 @@ function readyFrom(json: unknown, updated: number | undefined): ShopDetails {
   return { status: "ready", shop: valid ? shop : {}, valid, ...(updated !== undefined && { updated }) };
 }
 
+/** A deleted shop: settled at once (asking again won't bring it back), and left out of lists. */
+function deletedEntry(updated: number | undefined): ShopDetails {
+  return { status: "ready", shop: {}, valid: false, deleted: true, ...(updated !== undefined && { updated }) };
+}
+
 /**
  * Loads a shop's JSON unless it is loaded or loading. With `retries: false`
  * (the "Pays in" check) one attempt is made, and a card that shows the shop
@@ -127,7 +133,8 @@ export function requestShopDetails(
       ? (async (): Promise<ShopDetails> => {
           try {
             return update(key, readyFrom(await fetchQdnJson<unknown>("STORE", owner, id, { fresh: true }), updated));
-          } catch {
+          } catch (error) {
+            if (error instanceof QdnDeletedError) return update(key, deletedEntry(updated));
             // Keep what was shown; the next change in the index asks again.
             return update(key, { ...current, updated });
           }
@@ -142,7 +149,8 @@ export function requestShopDetails(
             }
             try {
               return update(key, readyFrom(await fetchQdnJson<unknown>("STORE", owner, id, { fresh: attempt > 0 }), updated));
-            } catch {
+            } catch (error) {
+              if (error instanceof QdnDeletedError) return update(key, deletedEntry(updated));
               // not on the node yet, or the node hiccupped: try again
             }
           }
@@ -179,6 +187,14 @@ export function primeShopDetails(owner: string, id: string, json: unknown): void
   const next = readyFrom(json, current?.status === "ready" ? current.updated : undefined);
   if (next.status !== "ready" || !next.valid) return;
   update(key, next);
+}
+
+/** Its owner deleted the shop (read on the shop page, or deleted here): its card leaves the lists at once. */
+export function markShopDeleted(owner: string, id: string): void {
+  const key = shopKey(owner, id);
+  const current = states.get(key);
+  if (current?.status === "ready" && current.deleted) return;
+  update(key, deletedEntry(current?.status === "ready" ? current.updated : undefined));
 }
 
 /** Forgets one shop's details (for example after its owner edits it), so its card reads it again. */

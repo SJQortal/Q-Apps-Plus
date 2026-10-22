@@ -136,6 +136,18 @@ describe("filtering shops", () => {
     expect(result.shops).toEqual([arrr, other]);
   });
 
+  it("drops deleted shops, until the index says the shop changed since (created again)", () => {
+    const deleted: ShopDetails = { status: "ready", shop: {}, valid: false, deleted: true, updated: 2 };
+    const filters = { pay: "" as const, mine: null };
+    expect(filterShops([arrr, plain, other], filters, (key) => (key === plain.key ? deleted : undefined)).shops).toEqual([arrr, other]);
+    const again = { ...plain, updated: 9 };
+    expect(filterShops([arrr, again, other], filters, (key) => (key === plain.key ? deleted : undefined)).shops).toEqual([
+      arrr,
+      again,
+      other,
+    ]);
+  });
+
   it("My shops keeps only the signed-in name's shops", () => {
     const result = filterShops([arrr, plain, other], { pay: "", mine: new Set([plain.key]) }, () => undefined);
     expect(result.shops).toEqual([plain]);

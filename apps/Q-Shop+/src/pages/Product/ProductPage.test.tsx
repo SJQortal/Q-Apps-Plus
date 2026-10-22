@@ -195,6 +195,38 @@ describe("product page", { timeout: 20_000 }, () => {
   });
 });
 
+describe("product page of a deleted shop", { timeout: 20_000 }, () => {
+  it("says the shop was deleted, from one read of each, without retrying", async () => {
+    const world = makeWorld();
+    world.shops[0].deleted = "plain";
+    const { node } = renderProduct(world, pathOf(P11));
+    expect(await screen.findByRole("heading", { level: 1, name: "Shop deleted" })).toBeInTheDocument();
+    expect(screen.getByText("This shop was deleted")).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/"))).toHaveLength(1);
+    expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toHaveLength(1);
+    expect(node.fetchCalls.filter((u) => u.includes("resources/search"))).toEqual([]);
+  });
+
+  it("says a product isn't in the shop any more when its catalogue was deleted, without retrying", async () => {
+    const node = installMockNode(makeWorld());
+    const serve = globalThis.fetch as unknown as (url: string) => Promise<unknown>;
+    const deleted = { ok: true, status: 200, text: async (): Promise<string> => "D", json: async (): Promise<unknown> => "D" };
+    const fetchMock = vi.fn(async (url: string): Promise<unknown> => (String(url).includes(CAT1) ? deleted : serve(url)));
+    vi.stubGlobal("fetch", fetchMock);
+    renderWithProviders(
+      <Routes>
+        <Route path="/:user/:store/:product/:catalogue" element={<ProductPage />} />
+      </Routes>,
+      { initialEntries: [pathOf(P11)], store: createAppStore() }
+    );
+    expect(await screen.findByText("This product isn't in the shop any more")).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(fetchMock.mock.calls.filter(([u]) => String(u).includes(CAT1))).toHaveLength(1);
+    expect(node.fetchCalls.filter((u) => u.includes("resources/search"))).toEqual([]);
+  });
+});
+
 describe("clampQuantity", () => {
   it("keeps quantities whole and between 1 and 99", () => {
     expect(clampQuantity("")).toBe(1);

@@ -81,7 +81,8 @@ export function cartViewLines(
         : catalogueFor(catalogues, order.catalogueId, cart.storeOwner);
     if (!catalogue) {
       const phase = cart.storeOwner ? phaseOf(order.catalogueId) : "failed";
-      const state: LineState = phase === "failed" ? "failed" : phase === "retrying" ? "fetching" : "loading";
+      const state: LineState =
+        phase === "gone" ? "gone" : phase === "failed" ? "failed" : phase === "retrying" ? "fetching" : "loading";
       return { ...base, product: null, state };
     }
     const product = catalogue.products[order.productId] ?? null;

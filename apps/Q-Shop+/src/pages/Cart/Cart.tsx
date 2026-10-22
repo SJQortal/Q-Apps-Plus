@@ -96,6 +96,12 @@ export function Cart() {
     dispatch(removeProductFromCart({ storeId: view.storeId, storeOwner: view.owner, productId: line.productId }));
   };
 
+  /** Its owner deleted the shop: its items go together. */
+  const removeShop = (view: ShopCartView) => {
+    dispatch(removeCartFromCarts({ storeId: view.storeId, storeOwner: view.owner }));
+    if (removed?.storeId === view.storeId && removed.storeOwner === view.cart.storeOwner) setRemoved(null);
+  };
+
   const undoRemove = () => {
     if (!removed) return;
     dispatch(
@@ -190,6 +196,7 @@ export function Cart() {
             onCheckout={openCheckout}
             onQuantity={changeQuantity}
             onRemove={remove}
+            onRemoveShop={removeShop}
             onRetryShop={retryShop}
             onRetryLines={retryLines}
           />

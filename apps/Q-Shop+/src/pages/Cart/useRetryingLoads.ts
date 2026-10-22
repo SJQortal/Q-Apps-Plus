@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mapWithConcurrency } from "../../qdn/search";
 
-/** Where one load stands: on its way, asking again, or given up until Retry. */
-export type LoadPhase = "loading" | "retrying" | "failed";
+/**
+ * Where one load stands: on its way, asking again, given up until Retry, or
+ * gone (deleted by its publisher: asking again won't bring it back).
+ */
+export type LoadPhase = "loading" | "retrying" | "failed" | "gone";
 
 /** A resource that isn't on the node yet is asked for again after these waits (docs/DESIGN.md → states). */
 export const RETRY_DELAYS_MS = [2000, 4000, 8000];
@@ -18,7 +21,7 @@ export interface LoadJob<T> {
 /**
  * Loads each job once, five at a time. A load that fails (resolves false or
  * throws) is tried again after 2, 4 and 8 s, then marked failed until
- * `retry(key)`. The caller keeps what was loaded and drops the job from
+ * `retry(key)`; one that resolves "gone" is marked gone at once. The caller keeps what was loaded and drops the job from
  * `jobs` once it has it, so a listed job without a phase is loading. A key
  * is loaded once per mount (plus each `retry`), even if it is listed again.
  * No polling: nothing runs once every job has loaded or failed, and pending
@@ -26,7 +29,7 @@ export interface LoadJob<T> {
  */
 export function useRetryingLoads<T>(
   jobs: LoadJob<T>[],
-  load: (item: T) => Promise<boolean>
+  load: (item: T) => Promise<boolean | "gone">
 ): { phaseOf: (key: string) => LoadPhase; retry: (key: string) => void } {
   const [phases, setPhases] = useState<Record<string, Exclude<LoadPhase, "loading">>>({});
   const started = useRef(new Set<string>());
@@ -51,13 +54,17 @@ export function useRetryingLoads<T>(
   /** Loads a job, then (until it works) again after each retry delay. Resolves after the first try. */
   const attempt = useCallback((job: LoadJob<T>): Promise<void> => {
     const run = async (round: number): Promise<void> => {
-      let ok = false;
+      let ok: boolean | "gone" = false;
       try {
         ok = await latest.current.load(job.item);
       } catch {
         ok = false;
       }
       if (!alive.current) return;
+      if (ok === "gone") {
+        setPhases((current) => ({ ...current, [job.key]: "gone" }));
+        return;
+      }
       if (ok) {
         // Loaded: it stays started, so a job the caller lists again (say,
         // because what it loaded was replaced elsewhere) is not loaded again

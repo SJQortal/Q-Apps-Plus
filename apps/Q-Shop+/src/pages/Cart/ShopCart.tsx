@@ -35,6 +35,7 @@ export function ShopCart({
   onCheckout,
   onQuantity,
   onRemove,
+  onRemoveShop,
   onRetryShop,
   onRetryLines,
 }: {
@@ -43,6 +44,8 @@ export function ShopCart({
   onCheckout: (view: ShopCartView, lines: CartLine[], leftOut: number) => void;
   onQuantity: (view: ShopCartView, line: CartViewLine, quantity: number) => void;
   onRemove: (view: ShopCartView, line: CartViewLine) => void;
+  /** Empties this shop's cart (offered when its owner deleted the shop). */
+  onRemoveShop?: (view: ShopCartView) => void;
   onRetryShop: (view: ShopCartView) => void;
   onRetryLines: (view: ShopCartView) => void;
 }) {
@@ -58,9 +61,11 @@ export function ShopCart({
   const blocked = !gate.allowed
     ? gate.reason
     : !shop
-      ? view.shopPhase === "failed"
-        ? "This shop couldn't be loaded."
-        : "Waiting for the shop to load…"
+      ? view.shopPhase === "gone"
+        ? "This shop was deleted."
+        : view.shopPhase === "failed"
+          ? "This shop couldn't be loaded."
+          : "Waiting for the shop to load…"
       : loading
         ? "Loading your items…"
         : lines.length === 0
@@ -102,6 +107,21 @@ export function ShopCart({
         <Typography role="status" variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           Fetching the shop from peers…
         </Typography>
+      )}
+      {!shop && view.shopPhase === "gone" && (
+        <Alert
+          severity="info"
+          sx={{ mt: 1 }}
+          action={
+            onRemoveShop ? (
+              <Button color="inherit" onClick={() => onRemoveShop(view)} sx={{ minHeight: 44 }}>
+                Remove items
+              </Button>
+            ) : undefined
+          }
+        >
+          Its owner deleted this shop, so these items can&apos;t be bought.
+        </Alert>
       )}
       {!shop && view.shopPhase === "failed" && (
         <Alert

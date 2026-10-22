@@ -138,7 +138,7 @@ function stockLine(status: string | undefined) {
 function ProductView({ owner, storeId, productId, catalogueId }: { owner: string; storeId: string; productId: string; catalogueId: string }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { shop, isOwner } = useViewedShop(owner, storeId, { products: false });
+  const { shop, shopStatus, isOwner } = useViewedShop(owner, storeId, { products: false });
   const { catalogue, status, retry } = useCatalogue(owner, catalogueId);
   const shopCoin = useShopCoin(shop);
   const [quantityText, setQuantityText] = useState("1");
@@ -151,7 +151,18 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const productTitle = typeof product?.title === "string" ? product.title.trim() : "";
   let title: ReactNode = productTitle || "Product";
   let content: ReactNode;
-  if (status === "loading" || status === "fetching") {
+  if (shopStatus === "deleted") {
+    title = "Shop deleted";
+    content = (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="This shop was deleted"
+        description={`${owner} deleted this shop and its products. Orders you placed there stay in My orders.`}
+        actionLabel="Browse shops"
+        onAction={() => navigate("/")}
+      />
+    );
+  } else if (status === "loading" || status === "fetching") {
     title = (
       <>
         <Box component="span" sx={visuallyHiddenSx}>

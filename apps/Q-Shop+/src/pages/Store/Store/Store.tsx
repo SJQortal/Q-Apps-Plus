@@ -544,6 +544,16 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
         onAction={() => navigate("/")}
       />
     );
+  } else if (shopStatus === "deleted") {
+    content = (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="This shop was deleted"
+        description={`${owner} deleted this shop. Orders you placed there stay in My orders.`}
+        actionLabel="Browse shops"
+        onAction={() => navigate("/")}
+      />
+    );
   } else if (shopStatus === "unavailable") {
     content = (
       <EmptyState
