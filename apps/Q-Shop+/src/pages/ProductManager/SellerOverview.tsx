@@ -172,6 +172,14 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
           />
         ) : ordersLoading && list.items.length === 0 ? (
           <OrderListSkeleton rows={3} />
+        ) : latest.length === 0 && more ? (
+          <EmptyState
+            icon={<ReceiptLongOutlinedIcon />}
+            title="No orders found yet"
+            description={`The first ${list.meta.offset} results were orders of other shops whose id starts like yours. Open Orders to look further.`}
+            actionLabel={onOpenTab ? "Open orders" : undefined}
+            onAction={onOpenTab ? () => onOpenTab("orders") : undefined}
+          />
         ) : latest.length === 0 ? (
           <EmptyState
             icon={<ReceiptLongOutlinedIcon />}

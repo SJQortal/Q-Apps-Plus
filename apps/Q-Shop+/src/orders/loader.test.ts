@@ -197,6 +197,36 @@ describe("the seller's orders", () => {
     expect(selectSellerItems(store.getState())).toHaveLength(6);
   });
 
+  it("reads on when a whole search page holds another shop's orders whose id starts the same", async () => {
+    const world = makeWorld({ shops: 2, me: { name: SELLER, address: "QSeller", publicKey: "SellerPK" } });
+    addOrder(world, "S0", 2000, { buyer: "Buyer 0" });
+    addOrder(world, "S1", 2001, { buyer: "Buyer 1" });
+    // 25 newer orders of shop my-shop-2: the first 20 rows of q-store-order-my-shop- are all theirs.
+    for (let i = 0; i < 25; i++) addOrder(world, `T${String(i).padStart(2, "0")}`, 3000 + i, { short: "my-shop-2", buyer: "Buyer 9" });
+    const node = installMockNode(world);
+    const store = createAppStore();
+    expect(await loadOrders(store, SHOP, "first")).toBe(true);
+    expect(store.getState().order.orders.map((r) => r.id)).toEqual([orderId("S1"), orderId("S0")]);
+    expect(store.getState().order.seller).toMatchObject({ offset: 27, hasMore: false, phase: "ready" });
+    const offsets = searchUrls(node)
+      .filter((u) => u.includes("identifier=q-store-order-my-shop-"))
+      .map((u) => new URLSearchParams(u.split("?")[1]).get("offset"));
+    expect(offsets).toEqual(["0", "20"]);
+  });
+
+  it("stops after 5 search pages of other shops' orders and leaves the rest to Load more", async () => {
+    const world = makeWorld({ shops: 2, me: { name: SELLER, address: "QSeller", publicKey: "SellerPK" } });
+    addOrder(world, "S0", 2000, { buyer: "Buyer 0" });
+    for (let i = 0; i < 105; i++) addOrder(world, `T${String(i).padStart(3, "0")}`, 3000 + i, { short: "my-shop-2", buyer: "Buyer 9" });
+    installMockNode(world);
+    const store = createAppStore();
+    await loadOrders(store, SHOP, "first");
+    expect(store.getState().order.orders).toHaveLength(0);
+    expect(store.getState().order.seller).toMatchObject({ offset: 100, hasMore: true, phase: "ready" });
+    expect(await loadOrders(store, SHOP, "more")).toBe(true);
+    expect(store.getState().order.orders.map((r) => r.id)).toEqual([orderId("S0")]);
+  });
+
   it("forgets the list when another shop is picked (resetOrders)", async () => {
     installMockNode(sellerWorld());
     const store = createAppStore();

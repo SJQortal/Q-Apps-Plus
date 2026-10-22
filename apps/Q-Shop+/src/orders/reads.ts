@@ -99,6 +99,27 @@ export async function searchShopOrders(shortStoreId: string, offset: number, fre
   return { rows, read: raw.length, hasMore: raw.length === ORDER_PAGE };
 }
 
+/** Search pages read at most for one page of a shop's orders (5 × 20 rows). */
+export const SHOP_SCAN_PAGES = 5;
+
+/**
+ * One page of the orders a shop received, reading on while a whole search
+ * page belonged to other shops. `q-store-order-art-` also matches every
+ * order of a shop `art-prints`; when 20 of those are newer than `art`'s
+ * latest order, the first search page has no row for `art` at all, and the
+ * list would say "No orders yet" while `art` has orders. Bounded: at most
+ * SHOP_SCAN_PAGES searches, then the caller pages on as usual.
+ */
+export async function searchShopOrdersPage(shortStoreId: string, offset: number, fresh = false): Promise<OrderPage> {
+  let page = await searchShopOrders(shortStoreId, offset, fresh);
+  let read = page.read;
+  for (let scanned = 1; page.rows.length === 0 && page.hasMore && scanned < SHOP_SCAN_PAGES; scanned++) {
+    page = await searchShopOrders(shortStoreId, offset + read, fresh);
+    read += page.read;
+  }
+  return { rows: page.rows, read, hasMore: page.hasMore };
+}
+
 // ------------------------------------------------------------------ orders
 
 export type OpenOutcome = { ok: true; order: Order } | { ok: false; stage: OrderReadStage };

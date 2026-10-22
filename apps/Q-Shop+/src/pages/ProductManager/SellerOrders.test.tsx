@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within, configure } from "@testing-library/react";
 import { renderWithProviders } from "../../test/renderWithProviders";
-import { installMockNode, makeWorld, type World } from "../../test/mockNode";
+import { installMockNode, installVisibleIntersectionObserver, makeWorld, type World } from "../../test/mockNode";
 import { SELLER, SELLER_ADDRESS, SELLER_PK } from "../../test/fixtures/shop";
 import { createAppStore } from "../../state/store";
 import { addUser } from "../../state/features/authSlice";
@@ -142,6 +142,19 @@ describe("the seller's Orders tab", () => {
     );
   });
 
+  it("looks further, instead of saying there are no orders, when other shops' orders fill the first pages", async () => {
+    installVisibleIntersectionObserver();
+    const w = makeWorld({ shops: 2, me: { name: SELLER, address: SELLER_ADDRESS, publicKey: SELLER_PK } });
+    addOrder(w, "S0", 2000, { buyer: "Alice" });
+    // 105 newer orders of shop my-shop-2 (q-store-order-my-shop- matches them too).
+    for (let i = 0; i < 105; i++) addOrder(w, `T${String(i).padStart(3, "0")}`, 3000 + i, { short: "my-shop-2", buyer: "Zed" });
+    installMockNode(w);
+    renderWithProviders(<OrdersTab />, { store: sellerStore() });
+    const list = await screen.findByRole("list", { name: "Orders received" });
+    await waitFor(() => expect(names(list)).toEqual(["Alice"]));
+    expect(screen.queryByText("No orders yet")).not.toBeInTheDocument();
+  });
+
   it("updates an order's status from the dialog, at once", async () => {
     const node = installMockNode(world());
     let finish: (v: unknown) => void = () => {};
@@ -187,6 +200,19 @@ describe("the seller overview", () => {
     expect(onOpenTab).toHaveBeenLastCalledWith("products");
     fireEvent.click(screen.getByRole("button", { name: "Reviews" }));
     expect(onOpenTab).toHaveBeenLastCalledWith("reviews");
+  });
+
+  it("doesn't say there are no orders when other shops' orders filled the pages it read", async () => {
+    const w = makeWorld({ shops: 2, me: { name: SELLER, address: SELLER_ADDRESS, publicKey: SELLER_PK } });
+    addOrder(w, "S0", 2000, { buyer: "Alice" });
+    for (let i = 0; i < 105; i++) addOrder(w, `T${String(i).padStart(3, "0")}`, 3000 + i, { short: "my-shop-2", buyer: "Zed" });
+    installMockNode(w);
+    const onOpenTab = vi.fn();
+    renderWithProviders(<SellerOverview storeId={STORE_ID} onOpenTab={onOpenTab} />, { store: sellerStore() });
+    expect(await screen.findByText("No orders found yet")).toBeInTheDocument();
+    expect(screen.queryByText("No orders yet")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open orders" }));
+    expect(onOpenTab).toHaveBeenLastCalledWith("orders");
   });
 
   it("works without tab links, and says when there are no orders", async () => {

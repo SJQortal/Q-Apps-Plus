@@ -103,7 +103,18 @@ export function OrderListView({
     );
   }
   if ((meta.phase === "loading" || meta.phase === "idle") && items.length === 0) return <OrderListSkeleton />;
-  if (items.length === 0) return <>{empty}</>;
+  if (items.length === 0 && !meta.hasMore) return <>{empty}</>;
+  if (items.length === 0) {
+    // The pages read so far held only other shops' orders (a longer id with the same start): look further.
+    return (
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Typography role="status" variant="body2" color="text.secondary" sx={{ textAlign: "center", pt: 2 }}>
+          No orders found in the first {meta.offset} results.
+        </Typography>
+        <LoadMore hasMore loading={meta.loadingMore} failed={meta.moreError} onLoadMore={list.loadMore} />
+      </Box>
+    );
+  }
 
   const more = meta.hasMore;
   const filtered = filter !== "all" || search.trim() !== "";

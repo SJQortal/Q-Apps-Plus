@@ -26,7 +26,7 @@ import {
   readStatus,
   resolveStatuses,
   searchBuyerOrders,
-  searchShopOrders,
+  searchShopOrdersPage,
   shopStatusIndex,
   sleep,
   type StatusIndex,
@@ -115,7 +115,7 @@ async function runPage(store: OrderStore, owner: ListOwner, mode: LoadMode): Pro
     page =
       owner.kind === "buyer"
         ? await searchBuyerOrders(owner.name, offset, fresh)
-        : await searchShopOrders(owner.shortStoreId, offset, fresh);
+        : await searchShopOrdersPage(owner.shortStoreId, offset, fresh);
   } catch {
     store.dispatch(listFailed({ kind, owner: key, generation, first }));
     return false;
