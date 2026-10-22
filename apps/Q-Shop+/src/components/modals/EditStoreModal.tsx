@@ -246,17 +246,7 @@ const MyModal: React.FC<MyModalProps> = ({ open, onClose, onPublish }) => {
           Edit Shop
         </ModalTitle>
         {!logo ? (
-          <ImageUploader onPick={(img: string) => setLogo(img)}>
-            <AddLogoButton>
-              Add Shop Logo
-              <AddLogoIcon
-                sx={{
-                  height: "25px",
-                  width: "auto",
-                }}
-              ></AddLogoIcon>
-            </AddLogoButton>
-          </ImageUploader>
+          <ImageUploader label="Add shop logo" onPick={(img: string) => setLogo(img)} />
         ) : (
           <LogoPreviewRow>
             <StoreLogoPreview src={logo} alt="logo" />

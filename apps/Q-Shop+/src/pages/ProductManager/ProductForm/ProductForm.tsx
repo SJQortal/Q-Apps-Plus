@@ -7,8 +7,6 @@ import { Price, Product } from "../../../state/features/storeSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "../../../state/store";
 import {
-  AddLogoButton,
-  AddLogoIcon,
   ButtonRow,
   CancelButton,
   CreateButton,
@@ -227,19 +225,7 @@ export const ProductForm: React.FC<ProductFormProps> = ({
         </ProductImagesRow>
       )}
       {(images.length === 0 || images.length < 3) && (
-        <ImageUploader
-          onPick={(img: string) => setImages(prev => [...prev, img])}
-        >
-          <AddLogoButton>
-            Add Product Image
-            <AddLogoIcon
-              sx={{
-                height: "25px",
-                width: "auto",
-              }}
-            ></AddLogoIcon>
-          </AddLogoButton>
-        </ImageUploader>
+        <ImageUploader label="Add product image" max={3 - images.length} onPick={(img: string) => setImages(prev => [...prev, img])} />
       )}
       {images.length > 0 && (
         <MaximumImagesRow>*Maximum 3 images</MaximumImagesRow>
