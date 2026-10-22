@@ -13,7 +13,6 @@
  */
 import { CATALOGUE_BASE, storeIdentifier } from "../qdn/identifiers";
 import { mapWithConcurrency, QDN_SEARCH_TTL_MS, searchQdn, type QdnResourceSummary } from "../qdn/search";
-import { checkStructure } from "../utils/checkStructure";
 import { HIDDEN_TEST_SHOP_OWNER } from "./shopIndex";
 
 export const NEW_CATALOGUES = 4;
@@ -67,24 +66,29 @@ function finiteNumber(value: unknown): number | undefined {
 
 /**
  * A catalogue entry as the strip shows it, or null. Catalogues are JSON any
- * name can publish, and the original's check only asks that the title is
- * there: a title like `{"a": 1}` was rendered as a React child, which threw
- * and blanked the whole app for every visitor while the catalogue was among
- * the newest. So the title must be text, the date a number, and the status
- * text (or nothing).
+ * name can publish, and a title like `{"a": 1}` was rendered as a React
+ * child, which threw and blanked the whole app for every visitor while the
+ * catalogue was among the newest. So the title must be text, the date a
+ * number, the pictures and prices lists, and the status text (or nothing).
+ *
+ * Not the original's checkStructure (a Q-Blog leftover the original never
+ * ran on catalogue products): it also wants a description and a type, and
+ * neither the original's product form nor the + app's requires a
+ * description, so products without one never showed here.
  */
 function stripProduct(productId: string, value: unknown): CatalogueProduct | null {
-  if (!value || typeof value !== "object" || Array.isArray(value) || !checkStructure(value)) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const product = value as Record<string, unknown>;
   const title = typeof product.title === "string" ? product.title.trim() : "";
   const created = finiteNumber(product.created);
-  if (!title || created === undefined) return null;
+  if (!title || !created || !Array.isArray(product.images) || !Array.isArray(product.price)) return null;
   return {
     ...(product as unknown as CatalogueProduct),
     id: productId,
     title,
     created,
     description: typeof product.description === "string" ? product.description : undefined,
+    type: typeof product.type === "string" ? product.type : undefined,
     status: typeof product.status === "string" ? product.status : undefined,
   };
 }

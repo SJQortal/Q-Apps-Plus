@@ -92,6 +92,26 @@ describe("new products", () => {
     for (const item of items) expect(typeof item.product.title).toBe("string");
   });
 
+  it("keeps products without a description, which the product form allows", () => {
+    const items = newProductsFrom(
+      [
+        {
+          row: row("Seller Name", "q-store-catalogue-my-shop-CAT0000001"),
+          json: {
+            products: {
+              empty: product("empty", 30, { description: "" }),
+              missing: product("missing", 20, { description: undefined, type: undefined }),
+              noPrice: product("noPrice", 10, { price: undefined }),
+              noImages: product("noImages", 5, { images: "data:image/webp;base64,SU1H" }),
+            },
+          },
+        },
+      ],
+      listedAll
+    );
+    expect(items.map((i) => i.product.id)).toEqual(["empty", "missing"]);
+  });
+
   it("leaves out catalogues of shops that aren't listed under that name, and the hidden test shop", () => {
     const json = { products: { a: product("a", 10) } };
     const items = newProductsFrom(
