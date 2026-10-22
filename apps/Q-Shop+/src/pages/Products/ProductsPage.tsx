@@ -170,10 +170,14 @@ function CategoryPicker({
   if (progress !== null) {
     return (
       <Box role="status" sx={{ display: "flex", alignItems: "center", gap: 1.5, minHeight: 44 }}>
-        <CircularProgress size={20} />
-        <Typography variant="body2" color="text.secondary">
+        <CircularProgress size={20} aria-hidden />
+        {/* The counter changes with every shop read: shown, but announced once. */}
+        <Typography variant="body2" color="text.secondary" aria-hidden>
           {progress}
         </Typography>
+        <Box component="span" sx={visuallyHiddenSx}>
+          Reading every shop&apos;s categories…
+        </Box>
       </Box>
     );
   }
@@ -361,11 +365,17 @@ export function ProductsPage() {
   }, [scope, filtered, catalogues]);
   const cappedNote = `Only the first ${searchScope.total} products were searched; pick a category to narrow it down.`;
 
+  // While reading, the counter shows but isn't announced at every step: screen readers hear the start and the result.
   let status = "";
+  let spoken: string | null = null;
   if (phase !== "ready") status = "";
-  else if (waitingForAll) status = readingAll;
-  else if (searching && searchPending > 0) status = `Searching… ${searchScope.read} of ${searchScope.total} products read`;
-  else if (searching) status = `${plural(results.length, "result", "results")} for “${terms.join(" ")}”`;
+  else if (waitingForAll) {
+    status = readingAll;
+    spoken = "Reading every shop's products…";
+  } else if (searching && searchPending > 0) {
+    status = `Searching… ${searchScope.read} of ${searchScope.total} products read`;
+    spoken = "Searching…";
+  } else if (searching) status = `${plural(results.length, "result", "results")} for “${terms.join(" ")}”`;
   else if (all.complete) status = plural(filtered.length, "product", "products");
   else status = "Newest first";
 
@@ -413,7 +423,7 @@ export function ProductsPage() {
       <EmptyState icon={<LocalMallOutlinedIcon />} title="No products yet" description="No shop has listed anything for sale yet." />
     );
   } else if (waitingForAll) {
-    body = <ProductGridSkeleton count={phone ? 4 : 8} note={readingAll} layout={layout} />;
+    body = <ProductGridSkeleton count={phone ? 4 : 8} layout={layout} />;
   } else if (filtered.length === 0) {
     body = <EmptyState icon={<TuneIcon />} title="No products match these filters" actionLabel="Clear filters" onAction={clearFilters} />;
   } else if (searching && results.length === 0 && searchPending === 0) {
@@ -569,7 +579,16 @@ export function ProductsPage() {
           )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
             <Typography variant="body2" color="text.secondary" role="status" aria-live="polite" sx={{ fontSize: 14, flex: 1, minWidth: 0 }}>
-              {status}
+              {spoken === null ? (
+                status
+              ) : (
+                <>
+                  <span aria-hidden>{status}</span>
+                  <Box component="span" sx={visuallyHiddenSx}>
+                    {spoken}
+                  </Box>
+                </>
+              )}
             </Typography>
             <ProductViewToggle layout={layout} />
           </Box>
