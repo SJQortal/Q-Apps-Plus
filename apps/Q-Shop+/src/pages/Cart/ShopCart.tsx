@@ -10,6 +10,7 @@ import { storePath } from "../../qdn/links";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { CartItem } from "./CartItem";
 import { CoinPicker } from "./CoinPicker";
+import { Picture } from "./Picture";
 import { checkoutLinesOf, isLeftOut, isLoadingLine, priceLines, type CartViewLine } from "./cartLines";
 import type { ShopCartView } from "./useCartData";
 
@@ -20,28 +21,7 @@ export interface CheckoutGate {
 }
 
 function ShopLogo({ src, title }: { src?: string; title: string }) {
-  return (
-    <Box
-      sx={{
-        width: 44,
-        height: 44,
-        borderRadius: 1,
-        overflow: "hidden",
-        flexShrink: 0,
-        bgcolor: "action.hover",
-        color: "text.secondary",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {src ? (
-        <Box component="img" src={src} alt={`${title} logo`} sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
-      ) : (
-        <StorefrontOutlinedIcon aria-hidden />
-      )}
-    </Box>
-  );
+  return <Picture src={src} alt={`${title} logo`} size={44} fallback={<StorefrontOutlinedIcon aria-hidden />} />;
 }
 
 /**
@@ -160,9 +140,9 @@ export function ShopCart({
       <Box sx={{ borderTop: 1, borderColor: "divider", pt: 2, display: "grid", gap: 1.5 }}>
         {shop && <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />}
         <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-          <Typography sx={{ fontWeight: 700 }}>Subtotal</Typography>
+          <Typography sx={{ fontWeight: 700, fontSize: 16 }}>Subtotal</Typography>
           {priced.ok ? (
-            <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" />
+            <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} />
           ) : (
             <Typography color="text.secondary">—</Typography>
           )}

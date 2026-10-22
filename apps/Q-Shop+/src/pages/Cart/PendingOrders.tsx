@@ -225,13 +225,13 @@ export function PendingOrderCard({
           {paid ? <HourglassEmptyIcon /> : <HelpOutlineIcon />}
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography id={titleId} component="h3" sx={{ fontWeight: 700 }}>
+          <Typography id={titleId} component="h3" sx={{ fontWeight: 700, fontSize: 16 }}>
             {paid ? "Payment sent — the order isn't recorded yet" : "Payment not confirmed"}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
             {shopTitle} · {items} {items === 1 ? "item" : "items"} · {formatDate(order.created)}
           </Typography>
-          <Typography variant="body2" component="div" sx={{ mt: 1, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5 }}>
+          <Typography variant="body2" component="div" sx={{ mt: 1, lineHeight: 1.9 }}>
             {paid ? "You paid" : "Hub didn't confirm your payment of"} {amount} to {seller}
             {foreign && <> ({order.coin} address {shortAddress(order.recipient)})</>}.
           </Typography>
@@ -300,7 +300,7 @@ export function PendingOrderCard({
           onCancel={() => setConfirming(null)}
           onConfirm={confirmPaid}
         >
-          <Typography variant="body2" component="div" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5 }}>
+          <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
             Only if your {order.coin} wallet shows a payment of {amount} to {shortAddress(order.recipient)}.
           </Typography>
           <Typography variant="body2" sx={{ mt: 1.5 }}>
@@ -316,7 +316,7 @@ export function PendingOrderCard({
           onCancel={() => setConfirming(null)}
           onConfirm={remove}
         >
-          <Typography variant="body2" component="div" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.5 }}>
+          <Typography variant="body2" component="div" sx={{ lineHeight: 1.9 }}>
             Only if your wallet shows no payment of {amount} to {seller}.
           </Typography>
           <Typography variant="body2" sx={{ mt: 1.5 }}>

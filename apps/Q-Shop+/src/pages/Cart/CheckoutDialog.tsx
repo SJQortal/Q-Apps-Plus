@@ -257,8 +257,8 @@ export function CheckoutDialog({
         )}
         <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />
         <Divider />
-        <Row label={<Typography sx={{ fontWeight: 700 }}>Total</Typography>}>
-          {priced.ok ? <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" /> : <Typography>—</Typography>}
+        <Row label={<Typography sx={{ fontWeight: 700, fontSize: 16 }}>Total</Typography>}>
+          {priced.ok ? <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} /> : <Typography>—</Typography>}
         </Row>
         {!priced.ok && priced.reason === "rate" && (
           <Box role="status" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -302,7 +302,7 @@ export function CheckoutDialog({
       <Stack sx={{ gap: 2 }}>
         <Box sx={{ textAlign: "center", py: 1 }}>
           <Typography color="text.secondary">You pay</Typography>
-          <AmountTag value={snapshot.amount} coin={snapshot.coin} shop={shop} size="large" />
+          <AmountTag value={snapshot.amount} coin={snapshot.coin} shop={shop} size="large" sx={{ fontSize: 28 }} />
           <Typography sx={{ mt: 0.5 }}>
             to <strong>{shop.owner}</strong>
             {snapshotAsset !== null && (

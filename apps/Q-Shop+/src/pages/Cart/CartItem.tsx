@@ -9,6 +9,7 @@ import { unitPrice } from "../../money/pricing";
 import { coinLabel, type ShopCoinSettings } from "../../money/coins";
 import { productPath } from "../../qdn/links";
 import { QuantityStepper } from "./QuantityStepper";
+import { Picture } from "./Picture";
 import type { CartViewLine } from "./cartLines";
 
 const THUMB = 72;
@@ -20,31 +21,6 @@ function LineNote({ children }: { children: ReactNode }) {
       <ReportProblemOutlinedIcon color="warning" sx={{ fontSize: 18, mt: "1px" }} aria-hidden />
       <span>{children}</span>
     </Typography>
-  );
-}
-
-function Thumb({ src, alt }: { src?: string; alt: string }) {
-  return (
-    <Box
-      sx={{
-        width: THUMB,
-        height: THUMB,
-        borderRadius: 1,
-        overflow: "hidden",
-        bgcolor: "action.hover",
-        color: "text.secondary",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-      }}
-    >
-      {src ? (
-        <Box component="img" src={src} alt={alt} loading="lazy" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
-      ) : (
-        <ImageOutlinedIcon aria-hidden />
-      )}
-    </Box>
   );
 }
 
@@ -116,36 +92,39 @@ export function CartItem({
   const image = images[product?.mainImageIndex ?? 0] ?? images[0];
   const forSale = line.state === "ready";
   const unit = forSale ? unitPrice(product, coin, rate) : undefined;
-  const removeButton = (
-    <IconButton aria-label={`Remove ${title}`} onClick={onRemove} sx={{ width: 44, height: 44 }}>
-      <DeleteOutlineIcon />
-    </IconButton>
-  );
 
   return (
     <Box component="li" sx={ROW_SX}>
-      <Thumb src={image} alt={product?.title ?? ""} />
+      <Picture src={image} alt={product?.title ?? ""} size={THUMB} fallback={<ImageOutlinedIcon aria-hidden />} />
       <Box sx={{ minWidth: 0 }}>
-        {product ? (
-          <Link
-            component={RouterLink}
-            to={productPath(owner, storeId, line.productId, line.catalogueId)}
-            underline="hover"
-            color="text.primary"
-            sx={{
-              fontWeight: 600,
-              display: "-webkit-box",
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: "vertical",
-              overflow: "hidden",
-              overflowWrap: "anywhere",
-            }}
-          >
-            {title}
-          </Link>
-        ) : (
-          <Typography sx={{ fontWeight: 600 }}>{title}</Typography>
-        )}
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
+          <Box sx={{ flex: 1, minWidth: 0, pt: 0.25 }}>
+            {product ? (
+              <Link
+                component={RouterLink}
+                to={productPath(owner, storeId, line.productId, line.catalogueId)}
+                underline="hover"
+                color="text.primary"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: 16,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {title}
+              </Link>
+            ) : (
+              <Typography sx={{ fontWeight: 600, fontSize: 16 }}>{title}</Typography>
+            )}
+          </Box>
+          <IconButton aria-label={`Remove ${title}`} onClick={onRemove} sx={{ width: 44, height: 44, mt: -1, mr: -1 }}>
+            <DeleteOutlineIcon />
+          </IconButton>
+        </Box>
 
         {forSale && (
           <Typography variant="body2" color="text.secondary" component="div" sx={{ mt: 0.25 }}>
@@ -181,12 +160,17 @@ export function CartItem({
               Quantity {line.quantity}
             </Typography>
           )}
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: "auto" }}>
-            {forSale && unit !== undefined && (
-              <PriceTag product={product} coin={coin} rate={rate} quantity={line.quantity} shop={shop} size="medium" />
-            )}
-            {removeButton}
-          </Box>
+          {forSale && unit !== undefined && (
+            <PriceTag
+              product={product}
+              coin={coin}
+              rate={rate}
+              quantity={line.quantity}
+              shop={shop}
+              size="medium"
+              sx={{ ml: "auto", fontSize: 16 }}
+            />
+          )}
         </Box>
       </Box>
     </Box>
