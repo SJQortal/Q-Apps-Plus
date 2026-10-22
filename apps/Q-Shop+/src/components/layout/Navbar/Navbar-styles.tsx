@@ -101,6 +101,10 @@ export const AppTitle = styled("span")(({ theme }) => ({
   lineHeight: 1,
   whiteSpace: "nowrap",
   color: theme.palette.text.primary,
+  // 600–760 px (a narrow Hub pane): the navigation needs the room; the mark
+  // stays and the button keeps its name. Phones have no navigation up here.
+  "@media (max-width: 759.95px)": { display: "none" },
+  [`@media ${PHONE_MEDIA}`]: { display: "inline" },
 }));
 
 /** Shops, Orders and Sell on desktop. */
@@ -165,7 +169,7 @@ export const AvatarContainer = styled("button")(({ theme }) => ({
   color: theme.palette.text.primary,
   font: "inherit",
   transition: "background-color 150ms ease",
-  "&:hover": { backgroundColor: theme.palette.action.hover },
+  "@media (hover: hover)": { "&:hover": { backgroundColor: theme.palette.action.hover } },
   "&:focus-visible": {
     outline: `2px solid ${theme.palette.primary.main}`,
     outlineOffset: 2,
@@ -185,6 +189,10 @@ export const NavbarName = styled(Typography)(({ theme }) => ({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  // Below 900 px (narrow Hub panes) the header needs the room for its navigation; the avatar stays.
+  [theme.breakpoints.down("md")]: {
+    display: "none",
+  },
   [`@media ${PHONE_MEDIA}`]: {
     display: "none",
   },

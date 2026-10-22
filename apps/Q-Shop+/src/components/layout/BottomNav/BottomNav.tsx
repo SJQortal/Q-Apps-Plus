@@ -89,7 +89,10 @@ const Item = styled("button", {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
-  [`&:hover .${INDICATOR_CLASS}`]: { backgroundColor: active ? primarySoft(theme) : theme.palette.action.hover },
+  // Hover only where there is a pointer that hovers: on touch screens :hover sticks after a tap.
+  "@media (hover: hover)": {
+    [`&:hover .${INDICATOR_CLASS}`]: { backgroundColor: active ? primarySoft(theme) : theme.palette.action.hover },
+  },
   "&:focus-visible": {
     outline: `2px solid ${theme.palette.primary.main}`,
     outlineOffset: -2,
