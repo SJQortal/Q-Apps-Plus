@@ -4,7 +4,7 @@
  * search by buyer over the loaded orders, and the order in a dialog where
  * the seller updates its status.
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Box, CircularProgress, IconButton, InputAdornment, TextField, Tooltip, Typography } from "@mui/material";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
@@ -17,12 +17,21 @@ import type { Order } from "../../state/features/orderSlice";
 import { useShopOrders } from "../../orders/hooks";
 import { OrderListSkeleton, OrderListView } from "../../orders/components/OrderListView";
 import type { StatusFilter } from "../../orders/status";
+import { sellerStatusCounts, splitSellerItems } from "../../orders/listView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
 
 export function OrdersTab() {
   const list = useShopOrders();
   const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
-  const [filter, setFilter] = useState<StatusFilter>("all");
+  // Opens on "To handle" while there are orders to handle, else on All, until
+  // the seller picks a filter (Simon, 2026-10-22, Follow-up 10).
+  const [chosen, setFilter] = useState<StatusFilter | null>(null);
+  const automatic = useMemo<StatusFilter>(() => {
+    const { main } = splitSellerItems(list.items, list.seller);
+    const { counts, loading } = sellerStatusCounts(main, list.seller);
+    return !loading && counts.Received > 0 ? "Received" : "all";
+  }, [list.items, list.seller]);
+  const filter = chosen ?? automatic;
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);

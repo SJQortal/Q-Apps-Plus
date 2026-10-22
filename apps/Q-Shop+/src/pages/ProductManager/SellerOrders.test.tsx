@@ -70,6 +70,11 @@ function sellerStore() {
   return store;
 }
 
+/** The tab opens on To handle while there are orders to handle; these tests look at All. */
+async function showAll(): Promise<void> {
+  fireEvent.click(await screen.findByRole("button", { name: /^All · / }));
+}
+
 function names(list: HTMLElement): string[] {
   return within(list)
     .getAllByRole("button")
@@ -91,11 +96,14 @@ afterEach(() => {
 });
 
 describe("the seller's Orders tab", () => {
-  it("puts the orders to handle first, then the handled ones, newest first", async () => {
+  it("opens on To handle while there are orders to handle, and All lists them first, then the handled ones", async () => {
     installMockNode(world());
     renderWithProviders(<OrdersTab />, { store: sellerStore() });
     const list = await screen.findByRole("list", { name: "Orders received" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "To handle · 3" })).toBeInTheDocument());
+    // Simon, 2026-10-22: the tab opens on To handle when there are any.
+    await waitFor(() => expect(screen.getByRole("button", { name: "To handle · 3" })).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(names(list)).toEqual(["Dave", "Bob", "Alice"]));
+    fireEvent.click(screen.getByRole("button", { name: /^All · / }));
     await waitFor(() => expect(names(list)).toEqual(["Dave", "Bob", "Alice", "Frank", "Erin", "Carol"]));
     expect(screen.getByRole("button", { name: "Shipped · 2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refunded · 1" })).toBeInTheDocument();
@@ -134,6 +142,7 @@ describe("the seller's Orders tab", () => {
     installMockNode(w);
     renderWithProviders(<OrdersTab />, { store: sellerStore() });
     const list = await screen.findByRole("list", { name: "Orders received" });
+    await showAll();
     await waitFor(() => expect(screen.getByRole("button", { name: "To handle · 3" })).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "All · 6" })).toBeInTheDocument();
     await waitFor(() => expect(names(list)).toEqual(["Dave", "Bob", "Alice", "Frank", "Erin", "Carol"]));
@@ -184,6 +193,7 @@ describe("the seller's Orders tab", () => {
     installMockNode(world());
     renderWithProviders(<OrdersTab />, { store: sellerStore() });
     const list = await screen.findByRole("list", { name: "Orders received" });
+    await showAll();
     await waitFor(() => expect(within(list).getAllByRole("button")).toHaveLength(6));
     fireEvent.change(screen.getByLabelText("Search by buyer"), { target: { value: "car" } });
     await waitFor(() => expect(names(screen.getByRole("list", { name: "Orders received" }))).toEqual(["Carol"]));
@@ -272,8 +282,10 @@ describe("the seller overview", () => {
     overview.unmount();
 
     renderWithProviders(<OrdersTab />, { store });
-    await waitFor(() => expect(node.summary().hub["FETCH q-store-order"]).toBe(12));
     const list = await screen.findByRole("list", { name: "Orders received" });
+    // It opens on To handle (S07–S11 and S03), so the shipped ones wait until All is picked.
+    await showAll();
+    await waitFor(() => expect(node.summary().hub["FETCH q-store-order"]).toBe(12));
     await waitFor(() => expect(within(list).getAllByRole("button")).toHaveLength(12));
   });
 
