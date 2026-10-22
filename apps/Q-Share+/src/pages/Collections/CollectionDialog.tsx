@@ -73,7 +73,7 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
         items: collection?.items ?? initialItems ?? [],
         created: collection?.created,
       });
-      const saved = await publishCollection({ name, identifier, body });
+      const saved = await publishCollection({ name, identifier, body, previousItems: collection?.items ?? [] });
       dispatch(upsertCollection(saved));
       if (name === myName) {
         dispatch(

@@ -209,6 +209,7 @@ function CollectionView({ name, id }: { name: string; id: string }) {
       const saved = await publishCollection({
         name: next.name,
         identifier: next.identifier,
+        previousItems: collection?.items ?? [],
         body: buildCollectionBody({
           title: next.title,
           description: next.description,

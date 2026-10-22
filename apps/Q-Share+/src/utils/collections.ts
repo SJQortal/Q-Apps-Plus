@@ -7,6 +7,7 @@
  * "deleting" a collection republishes it with no items.
  */
 import { QSHARE_COLLECTION_BASE } from "../constants/Identifiers";
+import { MAX_MARKERS, ownerAddress, stripRecipientMarkers, withRecipientMarkers } from "./recipientMarker";
 import { objectToBase64 } from "./toBase64";
 import { fetchQdnResource, needsEncodedFetch } from "./fetchVideos";
 import {
@@ -165,8 +166,10 @@ export async function buildCollectionPublish(input: {
   name: string;
   identifier: string;
   body: CollectionBody;
+  /** Owners (addresses) of shares this publish adds, for their notifications (recipientMarker.ts). */
+  recipients?: string[];
 }): Promise<CollectionPublishPayload> {
-  const { name, identifier, body } = input;
+  const { name, identifier, body, recipients = [] } = input;
   return {
     action: "PUBLISH_QDN_RESOURCE",
     name,
@@ -174,7 +177,7 @@ export async function buildCollectionPublish(input: {
     identifier,
     data64: await objectToBase64(body),
     title: body.title.slice(0, COLLECTION_TITLE_MAX),
-    description: body.description.slice(0, COLLECTION_DESCRIPTION_MAX),
+    description: withRecipientMarkers(body.description.slice(0, COLLECTION_DESCRIPTION_MAX), recipients),
     tag1: QSHARE_COLLECTION_BASE,
     filename: COLLECTION_FILENAME,
   };
@@ -231,7 +234,7 @@ export function summaryToCollection(row: QdnResourceSummary): CollectionSummary 
     name: row.name,
     identifier: row.identifier,
     title: row.metadata?.title ?? "",
-    description: row.metadata?.description ?? "",
+    description: stripRecipientMarkers(row.metadata?.description ?? ""),
     created: row.created,
     updated: row.updated,
   };
@@ -330,11 +333,44 @@ export async function publishCollection(input: {
   name: string;
   identifier: string;
   body: CollectionBody;
+  /** The items before this change; without it, the copy the app last read (or none: a new collection). */
+  previousItems?: CollectionItem[];
 }): Promise<Collection> {
-  const payload = await buildCollectionPublish(input);
+  const previous = input.previousItems ?? getCachedCollection(input.name, input.identifier)?.items ?? [];
+  const recipients = await markedShareOwners(input.name, previous, input.body.items);
+  const payload = await buildCollectionPublish({ ...input, recipients });
   await qortalRequest(payload);
   invalidateCollectionCaches();
   return remember({ ...input.body, name: input.name, identifier: input.identifier, fetchedAt: Date.now() });
+}
+
+/**
+ * The accounts a publish of `next` names in its markers: the owners of the
+ * shares it adds to `previous` (newest first), then of the newest shares
+ * already in it, so a marker stays through later publishes until four newer
+ * owners push it out (an owner whose app was closed meanwhile still finds it;
+ * what was already read is never reported twice). Never the publisher's own
+ * account; at most MAX_MARKERS. A name Core can't resolve is skipped.
+ */
+export async function markedShareOwners(
+  publisher: string,
+  previous: CollectionItem[],
+  next: CollectionItem[]
+): Promise<string[]> {
+  const isNew = (item: CollectionItem) => !previous.some((old) => sameItem(old, item));
+  const newestFirst = [...next].reverse();
+  const ordered = [...newestFirst.filter(isNew), ...newestFirst.filter((item) => !isNew(item))];
+  const names = [...new Map(ordered.map((item) => [item.name.toLowerCase(), item.name])).values()];
+  if (!names.length) return [];
+  const own = await ownerAddress(publisher);
+  const addresses: string[] = [];
+  // One lookup at a time (remembered for the session), stopping at four owners.
+  for (const name of names) {
+    const address = await ownerAddress(name);
+    if (address && address !== own && !addresses.includes(address)) addresses.push(address);
+    if (addresses.length >= MAX_MARKERS) break;
+  }
+  return addresses;
 }
 
 /** In-app route for a collection page. */

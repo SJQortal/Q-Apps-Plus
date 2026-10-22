@@ -127,6 +127,35 @@ describe('Settings → Layout', () => {
   });
 });
 
+describe('Settings → Notifications', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCache();
+  });
+
+  it('switches comment and collection notifications on and off', () => {
+    renderWithProviders(<Settings />);
+    const section = screen.getByRole('region', { name: 'Notifications' });
+    const comments = within(section).getByRole('switch', { name: 'Comments and replies' });
+    const collections = within(section).getByRole('switch', { name: 'Added to a collection' });
+    expect(comments).toBeChecked();
+    expect(collections).toBeChecked();
+    fireEvent.click(comments);
+    expect(readSettings().notifyComments).toBe(false);
+    fireEvent.click(collections);
+    expect(readSettings().notifyCollections).toBe(false);
+  });
+
+  it('scrolls to the section from the link in the notification list', () => {
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id);
+    };
+    renderWithProviders(<Settings />, { initialEntries: ['/settings#notifications'] });
+    expect(scrolled).toEqual(['notifications']);
+  });
+});
+
 describe('Settings → Back', () => {
   beforeEach(() => resetInAppHistory());
 
