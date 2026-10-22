@@ -158,7 +158,7 @@ export function ProductCard({
             startIcon={available && !isOwnProduct ? <AddShoppingCartOutlinedIcon /> : undefined}
             disabled={!available || isOwnProduct}
             onClick={onAddToCart}
-            aria-label={available && !isOwnProduct ? `Add ${title} to cart` : undefined}
+            aria-label={available && !isOwnProduct ? `Add to cart: ${title}` : undefined}
             sx={{ mt: "auto", minHeight: 44, alignSelf: "stretch" }}
           >
             {label}

@@ -110,7 +110,7 @@ describe("shop page", { timeout: 20_000 }, () => {
 
   it("adds one to the cart with the viewed shop's id and owner, and offers to view the cart", async () => {
     const { store } = renderShop(makeWorld());
-    const add = await screen.findByRole("button", { name: "Add Product 11 to cart" });
+    const add = await screen.findByRole("button", { name: "Add to cart: Product 11" });
     fireEvent.click(add);
     const cart = store.getState().cart.carts[STORE_ID];
     expect(cart.storeOwner).toBe("Seller Name");
