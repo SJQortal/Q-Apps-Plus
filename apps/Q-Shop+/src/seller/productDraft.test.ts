@@ -22,7 +22,7 @@ function values(overrides: Partial<ProductFormValues> = {}): ProductFormValues {
     description: "A cup",
     images: ["data:image/webp;base64,Q1VQ"],
     type: "physical",
-    category: "Kitchen",
+    category: "Home & Garden",
     status: "AVAILABLE",
     prices: { QORT: "2.5", ARRR: "" },
     ...overrides,
@@ -78,7 +78,7 @@ describe("a new product (the original's shape)", () => {
       price: [{ currency: "qort", value: 2.5 }],
       storeId: STORE_ID,
       shortStoreId: SHORT_STORE_ID,
-      category: "Kitchen",
+      category: "Home & Garden",
       id: `q-store-product-${SHORT_STORE_ID}-UIDxxxxxx1`,
       status: "AVAILABLE",
       user: SELLER,
@@ -191,9 +191,13 @@ describe("validation", () => {
   it("asks for an image, a title, a category and a QORT price above 0", () => {
     expect(validateProductForm(values({ images: [] }), coins)).toBe("Add at least one image");
     expect(validateProductForm(values({ title: "  " }), coins)).toBe("Add a title");
-    expect(validateProductForm(values({ category: "" }), coins)).toBe("Pick or type a category");
+    expect(validateProductForm(values({ category: "" }), coins)).toBe("Pick a category");
     expect(validateProductForm(values({ prices: { QORT: "0" } }), coins)).toBe("Set a price in QORT above 0");
     expect(validateProductForm(values({ prices: { QORT: "1", ARRR: "." } }), coins)).toBe("Check the ARRR price");
     expect(validateProductForm(values(), coins)).toBeNull();
+    // Only the list's categories, or the product's own old one while it is edited.
+    expect(validateProductForm(values({ category: "Mugs" }), coins)).toBe("Pick a category from the list");
+    expect(validateProductForm(values({ category: "Mugs" }), coins, { oldCategory: "Mugs" })).toBeNull();
+    expect(validateProductForm(values({ category: "Mugs" }), coins, { oldCategory: "Cups" })).toBe("Pick a category from the list");
   });
 });

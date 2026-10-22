@@ -37,6 +37,7 @@ import { roomTiming } from "../qdn/publishBatches";
 import { isDraftOfShop } from "./shopDrafts";
 import { resetPublishedIndexes } from "./productIndex";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
+import { SHOP_CATEGORIES } from "../constants/categories";
 
 vi.mock("../components/common/ImageUploader", () => ({
   default: ({ label, onPick }: { label: string; onPick: (img: string) => void }) => (
@@ -246,7 +247,7 @@ describe("the products tab", () => {
     expect(await within(dialog).findByText("Add at least one image")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Tea cup" } });
-    fireEvent.change(within(dialog).getByRole("combobox", { name: /^Category/ }), { target: { value: "Kitchen" } });
+    fireEvent.change(within(dialog).getByRole("combobox", { name: /^Category/ }), { target: { value: "Home & Garden" } });
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^Price in QORT/ }), { target: { value: "2,5" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
     await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(1));
@@ -274,12 +275,53 @@ describe("the products tab", () => {
       price: [{ currency: "qort", value: 2.5 }],
       storeId: STORE_ID,
       shortStoreId: SHORT_STORE_ID,
-      category: "Kitchen",
+      category: "Home & Garden",
       status: "AVAILABLE",
       user: SELLER,
     });
     expect(added.id).toMatch(new RegExp(`^q-store-product-${SHORT_STORE_ID}-.{10}$`));
     expect(screen.getByRole("heading", { name: "Ready to publish: 1 product" })).toBeInTheDocument();
+  });
+
+  it("offers the categories every shop picks from, and nothing else for a new product", async () => {
+    stubNode();
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    fireEvent.click(screen.getByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add product" });
+    const category = within(dialog).getByRole("combobox", { name: /^Category/ });
+    const options = within(category).getAllByRole("option").map((el) => el.textContent);
+    expect(options).toEqual(["Choose a category", ...SHOP_CATEGORIES]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Jam" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Price in QORT/ }), { target: { value: "3" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
+    expect(await within(dialog).findByText("Pick a category")).toBeInTheDocument();
+    fireEvent.change(category, { target: { value: "Food & Drink" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(1));
+    const [added] = Object.values(store.getState().global.productsToSave) as any[];
+    expect(added.category).toBe("Food & Drink");
+  });
+
+  it("an edited product keeps its category from before the list until the seller picks one", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Poster" }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    const category = within(dialog).getByRole("combobox", { name: /^Category/ }) as HTMLSelectElement;
+    // The fixture's "Art" isn't one of the list: it is offered as the product's own, and selected.
+    expect(category.value).toBe("Art");
+    expect(within(dialog).getByText(/“Art” isn't one of the categories every shop uses/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+    await waitFor(() => expect(store.getState().global.productsToSave[poster.id]).toBeDefined());
+    expect(store.getState().global.productsToSave[poster.id].category).toBe("Art");
+    // Picking one of the list replaces it.
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Poster" }));
+    const again = await screen.findByRole("dialog", { name: "Edit product" });
+    fireEvent.change(within(again).getByRole("combobox", { name: /^Category/ }), { target: { value: "Collectibles & Art" } });
+    fireEvent.click(within(again).getByRole("button", { name: "Save to drafts" }));
+    await waitFor(() => expect(store.getState().global.productsToSave[poster.id].category).toBe("Collectibles & Art"));
   });
 });
 

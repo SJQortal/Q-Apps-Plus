@@ -107,6 +107,23 @@ describe("Products", () => {
     expect(location()).toBe("/products?category=art");
   });
 
+  it("lists the categories every shop picks from first, and the sellers' own words under Other categories", async () => {
+    const world = makeWorld({ shops: 2, productsPerShop: 3 });
+    world.shops[0].products.forEach((p) => (p.category = "toys & hobbies"));
+    world.shops[1].products.forEach((p, i) => (p.category = i === 0 ? "Baby" : "flower"));
+    renderProducts({ world });
+    await waitFor(() => expect(cards()).toHaveLength(6));
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+    const dialog = await screen.findByRole("dialog", { name: "Categories" });
+    const group = await within(dialog).findByRole("group", { name: "Categories" });
+    expect(within(group).getAllByRole("checkbox").map((box) => box.getAttribute("aria-label") ?? box.closest("label")?.textContent)).toEqual([
+      "Toys & Hobbies3, 3 products",
+      "Baby1, 1 product",
+      "flower2, 2 products",
+    ]);
+    expect(within(group).getByRole("heading", { name: "Other categories" })).toBeInTheDocument();
+  });
+
   it("opens with the categories a link names, and sorts by price across shops", async () => {
     const world = makeWorld({ shops: 3, productsPerShop: 3 });
     world.shops[0].products[2].price = [{ currency: "qort", value: 0.5 }];

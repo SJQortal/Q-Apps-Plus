@@ -6,7 +6,6 @@
  */
 import type { Dispatch, SetStateAction } from "react";
 import {
-  Autocomplete,
   Box,
   IconButton,
   InputAdornment,
@@ -20,6 +19,7 @@ import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined
 import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
 import { CoinIcon } from "../../../components/money/CoinIcon";
+import { SHOP_CATEGORIES } from "../../../constants/categories";
 import { COINS, assetIdOf, coinLabel, isCoinTicker, type ShopCoinSettings } from "../../../money/coins";
 import {
   MAX_PRODUCT_IMAGES,
@@ -39,7 +39,8 @@ interface ProductFormProps {
   /** The coins the shop takes, QORT first (money/coins.ts shopCoins). */
   coins: string[];
   shop: ShopCoinSettings | null | undefined;
-  categories: string[];
+  /** The product's saved category when it isn't one of the list (constants/categories.ts): kept until another is picked. */
+  oldCategory?: string | null;
   /** Editing a published product: the status can change. */
   editing: boolean;
   onImageError: (message: string) => void;
@@ -55,7 +56,7 @@ function coinName(coin: string, shop: ShopCoinSettings | null | undefined): stri
   return isCoinTicker(coin) ? COINS[coin].label : coinLabel(coin, shop);
 }
 
-export const ProductForm = ({ values, onChange, coins, shop, categories, editing, onImageError }: ProductFormProps) => {
+export const ProductForm = ({ values, onChange, coins, shop, oldCategory, editing, onImageError }: ProductFormProps) => {
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
     onChange((prev) => ({ ...prev, [key]: value }));
   const setPrice = (coin: string, text: string) =>
@@ -165,15 +166,35 @@ export const ProductForm = ({ values, onChange, coins, shop, categories, editing
             {values.type === "physical" ? "Buyers give a delivery address at checkout." : "No delivery address is asked for."}
           </Typography>
         </Box>
-        <Autocomplete
-          freeSolo
-          options={categories}
-          inputValue={values.category}
-          onInputChange={(_, value) => set("category", value)}
-          renderInput={(params) => (
-            <TextField {...params} label="Category" required helperText="Pick one or type a new one" />
+        <TextField
+          select
+          label="Category"
+          required
+          fullWidth
+          value={values.category}
+          onChange={(e) => set("category", e.target.value)}
+          slotProps={{ select: { native: true }, inputLabel: { shrink: true } }}
+          helperText={
+            oldCategory && values.category === oldCategory
+              ? `“${oldCategory}” isn't one of the categories every shop uses. Pick one, so buyers find this product with others like it.`
+              : "The same categories in every shop, so buyers can browse all products by them."
+          }
+          sx={{ "& .MuiInputBase-root": { minHeight: 44 } }}
+        >
+          <option value="" disabled>
+            Choose a category
+          </option>
+          {SHOP_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+          {oldCategory && (
+            <optgroup label="This product's category now">
+              <option value={oldCategory}>{oldCategory}</option>
+            </optgroup>
           )}
-        />
+        </TextField>
         {editing && (
           <Box>
             <Typography id="product-status-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>

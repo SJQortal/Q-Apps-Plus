@@ -31,6 +31,7 @@ import type { Product } from "../state/features/storeSlice";
 import { dataContainerIdentifier } from "../qdn/identifiers";
 import { QdnDeletedError, fetchQdnJson } from "../qdn/search";
 import { fetchCatalogue } from "../utils/fetchCatalogues";
+import { categoryKey, listedCategory } from "../constants/categories";
 import { RetryCancelled, withPeerRetries } from "../pages/Store/peerRetry";
 import {
   compareRows,
@@ -140,10 +141,12 @@ export function statusOfRow(row: AllProductRow, catalogues: AllCatalogues): stri
   return effectiveStatus(row, ownCatalogue(row, catalogues));
 }
 
-/** A category as the filter groups it: sellers type their own, so "Art" and "art " are one. */
-export function categoryKey(category: string | null | undefined): string {
-  return (category ?? "").trim().toLocaleLowerCase();
-}
+/**
+ * A category as the filter groups it, whatever its case and spaces ("Baby"
+ * and " baby " are one): products saved before the list (constants/categories.ts)
+ * have the seller's own words.
+ */
+export { categoryKey };
 
 export interface AllProductsQuery {
   /** categoryKey()s; none = every category. */
@@ -170,12 +173,18 @@ export function filterAndSortAll(rows: AllProductRow[], query: AllProductsQuery,
 
 export interface CategoryOption {
   key: string;
-  /** The spelling most of its products use. */
+  /** The list's name, or (for a category of the seller's own) the spelling most of its products use. */
   label: string;
   count: number;
+  /** One of the list every shop picks from (constants/categories.ts). */
+  listed: boolean;
 }
 
-/** The categories of these products, the biggest first. Products without one aren't counted. */
+/**
+ * The categories of these products: the list's first, then the sellers' own
+ * words from before the list ("Other categories"), each the biggest first.
+ * Products without one aren't counted.
+ */
 export function categoryOptions(rows: AllProductRow[]): CategoryOption[] {
   const groups = new Map<string, { count: number; spellings: Map<string, number> }>();
   for (const row of rows) {
@@ -189,11 +198,18 @@ export function categoryOptions(rows: AllProductRow[]): CategoryOption[] {
   }
   const options: CategoryOption[] = [];
   for (const [key, group] of groups) {
-    const [label] = [...group.spellings].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
-    options.push({ key, label, count: group.count });
+    const listed = listedCategory(key);
+    const [label] = listed
+      ? [listed]
+      : [...group.spellings].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))[0];
+    options.push({ key, label, count: group.count, listed: !!listed });
   }
   return options.sort(
-    (a, b) => b.count - a.count || a.label.localeCompare(b.label, undefined, { sensitivity: "base" }) || (a.key < b.key ? -1 : 1)
+    (a, b) =>
+      Number(b.listed) - Number(a.listed) ||
+      b.count - a.count ||
+      a.label.localeCompare(b.label, undefined, { sensitivity: "base" }) ||
+      (a.key < b.key ? -1 : 1)
   );
 }
 

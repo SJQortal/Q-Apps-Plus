@@ -12,6 +12,7 @@
  */
 import { assetIdOf, priceCurrencyKey } from "../money/coins";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
+import { isListedCategory } from "../constants/categories";
 
 export interface PriceEntry {
   currency: string;
@@ -122,12 +123,21 @@ export function buildPriceList(
   return list;
 }
 
-/** The first problem with the form, in plain words, or null. */
-export function validateProductForm(values: ProductFormValues, coins: string[]): string | null {
+/**
+ * The first problem with the form, in plain words, or null. The category
+ * must be one of the list (constants/categories.ts), or the product's own old
+ * one (`oldCategory`), kept while it is edited.
+ */
+export function validateProductForm(
+  values: ProductFormValues,
+  coins: string[],
+  options: { oldCategory?: string | null } = {}
+): string | null {
   if (values.images.length === 0) return "Add at least one image";
   if (values.images.length > MAX_PRODUCT_IMAGES) return `Use at most ${MAX_PRODUCT_IMAGES} images`;
   if (!values.title.trim()) return "Add a title";
-  if (!values.category.trim()) return "Pick or type a category";
+  if (!values.category.trim()) return "Pick a category";
+  if (!isListedCategory(values.category) && values.category !== options.oldCategory) return "Pick a category from the list";
   if (!(parseAmount(values.prices.QORT ?? "") > 0)) return "Set a price in QORT above 0";
   for (const coin of coins) {
     if (coin === "QORT") continue;

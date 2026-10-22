@@ -12,11 +12,12 @@ import { Box, Button, Typography } from "@mui/material";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import ShortUniqueId from "short-unique-id";
 import type { RootState } from "../../../state/store";
-import { addProductsToSaveCategory, setProductsToSave } from "../../../state/features/globalSlice";
+import { setProductsToSave } from "../../../state/features/globalSlice";
 import { ResponsiveDialog } from "../../../components/common/mobile";
 import { shopCoins } from "../../../money/coins";
 import { ProductForm } from "../ProductForm/ProductForm";
 import { FormError } from "../../../seller/FormError";
+import { listedCategory, oldCategoryOf } from "../../../constants/categories";
 import {
   editedProductDraft,
   formValuesFor,
@@ -48,18 +49,16 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
   const name = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
-  const listCategories = useSelector((state: RootState) => state.global.listProducts.categories);
-  const draftCategories = useSelector((state: RootState) => state.global.productsToSaveCategories);
-  const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
 
   const coins = useMemo(() => shopCoins(currentStore) as string[], [currentStore]);
-  const categories = useMemo(() => {
-    const all = new Set<string>([...listCategories, ...draftCategories]);
-    for (const draft of Object.values(productsToSave)) if (draft?.category) all.add(draft.category);
-    return [...all].filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [listCategories, draftCategories, productsToSave]);
+  // A category saved before the list (constants/categories.ts) stays until the seller picks another.
+  const [oldCategory] = useState(() => oldCategoryOf(product));
 
-  const [initial] = useState<ProductFormValues>(() => formValuesFor(product, coins));
+  const [initial] = useState<ProductFormValues>(() => {
+    const start = formValuesFor(product, coins);
+    // A listed category saved in another spelling shows as the list's.
+    return { ...start, category: listedCategory(start.category) ?? start.category };
+  });
   const [values, setValues] = useState<ProductFormValues>(initial);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -78,14 +77,13 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     if (!currentStore?.id || !dataContainer || dataContainer.storeId !== currentStore.id) {
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
-    const invalid = validateProductForm(values, coins);
+    const invalid = validateProductForm(values, coins, { oldCategory });
     if (invalid) return setError(invalid);
     const trimmed = { ...values, title: values.title.trim(), category: values.category.trim() };
     const draft = product
       ? editedProductDraft({ base: product, values: trimmed, coins, name })
       : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now: Date.now() });
     dispatch(setProductsToSave(draft));
-    if (!categories.includes(trimmed.category)) dispatch(addProductsToSaveCategory(trimmed.category));
     onClose();
   };
 
@@ -135,7 +133,7 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
             onChange={setValues}
             coins={coins}
             shop={currentStore}
-            categories={categories}
+            oldCategory={oldCategory}
             editing={editingPublished}
             onImageError={setError}
           />

@@ -6,8 +6,9 @@
  * The products come from discovery/allProducts.ts: the shops' product
  * indexes, read newest first and only as far as the page needs, and the
  * catalogues (titles, pictures) of the products on screen only. Another
- * sort, categories (one or several, across every shop: sellers type their
- * own, so "Art" and "art" are one) or a search read every index first, one
+ * sort, categories (one or several, across every shop: the list every shop
+ * picks from, constants/categories.ts, then "Other categories", the sellers'
+ * own words from before the list) or a search read every index first, one
  * small read per shop; a search then reads at most 30 catalogues, as a shop
  * page's does. Prices are in QORT, the price every product has; a shop page
  * shows the buyer's preferred coin.
@@ -16,6 +17,7 @@
  * a product comes back to the same place in the list.
  */
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -150,9 +152,10 @@ function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => vo
 }
 
 /**
- * Categories to tick, the biggest first, with a box to find one (sellers
- * have made over a hundred). Shown in a popover on wider screens and in the
- * Filters sheet on phones.
+ * Categories to tick: the list's, then "Other categories" (sellers' own words
+ * from before the list, over a hundred), each the biggest first, with a box
+ * to find one. Shown in a popover on wider screens and in the Filters sheet
+ * on phones.
  */
 function CategoryPicker({
   options,
@@ -190,6 +193,9 @@ function CategoryPicker({
   }
   const needle = find.trim().toLocaleLowerCase();
   const shown = needle ? options.filter((option) => option.label.toLocaleLowerCase().includes(needle)) : options;
+  // The sellers' own words from before the list come under their own heading.
+  const hasListed = options.some((option) => option.listed);
+  const firstOther = shown.findIndex((option) => !option.listed);
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
       {options.length > 8 && (
@@ -208,9 +214,14 @@ function CategoryPicker({
         aria-label="Categories"
         sx={{ maxHeight: { xs: "40vh", sm: 340 }, overflowY: "auto", overscrollBehavior: "contain", display: "flex", flexDirection: "column" }}
       >
-        {shown.map((option) => (
+        {shown.map((option, i) => (
+          <Fragment key={option.key}>
+          {i === firstOther && hasListed && (
+            <Typography component="h3" variant="subtitle2" color="text.secondary" sx={{ mt: i > 0 ? 1.5 : 0, mb: 0.5 }}>
+              Other categories
+            </Typography>
+          )}
           <FormControlLabel
-            key={option.key}
             control={<Checkbox checked={selected.includes(option.key)} onChange={() => onToggle(option.key)} />}
             label={
               <Box component="span" sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
@@ -227,6 +238,7 @@ function CategoryPicker({
             }
             sx={{ m: 0, minHeight: 44, mr: 0.5, "& .MuiFormControlLabel-label": { flex: 1, minWidth: 0 } }}
           />
+          </Fragment>
         ))}
         {shown.length === 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>

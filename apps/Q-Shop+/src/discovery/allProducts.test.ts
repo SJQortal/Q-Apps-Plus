@@ -150,9 +150,24 @@ describe("filters and sorts across shops", () => {
       row("Hal", "H1", { category: "  " }),
     ]);
     expect(options).toEqual([
-      { key: "art", label: "Art", count: 3 },
-      { key: "kitchen", label: "Kitchen", count: 2 },
-      { key: "zines", label: "Zines", count: 1 },
+      { key: "art", label: "Art", count: 3, listed: false },
+      { key: "kitchen", label: "Kitchen", count: 2, listed: false },
+      { key: "zines", label: "Zines", count: 1, listed: false },
+    ]);
+  });
+
+  it("puts the list's categories first, in the list's spelling, then the sellers' own words", () => {
+    const options = categoryOptions([
+      row("Ann", "A1", { category: "Art" }),
+      row("Bob", "B1", { category: "art" }),
+      row("Cy", "C1", { category: "home & garden" }),
+      row("Dee", "D1", { category: "Baby" }),
+      row("Eve", "E1", { category: "Baby" }),
+    ]);
+    expect(options).toEqual([
+      { key: "baby", label: "Baby", count: 2, listed: true },
+      { key: "home & garden", label: "Home & Garden", count: 1, listed: true },
+      { key: "art", label: "Art", count: 2, listed: false },
     ]);
   });
 
