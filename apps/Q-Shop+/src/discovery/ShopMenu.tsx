@@ -62,7 +62,8 @@ export function ShopMenu({
     return (
       <>
         <BottomSheet open={Boolean(target)} onClose={onClose} title={shop?.title ?? "Shop"}>
-          <List disablePadding>
+          {/* A div, not a ul: the rows are buttons, not list items. */}
+          <List disablePadding component="div">
             <ListItemButton onClick={open} sx={{ minHeight: 48, borderRadius: 1 }}>
               <ListItemIcon>
                 <StorefrontOutlinedIcon />

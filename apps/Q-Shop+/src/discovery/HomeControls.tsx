@@ -98,7 +98,7 @@ export function ShopSearchField({ q, onSearch }: { q: string; onSearch: (text: s
                     onSearch("");
                     input.current?.focus();
                   }}
-                  sx={{ [`@media ${PHONE_MEDIA}`]: { width: 44, height: 44 } }}
+                  sx={{ width: 40, height: 40, [`@media ${PHONE_MEDIA}`]: { width: 44, height: 44 } }}
                 >
                   <ClearIcon fontSize="small" />
                 </IconButton>
