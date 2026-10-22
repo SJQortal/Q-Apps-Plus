@@ -12,7 +12,7 @@ import { createAppStore } from "../../../state/store";
 import { addUser } from "../../../state/features/authSlice";
 import { setCurrentStore } from "../../../state/features/globalSlice";
 import { statusesLoaded } from "../../../state/features/orderSlice";
-import { resetAssetCache } from "../../../seller/assets";
+import { resetAssetCache } from "../../../qdn/assets";
 import { resetAssetNamesFromNode } from "../../../orders/useOrderCoin";
 import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, poster } from "../../../test/fixtures/shop";
 import { fetchRetry, resetOrderReadCaches } from "../../../orders/reads";
@@ -201,7 +201,8 @@ describe("the seller's view of the coin an order names", () => {
       const asset = url.match(/^\/assets\/info\?assetId=(\d+)$/);
       if (asset) {
         const name = assets[Number(asset[1])];
-        return name ? reply(200, { assetId: Number(asset[1]), assetName: name }) : reply(400, { error: 601 });
+        // Core's shape: the asset's name is `name` (a transaction's is `assetName`).
+        return name ? reply(200, { assetId: Number(asset[1]), name, isDivisible: true, isUnspendable: false }) : reply(400, { error: 601 });
       }
       return reply(200, []);
     });

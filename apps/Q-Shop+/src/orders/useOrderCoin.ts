@@ -21,7 +21,7 @@ import type { Order } from "../state/features/orderSlice";
 import type { CurrentStore } from "../state/features/globalSlice";
 import { coinLabel, type ShopCoinSettings } from "../money/coins";
 import { shortStoreIdOf, shortStoreIdOfOrder } from "../qdn/identifiers";
-import { assetInfo } from "../seller/assets";
+import { assetInfo } from "../qdn/assets";
 import { orderCoin, orderCoinSettings } from "./format";
 import { paymentSummary, UNKNOWN_COIN, type PaymentSummary } from "./payment";
 

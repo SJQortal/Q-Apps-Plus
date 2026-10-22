@@ -28,7 +28,7 @@ import CreateStoreModal from "../components/modals/CreateStoreModal";
 import EditStoreModal from "../components/modals/EditStoreModal";
 import { RecreateShopDataDialog } from "./RecreateShopDataDialog";
 import { addressWarning, shopFormValues, toStoreFields, validateShopForm } from "./shopFields";
-import { assetInfo, parseAssetQuery, resetAssetCache } from "./assets";
+import { assetInfo, parseAssetQuery, resetAssetCache } from "../qdn/assets";
 import { isRecentlyDeletedShop, noteDeletedShop, resetDeletedShops } from "../qdn/deleted";
 
 const LOGO = "data:image/webp;base64,TE9HTw==";
@@ -45,10 +45,14 @@ vi.mock("../components/common/ImageUploader", () => ({
 /** A node that knows our shops (by search), the ones deleted (they serve "D"), and two assets. */
 function stubNode(opts: { shops?: { name: string; identifier: string }[]; deleted?: string[] } = {}) {
   const calls: string[] = [];
+  // Core's own shape: an asset's name is `name` (as /assets and /assets/info answer on mainnet).
   const assets = [
-    { assetId: 0, assetName: "QORT", isUnspendable: false },
-    { assetId: 81, assetName: "Gold", isUnspendable: false },
-    { assetId: 82, assetName: "Locked", isUnspendable: true },
+    { assetId: 0, owner: "QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG", name: "QORT", description: "QORTAL coin", quantity: 0, isDivisible: true, isUnspendable: false, creationGroupId: 0 },
+    { assetId: 81, owner: "QOwner81", name: "Gold", description: "A gold token", quantity: 1000, isDivisible: true, isUnspendable: false, creationGroupId: 0 },
+    { assetId: 82, owner: "QOwner82", name: "Locked", description: "", quantity: 1, isDivisible: false, isUnspendable: true, creationGroupId: 0 },
+    { assetId: 87, owner: "QfX9KhXnoB78v2D36j7nocKaYtzUYcyQyH", name: "BHC", description: "", quantity: 40204200000000, isDivisible: true, isUnspendable: false, creationGroupId: 0 },
+    { assetId: 88, owner: "QfX9KhXnoB78v2D36j7nocKaYtzUYcyQyH", name: "BHC Coin", description: "BHC Coin is the native Coin of Biohackers Corner.", quantity: 40204200000000, isDivisible: true, isUnspendable: false, creationGroupId: 0 },
+    { assetId: 90, owner: "QOwner90", name: "Seats", description: "Whole seats only", quantity: 100, isDivisible: false, isUnspendable: false, creationGroupId: 0 },
   ];
   const fetchMock = vi.fn(async (input: string) => {
     const url = String(input);
@@ -65,7 +69,7 @@ function stubNode(opts: { shops?: { name: string; identifier: string }[]; delete
     if (path === "/assets/info") {
       const id = params.get("assetId");
       const name = params.get("assetName");
-      const asset = assets.find((a) => (id !== null ? String(a.assetId) === id : a.assetName === name));
+      const asset = assets.find((a) => (id !== null ? String(a.assetId) === id : a.name === name));
       return asset ? ok(asset) : { ok: false, status: 400, text: async () => '{"error":601}' };
     }
     if (path === "/assets") return ok(assets);
@@ -84,6 +88,7 @@ function sellerStore() {
 }
 
 const field = (name: RegExp) => screen.getByRole("textbox", { name });
+const assetField = () => screen.getByRole("combobox", { name: /^Asset name or id/ });
 
 beforeEach(() => {
   resetAssetCache();
@@ -320,10 +325,10 @@ describe("edit shop", () => {
     await waitFor(() => expect(field(/^ARRR payout address/)).toHaveValue(ARRR_ADDRESS));
     expect(q.callsFor("GET_USER_WALLET")).toEqual([{ action: "GET_USER_WALLET", coin: "ARRR" }]);
 
-    fireEvent.change(field(/^Asset name or id/), { target: { value: "QORT" } });
+    fireEvent.change(assetField(), { target: { value: "QORT" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByText("QORT is always accepted.")).toBeInTheDocument();
-    fireEvent.change(field(/^Asset name or id/), { target: { value: "Gold" } });
+    fireEvent.change(assetField(), { target: { value: "Gold" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     const list = await screen.findByRole("list", { name: "Accepted assets" });
     expect(within(list).getByText("Gold")).toBeInTheDocument();
@@ -336,6 +341,40 @@ describe("edit shop", () => {
     expect(saved.foreignCoins).toEqual({ ARRR: ARRR_ADDRESS });
     expect(saved.acceptedAssets).toEqual([{ id: 81, name: "Gold" }]);
     expect(saved).toMatchObject({ id: STORE_ID, shortStoreId: SHORT_STORE_ID, title: viewedStore.title });
+  });
+
+  it("suggests the best matching assets as the seller types, any case, and adds one picked", async () => {
+    const { q, onClose } = setup({}, { supportedCoins: ["QORT"], foreignCoins: { ARRR: "" } });
+    fireEvent.change(assetField(), { target: { value: "bhc c" } });
+    const box = await screen.findByRole("listbox");
+    await waitFor(() => expect(within(box).getAllByRole("option").map((o) => o.textContent)).toEqual([
+      expect.stringContaining("BHC Coin"),
+    ]));
+    fireEvent.change(assetField(), { target: { value: "bhc" } });
+    // The exact name first, then the longer one; "Whole units only" and "Can't be transferred" are said.
+    await waitFor(() => expect(within(screen.getByRole("listbox")).getAllByRole("option")).toHaveLength(2));
+    const [first, second] = within(screen.getByRole("listbox")).getAllByRole("option");
+    expect(first).toHaveTextContent("BHC#87");
+    expect(second).toHaveTextContent(/BHC Coin#88 · BHC Coin is the native Coin/);
+    fireEvent.click(second);
+    const list = await screen.findByRole("list", { name: "Accepted assets" });
+    expect(within(list).getByText("BHC Coin")).toBeInTheDocument();
+    expect(assetField()).toHaveValue("");
+    // A typed name in another case is found too, from the list (Core matches names exactly).
+    fireEvent.change(assetField(), { target: { value: "gold" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(within(list).getByText("Gold")).toBeInTheDocument());
+    fireEvent.change(assetField(), { target: { value: "seat" } });
+    expect(await within(await screen.findByRole("listbox")).findByText("Whole units only")).toBeInTheDocument();
+    fireEvent.change(assetField(), { target: { value: "lock" } });
+    const locked = await within(await screen.findByRole("listbox")).findByRole("option", { name: /Locked/ });
+    expect(locked).toHaveAttribute("aria-disabled", "true");
+    expect(within(locked).getByText("Can't be transferred")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const saved = decodeData64((q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any).data64);
+    expect(saved.acceptedAssets).toEqual([{ id: 88, name: "BHC Coin" }, { id: 81, name: "Gold" }]);
   });
 
   it("a declined wallet request is quiet, and a coin switched on needs an address", async () => {

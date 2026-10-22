@@ -1,10 +1,17 @@
 /**
- * Qortal assets (Q-Assets) a shop can accept, read from the node only:
+ * Qortal assets (Q-Assets), read from the node only, as the Q-Assets app
+ * reads them (gitea.qortal.link/crowetic/Q-Assets, src/utils/qortalAssetRequests.ts):
  * `/assets/info?assetId=` or `?assetName=` for one asset (Core matches the
- * name exactly), and `/assets?limit=&offset=` for a page to browse. Reads are
- * small, paged and kept for the session. Asset 0 is QORT, which every shop
- * takes anyway; an unspendable asset can't be transferred, so buyers couldn't
- * pay with it.
+ * name exactly, case and all), and `/assets?includeData=false` for the list.
+ * Core names an asset `name` in both (`assetName` is only a transaction's
+ * field); this app read `assetName` and so found no asset at all on a real
+ * node. Core has no search by name, so the list (93 assets on mainnet,
+ * 2026-10-22) is read once a session, paged, and searched here as the seller
+ * types (`suggestAssets`).
+ *
+ * Asset 0 is QORT, which every shop takes anyway; an unspendable asset can't
+ * be transferred, so buyers couldn't pay with it; an indivisible one is paid
+ * in whole units only.
  */
 import type { ShopAsset } from "../money/coins";
 
@@ -41,12 +48,14 @@ async function getJson(url: string): Promise<unknown> {
   return body;
 }
 
-function toAsset(raw: any): CoreAsset | null {
+/** Core's asset JSON (`{assetId, name, …}`; `assetName` read too, should a node or app write that). */
+export function toAsset(raw: any): CoreAsset | null {
   const id = Number(raw?.assetId);
-  if (!Number.isSafeInteger(id) || id < 0 || typeof raw?.assetName !== "string") return null;
+  const name = typeof raw?.name === "string" ? raw.name : typeof raw?.assetName === "string" ? raw.assetName : null;
+  if (!Number.isSafeInteger(id) || id < 0 || name === null) return null;
   return {
     assetId: id,
-    assetName: raw.assetName,
+    assetName: name,
     owner: typeof raw.owner === "string" ? raw.owner : undefined,
     description: typeof raw.description === "string" ? raw.description : undefined,
     isDivisible: raw.isDivisible === true,
@@ -101,6 +110,66 @@ export function listAssets(page: number): Promise<CoreAsset[]> {
   return request;
 }
 
+/** The most of the list read (pages of ASSET_LIST_PAGE): 10 times mainnet's 93 today. */
+export const ASSET_LIST_PAGE = 100;
+export const ASSET_LIST_MAX_PAGES = 10;
+
+let allAssets: Promise<CoreAsset[]> | null = null;
+
+/** Every asset on the node, oldest first, read once a session (paged, at most 1,000). */
+export function loadAllAssets(): Promise<CoreAsset[]> {
+  if (allAssets) return allAssets;
+  const request = (async () => {
+    const out: CoreAsset[] = [];
+    for (let page = 0; page < ASSET_LIST_MAX_PAGES; page++) {
+      const body = await getJson(`/assets?includeData=false&limit=${ASSET_LIST_PAGE}&offset=${page * ASSET_LIST_PAGE}&reverse=false`);
+      const rows = Array.isArray(body) ? body : [];
+      out.push(...rows.map(toAsset).filter((a): a is CoreAsset => a !== null));
+      if (rows.length < ASSET_LIST_PAGE) break;
+    }
+    return out;
+  })();
+  allAssets = request;
+  request.catch(() => {
+    if (allAssets === request) allAssets = null;
+  });
+  return request;
+}
+
+/**
+ * The assets that best match what the seller typed, best first: the id
+ * ("88" or "#88"), then the name exactly (any case), then names starting
+ * with it, then words starting with it, then names containing it; shorter
+ * names first within each. QORT (asset 0) is left out.
+ */
+export function suggestAssets(all: CoreAsset[], text: string, limit = 8): CoreAsset[] {
+  const t = text.trim().toLowerCase();
+  if (!t) return [];
+  const id = /^#?\d+$/.test(t) ? Number(t.replace(/^#/, "")) : null;
+  const scored: { asset: CoreAsset; rank: number }[] = [];
+  for (const asset of all) {
+    if (asset.assetId === 0) continue;
+    const name = asset.assetName.toLowerCase();
+    let rank = -1;
+    if (id !== null && asset.assetId === id) rank = 0;
+    else if (name === t) rank = 1;
+    else if (name.startsWith(t)) rank = 2;
+    else if (name.split(/[\s\-_.]+/).some((word) => word.startsWith(t))) rank = 3;
+    else if (name.includes(t)) rank = 4;
+    if (rank >= 0) scored.push({ asset, rank });
+  }
+  return scored
+    .sort((a, b) => a.rank - b.rank || a.asset.assetName.length - b.asset.assetName.length || a.asset.assetId - b.asset.assetId)
+    .slice(0, limit)
+    .map((s) => s.asset);
+}
+
+/** A whole number of units (an indivisible asset can only move whole units). */
+export function isWholeAmount(amount: string | number): boolean {
+  const n = Number(amount);
+  return Number.isFinite(n) && Math.abs(n - Math.round(n)) < 1e-9;
+}
+
 /** Why an asset can't be added to the shop, or null. */
 export function assetProblem(asset: CoreAsset, accepted: ShopAsset[]): string | null {
   if (asset.assetId === 0) return "QORT is always accepted.";
@@ -117,4 +186,5 @@ export function toShopAsset(asset: CoreAsset): ShopAsset {
 export function resetAssetCache(): void {
   infoCache.clear();
   pageCache.clear();
+  allAssets = null;
 }

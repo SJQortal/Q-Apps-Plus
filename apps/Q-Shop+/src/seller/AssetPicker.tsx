@@ -1,12 +1,15 @@
 /**
- * The Q-Assets a shop accepts: the list with Remove, a field to add one by
- * id or exact name, and a paged list of every asset on the node to pick from.
- * Buyers pay an asset with TRANSFER_ASSET to the seller's Qortal address, and
- * only for products with a price in it (money/pricing.ts).
+ * The Q-Assets a shop accepts: the list with Remove, a field that suggests
+ * the best matching assets as the seller types (name or #id, any case: the
+ * node's list, read once a session, qdn/assets.ts), Add for an exact id or
+ * name, and Browse for every asset on the node. Buyers pay an asset with
+ * TRANSFER_ASSET to the seller's Qortal address, and only for products with
+ * a price in it (money/pricing.ts).
  */
-import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -22,7 +25,25 @@ import CloseIcon from "@mui/icons-material/Close";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { CoinIcon } from "../components/money/CoinIcon";
 import { assetCoinId, type ShopAsset } from "../money/coins";
-import { assetInfo, assetProblem, listAssets, parseAssetQuery, toShopAsset, ASSET_PAGE, type CoreAsset } from "./assets";
+import {
+  assetInfo,
+  assetProblem,
+  listAssets,
+  loadAllAssets,
+  parseAssetQuery,
+  suggestAssets,
+  toShopAsset,
+  ASSET_PAGE,
+  type CoreAsset,
+} from "../qdn/assets";
+
+/** "Can't be paid", "Already accepted", "Whole units only", or nothing: shown beside a suggestion. */
+function assetNote(asset: CoreAsset, accepted: ShopAsset[]): string | null {
+  if (accepted.some((a) => a.id === asset.assetId)) return "Already accepted";
+  if (asset.isUnspendable) return "Can't be transferred";
+  if (asset.isDivisible === false) return "Whole units only";
+  return null;
+}
 
 interface AssetPickerProps {
   assets: ShopAsset[];
@@ -34,6 +55,21 @@ export function AssetPicker({ assets, onChange }: AssetPickerProps) {
   const [looking, setLooking] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [browseOpen, setBrowseOpen] = useState(false);
+  // The node's asset list, read once the seller starts typing (once a session).
+  const [all, setAll] = useState<CoreAsset[] | null>(null);
+  const [listState, setListState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const wantList = () => {
+    if (listState !== "idle" && listState !== "failed") return;
+    setListState("loading");
+    loadAllAssets().then(
+      (list) => {
+        setAll(list);
+        setListState("ready");
+      },
+      () => setListState("failed")
+    );
+  };
+  const suggestions = useMemo(() => (all ? suggestAssets(all, query) : []), [all, query]);
 
   const add = (asset: CoreAsset): string | null => {
     const problem = assetProblem(asset, assets);
@@ -48,9 +84,18 @@ export function AssetPicker({ assets, onChange }: AssetPickerProps) {
     if (!parsed) return setMessage("Type an asset's name or its id number.");
     setLooking(true);
     try {
-      const asset = await assetInfo(parsed);
+      // A name typed in another case: the list knows it ("bhc coin" is "BHC Coin"); Core matches exactly.
+      const lower = "name" in parsed ? parsed.name.toLowerCase() : null;
+      const listed = lower !== null ? all?.filter((a) => a.assetId !== 0 && a.assetName.toLowerCase() === lower) : undefined;
+      const asset = listed?.length === 1 ? listed[0] : await assetInfo(parsed);
       if (!asset) {
-        setMessage("id" in parsed ? `No asset #${parsed.id} on your node.` : `No asset named "${parsed.name}". Names must match exactly; try Browse.`);
+        setMessage(
+          "id" in parsed
+            ? `No asset #${parsed.id} on your node.`
+            : listed && listed.length > 1
+              ? `Several assets are named "${parsed.name}": pick one from the suggestions.`
+              : `No asset named "${parsed.name}" on your node. Pick one from the suggestions as you type, or Browse.`
+        );
         return;
       }
       const problem = add(asset);
@@ -98,18 +143,69 @@ export function AssetPicker({ assets, onChange }: AssetPickerProps) {
         </List>
       )}
       <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <TextField
-          label="Asset name or id"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void lookUp();
-            }
+        <Autocomplete<CoreAsset, false, false, true>
+          freeSolo
+          sx={{ flex: "1 1 200px", minWidth: 0 }}
+          options={suggestions}
+          // The suggestions are already ranked (qdn/assets.ts suggestAssets).
+          filterOptions={(options) => options}
+          inputValue={query}
+          onInputChange={(_e, value, reason) => {
+            if (reason !== "reset") setQuery(value);
+            setMessage(null);
+            if (value.trim()) wantList();
           }}
-          sx={{ flex: "1 1 200px" }}
-          slotProps={{ htmlInput: { autoComplete: "off", enterKeyHint: "done" } }}
+          onOpen={wantList}
+          value={null}
+          blurOnSelect
+          onChange={(_e, value) => {
+            if (!value || typeof value === "string") return;
+            const problem = add(value);
+            setMessage(problem);
+            if (!problem) setQuery("");
+          }}
+          getOptionLabel={(option) => (typeof option === "string" ? option : option.assetName)}
+          getOptionDisabled={(option) => typeof option !== "string" && (option.isUnspendable === true || assets.some((a) => a.id === option.assetId))}
+          isOptionEqualToValue={(a, b) => typeof b !== "string" && a.assetId === b.assetId}
+          loading={listState === "loading"}
+          loadingText="Loading the node's assets…"
+          noOptionsText={listState === "failed" ? "Couldn't load the node's assets: type an exact name or id and Add" : `No asset matches “${query.trim()}”`}
+          renderOption={({ key, ...props }, option) => {
+            const note = assetNote(option, assets);
+            return (
+              <li key={key} {...props} style={{ ...props.style, minHeight: 48 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, width: "100%" }}>
+                  <CoinIcon coin={assetCoinId(option.assetId)} size={22} label={option.assetName} />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{option.assetName}</Typography>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {`#${option.assetId}${option.description ? ` · ${option.description}` : ""}`}
+                    </Typography>
+                  </Box>
+                  {note && (
+                    <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+                      {note}
+                    </Typography>
+                  )}
+                </Box>
+              </li>
+            );
+          }}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              label="Asset name or id"
+              helperText="Start typing: the best matches show as you type."
+              onKeyDown={(e) => {
+                // Enter with no suggestion highlighted: look the typed id or name up.
+                if (e.key === "Enter" && !(e.target as HTMLInputElement).getAttribute("aria-activedescendant")) {
+                  e.preventDefault();
+                  void lookUp();
+                }
+              }}
+              slotProps={{ ...params.slotProps, htmlInput: { ...params.slotProps.htmlInput, autoComplete: "off", enterKeyHint: "done" } }}
+            />
+          )}
         />
         <Button
           variant="outlined"
