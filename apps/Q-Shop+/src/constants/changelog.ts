@@ -21,7 +21,7 @@ export const CHANGELOG: Release[] = [
       "Same QDN data as Q-Shop: your shops, products, orders and reviews show here, and what you publish here still opens in the original.",
       "Find things: search shops by name, title and description; sort by newest, recently active, most products, top rated (weighted by how many reviews) or A–Z; filter by the coins a shop takes; stars on every shop; a New products strip.",
       "Products: every shop's products in one place, newest first, with search, sorts, one or several categories and in stock only.",
-      "One list of categories for every shop (based on eBay's and Amazon's), so the same kind of product is found together; products saved before keep theirs until the seller picks one.",
+      "One list of categories for every shop (based on eBay's and Amazon's), each with its icon, so the same kind of product is found together. Sellers find a category by typing what the product is (\"glasses\", \"ghee\"), and the title suggests one; products saved before keep theirs until the seller picks one.",
       "Shop pages filter and sort every product (category, in stock, newest, price) and search within the shop, as a grid or a list; they open on Featured, the seller's own order, and say how many orders the shop has received. Product pages have a picture gallery, share links and the collections the product is in.",
       "Collections: sellers group their products into collections, each with a picture and a description, in the order they choose; buyers browse them at the top of a shop and can share a collection's link.",
       "Arrange: sellers set the order their shop's products show in, and each collection's.",
