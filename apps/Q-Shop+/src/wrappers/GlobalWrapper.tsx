@@ -16,6 +16,7 @@ import { AppShell } from "../components/layout/AppShell";
 import { useUserAccount } from "../hooks/useUserAccount";
 import { useOwnShops } from "../hooks/useOwnShops";
 import { useTrackInAppHistory } from "../hooks/useSafeBack";
+import { useIframe } from "../hooks/useIframe";
 
 // Only web-gateway visitors ever see it, and it carries ua-parser-js: load it when opened.
 const DownloadQortalModal = lazy(() =>
@@ -33,6 +34,8 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   const { authenticate, authenticating } = useUserAccount();
   const { reload: reloadOwnShops } = useOwnShops();
   useTrackInAppHistory();
+  // Hub's Back button and qortal:// links into an open tab arrive as NAVIGATE_TO_PATH.
+  useIframe();
   const cartOpen = useSelector((state: RootState) => state.cart.isOpen);
   const [showDownloadModal, setShowDownloadModal] = useState<boolean>(false);
 
