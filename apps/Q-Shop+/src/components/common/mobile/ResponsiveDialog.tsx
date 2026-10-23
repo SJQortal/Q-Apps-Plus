@@ -107,7 +107,7 @@ export function ResponsiveDialog({
           tabIndex={0}
           role="region"
           aria-labelledby={titleId}
-          sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" } }}
+          sx={{ position: "relative", flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2, "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: "-2px" } }}
         >
           {children}
         </Box>

@@ -133,7 +133,7 @@ export function AccountMenu({ phone, open, anchorEl, onClose, onOpenBlockedNames
       {shops.length > 0 && (
         <>
           <MenuSectionTitle>My shops</MenuSectionTitle>
-          <MenuList aria-label="My shops" disablePadding sx={{ maxHeight: 240, overflowY: "auto" }}>
+          <MenuList aria-label="My shops" disablePadding sx={{ position: "relative", maxHeight: 240, overflowY: "auto" }}>
             {shops.map((shop) => {
               const title = shop.title || hashMapStores[shop.id]?.title || shortStoreIdOf(shop.id);
               const current = shop.id === currentStoreId && shop.owner === userName;

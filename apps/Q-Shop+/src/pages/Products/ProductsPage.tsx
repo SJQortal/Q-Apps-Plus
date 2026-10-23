@@ -241,7 +241,9 @@ function CategoryPicker({
       <Box
         role="group"
         aria-label="Categories"
-        sx={{ maxHeight: { xs: "40vh", sm: 340 }, overflowY: "auto", overscrollBehavior: "contain", display: "flex", flexDirection: "column" }}
+        // Positioned, so the rows' screen-reader text (position: absolute) stays inside this list's scroll
+        // instead of stretching the popover into a second one.
+        sx={{ position: "relative", maxHeight: { xs: "40vh", sm: 340 }, overflowY: "auto", overscrollBehavior: "contain", display: "flex", flexDirection: "column" }}
       >
         {shown.map((option, i) => (
           <Fragment key={option.key}>

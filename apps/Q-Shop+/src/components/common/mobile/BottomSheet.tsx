@@ -77,7 +77,8 @@ export function BottomSheet({ open, onClose, title, children, ariaLabel, keepMou
           {title}
         </Typography>
       ) : null}
-      <Box sx={{ overflowY: "auto", overscrollBehavior: "contain", px: 2, pb: 2 }}>{children}</Box>
+      {/* Positioned, so screen-reader text (position: absolute) scrolls with the content instead of stretching the sheet. */}
+      <Box sx={{ position: "relative", overflowY: "auto", overscrollBehavior: "contain", px: 2, pb: 2 }}>{children}</Box>
     </SwipeableDrawer>
   );
 }
