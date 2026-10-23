@@ -186,6 +186,18 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(cardTitles()).toContain("Product 4");
   });
 
+  it("narrows the products to a price range in QORT, from the index", async () => {
+    const { node } = renderShop(makeWorld());
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    const before = catalogueFetches(node).length;
+    // Product p costs 1 + p QORT.
+    fireEvent.change(screen.getByRole("textbox", { name: "Min price" }), { target: { value: "4" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Max price" }), { target: { value: "6,5" } });
+    await waitFor(() => expect(cardTitles()).toEqual(["Product 5", "Product 4", "Product 3"]));
+    expect(screen.getByRole("textbox", { name: "Max price" })).toHaveValue("6.5");
+    expect(catalogueFetches(node)).toHaveLength(before);
+  });
+
   it("adds one to the cart with the viewed shop's id and owner, and offers to view the cart", async () => {
     const { store } = renderShop(makeWorld());
     const add = await screen.findByRole("button", { name: "Add to cart: Product 11" });

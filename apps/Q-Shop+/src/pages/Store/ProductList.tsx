@@ -4,7 +4,7 @@
  * the category chips and the Auctions toggle.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Box, Chip, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import { Box, Chip, InputAdornment, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import { CategoryIcon } from "../../components/CategoryIcon";
@@ -83,6 +83,46 @@ export function AuctionsToggle({
         ...(on && { bgcolor: "action.selected", "&:hover": { bgcolor: "action.focus" } }),
       }}
     />
+  );
+}
+
+/** What a price field takes: digits and one dot (a comma becomes one), up to 8 decimals. */
+function cleanPrice(text: string): string {
+  const [whole, ...rest] = text.replace(/,/g, ".").replace(/[^0-9.]/g, "").split(".");
+  return rest.length ? `${whole}.${rest.join("").slice(0, 8)}` : whole;
+}
+
+/** A price range in QORT: two small fields, either may stay empty. */
+export function PriceRangeFields({
+  min,
+  max,
+  onChange,
+}: {
+  min: string;
+  max: string;
+  onChange: (range: { min: string; max: string }) => void;
+}) {
+  const field = (label: string, value: string, set: (text: string) => void) => (
+    <TextField
+      size="small"
+      label={label}
+      value={value}
+      onChange={(event) => set(cleanPrice(event.target.value))}
+      sx={{ width: 120, "& .MuiInputBase-root": { minHeight: 44 } }}
+      slotProps={{
+        htmlInput: { inputMode: "decimal", autoComplete: "off" },
+        input: { endAdornment: <InputAdornment position="end">QORT</InputAdornment> },
+      }}
+    />
+  );
+  return (
+    <Box role="group" aria-label="Price in QORT" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+      {field("Min price", min, (text) => onChange({ min: text, max }))}
+      <Typography color="text.secondary" aria-hidden>
+        –
+      </Typography>
+      {field("Max price", max, (text) => onChange({ min, max: text }))}
+    </Box>
   );
 }
 

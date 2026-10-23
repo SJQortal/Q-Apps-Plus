@@ -3,10 +3,12 @@ import {
   categoriesOf,
   effectiveSort,
   filterAndSortProducts,
+  inPriceRange,
   isInStock,
   isListed,
   matchesSearch,
   openAuctionCount,
+  priceBound,
   productRowsFromContainer,
   searchCatalogueIds,
   searchProducts,
@@ -244,5 +246,33 @@ describe("auctions in a list", () => {
     };
     expect(openAuctionCount(rows, catalogues, NOW)).toBe(1);
     expect(ids(filterAndSortProducts(rows, { ...query, auctionsOnly: true }, catalogues, [], NOW))).toEqual(["plain"]);
+  });
+});
+
+describe("a price range", () => {
+  it("keeps products within it by the index's QORT price, either bound optional", () => {
+    expect(inPriceRange({ priceQort: 5 }, 2, 8)).toBe(true);
+    expect(inPriceRange({ priceQort: 5 }, 5, 5)).toBe(true);
+    expect(inPriceRange({ priceQort: 5 }, 6, null)).toBe(false);
+    expect(inPriceRange({ priceQort: 5 }, null, 4.99)).toBe(false);
+    // Without a price, a product is out once there's a bound.
+    expect(inPriceRange({}, null, null)).toBe(true);
+    expect(inPriceRange({}, 0, null)).toBe(false);
+  });
+
+  it("reads typed bounds: a comma as a dot, nothing or junk as no bound", () => {
+    expect(["2", "2,5", " 0 ", "", "abc", "-3"].map(priceBound)).toEqual([2, 2.5, 0, null, null, null]);
+  });
+
+  it("filters the list with the others", () => {
+    const rows = productRowsFromContainer({
+      products: {
+        a: { created: 1, catalogueId: "c", priceQort: 1, status: "AVAILABLE" },
+        b: { created: 2, catalogueId: "c", priceQort: 5, status: "AVAILABLE" },
+        c: { created: 3, catalogueId: "c", priceQort: 9, status: "AVAILABLE" },
+      },
+    });
+    const ids = filterAndSortProducts(rows, { categories: [], inStockOnly: false, sort: "price-asc", minQort: 2, maxQort: 9 }, {}).map((r) => r.productId);
+    expect(ids).toEqual(["b", "c"]);
   });
 });

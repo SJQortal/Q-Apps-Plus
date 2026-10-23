@@ -38,6 +38,7 @@ import {
   compareRows,
   effectiveStatus,
   isInStock,
+  inPriceRange,
   isOpenAuction,
   isListed,
   productOf,
@@ -156,6 +157,9 @@ export interface AllProductsQuery {
   inStockOnly: boolean;
   /** Only auctions still open (pages/Store/shopData isOpenAuction). */
   auctionsOnly?: boolean;
+  /** A price range in QORT (pages/Store/shopData inPriceRange). */
+  minQort?: number | null;
+  maxQort?: number | null;
   sort: ProductSort;
 }
 
@@ -183,6 +187,7 @@ export function filterAndSortAll(rows: AllProductRow[], query: AllProductsQuery,
   return listedRows(rows, query.inStockOnly, catalogues, now)
     .filter((row) => categories.size === 0 || categories.has(categoryKey(row.category)))
     .filter((row) => !query.auctionsOnly || isOpenAuctionRow(row, catalogues, now))
+    .filter((row) => inPriceRange(row, query.minQort, query.maxQort))
     .sort((a, b) => compare(a, b) || byKey(a, b));
 }
 

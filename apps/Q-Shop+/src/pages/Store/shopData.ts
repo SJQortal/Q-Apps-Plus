@@ -66,6 +66,9 @@ export interface ProductQuery {
   inStockOnly: boolean;
   /** Only auctions still open (running, or yet to start). */
   auctionsOnly?: boolean;
+  /** A price range in QORT (the index's price; an auction's starting bid); null or absent: no bound. */
+  minQort?: number | null;
+  maxQort?: number | null;
   sort: ShopSort;
 }
 
@@ -222,7 +225,23 @@ export function filterAndSortProducts(
     .filter((row) => categories.size === 0 || (!!row.category && categories.has(row.category)))
     .filter((row) => !query.inStockOnly || isInStock(row, catalogues, now))
     .filter((row) => !query.auctionsOnly || isOpenAuction(row, catalogues, now))
+    .filter((row) => inPriceRange(row, query.minQort, query.maxQort))
     .sort(compareRows(query.sort, order, now));
+}
+
+/** Within the range, by the index's QORT price; a product without one is out once there's a bound. */
+export function inPriceRange(row: Pick<ProductRow, "priceQort">, min?: number | null, max?: number | null): boolean {
+  const hasMin = typeof min === "number" && Number.isFinite(min);
+  const hasMax = typeof max === "number" && Number.isFinite(max);
+  if (!hasMin && !hasMax) return true;
+  if (row.priceQort === undefined) return false;
+  return (!hasMin || row.priceQort >= min!) && (!hasMax || row.priceQort <= max!);
+}
+
+/** A typed price bound: a number of QORT, or null when empty or not a number. */
+export function priceBound(text: string): number | null {
+  const value = text.trim() ? Number(text.trim().replace(",", ".")) : NaN;
+  return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
 /** How many listed products are auctions still open (the Auctions toggle shows when there are any). */

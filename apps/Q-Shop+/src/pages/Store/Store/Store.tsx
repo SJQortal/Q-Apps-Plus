@@ -64,6 +64,7 @@ import {
   AUCTION_SORT,
   auctionTimesOf,
   openAuctionCount,
+  priceBound,
   PRODUCTS_PAGE,
   searchCatalogueIds,
   searchProducts,
@@ -75,7 +76,7 @@ import {
 import { productOrderOf } from "../../../qdn/productOrder";
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
 import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
-import { AuctionsToggle, CategoryChips, FETCHING_NOTE, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../ProductList";
+import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../ProductList";
 import { useNow } from "../../../hooks/useNow";
 import { productLayout, useProductView } from "../../../utils/productView";
 import { ShopHeader, ShopHeaderSkeleton } from "../ShopHeader";
@@ -130,6 +131,7 @@ function ShopProducts({
   const [filters, setFilters] = useState<Omit<ProductQuery, "sort">>({ categories: [], inStockOnly: false, auctionsOnly: false });
   // Auctions open and close as time passes: the list looks again every 30 s.
   const now = useNow(30_000);
+  const [price, setPrice] = useState({ min: "", max: "" });
   // The buyer's sort, once they pick one; until then the page's default (effectiveSort).
   const [pickedSort, setPickedSort] = useState<ShopSort | null>(null);
   const [searchText, setSearchText] = useState("");
@@ -173,7 +175,10 @@ function ShopProducts({
   const order = collection ? collection.products : shopOrder;
   // Auctions only: by when they end, unless the buyer picked a sort.
   const sort = filters.auctionsOnly && !pickedSort ? "ending" : effectiveSort(pickedSort, order.length > 0);
-  const query = useMemo<ProductQuery>(() => ({ ...filters, sort }), [filters, sort]);
+  const query = useMemo<ProductQuery>(
+    () => ({ ...filters, sort, minQort: priceBound(price.min), maxQort: priceBound(price.max) }),
+    [filters, sort, price]
+  );
   const auctions = useMemo(() => openAuctionCount(rows, catalogues, now), [rows, catalogues, now]);
   const baseSorts = order.length > 0 ? [FEATURED_SORT, ...PRODUCT_SORTS] : PRODUCT_SORTS;
   const sortOptions = auctions > 0 || sort === "ending" ? [...baseSorts, AUCTION_SORT] : baseSorts;
@@ -214,14 +219,19 @@ function ShopProducts({
     return { total: inScope.length, read: inScope.filter((row) => !!catalogues[row.catalogueId]).length };
   }, [scope, filtered, catalogues]);
   const cappedNote = `Only the first ${searchScope.total} products were searched; pick a category to narrow it down.`;
-  const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0) + (query.auctionsOnly ? 1 : 0);
+  const priced = query.minQort !== null || query.maxQort !== null;
+  const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0) + (query.auctionsOnly ? 1 : 0) + (priced ? 1 : 0);
 
   const toggleCategory = (category: string) =>
     setFilters((q) => ({
       ...q,
       categories: q.categories.includes(category) ? q.categories.filter((c) => c !== category) : [...q.categories, category],
     }));
-  const clearFilters = () => setFilters((q) => ({ ...q, categories: [], inStockOnly: false, auctionsOnly: false }));
+  const clearFilters = () => {
+    setFilters((q) => ({ ...q, categories: [], inStockOnly: false, auctionsOnly: false }));
+    setPrice({ min: "", max: "" });
+  };
+  const priceFields = <PriceRangeFields min={price.min} max={price.max} onChange={setPrice} />;
 
   const addToCart = (row: ProductRow) => {
     const product = productOf(row, catalogues);
@@ -478,6 +488,7 @@ function ShopProducts({
                     onClear={() => setFilters((q) => ({ ...q, categories: [] }))}
                   />
                 </Box>
+                {priceFields}
                 {stockSwitch}
               </Box>
             )}
@@ -518,6 +529,12 @@ function ShopProducts({
                   />
                 </Box>
               )}
+              <Box>
+                <Typography component="h3" variant="subtitle2" sx={{ mb: 1 }}>
+                  Price
+                </Typography>
+                {priceFields}
+              </Box>
               {stockSwitch}
               <Box sx={{ display: "flex", gap: 1 }}>
                 <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
