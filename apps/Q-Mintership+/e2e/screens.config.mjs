@@ -1131,8 +1131,8 @@ export default {
       }),
     },
     // Minter Admin polls (e2e/world.mjs addAdminPolls), encrypted to the Minter Admins: the
-    // open ones on Decisions (one read from a share), the closed ones in History (one closed
-    // two months ago), and one poll's own page with its comments open.
+    // open ones on Decisions (one read from a share), the closed ones in History's timeline
+    // (one closed two months ago), and one poll's own page with its comments open.
     // Ask the Minter Admins, a page as every + Propose choice is (Simon, 2026-10-18), with
     // answers of its own: one renamed, one recoloured, one added.
     {
@@ -1166,15 +1166,29 @@ export default {
         await page.waitForTimeout(300);
       }),
     },
+    // History: the poll that closed in the last 30 days among the events (the viewport, at
+    // its row), and Minter Admin polls alone over all of it, as Decisions' Closed polls opens it.
     {
       key: 'history-polls',
       path: '/history?as=admin',
       overlay: true,
       after: withPolls(async (page) => {
         await settle(page);
-        const section = page.getByRole('region', { name: 'Minter Admin polls' });
-        await section.getByRole('article').nth(1).waitFor({ timeout: 8000 });
-        await section.evaluate((s) => s.scrollIntoView({ block: 'start' }));
+        const link = page.getByRole('link', { name: /^Open the poll: / }).first();
+        await link.waitFor({ timeout: 8000 });
+        await link.evaluate((a) => a.closest('li').scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    {
+      key: 'history-polls-only',
+      path: '/history?as=admin&type=polls&period=all',
+      after: withPolls(async (page) => {
+        await settle(page);
+        await page
+          .getByRole('link', { name: /^Open the poll: / })
+          .nth(1)
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
       }),
     },
