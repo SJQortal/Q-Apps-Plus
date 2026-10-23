@@ -14,7 +14,7 @@
  * then, once the product has loaded, is its collections document read (once
  * per session; it holds a picture per collection).
  */
-import { useState, type ReactNode } from "react";
+import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, Divider, IconButton, InputBase, Link, Skeleton, Typography } from "@mui/material";
@@ -46,6 +46,10 @@ import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../Store/Cart
 import { visuallyHiddenSx } from "../Store/a11y";
 import { LocalBoundary } from "../Store/LocalBoundary";
 import { CategoryIcon } from "../../components/CategoryIcon";
+import { auctionTermsOf } from "../../auctions/rules";
+
+// Only auction products need it (bids, countdown, the winner's checkout).
+const AuctionPanel = lazy(() => import("../../auctions/AuctionPanel").then((m) => ({ default: m.AuctionPanel })));
 
 const FETCHING_NOTE = "Fetching from peers…";
 
@@ -173,6 +177,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const [quantityText, setQuantityText] = useState("1");
   const [added, setAdded] = useState<AddedNotice | null>(null);
   const product = catalogue?.products?.[productId];
+  const auctionTerms = useMemo(() => auctionTermsOf(product), [product]);
   // Pictures past the third, from their own document (qdn/productPictures.ts), after the catalogue's.
   const morePictures = useMorePictures(owner, product ? { id: productId, morePictures: (product as { morePictures?: unknown }).morePictures } : null);
   // Its description's text, and its videos and attachments (shown under the pictures).
@@ -260,11 +265,28 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               <Chip size="small" variant="outlined" label={product.category} icon={<CategoryIcon category={product.category} size={20} />} />
             )}
           </Box>
-          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
-            <PriceTag product={product} coin={shopCoin.coin} rate={shopCoin.rate} shop={shop} size="large" />
-            <CoinPicker shop={shop} shopCoin={shopCoin} id="product-coin" />
-          </Box>
-          <RateNote shopCoin={shopCoin} />
+          {auctionTerms ? (
+            <Suspense fallback={<Skeleton variant="rounded" height={220} aria-label="Loading the auction" />}>
+              <AuctionPanel
+                terms={auctionTerms}
+                product={product as unknown as Record<string, unknown>}
+                productId={productId}
+                catalogueId={catalogueId}
+                owner={owner}
+                storeId={storeId}
+                shop={shop}
+                isOwner={isOwner}
+              />
+            </Suspense>
+          ) : (
+            <>
+              <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+                <PriceTag product={product} coin={shopCoin.coin} rate={shopCoin.rate} shop={shop} size="large" />
+                <CoinPicker shop={shop} shopCoin={shopCoin} id="product-coin" />
+              </Box>
+              <RateNote shopCoin={shopCoin} />
+            </>
+          )}
           {inCollections.length > 0 && (
             <Box component="nav" aria-label="Collections" sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
               <Typography variant="body2" color="text.secondary">
@@ -283,7 +305,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               ))}
             </Box>
           )}
-          {stockLine(product.status)}
+          {/* An auction is stored out of stock for the original app; its panel says where it stands. */}
+          {!auctionTerms && stockLine(product.status)}
           {/* Where the shop ships, for something it ships (constants/shipping.ts). */}
           {product.type !== "digital" && typeof shop?.shipsTo === "string" && shop.shipsTo && (
             <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
@@ -293,7 +316,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               </span>
             </Typography>
           )}
-          {isOwner ? (
+          {auctionTerms ? null : isOwner ? (
             <Alert
               severity="info"
               action={
