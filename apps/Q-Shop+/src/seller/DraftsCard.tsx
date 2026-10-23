@@ -4,6 +4,7 @@
  * forgotten. Review lists them with Edit and Remove; Publish sends them all.
  */
 import { useId, useState } from "react";
+import { ProductImage } from "../components/common/ProductImage";
 import { useDispatch } from "react-redux";
 import { Alert, Box, Button, Chip, CircularProgress, Collapse, IconButton, Tooltip, Typography } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -136,7 +137,7 @@ export function DraftsCard({ onEdit, onPublish, preparing, error, notice = null 
                   }}
                 >
                   {image ? (
-                    <Box component="img" src={image} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    <ProductImage src={image} alt="" />
                   ) : (
                     <ImageOutlinedIcon />
                   )}

@@ -12,6 +12,7 @@
  * outside Qortal.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ProductImage } from "../components/common/ProductImage";
 import { useSelector } from "react-redux";
 import { Alert, Box, Button, InputAdornment, Skeleton, TextField, Typography, MenuItem } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
@@ -416,7 +417,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                     }}
                   >
                     <Box sx={{ width: 44, height: 44, borderRadius: 1, overflow: "hidden", bgcolor: "action.hover", flexShrink: 0 }}>
-                      {pic && <Box component="img" src={pic} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                      {pic && <ProductImage src={pic} alt="" />}
                     </Box>
                     <Box sx={{ flex: "1 1 160px", minWidth: 0 }}>
                       {name ? (

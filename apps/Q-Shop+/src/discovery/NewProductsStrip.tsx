@@ -14,6 +14,7 @@ import { PriceTag } from "../components/money/PriceTag";
 import { productPath } from "../qdn/links";
 import { loadNewProducts, type NewProduct } from "./newProducts";
 import { useLoadedPictures } from "../components/common/useLoadedPictures";
+import { ProductImage } from "../components/common/ProductImage";
 
 const TILE_WIDTH = { phone: 156, wide: 184 } as const;
 
@@ -61,15 +62,8 @@ function ProductTile({ item }: { item: NewProduct }) {
       >
         {/* Once the picture is in, no backdrop: a transparent background shows the tile. */}
         <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", bgcolor: pictures.isLoaded(item.image) ? "transparent" : accentWash(theme, 0.08) })}>
-          <Box
-            component="img"
-            src={item.image}
-            // The title is the next text in the link, so the picture adds nothing to its name.
-            alt=""
-            decoding="async"
-            onLoad={pictures.onLoad(item.image)}
-            sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-          />
+          {/* The title is the next text in the link, so the picture adds nothing to its name. */}
+          <ProductImage src={item.image} alt="" onLoad={pictures.onLoad(item.image)} />
           {outOfStock && (
             <Box
               aria-hidden

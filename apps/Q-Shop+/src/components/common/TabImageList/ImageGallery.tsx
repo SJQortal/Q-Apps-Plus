@@ -14,6 +14,7 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { ResponsiveDialog } from "../mobile";
 import { LANDSCAPE_PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { useLoadedPictures } from "../useLoadedPictures";
+import { ProductImage } from "../ProductImage";
 import { ZoomableImage } from "./ZoomableImage";
 
 export const MAX_GALLERY_IMAGES = 10;
@@ -183,7 +184,7 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
                 [LANDSCAPE]: { width: 44, height: 44 },
               }}
             >
-              <Box component="img" src={src} alt="" onLoad={pictures.onLoad(src)} sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              <ProductImage src={src} alt="" onLoad={pictures.onLoad(src)} />
             </ButtonBase>
           ))}
         </Box>

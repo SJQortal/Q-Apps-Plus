@@ -8,6 +8,7 @@
  * collections there.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ProductImage } from "../components/common/ProductImage";
 import { useSelector } from "react-redux";
 import {
   Box,
@@ -294,7 +295,7 @@ export function CollectionEditor({
                                   flexShrink: 0,
                                 }}
                               >
-                                {pic && <Box component="img" src={pic} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                                {pic && <ProductImage src={pic} alt="" />}
                               </Box>
                               <Box sx={{ minWidth: 0 }}>
                                 {name ? (

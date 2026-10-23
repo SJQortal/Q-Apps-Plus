@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Box } from "@mui/material";
 import { useLoadedPictures } from "../../components/common/useLoadedPictures";
+import { ProductImage } from "../../components/common/ProductImage";
 
 /**
  * A square picture (a product image or a shop logo, data URLs from QDN) that
@@ -39,7 +40,7 @@ export function Picture({
         justifyContent: "center",
       }}
     >
-      {show ? (
+      {show && fit === "contain" ? (
         <Box
           component="img"
           src={src}
@@ -48,8 +49,11 @@ export function Picture({
           decoding="async"
           onLoad={pictures.onLoad(src)}
           onError={() => setFailed(src ?? null)}
-          sx={{ width: "100%", height: "100%", objectFit: fit, display: "block" }}
+          sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
         />
+      ) : show && src ? (
+        // A product picture: a photo fills the square, a cut-out fits in it whole (ProductImage).
+        <ProductImage src={src} alt={alt} loading="lazy" onLoad={pictures.onLoad(src)} onError={() => setFailed(src ?? null)} />
       ) : (
         fallback
       )}

@@ -20,6 +20,7 @@
  * takes the keyboard focus, and Escape leaves it.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProductImage } from "../components/common/ProductImage";
 import { useSelector } from "react-redux";
 import {
   Badge,
@@ -608,7 +609,7 @@ const ProductRow = memo(function ProductRow({
           }}
         >
           {image ? (
-            <Box component="img" src={image} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <ProductImage src={image} alt="" />
           ) : load === "loading" || load === "idle" ? (
             <Skeleton variant="rectangular" width={56} height={56} />
           ) : (

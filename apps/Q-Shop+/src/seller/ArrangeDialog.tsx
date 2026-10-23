@@ -10,6 +10,7 @@
  * Nothing is saved until Done; the caller publishes.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ProductImage } from "../components/common/ProductImage";
 import { useSelector } from "react-redux";
 import { Box, Button, IconButton, Menu, MenuItem, Skeleton, Tooltip, Typography } from "@mui/material";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
@@ -195,7 +196,7 @@ export function ArrangeDialog({
                   {i + 1}
                 </Typography>
                 <Box sx={{ width: 40, height: 40, borderRadius: 1, overflow: "hidden", bgcolor: "action.hover", flexShrink: 0 }}>
-                  {pic && <Box component="img" src={pic} alt="" sx={{ width: "100%", height: "100%", objectFit: "cover" }} />}
+                  {pic && <ProductImage src={pic} alt="" />}
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Box component="span" sx={visuallyHiddenSx}>{`${i + 1}. `}</Box>
