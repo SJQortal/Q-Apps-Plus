@@ -183,6 +183,8 @@ function dataContainer(s) {
     ...(collectionsOf(s) && { collectionsId: `q-store-collections-${s.short}` }),
     ...(s.short === 'shop-1' && { productOrder: [productId(s, 3), productId(s, 0), productId(s, 7)] }),
     ...(s.short === 'my-shop' && { fiatPricing: { currency: 'USD', rates: { QORT: 0.18, ARRR: 0.25 }, updated: now - DAY } }),
+    // The seller arranged a few: the Products tab shows each one's place in the shop order.
+    ...(s.short === 'my-shop' && { productOrder: [productId(s, 7), productId(s, 2), productId(s, 10)] }),
   };
 }
 const storeJson = (s) => ({

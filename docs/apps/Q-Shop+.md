@@ -617,6 +617,14 @@ Simon, from Hub: *"this view in the Shop tab could be nicely centered and the ta
 
 Simon: *"when changing the order it does not optimistcally change after i approve it in Products window"*: the seller's Products list only sorted by date, price or title, so a published order never showed there (the shop page already followed it, from the app's own copy of the list). It now has **Featured (your order)**, the products the order names first and the rest newest first; it's the default once the shop has an order, and publishing one from Arrange switches the list to it as soon as Hub has published it. A sort the seller picks stays picked until then. Tests 947 → 948 (`productList.test`, `arrange.test`).
 
+### Round 5, 2026-10-23 (night): sort by a column; the Shop order column
+
+Simon: *"add these kinds of cool features like clicking on product price status added sorts the list in that order, and You can also add Shop order"*:
+- The Products tab's column names (**Product, Price, Status, Added**) sort the list when clicked, and the other way on a second click (A to Z / Z to A, low to high / high to low, available first / retired first, newest / oldest first); the column sorting the list is bold with its arrow, the others show theirs on hover. The Sort menu follows, and has the new ways too.
+- With an arranged order, a **Shop order** column comes first: each product's place as buyers see it on Featured (1, 2, …; "–" for a retired one), sortable first to last and back. The order sort reads "Shop order (Featured)".
+- On phones the columns aren't shown; the Sort menu in Category and sort has every way.
+- `seller/productList.ts` (SORT_COLUMNS, sortForColumn, shopOrderPlaces), `seller/ProductsTab.tsx` (SortHeader). Tests 948 → 952.
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
