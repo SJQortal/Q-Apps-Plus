@@ -11,7 +11,7 @@
  * prices. The rates are the seller's numbers: nothing is fetched from
  * outside Qortal.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ProductImage } from "../components/common/ProductImage";
 import { useSelector } from "react-redux";
 import { Alert, Box, Button, InputAdornment, Skeleton, TextField, Typography, MenuItem } from "@mui/material";
@@ -40,14 +40,14 @@ import {
   type PriceChange,
 } from "../money/fiatPricing";
 import { formatPrice } from "../money/pricing";
-import { resourceExists } from "../qdn/search";
 import { FormError } from "./FormError";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import type { SellerRow } from "./productList";
-import { useCatalogueLoader } from "./useCatalogueLoader";
+import { usePricingCatalogues } from "./usePricingCatalogues";
 import { PRICES_DRAFTS_TEXT, useShopPricing } from "./useShopPricing";
 import { draftsOfShop } from "./shopDrafts";
 import { selectMenuProps } from "../components/common/menuStyle";
+import { PriceReviewDialog, sameCoinPrices } from "./PriceReviewDialog";
 
 /** Products listed at a time. */
 export const PRICING_PAGE = 30;
@@ -62,29 +62,6 @@ function arrrPriceOf(product: Record<string, any> | undefined): number | undefin
   return typeof value === "number" && value > 0 ? value : undefined;
 }
 
-/** The coin prices stay as they are (only `fiatPrice` changes). */
-function sameCoinPrices(c: PriceChange): boolean {
-  return c.before.qort === c.after.qort && c.before.arrr === c.after.arrr;
-}
-
-/** How far the QORT price moves, as a share of the old one (1 = doubles or halves… or more). */
-export function priceMove(c: PriceChange): number {
-  const { qort: a } = c.before;
-  const { qort: b } = c.after;
-  if (!a || !b) return 0;
-  return Math.abs(b - a) / a;
-}
-
-/** Above this share a price change is called out before publishing. */
-export const BIG_PRICE_MOVE = 0.5;
-
-/** "1.50 → 2.00 QORT", "ARRR 0.25 → none (node's rate)". */
-function moveText(before: number | undefined, after: number | undefined, coin: string): string | null {
-  if (before === after) return null;
-  const fmt = (v: number | undefined) => (v === undefined ? (coin === "ARRR" ? "the node's rate" : "none") : `${formatPrice(v)} ${coin}`);
-  return `${fmt(before)} → ${fmt(after)}`;
-}
-
 export function PricingDialog({ onClose }: { onClose: () => void }) {
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
@@ -92,7 +69,6 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
   const allDrafts = useSelector((state: RootState) => state.global.productsToSave);
   const owner = currentStore?.owner || "";
-  const { request, retry, statusOf, productOf } = useCatalogueLoader(owner);
   const p = useShopPricing();
   const current = useMemo(() => fiatPricingOf(dataContainer), [dataContainer]);
   const takesArrr = shopCoins(currentStore).includes("ARRR");
@@ -116,38 +92,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   // Every product's catalogue: their prices in the currency are kept there.
-  const catalogueIds = useMemo(() => [...new Set(rows.map((row) => row.catalogueId))], [rows]);
-  const catalogueKey = catalogueIds.join("|");
-  useEffect(() => {
-    if (catalogueKey) request(catalogueKey.split("|"));
-  }, [catalogueKey, request]);
-  const loads = catalogueIds.map(statusOf);
-  const failed = catalogueIds.filter((_, i) => loads[i] === "failed");
-  const loading = loads.some((l) => l !== "ready" && l !== "failed");
-  // A catalogue that can't be read: is it on QDN at all? One that never landed (a publish that
-  // didn't finish) holds nothing to price, so it doesn't stop the others; one that exists does.
-  const [absent, setAbsent] = useState<Record<string, boolean>>({});
-  const asked = useRef(new Set<string>());
-  const failedKey = failed.join("|");
-  useEffect(() => {
-    if (!owner || !failedKey) return;
-    let alive = true;
-    for (const id of failedKey.split("|")) {
-      if (asked.current.has(id)) continue;
-      asked.current.add(id);
-      resourceExists("DOCUMENT", owner, id, { fresh: true }).then(
-        (exists) => alive && setAbsent((prev) => ({ ...prev, [id]: !exists })),
-        () => alive && setAbsent((prev) => ({ ...prev, [id]: false }))
-      );
-    }
-    return () => {
-      alive = false;
-    };
-  }, [failedKey, owner]);
-  const blocking = failed.filter((id) => absent[id] !== true);
-  const missingProducts = rows.filter((row) => failed.includes(row.catalogueId) && absent[row.catalogueId] === true).length;
-
-  const details = (row: SellerRow) => productOf(row.catalogueId, row.productId);
+  const { details, statusOf, loading, blocking, missingProducts, retryBlocking } = usePricingCatalogues(rows, owner);
   const initialText = (row: SellerRow) => {
     const fiat = fiatPriceOf(details(row), currency);
     return fiat ? fiatToText(fiat.value, currency) : "";
@@ -365,12 +310,7 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
                 action={
                   <Button
                     color="inherit"
-                    onClick={() =>
-                      blocking.forEach((id) => {
-                        asked.current.delete(id);
-                        retry(id);
-                      })
-                    }
+                    onClick={retryBlocking}
                     sx={{ minHeight: 44 }}
                   >
                     Retry
@@ -469,68 +409,15 @@ export function PricingDialog({ onClose }: { onClose: () => void }) {
       </ResponsiveDialog>
 
       {review && (
-        <ResponsiveDialog
-          open
-          onClose={() => setReview(null)}
-          title="Publish new prices?"
-          maxWidth="sm"
-          actions={
-            <>
-              <Button color="inherit" onClick={() => setReview(null)}>
-                Back
-              </Button>
-              <Button variant="contained" onClick={() => void send(review.pricing, review.changes)}>
-                Publish
-              </Button>
-            </>
-          }
-        >
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
-            {(() => {
-              const moved = review.changes.filter((c) => !sameCoinPrices(c)).sort((a, b) => priceMove(b) - priceMove(a));
-              const big = moved.filter((c) => priceMove(c) > BIG_PRICE_MOVE).length;
-              const shown = moved.slice(0, 8);
-              const byId = new Map(rows.map((row) => [row.productId, row]));
-              return (
-                <>
-                  <Typography>
-                    {moved.length === 1 ? "1 product gets a new price" : `${moved.length} products get new prices`}, at 1 QORT ={" "}
-                    {rateToText(review.pricing.rates.QORT)} {review.pricing.currency}
-                    {review.pricing.rates.ARRR ? ` and 1 ARRR = ${rateToText(review.pricing.rates.ARRR)} ${review.pricing.currency}` : ""}.
-                  </Typography>
-                  {big > 0 && (
-                    <Alert severity="warning">
-                      {big === 1 ? "1 price changes" : `${big} prices change`} by more than half. Check your rates before publishing.
-                    </Alert>
-                  )}
-                  <Box component="ul" aria-label="Price changes" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-                    {shown.map((c) => {
-                      const row = byId.get(c.productId);
-                      const name = (row && titleOf(details(row))) || "Product";
-                      return (
-                        <Box component="li" key={c.productId} sx={{ minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{name}</Typography>
-                          {[moveText(c.before.qort, c.after.qort, "QORT"), moveText(c.before.arrr, c.after.arrr, "ARRR")]
-                            .filter(Boolean)
-                            .map((line) => (
-                              <Typography key={line} variant="body2" color="text.secondary">
-                                {line}
-                              </Typography>
-                            ))}
-                        </Box>
-                      );
-                    })}
-                  </Box>
-                  {moved.length > shown.length && (
-                    <Typography variant="body2" color="text.secondary">
-                      {`and ${moved.length - shown.length} more`}
-                    </Typography>
-                  )}
-                </>
-              );
-            })()}
-          </Box>
-        </ResponsiveDialog>
+        <PriceReviewDialog
+          review={review}
+          titleOf={(productId) => {
+            const row = rows.find((r) => r.productId === productId);
+            return (row && titleOf(details(row))) || "Product";
+          }}
+          onBack={() => setReview(null)}
+          onPublish={() => void send(review.pricing, review.changes)}
+        />
       )}
 
       <ResponsiveDialog
