@@ -25,6 +25,7 @@ import { buildDeliveryPublish, fetchDeliveryDoc, rememberDeliveryDoc } from "../
 import { DeliveryZoneDialog } from "./DeliveryZoneDialog";
 import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
 import { ResponsiveDialog } from "../components/common/mobile";
+import type { SellerRow } from "./productList";
 
 const uid = new ShortUniqueId({ length: 8 });
 const newId = () => uid();
@@ -100,20 +101,23 @@ function ZoneRows({
     <Box component="ul" sx={{ m: 0, p: 0, listStyle: "none" }}>
       {zones.map((zone, i) => {
         const where = shippingSummaryWithStates(zone.countries, zone.states ?? null);
+        // An unnamed zone is called by where it goes ("The United States: Oregon"); a named one says where under its name.
+        const title = zone.name || where.charAt(0).toUpperCase() + where.slice(1);
         return (
           <Box component="li" key={zone.id} sx={{ display: "flex", alignItems: "center", gap: 1, py: 1, borderTop: i === 0 ? 0 : 1, borderColor: "divider" }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{zone.name || where}</Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
-                {zone.name ? `${where} · ` : ""}
-                {zone.countries.length === 1 ? "1 country" : `${zone.countries.length} countries`}
-              </Typography>
+              <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{title}</Typography>
+              {zone.name && (
+                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                  {where}
+                </Typography>
+              )}
               <Typography variant="body2">{zonePrice(zone, currency)}</Typography>
             </Box>
-            <IconButton aria-label={`Edit zone: ${zone.name || where}`} onClick={() => onEdit(zone)} disabled={disabled} sx={{ width: 44, height: 44 }}>
+            <IconButton aria-label={`Edit zone: ${title}`} onClick={() => onEdit(zone)} disabled={disabled} sx={{ width: 44, height: 44 }}>
               <EditOutlinedIcon />
             </IconButton>
-            <IconButton aria-label={`Remove zone: ${zone.name || where}`} onClick={() => onRemove(zone)} disabled={disabled} sx={{ width: 44, height: 44 }}>
+            <IconButton aria-label={`Remove zone: ${title}`} onClick={() => onRemove(zone)} disabled={disabled} sx={{ width: 44, height: 44 }}>
               <DeleteOutlineOutlinedIcon />
             </IconButton>
           </Box>
@@ -128,6 +132,7 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
   const store = useSelector((state: RootState) => state.global.currentStore);
   const name = useSelector((state: RootState) => state.auth.user?.name);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
+  const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const pricing = useMemo(() => fiatPricingOf(dataContainer as object | null), [dataContainer]);
   const shopCurrency = pricing?.currency ?? "QORT";
   const owner = store?.owner || name || "";
@@ -167,6 +172,12 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
     return map;
   };
   const choosingProfile = doc.profiles.find((p) => p.id === choosing);
+  // The shop's products: a profile counts those still in it (one deleted since stays listed, harmlessly).
+  const known = useMemo(() => new Set(rows.map((r) => r.productId)), [rows]);
+  const productCount = (profile: DeliveryProfile) => {
+    const n = rows.length ? profile.products.filter((id) => known.has(id)).length : profile.products.length;
+    return n === 1 ? "1 product" : `${n} products`;
+  };
 
   const saveZone = (profileId: string | null, zone: DeliveryZone) => {
     const put = (zones: DeliveryZone[]) => (zones.some((z) => z.id === zone.id) ? zones.map((z) => (z.id === zone.id ? zone : z)) : [...zones, zone].slice(0, MAX_ZONES));
@@ -240,8 +251,8 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
   const busy = publishing;
   const currencyNote =
     doc.currency === "QORT"
-      ? "Prices are in QORT; buyers paying in ARRR pay them at the node's rate."
-      : `Prices are in ${doc.currency}, your shop's currency: QORT and ARRR follow from your rates (Shop → Prices).`;
+      ? "Prices are in QORT (buyers paying in ARRR pay them at the node's rate)."
+      : `Prices are in ${doc.currency}, your shop's currency (QORT and ARRR follow from your rates).`;
 
   const profileCard = (profile: DeliveryProfile | null) => {
     const zones = profile ? profile.zones : doc.general.zones;
@@ -255,11 +266,7 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
               {title}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              {profile
-                ? profile.products.length === 1
-                  ? "1 product"
-                  : `${profile.products.length} products`
-                : "Every product not in another profile"}
+              {profile ? productCount(profile) : "Every product not in another profile"}
             </Typography>
           </Box>
           {profile && (
@@ -293,8 +300,8 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
             Delivery
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            What delivery costs where. Buyers pay it at checkout with their order, as one more line: Delivery to their country. {currencyNote} Where the
-            shop ships at all is its Ships to (Shop → Edit shop).
+            Buyers pay delivery at checkout, as one more line of their order. {currencyNote} Which countries you ship to at all is set under Shop →
+            Edit shop.
           </Typography>
         </Box>
       </Box>
