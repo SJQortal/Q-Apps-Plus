@@ -447,6 +447,39 @@ describe("cart page", () => {
     expect(Object.keys(store.getState().cart.carts)).toEqual([]);
   });
 
+  it("reads the coin's rate again at Confirm, so a cart left open for hours pays today's rate", async () => {
+    const world = makeWorld({ shops: 2 });
+    const [first, second] = world.shops;
+    const node = installMockNode(world);
+    node.q.on("SEND_COIN", async () => "arrr-txid");
+    const store = newStore();
+    store.dispatch(setPreferredCoin("ARRR"));
+    for (const shop of [first, second]) {
+      store.dispatch(
+        setProductToCart({
+          productId: shop.products[1].id,
+          catalogueId: `q-store-catalogue-${shop.shortStoreId}-CAT0000000`,
+          storeId: `q-store-general-${shop.shortStoreId}`,
+          storeOwner: shop.owner,
+        })
+      );
+    }
+    renderCart(store);
+    fireEvent.click(await within(await screen.findByRole("region", { name: "Summary" })).findByRole("button", { name: "Check out all 2 shops" }));
+    const rateReads = () => node.fetchCalls.filter((u) => u.startsWith("/crosschain/price/")).length;
+    const before = rateReads();
+    // The cached rate goes stale (as after 5 minutes): Confirm asks the node again.
+    const { resetRates } = await import("../../money/rates");
+    resetRates();
+    await press("Continue");
+    expect(await screen.findByText("You make 2 payments, one after another:")).toBeInTheDocument();
+    expect(rateReads()).toBe(before + 1);
+    // The first shop takes ARRR (2 QORT at 0.25 ARRR each); the second only QORT.
+    const payments = within(screen.getByRole("list", { name: "Payments" }));
+    expect(payments.getByText("0.50")).toBeInTheDocument();
+    expect(payments.getByText("2.00")).toBeInTheDocument();
+  });
+
   it("stops at a declined payment: the shops before it are paid, the ones after stay in the cart", async () => {
     const world = makeWorld({ shops: 2 });
     const [first, second] = world.shops;

@@ -62,7 +62,8 @@ export function useCartPricing(views: ShopCartView[]): ShopPricing[] {
         const coin = coins[i];
         const foreign = isForeignTicker(coin);
         const entry = rates[coin];
-        const rate = foreign ? (entry?.rate ?? cachedRate(coin)) : null;
+        // The shared cache while it's fresh (5 minutes), else this page's last read; Confirm reads again.
+        const rate = foreign ? (cachedRate(coin) ?? entry?.rate ?? null) : null;
         const failed = foreign && rate === null && !!entry?.failed;
         const lines = checkoutLinesOf(view.lines);
         const priced = priceLines(lines, coin, rate, foreign && rate === null && !failed, failed);

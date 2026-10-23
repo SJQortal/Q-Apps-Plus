@@ -21,7 +21,8 @@ import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutlineOutl
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { ResponsiveDialog } from "../../components/common/mobile";
 import { AmountTag } from "../../components/money/PriceTag";
-import { coinLabel } from "../../money/coins";
+import { coinLabel, isForeignTicker } from "../../money/coins";
+import { getRate } from "../../money/rates";
 import { paymentRequest, startCheckout, type CheckoutBuyer, type CheckoutStep } from "../../money/checkout";
 import { isDigitalOnly, missingDeliveryFields, type CartLine, type DeliveryInput, type OrderDetails } from "../../money/order";
 import { errorMessage } from "../../qdn/hubErrors";
@@ -123,6 +124,9 @@ export function CombinedCheckoutDialog({
   const [showErrors, setShowErrors] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [runs, setRuns] = useState<Record<string, Run>>({});
+  const [gettingRates, setGettingRates] = useState(false);
+  // Shops whose price couldn't be worked out at Confirm (no rate for their coin right now): left out.
+  const [unpriced, setUnpriced] = useState<string[]>([]);
   const running = useRef(false);
   const stepStart = useRef<HTMLDivElement>(null);
 
@@ -141,25 +145,39 @@ export function CombinedCheckoutDialog({
     if (!running.current) onClose();
   };
 
-  const toConfirm = () => {
+  // Confirm fixes what Pay pays, at rates read now (the cart page may have been open for hours; rates.ts keeps 5 minutes).
+  const toConfirm = async () => {
+    if (gettingRates) return;
+    setGettingRates(true);
+    const rates = new Map<string, number | null>();
+    for (const coin of new Set(included.map((s) => s.coin).filter(isForeignTicker))) {
+      rates.set(coin, await getRate(coin).catch(() => null));
+    }
+    setGettingRates(false);
     const next: Payment[] = [];
+    const missing: string[] = [];
     for (const s of included) {
       if (!s.shop) continue;
-      const priced = priceLines(s.lines, s.coin, s.rate, false);
-      if (!priced.ok) continue;
+      const rate = isForeignTicker(s.coin) ? (rates.get(s.coin) ?? null) : s.rate;
+      const priced = priceLines(s.lines, s.coin, rate, false, isForeignTicker(s.coin) && rate === null);
+      if (!priced.ok) {
+        missing.push(s.title);
+        continue;
+      }
       next.push({
         key: s.view.key,
         title: s.title,
         shop: s.shop,
         lines: s.lines,
         coin: s.coin,
-        rate: s.rate,
+        rate,
         amount: priced.amount,
         details: priced.details,
         digital: isDigitalOnly(s.lines),
       });
     }
     setPayments(next);
+    setUnpriced(missing);
     setStep("confirm");
   };
 
@@ -171,7 +189,7 @@ export function CombinedCheckoutDialog({
     }
     if (included.length === 0) return;
     saveDelivery(buyer.name, remember ? delivery : null);
-    toConfirm();
+    void toConfirm();
   };
 
   // A foreign coin's payout address comes from the checkout service's own request builder, as Pay will use it.
@@ -299,8 +317,8 @@ export function CombinedCheckoutDialog({
     actions = (
       <>
         <Button onClick={close}>Cancel</Button>
-        <Button variant="contained" onClick={() => (needsAddress ? setStep("delivery") : toConfirm())}>
-          Continue
+        <Button variant="contained" onClick={() => (needsAddress ? setStep("delivery") : void toConfirm())} disabled={gettingRates}>
+          {gettingRates ? "Getting rates…" : "Continue"}
         </Button>
       </>
     );
@@ -320,8 +338,8 @@ export function CombinedCheckoutDialog({
     actions = (
       <>
         <Button onClick={() => setStep("review")}>Back</Button>
-        <Button variant="contained" onClick={fromDelivery} disabled={included.length === 0}>
-          Continue
+        <Button variant="contained" onClick={fromDelivery} disabled={included.length === 0 || gettingRates}>
+          {gettingRates ? "Getting rates…" : "Continue"}
         </Button>
       </>
     );
@@ -361,6 +379,11 @@ export function CombinedCheckoutDialog({
           <Typography variant="body2" color="text.secondary">
             Left out (they don&apos;t ship to {delivery.country}): {notShipping.map((s) => s.title).join(", ")}.
           </Typography>
+        )}
+        {unpriced.length > 0 && (
+          <Alert severity="warning">
+            Left out, as your node has no rate for their coin right now: {unpriced.join(", ")}. They stay in your cart.
+          </Alert>
         )}
         {needsAddress && (
           <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
