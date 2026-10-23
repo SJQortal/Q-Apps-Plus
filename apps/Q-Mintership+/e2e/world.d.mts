@@ -103,7 +103,7 @@ export function sealFor(world: World, addresses: string[], value: unknown): stri
 // The original Admin Board (e2e/world-legacy.mjs): MAIL_PRIVATE cards sealed for their readers.
 export const ADMIN_BOARD_IDS: Record<'removal' | 'topic' | 'locked' | 'unreadable', string>;
 export const ADMIN_POLL_IDS: Record<
-  'open' | 'voted' | 'closed' | 'shared' | 'locked' | 'notAdmin',
+  'open' | 'voted' | 'closed' | 'shared' | 'locked' | 'notAdmin' | 'archived',
   string
 >;
 export function addAdminPolls(world: World): {

@@ -10,7 +10,7 @@ import {
 import { serveAdminPolls } from '../test/adminPolls';
 import { fetchCallsFor, mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../test/setup';
 import { ADDR, installWorld } from '../test/world';
-import { assemblePolls } from '../rules/adminPolls';
+import { assemblePoll, assemblePolls } from '../rules/adminPolls';
 import {
   encryptionTargets,
   getPublicKey,
@@ -19,6 +19,7 @@ import {
   pollContext,
   pollThreadKey,
   retryPollDecrypts,
+  type PollScope,
 } from './adminPolls';
 import { invalidate } from './query';
 
@@ -74,6 +75,75 @@ async function views(viewer: string, force = false) {
 const decrypts = () => qortalCallsFor('DECRYPT_DATA').length;
 const searches = () =>
   fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) => p.includes('DOCUMENT_PRIVATE'));
+
+describe('loadAdminPolls: History’s closed polls, and an older poll’s page', () => {
+  const read = async (viewer: string, scope: PollScope) => {
+    const data = await loadAdminPolls(viewer, { scope });
+    const ctx = pollContext(data);
+    return { data, views: data.sources.map((src) => assemblePoll(src, ctx)!) };
+  };
+
+  it('every closed poll of all time, the latest end first, with its votes and comments', async () => {
+    const { address } = setup();
+    const { data, views: list } = await read(address, { kind: 'closed', since: 0, count: 10 });
+    // The one closed two months ago too, which Decisions never reads; no open ones.
+    expect(list.map((v) => [v.id, v.open])).toEqual([
+      [ADMIN_POLL_IDS.closed, false],
+      [ADMIN_POLL_IDS.archived, false],
+    ]);
+    expect(data.more).toBe(false);
+    const [, archived] = list;
+    expect(archived.publisher.name).toBe('Admin E');
+    expect(archived.counts).toEqual({ yes: 3, no: 1, neutral: 0 });
+    expect(archived.myVote?.vote).toBe('yes');
+    expect(archived.commentRows).toHaveLength(1);
+    // All time: no `after`, still 100 a page.
+    const calls = searches();
+    expect(calls).toHaveLength(4);
+    for (const call of calls) {
+      const params = new URL(call, 'http://x').searchParams;
+      expect(params.get('after')).toBeNull();
+      expect(params.get('limit')).toBe('100');
+    }
+  });
+
+  it('reads the votes of the polls it shows only: the open ones’ wait for Decisions', async () => {
+    const { address } = setup();
+    await read(address, { kind: 'closed', since: 0, count: 10 });
+    const bodies = fetchCallsFor('/arbitrary/DOCUMENT_PRIVATE/');
+    expect(bodies.some((p) => p.includes(`qmp-adminvote-${ADMIN_POLL_IDS.closed}`))).toBe(true);
+    expect(bodies.some((p) => p.includes(`qmp-adminvote-${ADMIN_POLL_IDS.archived}`))).toBe(true);
+    for (const open of [ADMIN_POLL_IDS.open, ADMIN_POLL_IDS.voted])
+      expect(bodies.some((p) => p.includes(`qmp-adminvote-${open}`))).toBe(false);
+  });
+
+  it('only those that ended in the period History shows', async () => {
+    const { address } = setup();
+    const { views: month } = await read(address, {
+      kind: 'closed',
+      since: Date.now() - 30 * DAY,
+      count: 10,
+    });
+    expect(month.map((v) => v.id)).toEqual([ADMIN_POLL_IDS.closed]);
+  });
+
+  it('a ceiling: says when more closed than it reads', async () => {
+    const { address } = setup();
+    const first = await read(address, { kind: 'closed', since: 0, count: 1 });
+    expect(first.views.map((v) => v.id)).toEqual([ADMIN_POLL_IDS.closed]);
+    expect(first.data.more).toBe(true);
+  });
+
+  it('a poll’s own page finds one closed before Decisions’ 62 days, reading only that poll', async () => {
+    const { address } = setup();
+    const before = decrypts();
+    const { views: one } = await read(address, { kind: 'poll', id: ADMIN_POLL_IDS.archived });
+    expect(one.map((v) => v.id)).toEqual([ADMIN_POLL_IDS.archived]);
+    expect(one[0].poll.question).toBe('Should the Minter Admins meet in Q-Chat once a quarter?');
+    // The poll and its 4 votes: no other poll's body.
+    expect(decrypts() - before).toBe(5);
+  });
+});
 
 describe('loadAdminPolls: what an admin reads', () => {
   it('four searches (one per prefix), newest first, 100 a page, the last 62 days', async () => {

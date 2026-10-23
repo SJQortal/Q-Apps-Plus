@@ -9,6 +9,9 @@
  * With `groupAlike` (the Explorer's Mintership tab), events of one kind
  * that ended the same way the same day are one line ("Made a Minter Admin ·
  * 12 accounts") that opens to each of them (alikeEvents.ts).
+ *
+ * With `polls` (History, for Minter Admins), the closed Minter Admin polls
+ * are rows among the events, by when voting ended, each linking to its page.
  */
 import { Fragment, useId, useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
@@ -22,19 +25,22 @@ import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlin
 import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 import LockOpenOutlinedIcon from '@mui/icons-material/LockOpenOutlined';
 import LoginOutlinedIcon from '@mui/icons-material/LoginOutlined';
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined';
 import PersonAddAlt1OutlinedIcon from '@mui/icons-material/PersonAddAlt1Outlined';
 import PersonRemoveOutlinedIcon from '@mui/icons-material/PersonRemoveOutlined';
+import PollOutlinedIcon from '@mui/icons-material/PollOutlined';
 import RemoveModeratorOutlinedIcon from '@mui/icons-material/RemoveModeratorOutlined';
 import { primarySoft } from '../../../hub-theme';
 import { OUTCOME_LABEL, type TimelineEvent, type TimelineKind } from '../../../data/timeline';
 import { PersonChip, PersonInline } from '../../../components/common/Person';
 import { ExpandChevron } from '../../../components/common/ExpandChevron';
 import { SmoothReveal } from '../../../components/common/SmoothReveal';
+import { flowColumns, SECTION_COLUMN } from '../../../components/layout/flowColumns';
 import { alikeEvents } from './alikeEvents';
 import { ToneChip } from '../../../components/common/Section';
 import { useDisplayName } from '../../../hooks/useDisplayName';
-import { decisionPath } from '../../../routes/paths';
+import { adminPollPath, decisionPath } from '../../../routes/paths';
 import { formatCount, formatDate, formatRelative } from '../../../utils/format';
 
 const ICON: Record<TimelineKind, SvgIconComponent> = {
@@ -360,8 +366,88 @@ function TimelineGroup({
   );
 }
 
+/** A closed Minter Admin poll as History's timeline shows it (parts/ClosedPolls.tsx). */
+export interface TimelinePoll {
+  id: string;
+  question: string;
+  /** When voting ended (ms). */
+  at: number;
+  /** The Minter Admin who asked. */
+  askedBy: string;
+  /** "Yes 3 · No 1 · Neutral 1", in the poll's own answers' words. */
+  result: string;
+  /** "You voted Neutral", "Your vote came after the end", or null. */
+  mine: string | null;
+}
+
+/**
+ * A closed Minter Admin poll among the events: the question, when voting
+ * ended and who asked, the result and the viewer's vote, and its own page.
+ */
+function PollItem({ poll }: { poll: TimelinePoll }) {
+  const theme = useTheme();
+  return (
+    <Box
+      component="li"
+      sx={{
+        display: 'flex',
+        gap: 1.5,
+        py: 1.5,
+        px: { xs: 1.5, sm: 2 },
+        '& + &': { borderTop: 1, borderColor: 'divider' },
+      }}
+    >
+      <Box
+        aria-hidden
+        sx={{
+          width: 36,
+          height: 36,
+          flexShrink: 0,
+          borderRadius: '50%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: primarySoft(theme),
+          color: theme.palette.primary.main,
+        }}
+      >
+        <PollOutlinedIcon sx={{ fontSize: 20 }} />
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+          <Typography sx={{ fontWeight: 600 }}>Minter Admin poll</Typography>
+          <ToneChip
+            size="small"
+            variant="outlined"
+            icon={<LockOutlinedIcon />}
+            label="Minter Admins only"
+          />
+        </Box>
+        <Typography sx={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{poll.question}</Typography>
+        <Typography component="div" variant="body2" color="text.secondary">
+          Closed {formatDate(poll.at)} · asked by <PersonInline address={poll.askedBy} />
+        </Typography>
+        <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>
+          {poll.mine ? `${poll.result} · ${poll.mine}` : poll.result}
+        </Typography>
+        <Link
+          component={RouterLink}
+          to={adminPollPath(poll.id)}
+          variant="body2"
+          aria-label={`Open the poll: ${poll.question}`}
+          sx={ROW_LINK_SX}
+        >
+          Open the poll
+        </Link>
+      </Box>
+    </Box>
+  );
+}
+
 export interface TimelineListProps {
   events: TimelineEvent[];
+  /** Closed Minter Admin polls among the events, by when voting ended (History). */
+  polls?: readonly TimelinePoll[];
   /** Show who each event is about (History); a person page leaves it out. */
   showSubject?: boolean;
   /** Show which Minter Admin proposed each (default true; off on an admin's own list). */
@@ -378,6 +464,7 @@ export interface TimelineListProps {
 /** Events newest first, under a small month heading each. */
 export function TimelineList({
   events,
+  polls = [],
   showSubject = false,
   showProposer = true,
   nowMs,
@@ -385,17 +472,34 @@ export function TimelineList({
   groupAlike = false,
   isNew,
 }: TimelineListProps) {
-  const months: Array<{ month: string; events: TimelineEvent[] }> = [];
-  for (const event of events) {
-    const month = MONTH.format(new Date(event.at));
+  const items: Array<{ at: number; event?: TimelineEvent; poll?: TimelinePoll }> = [
+    ...events.map((event) => ({ at: event.at, event })),
+    ...polls.map((poll) => ({ at: poll.at, poll })),
+  ];
+  // Newest first; events keep their own order among themselves.
+  if (polls.length) items.sort((a, b) => b.at - a.at);
+  const months: Array<{ month: string; items: typeof items }> = [];
+  for (const item of items) {
+    const month = MONTH.format(new Date(item.at));
     const last = months[months.length - 1];
-    if (last && last.month === month) last.events.push(event);
-    else months.push({ month, events: [event] });
+    if (last && last.month === month) last.items.push(item);
+    else months.push({ month, items: [item] });
   }
+  const row = (event: TimelineEvent) => (
+    <TimelineItem
+      key={event.signature}
+      event={event}
+      showSubject={showSubject}
+      showProposer={showProposer}
+      nowMs={nowMs}
+      fresh={Boolean(isNew?.(event))}
+    />
+  );
   return (
-    <Box aria-label={label} role="group" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      {months.map(({ month, events: list }) => (
-        <Fragment key={month}>
+    // A month under another; side by side in Full window on a big screen, newest first.
+    <Box aria-label={label} role="group" sx={{ ...flowColumns(SECTION_COLUMN), gap: 1 }}>
+      {months.map(({ month, items: list }) => (
+        <Box key={month} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography
             variant="body2"
             color="text.secondary"
@@ -413,29 +517,31 @@ export function TimelineList({
                 '& > li + li': { borderTop: 1, borderColor: 'divider' },
               }}
             >
-              {(groupAlike ? alikeEvents(list) : list.map((event) => [event])).map((run) =>
-                run.length > 1 ? (
-                  <TimelineGroup
-                    key={run[0].signature}
-                    events={run}
-                    showSubject={showSubject}
-                    showProposer={showProposer}
-                    nowMs={nowMs}
-                  />
-                ) : (
-                  <TimelineItem
-                    key={run[0].signature}
-                    event={run[0]}
-                    showSubject={showSubject}
-                    showProposer={showProposer}
-                    nowMs={nowMs}
-                    fresh={Boolean(isNew?.(run[0]))}
-                  />
-                )
-              )}
+              {groupAlike
+                ? alikeEvents(list.flatMap((item) => (item.event ? [item.event] : []))).map(
+                    (run) =>
+                      run.length > 1 ? (
+                        <TimelineGroup
+                          key={run[0].signature}
+                          events={run}
+                          showSubject={showSubject}
+                          showProposer={showProposer}
+                          nowMs={nowMs}
+                        />
+                      ) : (
+                        row(run[0])
+                      )
+                  )
+                : list.map((item) =>
+                    item.poll ? (
+                      <PollItem key={`poll-${item.poll.id}`} poll={item.poll} />
+                    ) : (
+                      row(item.event as TimelineEvent)
+                    )
+                  )}
             </Box>
           </ListCard>
-        </Fragment>
+        </Box>
       ))}
     </Box>
   );

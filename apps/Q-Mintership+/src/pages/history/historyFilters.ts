@@ -10,8 +10,9 @@
  * as are removals and bans; making, removing, becoming a Minter Admin and
  * stepping down share one. Decision types are searched by type over the
  * period (data/historySearch.ts); all types, joins, join requests and leaves
- * are read in 30-day windows. Pure, so the order and the names are pinned by
- * tests.
+ * are read in 30-day windows. Minter Admin polls are a type too, for Minter
+ * Admins only (parts/ClosedPolls.tsx reads them). Pure, so the order and the
+ * names are pinned by tests.
  */
 import { HISTORY_MAX_WINDOWS, HISTORY_WINDOW_DAYS, type TimelineEvent } from '../../data/timeline';
 import type { GroupTxType } from '../../data/types';
@@ -29,6 +30,7 @@ export type HistoryType =
   | 'liftBan'
   | 'cancelInvite'
   | 'admins'
+  | 'polls'
   | 'other';
 
 export type HistoryFilter = 'all' | HistoryType;
@@ -44,6 +46,7 @@ export const HISTORY_TYPES: ReadonlyArray<{ key: HistoryType; label: string }> =
   { key: 'liftBan', label: 'Bans lifted' },
   { key: 'cancelInvite', label: 'Cancelled invites' },
   { key: 'admins', label: 'Minter Admin changes' },
+  { key: 'polls', label: 'Minter Admin polls' },
   { key: 'other', label: 'Other changes' },
 ];
 
@@ -117,16 +120,20 @@ export function matchesHistoryFilter(
 /**
  * The type choices: All, then every type in HISTORY_TYPES order. Other
  * changes only shows when `events` hold one or it is chosen: History's reads
- * hold only MINTER's own kinds of change.
+ * hold only MINTER's own kinds of change. Minter Admin polls only for a
+ * Minter Admin (`polls`).
  */
 export function historyFilterChoices(
   events: ReadonlyArray<Pick<TimelineEvent, 'kind' | 'decline' | 'joinRequest'>>,
-  chosen: HistoryFilter
+  chosen: HistoryFilter,
+  options: { polls?: boolean } = {}
 ): Array<{ key: HistoryFilter; label: string }> {
   const other = chosen === 'other' || events.some((e) => historyType(e) === 'other');
   return [
     { key: 'all', label: 'All' },
-    ...HISTORY_TYPES.filter((t) => t.key !== 'other' || other).map((t) => ({ ...t })),
+    ...HISTORY_TYPES.filter(
+      (t) => (t.key !== 'other' || other) && (t.key !== 'polls' || options.polls)
+    ).map((t) => ({ ...t })),
   ];
 }
 

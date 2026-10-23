@@ -4,6 +4,9 @@
  *   QPLUS_CHROMIUM=~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome \
  *     scripts/screens.mjs Q-Mintership+ [--only home-admin,decisions] [--themes hub30] [--mode light]
  *
+ * QMP_PAGE_WIDTH=full runs every screen with Page width set to Full window (Settings →
+ * Appearance), e.g. with `--sizes 1920x1080,2560x1440,3840x2160` for big screens.
+ *
  * The mock node is the shared world (e2e/world.mjs): a MINTER group with a
  * person in every status and a decision in every state. `?as=<persona>` in a
  * screen's path picks who is signed in; `outside` has no Hub at all and
@@ -426,6 +429,12 @@ export default {
         localStorage.removeItem('qmintershipplus-connections-circle-order');
         // And the list an Assets screen picked.
         localStorage.removeItem('qmintershipplus-assets-view');
+        // Page width as the run asks (QMP_PAGE_WIDTH), not as a *-full screen left it.
+        ${
+          process.env.QMP_PAGE_WIDTH === 'full'
+            ? `localStorage.setItem('qmintershipplus-page-width', '"full"');`
+            : `localStorage.removeItem('qmintershipplus-page-width');`
+        }
       } catch (e) {}
     })();`,
   ],
@@ -798,6 +807,32 @@ export default {
     },
     { key: 'activity-member', path: '/explorer/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
+    // Page width: Full window (crowetic, 2026-10-23). Settings with it picked, and Decisions,
+    // whose cards sit side by side once two fit (only past the five sizes; --sizes 1920x1080).
+    {
+      key: 'settings-full',
+      path: '/settings?as=admin',
+      after: async (page) => {
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-page-width', '"full"')
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        // Page width isn't offered on phones (it changes nothing there): Motion is on every size.
+        await page.getByRole('combobox', { name: 'Motion' }).waitFor({ timeout: 8000 });
+      },
+    },
+    {
+      key: 'decisions-full',
+      path: '/decisions?as=admin',
+      after: async (page) => {
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-page-width', '"full"')
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+      },
+    },
     // A moving target (e2e/world.mjs addTargetShift): the "target changed" note
     // (this device last saw 23 admin seats), the chips, and an admin change's impact.
     {
@@ -1097,8 +1132,8 @@ export default {
       }),
     },
     // Minter Admin polls (e2e/world.mjs addAdminPolls), encrypted to the Minter Admins: the
-    // section on Decisions (one poll read from a share, one closed), and one poll's own page
-    // with its comments open.
+    // open ones on Decisions (one read from a share), the closed ones in History's timeline
+    // (one closed two months ago), and one poll's own page with its comments open.
     // Ask the Minter Admins, a page as every + Propose choice is (Simon, 2026-10-18), with
     // answers of its own: one renamed, one recoloured, one added.
     {
@@ -1129,6 +1164,32 @@ export default {
         await section.getByRole('article').first().waitFor({ timeout: 8000 });
         // Landscape phones take the viewport: the section from its top.
         await section.evaluate((s) => s.scrollIntoView({ block: 'start' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    // History: the poll that closed in the last 30 days among the events (the viewport, at
+    // its row), and Minter Admin polls alone over all of it, as Decisions' Closed polls opens it.
+    {
+      key: 'history-polls',
+      path: '/history?as=admin',
+      overlay: true,
+      after: withPolls(async (page) => {
+        await settle(page);
+        const link = page.getByRole('link', { name: /^Open the poll: / }).first();
+        await link.waitFor({ timeout: 8000 });
+        await link.evaluate((a) => a.closest('li').scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    {
+      key: 'history-polls-only',
+      path: '/history?as=admin&type=polls&period=all',
+      after: withPolls(async (page) => {
+        await settle(page);
+        await page
+          .getByRole('link', { name: /^Open the poll: / })
+          .nth(1)
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
       }),
     },

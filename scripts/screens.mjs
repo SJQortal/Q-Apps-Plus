@@ -9,6 +9,7 @@
  * best practices) violations.
  *
  *   scripts/screens.mjs <App+> [--only home,share] [--themes hub30] [--mode light] [--build] [--port 4173]
+ *                          [--sizes 1920x1080,2560x1440,3840x2160]
  *
  * The app describes itself in apps/<App+>/e2e/screens.config.mjs (see
  * apps/Q-Share+/e2e/screens.config.mjs): its name, theme storage key, mock
@@ -38,10 +39,10 @@ const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : fallback;
 };
-const VALUED = ['only', 'themes', 'mode', 'port'];
+const VALUED = ['only', 'themes', 'mode', 'port', 'sizes'];
 const appName = args.find((a, i) => !a.startsWith('--') && !VALUED.includes(args[i - 1]?.slice(2)));
 if (!appName) {
-  console.error('Usage: scripts/screens.mjs <App+> [--only a,b] [--themes hub30,black] [--mode light] [--build]');
+  console.error('Usage: scripts/screens.mjs <App+> [--only a,b] [--themes hub30,black] [--mode light] [--sizes 1920x1080] [--build]');
   process.exit(1);
 }
 const app = path.join(root, 'apps', appName);
@@ -61,13 +62,24 @@ const PORT = Number(opt('port', '4173'));
 const MODE = opt('mode', 'dark') === 'light' ? 'light' : 'dark';
 const ctx = { mode: MODE, now: Date.now() };
 
-const VIEWPORTS = [
-  { name: '360x740', width: 360, height: 740, mobile: true },
-  { name: '390x844', width: 390, height: 844, mobile: true },
-  { name: '844x390', width: 844, height: 390, mobile: true },
-  { name: '700', width: 700, height: 900, mobile: false },
-  { name: '1280', width: 1280, height: 800, mobile: false },
-];
+const SIZES = opt('sizes', '');
+// --sizes swaps the five for others, such as big screens: WxH each, a phone when a side is under 500.
+const VIEWPORTS = SIZES
+  ? SIZES.split(',').map((size) => {
+      const [width, height] = size.split('x').map(Number);
+      if (!width || !height) {
+        console.error(`--sizes takes WxH,WxH (e.g. 1920x1080), not "${size}"`);
+        process.exit(1);
+      }
+      return { name: size, width, height, mobile: Math.min(width, height) < 500 };
+    })
+  : [
+      { name: '360x740', width: 360, height: 740, mobile: true },
+      { name: '390x844', width: 390, height: 844, mobile: true },
+      { name: '844x390', width: 844, height: 390, mobile: true },
+      { name: '700', width: 700, height: 900, mobile: false },
+      { name: '1280', width: 1280, height: 800, mobile: false },
+    ];
 
 // ---- tools -----------------------------------------------------------------
 function resolveFrom(dirs, names) {
@@ -283,11 +295,11 @@ lines.push(AXE_SOURCE ? `axe rules violated: ${byRule.size}` : 'axe: skipped');
 for (const [id, e] of [...byRule.entries()].sort((a, b) => b[1].nodes - a[1].nodes)) {
   lines.push(`axe ${id} (${e.impact}) nodes=${e.nodes} on ${e.screens.size} captures, e.g. ${[...e.screens][0]} ${JSON.stringify(e.sample)}`);
 }
-// One report per theme set and mode (nothing in the repo reads a fixed
+// One report per theme set, mode and --sizes (nothing in the repo reads a fixed
 // report.json, so none is written).
 const ALL_THEMES = ['hub30', 'hub20', 'black', 'white'];
 const themeTag = themes.length === ALL_THEMES.length && ALL_THEMES.every((t) => themes.includes(t)) ? 'all' : themes.join(',');
-const reportFile = path.join(shots, `report-${themeTag}-${MODE}.json`);
+const reportFile = path.join(shots, `report-${themeTag}-${MODE}${SIZES ? `-${SIZES}` : ''}.json`);
 writeFileSync(reportFile, JSON.stringify(report, null, 1));
 lines.push(`Report: ${path.relative(root, reportFile)}`);
 console.log(lines.join('\n'));

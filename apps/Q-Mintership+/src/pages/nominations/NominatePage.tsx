@@ -123,7 +123,7 @@ export default function NominatePage() {
         subtitle="Pick the person, say why, add links."
         back={decisionsViewPath('nominations')}
       />
-      <PageBody $maxWidth={680}>{body}</PageBody>
+      <PageBody $form>{body}</PageBody>
     </>
   );
 }
