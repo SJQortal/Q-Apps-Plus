@@ -89,6 +89,24 @@ function product(s, p) {
   };
 }
 const HOUR = 3_600_000;
+// Delivery prices (delivery/model.ts): the seller's own in USD, with a profile for heavy items; Plus Gadgets' in QORT.
+const DELIVERY = {
+  'my-shop': {
+    v: 1,
+    storeId: 'q-store-general-my-shop',
+    currency: 'USD',
+    general: {
+      zones: [
+        { id: 'na', name: 'North America', countries: ['US', 'CA'], first: 6, extra: 2, freeOver: 80 },
+        { id: 'eu', name: 'Europe', countries: ['DE', 'FR', 'IT', 'ES', 'NL', 'PL', 'PT'], first: 9, extra: 3 },
+        { id: 'west', countries: ['US'], states: ['CA', 'OR', 'WA'], first: 4 },
+      ],
+    },
+    profiles: [{ id: 'heavy', name: 'Heavy items', products: [productId({ short: 'my-shop' }, 3), productId({ short: 'my-shop' }, 6)], zones: [{ id: 'world', name: 'Worldwide', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT', 'JP', 'AU'], first: 25 }] }],
+    updated: now - DAY,
+  },
+  'shop-1': { v: 1, storeId: 'q-store-general-shop-1', currency: 'QORT', general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5 }] }, profiles: [], updated: now - DAY },
+};
 const AUCTIONS = {
   'shop-1': {
     4: { v: 1, start: now - DAY, end: now + DAY + 5 * HOUR, startingBid: 12, reserve: 30, buyNow: 80, extendMinutes: 5 },
@@ -231,6 +249,7 @@ function rows() {
     out.push({ name: s.owner, service: 'STORE', identifier: s.id, created: s.created, updated: s.updated, size: 3000, metadata: { title: s.title, description: `**coins:QORTtrue,ARRR${s.arrr}**${s.description}` } });
     out.push({ name: s.owner, service: 'DOCUMENT', identifier: `${s.id}-datacontainer`, created: s.created, updated: s.updated + 1000, size: 150 + 120 * s.products });
     for (let c = 0; c * 10 < s.products; c++) out.push({ name: s.owner, service: 'DOCUMENT', identifier: catalogueId(s, c), created: s.created, updated: s.updated, size: 40000 });
+    if (DELIVERY[s.short]) out.push({ name: s.owner, service: 'DOCUMENT', identifier: `q-store-delivery-${s.short}`, created: now - DAY, updated: now - DAY, size: 600 });
   }
   reviews.forEach((r, i) => out.push({ name: r.name, service: 'DOCUMENT', identifier: `q-store-review-${r.short}-${r.uid}-${r.rating * 10}`, created: now - i * DAY, updated: now - i * DAY, size: 200, metadata: { title: r.title, description: r.description } }));
   for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
@@ -369,6 +388,10 @@ export default {
       if (service === 'DOCUMENT' && name === 'Video Maker' && id === 'qtube_vid_kiln_xyz') return json(route, { title: 'Inside the kiln', videoReference: { name: 'Video Maker', identifier: 'qtube_vid_kiln_xyz_v', service: 'VIDEO' } }).then(() => true);
       if (service === 'THUMBNAIL') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
       if (service === 'IMAGE' && id === 'asset81_Gold Bar_aavatar' && name === 'Gold Issuer') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
+      if (service === 'DOCUMENT' && id.startsWith('q-store-delivery-')) {
+        const owned = shops.find((s) => s.owner === name && id === `q-store-delivery-${s.short}`);
+        if (owned && DELIVERY[owned.short]) return json(route, DELIVERY[owned.short]).then(() => true);
+      }
       if (service === 'DOCUMENT' && id.startsWith('q-store-collections-')) {
         const owned = shops.find((s) => s.owner === name && id === `q-store-collections-${s.short}`);
         const doc = owned && collectionsOf(owned);
@@ -409,6 +432,22 @@ export default {
     { key: 'product-collections', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 2)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('navigation', { name: 'Collections' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); } },
     { key: 'cart', path: '/cart', after: async (page) => page.waitForTimeout(900) },
     { key: 'checkout', path: '/cart', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Check out Plus Gadgets', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+    { key: 'checkout-delivery', path: '/cart', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Check out Plus Gadgets', exact: true }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Continue' }).click({ timeout: 6000 });
+      await d.getByLabel(/Customer name/).fill('Ann Buyer', { timeout: 6000 });
+      await d.getByLabel(/Street address/).fill('1 Rua das Flores');
+      await d.getByLabel(/^City/).fill('Porto');
+      const country = d.getByRole('combobox', { name: /Country/ });
+      await country.fill('Portugal');
+      await page.getByRole('option', { name: 'Portugal', exact: true }).click({ timeout: 4000 });
+      await d.getByLabel(/Region/).fill('Norte');
+      await d.getByLabel(/Zip code/).fill('4000-001');
+      await d.getByRole('button', { name: 'Continue' }).click();
+      await d.getByText(/^Delivery to Portugal/).waitFor({ timeout: 6000 });
+      await page.waitForTimeout(400);
+    } },
     { key: 'checkout-all', path: '/cart', overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Check out all 2 shops' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Check out 2 shops' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'product-auction', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 4)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText('3 bids').waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'product-auction-won', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 8)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/^You won!/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
@@ -434,6 +473,9 @@ export default {
     { key: 'shop-sort-menu', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(800); await page.getByRole('combobox', { name: /^Sort/ }).click({ timeout: 2500 }); await page.getByRole('listbox').waitFor({ timeout: 3000 }); await page.waitForTimeout(400); } },
     { key: 'seller-currency-menu', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Change rates and prices' }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Prices in USD' }).getByRole('combobox', { name: /^Currency/ }).click({ timeout: 4000 }); await page.getByRole('listbox').waitFor({ timeout: 3000 }); await page.waitForTimeout(400); } },
     { key: 'seller-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'seller-delivery', path: `/product-manager/q-store-general-my-shop?tab=delivery`, after: async (page) => { await page.getByRole('region', { name: 'Shipping profile: Heavy items' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-delivery-zone', path: `/product-manager/q-store-general-my-shop?tab=delivery`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Edit zone: North America' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Edit delivery zone' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-delivery-products', path: `/product-manager/q-store-general-my-shop?tab=delivery`, overlay: true, after: async (page) => { await page.getByRole('region', { name: 'Shipping profile: Heavy items' }).getByRole('button', { name: 'Choose products' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Products in Heavy items' }).getByRole('checkbox').first().waitFor({ timeout: 6000 }); await page.waitForTimeout(700); } },
     // Assets 82–84 have no picture on the mock node: each falls back to another (a 404 is how Core says so).
     { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, expectErrors: /404|Failed to load resource/, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
