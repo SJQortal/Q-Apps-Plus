@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
+import { ABOUT_LINKS } from '../../constants/plus';
 import { fullWindowMaxWidth } from '../../test/fullWindow';
 import { MUTED_NAMES_KEY, mutedNamesAtom } from '../../state/comments';
 import SettingsPage from './SettingsPage';
@@ -124,9 +125,11 @@ describe('Settings', () => {
     await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-    await u.click(await screen.findByRole('button', { name: 'Copy the Q-Apps+ source link' }));
+    // The last of the build's About links (constants/plus.ts).
+    const { title } = ABOUT_LINKS[ABOUT_LINKS.length - 1];
+    await u.click(await screen.findByRole('button', { name: `Copy the ${title} link` }));
     expect(await screen.findByText('Copied: paste it in your browser.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Q-Apps+ source link copied' })).toBeVisible();
+    expect(screen.getByRole('button', { name: `${title} link copied` })).toBeVisible();
     expect(writeText).toHaveBeenCalled();
   });
 });

@@ -54,13 +54,7 @@ import {
   type TimeDisplay,
 } from '../../state/settings';
 import { APP_VERSION } from '../../constants/app';
-import {
-  APP_NAME,
-  ORIGINAL_APP_LINK,
-  ORIGINAL_WORDS,
-  SOURCE_REPO,
-  UPSTREAM_REPO,
-} from '../../constants/plus';
+import { ABOUT_LINKS, APP_NAME, ORIGINAL_APP_LINK, ORIGINAL_WORDS } from '../../constants/plus';
 import { PATHS } from '../../routes/paths';
 import { formatCount, plural, sentenceStart } from '../../utils/format';
 import { ActivitySettingsDialog } from '../explorer/account/activity/ActivitySettings';
@@ -474,8 +468,9 @@ export default function SettingsPage() {
                 <OpenInNewOutlinedIcon aria-hidden sx={{ fontSize: 18, opacity: 0.6 }} />
               </LinkRow>
             ) : null}
-            <WebLinkRow title="Upstream source" url={UPSTREAM_REPO} />
-            <WebLinkRow title="Q-Apps+ source" url={SOURCE_REPO} />
+            {ABOUT_LINKS.map((link) => (
+              <WebLinkRow key={link.url} title={link.title} url={link.url} />
+            ))}
           </Card>
           <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
             {APP_NAME} reads MINTER straight from the chain, so it shows the same members, admins
