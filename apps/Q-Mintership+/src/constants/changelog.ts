@@ -18,6 +18,23 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.3',
+    date: '2026-10-23',
+    title: 'Full window on big screens',
+    summary:
+      'A new Page width setting: Full window spreads the pages across the whole window, with cards side by side on big screens.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'Settings → Appearance → Page width: Comfortable keeps each page in a centred column, as before; Full window uses the whole width of the window.',
+          'In Full window, decisions, nominations and Minter Admin polls sit side by side, as many as fit; so do Home’s and Settings’ sections and History’s months. The Explorer, Activity and their tables, charts and grids use the whole width. Forms keep their width, so fields stay easy to fill in.',
+          'Phones look as they did, upright or held sideways.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.2',
     date: '2026-10-21',
     title: 'Q-Assets in the Explorer',
