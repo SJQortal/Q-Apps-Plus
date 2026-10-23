@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import COUNTRY_LIST from "./countries.json";
+import STATE_LIST from "./states.json";
 import {
   ALL_COUNTRY_CODES,
   EU_COUNTRIES,
@@ -8,6 +9,14 @@ import {
   shippingCountriesOf,
   shippingSummary,
   shipsToCountry,
+  ALL_STATE_CODES,
+  LOWER_48,
+  US_STATE_GROUPS,
+  placeNotShipped,
+  shippingStatesOf,
+  shippingSummaryWithStates,
+  shipsToAddress,
+  statesSummary,
 } from "./shipping";
 
 const region = (id: string) => SHIPPING_REGIONS.find((r) => r.id === id)!.codes;
@@ -42,5 +51,44 @@ describe("shipping regions", () => {
     expect(shipsToCountry({}, "Germany")).toBe(true);
     expect(shipsToCountry({ shippingCountries: [] }, "Germany")).toBe(true);
     expect(countryCode("United States")).toBe("US");
+  });
+});
+
+describe("shipping within the United States, by state", () => {
+  it("groups every state of the delivery form's list once: 50 states, DC and 8 territories", () => {
+    const codes = (STATE_LIST as { value: string }[]).map((st) => st.value);
+    expect([...ALL_STATE_CODES].sort()).toEqual([...codes].sort());
+    expect(US_STATE_GROUPS.map((g) => g.codes.length)).toEqual([50, 1, 8]);
+    expect(LOWER_48).toHaveLength(49);
+    expect(LOWER_48).not.toContain("AK");
+    expect(LOWER_48).toContain("DC");
+  });
+
+  it("say in words which states", () => {
+    expect(statesSummary(null)).toBe("every state");
+    expect(statesSummary(LOWER_48)).toBe("the lower 48 and DC");
+    expect(statesSummary(ALL_STATE_CODES.filter((c) => c !== "AK" && c !== "HI"))).toBe("every state and territory except Alaska and Hawaii");
+    expect(statesSummary(LOWER_48.filter((c) => c !== "TX"))).toBe("every state except Alaska, Hawaii and Texas, no territories");
+    expect(statesSummary(US_STATE_GROUPS[0].codes.concat("DC"))).toBe("every state, no territories");
+    expect(statesSummary([...US_STATE_GROUPS[0].codes, "DC", "PR"])).toBe("every state and 1 territory");
+    expect(statesSummary(["CA", "OR", "WA"])).toBe("California, Oregon and Washington");
+    expect(statesSummary(LOWER_48.slice(0, 12))).toBe("12 states");
+    expect(shippingSummaryWithStates(["US"], LOWER_48)).toBe("the United States: the lower 48 and DC");
+    expect(shippingSummaryWithStates(["US", "CA", "MX", "GL", "BM", "PM"], ["CA", "OR"])).toBe("North America; in the United States, California and Oregon");
+    expect(shippingSummaryWithStates(["US"], null)).toBe("United States");
+  });
+
+  it("check a buyer's state against them, in the United States only, never blocking an unknown one", () => {
+    const shop = { shippingCountries: ["US", "CA"], shippingStates: ["OR", "WA", "XX"] };
+    expect(shippingStatesOf(shop)).toEqual(["OR", "WA"]);
+    expect(shipsToAddress(shop, "United States", "Oregon")).toBe(true);
+    expect(shipsToAddress(shop, "United States", "Alaska")).toBe(false);
+    expect(shipsToAddress(shop, "United States", "")).toBe(true);
+    expect(shipsToAddress(shop, "Canada", "Alaska")).toBe(true);
+    expect(shipsToAddress(shop, "Germany", "")).toBe(false);
+    expect(shipsToAddress({ shippingCountries: ["US"] }, "United States", "Alaska")).toBe(true);
+    expect(placeNotShipped(shop, "United States", "Alaska")).toBe("Alaska, United States");
+    expect(placeNotShipped(shop, "Germany", "")).toBe("Germany");
+    expect(placeNotShipped(shop, "United States", "Oregon")).toBeNull();
   });
 });

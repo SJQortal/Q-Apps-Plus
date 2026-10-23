@@ -26,7 +26,7 @@ import { getRate } from "../../money/rates";
 import { paymentRequest, startCheckout, type CheckoutBuyer, type CheckoutStep } from "../../money/checkout";
 import { isDigitalOnly, missingDeliveryFields, type CartLine, type DeliveryInput, type OrderDetails } from "../../money/order";
 import { errorMessage } from "../../qdn/hubErrors";
-import { shipsToCountry } from "../../constants/shipping";
+import { placeNotShipped } from "../../constants/shipping";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing, saveDelivery, savedDelivery } from "./delivery";
 import { RememberAddress } from "./RememberAddress";
@@ -137,7 +137,9 @@ export function CombinedCheckoutDialog({
   const physical = shops.filter((s) => !isDigitalOnly(s.lines));
   const needsAddress = physical.length > 0;
   // Shops that don't ship to the address are left out (constants/shipping.ts).
-  const notShipping = needsAddress && delivery.country ? physical.filter((s) => s.shop && !shipsToCountry(s.shop, delivery.country)) : [];
+  const notShipping = needsAddress && delivery.country ? physical.filter((s) => s.shop && placeNotShipped(s.shop, delivery.country, delivery.state)) : [];
+  // The place they don't ship to: the country, or the state in it when that is what's out.
+  const notShippedPlace = notShipping.length ? placeNotShipped(notShipping[0].shop, delivery.country, delivery.state) : null;
   const included = shops.filter((s) => !notShipping.includes(s));
   const busy = step === "running";
 
@@ -329,7 +331,7 @@ export function CombinedCheckoutDialog({
         <RememberAddress checked={remember} onChange={setRemember} />
         {notShipping.length > 0 && (
           <Alert severity="warning" role="alert">
-            {notShipping.map((s) => s.title).join(", ")} {notShipping.length === 1 ? "doesn't" : "don't"} ship to {delivery.country}
+            {notShipping.map((s) => s.title).join(", ")} {notShipping.length === 1 ? "doesn't" : "don't"} ship to {notShippedPlace}
             {included.length > 0 ? ", so they're left out of this checkout and stay in your cart." : ". Pick another address, or ask the sellers."}
           </Alert>
         )}
@@ -377,7 +379,7 @@ export function CombinedCheckoutDialog({
         ))}
         {notShipping.length > 0 && (
           <Typography variant="body2" color="text.secondary">
-            Left out (they don&apos;t ship to {delivery.country}): {notShipping.map((s) => s.title).join(", ")}.
+            Left out (they don&apos;t ship to {notShippedPlace}): {notShipping.map((s) => s.title).join(", ")}.
           </Typography>
         )}
         {unpriced.length > 0 && (

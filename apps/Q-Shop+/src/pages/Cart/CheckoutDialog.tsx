@@ -37,7 +37,7 @@ import { RememberAddress } from "./RememberAddress";
 import { PendingOrderCard } from "./PendingOrders";
 import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
-import { shipsToCountry } from "../../constants/shipping";
+import { placeNotShipped } from "../../constants/shipping";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
 
@@ -150,7 +150,8 @@ export function CheckoutDialog({
   };
 
   // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here.
-  const noShipping = !isDigital && delivery.country && !shipsToCountry(shop, delivery.country) ? delivery.country : null;
+  // ... and in the United States, its states when it ships to some only.
+  const noShipping = !isDigital && delivery.country ? placeNotShipped(shop, delivery.country, delivery.state) : null;
 
   const fromDelivery = () => {
     if (missingDeliveryFields(delivery).length > 0) {

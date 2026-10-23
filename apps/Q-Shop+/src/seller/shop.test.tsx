@@ -162,6 +162,46 @@ describe("create shop", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: /^Europe/ }));
   }
 
+  it("ships to the USA at a tap, and to some states only: the lower 48 and DC, less one", async () => {
+    stubNode();
+    const q = installQortalMock({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    const onCreated = vi.fn();
+    renderWithProviders(<CreateStoreModal open onClose={() => {}} onCreated={onCreated} />, { store: sellerStore() });
+    await fillShop();
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Europe/ }));
+    fireEvent.click(screen.getByRole("button", { name: "USA: the United States, every state" }));
+    const us = screen.getByRole("region", { name: "Within the United States" });
+    expect(within(us).getByText("Every state · 59 of 59")).toBeInTheDocument();
+    fireEvent.click(within(us).getByRole("button", { name: "Lower 48 and DC" }));
+    fireEvent.click(within(us).getByRole("button", { name: "Choose states" }));
+    fireEvent.click(within(within(us).getByRole("group", { name: "States of the United States" })).getByRole("checkbox", { name: "Texas" }));
+    expect(within(us).getByText("Every state except Alaska, Hawaii and Texas, no territories · 48 of 59")).toBeInTheDocument();
+    expect(within(us).getByRole("checkbox", { name: /^States/ })).toHaveAttribute("data-indeterminate", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Create shop" }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalled());
+    const saved = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(saved.shippingCountries).toEqual(["US"]);
+    expect(saved.shippingStates).toHaveLength(48);
+    expect(saved.shippingStates).not.toContain("TX");
+    expect(saved.shipsTo).toBe("the United States: every state except Alaska, Hawaii and Texas, no territories");
+  });
+
+  it("asks for a state when the United States is ticked without any, and forgets states once it's unticked", async () => {
+    stubNode();
+    renderWithProviders(<CreateStoreModal open onClose={() => {}} onCreated={() => {}} />, { store: sellerStore() });
+    await fillShop();
+    fireEvent.click(screen.getByRole("button", { name: "USA: the United States, every state" }));
+    const us = screen.getByRole("region", { name: "Within the United States" });
+    fireEvent.click(within(us).getByRole("button", { name: "Choose states" }));
+    for (const group of [/^States/, /^District of Columbia/, /^Territories/]) fireEvent.click(within(us).getByRole("checkbox", { name: group }));
+    expect(within(us).getByText("No state ticked yet")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create shop" }));
+    expect(await screen.findByText("Tick the US states the shop ships to, or untick the United States")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Choose countries in North America" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Countries in North America" })).getByRole("checkbox", { name: "United States" }));
+    expect(screen.queryByRole("region", { name: "Within the United States" })).toBeNull();
+  });
+
   it("cleans the id as the original did, previews it, and publishes the original's STORE + empty product list", async () => {
     stubNode();
     const q = installQortalMock({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });

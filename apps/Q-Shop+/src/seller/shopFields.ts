@@ -7,7 +7,7 @@
  * `metaDescription` are the + app's additive fields.
  */
 import { FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
-import { shippingCountriesOf, shippingSummary } from "../constants/shipping";
+import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } from "../constants/shipping";
 import type { StoreFields } from "../qdn/payloads";
 
 export interface ShopFormValues {
@@ -21,6 +21,8 @@ export interface ShopFormValues {
   shipsTo: string;
   /** The countries it ships to (constants/shipping.ts); null keeps the typed text. */
   shippingCountries: string[] | null;
+  /** The US states it ships to, when it ships to the United States; null: every state. */
+  shippingStates: string[] | null;
   /** Coins the shop takes besides QORT. */
   coins: Record<ForeignTicker, boolean>;
   /** Payout address per coin, kept while a coin is switched off. */
@@ -54,6 +56,7 @@ export function shopFormValues(store?: {
   location?: string;
   shipsTo?: string;
   shippingCountries?: unknown;
+  shippingStates?: unknown;
   supportedCoins?: string[];
   foreignCoins?: Record<string, string>;
   acceptedAssets?: ShopAsset[];
@@ -68,6 +71,7 @@ export function shopFormValues(store?: {
     shipsTo: store?.shipsTo ?? "",
     // A new shop picks countries; an older one keeps its typed text until the seller ticks some.
     shippingCountries: shippingCountriesOf(store) ?? (store ? null : []),
+    shippingStates: shippingStatesOf(store),
     coins: perTicker((t) => supported.includes(t)),
     addresses: perTicker((t) => (typeof store?.foreignCoins?.[t] === "string" ? store.foreignCoins[t] : "")),
     assets: Array.isArray(store?.acceptedAssets)
@@ -85,13 +89,20 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
     description: values.description.trim(),
     metaDescription: values.metaDescription.trim(),
     location: values.location.trim(),
-    shipsTo: values.shippingCountries && values.shippingCountries.length > 0 ? shippingSummary(values.shippingCountries) : values.shipsTo.trim(),
-    ...(values.shippingCountries !== null && { shippingCountries: values.shippingCountries }),
+    shipsTo:
+      values.shippingCountries && values.shippingCountries.length > 0 ? shippingSummaryWithStates(values.shippingCountries, usStates(values)) : values.shipsTo.trim(),
+    // With the country list, the states always say where (an empty list: every state, so the field goes).
+    ...(values.shippingCountries !== null && { shippingCountries: values.shippingCountries, shippingStates: usStates(values) ?? [] }),
     logo: values.logo ?? "",
     foreignCoins,
     supportedCoins,
     acceptedAssets: values.assets.map((a) => ({ id: a.id, name: a.name })),
   };
+}
+
+/** The US states it ships to when that is some only (null: every state, or not the United States). */
+function usStates(values: ShopFormValues): string[] | null {
+  return values.shippingCountries?.includes(US) ? values.shippingStates : null;
 }
 
 /** The first problem, in plain words, or null. */
@@ -104,6 +115,7 @@ export function validateShopForm(values: ShopFormValues): string | null {
   if (values.shippingCountries !== null ? values.shippingCountries.length === 0 : !values.shipsTo.trim()) {
     return "Tick where the shop ships to (Worldwide for anywhere)";
   }
+  if (usStates(values)?.length === 0) return "Tick the US states the shop ships to, or untick the United States";
   for (const t of FOREIGN_TICKERS) {
     if (values.coins[t] && !values.addresses[t].trim()) return `Add your ${t} payout address, or switch ${t} off`;
   }

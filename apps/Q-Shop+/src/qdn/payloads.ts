@@ -69,6 +69,11 @@ export interface StoreFields {
    * `shipsTo` then says them in words. Left out when empty.
    */
   shippingCountries?: string[];
+  /**
+   * + app, additive: the US states it ships to (codes of the delivery form's
+   * list), when it ships to some only. Left out when empty (every state).
+   */
+  shippingStates?: string[];
 }
 
 /**
@@ -89,6 +94,15 @@ function withShippingCountries<T extends Record<string, any>>(obj: T, codes: str
   if (codes.length > 0) return { ...obj, shippingCountries: [...codes] };
   const rest = { ...obj };
   delete rest.shippingCountries;
+  return rest;
+}
+
+/** The shop object with `shippingStates` set, or without it when the list is empty; unchanged when not given. */
+function withShippingStates<T extends Record<string, any>>(obj: T, codes: string[] | undefined): T {
+  if (codes === undefined) return obj;
+  if (codes.length > 0) return { ...obj, shippingStates: [...codes] };
+  const rest = { ...obj };
+  delete rest.shippingStates;
   return rest;
 }
 
@@ -122,7 +136,8 @@ export function buildCreateStorePublish(args: {
 }) {
   const { name, shortStoreId, fields, created } = args;
   const identifier = storeIdentifier(shortStoreId);
-  const storeObj = withShippingCountries(
+  const storeObj = withShippingStates(
+    withShippingCountries(
     withMetaDescription(
       withAssets(
         {
@@ -141,6 +156,8 @@ export function buildCreateStorePublish(args: {
       fields.metaDescription
     ),
     fields.shippingCountries
+    ),
+    fields.shippingStates
   );
   const dataContainer = emptyDataContainer(identifier, shortStoreId, name);
   const resourceStore: PublishResource = {
@@ -203,7 +220,7 @@ export function buildEditStorePublish(args: {
       storeObj = rest;
     }
   }
-  storeObj = withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries);
+  storeObj = withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates);
   return {
     storeObj,
     request: {

@@ -6,13 +6,16 @@
 import { useState } from "react";
 import { Box, Button, Typography } from "@mui/material";
 import { ResponsiveDialog } from "../../components/common/mobile";
-import { SHIPPING_REGIONS, countryName, shippingCountriesOf } from "../../constants/shipping";
+import { ALL_STATE_CODES, SHIPPING_REGIONS, US, countryName, shippingCountriesOf, shippingStatesOf, stateName, statesSummary } from "../../constants/shipping";
 
-export function ShippingCountriesButton({ shop }: { shop: { shippingCountries?: unknown; title?: string } }) {
+export function ShippingCountriesButton({ shop }: { shop: { shippingCountries?: unknown; shippingStates?: unknown; title?: string } }) {
   const [open, setOpen] = useState(false);
   const list = shippingCountriesOf(shop);
   if (!list) return null;
   const chosen = new Set(list);
+  // In the United States, the states it ships to when some only.
+  const states = chosen.has(US) ? shippingStatesOf(shop) : null;
+  const missingStates = states ? ALL_STATE_CODES.filter((c) => !states.includes(c)) : [];
   return (
     <>
       <Button
@@ -43,6 +46,21 @@ export function ShippingCountriesButton({ shop }: { shop: { shippingCountries?: 
               </Box>
             );
           })}
+          {states && (
+            <Box component="section" aria-label="Within the United States">
+              <Typography sx={{ fontWeight: 700 }}>
+                Within the United States{" "}
+                <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
+                  · {statesSummary(states)}
+                </Box>
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.6 }}>
+                {missingStates.length <= states.length
+                  ? `Not to ${missingStates.map(stateName).sort((a, b) => a.localeCompare(b)).join(", ")}.`
+                  : `Only to ${states.map(stateName).sort((a, b) => a.localeCompare(b)).join(", ")}.`}
+              </Typography>
+            </Box>
+          )}
         </Box>
       </ResponsiveDialog>
     </>

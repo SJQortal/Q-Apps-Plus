@@ -296,6 +296,28 @@ describe("checkout (pinned)", () => {
     expect(html).toContain("State: Oregon");
   });
 
+  it("stops a physical order to a US state the shop doesn't ship to, and lets one it does through", async () => {
+    const { q } = setup({
+      items: [{ product: chair, qty: 1 }],
+      shop: { shippingCountries: ["US"], shippingStates: ["OR", "WA"], shipsTo: "the United States: Oregon and Washington" },
+    });
+    await openCheckout();
+    await press("Continue");
+    await screen.findByLabelText(/Customer name/i);
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Alaska" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Alaska" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(`${STORE_TITLE} doesn't ship to Alaska, United States: it ships to the United States: Oregon and Washington.`);
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" })).toBeDisabled();
+    const state = screen.getByRole("combobox", { name: /State/ });
+    fireEvent.change(state, { target: { value: "" } });
+    fireEvent.change(state, { target: { value: "Oreg" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
+    await waitFor(() => expect(screen.queryByText(/doesn't ship to/)).toBeNull());
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
   it("stops a physical order to a country the shop doesn't ship to, before anything is paid (constants/shipping.ts)", async () => {
     const { q } = setup({ items: [{ product: chair, qty: 1 }], shop: { shippingCountries: ["IS", "NO"], shipsTo: "Iceland and Norway" } });
     await openCheckout();

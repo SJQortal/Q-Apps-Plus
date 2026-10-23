@@ -312,7 +312,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
               <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
               <span>
-                Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop as { shippingCountries?: unknown; title?: string }} />
+                Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop as { shippingCountries?: unknown; shippingStates?: unknown; title?: string }} />
               </span>
             </Typography>
           )}

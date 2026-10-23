@@ -23,6 +23,8 @@ export interface CurrentStore {
   metaDescription?: string;
   /** + app, additive: the countries it ships to (constants/shipping.ts). */
   shippingCountries?: string[];
+  /** + app, additive: the US states it ships to, when some only. */
+  shippingStates?: string[];
   id: string;
   title: string;
   description: string;

@@ -119,7 +119,13 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           )}
         </Box>
         <TextField label="Location" value={values.location} onChange={(e) => set("location", e.target.value)} required fullWidth />
-        <ShipsToPicker value={values.shippingCountries} onChange={(codes) => set("shippingCountries", codes)} typed={values.shipsTo} />
+        <ShipsToPicker
+          value={values.shippingCountries}
+          onChange={(codes) => set("shippingCountries", codes)}
+          states={values.shippingStates}
+          onStatesChange={(states) => set("shippingStates", states)}
+          typed={values.shipsTo}
+        />
       </Box>
 
       <Box component="section" aria-label="Payments" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>

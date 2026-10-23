@@ -39,8 +39,9 @@ export interface CartViewLine {
 /** The shop as checkout needs it, plus what the cart shows. */
 export interface CartShop extends CheckoutShop {
   logo?: string;
-  /** Where it ships (constants/shipping.ts): checked against the delivery country. */
+  /** Where it ships (constants/shipping.ts): checked against the delivery country, and in the US its state. */
   shippingCountries?: string[];
+  shippingStates?: string[];
   shipsTo?: string;
 }
 
@@ -142,6 +143,7 @@ export function cartShopFrom(storeId: string, owner: string, store: any): CartSh
     acceptedAssets: assets,
     logo: typeof store?.logo === "string" ? store.logo : undefined,
     ...(Array.isArray(store?.shippingCountries) && { shippingCountries: store.shippingCountries.filter((c: unknown): c is string => typeof c === "string") }),
+    ...(Array.isArray(store?.shippingStates) && { shippingStates: store.shippingStates.filter((c: unknown): c is string => typeof c === "string") }),
     ...(typeof store?.shipsTo === "string" && { shipsTo: store.shipsTo }),
   };
 }

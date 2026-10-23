@@ -9,8 +9,14 @@
  * original's free-text `shipsTo` gets a summary in words ("Europe (except
  * Russia) and North America"), which both apps show. A shop without the list
  * keeps its typed `shipsTo`, and nothing is checked against it.
+ *
+ * Within the United States a shop can ship to some states only (Simon,
+ * 2026-10-23): `shippingStates`, codes of the delivery form's own state list
+ * (constants/states.json: the 50 states, DC and the territories), next to
+ * "US" in `shippingCountries`. Without it, every state.
  */
 import COUNTRY_LIST from "./countries.json";
+import STATE_LIST from "./states.json";
 
 export interface ShippingRegion {
   id: string;
@@ -130,4 +136,109 @@ export function shippingSummary(codes: readonly string[]): string {
     }
   }
   return listWords(parts);
+}
+
+// ---------------------------------------------------------------- United States, by state
+
+export const US = "US";
+
+const STATE_NAMES: Record<string, string> = Object.fromEntries((STATE_LIST as { text: string; value: string }[]).map((st) => [st.value, st.text]));
+const STATE_CODES_BY_NAME: Record<string, string> = Object.fromEntries((STATE_LIST as { text: string; value: string }[]).map((st) => [st.text.toLowerCase(), st.value]));
+
+/** Territories in the delivery form's state list; the rest are the 50 states and DC. */
+const TERRITORIES = new Set(["AS", "FM", "GU", "MH", "MP", "PW", "PR", "VI"]);
+
+export interface StateGroup {
+  id: string;
+  label: string;
+  codes: readonly string[];
+}
+
+/** The delivery form's states, in groups: every code is in exactly one (a test checks). */
+export const US_STATE_GROUPS: readonly StateGroup[] = [
+  { id: "states", label: "States", codes: Object.keys(STATE_NAMES).filter((c) => c !== "DC" && !TERRITORIES.has(c)) },
+  { id: "dc", label: "District of Columbia", codes: ["DC"] },
+  { id: "territories", label: "Territories", codes: Object.keys(STATE_NAMES).filter((c) => TERRITORIES.has(c)) },
+];
+
+export const ALL_STATE_CODES: readonly string[] = US_STATE_GROUPS.flatMap((g) => g.codes);
+
+/** The contiguous states and DC: everywhere on the mainland, a common shipping zone. */
+export const LOWER_48: readonly string[] = ALL_STATE_CODES.filter((c) => !TERRITORIES.has(c) && c !== "AK" && c !== "HI");
+
+export function stateName(code: string): string {
+  return STATE_NAMES[code] ?? code;
+}
+
+/** A state's code from its name as the delivery form writes it (any case), or null. */
+export function stateCode(name: string | null | undefined): string | null {
+  if (!name) return null;
+  return STATE_CODES_BY_NAME[name.trim().toLowerCase()] ?? null;
+}
+
+/** The US states the shop ships to, when it ships to some only (well-formed codes, each once, in the list's order); null: every state. */
+export function shippingStatesOf(shop: { shippingStates?: unknown } | null | undefined): string[] | null {
+  const list = shop?.shippingStates;
+  if (!Array.isArray(list)) return null;
+  const known = new Set(list.filter((c): c is string => typeof c === "string" && c in STATE_NAMES));
+  if (known.size === 0) return null;
+  return ALL_STATE_CODES.filter((c) => known.has(c));
+}
+
+/**
+ * Whether a shop ships to the delivery address: its country (shipsToCountry),
+ * then, in the United States, its state when the shop ships to some only.
+ * An unknown country or state never blocks.
+ */
+export function shipsToAddress(
+  shop: { shippingCountries?: unknown; shippingStates?: unknown } | null | undefined,
+  country: string | null | undefined,
+  state: string | null | undefined
+): boolean {
+  if (!shipsToCountry(shop, country)) return false;
+  if (countryCode(country) !== US || !shippingCountriesOf(shop)) return true;
+  const states = shippingStatesOf(shop);
+  const code = stateCode(state);
+  return !states || !code || states.includes(code);
+}
+
+/**
+ * The states in words: "every state", "the lower 48 and DC", "every state
+ * and territory except Alaska and Hawaii", "every state except Texas, no
+ * territories", "California, Oregon and Washington", "12 states"…
+ */
+export function statesSummary(codes: readonly string[] | null): string {
+  if (!codes) return "every state";
+  const chosen = new Set(codes);
+  if (ALL_STATE_CODES.every((c) => chosen.has(c))) return "every state";
+  if (LOWER_48.length === chosen.size && LOWER_48.every((c) => chosen.has(c))) return "the lower 48 and DC";
+  const territories = [...TERRITORIES].filter((c) => chosen.has(c)).length;
+  const mainMissing = ALL_STATE_CODES.filter((c) => !TERRITORIES.has(c) && !chosen.has(c));
+  const some = territories === 1 ? "1 territory" : `${territories} territories`;
+  const noTerritories = territories === 0 ? ", no territories" : territories < TERRITORIES.size ? ` and ${some}` : "";
+  if (mainMissing.length === 0) return territories === 0 ? "every state, no territories" : `every state and ${some}`;
+  if (mainMissing.length <= 3 && chosen.size > 3) {
+    const except = listWords(mainMissing.map(stateName));
+    return territories === TERRITORIES.size ? `every state and territory except ${except}` : `every state except ${except}${noTerritories}`;
+  }
+  if (chosen.size <= 4) return listWords(codes.map(stateName));
+  return territories > 0 ? `${chosen.size} states and territories` : `${chosen.size} states`;
+}
+
+/** The shop's places in words for `shipsTo`, with the US states when it ships to some only. */
+export function shippingSummaryWithStates(codes: readonly string[], states: readonly string[] | null): string {
+  const summary = shippingSummary(codes);
+  if (!summary || !states || !codes.includes(US)) return summary;
+  if (codes.length === 1) return `the United States: ${statesSummary(states)}`;
+  return `${summary}; in the United States, ${statesSummary(states)}`;
+}
+
+/** The place an address is, as a shop's "doesn't ship to …" names it: "Germany", or "Alaska, United States" when only its state is out. */
+export function placeNotShipped(
+  shop: { shippingCountries?: unknown; shippingStates?: unknown } | null | undefined,
+  country: string,
+  state: string | null | undefined
+): string | null {
+  if (shipsToAddress(shop, country, state)) return null;
+  return shipsToCountry(shop, country) && state ? `${state}, ${country}` : country;
 }

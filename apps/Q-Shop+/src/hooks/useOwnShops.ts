@@ -77,6 +77,7 @@ export function currentStoreFrom(storeId: string, owner: string, json: any, row?
     acceptedAssets: Array.isArray(json?.acceptedAssets) ? json.acceptedAssets : undefined,
     metaDescription: typeof json?.metaDescription === "string" ? json.metaDescription : undefined,
     shippingCountries: Array.isArray(json?.shippingCountries) ? json.shippingCountries : undefined,
+    shippingStates: Array.isArray(json?.shippingStates) ? json.shippingStates : undefined,
     owner,
   } as unknown as CurrentStore;
 }

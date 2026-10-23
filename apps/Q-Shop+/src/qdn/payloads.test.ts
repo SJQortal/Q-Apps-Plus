@@ -102,6 +102,27 @@ describe("shop publishes (the original's shapes)", () => {
     expect("acceptedAssets" in without.storeObj).toBe(false);
   });
 
+  it("writes the countries and the US states it ships to after the original's keys, and an edit to every state takes the states out", () => {
+    const created = buildCreateStorePublish({
+      name: SELLER,
+      shortStoreId: SHORT_STORE_ID,
+      fields: { ...fields, shipsTo: "the United States: Oregon and Washington", shippingCountries: ["US"], shippingStates: ["OR", "WA"] },
+      created: 1,
+    });
+    expect(Object.keys(created.storeObj).slice(-2)).toEqual(["shippingCountries", "shippingStates"]);
+    expect(created.storeObj).toMatchObject({ shipsTo: "the United States: Oregon and Washington", shippingCountries: ["US"], shippingStates: ["OR", "WA"] });
+    const everyState = buildEditStorePublish({
+      name: SELLER,
+      currentStore: { ...viewedStore, shippingCountries: ["US"], shippingStates: ["OR", "WA"] },
+      fields: { ...fields, shippingCountries: ["US", "CA"], shippingStates: [] },
+    });
+    expect(everyState.storeObj).toMatchObject({ shippingCountries: ["US", "CA"] });
+    expect("shippingStates" in everyState.storeObj).toBe(false);
+    // A shop still on its typed text keeps whatever it has.
+    const typed = buildEditStorePublish({ name: SELLER, currentStore: { ...viewedStore, shippingStates: ["OR"] }, fields });
+    expect(typed.storeObj).toMatchObject({ shippingStates: ["OR"] });
+  });
+
   it("writes a meta description into the shop and its QDN description, and leaves it out when empty (additive data)", () => {
     const meta = "Ghee, tallow and sleep gear from Reykjavík.";
     const created = buildCreateStorePublish({ name: SELLER, shortStoreId: SHORT_STORE_ID, fields: { ...fields, metaDescription: meta }, created: 1 });
