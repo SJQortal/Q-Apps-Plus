@@ -4,8 +4,9 @@
  * same checkout service as a single shop's (money/checkout.ts startCheckout,
  * unchanged): one payment and one order per shop, each confirmed in Hub.
  *
- * Each shop is paid in the coin its cart shows. A shop that doesn't ship to
- * the address is left out (it stays in the cart). Declining a payment, or one
+ * Each shop is paid in the coin its cart shows, with its delivery fee for
+ * the address when it prices delivery (delivery/checkoutDelivery.ts). A shop
+ * that doesn't ship or deliver there is left out (it stays in the cart). Declining a payment, or one
  * failing, stops there: the shops before it are paid and ordered, the ones
  * after it stay in the cart. Nothing here can pay twice: Pay all runs once,
  * and the results only ever say what happened.
@@ -23,6 +24,7 @@ import { ResponsiveDialog } from "../../components/common/mobile";
 import { AmountTag } from "../../components/money/PriceTag";
 import { coinLabel, isForeignTicker } from "../../money/coins";
 import { getRate } from "../../money/rates";
+import { unitPrice } from "../../money/pricing";
 import { paymentRequest, startCheckout, type CheckoutBuyer, type CheckoutStep } from "../../money/checkout";
 import { isDigitalOnly, missingDeliveryFields, type CartLine, type DeliveryInput, type OrderDetails } from "../../money/order";
 import { errorMessage } from "../../qdn/hubErrors";
@@ -31,6 +33,7 @@ import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing, saveDelivery, savedDelivery } from "./delivery";
 import { RememberAddress } from "./RememberAddress";
 import { itemCount, priceLines, type CartShop } from "./cartLines";
+import { deliveryCharge, loadShopDelivery, type DeliveryCharge } from "../../delivery/checkoutDelivery";
 import type { ShopPricing } from "./useCartPricing";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
@@ -46,6 +49,11 @@ interface Payment {
   amount: string;
   details: OrderDetails;
   digital: boolean;
+  /** The items bought (the delivery fee's line isn't one). */
+  items: number;
+  /** The delivery fee's line, in `lines` too; free: the shop's prices make it free there. */
+  delivery: CartLine | null;
+  deliveryFree: boolean;
 }
 
 type RunState = "waiting" | CheckoutStep | "done" | "declined" | "failed" | "pending" | "skipped";
@@ -127,6 +135,8 @@ export function CombinedCheckoutDialog({
   const [gettingRates, setGettingRates] = useState(false);
   // Shops whose price couldn't be worked out at Confirm (no rate for their coin right now): left out.
   const [unpriced, setUnpriced] = useState<string[]>([]);
+  // Shops that can't deliver there now (their delivery prices: delivery/checkoutDelivery.ts), and why: left out.
+  const [undelivered, setUndelivered] = useState<{ key: string; message: string }[]>([]);
   const running = useRef(false);
   const stepStart = useRef<HTMLDivElement>(null);
 
@@ -155,13 +165,31 @@ export function CombinedCheckoutDialog({
     for (const coin of new Set(included.map((s) => s.coin).filter(isForeignTicker))) {
       rates.set(coin, await getRate(coin).catch(() => null));
     }
+    // Each shop that ships prices its delivery for the address, all read at once.
+    const shipped = included.filter((s) => s.shop && !isDigitalOnly(s.lines));
+    const prices = await Promise.all(shipped.map((s) => loadShopDelivery(s.shop!.owner, s.shop!.id).then((d) => d, () => null)));
+    const deliveryOf = new Map(shipped.map((s, i) => [s.view.key, prices[i]]));
     setGettingRates(false);
     const next: Payment[] = [];
     const missing: string[] = [];
+    const notDelivered: { key: string; message: string }[] = [];
     for (const s of included) {
       if (!s.shop) continue;
       const rate = isForeignTicker(s.coin) ? (rates.get(s.coin) ?? null) : s.rate;
-      const priced = priceLines(s.lines, s.coin, rate, false, isForeignTicker(s.coin) && rate === null);
+      const digital = isDigitalOnly(s.lines);
+      let charge: DeliveryCharge = { ok: true, line: null, free: false };
+      if (!digital) {
+        const read = deliveryOf.get(s.view.key);
+        charge = read
+          ? deliveryCharge({ shop: s.shop, delivery: read, lines: s.lines, address: delivery, coin: s.coin, rate })
+          : { ok: false, message: `${s.title}'s delivery prices couldn't be read from your node right now.` };
+      }
+      if (!charge.ok) {
+        notDelivered.push({ key: s.view.key, message: charge.message });
+        continue;
+      }
+      const lines = charge.line ? [...s.lines, charge.line] : s.lines;
+      const priced = priceLines(lines, s.coin, rate, false, isForeignTicker(s.coin) && rate === null);
       if (!priced.ok) {
         missing.push(s.title);
         continue;
@@ -170,16 +198,20 @@ export function CombinedCheckoutDialog({
         key: s.view.key,
         title: s.title,
         shop: s.shop,
-        lines: s.lines,
+        lines,
         coin: s.coin,
         rate,
         amount: priced.amount,
         details: priced.details,
-        digital: isDigitalOnly(s.lines),
+        digital,
+        items: itemCount(s.lines),
+        delivery: charge.line,
+        deliveryFree: charge.free,
       });
     }
     setPayments(next);
     setUnpriced(missing);
+    setUndelivered(notDelivered);
     setStep("confirm");
   };
 
@@ -312,7 +344,9 @@ export function CombinedCheckoutDialog({
           Each shop is paid on its own, in the coin its cart shows, and gets its own order: Hub asks you to confirm {shops.length * 2} times (a payment and an order for each shop).
         </Alert>
         <Typography variant="body2" color="text.secondary">
-          {needsAddress ? "Next: the delivery address, once for every shop that ships." : "Digital orders: nothing is shipped."}
+          {needsAddress
+            ? "Next: the delivery address, once for every shop that ships. Shops that price delivery add it for your address."
+            : "Digital orders: nothing is shipped."}
         </Typography>
       </Stack>
     );
@@ -341,7 +375,7 @@ export function CombinedCheckoutDialog({
       <>
         <Button onClick={() => setStep("review")}>Back</Button>
         <Button variant="contained" onClick={fromDelivery} disabled={included.length === 0 || gettingRates}>
-          {gettingRates ? "Getting rates…" : "Continue"}
+          {gettingRates ? "Working out prices…" : "Continue"}
         </Button>
       </>
     );
@@ -362,8 +396,15 @@ export function CombinedCheckoutDialog({
                       {i + 1}. {p.title}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      to {p.shop.owner} · {itemCount(p.lines) === 1 ? "1 item" : `${itemCount(p.lines)} items`}
+                      to {p.shop.owner} · {p.items === 1 ? "1 item" : `${p.items} items`}
+                      {p.deliveryFree ? " · free delivery" : ""}
                     </Typography>
+                    {p.delivery && (
+                      <Typography variant="body2" color="text.secondary" component="div" sx={{ display: "flex", gap: 0.5, flexWrap: "wrap", alignItems: "baseline" }}>
+                        With {String(p.delivery.product?.title ?? "delivery")}:
+                        <AmountTag value={unitPrice(p.delivery.product, p.coin, p.rate)} coin={p.coin} shop={p.shop} size="small" />
+                      </Typography>
+                    )}
                   </>
                 }
               >
@@ -382,6 +423,11 @@ export function CombinedCheckoutDialog({
             Left out (they don&apos;t ship to {notShippedPlace}): {notShipping.map((s) => s.title).join(", ")}.
           </Typography>
         )}
+        {undelivered.map((u) => (
+          <Alert key={u.key} severity="warning">
+            Left out: {u.message} It stays in your cart.
+          </Alert>
+        ))}
         {unpriced.length > 0 && (
           <Alert severity="warning">
             Left out, as your node has no rate for their coin right now: {unpriced.join(", ")}. They stay in your cart.

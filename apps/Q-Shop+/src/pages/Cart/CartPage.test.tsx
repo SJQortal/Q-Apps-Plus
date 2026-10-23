@@ -447,6 +447,50 @@ describe("cart page", () => {
     expect(Object.keys(store.getState().cart.carts)).toEqual([]);
   });
 
+  it("adds each shop's delivery fee for the address to its payment, and leaves out a shop that doesn't deliver there", async () => {
+    const world = makeWorld({ shops: 3 });
+    const [first, second, third] = world.shops;
+    const zones = (countries: string[], first: number) => ({ zones: [{ id: "z", countries, first }] });
+    first.delivery = { v: 1, storeId: `q-store-general-${first.shortStoreId}`, currency: "QORT", general: zones(["PT", "ES"], 0.5), profiles: [], updated: 1 };
+    third.delivery = { v: 1, storeId: `q-store-general-${third.shortStoreId}`, currency: "QORT", general: zones(["PL"], 2), profiles: [], updated: 1 };
+    const node = installMockNode(world);
+    node.q.on("SEND_COIN", async () => ({ signature: "PAYSIG" }));
+    node.q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    const store = newStore();
+    // Product 3 of each shop is physical, at 4 QORT.
+    for (const shop of [first, second, third]) {
+      store.dispatch(
+        setProductToCart({
+          productId: shop.products[3].id,
+          catalogueId: `q-store-catalogue-${shop.shortStoreId}-CAT0000000`,
+          storeId: `q-store-general-${shop.shortStoreId}`,
+          storeOwner: shop.owner,
+        })
+      );
+    }
+    renderCart(store);
+    fireEvent.click(await within(await screen.findByRole("region", { name: "Summary" })).findByRole("button", { name: "Check out all 3 shops" }));
+    await press("Continue");
+    const type = (label: RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    await screen.findByLabelText(/Customer name/i);
+    type(/Customer name/i, "Ann Buyer");
+    type(/Street address/i, "1 Rua");
+    type(/^City/, "Porto");
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "Portugal" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Portugal" }));
+    type(/Region/i, "Norte");
+    type(/Zip code/i, "4000");
+    await press("Continue");
+
+    expect(await screen.findByText("You make 2 payments, one after another:")).toBeInTheDocument();
+    expect(screen.getByText(`Left out: ${third.title} doesn't deliver Product 3 to Portugal. Remove it from your cart, pick another address, or ask the seller. It stays in your cart.`)).toBeInTheDocument();
+    await press("Pay 2 shops");
+    await waitFor(() => expect(node.q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
+    // The second shop has no delivery prices: its 4 QORT; the first adds 0.5 for Portugal.
+    expect(node.q.callsFor("SEND_COIN").map((c) => c.amount)).toEqual(["4.00000000", "4.50000000"]);
+    expect(Object.keys(store.getState().cart.carts)).toEqual([`q-store-general-${third.shortStoreId}`]);
+  });
+
   it("reads the coin's rate again at Confirm, so a cart left open for hours pays today's rate", async () => {
     const world = makeWorld({ shops: 2 });
     const [first, second] = world.shops;

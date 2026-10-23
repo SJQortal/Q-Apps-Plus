@@ -38,6 +38,8 @@ export interface WorldShop {
   collections?: { id: string; title: string; description?: string; image?: string; products: string[]; created?: number; updated?: number }[];
   /** The seller's order of its products (qdn/productOrder.ts), in the product index. */
   productOrder?: string[];
+  /** Its delivery prices (delivery/model.ts), DOCUMENT q-store-delivery-<short>, when it has some. */
+  delivery?: unknown;
 }
 
 export interface WorldReview {
@@ -220,6 +222,9 @@ function allRows(world: World): Row[] {
     for (const id of catalogueIdsOf(s)) {
       rows.push({ name: s.owner, service: "DOCUMENT", identifier: id, created: s.created, updated: s.updated, size: 20000 });
     }
+    if (s.delivery) {
+      rows.push({ name: s.owner, service: "DOCUMENT", identifier: `q-store-delivery-${s.shortStoreId}`, created: s.created, updated: s.updated, size: 400 });
+    }
   }
   for (const r of world.reviews) {
     rows.push({
@@ -330,6 +335,10 @@ export function installMockNode(world: World): MockNode {
         const shop = world.shops.find((s) => s.owner === name && `q-store-collections-${s.shortStoreId}` === id && s.collections);
         if (shop?.deleted) return json(shop.deleted === "marked" ? { collections: [], deleted: true } : "D");
         return shop ? json({ storeId: `q-store-general-${shop.shortStoreId}`, collections: shop.collections }) : json({ error: 1401 }, 404);
+      }
+      if (service === "DOCUMENT" && id.startsWith("q-store-delivery-")) {
+        const shop = world.shops.find((s) => s.owner === name && `q-store-delivery-${s.shortStoreId}` === id && s.delivery);
+        return shop ? json(shop.delivery) : json({ error: 1401 }, 404);
       }
       if (service === "DOCUMENT" && id.startsWith("q-store-review-")) {
         const r = world.reviews.find((x) => x.name === name && id.startsWith(`q-store-review-${x.shortStoreId}-${x.uid}`));

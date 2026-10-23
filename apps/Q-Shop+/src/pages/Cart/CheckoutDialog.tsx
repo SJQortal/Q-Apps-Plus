@@ -1,6 +1,8 @@
 /**
  * Checkout for one shop's cart, full-screen on phones: Review → Delivery
- * (physical orders only) → Confirm → progress → result. Every amount and
+ * (physical orders only; the shop's delivery prices, when it has some, add
+ * the fee for the address as one more line: delivery/checkoutDelivery.ts) →
+ * Confirm → progress → result. Every amount and
  * every call comes from the money layer: the total is priceCheckout's, and
  * Pay runs startCheckout (money/checkout.ts), which pays once and records
  * the order, keeping a paid order to finish later if recording doesn't
@@ -19,7 +21,7 @@ import { ResponsiveDialog } from "../../components/common/mobile";
 import { AmountTag, PriceTag } from "../../components/money/PriceTag";
 import { useShopCoin } from "../../money/useShopCoin";
 import { assetIdOf, coinLabel, isForeignTicker } from "../../money/coins";
-import { formatPrice } from "../../money/pricing";
+import { formatPrice, unitPrice } from "../../money/pricing";
 import {
   paymentRequest,
   startCheckout,
@@ -38,6 +40,8 @@ import { PendingOrderCard } from "./PendingOrders";
 import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
 import { placeNotShipped } from "../../constants/shipping";
+import { deliveryCharge, loadShopDelivery } from "../../delivery/checkoutDelivery";
+import { deliveryMoney } from "../../delivery/model";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
 
@@ -47,6 +51,9 @@ interface Snapshot {
   rate: number | null;
   amount: string;
   details: OrderDetails;
+  /** The lines Pay pays: the cart's, and the delivery fee's when there is one. */
+  lines: CartLine[];
+  delivery: { line: CartLine | null; free: boolean };
 }
 
 type Outcome = CheckoutResult & { unexpected?: boolean };
@@ -71,6 +78,12 @@ function Row({ label, children }: { label: ReactNode; children: ReactNode }) {
       <Box sx={{ flexShrink: 0, textAlign: "right" }}>{children}</Box>
     </Box>
   );
+}
+
+/** "5.00 USD" for a fee set in a currency, beside what it costs in the coin. */
+function deliveryInCurrency(line: CartLine): string | null {
+  const fee = (line.product as { delivery?: { currency?: unknown; value?: unknown } } | null)?.delivery;
+  return fee && typeof fee.currency === "string" && fee.currency !== "QORT" && typeof fee.value === "number" ? deliveryMoney(fee.value, fee.currency) : null;
 }
 
 function deliverySummary(delivery: DeliveryInput): string[] {
@@ -114,6 +127,10 @@ export function CheckoutDialog({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [notice, setNotice] = useState<{ severity: "info" | "error"; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // Reading the shop's delivery prices on the way to Confirm, and why the address can't be delivered to.
+  const [quoting, setQuoting] = useState(false);
+  const [deliveryProblem, setDeliveryProblem] = useState<string | null>(null);
+  const [hasDeliveryPrices, setHasDeliveryPrices] = useState(false);
   const paying = useRef(false);
   const stepStart = useRef<HTMLDivElement>(null);
   const pending = usePendingOrders(buyer.name);
@@ -122,6 +139,19 @@ export function CheckoutDialog({
   useEffect(() => {
     stepStart.current?.focus();
   }, [step]);
+
+  // A physical order reads the shop's delivery prices early (cached), so Continue at the address is quick.
+  useEffect(() => {
+    if (isDigital) return;
+    let alive = true;
+    loadShopDelivery(shop.owner, shop.id).then(
+      (d) => alive && setHasDeliveryPrices(!!d.doc),
+      () => {}
+    );
+    return () => {
+      alive = false;
+    };
+  }, [isDigital, shop.owner, shop.id]);
 
   const priced = priceLines(lines, coin, rate, rateLoading, rateError);
   const label = coinLabel(coin, shop);
@@ -133,13 +163,14 @@ export function CheckoutDialog({
     if (!paying.current && !recordingNow) onClose();
   };
 
-  const toConfirm = () => {
-    const now = priceLines(lines, coin, rate, rateLoading, rateError);
+  const toConfirm = (delivery: Snapshot["delivery"] = { line: null, free: false }) => {
+    const paid = delivery.line ? [...lines, delivery.line] : lines;
+    const now = priceLines(paid, coin, rate, rateLoading, rateError);
     if (!now.ok) {
       setStep("review");
       return;
     }
-    setSnapshot({ coin, rate, amount: now.amount, details: now.details });
+    setSnapshot({ coin, rate, amount: now.amount, details: now.details, lines: paid, delivery });
     setNotice(null);
     setStep("confirm");
   };
@@ -149,19 +180,39 @@ export function CheckoutDialog({
     else setStep("delivery");
   };
 
+  const changeDelivery = (next: DeliveryInput) => {
+    setDelivery(next);
+    setDeliveryProblem(null);
+  };
+
   // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here.
   // ... and in the United States, its states when it ships to some only.
   const noShipping = !isDigital && delivery.country ? placeNotShipped(shop, delivery.country, delivery.state) : null;
 
-  const fromDelivery = () => {
+  const fromDelivery = async () => {
+    if (quoting) return;
     if (missingDeliveryFields(delivery).length > 0) {
       setShowErrors(true);
       focusFirstMissing(DELIVERY_PREFIX, delivery);
       return;
     }
     if (noShipping) return;
+    setDeliveryProblem(null);
+    setQuoting(true);
+    let charge: ReturnType<typeof deliveryCharge>;
+    try {
+      const prices = await loadShopDelivery(shop.owner, shop.id);
+      charge = deliveryCharge({ shop, delivery: prices, lines, address: delivery, coin, rate });
+    } catch {
+      charge = { ok: false, message: `${shop.title || shop.owner}'s delivery prices couldn't be read from your node right now. Try again.` };
+    }
+    setQuoting(false);
+    if (!charge.ok) {
+      setDeliveryProblem(charge.message);
+      return;
+    }
     saveDelivery(buyer.name, remember ? delivery : null);
-    toConfirm();
+    toConfirm({ line: charge.line, free: charge.free });
   };
 
   const pay = async () => {
@@ -182,7 +233,7 @@ export function CheckoutDialog({
           foreignCoins: shop.foreignCoins,
           acceptedAssets: shop.acceptedAssets,
         },
-        lines,
+        lines: snapshot.lines,
         coin: snapshot.coin,
         rate: snapshot.rate,
         isDigital,
@@ -269,7 +320,7 @@ export function CheckoutDialog({
         )}
         <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />
         <Divider />
-        <Row label={<Typography sx={{ fontWeight: 700, fontSize: 16 }}>Total</Typography>}>
+        <Row label={<Typography sx={{ fontWeight: 700, fontSize: 16 }}>{hasDeliveryPrices ? "Subtotal" : "Total"}</Typography>}>
           {priced.ok ? <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} /> : <Typography>—</Typography>}
         </Row>
         {!priced.ok && priced.reason === "rate" && (
@@ -292,7 +343,11 @@ export function CheckoutDialog({
           </Alert>
         )}
         <Typography variant="body2" color="text.secondary">
-          {isDigital ? "Digital order: nothing is shipped." : "Next: where to deliver it."}
+          {isDigital
+            ? "Digital order: nothing is shipped."
+            : hasDeliveryPrices
+              ? "Next: where to deliver it. Delivery is added for your address."
+              : "Next: where to deliver it."}
         </Typography>
       </Stack>
     );
@@ -307,7 +362,7 @@ export function CheckoutDialog({
   } else if (step === "delivery") {
     body = (
       <Stack sx={{ gap: 2 }}>
-        <LazyDeliveryForm value={delivery} onChange={setDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
+        <LazyDeliveryForm value={delivery} onChange={changeDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
         <RememberAddress checked={remember} onChange={setRemember} />
         {noShipping && (
           <Alert severity="warning" role="alert">
@@ -315,13 +370,25 @@ export function CheckoutDialog({
             {shop.shipsTo ? `: it ships to ${shop.shipsTo}` : ""}. Pick another address, or ask the seller.
           </Alert>
         )}
+        {deliveryProblem && !noShipping && (
+          <Alert severity="warning" role="alert">
+            {deliveryProblem}
+          </Alert>
+        )}
       </Stack>
     );
     actions = (
       <>
-        <Button onClick={() => setStep("review")}>Back</Button>
-        <Button variant="contained" onClick={fromDelivery} disabled={!!noShipping}>
-          Continue
+        <Button onClick={() => setStep("review")} disabled={quoting}>
+          Back
+        </Button>
+        <Button
+          variant="contained"
+          onClick={() => void fromDelivery()}
+          disabled={!!noShipping || quoting}
+          startIcon={quoting ? <CircularProgress size={18} color="inherit" /> : undefined}
+        >
+          {quoting ? "Working out delivery…" : "Continue"}
         </Button>
       </>
     );
@@ -366,6 +433,22 @@ export function CheckoutDialog({
             {itemCount(lines)} from {shop.title || shop.owner}
           </Typography>
         </Row>
+        {snapshot.delivery.line ? (
+          <Row label={<Typography variant="body2">{String(snapshot.delivery.line.product?.title ?? "Delivery")}</Typography>}>
+            <AmountTag value={unitPrice(snapshot.delivery.line.product, snapshot.coin, snapshot.rate)} coin={snapshot.coin} shop={shop} size="small" />
+            {deliveryInCurrency(snapshot.delivery.line) && (
+              <Typography variant="body2" color="text.secondary">
+                {deliveryInCurrency(snapshot.delivery.line)}
+              </Typography>
+            )}
+          </Row>
+        ) : (
+          snapshot.delivery.free && (
+            <Row label={<Typography variant="body2">Delivery</Typography>}>
+              <Typography variant="body2">Free</Typography>
+            </Row>
+          )
+        )}
         <Box>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
             <Typography variant="body2">{isDigital ? "Digital order: nothing is shipped." : "Deliver to"}</Typography>

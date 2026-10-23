@@ -41,6 +41,8 @@ import {
   viewedStore,
 } from "../../test/fixtures/shop";
 import { CartPage } from "./CartPage";
+import { resourcePath } from "../../qdn/search";
+import { dataContainerIdentifier, deliveryIdentifier } from "../../qdn/identifiers";
 
 vi.mock("short-unique-id", () => ({
   default: class {
@@ -51,8 +53,16 @@ vi.mock("short-unique-id", () => ({
 }));
 
 const NOW = 1761000000000;
+const DELIVERY_ID = deliveryIdentifier(SHORT_STORE_ID);
 
-function setup(opts: { coin?: "QORT" | "ARRR"; items: { product: any; qty: number }[]; rate?: string; shop?: Record<string, unknown> }) {
+function setup(opts: {
+  coin?: "QORT" | "ARRR";
+  items: { product: any; qty: number }[];
+  rate?: string;
+  shop?: Record<string, unknown>;
+  /** The shop's delivery prices (delivery/model.ts), and its product list when they're in a currency. */
+  delivery?: { doc: unknown; productList?: unknown };
+}) {
   const store = createAppStore();
   store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
   store.dispatch(setStoreId(STORE_ID));
@@ -75,6 +85,15 @@ function setup(opts: { coin?: "QORT" | "ARRR"; items: { product: any; qty: numbe
     vi.fn(async (url: string) => {
       if (String(url).startsWith("/crosschain/price/PIRATECHAIN")) {
         return { ok: true, status: 200, text: async () => opts.rate ?? "0", json: async () => Number(opts.rate) };
+      }
+      // The + app's delivery prices (delivery/deliveryDoc.ts): none unless the test gives some, as in the original.
+      const json = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body });
+      if (String(url).startsWith("/arbitrary/resources/search?") && String(url).includes(`identifier=${DELIVERY_ID}`)) {
+        return json(opts.delivery ? [{ name: SELLER, service: "DOCUMENT", identifier: DELIVERY_ID }] : []);
+      }
+      if (opts.delivery && url === resourcePath("DOCUMENT", SELLER, DELIVERY_ID)) return json(opts.delivery.doc);
+      if (opts.delivery?.productList && url === resourcePath("DOCUMENT", SELLER, dataContainerIdentifier(STORE_ID))) {
+        return json(opts.delivery.productList);
       }
       throw new Error(`unexpected fetch ${url}`);
     })
@@ -299,6 +318,91 @@ describe("checkout (pinned)", () => {
     expect(html).toContain(`Qortal name: <strong>${BUYER}</strong>`);
     expect(html).toContain("Ann Buyer<br>1 Main St<br>Springfield, Oregon 97001<br>United States");
     expect(html).toContain("<strong>Note from the buyer:</strong> Leave at the door");
+  });
+
+  /** The delivery step filled in for Oregon, United States. */
+  async function deliverToOregon() {
+    const type = (label: RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    await screen.findByLabelText(/Customer name/i);
+    type(/Customer name/i, "Ann Buyer");
+    type(/Street address/i, "1 Main St");
+    type(/^City/, "Springfield");
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Oregon" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
+    type(/Zip code/i, "97001");
+  }
+
+  const zone = (over: Record<string, unknown>) => ({ id: "zone1", countries: ["US"], first: 3, ...over });
+
+  it("adds the shop's delivery fee for the address as one more line of the order, paid with it", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ states: ["OR"], extra: 1 })] }, profiles: [], updated: 1 };
+    const { q } = setup({ items: [{ product: chair, qty: 2 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    // Confirm names the fee: 3 for the first chair, 1 for the second.
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Delivery to United States (Oregon)")).toBeInTheDocument();
+    await press(/^Pay /);
+
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")[0]).toEqual({ action: "SEND_COIN", coin: "QORT", destinationAddress: SELLER_ADDRESS, amount: "28.00000000" });
+    const [orderRes, mailRes] = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    const order = decodeData64(orderRes.data64);
+    // The chairs as before, then the fee, priced like a product so the original shows it as a line of the total.
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id, "q-store-delivery"]);
+    expect(order.details[chair.id].totalProductPrice).toBe(24);
+    expect(order.details["q-store-delivery"]).toEqual({
+      product: {
+        id: "q-store-delivery",
+        title: "Delivery to United States (Oregon)",
+        type: "delivery",
+        price: [{ currency: "qort", value: 4 }],
+        delivery: { currency: "QORT", value: 4, parts: [{ profile: "Delivery", zone: "", items: 2, fee: 4 }] },
+      },
+      catalogueId: "",
+      quantity: 1,
+      pricePerUnit: 4,
+      totalProductPrice: 4,
+    });
+    expect(order.details.totalPrice).toBe("28.00000000");
+    const html = decodeData64(mailRes.data64).htmlContent;
+    expect(html).toContain("ordered 2 items");
+    expect(html).toContain("<strong>Delivery to United States (Oregon)</strong>");
+  });
+
+  it("prices a delivery fee set in USD in QORT from the shop's rates", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "USD", general: { zones: [zone({ first: 7 })] }, profiles: [], updated: 1 };
+    const productList = { storeId: STORE_ID, products: {}, fiatPricing: { currency: "USD", rates: { QORT: 0.18 }, updated: 1 } };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc, productList } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    expect(await within(await screen.findByRole("dialog")).findByText("$7.00")).toBeInTheDocument();
+    await press(/^Pay /);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    // 7 USD at 0.18 USD a QORT: 38.89 QORT, on top of the chair's 12.
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ coin: "QORT", amount: "50.89000000" });
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details["q-store-delivery"].product.delivery).toMatchObject({ currency: "USD", value: 7, qort: 38.89 });
+  });
+
+  it("stops at the address when the shop doesn't deliver there", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ countries: ["PL"] })] }, profiles: [], updated: 1 };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      `${STORE_TITLE} doesn't deliver ${chair.title} to Oregon, United States. Remove it from your cart, pick another address, or ask the seller.`
+    );
+    expect(screen.queryByRole("button", { name: /^Pay / })).not.toBeInTheDocument();
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
   });
 
   it("stops a physical order to a US state the shop doesn't ship to, and lets one it does through", async () => {
