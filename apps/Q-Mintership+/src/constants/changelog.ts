@@ -30,6 +30,7 @@ export const CHANGELOG: Release[] = [
           'Settings → Appearance → Page width: Comfortable keeps each page in a centred column, as before; Full window uses the whole width of the window.',
           'In Full window, decisions, nominations and Minter Admin polls sit side by side, as many as fit; so do Home’s and Settings’ sections and History’s months. The Explorer, Activity and their tables, charts and grids use the whole width. Forms keep their width, so fields stay easy to fill in.',
           'Phones look as they did, upright or held sideways.',
+          'Opening a menu, such as a choice in Settings, no longer moves the page sideways, and the side rail and the page’s title bar stay where they are.',
         ],
       },
       {
