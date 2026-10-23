@@ -9,6 +9,7 @@ import { Alert, Box, Checkbox, CircularProgress, FormControlLabel, Typography } 
 import { fetchBids } from "../auctions/bids";
 import { auctionState, type AuctionTerms, type Bid } from "../auctions/rules";
 import { formatPrice } from "../money/pricing";
+import { whenText } from "../auctions/format";
 
 type Load = { key: string; status: "loading" | "ready" | "failed"; bids: Bid[] };
 
@@ -68,7 +69,7 @@ export function VoidBids({
           <Box component="li" key={bid.id}>
             <FormControlLabel
               control={<Checkbox checked={voided.includes(bid.id)} onChange={(e) => toggle(bid.id, e.target.checked)} />}
-              label={`Void: ${bid.bidder}, ${formatPrice(bid.amount)} QORT, ${new Date(bid.created).toLocaleString()}`}
+              label={`Void: ${bid.bidder}, ${formatPrice(bid.amount)} QORT, ${whenText(bid.created)}`}
               sx={{ minHeight: 44, mr: 0, "& .MuiFormControlLabel-label": { overflowWrap: "anywhere" } }}
             />
           </Box>

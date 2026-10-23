@@ -29,25 +29,12 @@ import { placeBid, TOO_MANY_BIDS } from "./placeBid";
 import { auctionCheckoutShop, wonLine } from "./auctionCheckout";
 import { isAuctionPaid, noteAuctionPaid } from "./paid";
 import { MAX_BID, timeLeft, type AuctionTerms, type Bid } from "./rules";
+import { agoText, whenText } from "./format";
 
 const CheckoutDialog = lazy(() => import("../pages/Cart/CheckoutDialog").then((m) => ({ default: m.CheckoutDialog })));
 const bidUid = new ShortUniqueId({ length: 6 });
 const EPSILON = 1e-9;
 
-const WHEN = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-
-/** "Sun, Oct 25, 8:00 PM", in this device's time. */
-export function whenText(ms: number): string {
-  return WHEN.format(new Date(ms));
-}
-
-function agoText(ms: number, now: number): string {
-  const s = Math.max(0, Math.floor((now - ms) / 1000));
-  if (s < 60) return "just now";
-  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
-  return whenText(ms);
-}
 
 const qort = (value: number) => `${formatPrice(value)} QORT`;
 
