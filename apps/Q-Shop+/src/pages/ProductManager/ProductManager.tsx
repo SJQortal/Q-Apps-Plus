@@ -43,7 +43,7 @@ import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteP
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
 import { DeliveryTab } from "../../seller/DeliveryTab";
-import { SELLER_TABS, TAB_LABEL, isSellerTab, type SellerTab } from "./sellerTabs";
+import { CENTRED_TABS, CENTRED_WIDTH, SELLER_TABS, TAB_LABEL, isSellerTab, type SellerTab } from "./sellerTabs";
 
 type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null } | null;
 type DeleteRequest = { key: number; products: ProductToDelete[]; onDeleted?: () => void } | null;
@@ -281,7 +281,12 @@ export const ProductManager = () => {
             ))}
           </Tabs>
         </Box>
-        <Box role="tabpanel" id={`seller-panel-${tab}`} aria-labelledby={`seller-tab-${tab}`} sx={{ minWidth: 0 }}>
+        <Box
+          role="tabpanel"
+          id={`seller-panel-${tab}`}
+          aria-labelledby={`seller-tab-${tab}`}
+          sx={{ minWidth: 0, ...(CENTRED_TABS.has(tab) && { width: "100%", maxWidth: CENTRED_WIDTH, mx: "auto" }) }}
+        >
           {tab === "overview" && <SellerOverview {...overviewProps} />}
           {tab === "products" && (
             <ProductsTab

@@ -410,7 +410,7 @@ export const ProductForm = ({
                       : pricing.rates.ARRR
                         ? ` · ${coinPriceFromFiat(fiat, pricing.rates.ARRR)} ARRR`
                         : " (ARRR at your node's rate)"
-                  } at your rates (1 QORT = ${rateToText(pricing.rates.QORT)} ${pricing.currency}). They follow when you change a rate in Shop → Prices.`
+                  } at your rates (1 QORT = ${rateToText(pricing.rates.QORT)} ${pricing.currency}). They follow when you change a rate in Shop Settings → Prices.`
                 : stale
                   ? `Its QORT price was changed elsewhere since it was ${formatFiat(stale, pricing.currency)}. Type a price in ${pricing.currency} to follow your rates again.`
                   : `Its QORT and ARRR prices then follow from your rates. Leave it empty to set them yourself.`

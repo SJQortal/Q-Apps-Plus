@@ -61,7 +61,7 @@ export function ShopTab() {
   const assets = store.acceptedAssets ?? [];
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3, maxWidth: 760 }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <Box>
         <SectionTitle as="h2">Details</SectionTitle>
         <Card label="Shop details">

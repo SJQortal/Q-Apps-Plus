@@ -11,8 +11,16 @@ export const TAB_LABEL: Record<SellerTab, string> = {
   orders: "Orders",
   reviews: "Reviews",
   delivery: "Delivery",
-  shop: "Shop",
+  shop: "Shop Settings",
 };
+
+/**
+ * Tabs read as one column in the middle of the page (Simon, 2026-10-23: the
+ * Shop tab "could be nicely centered", Reviews "too wide"); the lists and
+ * grids of the others use the page's width.
+ */
+export const CENTRED_TABS: ReadonlySet<SellerTab> = new Set(["reviews", "delivery", "shop"]);
+export const CENTRED_WIDTH = 880;
 
 export function isSellerTab(value: string | null): value is SellerTab {
   return !!value && (SELLER_TABS as readonly string[]).includes(value);

@@ -265,7 +265,7 @@ describe("the seller overview", () => {
     expect(onOpenTab).toHaveBeenLastCalledWith("reviews");
     // The links at its foot are the tab bar's, in its order, Overview marked as the page you're on.
     const nav = screen.getByRole("navigation", { name: "Manage your shop" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Overview", "Products", "Collections", "Orders", "Reviews", "Delivery", "Shop"]);
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Overview", "Products", "Collections", "Orders", "Reviews", "Delivery", "Shop Settings"]);
     expect(within(nav).getByRole("button", { name: "Overview" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(nav).getByRole("button", { name: "Delivery" }));
     expect(onOpenTab).toHaveBeenLastCalledWith("delivery");

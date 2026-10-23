@@ -300,8 +300,8 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
             Delivery
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Buyers pay delivery at checkout, as one more line of their order. {currencyNote} Which countries you ship to at all is set under Shop →
-            Edit shop.
+            Buyers pay delivery at checkout, as one more line of their order. {currencyNote} Which countries you ship to at all is set under Shop
+            Settings → Edit shop.
           </Typography>
         </Box>
       </Box>
