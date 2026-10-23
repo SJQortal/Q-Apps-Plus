@@ -3,7 +3,6 @@
  * received (pages/Store/orderCount.ts), where it is and ships to, the coins it takes, and what you can do (message the seller, share, see
  * the details; the owner also edits the shop or opens the seller page).
  */
-import { useEffect, useRef, useState } from "react";
 import { Box, Button, Rating, Skeleton, Typography } from "@mui/material";
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -70,45 +69,18 @@ export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews;
 }
 
 /**
- * The shop's own description: larger and in the page's main text colour, at
- * a line length that reads well (Simon: "the shops description text could be
- * a bit more clear and nicer and bigger"), four lines with Read more when it
- * is longer.
+ * The shop's own description: larger and in the page's main text colour
+ * (Simon: "the shops description text could be a bit more clear and nicer
+ * and bigger"), whole and across the header's width (Simon: "no read more
+ * read less on the shop pages … the text can extend across the screen").
  */
 export function ShopDescription({ text }: { text: string }) {
-  const box = useRef<HTMLParagraphElement>(null);
-  const [open, setOpen] = useState(false);
-  const [long, setLong] = useState(false);
-  useEffect(() => {
-    const el = box.current;
-    if (!el || open || typeof ResizeObserver === "undefined") return;
-    // Measured while clamped: more text than four lines show.
-    const observer = new ResizeObserver(() => setLong(el.scrollHeight > el.clientHeight + 1));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [open, text]);
   return (
-    <Box sx={{ mt: 2 }}>
-      <Typography
-        ref={box}
-        sx={{
-          fontSize: { xs: 16, sm: 17 },
-          lineHeight: 1.65,
-          color: "text.primary",
-          maxWidth: "78ch",
-          whiteSpace: "pre-wrap",
-          overflowWrap: "anywhere",
-          ...(!open && { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }),
-        }}
-      >
-        {text}
-      </Typography>
-      {(long || open) && (
-        <Button onClick={() => setOpen((v) => !v)} aria-expanded={open} size="small" sx={{ mt: 0.5, ml: -1, minHeight: 44, textTransform: "none", fontWeight: 600 }}>
-          {open ? "Show less" : "Read more"}
-        </Button>
-      )}
-    </Box>
+    <Typography
+      sx={{ mt: 2, fontSize: { xs: 16, sm: 17 }, lineHeight: 1.65, color: "text.primary", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+    >
+      {text}
+    </Typography>
   );
 }
 
