@@ -33,6 +33,7 @@ import { resetPublishedIndexes } from "./productIndex";
 import { resetSentCollections } from "./useCollections";
 import { INDEX_CHANGED_TEXT } from "./freshIndex";
 import { moveItem } from "./ArrangeDialog";
+import { selectField, selectValue } from "../test/select";
 
 const DOC_ID = "q-store-collections-my-shop";
 
@@ -127,6 +128,12 @@ describe("arranging the shop", () => {
     await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe("Your shop's order is published"));
     expect((store.getState().global.dataContainer as any).productOrder).toEqual([chair.id, poster.id, mug.id]);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Arrange your shop" })).toBeNull());
+    // The Products list shows the new order at once (Simon: it stayed newest first), sorted Featured.
+    expect(selectValue(selectField("Sort"))).toBe("featured");
+    const list = within(screen.getByRole("list", { name: "Products" }));
+    await waitFor(() =>
+      expect(list.getAllByRole("listitem").map((li) => within(li).queryByText(/^(Mug|Poster|Chair)$/)?.textContent)).toEqual(["Chair", "Poster", "Mug"])
+    );
   });
 
   it("starts from the shop's order, products added since at the end; Newest first publishes an empty order", async () => {

@@ -17,7 +17,7 @@ import { PublishProductsDialog } from "./PublishProductsDialog";
 import type { SellerRow } from "./productList";
 import { useProductOrder } from "./useProductOrder";
 
-export function ArrangeShop({ onClose }: { onClose: () => void }) {
+export function ArrangeShop({ onClose, onPublished }: { onClose: () => void; /** The order landed: the Products list shows it. */ onPublished?: () => void }) {
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
@@ -66,11 +66,15 @@ export function ArrangeShop({ onClose }: { onClose: () => void }) {
           settledNote="Your shop keeps its previous order until this is published."
           onDone={() => {
             o.done();
+            onPublished?.();
             onClose();
           }}
           onClose={(sent) => {
             o.closed(sent);
-            if (sent.length > 0) onClose();
+            if (sent.length > 0) {
+              onPublished?.();
+              onClose();
+            }
           }}
         />
       )}

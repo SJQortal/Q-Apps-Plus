@@ -26,6 +26,13 @@ describe("the seller's product list", () => {
     expect(ids(filterSellerProducts([...rows, auction], { ...DEFAULT_FILTERS, status: "AUCTION" }, detailsOf))).toEqual(["p-clock"]);
   });
 
+  it("sorts by the seller's order (Featured), the products it doesn't name after, newest first", () => {
+    expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "featured" }, detailsOf, ["p-chair", "p-gone", "p-poster"]))).toEqual(["p-chair", "p-poster", "p-odd", "p-mug"]);
+    // Filters still apply; with no order it is newest first.
+    expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "featured", category: "Art" }, detailsOf, ["p-poster", "p-odd"]))).toEqual(["p-poster", "p-odd"]);
+    expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "featured" }, detailsOf))).toEqual(["p-odd", "p-mug", "p-chair", "p-poster"]);
+  });
+
   it("sorts newest first by default, and by price either way", () => {
     expect(ids(filterSellerProducts(rows, DEFAULT_FILTERS, detailsOf))).toEqual(["p-odd", "p-mug", "p-chair", "p-poster"]);
     expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "oldest" }, detailsOf))).toEqual(["p-poster", "p-chair", "p-mug", "p-odd"]);

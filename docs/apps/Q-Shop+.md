@@ -613,6 +613,10 @@ Simon, from Hub: *"this view in the Shop tab could be nicely centered and the ta
 - A new **seller-reviews** screen found that the reviews' h3 titles had no h2 above them there (axe heading-order); the list has a visually hidden Reviews heading now.
 - **Screens:** seller-reviews, seller-shop, seller-delivery, seller and shop in Hub 3.0, Classic and White at five sizes: 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe.
 
+### Round 5, 2026-10-23 (evening): the Products tab follows the order you arrange
+
+Simon: *"when changing the order it does not optimistcally change after i approve it in Products window"*: the seller's Products list only sorted by date, price or title, so a published order never showed there (the shop page already followed it, from the app's own copy of the list). It now has **Featured (your order)**, the products the order names first and the rest newest first; it's the default once the shop has an order, and publishing one from Arrange switches the list to it as soon as Hub has published it. A sort the seller picks stays picked until then. Tests 947 → 948 (`productList.test`, `arrange.test`).
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.

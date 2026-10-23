@@ -70,6 +70,7 @@ import {
 } from "./productList";
 import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
 import { ArrangeShop } from "./ArrangeShop";
+import { productOrderOf } from "../qdn/productOrder";
 import { selectMenuProps } from "../components/common/menuStyle";
 
 export const PRODUCTS_PAGE = 24;
@@ -119,9 +120,16 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const categories = useSelector((state: RootState) => state.global.listProducts.categories);
   const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
+  const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
+  // The seller's own order (Arrange): the list opens on it once there is one, and goes to it when one is published.
+  const order = useMemo(() => productOrderOf(dataContainer), [dataContainer]);
   const { request, retry, refresh, statusOf: loadOf, productOf } = useCatalogueLoader(owner);
 
   const [filters, setFilters] = useState<SellerFilters>(DEFAULT_FILTERS);
+  const [chosenSort, setChosenSort] = useState<SellerSort | null>(null);
+  const defaultSort: SellerSort = order.length > 0 ? "featured" : "newest";
+  const sort: SellerSort = chosenSort === "featured" && order.length === 0 ? "newest" : (chosenSort ?? defaultSort);
+  const view: SellerFilters = { ...filters, sort };
   const [shown, setShown] = useState(PRODUCTS_PAGE);
   const [sheetOpen, setSheetOpen] = useState(false);
   // The product the seller tapped before its catalogue had loaded; its form opens once it lands.
@@ -141,14 +149,14 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   }, [selecting]);
 
   const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId);
-  const filtered = filterSellerProducts(rows, filters, detailsOf);
+  const filtered = filterSellerProducts(rows, view, detailsOf, order);
   const counts = useMemo(() => statusCounts(rows), [rows]);
   const visible = filtered.slice(0, shown);
   const sortedCategories = useMemo(() => [...categories].sort((a, b) => a.localeCompare(b)), [categories]);
 
   // A search (or a sort by title) needs every product's title: load the
   // catalogues of the products the other filters leave, 5 at a time.
-  const searchCatalogues = needsDetails(filters)
+  const searchCatalogues = needsDetails(view)
     ? [...new Set(filterSellerProducts(rows, { ...filters, query: "", sort: "newest" }, detailsOf).map((r) => r.catalogueId))]
     : [];
   const searchKey = searchCatalogues.join("|");
@@ -228,7 +236,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
     setFilters((prev) => ({ ...prev, ...patch }));
     setShown(PRODUCTS_PAGE);
   };
-  const filtersActive = filters.category !== "" || filters.sort !== "newest";
+  const filtersActive = filters.category !== "" || sort !== defaultSort;
 
   const categorySelect = (
     <TextField
@@ -252,13 +260,16 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
     <TextField
       select
       label="Sort"
-      value={filters.sort}
-      onChange={(e) => update({ sort: e.target.value as SellerSort })}
+      value={sort}
+      onChange={(e) => {
+        setChosenSort(e.target.value as SellerSort);
+        setShown(PRODUCTS_PAGE);
+      }}
       slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 190 }}
       fullWidth={phone}
     >
-      {(Object.keys(SORT_LABEL) as SellerSort[]).map((s) => (
+      {(Object.keys(SORT_LABEL) as SellerSort[]).filter((s) => s !== "featured" || order.length > 0).map((s) => (
         <MenuItem key={s} value={s}>
           {SORT_LABEL[s]}
         </MenuItem>
@@ -508,7 +519,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
           </Box>
         </BottomSheet>
       )}
-      {arranging && <ArrangeShop onClose={() => setArranging(false)} />}
+      {arranging && <ArrangeShop onClose={() => setArranging(false)} onPublished={() => setChosenSort(null)} />}
     </Box>
   );
 }

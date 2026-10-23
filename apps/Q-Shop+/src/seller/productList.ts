@@ -6,6 +6,7 @@
  * matches those that are loaded.
  */
 import { auctionRowOf } from "../auctions/catalog";
+import { arrangeProducts } from "../qdn/productOrder";
 
 export interface SellerRow {
   productId: string;
@@ -19,11 +20,13 @@ export interface SellerRow {
   auction?: { start: number; end: number };
 }
 
-export type SellerSort = "newest" | "oldest" | "price-asc" | "price-desc" | "title";
+/** featured: the seller's own order (Products → Arrange, qdn/productOrder.ts), the products it doesn't name after, newest first. */
+export type SellerSort = "featured" | "newest" | "oldest" | "price-asc" | "price-desc" | "title";
 /** AUCTION: sold by auction (stored out of stock for the original app; auctions/catalog.ts). */
 export type StatusFilter = "all" | "AVAILABLE" | "AUCTION" | "OUT_OF_STOCK" | "RETIRED";
 
 export const SORT_LABEL: Record<SellerSort, string> = {
+  featured: "Featured (your order)",
   newest: "Newest first",
   oldest: "Oldest first",
   "price-asc": "Price: low to high",
@@ -65,7 +68,7 @@ export function needsDetails(filters: SellerFilters): boolean {
   return filters.query.trim().length > 0 || filters.sort === "title";
 }
 
-export function filterSellerProducts(rows: SellerRow[], filters: SellerFilters, detailsOf: DetailsOf): SellerRow[] {
+export function filterSellerProducts(rows: SellerRow[], filters: SellerFilters, detailsOf: DetailsOf, order: readonly string[] = []): SellerRow[] {
   const query = filters.query.trim().toLowerCase();
   const list = rows.filter((row) => {
     if (filters.status !== "all" && statusOf(row) !== filters.status) return false;
@@ -78,6 +81,11 @@ export function filterSellerProducts(rows: SellerRow[], filters: SellerFilters, 
   });
   const byCreated = (a: SellerRow, b: SellerRow) => (b.created ?? 0) - (a.created ?? 0);
   switch (filters.sort) {
+    case "featured": {
+      const byId = new Map(list.map((row) => [row.productId, row]));
+      const newest = [...list].sort(byCreated).map((row) => row.productId);
+      return arrangeProducts([...order], newest).map((id) => byId.get(id) as SellerRow);
+    }
     case "oldest":
       return list.sort((a, b) => -byCreated(a, b));
     case "price-asc":
