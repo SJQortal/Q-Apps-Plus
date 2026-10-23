@@ -74,15 +74,17 @@ describe("the Delivery tab", () => {
     const general = await card("General");
     expect(within(general).getByText(/No zones yet/)).toBeInTheDocument();
 
-    // General: the whole of the USA, 2.5 QORT and 1 QORT for each item more.
+    // General: the whole of the USA, 2.5 QORT and 1 QORT for each extra item.
     fireEvent.click(within(general).getByRole("button", { name: "Add a zone" }));
     let d = await dialog();
     fireEvent.click(within(d).getByRole("button", { name: "USA: the United States, every state" }));
     fireEvent.change(within(d).getByLabelText(/^First item/), { target: { value: "2.5" } });
-    fireEvent.change(within(d).getByLabelText(/^Each item more/), { target: { value: "1" } });
+    fireEvent.change(within(d).getByLabelText(/^Each extra item/), { target: { value: "1" } });
+    // The form works an example out as you type.
+    expect(within(d).getByRole("status", { name: "Example" })).toHaveTextContent("3 items: 2.50 QORT + 2 × 1.00 QORT = 4.50 QORT");
     fireEvent.click(within(d).getByRole("button", { name: "Save zone" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(within(general).getByText("2.50 QORT · 1.00 QORT each item more")).toBeInTheDocument();
+    expect(within(general).getByText("2.50 QORT · 1.00 QORT each extra item")).toBeInTheDocument();
 
     // A profile for the chair, delivered to the EU at 10 QORT.
     fireEvent.click(screen.getByRole("button", { name: "Add a shipping profile" }));
@@ -97,7 +99,11 @@ describe("the Delivery tab", () => {
     await waitFor(() => expect(within(heavy).getByText("1 product")).toBeInTheDocument());
     fireEvent.click(within(heavy).getByRole("button", { name: "Add a zone" }));
     d = await dialog();
+    // Save says what's missing, and the message goes as soon as the zone is changed.
+    fireEvent.click(within(d).getByRole("button", { name: "Save zone" }));
+    expect(within(d).getByRole("alert")).toHaveTextContent("Tick where this zone delivers to.");
     fireEvent.click(within(d).getByRole("button", { name: "European Union" }));
+    expect(within(d).queryByRole("alert")).not.toBeInTheDocument();
     fireEvent.change(within(d).getByLabelText(/^First item/), { target: { value: "10" } });
     fireEvent.click(within(d).getByRole("button", { name: "Save zone" }));
     await waitFor(() => expect(within(heavy).getByText("10.00 QORT")).toBeInTheDocument());
@@ -138,11 +144,11 @@ describe("the Delivery tab", () => {
     setup({ delivery, index });
     const general = await card("General");
     expect(within(general).getByText("Europe")).toBeInTheDocument();
-    expect(within(general).getByText("3.00 QORT · free over 50.00 QORT")).toBeInTheDocument();
+    expect(within(general).getByText("3.00 QORT · free from 50.00 QORT")).toBeInTheDocument();
     const warning = screen.getByText(/These prices are in QORT, but the shop now prices in USD/);
     expect(warning).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use USD" }));
-    expect(within(general).getByText("$3.00 · free over $50.00")).toBeInTheDocument();
+    expect(within(general).getByText("$3.00 · free from $50.00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Publish delivery prices" })).toBeInTheDocument();
   });
 });

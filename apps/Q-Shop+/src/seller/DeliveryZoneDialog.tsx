@@ -1,13 +1,15 @@
 /**
  * One delivery zone of a shipping profile (delivery/model.ts): where it goes
  * (countries by region, and US states, with seller/ShipsToPicker.tsx), what
- * the first item costs, each item after it, and the amount over which it's
- * free. Amounts in the shop's currency (or QORT).
+ * delivering one item costs, what each extra item adds, and from what amount
+ * of items it's free, with a worked example under them. Amounts in the
+ * shop's currency (or QORT).
  */
 import { useState } from "react";
 import { Box, Button, InputAdornment, TextField, Typography } from "@mui/material";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { priceDecimals, sanitizeFiatInput } from "../money/fiatPricing";
+import { deliveryMoney } from "../delivery/model";
 import { shippingSummaryWithStates, US } from "../constants/shipping";
 import type { DeliveryZone } from "../delivery/model";
 import { sanitizeAmountInput } from "./productDraft";
@@ -45,17 +47,36 @@ export function DeliveryZoneDialog({
   const [freeOver, setFreeOver] = useState(asText(zone?.freeOver));
   const [error, setError] = useState<string | null>(null);
   const clean = (text: string) => (currency === "QORT" ? sanitizeAmountInput(text) : sanitizeFiatInput(text, priceDecimals(currency)));
-  const unit = <InputAdornment position="end">{currency}</InputAdornment>;
+  // Any change answers the last message: it is shown again only if Save finds it still wrong.
+  const typed = (set: (v: string) => void) => (e: { target: { value: string } }) => {
+    set(clean(e.target.value));
+    setError(null);
+  };
+  const amountField = {
+    htmlInput: { inputMode: "decimal" as const },
+    input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
+    // Always above the box: a long label beside the currency would run into it.
+    inputLabel: { shrink: true },
+  };
+  const firstValue = parseDeliveryAmount(first, currency);
+  const extraValue = extra.trim() ? parseDeliveryAmount(extra, currency) : 0;
+  const freeValue = freeOver.trim() ? parseDeliveryAmount(freeOver, currency) : 0;
+  const money = (v: number) => deliveryMoney(v, currency);
+  const example =
+    Number.isFinite(firstValue) && Number.isFinite(extraValue) && Number.isFinite(freeValue)
+      ? [
+          `1 item: ${firstValue > 0 ? money(firstValue) : "free"}`,
+          ...(extraValue > 0 ? [`3 items: ${money(firstValue)} + 2 × ${money(extraValue)} = ${money(firstValue + 2 * extraValue)}`] : []),
+          ...(freeValue > 0 ? [`Free when the items in the order come to ${money(freeValue)} or more`] : []),
+        ]
+      : null;
 
   const save = () => {
     setError(null);
     if (countries.length === 0) return setError("Tick where this zone delivers to.");
-    const firstValue = parseDeliveryAmount(first, currency);
-    if (!Number.isFinite(firstValue)) return setError(`Type what delivery costs, in ${currency} (0 for free).`);
-    const extraValue = extra.trim() ? parseDeliveryAmount(extra, currency) : 0;
-    const freeValue = freeOver.trim() ? parseDeliveryAmount(freeOver, currency) : 0;
-    if (!Number.isFinite(extraValue)) return setError("Check the price for each item after the first.");
-    if (!Number.isFinite(freeValue)) return setError("Check the amount over which delivery is free.");
+    if (!Number.isFinite(firstValue)) return setError(`Type what delivering one item costs, in ${currency} (0 for free).`);
+    if (!Number.isFinite(extraValue)) return setError("Check what each extra item adds.");
+    if (!Number.isFinite(freeValue)) return setError("Check the amount from which delivery is free.");
     if (countries.includes(US) && states?.length === 0) return setError("Tick the US states this zone delivers to, or untick the United States.");
     onSave({
       id: zone?.id ?? newId(),
@@ -94,32 +115,56 @@ export function DeliveryZoneDialog({
           fullWidth
           slotProps={{ htmlInput: { maxLength: 60 } }}
         />
-        <ShipsToPicker value={countries} onChange={setCountries} states={states} onStatesChange={setStates} title="Delivers to" />
+        <ShipsToPicker
+          value={countries}
+          onChange={(next) => {
+            setCountries(next);
+            setError(null);
+          }}
+          states={states}
+          onStatesChange={(next) => {
+            setStates(next);
+            setError(null);
+          }}
+          title="Delivers to"
+        />
         <Typography sx={{ fontWeight: 600 }}>Price</Typography>
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(3, minmax(0, 1fr))" } }}>
           <TextField
             label="First item"
             required
             value={first}
-            onChange={(e) => setFirst(clean(e.target.value))}
-            helperText="0 for free delivery"
-            slotProps={{ htmlInput: { inputMode: "decimal" }, input: { endAdornment: unit } }}
+            onChange={typed(setFirst)}
+            placeholder="0.00"
+            helperText="Delivering one item. 0: free"
+            slotProps={amountField}
           />
           <TextField
-            label="Each item more"
+            label="Each extra item"
             value={extra}
-            onChange={(e) => setExtra(clean(e.target.value))}
-            helperText="Optional"
-            slotProps={{ htmlInput: { inputMode: "decimal" }, input: { endAdornment: unit } }}
+            onChange={typed(setExtra)}
+            placeholder="0.00"
+            helperText="Optional: added for every item after the first"
+            slotProps={amountField}
           />
           <TextField
-            label="Free over"
+            label="Free delivery from"
             value={freeOver}
-            onChange={(e) => setFreeOver(clean(e.target.value))}
-            helperText="Optional: the order's items"
-            slotProps={{ htmlInput: { inputMode: "decimal" }, input: { endAdornment: unit } }}
+            onChange={typed(setFreeOver)}
+            placeholder="None"
+            helperText="Optional: when the items come to this much"
+            slotProps={amountField}
           />
         </Box>
+        {example && (
+          <Box role="status" aria-label="Example" sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "action.hover" }}>
+            {example.map((line) => (
+              <Typography key={line} variant="body2" sx={{ overflowWrap: "anywhere" }}>
+                {line}
+              </Typography>
+            ))}
+          </Box>
+        )}
         {error && (
           <Typography role="alert" color="error">
             {error}

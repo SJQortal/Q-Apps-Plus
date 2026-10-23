@@ -2,8 +2,8 @@
  * The seller's Delivery tab (delivery/model.ts): what delivery costs where,
  * in shipping profiles. General covers every product not in another
  * profile; each profile has its zones (countries and regions, US states) with
- * a price for the first item, each item more, and an amount over which it's
- * free, and its own products. Prices are in the shop's currency when it
+ * a price for the first item, what each extra item adds, and an amount from
+ * which it's free, and its own products. Prices are in the shop's currency when it
  * prices in one (USD…), and QORT and ARRR follow from its rates; else in QORT.
  * Changes stay here until Publish sends the one document.
  */
@@ -30,11 +30,11 @@ import type { SellerRow } from "./productList";
 const uid = new ShortUniqueId({ length: 8 });
 const newId = () => uid();
 
-/** "5.00 USD · 1.00 USD each more · free over 100.00 USD" */
+/** "$5.00 · $1.00 each extra item · free from $100.00" */
 export function zonePrice(zone: DeliveryZone, currency: string): string {
   const parts = [zone.first > 0 ? money(zone.first, currency) : "Free"];
-  if (zone.extra) parts.push(`${money(zone.extra, currency)} each item more`);
-  if (zone.freeOver) parts.push(`free over ${money(zone.freeOver, currency)}`);
+  if (zone.extra) parts.push(`${money(zone.extra, currency)} each extra item`);
+  if (zone.freeOver) parts.push(`free from ${money(zone.freeOver, currency)}`);
   return parts.join(" · ");
 }
 
