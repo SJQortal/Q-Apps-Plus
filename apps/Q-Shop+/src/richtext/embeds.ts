@@ -9,7 +9,10 @@
  *     Video: <title></div>
  * The text inside is what an app that doesn't know embeds shows. A video is a
  * VIDEO resource, a file a FILE resource; `link` is where it opens (a Q-Tube
- * or Q-Share page) and is only ever a qortal:// link. Anyone can publish a
+ * or Q-Share page) and is only ever a qortal:// link. A video may name its
+ * thumbnail, a THUMBNAIL resource (Simon, 2026-10-23), in `data-thumb-name`
+ * and `data-thumb-identifier`: the seller's own, whoever published the
+ * video. Anyone can publish a
  * description, so every embed is read back through `embedFromData`, which
  * keeps only well-formed values.
  *
@@ -29,6 +32,8 @@ export interface VideoEmbed {
   identifier: string;
   title?: string;
   link?: string;
+  /** A picture shown until it plays: a THUMBNAIL resource. */
+  thumbnail?: { name: string; identifier: string };
 }
 
 export interface FileEmbed {
@@ -129,7 +134,10 @@ export function embedFromData(data: Record<string, string | undefined>): QortalE
   if (!isSafeName(name) || !isSafeIdentifier(identifier)) return null;
   const title = text(data.title, 180);
   const link = qortalLinkOrNone(data.link);
-  if (kind === "video") return { kind, name, identifier, ...(title && { title }), ...(link && { link }) };
+  if (kind === "video") {
+    const thumbnail = isSafeName(data.thumbName) && isSafeIdentifier(data.thumbIdentifier) ? { name: data.thumbName, identifier: data.thumbIdentifier } : undefined;
+    return { kind, name, identifier, ...(title && { title }), ...(link && { link }), ...(thumbnail && { thumbnail }) };
+  }
   if (kind !== "file") return null;
   const filename = text(data.filename, 180);
   const mimetype = typeof data.mimetype === "string" && /^[\w.+-]+\/[\w.+-]+$/.test(data.mimetype) ? data.mimetype : undefined;
@@ -151,6 +159,10 @@ export function embedData(embed: QortalEmbed): Record<string, string> {
   const data: Record<string, string> = { kind: embed.kind, name: embed.name, identifier: embed.identifier };
   if (embed.title) data.title = embed.title;
   if (embed.link) data.link = embed.link;
+  if (embed.kind === "video" && embed.thumbnail) {
+    data.thumbName = embed.thumbnail.name;
+    data.thumbIdentifier = embed.thumbnail.identifier;
+  }
   if (embed.kind === "file") {
     if (embed.filename) data.filename = embed.filename;
     if (embed.mimetype) data.mimetype = embed.mimetype;

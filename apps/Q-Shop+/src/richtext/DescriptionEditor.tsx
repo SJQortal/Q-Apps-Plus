@@ -26,8 +26,8 @@ import { Box } from "@mui/material";
 import ReactQuill, { Quill } from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
-import { EMBED_CLASS, embedData, embedFromData, embedLabel, type QortalEmbed } from "./embeds";
-import { AddFileDialog, AddVideoDialog } from "./AddMediaDialogs";
+import { EMBED_CLASS, embedData, embedFromData, embedLabel, type QortalEmbed, type VideoEmbed } from "./embeds";
+import { AddFileDialog, AddVideoDialog, VideoThumbnailDialog } from "./AddMediaDialogs";
 
 // ---------------------------------------------------------------- Quill setup (once)
 
@@ -117,6 +117,8 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
   const quillRef = useRef<ReactQuill>(null);
   const wrapper = useRef<HTMLDivElement>(null);
   const [dialog, setDialog] = useState<"video" | "file" | null>(null);
+  // A video in the description whose thumbnail is being added or changed, by its place.
+  const [thumbFor, setThumbFor] = useState<{ index: number; embed: VideoEmbed } | null>(null);
   const openRef = useRef(setDialog);
 
   const modules = useMemo(
@@ -124,7 +126,14 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
       toolbar: {
         container: phone ? PHONE_TOOLBAR : DESKTOP_TOOLBAR,
         handlers: {
-          qortalVideo: () => openRef.current("video"),
+          // With a video selected (from the keyboard), its thumbnail; else a new video.
+          qortalVideo: () => {
+            const quill = quillRef.current?.getEditor();
+            const at = quill?.getSelection();
+            const value = at && at.length === 1 ? (quill?.getContents(at.index, 1).ops[0]?.insert as { qortalEmbed?: QortalEmbed } | undefined)?.qortalEmbed : undefined;
+            if (at && value?.kind === "video") setThumbFor({ index: at.index, embed: value });
+            else openRef.current("video");
+          },
           qortalFile: () => openRef.current("file"),
         },
       },
@@ -156,6 +165,32 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
       if (labelId) editor.setAttribute("aria-labelledby", labelId);
     }
   }, [phone, labelId]);
+
+  // A click on a video block opens its thumbnail (the block itself isn't editable text).
+  useEffect(() => {
+    const root = wrapper.current;
+    if (!root) return;
+    const onClick = (event: MouseEvent) => {
+      const node = event.target instanceof Element ? event.target.closest<HTMLElement>(`.ql-editor .${EMBED_CLASS}[data-kind="video"]`) : null;
+      const quill = quillRef.current?.getEditor();
+      if (!node || !quill) return;
+      const embed = embedFromData({ ...node.dataset });
+      const blot = Quill.find(node);
+      if (embed?.kind !== "video" || !blot || blot instanceof Quill) return;
+      setThumbFor({ index: quill.getIndex(blot as never), embed });
+    };
+    root.addEventListener("click", onClick);
+    return () => root.removeEventListener("click", onClick);
+  }, []);
+
+  const replaceVideo = (index: number, embed: VideoEmbed) => {
+    setThumbFor(null);
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+    quill.deleteText(index, 1, "user");
+    quill.insertEmbed(index, "qortalEmbed", embed, "user");
+    quill.setSelection(index + 1, 0, "silent");
+  };
 
   const insert = (embeds: QortalEmbed[]) => {
     setDialog(null);
@@ -228,6 +263,14 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
           userSelect: "none",
           cursor: "default",
         },
+        // A video's thumbnail is added or changed by clicking it (the hint isn't stored: it's CSS).
+        [`& .ql-editor .${EMBED_CLASS}[data-kind="video"]`]: { cursor: "pointer" },
+        [`& .ql-editor .${EMBED_CLASS}[data-kind="video"]::after`]: {
+          content: '"  ·  thumbnail: click to add"',
+          fontWeight: 400,
+          color: theme.palette.text.secondary,
+        },
+        [`& .ql-editor .${EMBED_CLASS}[data-kind="video"][data-thumb-identifier]::after`]: { content: '"  ·  has a thumbnail (click to change)"' },
         [`& .ql-editor .${EMBED_CLASS}[data-kind="video"]::before`]: { content: '"▶ "', color: theme.palette.primary.main },
         [`& .ql-editor .${EMBED_CLASS}[data-kind="file"]::before`]: { content: '"📄 "' },
       })}
@@ -248,6 +291,9 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
         <AddVideoDialog open onClose={() => setDialog(null)} onAdd={(embed) => insert([embed])} name={name} productTitle={productTitle} shopTitle={shopTitle} />
       )}
       {dialog === "file" && <AddFileDialog open onClose={() => setDialog(null)} onAdd={insert} name={name} shopTitle={shopTitle} />}
+      {thumbFor && (
+        <VideoThumbnailDialog embed={thumbFor.embed} name={name} onClose={() => setThumbFor(null)} onSave={(embed) => replaceVideo(thumbFor.index, embed)} />
+      )}
     </Box>
   );
 }

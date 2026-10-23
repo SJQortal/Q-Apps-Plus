@@ -20,7 +20,7 @@
 import ShortUniqueId from "short-unique-id";
 import { fetchQdnJson } from "../qdn/search";
 import { jsonToBase64 } from "../qdn/payloads";
-import { VIDEO_BASE } from "../qdn/identifiers";
+import { THUMB_BASE, VIDEO_BASE } from "../qdn/identifiers";
 import { isSafeIdentifier, qshareLink, qtubeLink, type FileEmbed, type VideoEmbed } from "./embeds";
 
 function text(value: unknown, max: number): string | undefined {
@@ -77,22 +77,49 @@ export const MAX_PDF_BYTES = 100 * 1024 * 1024;
 /** Characters Q-Share strips from file names on publish (its `titleFormatterOnSave`). */
 const FILENAME_STRIP = /[\r\n/<>:"'\\*|?]+/g;
 
-export function buildVideoPublish(args: { name: string; file: File; title: string; shopTitle?: string; uid?: () => string }) {
-  const identifier = `${VIDEO_BASE}-${(args.uid ?? (() => uid10()))()}`;
-  const title = args.title.trim() || args.file.name;
+/**
+ * A video's thumbnail: a THUMBNAIL of the seller's, `q-store-thumb-<uid>`,
+ * the picture as a WebP (components/common/ImageUploader.tsx compressImage).
+ */
+export function buildThumbnailPublish(args: { name: string; dataUrl: string; title?: string; uid?: () => string }) {
+  const identifier = `${THUMB_BASE}-${(args.uid ?? (() => uid10()))()}`;
   return {
     identifier,
-    request: {
+    resource: {
       action: "PUBLISH_QDN_RESOURCE" as const,
       name: args.name,
-      service: "VIDEO",
+      service: "THUMBNAIL",
       identifier,
-      file: args.file,
-      filename: args.file.name.replace(FILENAME_STRIP, "") || "video",
-      title: title.slice(0, 50),
-      description: (args.shopTitle ? `A product video from ${args.shopTitle} on Q-Shop` : "A product video on Q-Shop").slice(0, 240),
+      data64: args.dataUrl.replace(/^data:[^,]*,/, ""),
+      filename: "thumbnail.webp",
+      title: `${args.title?.trim() || "Video"} (thumbnail)`.slice(0, 50),
+      description: "A product video's thumbnail on Q-Shop",
     },
-    embed: { kind: "video" as const, name: args.name, identifier, title: title.slice(0, 180) },
+    thumbnail: { name: args.name, identifier },
+  };
+}
+
+/** An uploaded video, and its thumbnail in the same publish when the seller picked one. */
+export function buildVideoPublish(args: { name: string; file: File; title: string; shopTitle?: string; thumbnail?: string | null; uid?: () => string }) {
+  const identifier = `${VIDEO_BASE}-${(args.uid ?? (() => uid10()))()}`;
+  const title = args.title.trim() || args.file.name;
+  const video = {
+    action: "PUBLISH_QDN_RESOURCE" as const,
+    name: args.name,
+    service: "VIDEO",
+    identifier,
+    file: args.file,
+    filename: args.file.name.replace(FILENAME_STRIP, "") || "video",
+    title: title.slice(0, 50),
+    description: (args.shopTitle ? `A product video from ${args.shopTitle} on Q-Shop` : "A product video on Q-Shop").slice(0, 240),
+  };
+  const embed = { kind: "video" as const, name: args.name, identifier, title: title.slice(0, 180) };
+  if (!args.thumbnail) return { identifier, request: video as Record<string, unknown>, embed: embed as VideoEmbed };
+  const thumb = buildThumbnailPublish({ name: args.name, dataUrl: args.thumbnail, title, uid: args.uid });
+  return {
+    identifier,
+    request: { action: "PUBLISH_MULTIPLE_QDN_RESOURCES" as const, resources: [video, thumb.resource] } as Record<string, unknown>,
+    embed: { ...embed, thumbnail: thumb.thumbnail } as VideoEmbed,
   };
 }
 

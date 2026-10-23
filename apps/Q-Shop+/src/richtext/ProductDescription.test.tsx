@@ -90,6 +90,21 @@ describe("a product's description", { timeout: 20_000 }, () => {
     expect(within(text).queryByRole("button")).toBeNull();
   });
 
+  it("shows a video's thumbnail until it plays, from the seller's THUMBNAIL", async () => {
+    const withThumb = VIDEO_EMBED.replace('data-kind="video"', 'data-kind="video" data-thumb-name="Seller Name" data-thumb-identifier="q-store-thumb-ThUmB12345"');
+    const { container } = renderWithProviders(<Described product={rich(`<p>Watch:</p>${withThumb}`)} />);
+    const video = screen.getByRole("region", { name: "Video" });
+    const img = video.querySelector("img");
+    expect(img).toHaveAttribute("src", "/arbitrary/THUMBNAIL/Seller%20Name/q-store-thumb-ThUmB12345");
+    expect(img).toHaveAttribute("loading", "lazy");
+    expect(within(video).getByRole("button", { name: "Play video: Making ghee" })).toBeInTheDocument();
+    // A bad thumbnail id is dropped (embeds.ts), so no picture.
+    const bad = VIDEO_EMBED.replace('data-kind="video"', 'data-kind="video" data-thumb-name="Seller Name" data-thumb-identifier="../x"');
+    container.remove();
+    const second = renderWithProviders(<Described product={rich(`<p>Watch:</p>${bad}`)} />);
+    expect(second.container.querySelector("img")).toBeNull();
+  });
+
   it("plays a video only when asked, once the node has it", async () => {
     routes["/arbitrary/resource/status/VIDEO/Seller%20Name/q-store-video-AbCdEf1234"] = { body: { status: "READY" } };
     renderWithProviders(<Described product={rich(`<p>Watch:</p>${VIDEO_EMBED}`)} />);

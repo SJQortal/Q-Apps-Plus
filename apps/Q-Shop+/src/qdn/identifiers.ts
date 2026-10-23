@@ -19,6 +19,8 @@ export const COLLECTIONS_BASE = "q-store-collections";
 export const PICTURES_BASE = "q-store-pictures";
 /** + app, additive (round 5): a product video published from the description editor (richtext/qortalSources.ts). */
 export const VIDEO_BASE = "q-store-video";
+/** + app, additive (round 5): a product video's thumbnail, a THUMBNAIL of the seller's (richtext/qortalSources.ts). */
+export const THUMB_BASE = "q-store-thumb";
 /** + app, additive (round 5): a bid on an auction (auctions/bids.ts), published by the bidder. */
 export const BID_BASE = "q-store-bid";
 

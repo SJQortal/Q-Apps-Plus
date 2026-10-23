@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { base64ToJson } from "../qdn/payloads";
 import { resetQdnCaches } from "../qdn/search";
-import { buildPdfSharePublish, buildVideoPublish, filesFromQshare, shareSlug, videoFromQtube } from "./qortalSources";
+import { buildPdfSharePublish, buildThumbnailPublish, buildVideoPublish, filesFromQshare, shareSlug, videoFromQtube } from "./qortalSources";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -90,6 +90,35 @@ describe("a video published from the editor", () => {
       description: "A product video from Biohackers Corner on Q-Shop",
     });
     expect(built.embed).toEqual({ kind: "video", name: "Seller Name", identifier: "q-store-video-AbCdEf1234", title: "Making ghee" });
+  });
+
+  it("publishes a thumbnail as a THUMBNAIL of the seller's, with an uploaded video in the same publish", () => {
+    const thumb = buildThumbnailPublish({ name: "Seller Name", dataUrl: "data:image/webp;base64,UklGRg==", title: "Making ghee", uid: () => "ThUmB12345" });
+    expect(thumb.resource).toEqual({
+      action: "PUBLISH_QDN_RESOURCE",
+      name: "Seller Name",
+      service: "THUMBNAIL",
+      identifier: "q-store-thumb-ThUmB12345",
+      data64: "UklGRg==",
+      filename: "thumbnail.webp",
+      title: "Making ghee (thumbnail)",
+      description: "A product video's thumbnail on Q-Shop",
+    });
+    const file = new File(["v"], "ghee.mp4", { type: "video/mp4" });
+    const ids = ["AbCdEf1234", "ThUmB12345"];
+    const built = buildVideoPublish({ name: "Seller Name", file, title: "Making ghee", thumbnail: "data:image/webp;base64,UklGRg==", uid: () => ids.shift()! });
+    expect(built.request).toMatchObject({ action: "PUBLISH_MULTIPLE_QDN_RESOURCES" });
+    expect((built.request.resources as { service: string; identifier: string }[]).map((r) => [r.service, r.identifier])).toEqual([
+      ["VIDEO", "q-store-video-AbCdEf1234"],
+      ["THUMBNAIL", "q-store-thumb-ThUmB12345"],
+    ]);
+    expect(built.embed).toEqual({
+      kind: "video",
+      name: "Seller Name",
+      identifier: "q-store-video-AbCdEf1234",
+      title: "Making ghee",
+      thumbnail: { name: "Seller Name", identifier: "q-store-thumb-ThUmB12345" },
+    });
   });
 });
 

@@ -5,13 +5,16 @@
  * plays in the browser's own player, in its own shape (Simon: "make sure
  * that the video plays in its format, not only horizontal"): once the video
  * says its size, the panel takes it, a tall one no higher than the screen
- * allows. Under it: its title, who published it, and Open in Q-Tube when it
+ * allows. Until then it shows the video's thumbnail when the seller gave it
+ * one (Simon, 2026-10-23), in the picture's own shape, read only once on
+ * screen. Under it: its title, who published it, and Open in Q-Tube when it
  * came from there.
  */
 import { useEffect, useRef, useState } from "react";
 import { Box, Button, CircularProgress, IconButton, Link, Typography } from "@mui/material";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { ResourceUnavailableError, resourceUrl, waitForResource } from "../qdn/resourceStatus";
+import { resourcePath } from "../qdn/search";
 import type { VideoEmbed } from "./embeds";
 
 type Phase = "idle" | "fetching" | "ready" | "failed";
@@ -22,6 +25,8 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
   const [problem, setProblem] = useState("");
   // The video's own width / height, once it is known; 16:9 until then.
   const [aspect, setAspect] = useState<number | null>(null);
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const thumb = embed.thumbnail && !thumbFailed ? resourcePath("THUMBNAIL", embed.thumbnail.name, embed.thumbnail.identifier) : null;
   const stop = useRef<AbortController | null>(null);
   useEffect(() => () => stop.current?.abort(), []);
   const title = embed.title || "Video";
@@ -93,13 +98,39 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
             </Button>
           </Box>
         ) : (
-          <IconButton
-            aria-label={`Play video: ${title}`}
-            onClick={play}
-            sx={{ width: 72, height: 72, bgcolor: "primary.main", color: "primary.contrastText", "&:hover": { bgcolor: "primary.dark" } }}
-          >
-            <PlayArrowRoundedIcon sx={{ fontSize: 44 }} />
-          </IconButton>
+          <>
+            {thumb && (
+              <Box
+                component="img"
+                src={thumb}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                onLoad={(event) => {
+                  // The panel takes the picture's shape until the video says its own.
+                  const { naturalWidth, naturalHeight } = event.currentTarget as HTMLImageElement;
+                  if (naturalWidth > 0 && naturalHeight > 0) setAspect((a) => a ?? naturalWidth / naturalHeight);
+                }}
+                onError={() => setThumbFailed(true)}
+                sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              />
+            )}
+            <IconButton
+              aria-label={`Play video: ${title}`}
+              onClick={play}
+              sx={{
+                position: "relative",
+                width: 72,
+                height: 72,
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+                boxShadow: 3,
+                "&:hover": { bgcolor: "primary.dark" },
+              }}
+            >
+              <PlayArrowRoundedIcon sx={{ fontSize: 44 }} />
+            </IconButton>
+          </>
         )}
       </Box>
       <Box component="figcaption" sx={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", columnGap: 1.5, rowGap: 0.25 }}>

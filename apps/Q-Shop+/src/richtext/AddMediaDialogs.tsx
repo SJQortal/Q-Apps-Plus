@@ -9,16 +9,24 @@
  *   `qortal://FILE/…` link adds one), or a PDF uploaded and published now to
  *   Q-Share, in Q-Share's own format (buildPdfSharePublish).
  *
+ * A video can have a thumbnail (Simon, 2026-10-23): a picture the seller
+ * picks, published as a THUMBNAIL of theirs (with an uploaded video, in the
+ * same publish), shown until the video plays. VideoThumbnailDialog adds or
+ * changes one for a video already in the description.
+ *
  * Publishing goes through Hub, which asks the seller to confirm and shows the
  * fee and progress (richtext/publishMedia.ts).
  */
 import { useId, useRef, useState, type ReactNode } from "react";
 import { Box, Button, CircularProgress, List, ListItemButton, ListItemText, Tab, Tabs, TextField, Typography } from "@mui/material";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
+import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
+import { compressImage } from "../components/common/ImageUploader";
+import { resourcePath } from "../qdn/search";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { searchQdn, type QdnResourceSummary } from "../qdn/search";
 import { parseQortalLink, resourceLink, type FileEmbed, type VideoEmbed } from "./embeds";
-import { MAX_PDF_BYTES, MAX_VIDEO_BYTES, buildPdfSharePublish, buildVideoPublish, filesFromQshare, videoFromQtube } from "./qortalSources";
+import { MAX_PDF_BYTES, MAX_VIDEO_BYTES, buildPdfSharePublish, buildThumbnailPublish, buildVideoPublish, filesFromQshare, videoFromQtube } from "./qortalSources";
 import { publishMedia } from "./publishMedia";
 import { formatBytes } from "./QortalFile";
 
@@ -53,6 +61,166 @@ function FilePick({ accept, label, file, onPick }: { accept: string; label: stri
 
 const FEE_NOTE = "Publishing goes through Hub, which asks you to confirm and shows the small QORT fee and its progress.";
 
+/** A thumbnail as wide as a phone screen shows it sharp, as WebP (a THUMBNAIL stays small). */
+export const THUMBNAIL_WIDTH = 960;
+
+/**
+ * A video's thumbnail: the picture picked (a WebP data URL), else the one it
+ * has (`current`, its THUMBNAIL), with Choose and Remove.
+ */
+function ThumbnailPick({
+  value,
+  current,
+  onChange,
+  disabled,
+}: {
+  value: string | null;
+  current?: string | null;
+  onChange: (dataUrl: string | null) => void;
+  disabled?: boolean;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const shown = value ?? current ?? null;
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    if (!file.type.startsWith("image/")) return setError("Pick a picture (JPEG, PNG or WebP).");
+    setBusy(true);
+    try {
+      onChange(await compressImage(file, THUMBNAIL_WIDTH));
+    } catch {
+      setError("That picture couldn't be read. Try another.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Box component="section" aria-label="Thumbnail" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+        Thumbnail{" "}
+        <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
+          (optional): shown until the video plays
+        </Box>
+      </Typography>
+      {shown && (
+        <Box component="img" src={shown} alt="The video's thumbnail" sx={{ maxWidth: 240, maxHeight: 180, borderRadius: 1, border: 1, borderColor: "divider", objectFit: "contain", alignSelf: "flex-start" }} />
+      )}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <input ref={input} type="file" accept="image/*" hidden onChange={(e) => void pick(e.target.files?.[0])} aria-hidden tabIndex={-1} />
+        <Button
+          variant="outlined"
+          color="inherit"
+          startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <AddPhotoAlternateOutlinedIcon />}
+          onClick={() => input.current?.click()}
+          disabled={disabled || busy}
+          sx={{ minHeight: 44 }}
+        >
+          {shown ? "Choose another picture" : "Add a thumbnail"}
+        </Button>
+        {shown && (
+          <Button color="inherit" onClick={() => onChange(null)} disabled={disabled || busy} sx={{ minHeight: 44 }}>
+            Remove
+          </Button>
+        )}
+      </Box>
+      {error && (
+        <Typography role="alert" variant="body2" color="error">
+          {error}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/** Publishes a picked thumbnail under `name`: the embed with it, null when declined, or a problem. */
+async function withPublishedThumbnail(embed: VideoEmbed, name: string, dataUrl: string): Promise<{ embed: VideoEmbed } | { declined: true } | { problem: string }> {
+  const built = buildThumbnailPublish({ name, dataUrl, title: embed.title });
+  const outcome = await publishMedia(built.resource, { service: "THUMBNAIL", name, identifier: built.identifier });
+  if (outcome.kind === "done") return { embed: { ...embed, thumbnail: built.thumbnail } };
+  if (outcome.kind === "declined") return { declined: true };
+  return { problem: outcome.message };
+}
+
+/** Adds, changes or removes the thumbnail of a video already in the description. */
+export function VideoThumbnailDialog({
+  embed,
+  name,
+  onClose,
+  onSave,
+}: {
+  embed: VideoEmbed;
+  /** The name the shop publishes under: the thumbnail is published by it. */
+  name: string | null | undefined;
+  onClose: () => void;
+  onSave: (embed: VideoEmbed) => void;
+}) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const [removed, setRemoved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const current = !removed && embed.thumbnail ? resourcePath("THUMBNAIL", embed.thumbnail.name, embed.thumbnail.identifier) : null;
+  const changed = picked !== null || removed;
+  const save = async () => {
+    setError(null);
+    if (picked) {
+      if (!name) return setError("Sign in with your shop's Qortal name to publish a thumbnail.");
+      setPublishing(true);
+      const result = await withPublishedThumbnail(embed, name, picked);
+      setPublishing(false);
+      if ("embed" in result) onSave(result.embed);
+      else if ("problem" in result) setError(result.problem);
+      return;
+    }
+    const rest = { ...embed };
+    delete rest.thumbnail;
+    onSave(rest);
+  };
+  return (
+    <ResponsiveDialog
+      open
+      onClose={publishing ? () => {} : onClose}
+      title="Video thumbnail"
+      maxWidth="sm"
+      busy={publishing}
+      actions={
+        <>
+          <Button color="inherit" onClick={onClose} disabled={publishing}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={() => void save()} disabled={!changed || publishing}>
+            {publishing ? "Publishing…" : picked ? "Publish and save" : "Save"}
+          </Button>
+        </>
+      }
+    >
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{embed.title || "Video"}</Typography>
+        <ThumbnailPick
+          value={picked}
+          current={current}
+          onChange={(dataUrl) => {
+            setPicked(dataUrl);
+            if (!dataUrl) setRemoved(true);
+          }}
+          disabled={publishing}
+        />
+        {picked && (
+          <Typography variant="body2" color="text.secondary">
+            The picture is published under {name ?? "your name"}. {FEE_NOTE}
+          </Typography>
+        )}
+        {error && (
+          <Typography role="alert" color="error">
+            {error}
+          </Typography>
+        )}
+      </Box>
+    </ResponsiveDialog>
+  );
+}
+
 export function AddVideoDialog({
   open,
   onClose,
@@ -80,6 +248,11 @@ export function AddVideoDialog({
   const [rows, setRows] = useState<QdnResourceSummary[] | null>(null);
   const [more, setMore] = useState(false);
   const [mineError, setMineError] = useState<string | null>(null);
+  const [picked, setPicked] = useState<VideoEmbed | null>(null);
+  // The thumbnail picked for it (any tab), and a publish of it in progress.
+  const [thumb, setThumb] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   // Upload
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState(productTitle);
@@ -127,13 +300,27 @@ export function AddVideoDialog({
     setUploadError(null);
     if (!file.type.startsWith("video/")) return setUploadError("Pick a video file.");
     if (file.size > MAX_VIDEO_BYTES) return setUploadError(`Use a video under ${formatBytes(MAX_VIDEO_BYTES)}.`);
-    const built = buildVideoPublish({ name, file, title, shopTitle });
+    const built = buildVideoPublish({ name, file, title, shopTitle, thumbnail: thumb });
     setPublishing(true);
     const outcome = await publishMedia(built.request, { service: "VIDEO", name, identifier: built.identifier });
     setPublishing(false);
     if (outcome.kind === "done") onAdd(built.embed);
     else if (outcome.kind === "failed") setUploadError(outcome.message);
   };
+
+  // A video from a link or the seller's list: its thumbnail, when picked, is published first.
+  const add = async (embed: VideoEmbed | null) => {
+    if (!embed) return;
+    setAddError(null);
+    if (!thumb) return onAdd(embed);
+    if (!name) return setAddError("Sign in with your shop's Qortal name to publish a thumbnail.");
+    setAdding(true);
+    const result = await withPublishedThumbnail(embed, name, thumb);
+    setAdding(false);
+    if ("embed" in result) onAdd(result.embed);
+    else if ("problem" in result) setAddError(result.problem);
+  };
+  const busy = publishing || adding;
 
   const tabs = [
     { key: "link" as const, label: "Link" },
@@ -144,18 +331,18 @@ export function AddVideoDialog({
   return (
     <ResponsiveDialog
       open={open}
-      onClose={publishing ? () => {} : onClose}
+      onClose={busy ? () => {} : onClose}
       title="Add a video"
       maxWidth="sm"
-      busy={publishing}
+      busy={busy}
       actions={
         <>
-          <Button color="inherit" onClick={onClose} disabled={publishing}>
+          <Button color="inherit" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          {tab === "link" && (
-            <Button variant="contained" disabled={!found} onClick={() => found && onAdd(found)}>
-              Add video
+          {(tab === "link" || tab === "mine") && (
+            <Button variant="contained" disabled={!(tab === "link" ? found : picked) || adding} onClick={() => void add(tab === "link" ? found : picked)}>
+              {adding ? "Publishing…" : thumb ? "Publish thumbnail and add" : "Add video"}
             </Button>
           )}
           {tab === "upload" && (
@@ -228,7 +415,9 @@ export function AddVideoDialog({
                 return (
                   <ListItemButton
                     key={row.identifier}
-                    onClick={() => onAdd({ kind: "video", name: row.name, identifier: row.identifier, title: label.slice(0, 180) })}
+                    selected={picked?.identifier === row.identifier}
+                    aria-pressed={picked?.identifier === row.identifier}
+                    onClick={() => setPicked({ kind: "video", name: row.name, identifier: row.identifier, title: label.slice(0, 180) })}
                     sx={{ minHeight: 56 }}
                   >
                     <ListItemText
@@ -271,6 +460,17 @@ export function AddVideoDialog({
           </Typography>
         )}
       </TabPanel>
+      {/* Once a video is chosen, in any tab: its thumbnail. */}
+      {(tab === "link" ? found : tab === "mine" ? picked : file) && (
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 2 }}>
+          <ThumbnailPick value={thumb} onChange={setThumb} disabled={busy} />
+          {addError && (
+            <Typography role="alert" color="error">
+              {addError}
+            </Typography>
+          )}
+        </Box>
+      )}
     </ResponsiveDialog>
   );
 }
