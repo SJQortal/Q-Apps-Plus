@@ -1131,8 +1131,8 @@ export default {
       }),
     },
     // Minter Admin polls (e2e/world.mjs addAdminPolls), encrypted to the Minter Admins: the
-    // section on Decisions (one poll read from a share, one closed), and one poll's own page
-    // with its comments open.
+    // open ones on Decisions (one read from a share), the closed ones in History (one closed
+    // two months ago), and one poll's own page with its comments open.
     // Ask the Minter Admins, a page as every + Propose choice is (Simon, 2026-10-18), with
     // answers of its own: one renamed, one recoloured, one added.
     {
@@ -1162,6 +1162,18 @@ export default {
         const section = page.getByRole('region', { name: /^Minter Admin polls · / });
         await section.getByRole('article').first().waitFor({ timeout: 8000 });
         // Landscape phones take the viewport: the section from its top.
+        await section.evaluate((s) => s.scrollIntoView({ block: 'start' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    {
+      key: 'history-polls',
+      path: '/history?as=admin',
+      overlay: true,
+      after: withPolls(async (page) => {
+        await settle(page);
+        const section = page.getByRole('region', { name: 'Minter Admin polls' });
+        await section.getByRole('article').nth(1).waitFor({ timeout: 8000 });
         await section.evaluate((s) => s.scrollIntoView({ block: 'start' }));
         await page.waitForTimeout(300);
       }),
