@@ -85,7 +85,7 @@ describe('loadAdminPolls: History’s closed polls, and an older poll’s page',
 
   it('every closed poll of all time, the latest end first, with its votes and comments', async () => {
     const { address } = setup();
-    const { data, views: list } = await read(address, { kind: 'closed', count: 10 });
+    const { data, views: list } = await read(address, { kind: 'closed', since: 0, count: 10 });
     // The one closed two months ago too, which Decisions never reads; no open ones.
     expect(list.map((v) => [v.id, v.open])).toEqual([
       [ADMIN_POLL_IDS.closed, false],
@@ -109,7 +109,7 @@ describe('loadAdminPolls: History’s closed polls, and an older poll’s page',
 
   it('reads the votes of the polls it shows only: the open ones’ wait for Decisions', async () => {
     const { address } = setup();
-    await read(address, { kind: 'closed', count: 10 });
+    await read(address, { kind: 'closed', since: 0, count: 10 });
     const bodies = fetchCallsFor('/arbitrary/DOCUMENT_PRIVATE/');
     expect(bodies.some((p) => p.includes(`qmp-adminvote-${ADMIN_POLL_IDS.closed}`))).toBe(true);
     expect(bodies.some((p) => p.includes(`qmp-adminvote-${ADMIN_POLL_IDS.archived}`))).toBe(true);
@@ -117,9 +117,19 @@ describe('loadAdminPolls: History’s closed polls, and an older poll’s page',
       expect(bodies.some((p) => p.includes(`qmp-adminvote-${open}`))).toBe(false);
   });
 
-  it('10 at a time: a page says when there are more', async () => {
+  it('only those that ended in the period History shows', async () => {
     const { address } = setup();
-    const first = await read(address, { kind: 'closed', count: 1 });
+    const { views: month } = await read(address, {
+      kind: 'closed',
+      since: Date.now() - 30 * DAY,
+      count: 10,
+    });
+    expect(month.map((v) => v.id)).toEqual([ADMIN_POLL_IDS.closed]);
+  });
+
+  it('a ceiling: says when more closed than it reads', async () => {
+    const { address } = setup();
+    const first = await read(address, { kind: 'closed', since: 0, count: 1 });
     expect(first.views.map((v) => v.id)).toEqual([ADMIN_POLL_IDS.closed]);
     expect(first.data.more).toBe(true);
   });

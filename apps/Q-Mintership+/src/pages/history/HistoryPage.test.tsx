@@ -454,69 +454,78 @@ describe('History page: the closed Minter Admin polls', () => {
     fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) =>
       /identifier=qmp-admin(poll|vote|comment|share)-/.test(p)
     );
+  const pollRow = (list: HTMLElement, question: string) =>
+    within(list)
+      .getByRole('link', { name: `Open the poll: ${question}` })
+      .closest('li') as HTMLElement;
 
-  // Simon, 2026-10-23: "the closed minter admin polls should go into history".
-  it('lists every closed poll for a Minter Admin, the latest end first, with its results', async () => {
+  // Simon, 2026-10-23: "i want minter admin polls to show in history like all the other polls".
+  it('a Minter Admin sees each poll that closed in the period among the events', async () => {
     await renderPage(<HistoryPage />, {
       persona: 'admin',
       path: '/history',
       setup: withAdminPolls('admin'),
     });
-    const section = await screen.findByRole('region', { name: 'Minter Admin polls' }, T);
-    await within(section).findByRole('article', { name: `Minter Admin poll: ${ARCHIVED_Q}` }, T);
+    const list = await eventsList();
+    const link = await within(list).findByRole('link', { name: `Open the poll: ${CLOSED_Q}` }, T);
+    expect(link).toHaveAttribute('href', '/decisions/polls/review03');
+    const row = pollRow(list, CLOSED_Q);
+    expect(within(row).getByText('Minter Admin poll')).toBeInTheDocument();
+    expect(within(row).getByText('Minter Admins only')).toBeInTheDocument();
+    expect(within(row).getByText(CLOSED_Q)).toBeInTheDocument();
+    expect(within(row).getByText(/^Closed \d+ \w+ 2026 · asked by/)).toHaveTextContent('Admin C');
     expect(
-      within(section)
-        .getAllByRole('article')
-        .map((a) => a.getAttribute('aria-label'))
-    ).toEqual([`Minter Admin poll: ${CLOSED_Q}`, `Minter Admin poll: ${ARCHIVED_Q}`]);
-    // Open polls stay on Decisions.
-    expect(within(section).queryByText(OPEN_Q)).toBeNull();
-    const closed = within(section).getByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` });
-    expect(within(closed).getByText('Closed')).toBeVisible();
-    expect(within(closed).getByText(/^Ended 4 days ago · /)).toBeVisible();
-    expect(within(closed).getByText('1 vote came after the end and doesn’t count.')).toBeVisible();
-    expect(within(closed).getByText('You voted Neutral')).toBeVisible();
-    expect(within(closed).queryByRole('button', { name: /^Vote / })).toBeNull();
-    // Closed two months ago: Decisions never read it.
-    const archived = within(section).getByRole('article', {
-      name: `Minter Admin poll: ${ARCHIVED_Q}`,
-    });
-    expect(within(archived).getByText('You voted Yes')).toBeVisible();
-    expect(within(archived).getByRole('button', { name: /^Comments \(1\)/ })).toBeVisible();
-    // Two, fewer than a page.
-    expect(within(section).queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
+      within(row).getByText('Yes 3 · No 1 · Neutral 1 · You voted Neutral')
+    ).toBeInTheDocument();
+    // Its month holds the events around it, newest first.
+    const rows = within(link.closest('ul') as HTMLElement).getAllByRole('listitem');
+    expect(rows.length).toBeGreaterThan(1);
+    // Open polls stay on Decisions; the one that closed two months ago is past 30 days.
+    expect(within(list).queryByText(OPEN_Q)).toBeNull();
+    expect(within(list).queryByText(ARCHIVED_Q)).toBeNull();
+    // Its type among the others.
+    expect(screen.getByRole('button', { name: 'Minter Admin polls' })).toBeInTheDocument();
     expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
-    await expectNoAxeViolations(section);
+    await expectNoAxeViolations(document.body);
   });
 
-  it('opened from Decisions’ Closed polls, it scrolls into view once its polls are in', async () => {
-    const scrolled: Element[] = [];
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this);
-    };
-    try {
-      await renderPage(<HistoryPage />, {
-        persona: 'admin',
-        path: '/history#history-admin-polls',
-        route: '/history',
-        setup: withAdminPolls('admin'),
-      });
-      const section = await screen.findByRole('region', { name: 'Minter Admin polls' }, T);
-      await within(section).findByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` }, T);
-      expect(scrolled.map((el) => el.id)).toContain('history-admin-polls');
-    } finally {
-      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-    }
+  it('Minter Admin polls alone, over all of it, as Decisions’ Closed polls opens it', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'admin',
+      path: '/history?type=polls&period=all',
+      setup: withAdminPolls('admin'),
+    });
+    const list = await screen.findByRole(
+      'group',
+      { name: 'MINTER events: Minter Admin polls, newest first' },
+      T
+    );
+    await within(list).findByRole('link', { name: `Open the poll: ${ARCHIVED_Q}` }, T);
+    expect(
+      within(list)
+        .getAllByRole('link')
+        .filter((a) => a.getAttribute('aria-label')?.startsWith('Open the poll'))
+        .map((a) => a.getAttribute('aria-label'))
+    ).toEqual([`Open the poll: ${CLOSED_Q}`, `Open the poll: ${ARCHIVED_Q}`]);
+    expect(within(list).queryByRole('link', { name: /^Open the decision/ })).toBeNull();
+    const archived = pollRow(list, ARCHIVED_Q);
+    expect(
+      within(archived).getByText('Yes 3 · No 1 · Neutral 0 · You voted Yes')
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^2 polls /)).toBeInTheDocument();
   });
 
-  it('a member sees no polls, and nothing of them is read or decrypted', async () => {
+  it('a member sees no polls and no such type, and nothing of them is read or decrypted', async () => {
     await renderPage(<HistoryPage />, {
       persona: 'learner',
-      path: '/history',
+      path: '/history?type=polls',
       setup: withAdminPolls('learner'),
     });
-    await eventsList();
-    expect(screen.queryByRole('region', { name: 'Minter Admin polls' })).toBeNull();
+    // A link to the polls opens on All for them.
+    const list = await eventsList();
+    expect(list).toHaveAccessibleName('MINTER events, newest first');
+    expect(screen.queryByRole('button', { name: 'Minter Admin polls' })).toBeNull();
+    expect(within(list).queryByText('Minter Admin poll')).toBeNull();
     expect(pollReads()).toEqual([]);
     expect(qortalCallsFor('DECRYPT_DATA')).toEqual([]);
   });

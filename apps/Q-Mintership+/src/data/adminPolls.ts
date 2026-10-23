@@ -73,25 +73,28 @@ import {
 export const ADMIN_POLL_PAGES = 3;
 /** The same over all time (History, an older poll's page): 1,000 rows per prefix. */
 export const ALL_TIME_POLL_PAGES = 10;
-/** History lists this many closed polls, and this many more per Show more. */
-export const POLL_HISTORY_PAGE = 10;
+/** History reads at most this many closed polls for its period (more is said, never silent). */
+export const HISTORY_POLL_CEILING = 100;
 
 /**
  * Which polls a read is for:
  * - `listed`: Decisions, Home and a poll's page: open, or ended in the last 31 days;
- * - `closed`: History: the `count` that ended most recently, of all time;
+ * - `closed`: History's timeline: those that ended since `since` (its period's
+ *   start), the latest first, at most `count`, searched over all time;
  * - `poll`: the page of a poll that is no longer listed: that one, of all time.
  * Only the polls kept have their votes and shares read and decrypted.
  */
 export type PollScope =
-  { kind: 'listed' } | { kind: 'closed'; count: number } | { kind: 'poll'; id: string };
+  | { kind: 'listed' }
+  | { kind: 'closed'; since: number; count: number }
+  | { kind: 'poll'; id: string };
 
 const LISTED: PollScope = { kind: 'listed' };
 
 /** The read store's key for a scope (data/adminPollKeys.ts). */
 export function pollScopeKey(viewer: string, scope: PollScope): string {
   return scope.kind === 'closed'
-    ? closedPollsKey(viewer, scope.count)
+    ? closedPollsKey(viewer, scope.since, scope.count)
     : scope.kind === 'poll'
       ? onePollKey(viewer, scope.id)
       : adminPollsKey(viewer);
@@ -337,7 +340,7 @@ export function loadAdminPolls(
         scope.kind === 'listed'
           ? isPollShown(poll, now)
           : scope.kind === 'closed'
-            ? !isPollOpen(poll, now)
+            ? !isPollOpen(poll, now) && poll.endsAt >= scope.since
             : true;
       const maybeShown = (src: PollSources) => {
         const direct = resolvePoll({ ...src, shares: [] }, ctx);
@@ -345,7 +348,7 @@ export function loadAdminPolls(
         return fromAdmin(src.shares.map((s) => s.row)).length > 0;
       };
       let wanted = candidates.filter(maybeShown);
-      // History: the `count` that ended last. One readable only through a share has no end
+      // History: the `count` that ended last in its period. One readable only through a share has no end
       // until its share is read: those few are read too, and the page is cut once they are.
       let more = false;
       if (scope.kind === 'closed') {

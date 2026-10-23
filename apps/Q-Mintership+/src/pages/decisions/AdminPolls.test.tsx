@@ -117,7 +117,7 @@ describe('Decisions → Minter Admin polls', () => {
     expect(within(section).queryByText(CLOSED_Q)).toBeNull();
     expect(within(section).getByRole('link', { name: 'Closed polls' })).toHaveAttribute(
       'href',
-      '/history#history-admin-polls'
+      '/history?type=polls&period=all'
     );
   });
 

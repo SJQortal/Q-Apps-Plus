@@ -1,7 +1,7 @@
 /**
  * Decisions → "Minter Admin polls", for Minter Admins only (loaded on demand,
  * so nobody else downloads or reads any of it): the open polls, the soonest
- * end first. Once closed, a poll is in History (pages/history/AdminPollHistory.tsx).
+ * end first. Once closed, a poll is in History's timeline (pages/history/parts/ClosedPolls.tsx).
  * Each card votes, shares and comments through its own Hub step. Advisory
  * only. "Hide already voted on" (the Decisions switch) leaves out the polls
  * the viewer voted on, with a note to show them.
@@ -34,7 +34,6 @@ import {
   type ShownPoll,
 } from './adminPollUi';
 import { useAdminPolls } from './useAdminPolls';
-import { HISTORY_POLLS_ID } from '../history/historyIds';
 import { PATHS } from '../../routes/paths';
 
 export const ADMIN_POLLS_SECTION_ID = 'admin-polls';
@@ -159,7 +158,7 @@ export default function AdminPollsSection({
           </Typography>
           <Button
             component={RouterLink}
-            to={`${PATHS.history}#${HISTORY_POLLS_ID}`}
+            to={`${PATHS.history}?type=polls&period=all`}
             startIcon={<HistoryOutlinedIcon />}
             sx={{ minHeight: 44 }}
           >
