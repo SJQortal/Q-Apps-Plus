@@ -174,9 +174,12 @@ function publishOrderRequest(pending: PendingOrder, delivery: DeliveryInput) {
     buyerName: pending.buyer.name,
     delivery,
     created: pending.created,
+    payment: pending.payment,
+    orderUid: pending.orderUid,
   });
   const mail = buildOrderMail({
     shortStoreId: pending.store.shortStoreId,
+    storeTitle: pending.store.title,
     buyerName: pending.buyer.name,
     sellerName: pending.store.owner,
     htmlContent: html,

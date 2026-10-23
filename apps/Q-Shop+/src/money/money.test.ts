@@ -179,6 +179,7 @@ describe("order building", () => {
     });
     expect(html).not.toContain("<script>");
     expect(html).not.toContain("<b>Shop</b>");
-    expect(html).toContain("Customer Name: &lt;script&gt;");
+    expect(html).toContain("&lt;script&gt;<br>");
+    expect(html).toContain("New order · &lt;b&gt;Shop&lt;/b&gt;");
   });
 });

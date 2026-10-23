@@ -9,8 +9,9 @@
  * or the seller is HTML-escaped in the mail.
  */
 import { orderIdentifier, orderMailIdentifier } from "../qdn/identifiers";
+import { APP_NAME } from "../constants/plus";
 import { jsonToBase64 } from "../qdn/payloads";
-import { amountText, unitPrice, type PricedProduct } from "./pricing";
+import { amountText, formatPrice, unitPrice, type PricedProduct } from "./pricing";
 
 export interface CartLine {
   productId: string;
@@ -197,195 +198,121 @@ export function formatLlll(timestamp: number): string {
   return `${DAYS[d.getDay()]}, ${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} ${h12}:${mm} ${h < 12 ? "AM" : "PM"}`;
 }
 
-const QORT_SVG = `<svg
-                          fill={"#000000"}
-                          version="1.0"
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="22"
-                          height="22"
-                          viewBox="0 0 695.000000 754.000000"
-                          preserveAspectRatio="xMidYMid meet"
-                        >
-                          <g
-                            transform="translate(0.000000,754.000000) scale(0.100000,-0.100000)"
-                            stroke="none"
-                          >
-                            <path
-                              d="M3035 7289 c-374 -216 -536 -309 -1090 -629 -409 -236 -1129 -652
-                -1280 -739 -82 -48 -228 -132 -322 -186 l-173 -100 0 -1882 0 -1883 38 -24
-                c20 -13 228 -134 462 -269 389 -223 1779 -1026 2335 -1347 127 -73 268 -155
-                314 -182 56 -32 95 -48 118 -48 33 0 207 97 991 552 l102 60 0 779 c0 428 -2
-                779 -4 779 -3 0 -247 -140 -543 -311 -296 -170 -544 -308 -553 -306 -8 2 -188
-                104 -400 226 -212 123 -636 368 -942 544 l-558 322 0 1105 c0 1042 1 1106 18
-                1116 9 6 107 63 217 126 110 64 421 243 690 398 270 156 601 347 736 425 l247
-                142 363 -210 c200 -115 551 -317 779 -449 228 -132 495 -286 594 -341 l178
-                -102 -6 -1889 -6 -1888 23 14 c12 8 318 185 680 393 l657 379 0 1887 0 1886
-                -77 46 c-43 25 -458 264 -923 532 -465 268 -1047 605 -1295 748 -646 373 -965
-                557 -968 557 -1 0 -182 -104 -402 -231z"
-                            />
-                            <path
-                              d="M3010 4769 c-228 -133 -471 -274 -540 -313 l-125 -72 0 -633 0 -632
-                295 -171 c162 -94 407 -235 544 -315 137 -79 255 -142 261 -139 6 2 200 113
-                431 247 230 133 471 272 534 308 l115 66 2 635 3 635 -536 309 c-294 169 -543
-                310 -552 312 -9 2 -204 -105 -432 -237z"
-                            />
-                          </g>
-                        </svg>`;
+// The mail's look (Simon, 2026-10-23: "nicer, more easy to read, professional"):
+// left-aligned, one column, no fonts or colours of its own (Q-Mail shows it in
+// its theme's font and colours, and removes colours and backgrounds anyway),
+// grey hairlines that read in light and dark.
+const RULE = "1px solid rgba(128, 128, 128, 0.35)";
+const KICKER = "margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.7;";
+const TITLE = "margin: 4px 0 2px; font-size: 22px; font-weight: 700; line-height: 1.3;";
+const SECTION = "margin: 24px 0 8px; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.75;";
+const P = "margin: 0 0 4px;";
+const TH = `padding: 8px 10px 8px 0; border-bottom: ${RULE}; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.75;`;
+const TD = `padding: 10px 10px 10px 0; border-bottom: ${RULE}; vertical-align: top;`;
+const NUM = "text-align: right; white-space: nowrap;";
 
-const ARRR_SVG = `<svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          xmlnsXlink="http://www.w3.org/1999/xlink"
-                          version="1.1"
-                          id="Layer_1"
-                          x="0px"
-                          y="0px"
-                          viewBox="0 0 2000 2000"
-                          width="22"
-                          height="22"
-                          xmlSpace="preserve"
-                        >
-                          <linearGradient
-                            id="SVGID_1_"
-                            gradientUnits="userSpaceOnUse"
-                            x1="0"
-                            y1="-2"
-                            x2="2000"
-                            y2="-2"
-                            gradientTransform="matrix(1 0 0 1 0 1002)"
-                          >
-                            <stop offset="0"></stop>
-                            <stop offset="1"></stop>
-                          </linearGradient>
-                          <path
-                            fill="#000000"
-                            d="M1000,0C447.6,0,0,447.6,0,1000s447.6,1000,1000,1000s1000-447.6,1000-1000S1552.4,0,1000,0z M548.6,741.5  c0-123.6,100.2-223.1,224.6-223.1h512.4c58.6,0,114.9,23,156.7,64.1l-262.2,131.9h-361c-40.7,0-73.1,29.4-73.1,64.8v160.5  l-196.7,102.5V741.5L548.6,741.5z M1507.9,1075.4c0,123.6-100.2,223.1-223.1,223.1H745.3v190.7c0,32.4-24.1,58.8-52.8,65.6  l-67.1,1.5h-76.9v-331.6l257-134.1h431.8c40.7,0,74.6-29.4,74.6-65.6V828.9l195.9-98.7L1507.9,1075.4L1507.9,1075.4z"
-                          ></path>
-                        </svg>`;
-
-/** The coin's mark in the mail: the original's QORT or ARRR SVG, nothing for other coins. */
-function coinMark(currency: string): string {
-  if (currency === "QORT") return QORT_SVG;
-  if (currency === "ARRR") return ARRR_SVG;
-  return "";
+function amount(value: number | string, unit: string): string {
+  return `${formatPrice(typeof value === "string" ? Number(value) : value)} ${unit}`;
 }
 
-const LINE = `font-family: Karla; font-size: 21px; font-weight: 300; letter-spacing: 0; text-align: center;`;
-const CARD = `display: flex; flex-direction: column; align-items: center; padding: 20px 40px; gap: 10px; background-color: white; border-radius: 5px; color: black;`;
-const HEAD = `font-family: Merriweather Sans, sans-serif; font-size: 20px; letter-spacing: 0; text-align: center;`;
-
 /**
- * The order summary mail's HTML, in the original's layout. `currencyLabel`
- * is what follows each amount (the ticker, or an asset's name).
+ * The seller's order mail: who ordered, when, the items with their prices
+ * and the total paid, how it was paid, where to deliver it, and what to do
+ * next. Typed text (titles, the address, the note) is HTML-escaped.
  */
 export function buildOrderMailHtml(args: {
   details: OrderDetails;
   storeTitle: string | undefined;
   currency: string;
+  /** What follows each amount (the ticker, or an asset's name). */
   currencyLabel: string;
   isDigital: boolean;
   buyerName: string;
   delivery: DeliveryInput;
   created: number;
+  /** The payment as recorded in the order (its transaction), when known. */
+  payment?: PaymentRecord | null;
+  /** The order's own id (its uid), for reference. */
+  orderUid?: string;
 }): string {
-  const { details, storeTitle, currency, currencyLabel, isDigital, buyerName, delivery, created } = args;
-  const mark = coinMark(currency);
+  const { details, storeTitle, currencyLabel, isDigital, buyerName, delivery, created, payment, orderUid } = args;
   const unit = escapeHtml(currencyLabel);
-  const lines = orderLines(details)
+  const shop = escapeHtml(storeTitle || "your shop");
+  const lines = orderLines(details);
+  const items = lines.reduce((sum, [, line]) => sum + (Number(line.quantity) || 0), 0);
+  const rows = lines
     .map(([, line]) => {
-      return `
-                <div style="${CARD}">
-                <div style="${LINE}">Shop: ${escapeHtml(storeTitle)}</div>
-                  <div style="display: flex; flex-direction: row; align-items: center; gap: 10px;">
-                    <div style="${LINE}">Product: ${escapeHtml(line.product?.title)}</div>
-                    <div style="${LINE}">x ${line.quantity}</div>
-                  </div>
-                  <div style="display: flex; flex-direction: row; align-items: center;">
-                    <div style="display: flex; align-items: center; ${LINE.replace(" text-align: center;", "")} text-align: center; gap: 7px">
-                    Price:
-                    <div style="display: flex; align-items: center; gap: 2px;">
-                    ${mark} ${line.pricePerUnit} ${unit}
-                </div>
-                  </div>
-                    </div>
-                  <div style="display: flex; flex-direction: row; align-items: center;">
-                    <div style="display: flex; align-items: center; ${LINE.replace(" text-align: center;", "")} text-align: center; gap: 7px">
-                    Total Price:
-                    <div style="display: flex; align-items: center; gap: 2px;">
-                    ${mark}
-                    ${line.totalProductPrice} ${unit}
-                  </div>
-                </div>
-              </div>
-            </div>
-              `;
+      const won = line.product?.auctionWin ? `<div style="font-size: 13px; opacity: 0.75;">Won at auction</div>` : "";
+      return `<tr>
+          <td style="${TD}"><strong>${escapeHtml(line.product?.title || "Item")}</strong>${won}</td>
+          <td style="${TD} ${NUM}">${escapeHtml(line.quantity)}</td>
+          <td style="${TD} ${NUM}">${amount(line.pricePerUnit, unit)}</td>
+          <td style="${TD} ${NUM}">${amount(line.totalProductPrice, unit)}</td>
+        </tr>`;
     })
     .join("");
-  const place =
-    delivery.country === US
-      ? `<div style="${LINE}">
-                State: ${escapeHtml(delivery.state)}
-              </div>`
-      : `<div style="${LINE}">
-                Region: ${escapeHtml(delivery.region)}
-              </div>`;
-  const deliveryBlock = !isDigital
-    ? `
-        <div>
-          <div style="${HEAD}">
-            Delivery Information
-          </div>
-          <div style="${CARD}">
-            <div style="${LINE}">
-              Qortal Username: ${escapeHtml(buyerName)}
-            </div>
-            <div style="${LINE}">
-              Customer Name: ${escapeHtml(delivery.customerName)}
-            </div>
-            <div style="${LINE}">
-              Street Address: ${escapeHtml(delivery.streetAddress)}
-            </div>
-            <div style="${LINE}">
-              City: ${escapeHtml(delivery.city)}
-            </div>
-            ${place}
-            <div style="${LINE}">
-              Country: ${escapeHtml(delivery.country)}
-            </div>
-            <div style="${LINE}">
-              Zip Code: ${escapeHtml(delivery.zipCode)}
-            </div>
-            <div style="${LINE}">
-              Delivery Note: ${escapeHtml(delivery.deliveryNote)}
-            </div>
-          </div>
-        </div>
-        `
-    : `<div></div>`;
-  return `
-      <div style="display: flex; flex-direction: column; align-items: center; padding: 10px; gap: 10px;">
-        <div style="${HEAD}">
-          You have sold a product for your shop!
-        </div>
-        <div>
-          ${lines}
-        </div>
-        ${deliveryBlock}
-        <div>
-          <div style="${HEAD}">
-            Date of purchase
-          </div>
-          <div style="${CARD}">
-            <div style="font-family: Karla; font-size: 18px; font-weight: 300; letter-spacing: 0; text-align: center;">
-              Date: ${formatLlll(created)}
-            </div>
-          </div>
-        </div>
-      </div>
-      `;
+  const total = String(details.totalPrice ?? "");
+  const code = (text: string) => `<span style="font-family: monospace; font-size: 13px; word-break: break-all;">${escapeHtml(text)}</span>`;
+  const paymentLines: string[] = [`Paid: <strong>${amount(payment?.total ?? total, unit)}</strong>`];
+  if (payment?.transactionSignature) paymentLines.push(`Transaction: ${code(payment.transactionSignature)}`);
+  if (payment?.foreignTxid) paymentLines.push(`Transaction: ${code(payment.foreignTxid)}`);
+  const paidTo = payment?.arrrAddressUsed || payment?.foreignAddressUsed;
+  if (paidTo) paymentLines.push(`To your address: ${code(paidTo)}`);
+  const place = delivery.country === US ? delivery.state : delivery.region;
+  const address = [
+    delivery.customerName,
+    delivery.streetAddress,
+    [delivery.city, [place, delivery.zipCode].filter(Boolean).join(" ")].filter(Boolean).join(", "),
+    delivery.country,
+  ]
+    .filter((line) => line && line.trim())
+    .map((line) => escapeHtml(line))
+    .join("<br>");
+  const deliveryBlock = isDigital
+    ? `<p style="${P}">Digital order: nothing to ship.</p>`
+    : `<p style="${P} line-height: 1.6;">${address}</p>${
+        delivery.deliveryNote.trim() ? `<p style="margin: 8px 0 4px;"><strong>Note from the buyer:</strong> ${escapeHtml(delivery.deliveryNote)}</p>` : ""
+      }`;
+  return `<div style="max-width: 640px; text-align: left; font-size: 15px; line-height: 1.55;">
+    <p style="${KICKER}">New order · ${shop}</p>
+    <h2 style="${TITLE}">${escapeHtml(buyerName)} ordered ${items === 1 ? "1 item" : `${items} items`}</h2>
+    <p style="${P} opacity: 0.8;">${escapeHtml(formatLlll(created))}${orderUid ? ` · Order ${escapeHtml(orderUid)}` : ""}</p>
+
+    <table style="width: 100%; margin-top: 20px; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th style="${TH} text-align: left;">Item</th>
+          <th style="${TH} ${NUM}">Qty</th>
+          <th style="${TH} ${NUM}">Price</th>
+          <th style="${TH} ${NUM}">Total</th>
+        </tr>
+      </thead>
+      <tbody>${rows}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3" style="padding: 12px 10px 0 0;"><strong>Total</strong></td>
+          <td style="padding: 12px 10px 0 0; ${NUM}"><strong>${amount(total, unit)}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <h3 style="${SECTION}">Payment</h3>
+    ${paymentLines.map((line) => `<p style="${P}">${line}</p>`).join("\n    ")}
+
+    <h3 style="${SECTION}">${isDigital ? "Delivery" : "Ship to"}</h3>
+    ${deliveryBlock}
+    <p style="${P}">Qortal name: <strong>${escapeHtml(buyerName)}</strong></p>
+
+    <p style="margin: 28px 0 0; padding-top: 12px; border-top: ${RULE}; font-size: 13px; opacity: 0.75;">
+      Sent by ${escapeHtml(APP_NAME)} when the order was placed. The order is in your shop's Orders, where you can update its status for the buyer; reply to this message to write to them.
+    </p>
+  </div>`;
 }
 
 export function buildOrderMail(args: {
   shortStoreId: string;
+  storeTitle?: string;
   buyerName: string;
   sellerName: string;
   htmlContent: string;
@@ -393,7 +320,8 @@ export function buildOrderMail(args: {
 }) {
   return {
     title: `Order for shop ${args.shortStoreId} from ${args.buyerName}`,
-    subject: "New order",
+    // What Q-Mail lists: which shop and who (it was "New order" for every one).
+    subject: `New order${args.storeTitle ? ` at ${args.storeTitle}` : ""} from ${args.buyerName}`.slice(0, 120),
     createdAt: args.createdAt,
     version: 1,
     attachments: [],

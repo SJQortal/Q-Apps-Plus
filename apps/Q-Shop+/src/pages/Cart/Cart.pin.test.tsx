@@ -185,7 +185,8 @@ describe("checkout (pinned)", () => {
     const mail = decodeData64(mailRes.data64);
     expect(mail).toMatchObject({
       title: `Order for shop ${SHORT_STORE_ID} from ${BUYER}`,
-      subject: "New order",
+      // Q-Shop+ (Simon, 2026-10-23): the subject names the shop and the buyer; the original's was "New order".
+      subject: `New order at ${STORE_TITLE} from ${BUYER}`,
       createdAt: NOW,
       version: 1,
       attachments: [],
@@ -193,14 +194,17 @@ describe("checkout (pinned)", () => {
       generalData: { thread: [] },
       recipient: SELLER,
     });
-    expect(mail.htmlContent).toContain("You have sold a product for your shop!");
-    // Typed text is HTML-escaped in the mail since night 1 (a fix: the original
-    // wrote it raw); it reads the same in Q-Mail.
-    expect(mail.htmlContent).toContain("Shop: Seller&#39;s Shop");
-    expect(mail.htmlContent).toContain("Product: Mug");
-    expect(mail.htmlContent).toContain("x 2");
-    // Digital orders carry no delivery block.
-    expect(mail.htmlContent).not.toContain("Delivery Information");
+    // Q-Shop+'s mail (Simon, 2026-10-23: "nicer, more easy to read, professional"): who, when, the items
+    // with prices and the total, the payment, and the delivery. Typed text is HTML-escaped (night 1).
+    expect(mail.htmlContent).toContain("New order · Seller&#39;s Shop");
+    expect(mail.htmlContent).toContain(`${BUYER} ordered 3 items`);
+    expect(mail.htmlContent).toContain("Order ORDERxxxx1");
+    expect(mail.htmlContent).toMatch(/<strong>Mug<\/strong><\/td>\s*<td[^>]*>2<\/td>\s*<td[^>]*>1\.50 QORT<\/td>\s*<td[^>]*>3\.00 QORT<\/td>/);
+    expect(mail.htmlContent).toContain("<strong>3.10 QORT</strong>");
+    expect(mail.htmlContent).toContain("PAYMENTSIG");
+    // Digital orders carry no address.
+    expect(mail.htmlContent).toContain("Digital order: nothing to ship.");
+    expect(mail.htmlContent).not.toContain("Ship to");
 
     // Success empties this store's cart.
     await waitFor(() => expect(store.getState().cart.carts[STORE_ID]).toBeUndefined());
@@ -291,9 +295,10 @@ describe("checkout (pinned)", () => {
       },
     });
     const html = decodeData64(mailRes.data64).htmlContent;
-    expect(html).toContain("Delivery Information");
-    expect(html).toContain(`Qortal Username: ${BUYER}`);
-    expect(html).toContain("State: Oregon");
+    expect(html).toContain("Ship to");
+    expect(html).toContain(`Qortal name: <strong>${BUYER}</strong>`);
+    expect(html).toContain("Ann Buyer<br>1 Main St<br>Springfield, Oregon 97001<br>United States");
+    expect(html).toContain("<strong>Note from the buyer:</strong> Leave at the door");
   });
 
   it("stops a physical order to a US state the shop doesn't ship to, and lets one it does through", async () => {
