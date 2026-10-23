@@ -41,6 +41,7 @@ import { resetPublishedIndexes } from "./productIndex";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
 import { SHOP_CATEGORIES } from "../constants/categories";
 import { categoryInput, categoryOptions, pickCategory } from "../test/categories";
+import { selectField, selectValue } from "../test/select";
 
 vi.mock("../components/common/ImageUploader", () => ({
   default: ({ label, onPick }: { label: string; onPick: (img: string) => void }) => (
@@ -763,3 +764,52 @@ describe("publishing", () => {
     expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(1);
   });
 });
+
+describe("sorting the products by their columns", () => {
+  beforeEach(() => installVisibleIntersectionObserver());
+
+  const names = (list: HTMLElement) =>
+    within(list)
+      .getAllByRole("listitem")
+      .map((li) => within(li).queryByText(/^(Mug|Poster|Chair)$/)?.textContent);
+
+  it("sorts by a column's name, and the other way with a second click; the Sort menu follows", async () => {
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    // Added in this order: the chair, the poster, the mug.
+    const dated = (id: string, created: number) => ({ ...(dataContainer.products as Record<string, object>)[id], created });
+    store.dispatch(setDataContainer({ ...dataContainer, products: { [mug.id]: dated(mug.id, 3000), [poster.id]: dated(poster.id, 2000), [chair.id]: dated(chair.id, 1000) } }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    await waitFor(() => expect(names(list)).toEqual(["Mug", "Poster", "Chair"]));
+    const columns = screen.getByRole("group", { name: "Sort by column" });
+    // No shop order yet: no column for it.
+    expect(within(columns).queryByRole("button", { name: /shop order/i })).toBeNull();
+    fireEvent.click(within(columns).getByRole("button", { name: "Sort by price, low to high" }));
+    expect(names(list)).toEqual(["Poster", "Mug", "Chair"]);
+    expect(selectValue(selectField("Sort"))).toBe("price-asc");
+    fireEvent.click(within(columns).getByRole("button", { name: "Price, low to high: sort high to low" }));
+    expect(names(list)).toEqual(["Chair", "Mug", "Poster"]);
+    fireEvent.click(within(columns).getByRole("button", { name: "Sort by product, A to Z" }));
+    await waitFor(() => expect(names(list)).toEqual(["Chair", "Mug", "Poster"]));
+    fireEvent.click(within(columns).getByRole("button", { name: "Product, A to Z: sort Z to A" }));
+    expect(names(list)).toEqual(["Poster", "Mug", "Chair"]);
+    fireEvent.click(within(columns).getByRole("button", { name: "Sort by added, newest first" }));
+    expect(names(list)).toEqual(["Mug", "Poster", "Chair"]);
+    fireEvent.click(within(columns).getByRole("button", { name: "Added, newest first: sort oldest first" }));
+    expect(names(list)).toEqual(["Chair", "Poster", "Mug"]);
+    expect(selectValue(selectField("Sort"))).toBe("oldest");
+  });
+
+  it("shows each product's place in the shop order, and sorts by it either way", async () => {
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer({ ...dataContainer, productOrder: [chair.id, mug.id] }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    // The shop order is the list's sort now: the chair, the mug, then the rest newest first.
+    await waitFor(() => expect(names(list)).toEqual(["Chair", "Mug", "Poster"]));
+    expect(within(list).getAllByText(/in shop order/).map((el) => el.parentElement?.textContent)).toEqual(["1 in shop order", "2 in shop order", "3 in shop order"]);
+    const columns = screen.getByRole("group", { name: "Sort by column" });
+    fireEvent.click(within(columns).getByRole("button", { name: "Shop order, first to last: sort last to first" }));
+    expect(names(list)).toEqual(["Poster", "Mug", "Chair"]);
+    expect(selectValue(selectField("Sort"))).toBe("featured-desc");
+  });
+});
+

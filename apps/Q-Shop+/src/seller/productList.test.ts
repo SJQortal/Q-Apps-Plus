@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_FILTERS, filterSellerProducts, isFiltered, needsDetails, statusCounts, type SellerRow } from "./productList";
+import { DEFAULT_FILTERS, filterSellerProducts, isFiltered, needsDetails, shopOrderPlaces, sortColumnOf, sortForColumn, statusCounts, type SellerRow } from "./productList";
 
 const rows: SellerRow[] = [
   { productId: "p-mug", created: 3, priceQort: 1.5, category: "Kitchen", catalogueId: "c1", status: "AVAILABLE" },
@@ -31,6 +31,28 @@ describe("the seller's product list", () => {
     // Filters still apply; with no order it is newest first.
     expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "featured", category: "Art" }, detailsOf, ["p-poster", "p-odd"]))).toEqual(["p-poster", "p-odd"]);
     expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "featured" }, detailsOf))).toEqual(["p-odd", "p-mug", "p-chair", "p-poster"]);
+  });
+
+  it("sorts by status and title either way, and each column's second click is its other way", () => {
+    // Available (newest first), out of stock, retired; and back.
+    expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "status" }, detailsOf))).toEqual(["p-odd", "p-mug", "p-poster", "p-chair"]);
+    expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "status-desc" }, detailsOf))).toEqual(["p-chair", "p-poster", "p-odd", "p-mug"]);
+    // Z to A, a product without a title still last.
+    expect(ids(filterSellerProducts(rows, { ...DEFAULT_FILTERS, sort: "title-desc" }, detailsOf))).toEqual(["p-poster", "p-mug", "p-chair", "p-odd"]);
+    expect(sortForColumn("price", "newest")).toBe("price-asc");
+    expect(sortForColumn("price", "price-asc")).toBe("price-desc");
+    expect(sortForColumn("price", "price-desc")).toBe("price-asc");
+    expect(sortForColumn("added", "title")).toBe("newest");
+    expect(sortColumnOf("oldest")).toEqual({ column: "added", way: "second" });
+    expect(sortColumnOf("featured")).toEqual({ column: "order", way: "first" });
+  });
+
+  it("numbers the listed products in the shop's order, the rest newest first after it, retired ones left out", () => {
+    expect([...shopOrderPlaces(rows, ["p-poster", "p-chair"])]).toEqual([
+      ["p-poster", 1],
+      ["p-odd", 2],
+      ["p-mug", 3],
+    ]);
   });
 
   it("sorts newest first by default, and by price either way", () => {

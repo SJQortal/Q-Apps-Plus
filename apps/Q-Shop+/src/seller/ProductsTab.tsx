@@ -57,17 +57,24 @@ import { CategoryIcon } from "../components/CategoryIcon";
 import { STATUS_LABEL, productForEdit, productFromIndexRow } from "./productDraft";
 import {
   DEFAULT_FILTERS,
+  SORT_COLUMNS,
   SORT_LABEL,
   filterSellerProducts,
   isFiltered,
   needsDetails,
+  shopOrderPlaces,
+  sortColumnOf,
+  sortForColumn,
   statusCounts,
   statusOf,
   type SellerFilters,
   type SellerRow,
   type SellerSort,
+  type SortColumn,
   type StatusFilter,
 } from "./productList";
+import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
 import { ArrangeShop } from "./ArrangeShop";
 import { productOrderOf } from "../qdn/productOrder";
@@ -150,6 +157,13 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
 
   const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId);
   const filtered = filterSellerProducts(rows, view, detailsOf, order);
+  // With an order, each product's place in it is a column of its own.
+  const places = useMemo(() => (order.length > 0 ? shopOrderPlaces(rows, order) : null), [rows, order]);
+  const columns = rowColumns(!!places);
+  const sortBy = (next: SellerSort) => {
+    setChosenSort(next);
+    setShown(PRODUCTS_PAGE);
+  };
   const counts = useMemo(() => statusCounts(rows), [rows]);
   const visible = filtered.slice(0, shown);
   const sortedCategories = useMemo(() => [...categories].sort((a, b) => a.localeCompare(b)), [categories]);
@@ -261,15 +275,12 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
       select
       label="Sort"
       value={sort}
-      onChange={(e) => {
-        setChosenSort(e.target.value as SellerSort);
-        setShown(PRODUCTS_PAGE);
-      }}
+      onChange={(e) => sortBy(e.target.value as SellerSort)}
       slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 190 }}
       fullWidth={phone}
     >
-      {(Object.keys(SORT_LABEL) as SellerSort[]).filter((s) => s !== "featured" || order.length > 0).map((s) => (
+      {(Object.keys(SORT_LABEL) as SellerSort[]).filter((s) => !s.startsWith("featured") || order.length > 0).map((s) => (
         <MenuItem key={s} value={s}>
           {SORT_LABEL[s]}
         </MenuItem>
@@ -455,23 +466,24 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
             />
           ) : (
             <>
+              {/* The columns sort the list: a click sorts by one, a second the other way. */}
               <Box
-                aria-hidden
+                role="group"
+                aria-label="Sort by column"
                 sx={{
                   display: { xs: "none", md: "grid" },
-                  gridTemplateColumns: ROW_COLUMNS_MD,
+                  gridTemplateColumns: columns,
+                  alignItems: "center",
                   gap: 2,
                   px: 1.5,
-                  color: "text.secondary",
-                  fontSize: 13,
-                  fontWeight: 600,
                 }}
               >
+                {places && <SortHeader column="order" sort={sort} onSort={sortBy} />}
                 <span />
-                <span>Product</span>
-                <span>Price</span>
-                <span>Status</span>
-                <span>Added</span>
+                <SortHeader column="title" sort={sort} onSort={sortBy} />
+                <SortHeader column="price" sort={sort} onSort={sortBy} />
+                <SortHeader column="status" sort={sort} onSort={sortBy} />
+                <SortHeader column="added" sort={sort} onSort={sortBy} />
                 <span />
               </Box>
               <Box component="ul" aria-label="Products" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1 }}>
@@ -479,6 +491,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                   <ProductRow
                     key={row.productId}
                     row={row}
+                    place={places ? (places.get(row.productId) ?? null) : undefined}
                     details={detailsOf(row)}
                     load={loadOf(row.catalogueId)}
                     edited={!!productsToSave[row.productId]}
@@ -524,10 +537,65 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   );
 }
 
-const ROW_COLUMNS_MD = "56px minmax(0, 1fr) 150px 130px 120px 24px";
+/** The list's columns on wider screens: the shop order (when there is one), the picture, product, price, status, added. */
+function rowColumns(withOrder: boolean): string {
+  return `${withOrder ? "96px " : ""}56px minmax(0, 1fr) 150px 130px 120px 24px`;
+}
+
+/** Up for the sorts that go from small to large (A–Z, low to high, first to last, oldest first). */
+const SORT_UP: ReadonlySet<SellerSort> = new Set(["featured", "title", "price-asc", "status", "oldest"]);
+
+/** How each sort reads after the column's name: "Price, low to high". */
+const SORT_WAY: Record<SellerSort, string> = {
+  featured: "first to last",
+  "featured-desc": "last to first",
+  newest: "newest first",
+  oldest: "oldest first",
+  "price-asc": "low to high",
+  "price-desc": "high to low",
+  title: "A to Z",
+  "title-desc": "Z to A",
+  status: "available first",
+  "status-desc": "retired first",
+};
+
+function SortHeader({ column, sort, onSort }: { column: SortColumn; sort: SellerSort; onSort: (sort: SellerSort) => void }) {
+  const { label } = SORT_COLUMNS[column];
+  const on = sortColumnOf(sort)?.column === column;
+  const next = sortForColumn(column, sort);
+  const Arrow = SORT_UP.has(on ? sort : next) ? ArrowUpwardIcon : ArrowDownwardIcon;
+  return (
+    <ButtonBase
+      onClick={() => onSort(next)}
+      aria-label={on ? `${label}, ${SORT_WAY[sort]}: sort ${SORT_WAY[next]}` : `Sort by ${label.toLowerCase()}, ${SORT_WAY[next]}`}
+      sx={{
+        justifySelf: "start",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 0.5,
+        minHeight: 36,
+        px: 0.5,
+        mx: -0.5,
+        borderRadius: 1,
+        fontSize: 13,
+        fontWeight: on ? 700 : 600,
+        color: on ? "text.primary" : "text.secondary",
+        whiteSpace: "nowrap",
+        "& .qp-sort-arrow": { opacity: on ? 1 : 0, transition: "opacity 150ms ease" },
+        "&:hover": { color: "text.primary", "& .qp-sort-arrow": { opacity: on ? 1 : 0.5 } },
+        "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main" },
+      }}
+    >
+      {label}
+      <Arrow className="qp-sort-arrow" sx={{ fontSize: 16 }} aria-hidden />
+    </ButtonBase>
+  );
+}
 
 interface ProductRowProps {
   row: SellerRow;
+  /** Its place in the shop's order (null: not listed there, retired); undefined: no order column. */
+  place?: number | null;
   details: Record<string, any> | undefined;
   load: CatalogueLoad;
   edited: boolean;
@@ -545,6 +613,7 @@ interface ProductRowProps {
 
 const ProductRow = memo(function ProductRow({
   row,
+  place,
   details,
   load,
   edited,
@@ -585,7 +654,7 @@ const ProductRow = memo(function ProductRow({
           flex: 1,
           minWidth: 0,
           display: "grid",
-          gridTemplateColumns: { xs: "56px minmax(0, 1fr) 24px", md: ROW_COLUMNS_MD },
+          gridTemplateColumns: { xs: "56px minmax(0, 1fr) 24px", md: rowColumns(place !== undefined) },
           alignItems: "center",
           gap: { xs: 1.5, md: 2 },
           p: 1.5,
@@ -608,6 +677,11 @@ const ProductRow = memo(function ProductRow({
         <Box component="span" sx={visuallyHiddenSx}>
           {selecting ? "Select" : "Edit"}
         </Box>
+        {place !== undefined && (
+          <Typography component="span" sx={{ display: { xs: "none", md: "block" }, fontWeight: 700, color: place ? "text.primary" : "text.secondary" }}>
+            {place ? <>{place}<Box component="span" sx={visuallyHiddenSx}> in shop order</Box></> : "–"}
+          </Typography>
+        )}
         <Box
           sx={{
             width: 56,
