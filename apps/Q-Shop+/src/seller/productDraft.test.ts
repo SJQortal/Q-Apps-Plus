@@ -371,8 +371,41 @@ describe("an auction (auctions/rules.ts)", () => {
     const edited = editedProductDraft({ base: product, values: { ...form, description: "<p>Sold</p>" }, coins, name: SELLER, now }) as Record<string, unknown>;
     expect(edited.auction).toEqual(terms);
     expect(edited.description).toBe("Sold");
-    // Changing them means a new run, which must end in the future.
-    expect(auctionFromForm({ ...form.auction!, startingBid: "4" }, now, terms)).toEqual({ problem: "The end must be in the future" });
+    // Changing them means a new run, from a new start.
+    expect(auctionFromForm({ ...form.auction!, startingBid: "4" }, now, terms)).toMatchObject({ problem: expect.stringMatching(/run it again/) });
+  });
+
+  it("keeps saved times to the millisecond when the form leaves them as shown (it shows minutes)", () => {
+    // Started on publish: the saved start has seconds and milliseconds.
+    const terms = { v: 1 as const, start: now + 12_345, end: now + 7 * 24 * HOUR, startingBid: 3, extendMinutes: 5 };
+    const form = formValuesFor({ ...mug, status: "OUT_OF_STOCK", auction: terms }, coins).auction!;
+    expect(auctionFromForm(form, now + HOUR, terms)).toEqual({ terms });
+    // Ended: an edit that leaves the terms alone still saves (a typo in the description, say).
+    expect(auctionFromForm(form, now + 8 * 24 * HOUR, terms)).toEqual({ terms });
+  });
+
+  it("once bidding has started, lets only the end move, to later; once ended, runs again only from a new start", () => {
+    const terms = { v: 1 as const, start: now - HOUR, end: now + 24 * HOUR, startingBid: 3, extendMinutes: 5 };
+    const form = formValuesFor({ ...mug, status: "OUT_OF_STOCK", auction: terms }, coins).auction!;
+    expect(auctionFromForm({ ...form, startingBid: "1" }, now, terms)).toEqual({ problem: "Bidding has started: only the end can change now, to later" });
+    expect(auctionFromForm({ ...form, start: "" }, now, terms)).toMatchObject({ problem: expect.stringMatching(/only the end/) });
+    expect(auctionFromForm({ ...form, end: toLocalInput(now + 2 * HOUR) }, now, terms)).toEqual({ problem: "Bidding has started: the end can only move later" });
+    expect(auctionFromForm({ ...form, end: toLocalInput(now + 48 * HOUR) }, now, terms)).toEqual({ terms: { ...terms, end: now + 48 * HOUR } });
+    // Ended: a later end alone would reopen it with its old bids.
+    const after = now + 25 * HOUR;
+    expect(auctionFromForm({ ...form, end: toLocalInput(after + 24 * HOUR) }, after, terms)).toMatchObject({ problem: expect.stringMatching(/run it again/) });
+    expect(auctionFromForm({ ...form, start: "", end: toLocalInput(after + 24 * HOUR) }, after, terms)).toEqual({
+      terms: { ...terms, start: after, end: after + 24 * HOUR },
+    });
+  });
+
+  it("can be retired, and stays out of stock for the original app otherwise", () => {
+    const product = { ...mug, status: "OUT_OF_STOCK", auction: { v: 1, start: now - 9 * HOUR, end: now - HOUR, startingBid: 3, extendMinutes: 5 } };
+    const form = formValuesFor(product, coins);
+    const retired = editedProductDraft({ base: product, values: { ...form, status: "RETIRED" }, coins, name: SELLER, now }) as Record<string, unknown>;
+    expect(retired.status).toBe("RETIRED");
+    const listed = editedProductDraft({ base: product, values: { ...form, status: "AVAILABLE" }, coins, name: SELLER, now }) as Record<string, unknown>;
+    expect(listed.status).toBe("OUT_OF_STOCK");
   });
 
   it("back at a fixed price loses its terms and sells at the typed price", () => {

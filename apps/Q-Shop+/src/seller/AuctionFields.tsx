@@ -3,9 +3,11 @@
  * starts and ends (quick picks for the end), an optional reserve and buy-now
  * price, and how much a late bid extends it. All in QORT.
  */
-import { Box, Button, InputAdornment, MenuItem, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, InputAdornment, MenuItem, TextField, Typography } from "@mui/material";
 import { CoinIcon } from "../components/money/CoinIcon";
 import { selectMenuProps } from "../components/common/menuStyle";
+import { useNow } from "../hooks/useNow";
+import type { AuctionTerms } from "../auctions/rules";
 import { sanitizeAmountInput, toLocalInput, type AuctionFormValues } from "./productDraft";
 
 const DURATIONS = [1, 3, 7, 14];
@@ -28,24 +30,44 @@ const qortSlot = {
   },
 };
 
-/** The end `days` after the start (or now, when it starts on publishing), to the hour. */
+/** The end `days` after the start, or after now once that has passed (or it starts on publishing), to the hour. */
 function endAfter(startText: string, days: number): string {
-  const from = startText.trim() ? new Date(startText).getTime() : Date.now();
-  const base = Number.isFinite(from) ? from : Date.now();
+  const typed = startText.trim() ? new Date(startText).getTime() : NaN;
+  const base = Number.isFinite(typed) ? Math.max(typed, Date.now()) : Date.now();
   return toLocalInput(Math.ceil((base + days * 86_400_000) / 3_600_000) * 3_600_000);
 }
 
-export function AuctionFields({ value, onChange }: { value: AuctionFormValues; onChange: (next: AuctionFormValues) => void }) {
+export function AuctionFields({
+  value,
+  onChange,
+  saved = null,
+}: {
+  value: AuctionFormValues;
+  onChange: (next: AuctionFormValues) => void;
+  /** The auction as published, when editing one: once bidding starts its terms are the bidders' (productDraft.ts auctionFromForm). */
+  saved?: AuctionTerms | null;
+}) {
+  const now = useNow(30_000);
+  const running = !!saved && now >= saved.start && now < saved.end;
+  const ended = !!saved && now >= saved.end;
   const set = <K extends keyof AuctionFormValues>(key: K, next: AuctionFormValues[K]) => onChange({ ...value, [key]: next });
   const endIn = (days: number) => set("end", endAfter(value.start, days));
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      {running && <Alert severity="info">Bidding has started, so its terms stay as bidders saw them: only the end can move, to later.</Alert>}
+      {ended && (
+        <Alert severity="info">
+          This auction has ended. Leave its terms as they are to keep its result, or run it again: clear Starts (or set a new start) and set a new end; earlier
+          bids then no longer count.
+        </Alert>
+      )}
       <TextField
         label="Starting bid"
         value={value.startingBid}
         onChange={(e) => set("startingBid", sanitizeAmountInput(e.target.value))}
         required
         fullWidth
+        disabled={running}
         helperText="The lowest first bid. Each bid after it must beat the last by a small step."
         slotProps={qortSlot}
       />
@@ -56,6 +78,7 @@ export function AuctionFields({ value, onChange }: { value: AuctionFormValues; o
           value={value.start}
           onChange={(e) => set("start", e.target.value)}
           fullWidth
+          disabled={running}
           helperText="Empty: as soon as you publish it."
           slotProps={{ inputLabel: { shrink: true } }}
         />
@@ -85,6 +108,7 @@ export function AuctionFields({ value, onChange }: { value: AuctionFormValues; o
           value={value.reserve}
           onChange={(e) => set("reserve", sanitizeAmountInput(e.target.value))}
           fullWidth
+          disabled={running}
           helperText="Optional. The least you sell for; bidders only see whether it's reached."
           slotProps={qortSlot}
         />
@@ -93,6 +117,7 @@ export function AuctionFields({ value, onChange }: { value: AuctionFormValues; o
           value={value.buyNow}
           onChange={(e) => set("buyNow", sanitizeAmountInput(e.target.value))}
           fullWidth
+          disabled={running}
           helperText="Optional. A bid of this much wins at once."
           slotProps={qortSlot}
         />
@@ -103,6 +128,7 @@ export function AuctionFields({ value, onChange }: { value: AuctionFormValues; o
         value={value.extendMinutes}
         onChange={(e) => set("extendMinutes", e.target.value)}
         fullWidth
+        disabled={running}
         helperText="A bid in the last minutes moves the end, so no one wins by bidding at the last second."
         slotProps={{ select: { MenuProps: selectMenuProps } }}
       >

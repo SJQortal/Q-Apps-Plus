@@ -305,8 +305,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               ))}
             </Box>
           )}
-          {/* An auction is stored out of stock for the original app; its panel says where it stands. */}
-          {!auctionTerms && stockLine(product.status)}
+          {/* An auction is stored out of stock for the original app; its panel says where it stands (a retired one says so). */}
+          {(!auctionTerms || product.status === RETIRED) && stockLine(product.status)}
           {/* Where the shop ships, for something it ships (constants/shipping.ts). */}
           {product.type !== "digital" && typeof shop?.shipsTo === "string" && shop.shipsTo && (
             <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>

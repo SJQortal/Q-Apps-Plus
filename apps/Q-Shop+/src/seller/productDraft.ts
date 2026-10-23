@@ -119,14 +119,22 @@ function sameTerms(a: AuctionTerms, b: AuctionTerms): boolean {
 }
 
 /**
- * The auction's terms from the form, or what is wrong with them. Terms left
- * as they were saved pass as they are (an auction that has ended can still
- * have its description edited); changed ones must end in the future.
+ * The auction's terms from the form, or what is wrong with them, by where a
+ * saved auction stands:
+ *
+ * - Terms left as they were saved pass as they are (an auction that has
+ *   ended can still have its description edited). The form shows times to
+ *   the minute, so a time left as shown keeps its saved value.
+ * - Before it starts, anything can change.
+ * - Once bidding has started, the terms are the bidders': only a later end.
+ * - Once it has ended, it can run again: from a new start (empty: now), so
+ *   the earlier bids no longer count.
  */
 export function auctionFromForm(form: AuctionFormValues, now: number, saved?: AuctionTerms | null): { terms: AuctionTerms } | { problem: string } {
   const startingBid = parseAmount(form.startingBid);
-  const start = form.start.trim() ? fromLocalInput(form.start) : now;
-  const end = fromLocalInput(form.end);
+  const keep = (text: string, savedAt: number | undefined) => (savedAt !== undefined && text === toLocalInput(savedAt) ? savedAt : fromLocalInput(text));
+  const start = form.start.trim() ? keep(form.start, saved?.start) : now;
+  const end = keep(form.end, saved?.end);
   const reserve = form.reserve.trim() ? parseAmount(form.reserve) : undefined;
   const buyNow = form.buyNow.trim() ? parseAmount(form.buyNow) : undefined;
   const extend = Number(form.extendMinutes);
@@ -144,6 +152,13 @@ export function auctionFromForm(form: AuctionFormValues, now: number, saved?: Au
     extendMinutes: Number.isFinite(extend) ? Math.max(0, Math.min(60, Math.floor(extend))) : DEFAULT_EXTEND_MINUTES,
   };
   if (saved && sameTerms(terms, saved)) return { terms: saved };
+  if (saved && now >= saved.start && now < saved.end) {
+    if (!sameTerms({ ...terms, end: saved.end }, saved)) return { problem: "Bidding has started: only the end can change now, to later" };
+    if (terms.end < saved.end) return { problem: "Bidding has started: the end can only move later" };
+  }
+  if (saved && now >= saved.end && terms.start < saved.end) {
+    return { problem: "This auction has ended. To run it again, clear Starts (or set a new start) and set a new end" };
+  }
   const problem = auctionTermsProblem(terms, now);
   return problem ? { problem } : { terms };
 }
@@ -165,7 +180,9 @@ function withSale<T extends Record<string, unknown>>(draft: T, values: ProductFo
   if ("problem" in result) throw new Error(result.problem);
   const rest = { ...draft } as Record<string, unknown>;
   delete rest.fiatPrice;
-  return { ...rest, price: [{ currency: "qort", value: result.terms.startingBid }], status: "OUT_OF_STOCK", auction: result.terms } as unknown as T;
+  // Out of stock for the original app, unless the seller retires it (once it has sold, say).
+  const status = values.status === "RETIRED" ? "RETIRED" : "OUT_OF_STOCK";
+  return { ...rest, price: [{ currency: "qort", value: result.terms.startingBid }], status, auction: result.terms } as unknown as T;
 }
 
 /** The shop's pricing in a currency, as the product form uses it. */

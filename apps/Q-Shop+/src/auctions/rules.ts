@@ -96,11 +96,14 @@ export function minimumBid(terms: Pick<AuctionTerms, "startingBid">, high: numbe
 
 const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
 
+/** Times past this (the year 2100) aren't an auction's: dates can't even show them past 8.64e15. */
+export const MAX_TIME = 4_102_444_800_000;
+
 /** A product's auction terms, when it has usable ones (anyone can publish a product). */
 export function auctionTermsOf(product: unknown): AuctionTerms | null {
   const raw = (product as { auction?: unknown } | null)?.auction as Partial<AuctionTerms> | undefined;
   if (!raw || typeof raw !== "object") return null;
-  if (!positive(raw.start) || !positive(raw.end) || raw.end <= raw.start || !positive(raw.startingBid)) return null;
+  if (!positive(raw.start) || !positive(raw.end) || raw.end <= raw.start || raw.end > MAX_TIME || !positive(raw.startingBid)) return null;
   const extend = typeof raw.extendMinutes === "number" && Number.isFinite(raw.extendMinutes) ? Math.max(0, Math.min(60, Math.floor(raw.extendMinutes))) : DEFAULT_EXTEND_MINUTES;
   return {
     v: 1,

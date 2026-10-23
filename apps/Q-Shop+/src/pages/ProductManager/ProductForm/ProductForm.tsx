@@ -50,6 +50,7 @@ import {
   type ProductFormValues,
 } from "../../../seller/productDraft";
 import { AuctionFields } from "../../../seller/AuctionFields";
+import { auctionTermsOf } from "../../../auctions/rules";
 
 interface ProductFormProps {
   values: ProductFormValues;
@@ -317,6 +318,24 @@ export const ProductForm = ({
             </Button>
           </Box>
         )}
+        {editing && values.sale === "auction" && (
+          <Box>
+            <Typography id="product-listing-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              In the shop
+            </Typography>
+            {/* An auction is stored out of stock for the original app; it can still be retired (once it has sold, say). */}
+            <ToggleButtonGroup
+              exclusive
+              value={values.status === "RETIRED" ? "RETIRED" : "OUT_OF_STOCK"}
+              onChange={(_, value) => value && set("status", value)}
+              aria-labelledby="product-listing-label"
+              sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
+            >
+              <ToggleButton value="OUT_OF_STOCK">Listed</ToggleButton>
+              <ToggleButton value="RETIRED">Retired</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
         {editing && values.sale !== "auction" && (
           <Box>
             <Typography id="product-status-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
@@ -369,7 +388,7 @@ export const ProductForm = ({
           </ToggleButtonGroup>
         </Box>
         {values.sale === "auction" && values.auction && (
-          <AuctionFields value={values.auction} onChange={(auction) => onChange((prev) => ({ ...prev, auction }))} />
+          <AuctionFields value={values.auction} onChange={(auction) => onChange((prev) => ({ ...prev, auction }))} saved={auctionTermsOf(saved)} />
         )}
         {values.sale !== "auction" && pricing && (
           <TextField
