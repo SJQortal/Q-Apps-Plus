@@ -225,7 +225,7 @@ describe("shop page", { timeout: 20_000 }, () => {
     renderShop(makeWorld(), SHOP_PATH, { name: "Seller Name" });
     await waitFor(() => expect(screen.getAllByRole("button", { name: "Your product" })).toHaveLength(12));
     screen.getAllByRole("button", { name: "Your product" }).forEach((b) => expect(b).toBeDisabled());
-    expect(screen.getByRole("button", { name: /Seller page/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Manage Shop" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Message seller/ })).toBeNull();
   });
 

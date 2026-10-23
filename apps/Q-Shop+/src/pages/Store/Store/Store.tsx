@@ -284,8 +284,8 @@ function ShopProducts({
       <EmptyState
         icon={<StorefrontOutlinedIcon />}
         title="Your shop has no product list yet"
-        description="The seller page can create it, then you can add products."
-        actionLabel="Open seller page"
+        description="Manage Shop can create it, then you can add products."
+        actionLabel="Open Manage Shop"
         onAction={onSellerPage}
       />
     ) : (
@@ -315,7 +315,7 @@ function ShopProducts({
       <EmptyState
         icon={<StorefrontOutlinedIcon />}
         title="No products yet"
-        description="Add your first product on the seller page."
+        description="Add your first product in Manage Shop."
         actionLabel="Add products"
         onAction={onSellerPage}
       />

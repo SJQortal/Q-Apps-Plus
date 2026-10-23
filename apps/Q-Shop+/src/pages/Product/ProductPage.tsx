@@ -24,6 +24,7 @@ import AddShoppingCartOutlinedIcon from "@mui/icons-material/AddShoppingCartOutl
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
 import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
 import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
 import { setProductToCart, MAX_QUANTITY } from "../../state/features/cartSlice";
@@ -320,8 +321,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             <Alert
               severity="info"
               action={
-                <Button color="inherit" onClick={() => navigate(`/product-manager/${encodeURIComponent(storeId)}`)} sx={{ minHeight: 44 }}>
-                  Seller page
+                <Button color="inherit" startIcon={<SellOutlinedIcon />} onClick={() => navigate(`/product-manager/${encodeURIComponent(storeId)}`)} sx={{ minHeight: 44 }}>
+                  Manage Shop
                 </Button>
               }
             >

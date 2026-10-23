@@ -1,13 +1,14 @@
 /**
  * The top of a shop page: logo, owner, rating and how many orders it has
  * received (pages/Store/orderCount.ts), where it is and ships to, the coins it takes, and what you can do (message the seller, share, see
- * the details; the owner also edits the shop or opens the seller page).
+ * the details; the owner also edits the shop or opens Manage Shop).
  */
 import { Box, Button, Rating, Skeleton, Typography } from "@mui/material";
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
@@ -242,8 +243,9 @@ export function ShopHeader({
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2, "& > *": { flex: { xs: "1 1 auto", sm: "0 0 auto" } } }}>
         {isOwner ? (
           <>
-            <Button variant="contained" startIcon={<StorefrontOutlinedIcon />} onClick={onSellerPage} sx={{ minHeight: 44 }}>
-              Seller page
+            {/* Named and drawn as the header's Manage Shop, where it leads (Simon, 2026-10-23). */}
+            <Button variant="contained" startIcon={<SellOutlinedIcon />} onClick={onSellerPage} sx={{ minHeight: 44 }}>
+              Manage Shop
             </Button>
             <Button
               variant="outlined"
