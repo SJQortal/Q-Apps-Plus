@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Box, Button, IconButton, LinearProgress, Rating, Skeleton, Typography } from "@mui/material";
+import { visuallyHiddenSx } from "../a11y";
 import CloseIcon from "@mui/icons-material/Close";
 import RateReviewOutlinedIcon from "@mui/icons-material/RateReviewOutlined";
 import { useSelector } from "react-redux";
@@ -262,7 +263,13 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
         <Summary summary={summary} fallback={averageStoreRating} />
       )}
       {writeArea}
-      <Box component="section" aria-label="Reviews" sx={{ borderTop: 1, borderColor: "divider" }}>
+      <Box component="section" aria-label="Reviews" sx={{ position: "relative", borderTop: 1, borderColor: "divider" }}>
+        {/* The reviews' titles are h3: without the header above (the seller's Reviews tab), a heading of the list's own comes first. */}
+        {!onClose && (
+          <Typography component="h2" sx={visuallyHiddenSx}>
+            Reviews
+          </Typography>
+        )}
         {list}
       </Box>
       {writing && (
