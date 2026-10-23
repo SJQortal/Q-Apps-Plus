@@ -22,6 +22,10 @@
  */
 import { jsonToBase64, type CatalogueDoc, type DataContainerDoc, type PublishResource } from "../qdn/payloads";
 import { dataContainerIdentifier } from "../qdn/identifiers";
+import { type FiatPricing, type FiatRates } from "./fiatRates";
+
+// The shop's pricing and its rates, kept light for the header (money/fiatRates.ts).
+export { RATE_DECIMALS, fiatPricingOf, isValidTicker, rateToText, type FiatPricing, type FiatRates } from "./fiatRates";
 
 /**
  * The currencies offered, USD first (PLN and ISK: Simon, 2026-10-22). The
@@ -57,11 +61,6 @@ export function normalizeTicker(text: string): string {
   return text.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
 }
 
-/** A currency the app can price in: 2 to 10 letters or digits, not the coins it works out (QORT, ARRR). */
-export function isValidTicker(ticker: string): boolean {
-  return /^[A-Z0-9]{2,10}$/.test(ticker) && ticker !== "QORT" && ticker !== "ARRR";
-}
-
 /** Decimals a price in the currency takes: 2 for the offered currencies, 8 for a ticker of the seller's own (0.00012 BTC). */
 export function priceDecimals(currency: string): number {
   return isListedCurrency(currency) ? 2 : 8;
@@ -73,19 +72,6 @@ export function fiatToText(value: number, currency: string): string {
   return value.toFixed(8).replace(/0+$/, "").replace(/\.$/, "");
 }
 
-export interface FiatRates {
-  /** One QORT in the currency. */
-  QORT: number;
-  /** One ARRR in the currency; none: buyers paying in ARRR pay the QORT price at the node's rate. */
-  ARRR?: number;
-}
-
-export interface FiatPricing {
-  currency: string;
-  rates: FiatRates;
-  updated: number;
-}
-
 export interface FiatPrice {
   currency: string;
   value: number;
@@ -94,19 +80,6 @@ export interface FiatPrice {
 }
 
 const positive = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value > 0;
-const isCurrency = (value: unknown): value is string => typeof value === "string" && isValidTicker(value);
-
-/** The shop's pricing as its product index holds it, or null (none, stopped, or malformed). */
-export function fiatPricingOf(index: object | null | undefined): FiatPricing | null {
-  const raw = (index as { fiatPricing?: unknown } | null | undefined)?.fiatPricing;
-  if (!raw || typeof raw !== "object") return null;
-  const { currency, rates, updated } = raw as { currency?: unknown; rates?: unknown; updated?: unknown };
-  if (!isCurrency(currency) || !rates || typeof rates !== "object") return null;
-  const { QORT, ARRR } = rates as { QORT?: unknown; ARRR?: unknown };
-  if (!positive(QORT)) return null;
-  return { currency, rates: { QORT, ...(positive(ARRR) && { ARRR }) }, updated: positive(updated) ? updated : 0 };
-}
-
 /** The QORT price on a product (`{currency: "qort"}`), or undefined. */
 export function qortPriceOf(product: { price?: unknown } | null | undefined): number | undefined {
   const list = Array.isArray(product?.price) ? (product.price as { currency?: unknown; value?: unknown }[]) : [];
@@ -171,9 +144,6 @@ export function sanitizeFiatInput(text: string, decimals = 2): string {
   return `${cleaned.slice(0, dot)}.${cleaned.slice(dot + 1).replace(/\./g, "").slice(0, decimals)}`;
 }
 
-/** Rates are typed with up to 8 decimals (one QORT may be worth less than a cent). */
-export const RATE_DECIMALS = 8;
-
 /** "$12.50", "€3.00", "¥1,200" (the browser's own currency names; nothing is fetched); "0.00012 XAU" for a ticker of the seller's own. */
 export function formatFiat(value: number, currency: string): string {
   if (!isListedCurrency(currency)) return `${fiatToText(value, currency)} ${currency}`;
@@ -182,12 +152,6 @@ export function formatFiat(value: number, currency: string): string {
   } catch {
     return `${value.toFixed(2)} ${currency}`;
   }
-}
-
-/** A rate as typed: "0.18", never an exponent. */
-export function rateToText(rate: number | undefined): string {
-  if (!positive(rate)) return "";
-  return rate.toFixed(RATE_DECIMALS).replace(/0+$/, "").replace(/\.$/, "");
 }
 
 /**
