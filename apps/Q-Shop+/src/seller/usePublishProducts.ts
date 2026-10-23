@@ -39,6 +39,7 @@ import {
 } from "../qdn/payloads";
 import { invalidateQdnJson, invalidateQdnSearches, isDeletedBody } from "../qdn/search";
 import { primePicturesDocs, splitProductPictures, withPicturesLanded } from "../qdn/productPictures";
+import { withAuctionRows } from "../auctions/catalog";
 import { errorMessage } from "../qdn/hubErrors";
 import { draftsOfShop } from "./shopDrafts";
 import { indexKey, notePublishedIndex } from "./productIndex";
@@ -122,7 +123,7 @@ export function usePublishProducts() {
       const base = seen;
       // Pictures 4–10 go first, in documents of their own; the catalogues keep 3.
       const pictures = splitProductPictures(name, productsToSave as unknown as Record<string, ProductDraft>);
-      const built = await buildProductPublish({
+      const original = await buildProductPublish({
         name,
         shortStoreId: shortStoreIdOf(storeId),
         dataContainer: base,
@@ -160,6 +161,8 @@ export function usePublishProducts() {
         },
         newUid: () => uid(),
       });
+      // Auction rows say when they run, and keep their product's status (auctions/catalog.ts).
+      const built = withAuctionRows(original, pictures.drafts);
       const labels: Record<string, string> = { ...pictures.labels };
       built.catalogues.forEach((cat, i) => {
         const n = Object.keys(cat.products ?? {}).length;

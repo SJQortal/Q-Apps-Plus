@@ -21,6 +21,7 @@ import { FormError } from "../../../seller/FormError";
 import { listedCategory, oldCategoryOf } from "../../../constants/categories";
 import { fiatPricingOf } from "../../../money/fiatPricing";
 import { needsMorePictures } from "../../../qdn/productPictures";
+import { auctionTermsOf } from "../../../auctions/rules";
 import { useMorePictures } from "../../../hooks/useMorePictures";
 import {
   editedProductDraft,
@@ -109,12 +110,13 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     if (!currentStore?.id || !dataContainer || dataContainer.storeId !== currentStore.id) {
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
-    const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly });
+    const now = Date.now();
+    const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product) });
     if (invalid) return setError(invalid);
     const trimmed = { ...values, title: values.title.trim(), category: values.category.trim() };
     const draft = product
-      ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing, picturesKept: picturesPending })
-      : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now: Date.now(), pricing });
+      ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing, picturesKept: picturesPending, now })
+      : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now, pricing });
     dispatch(setProductsToSave(draft));
     onClose();
   };

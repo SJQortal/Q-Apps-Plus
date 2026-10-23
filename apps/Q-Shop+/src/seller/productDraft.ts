@@ -15,6 +15,7 @@ import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { MAX_PRODUCT_PICTURES, withPicturesRef } from "../qdn/productPictures";
 import { MAX_DESCRIPTION_HTML, descriptionHtmlOf, htmlToPlainText, isPlainHtml } from "../richtext/plainText";
 import { normalizeQuillHtml } from "../richtext/quillHtml";
+import { DEFAULT_EXTEND_MINUTES, auctionTermsOf, auctionTermsProblem, roundQort, type AuctionTerms } from "../auctions/rules";
 import { isListedCategory } from "../constants/categories";
 import { fiatPriceOf, fiatToText, parseFiat, priceDecimals, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
 
@@ -56,6 +57,114 @@ export interface ProductFormValues {
    * shop prices in one; then QORT and ARRR follow from it. "" when not.
    */
   fiat?: string;
+  /** How it sells: at its price (the default), or to the highest bidder (auctions/rules.ts). */
+  sale?: "fixed" | "auction";
+  /** The auction's terms as typed, when it sells by auction. */
+  auction?: AuctionFormValues;
+}
+
+/** An auction's terms as the form holds them (times as `datetime-local` text, in the seller's time). */
+export interface AuctionFormValues {
+  startingBid: string;
+  /** "" starts it when the product is saved. */
+  start: string;
+  end: string;
+  reserve: string;
+  buyNow: string;
+  /** Minutes a late bid moves the end; "0" turns it off. */
+  extendMinutes: string;
+}
+
+const pad = (n: number) => String(n).padStart(2, "0");
+
+/** A time as `datetime-local` text, in this device's time zone. */
+export function toLocalInput(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** `datetime-local` text as a time (NaN when it isn't one). */
+export function fromLocalInput(text: string): number {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text) ? new Date(text).getTime() : NaN;
+}
+
+/** A new auction: it starts when saved and runs seven days, to the hour; late bids add five minutes. */
+export function defaultAuctionValues(now: number): AuctionFormValues {
+  const end = Math.ceil((now + 7 * 86_400_000) / 3_600_000) * 3_600_000;
+  return { startingBid: "", start: "", end: toLocalInput(end), reserve: "", buyNow: "", extendMinutes: String(DEFAULT_EXTEND_MINUTES) };
+}
+
+function auctionFormOf(terms: AuctionTerms): AuctionFormValues {
+  const text = (v: number | undefined) => (v === undefined ? "" : String(v));
+  return {
+    startingBid: String(terms.startingBid),
+    start: toLocalInput(terms.start),
+    end: toLocalInput(terms.end),
+    reserve: text(terms.reserve),
+    buyNow: text(terms.buyNow),
+    extendMinutes: String(terms.extendMinutes),
+  };
+}
+
+function sameTerms(a: AuctionTerms, b: AuctionTerms): boolean {
+  return (
+    a.start === b.start &&
+    a.end === b.end &&
+    a.startingBid === b.startingBid &&
+    a.reserve === b.reserve &&
+    a.buyNow === b.buyNow &&
+    a.extendMinutes === b.extendMinutes
+  );
+}
+
+/**
+ * The auction's terms from the form, or what is wrong with them. Terms left
+ * as they were saved pass as they are (an auction that has ended can still
+ * have its description edited); changed ones must end in the future.
+ */
+export function auctionFromForm(form: AuctionFormValues, now: number, saved?: AuctionTerms | null): { terms: AuctionTerms } | { problem: string } {
+  const startingBid = parseAmount(form.startingBid);
+  const start = form.start.trim() ? fromLocalInput(form.start) : now;
+  const end = fromLocalInput(form.end);
+  const reserve = form.reserve.trim() ? parseAmount(form.reserve) : undefined;
+  const buyNow = form.buyNow.trim() ? parseAmount(form.buyNow) : undefined;
+  const extend = Number(form.extendMinutes);
+  if (!Number.isFinite(start)) return { problem: "Check when the auction starts" };
+  if (!Number.isFinite(end)) return { problem: "Set when the auction ends" };
+  if (reserve !== undefined && !(reserve > 0)) return { problem: "Check the reserve price" };
+  if (buyNow !== undefined && !(buyNow > 0)) return { problem: "Check the buy-now price" };
+  const terms: AuctionTerms = {
+    v: 1,
+    start,
+    end,
+    startingBid: roundQort(startingBid),
+    ...(reserve !== undefined && { reserve: roundQort(reserve) }),
+    ...(buyNow !== undefined && { buyNow: roundQort(buyNow) }),
+    extendMinutes: Number.isFinite(extend) ? Math.max(0, Math.min(60, Math.floor(extend))) : DEFAULT_EXTEND_MINUTES,
+  };
+  if (saved && sameTerms(terms, saved)) return { terms: saved };
+  const problem = auctionTermsProblem(terms, now);
+  return problem ? { problem } : { terms };
+}
+
+/**
+ * A product sold by auction: its terms, its starting bid as its one (QORT)
+ * price, and OUT_OF_STOCK for the original Q-Shop, which knows no auctions
+ * and would otherwise sell it at that price. A fixed-price product loses any
+ * terms it had.
+ */
+function withSale<T extends Record<string, unknown>>(draft: T, values: ProductFormValues, now: number, saved: AuctionTerms | null): T {
+  if (values.sale !== "auction") {
+    if (!("auction" in draft)) return draft;
+    const rest = { ...draft };
+    delete rest.auction;
+    return rest;
+  }
+  const result = auctionFromForm(values.auction ?? defaultAuctionValues(now), now, saved);
+  if ("problem" in result) throw new Error(result.problem);
+  const rest = { ...draft } as Record<string, unknown>;
+  delete rest.fiatPrice;
+  return { ...rest, price: [{ currency: "qort", value: result.terms.startingBid }], status: "OUT_OF_STOCK", auction: result.terms } as unknown as T;
 }
 
 /** The shop's pricing in a currency, as the product form uses it. */
@@ -155,7 +264,7 @@ export function buildPriceList(
 export function validateProductForm(
   values: ProductFormValues,
   coins: string[],
-  options: { oldCategory?: string | null; pricing?: FiatPricing | null; wholeOnly?: string[] } = {}
+  options: { oldCategory?: string | null; pricing?: FiatPricing | null; wholeOnly?: string[]; now?: number; savedAuction?: AuctionTerms | null } = {}
 ): string | null {
   if (values.images.length === 0) return "Add at least one image";
   if (values.images.length > MAX_PRODUCT_IMAGES) return `Use at most ${MAX_PRODUCT_IMAGES} images`;
@@ -166,6 +275,10 @@ export function validateProductForm(
   }
   if (!values.category.trim()) return "Pick a category";
   if (!isListedCategory(values.category) && values.category !== options.oldCategory) return "Pick a category from the list";
+  if (values.sale === "auction") {
+    const result = auctionFromForm(values.auction ?? defaultAuctionValues(options.now ?? Date.now()), options.now ?? Date.now(), options.savedAuction);
+    return "problem" in result ? result.problem : null;
+  }
   const fiatText = options.pricing ? (values.fiat ?? "").trim() : "";
   if (fiatText && typedFiat(values, options.pricing) === null) return `Check the ${options.pricing?.currency} price`;
   // A price in the shop's currency gives the QORT and ARRR prices.
@@ -235,6 +348,7 @@ export function newProductDraft(args: {
     status: "AVAILABLE",
     user: name,
   };
+  if (values.sale === "auction") return withPicturesRef(withSale(draft, values, now, null));
   return withPicturesRef(withFormFiat(draft, values, coins, args.pricing));
 }
 
@@ -274,9 +388,18 @@ export function editedProductDraft(args: {
    * (the form's 3 and the pointer) stay exactly as they are.
    */
   picturesKept?: boolean;
+  /** When it is saved (an auction starting "now" starts then). */
+  now?: number;
 }) {
   const { base, values, coins, name } = args;
   const pictures = args.picturesKept ? <T,>(draft: T) => draft : withPicturesRef;
+  // Sold by auction (or no longer): its terms, its starting bid as its price (auctions/rules.ts).
+  if (values.sale === "auction" || "auction" in base) {
+    const edited = editedWithoutFiat(base, values, coins, name);
+    const sold = withSale(edited, values, args.now ?? Date.now(), auctionTermsOf(base));
+    if (values.sale === "auction" || !args.pricing) return pictures(sold);
+    return pictures(withFormFiat(sold, values, coins, args.pricing));
+  }
   // Without the shop's pricing the form shows no price in a currency: the product keeps what it has.
   if (!args.pricing) return pictures(editedWithoutFiat(base, values, coins, name));
   return pictures(withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing));
@@ -388,5 +511,12 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
     category: typeof product.category === "string" ? product.category : "",
     status: (PRODUCT_STATUSES as readonly string[]).includes(product.status) ? product.status : "AVAILABLE",
     prices: initialPriceText(product as { price?: { currency: string; value: number }[] }, coins),
+    ...auctionValuesOf(product),
   };
+}
+
+/** A product sold by auction opens with its terms (none for a fixed-price one, so its values stay as they were). */
+function auctionValuesOf(product: Record<string, any>): Pick<ProductFormValues, "sale" | "auction"> {
+  const terms = auctionTermsOf(product);
+  return terms ? { sale: "auction", auction: auctionFormOf(terms) } : {};
 }

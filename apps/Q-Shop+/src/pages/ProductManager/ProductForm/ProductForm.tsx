@@ -46,8 +46,10 @@ import {
   TYPE_LABEL,
   sanitizeAmountInput,
   typedFiat,
+  defaultAuctionValues,
   type ProductFormValues,
 } from "../../../seller/productDraft";
+import { AuctionFields } from "../../../seller/AuctionFields";
 
 interface ProductFormProps {
   values: ProductFormValues;
@@ -315,7 +317,7 @@ export const ProductForm = ({
             </Button>
           </Box>
         )}
-        {editing && (
+        {editing && values.sale !== "auction" && (
           <Box>
             <Typography id="product-status-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
               Status
@@ -339,7 +341,37 @@ export const ProductForm = ({
 
       <Box component="section" aria-label="Price" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         <SectionTitle>Price</SectionTitle>
-        {pricing && (
+        <Box>
+          <Typography id="product-sale-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+            How it sells
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            value={values.sale ?? "fixed"}
+            onChange={(_, sale: "fixed" | "auction" | null) =>
+              sale &&
+              onChange((prev) => ({
+                ...prev,
+                sale,
+                // A first auction starts from the QORT price typed so far.
+                ...(sale === "auction" && {
+                  auction: prev.auction ?? { ...defaultAuctionValues(Date.now()), startingBid: prev.prices.QORT ?? "" },
+                }),
+                // An auction is stored out of stock (for the original); back at a price, it's for sale again.
+                ...(sale === "fixed" && prev.sale === "auction" && { status: "AVAILABLE" }),
+              }))
+            }
+            aria-labelledby="product-sale-label"
+            sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 2.5, textTransform: "none" } }}
+          >
+            <ToggleButton value="fixed">Fixed price</ToggleButton>
+            <ToggleButton value="auction">Auction</ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        {values.sale === "auction" && values.auction && (
+          <AuctionFields value={values.auction} onChange={(auction) => onChange((prev) => ({ ...prev, auction }))} />
+        )}
+        {values.sale !== "auction" && pricing && (
           <TextField
             label={`Price in ${pricing.currency}`}
             value={values.fiat ?? ""}
@@ -364,7 +396,7 @@ export const ProductForm = ({
             }}
           />
         )}
-        {fiat === null && (
+        {values.sale !== "auction" && fiat === null && (
         <TextField
           label="Price in QORT"
           value={values.prices.QORT ?? ""}
@@ -384,7 +416,7 @@ export const ProductForm = ({
           }}
         />
         )}
-        {otherCoins.length > 0 && (
+        {values.sale !== "auction" && otherCoins.length > 0 && (
           <>
             <Typography variant="body2" color="text.secondary">
               Your shop also takes {otherCoins.map((c) => coinLabel(c, shop)).join(", ")}. Set your own price in a coin, or

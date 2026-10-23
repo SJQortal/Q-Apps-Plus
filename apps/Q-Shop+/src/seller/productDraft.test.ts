@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  auctionFromForm,
   buildPriceList,
+  defaultAuctionValues,
   editedProductDraft,
+  fromLocalInput,
   formValuesFor,
   initialPriceText,
   newProductDraft,
@@ -9,6 +12,7 @@ import {
   productForEdit,
   productFromIndexRow,
   sanitizeAmountInput,
+  toLocalInput,
   validateProductForm,
   type ProductFormValues,
 } from "./productDraft";
@@ -315,5 +319,76 @@ describe("a formatted description (richtext/plainText.ts)", () => {
     const base = { images: ["data:image/webp;base64,SU1H"], title: "T", category: "Baby" };
     expect(validateProductForm(values({ ...base, description: `<p><strong>${"x".repeat(20_001)}</strong></p>` }), coins)).toMatch(/Shorten the description/);
     expect(validateProductForm(values({ ...base, description: `<p>${"x".repeat(20_001)}</p>` }), coins)).toBeNull();
+  });
+});
+
+describe("an auction (auctions/rules.ts)", () => {
+  const HOUR = 3_600_000;
+  // A whole hour, so the form's minutes hold it exactly.
+  const now = Math.ceil(1_800_000_000_000 / HOUR) * HOUR;
+  const auction = (overrides: Partial<NonNullable<ProductFormValues["auction"]>> = {}) => ({
+    ...defaultAuctionValues(now),
+    startingBid: "12.5",
+    ...overrides,
+  });
+
+  it("is a product with its terms after the original's keys, priced at its starting bid and out of stock for the original", () => {
+    const draft = newProductDraft({
+      values: values({ sale: "auction", auction: auction({ reserve: "20", buyNow: "50" }), fiat: "10" }),
+      coins,
+      storeId: STORE_ID,
+      name: SELLER,
+      uid: "UIDxxxxxx1",
+      now,
+      pricing: { currency: "USD", rates: { QORT: 0.18, ARRR: 0.25 }, updated: 1 },
+    }) as Record<string, unknown>;
+    expect(Object.keys(draft).slice(-1)).toEqual(["auction"]);
+    expect(draft).not.toHaveProperty("fiatPrice");
+    expect(draft.price).toEqual([{ currency: "qort", value: 12.5 }]);
+    expect(draft.status).toBe("OUT_OF_STOCK");
+    // It starts when it's saved and runs seven days, to the hour.
+    expect(draft.auction).toEqual({ v: 1, start: now, end: now + 7 * 24 * HOUR, startingBid: 12.5, reserve: 20, buyNow: 50, extendMinutes: 5 });
+  });
+
+  it("asks for a starting bid and an end in the future, not for a price", () => {
+    const form = (a: Partial<NonNullable<ProductFormValues["auction"]>>) => values({ sale: "auction", auction: auction(a), prices: { QORT: "", ARRR: "" } });
+    expect(validateProductForm(form({}), coins, { now })).toBeNull();
+    expect(validateProductForm(form({ startingBid: "" }), coins, { now })).toMatch(/starting bid/);
+    expect(validateProductForm(form({ end: toLocalInput(now - HOUR) }), coins, { now })).toMatch(/end after it starts/);
+    expect(validateProductForm(form({ start: toLocalInput(now - 2 * HOUR), end: toLocalInput(now - HOUR) }), coins, { now })).toMatch(/future/);
+    expect(validateProductForm(form({ end: "" }), coins, { now })).toMatch(/when the auction ends/);
+    expect(validateProductForm(form({ buyNow: "5" }), coins, { now })).toMatch(/Buy now/);
+  });
+
+  it("opens with its terms in the seller's time, and an edit that leaves them keeps them, even once it has ended", () => {
+    const terms = { v: 1 as const, start: now - 10 * 24 * HOUR, end: now - 3 * 24 * HOUR, startingBid: 3, extendMinutes: 0 };
+    const product = { ...mug, status: "OUT_OF_STOCK", auction: terms };
+    const form = formValuesFor(product, coins);
+    expect(form.sale).toBe("auction");
+    expect(form.auction).toEqual({ startingBid: "3", start: toLocalInput(terms.start), end: toLocalInput(terms.end), reserve: "", buyNow: "", extendMinutes: "0" });
+    expect(fromLocalInput(form.auction!.end)).toBe(terms.end);
+    expect(validateProductForm({ ...form, description: "<p>Sold</p>" }, coins, { now, savedAuction: terms, oldCategory: "Kitchen" })).toBeNull();
+    const edited = editedProductDraft({ base: product, values: { ...form, description: "<p>Sold</p>" }, coins, name: SELLER, now }) as Record<string, unknown>;
+    expect(edited.auction).toEqual(terms);
+    expect(edited.description).toBe("Sold");
+    // Changing them means a new run, which must end in the future.
+    expect(auctionFromForm({ ...form.auction!, startingBid: "4" }, now, terms)).toEqual({ problem: "The end must be in the future" });
+  });
+
+  it("back at a fixed price loses its terms and sells at the typed price", () => {
+    const product = { ...mug, status: "OUT_OF_STOCK", auction: { v: 1, start: now, end: now + HOUR, startingBid: 3, extendMinutes: 5 } };
+    const form = formValuesFor(product, coins);
+    const edited = editedProductDraft({
+      base: product,
+      values: { ...form, sale: "fixed", status: "AVAILABLE", prices: { QORT: "4", ARRR: "" } },
+      coins,
+      name: SELLER,
+      now,
+    }) as Record<string, unknown>;
+    expect(edited).not.toHaveProperty("auction");
+    expect(edited.price).toEqual([{ currency: "qort", value: 4 }]);
+    expect(edited.status).toBe("AVAILABLE");
+    // A fixed-price product's form says nothing of auctions, so its values stay as they were.
+    expect(formValuesFor(mug, coins)).not.toHaveProperty("sale");
   });
 });
