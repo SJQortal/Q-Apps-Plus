@@ -169,6 +169,16 @@ describe("an auction on its product page", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("textbox", { name: "Your bid" })).toBeNull();
   });
 
+  it("prices Buy now at the least bid allowed once a bid just under it leads", async () => {
+    const now = Date.now();
+    renderAuction(auctionWorld({ v: 1, start: now - DAY, end: now + DAY, startingBid: 10, buyNow: 80, extendMinutes: 5 }), () => [bid("Ann", "AAA111", 79.8, now - MIN)]);
+    const panel = await screen.findByRole("region", { name: "Auction" });
+    expect(await within(panel).findByRole("button", { name: "Buy now for 80.30 QORT" })).toBeInTheDocument();
+    // A typed bid over it buys it at that price.
+    fireEvent.change(within(panel).getByRole("textbox", { name: "Your bid" }), { target: { value: "95" } });
+    expect(within(panel).getByRole("button", { name: "Bid 80.30 QORT" })).toBeInTheDocument();
+  });
+
   it("says when an upcoming auction opens, and takes no bids before", async () => {
     const now = Date.now();
     renderAuction(auctionWorld({ v: 1, start: now + 3 * 3_600_000 + 5 * MIN, end: now + 2 * DAY, startingBid: 10, extendMinutes: 5 }), () => []);

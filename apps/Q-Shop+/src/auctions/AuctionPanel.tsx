@@ -100,9 +100,11 @@ export function AuctionPanel({
   const loading = auction.status === "loading";
 
   const typed = amountText.trim() ? parseAmount(amountText) : state.minNext;
+  // Buy now costs the buy-now price, or the least bid allowed when that is already more (a bid just under it leads).
+  const buyNowPrice = terms.buyNow !== undefined ? Math.max(terms.buyNow, state.minNext) : undefined;
   // A bid at the buy-now price or above buys it at that price.
-  const amount = terms.buyNow !== undefined && typed + EPSILON >= terms.buyNow ? terms.buyNow : typed;
-  const canBuyNow = live && terms.buyNow !== undefined && (!high || high.amount + EPSILON < terms.buyNow);
+  const amount = buyNowPrice !== undefined && typed + EPSILON >= buyNowPrice ? buyNowPrice : typed;
+  const canBuyNow = live && buyNowPrice !== undefined && (!high || high.amount + EPSILON < buyNowPrice);
 
   const submit = async (value: number) => {
     if (busy) return;
@@ -242,8 +244,8 @@ export function AuctionPanel({
           </Button>
         </Box>
         {canBuyNow && (
-          <Button variant="outlined" size="large" disabled={busy || loading} onClick={() => void submit(terms.buyNow!)} sx={{ minHeight: 48, alignSelf: "flex-start" }}>
-            Buy now for {qort(terms.buyNow!)}
+          <Button variant="outlined" size="large" disabled={busy || loading} onClick={() => void submit(buyNowPrice!)} sx={{ minHeight: 48, alignSelf: "flex-start" }}>
+            Buy now for {qort(buyNowPrice!)}
           </Button>
         )}
         <Typography variant="body2" color="text.secondary">
