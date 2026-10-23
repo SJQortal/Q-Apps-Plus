@@ -85,23 +85,29 @@ function product(s, p) {
     // The product page's product: a formatted description with a video, a PDF and a Q-Tube link, and 7 pictures.
     ...(s.short === 'shop-3' && p === 0 && RICH),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
-    ...(s.short === 'shop-1' && AUCTIONS[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[p].startingBid }], auction: AUCTIONS[p] }),
+    ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
   };
 }
 const HOUR = 3_600_000;
 const AUCTIONS = {
-  4: { v: 1, start: now - DAY, end: now + DAY + 5 * HOUR, startingBid: 12, reserve: 30, buyNow: 80, extendMinutes: 5 },
-  6: { v: 1, start: now + 3 * HOUR, end: now + 4 * DAY, startingBid: 5, extendMinutes: 5 },
-  8: { v: 1, start: now - 5 * DAY, end: now - DAY, startingBid: 10, extendMinutes: 5 },
+  'shop-1': {
+    4: { v: 1, start: now - DAY, end: now + DAY + 5 * HOUR, startingBid: 12, reserve: 30, buyNow: 80, extendMinutes: 5 },
+    6: { v: 1, start: now + 3 * HOUR, end: now + 4 * DAY, startingBid: 5, extendMinutes: 5 },
+    8: { v: 1, start: now - 5 * DAY, end: now - DAY, startingBid: 10, extendMinutes: 5 },
+  },
+  // The signed-in seller's own, ended, with an absurd bid to void.
+  'my-shop': { 9: { v: 1, start: now - 5 * DAY, end: now - DAY, startingBid: 10, extendMinutes: 5 } },
 };
-// Bids (auctions/bids.ts): [product, bidder, amount, created]
+// Bids (auctions/bids.ts): [shop, product, bidder, amount, created]
 const BIDS = [
-  [4, 'Ann Buyer', 12, now - 20 * HOUR],
-  [4, 'bob+builder', 15, now - 10 * HOUR],
-  [4, 'Zoë Ålund', 18.5, now - 2 * HOUR],
-  [8, 'Ann Buyer', 10, now - 4 * DAY],
-  [8, 'bob+builder', 12, now - 3 * DAY],
-  [8, ME, 15, now - 2 * DAY],
+  ['shop-1', 4, 'Ann Buyer', 12, now - 20 * HOUR],
+  ['shop-1', 4, 'bob+builder', 15, now - 10 * HOUR],
+  ['shop-1', 4, 'Ann Buyer', 18.5, now - 2 * HOUR],
+  ['shop-1', 8, 'Ann Buyer', 10, now - 4 * DAY],
+  ['shop-1', 8, 'bob+builder', 12, now - 3 * DAY],
+  ['shop-1', 8, ME, 15, now - 2 * DAY],
+  ['my-shop', 9, 'Ann Buyer', 12, now - 3 * DAY],
+  ['my-shop', 9, 'Troll Account', 9000000, now - 2 * DAY],
 ];
 const RICH = {
   // As Q-Shop+ writes it: the plain description is the formatted one's text (richtext/plainText.ts).
@@ -230,9 +236,10 @@ function rows() {
   for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
   statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
   out.push({ name: 'Gold Issuer', service: 'IMAGE', identifier: 'asset81_Gold Bar_aavatar', created: now - DAY, updated: now - DAY, size: 2000 });
-  BIDS.forEach(([p, name, amount, created], i) =>
-    out.push({ name, service: 'DOCUMENT', identifier: `q-store-bid-shop-1-P${String(p).padStart(9, '0')}-BID${String(i).padStart(3, '0')}`, created, updated: created, size: 150, metadata: { title: 'Bid', description: `bid:${amount};to:${encodeURIComponent('Shop+Plus')}` } })
-  );
+  BIDS.forEach(([short, p, name, amount, created], i) => {
+    const seller = shops.find((x) => x.short === short).owner;
+    out.push({ name, service: 'DOCUMENT', identifier: `q-store-bid-${short}-P${String(p).padStart(9, '0')}-BID${String(i).padStart(3, '0')}`, created, updated: created, size: 150, metadata: { title: 'Bid', description: `bid:${amount};to:${encodeURIComponent(seller)}` } });
+  });
   return out;
 }
 
@@ -346,6 +353,9 @@ export default {
     const sp = url.searchParams;
     if (p.endsWith('/arbitrary/resources/search')) return json(route, search(sp)).then(() => true);
     if (p === '/names/primary/QOwner') return json(route, { name: 'Gold Issuer', owner: 'QOwner' }).then(() => true);
+    // A name's address (the auction's chain check, auctions/confirm.ts): as GET_NAME_DATA answers below.
+    const named = p.match(/^\/names\/([^/]+)$/);
+    if (named) return json(route, { name: named[1], owner: 'Q' + named[1].replace(/[^A-Za-z0-9]/g, '') + 'Address' }).then(() => true);
     if (p.startsWith('/crosschain/price/')) return route.fulfill({ status: 200, contentType: 'text/plain', body: '25000000' }).then(() => true);
     if (p.startsWith('/transactions/')) return json(route, []).then(() => true);
     if (p.startsWith('/assets')) return json(route, p.includes('/info') ? { assetId: 81, name: 'Gold Bar', owner: 'QOwner', quantity: 1000, isDivisible: true, isUnspendable: false } : [{ assetId: 0, name: 'QORT', description: 'QORTAL coin', isDivisible: true }, { assetId: 81, name: 'Gold Bar', description: 'A test asset', isDivisible: true }, { assetId: 82, name: 'Silver', description: '', isDivisible: true }, { assetId: 83, name: 'Gold Seats', description: 'Whole seats only', isDivisible: false }, { assetId: 84, name: 'Golden Locked', description: '', isDivisible: true, isUnspendable: true }]).then(() => true);
@@ -403,6 +413,7 @@ export default {
     { key: 'product-auction', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 4)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText('3 bids').waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'product-auction-won', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 8)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/^You won!/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'shop-auctions', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => { await page.getByRole('button', { name: 'Auctions (2)' }).click({ timeout: 8000 }); await page.waitForTimeout(700); } },
+    { key: 'seller-auction-edit', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.mouse.wheel(0, 700); await page.waitForTimeout(900); await page.getByRole('button', { name: /^Edit Ebook 9\b/ }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('checkbox', { name: /^Void: Troll Account/ }).scrollIntoViewIfNeeded({ timeout: 10000 }); await page.waitForTimeout(400); } },
     { key: 'seller-product-auction', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('button', { name: 'Auction', exact: true }).click({ timeout: 10000 }); await d.getByRole('textbox', { name: /^Starting bid/ }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'orders', path: '/my-orders', after: async (page) => page.waitForTimeout(900) },
     { key: 'seller', path: `/product-manager/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
@@ -423,7 +434,8 @@ export default {
     { key: 'shop-sort-menu', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(800); await page.getByRole('combobox', { name: /^Sort/ }).click({ timeout: 2500 }); await page.getByRole('listbox').waitFor({ timeout: 3000 }); await page.waitForTimeout(400); } },
     { key: 'seller-currency-menu', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Change rates and prices' }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Prices in USD' }).getByRole('combobox', { name: /^Currency/ }).click({ timeout: 4000 }); await page.getByRole('listbox').waitFor({ timeout: 3000 }); await page.waitForTimeout(400); } },
     { key: 'seller-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, after: async (page) => page.waitForTimeout(900) },
-    { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    // Assets 82–84 have no picture on the mock node: each falls back to another (a 404 is how Core says so).
+    { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, expectErrors: /404|Failed to load resource/, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 4000 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
