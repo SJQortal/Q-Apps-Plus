@@ -1,7 +1,7 @@
 /**
  * The sticky header (docs/DESIGN.md → Layout): the logo and the app's name
  * (home), Shops / Products / Orders / Manage Shop (Simon, 2026-10-22: was "Sell") and the cart on desktop, Settings,
- * and the account menu or Sign in. On phones it slides away when you scroll
+ * and the account menu or Sign in; beside Manage Shop, a seller pricing in a currency gets their QORT rate. On phones it slides away when you scroll
  * down and comes back when you scroll up; the navigation lives in BottomNav
  * there, and Settings stays up here (the bar takes five items).
  */
@@ -34,6 +34,7 @@ import {
   NavbarName,
 } from "./Navbar-styles";
 import { LogoMark } from "./LogoMark";
+import { QuickRateButton } from "./QuickRateButton";
 import { useHideOnScroll, usePublishHeaderOffset } from "./useHideOnScroll";
 
 // Both open now and then: loaded the first time they open, so the name
@@ -131,8 +132,10 @@ const NavBar: React.FC = () => {
             </NavLinkButton>
           </DesktopNav>
         )}
+        {!phone && <QuickRateButton phone={false} />}
 
         <HeaderActions>
+          {phone && <QuickRateButton phone />}
           {!phone && (
             <Tooltip title="Cart">
               <IconButton

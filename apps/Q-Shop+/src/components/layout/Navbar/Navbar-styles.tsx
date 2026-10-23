@@ -67,6 +67,8 @@ export const HeaderInner = styled("div")(({ theme }) => ({
   padding: theme.spacing(0, 2),
   boxSizing: "border-box",
   [theme.breakpoints.up("sm")]: { padding: theme.spacing(0, 3) },
+  // A seller's QORT rate beside Manage Shop (QuickRateButton) needs room below 1000 px: the navigation keeps its names, not its icons.
+  "@media (max-width: 999.95px)": { "&:has(.qp-quick-rate) nav .MuiSvgIcon-root": { display: "none" } },
   // Last, so a landscape phone wider than 600 px gets the phone edge too.
   [`@media ${PHONE_MEDIA}`]: { padding: theme.spacing(0, 1) },
 }));
