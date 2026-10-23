@@ -17,6 +17,7 @@ import { useDispatch, useSelector, useStore } from "react-redux";
 import { Link as RouterLink } from "react-router-dom";
 import { Alert, Box, Button, Divider, Link, Skeleton, Typography } from "@mui/material";
 import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { RootState } from "../../../state/store";
 import type { Order, OrderStatusInfo } from "../../../state/features/orderSlice";
@@ -28,7 +29,7 @@ import { mailToLink, productPath, storePath } from "../../../qdn/links";
 import { ensureOrderStatus, type OrderStore } from "../../../orders/loader";
 import { sendOrderStatus } from "../../../orders/statusUpdate";
 import { normalizeStatus } from "../../../orders/status";
-import { deliveryLines, formatOrderDate, isDigitalOrder, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
+import { deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
 import { useOrderCoinView } from "../../../orders/useOrderCoin";
 import type { ShopCoinSettings } from "../../../money/coins";
 import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
@@ -155,6 +156,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   if (!order) return null;
 
   const items = orderItems(order);
+  const deliveryFee = orderDelivery(order);
   const { coin, settings: coinSettings } = coinView;
   const digital = isDigitalOrder(order);
   const address = deliveryLines(order);
@@ -316,6 +318,18 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
                 sellerName={order.sellerName || ""}
               />
             ))}
+            {deliveryFee && (
+              // The shop's delivery fee for the address (delivery/model.ts): a line of the order, not a product.
+              <Box component="li" sx={{ display: "flex", gap: 1.5, alignItems: "center", minWidth: 0 }}>
+                <Box aria-hidden sx={{ width: 56, height: 56, borderRadius: 1.5, flexShrink: 0, bgcolor: "action.hover", display: "grid", placeItems: "center" }}>
+                  <LocalShippingOutlinedIcon sx={{ color: "text.secondary" }} />
+                </Box>
+                <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 600, overflowWrap: "anywhere" }}>{deliveryFee.title}</Typography>
+                <Box sx={{ flexShrink: 0, textAlign: "right" }}>
+                  <AmountTag value={deliveryFee.total} coin={coin} shop={coinSettings} size="small" />
+                </Box>
+              </Box>
+            )}
           </Box>
           <Divider />
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>

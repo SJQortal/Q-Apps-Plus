@@ -6,6 +6,7 @@
 import type { Order } from "../state/features/orderSlice";
 import { assetIdOf, type ShopCoinSettings } from "../money/coins";
 import { isDigitalOnly, type CartLine } from "../money/order";
+import { isDeliveryLine } from "../delivery/model";
 
 const asText = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
 
@@ -54,11 +55,11 @@ function num(value: unknown): number | undefined {
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
-/** The order's product lines, in the order they were written. */
+/** The order's product lines, in the order they were written (its delivery fee isn't one: orderDelivery). */
 export function orderItems(order: Order | null | undefined): OrderItem[] {
   const details = (order?.details ?? {}) as Record<string, any>;
   return Object.keys(details)
-    .filter((key) => key !== "totalPrice" && details[key] && typeof details[key] === "object")
+    .filter((key) => key !== "totalPrice" && details[key] && typeof details[key] === "object" && !isDeliveryLine(key, details[key]))
     .map((key) => {
       const line = details[key];
       const product = line.product ?? {};
@@ -75,6 +76,15 @@ export function orderItems(order: Order | null | undefined): OrderItem[] {
         product,
       };
     });
+}
+
+/** The order's delivery fee line (delivery/model.ts), when it has one: "Delivery to Poland" and what it cost. */
+export function orderDelivery(order: Order | null | undefined): { title: string; total: number | undefined } | null {
+  const details = (order?.details ?? {}) as Record<string, any>;
+  const key = Object.keys(details).find((k) => k !== "totalPrice" && details[k] && typeof details[k] === "object" && isDeliveryLine(k, details[k]));
+  if (!key) return null;
+  const title: unknown = details[key].product?.title;
+  return { title: typeof title === "string" && title ? title : "Delivery", total: num(details[key].totalProductPrice) };
 }
 
 /** "Mug × 2, Poster", or "Mug × 2 and 3 more". */

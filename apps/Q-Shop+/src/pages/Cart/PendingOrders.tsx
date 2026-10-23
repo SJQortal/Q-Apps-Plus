@@ -42,6 +42,7 @@ import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing } from "./delivery";
 import { itemCount, shortAddress } from "./cartLines";
 import { useRecordingOrder } from "./usePendingOrders";
+import { isDeliveryLine } from "../../delivery/model";
 
 /**
  * The coin settings a pending order's payment record needs: only an asset's
@@ -177,7 +178,7 @@ export function PendingOrderCard({
   const seller = order.store.owner;
   const shopTitle = order.store.title || "this shop";
   const lines = orderLines(order.details);
-  const items = itemCount(lines.map(([, line]) => line));
+  const items = itemCount(lines.filter(([key, line]) => !isDeliveryLine(key, line)).map(([, line]) => line));
   const foreign = isForeignTicker(order.coin);
   const amount = <AmountTag value={order.amount} coin={order.coin} shop={settings} size="small" />;
 

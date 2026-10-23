@@ -12,6 +12,7 @@ import { orderIdentifier, orderMailIdentifier } from "../qdn/identifiers";
 import { APP_NAME } from "../constants/plus";
 import { jsonToBase64 } from "../qdn/payloads";
 import { amountText, formatPrice, unitPrice, type PricedProduct } from "./pricing";
+import { isDeliveryLine } from "../delivery/model";
 
 export interface CartLine {
   productId: string;
@@ -239,9 +240,16 @@ export function buildOrderMailHtml(args: {
   const unit = escapeHtml(currencyLabel);
   const shop = escapeHtml(storeTitle || "your shop");
   const lines = orderLines(details);
-  const items = lines.reduce((sum, [, line]) => sum + (Number(line.quantity) || 0), 0);
+  // The delivery fee is a line of its own (delivery/model.ts): in the table, not in the item count.
+  const items = lines.filter(([key, line]) => !isDeliveryLine(key, line)).reduce((sum, [, line]) => sum + (Number(line.quantity) || 0), 0);
   const rows = lines
-    .map(([, line]) => {
+    .map(([key, line]) => {
+      if (isDeliveryLine(key, line)) {
+        return `<tr>
+          <td style="${TD}" colspan="3"><strong>${escapeHtml(line.product?.title || "Delivery")}</strong></td>
+          <td style="${TD} ${NUM}">${amount(line.totalProductPrice, unit)}</td>
+        </tr>`;
+      }
       const won = line.product?.auctionWin ? `<div style="font-size: 13px; opacity: 0.75;">Won at auction</div>` : "";
       return `<tr>
           <td style="${TD}"><strong>${escapeHtml(line.product?.title || "Item")}</strong>${won}</td>
