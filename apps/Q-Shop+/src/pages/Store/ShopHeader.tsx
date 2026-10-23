@@ -3,6 +3,7 @@
  * received (pages/Store/orderCount.ts), where it is and ships to, the coins it takes, and what you can do (message the seller, share, see
  * the details; the owner also edits the shop or opens the seller page).
  */
+import { useEffect, useRef, useState } from "react";
 import { Box, Button, Rating, Skeleton, Typography } from "@mui/material";
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -64,6 +65,49 @@ export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews;
       {average !== null && <Rating value={roundToHalf(average)} precision={0.5} readOnly size="small" aria-hidden />}
       <span>{label}</span>
     </Button>
+  );
+}
+
+/**
+ * The shop's own description: larger and in the page's main text colour, at
+ * a line length that reads well (Simon: "the shops description text could be
+ * a bit more clear and nicer and bigger"), four lines with Read more when it
+ * is longer.
+ */
+export function ShopDescription({ text }: { text: string }) {
+  const box = useRef<HTMLParagraphElement>(null);
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (!el || open || typeof ResizeObserver === "undefined") return;
+    // Measured while clamped: more text than four lines show.
+    const observer = new ResizeObserver(() => setLong(el.scrollHeight > el.clientHeight + 1));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [open, text]);
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography
+        ref={box}
+        sx={{
+          fontSize: { xs: 16, sm: 17 },
+          lineHeight: 1.65,
+          color: "text.primary",
+          maxWidth: "78ch",
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
+          ...(!open && { display: "-webkit-box", WebkitLineClamp: 4, WebkitBoxOrient: "vertical", overflow: "hidden" }),
+        }}
+      >
+        {text}
+      </Typography>
+      {(long || open) && (
+        <Button onClick={() => setOpen((v) => !v)} aria-expanded={open} size="small" sx={{ mt: 0.5, ml: -1, minHeight: 44, textTransform: "none", fontWeight: 600 }}>
+          {open ? "Show less" : "Read more"}
+        </Button>
+      )}
+    </Box>
   );
 }
 
@@ -137,93 +181,89 @@ export function ShopHeader({
             <StorefrontOutlinedIcon fontSize="large" />
           </Box>
         )}
-        <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0.5 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-            <NameAvatar name={owner} size={24} eager />
-            <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
-              <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
-                by{" "}
-              </Box>
-              {owner}
-              {isOwner ? (
+        {/* Who and how it's rated on the left; where it is, where it ships and what it takes beside it on wider screens. */}
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: "grid",
+            gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" },
+            columnGap: 4,
+            rowGap: 0.75,
+            alignItems: "start",
+          }}
+        >
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, minWidth: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+              <NameAvatar name={owner} size={24} eager />
+              <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
                 <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
-                  {" "}
-                  (you)
+                  by{" "}
                 </Box>
-              ) : null}
-            </Typography>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5 }}>
-            <RatingSummaryButton reviews={reviews} onOpen={onOpenReviews} />
-            {orders && (
-              <Typography variant="body2" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
-                <ShoppingBagOutlinedIcon fontSize="small" aria-hidden />
-                {orders}
+                {owner}
+                {isOwner ? (
+                  <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
+                    {" "}
+                    (you)
+                  </Box>
+                ) : null}
               </Typography>
-            )}
-          </Box>
-          {(shop.location || shop.shipsTo) && (
-            <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 2, rowGap: 0.5, color: "text.secondary" }}>
-              {shop.location ? (
-                <Typography variant="body2" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-                  <PlaceOutlinedIcon fontSize="small" aria-hidden />
-                  <span>{shop.location}</span>
-                </Typography>
-              ) : null}
-              {shop.shipsTo ? (
-                <Typography variant="body2" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
-                  <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
-                  <span>Ships to {shop.shipsTo}</span>
-                </Typography>
-              ) : null}
             </Box>
-          )}
-          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 0.5 }}>
-            <Typography variant="body2" color="text.secondary" component="span">
-              Accepts
-            </Typography>
-            <Box component="ul" aria-label="Accepted coins" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {coins.map((coin) => (
-                <Box
-                  component="li"
-                  key={coin}
-                  sx={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 0.5,
-                    px: 1,
-                    py: 0.25,
-                    border: 1,
-                    borderColor: "divider",
-                    borderRadius: 4,
-                    fontSize: 13,
-                    fontWeight: 600,
-                  }}
-                >
-                  <CoinIcon coin={coin} size={16} label={coinLabel(coin, shop)} />
-                  {coinLabel(coin, shop)}
-                </Box>
-              ))}
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5 }}>
+              <RatingSummaryButton reviews={reviews} onOpen={onOpenReviews} />
+              {orders && (
+                <Typography variant="body2" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+                  <ShoppingBagOutlinedIcon fontSize="small" aria-hidden />
+                  {orders}
+                </Typography>
+              )}
+            </Box>
+          </Box>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, minWidth: 0 }}>
+            {shop.location ? (
+              <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                <PlaceOutlinedIcon fontSize="small" aria-hidden />
+                <span>{shop.location}</span>
+              </Typography>
+            ) : null}
+            {shop.shipsTo ? (
+              <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
+                <span>Ships to {shop.shipsTo}</span>
+              </Typography>
+            ) : null}
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+              <Typography variant="body2" color="text.secondary" component="span">
+                Accepts
+              </Typography>
+              <Box component="ul" aria-label="Accepted coins" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {coins.map((coin) => (
+                  <Box
+                    component="li"
+                    key={coin}
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                      px: 1,
+                      py: 0.25,
+                      border: 1,
+                      borderColor: "divider",
+                      borderRadius: 4,
+                      fontSize: 13,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <CoinIcon coin={coin} size={16} label={coinLabel(coin, shop)} />
+                    {coinLabel(coin, shop)}
+                  </Box>
+                ))}
+              </Box>
             </Box>
           </Box>
         </Box>
       </Box>
-      {shop.description ? (
-        <Typography
-          variant="body2"
-          sx={{
-            mt: 1.5,
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
-            display: "-webkit-box",
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
-          }}
-        >
-          {shop.description}
-        </Typography>
-      ) : null}
+      {shop.description ? <ShopDescription text={shop.description} /> : null}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2, "& > *": { flex: { xs: "1 1 auto", sm: "0 0 auto" } } }}>
         {isOwner ? (
           <>
