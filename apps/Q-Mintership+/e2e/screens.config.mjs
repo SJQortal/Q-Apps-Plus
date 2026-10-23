@@ -4,6 +4,9 @@
  *   QPLUS_CHROMIUM=~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome \
  *     scripts/screens.mjs Q-Mintership+ [--only home-admin,decisions] [--themes hub30] [--mode light]
  *
+ * QMP_PAGE_WIDTH=full runs every screen with Page width set to Full window (Settings →
+ * Appearance), e.g. with `--sizes 1920x1080,2560x1440,3840x2160` for big screens.
+ *
  * The mock node is the shared world (e2e/world.mjs): a MINTER group with a
  * person in every status and a decision in every state. `?as=<persona>` in a
  * screen's path picks who is signed in; `outside` has no Hub at all and
@@ -426,6 +429,12 @@ export default {
         localStorage.removeItem('qmintershipplus-connections-circle-order');
         // And the list an Assets screen picked.
         localStorage.removeItem('qmintershipplus-assets-view');
+        // Page width as the run asks (QMP_PAGE_WIDTH), not as a *-full screen left it.
+        ${
+          process.env.QMP_PAGE_WIDTH === 'full'
+            ? `localStorage.setItem('qmintershipplus-page-width', '"full"');`
+            : `localStorage.removeItem('qmintershipplus-page-width');`
+        }
       } catch (e) {}
     })();`,
   ],
@@ -798,6 +807,31 @@ export default {
     },
     { key: 'activity-member', path: '/explorer/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
+    // Page width: Full window (crowetic, 2026-10-23). Settings with it picked, and Decisions,
+    // whose cards sit side by side once two fit (only past the five sizes; --sizes 1920x1080).
+    {
+      key: 'settings-full',
+      path: '/settings?as=admin',
+      after: async (page) => {
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-page-width', '"full"')
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        await page.getByRole('combobox', { name: 'Page width' }).waitFor({ timeout: 8000 });
+      },
+    },
+    {
+      key: 'decisions-full',
+      path: '/decisions?as=admin',
+      after: async (page) => {
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-page-width', '"full"')
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+      },
+    },
     // A moving target (e2e/world.mjs addTargetShift): the "target changed" note
     // (this device last saw 23 admin seats), the chips, and an admin change's impact.
     {
