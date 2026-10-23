@@ -8,8 +8,9 @@ import { STORAGE_PREFIX } from "../../constants/plus";
 
 /**
  * Delivery addresses buyers chose to keep for their next checkout, per
- * Qortal name: on this device only, never published (after the checkout
- * profile of Simon's Qortal Web Builder shops).
+ * Qortal name: in this browser only, never published (after the checkout
+ * profile of Simon's Qortal Web Builder shops). Every Q-App on a node shares
+ * one browser origin, so other Q-Apps can read it: the tick says so.
  */
 export const SAVED_DELIVERY_STORAGE_KEY = `${STORAGE_PREFIX}delivery-addresses`;
 

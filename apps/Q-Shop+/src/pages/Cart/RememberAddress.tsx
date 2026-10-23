@@ -9,7 +9,10 @@ export function RememberAddress({ checked, onChange }: { checked: boolean; onCha
         label="Remember this address on this device"
         sx={{ minHeight: 44, mr: 0 }}
       />
-      <FormHelperText sx={{ mt: -0.5, ml: 4 }}>Kept only here for your next checkout, never published. Untick it to forget it.</FormHelperText>
+      <FormHelperText sx={{ mt: -0.5, ml: 4 }}>
+        Kept in this browser for your next checkout and never published, but other Q-Apps opened in this Hub can read it: leave it unticked on a shared
+        computer. Untick it to forget it.
+      </FormHelperText>
     </Box>
   );
 }
