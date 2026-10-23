@@ -452,6 +452,20 @@ Simon: "when I remove collection it does not remove optimistically". Delete repu
 - **At once:** Delete, Delete folder, Remove and Move close their dialog and show the change straight away (Delete goes to your collections without it; Delete folder to the parent), as Add to collection already did. If Hub says no or the publish fails, what was there comes back, with "“…” wasn't deleted." after a Delete. One change at a time: another waits while the first publishes ("Publishing…").
 - Tests: 668 → 676 (the optimistic ones fail on the previous code).
 
+### Menus and dialogs no longer move the page (1.0.1, 2026-10-23)
+
+`src/index.css` had `overflow-x: clip` on `html, body`. With html clipped, MUI's scroll lock for a Select, Menu or Dialog (overflow: hidden on body, padded by the scrollbar's width) no longer reached the window: the scrollbar stayed while body was padded, so the page moved sideways each time a menu opened, and body became a scroll box of its own, so the sticky header and Back bars stuck to its top and went out of view. The clip is on `#root` now, as Q-Shop+ (`c4fdd077`) and Q-Mintership+ (`b99c00c7`) did and docs/QORTAL.md pitfall 2 says.
+
+Measured in Brave (Playwright pointed at a wrapper that drops `--hide-scrollbars`, which the screenshot check uses and which hides this bug), 1280×800, a 16 px scrollbar, the page scrolled to 400 px, the page's first heading and the sticky header measured before a menu opens and while it is open:
+
+| Menu opened | Before: page shift | Before: header top | After: page shift | After: header top |
+|---|---|---|---|---|
+| Account menu (Home) | −8 px | −400 px | 0 | 0 |
+| A select on Settings | −8 px | −400 px | 0 | 0 |
+| Category select (Home filters) | 0 (the page jumped back to the top) | 0 | 0, and it stays scrolled at 400 px | 0 |
+
+After the fix the scrollbar is hidden while the menu is open and body padded by its 16 px, as MUI intends. Every screen in Hub 3.0 at all five sizes, with Brave (106 captures, 44 of them at 360×740 and 390×844): 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. (This branch's `scripts/screens.mjs` has no `--sizes` yet; it is on `q-mintership-plus/1.0.3`, so the run took all five sizes.)
+
 ## Follow-ups
 
 Questions for Simon (after pass 2):
