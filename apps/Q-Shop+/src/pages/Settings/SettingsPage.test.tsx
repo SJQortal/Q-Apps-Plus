@@ -13,6 +13,7 @@ import { base64ToJson } from "../../qdn/payloads";
 import { ACTIVE_NAME_STORAGE_KEY } from "../../constants/plus";
 import { ShellContext, type ShellActions } from "../../components/layout/shellState";
 import { SettingsPage, shortAddress } from "./SettingsPage";
+import { SAVED_DELIVERY_STORAGE_KEY } from "../Cart/delivery";
 import { getProductView, resetProductView } from "../../utils/productView";
 import { chooseOption, optionNames, selectField, selectValue } from "../../test/select";
 
@@ -66,6 +67,18 @@ describe("SettingsPage", () => {
     expect(black).toHaveAttribute("aria-checked", "true");
     expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe(JSON.stringify("black"));
     expect(document.documentElement.getAttribute("data-ui-theme")).toBe("black");
+  });
+
+  it("shows the delivery address checkout kept for this name, and forgets it", () => {
+    localStorage.setItem(
+      SAVED_DELIVERY_STORAGE_KEY,
+      JSON.stringify({ "Buyer+One": { customerName: "Ann", streetAddress: "1 Main St", city: "Porto", region: "Norte", state: "", country: "Portugal", zipCode: "4000", deliveryNote: "" } })
+    );
+    renderSettings({ store: signedInStore() });
+    expect(screen.getByText(/^1 Main St, Porto, Portugal: kept in this browser/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Forget it" }));
+    expect(localStorage.getItem(SAVED_DELIVERY_STORAGE_KEY)).toBeNull();
+    expect(screen.queryByText("Saved delivery address")).toBeNull();
   });
 
   it("opens the changelog dialog", () => {

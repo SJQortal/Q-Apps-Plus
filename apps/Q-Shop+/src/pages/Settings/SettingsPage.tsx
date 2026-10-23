@@ -40,6 +40,7 @@ import { copyText } from "../../utils/clipboard";
 import { collectSettingsSnapshot, fetchSettingsFromQdn, publishSettingsToQdn } from "../../utils/settingsQdn";
 import { isProductView, setProductView, useProductView } from "../../utils/productView";
 import { selectMenuProps } from "../../components/common/menuStyle";
+import { saveDelivery, savedDelivery } from "../Cart/delivery";
 
 /** The coins a buyer can prefer, in the order the shops offer them. */
 export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR"];
@@ -116,6 +117,9 @@ export function SettingsPage() {
   const { signIn, authenticating } = useShellActions();
   const user = useSelector((state: RootState) => state.auth.user);
   const preferredCoin = useSelector((state: RootState) => state.store.preferredCoin);
+  // The address checkout kept for this name, if the buyer ticked it (pages/Cart/delivery.ts).
+  const [forgotFor, setForgotFor] = useState<string | null>(null);
+  const savedAddress = user?.name && forgotFor !== user.name ? savedDelivery(user.name) : null;
   const productView = useProductView();
   const { uiTheme, setUiTheme } = useHubTheme();
   const switchName = useSwitchActiveName();
@@ -347,6 +351,26 @@ export function SettingsPage() {
             ))}
           </TextField>
         </Row>
+        {savedAddress && (
+          <Row>
+            <RowLabel title="Saved delivery address">
+              {[savedAddress.streetAddress, savedAddress.city, savedAddress.country].filter(Boolean).join(", ")}: kept in this browser for {user?.name}&apos;s next
+              checkout (other Q-Apps in this Hub can read it).
+            </RowLabel>
+            <Buttons>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  if (!user?.name) return;
+                  saveDelivery(user.name, null);
+                  setForgotFor(user.name);
+                }}
+              >
+                Forget it
+              </Button>
+            </Buttons>
+          </Row>
+        )}
         <Row>
           <RowLabel title="Blocked names">The block list Q-Shop shares with Q-Blog.</RowLabel>
           <Buttons>
