@@ -26,6 +26,7 @@ import {
   STORE_ID,
   STORE_TITLE,
   catalogue,
+  chair,
   mug,
   poster,
   viewedStore,
@@ -33,6 +34,7 @@ import {
 import { listPendingOrders } from "../../money/pendingOrders";
 import { noteDeletedShop, resetDeletedShops } from "../../qdn/deleted";
 import { CartPage } from "./CartPage";
+import { SAVED_DELIVERY_STORAGE_KEY } from "./delivery";
 
 vi.mock("short-unique-id", () => ({
   default: class {
@@ -356,6 +358,45 @@ describe("cart page", () => {
     // Only the copy's cart was bought; Seller Name's stays.
     expect(cartFor(store.getState().cart.carts, copy.owner, storeId)).toBeUndefined();
     expect(Object.keys(cartFor(store.getState().cart.carts, real.owner, storeId)!.orders)).toEqual([real.products[1].id]);
+  });
+
+  it("remembers the delivery address on this device only when asked, and forgets it when unticked", async () => {
+    sellerMock();
+    const store = newStore();
+    withFixtureShop(store, [{ product: chair, qty: 1 }]);
+    renderCart(store);
+    await openCheckout();
+    await press("Continue");
+    const type = (label: RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    await screen.findByLabelText(/Customer name/i);
+    type(/Customer name/i, "Ann Buyer");
+    type(/Street address/i, "1 Main St");
+    type(/^City/, "Porto");
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "Portugal" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Portugal" }));
+    type(/Region/i, "Norte");
+    type(/Zip code/i, "4000-001");
+    const remember = screen.getByRole("checkbox", { name: "Remember this address on this device" });
+    expect(remember).not.toBeChecked();
+    fireEvent.click(remember);
+    await press("Continue");
+    expect(await screen.findByText("Confirm and pay")).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(SAVED_DELIVERY_STORAGE_KEY)!)[BUYER]).toMatchObject({ customerName: "Ann Buyer", city: "Porto", country: "Portugal" });
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Back" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Back" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // The next checkout starts from it; unticked, it's forgotten.
+    await openCheckout();
+    await press("Continue");
+    expect(await screen.findByLabelText(/Street address/i)).toHaveValue("1 Main St");
+    const again = screen.getByRole("checkbox", { name: "Remember this address on this device" });
+    expect(again).toBeChecked();
+    fireEvent.click(again);
+    await press("Continue");
+    expect(await screen.findByText("Confirm and pay")).toBeInTheDocument();
+    expect(localStorage.getItem(SAVED_DELIVERY_STORAGE_KEY)).toBeNull();
   });
 
   it("checks out several shops together: one review, then each shop paid and its order recorded in turn", async () => {

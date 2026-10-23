@@ -27,7 +27,8 @@ import { isDigitalOnly, missingDeliveryFields, type CartLine, type DeliveryInput
 import { errorMessage } from "../../qdn/hubErrors";
 import { shipsToCountry } from "../../constants/shipping";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
-import { emptyDelivery, focusFirstMissing } from "./delivery";
+import { emptyDelivery, focusFirstMissing, saveDelivery, savedDelivery } from "./delivery";
+import { RememberAddress } from "./RememberAddress";
 import { itemCount, priceLines, type CartShop } from "./cartLines";
 import type { ShopPricing } from "./useCartPricing";
 
@@ -116,7 +117,9 @@ export function CombinedCheckoutDialog({
 }) {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>("review");
-  const [delivery, setDelivery] = useState<DeliveryInput>(() => emptyDelivery(buyer.name));
+  // The address the buyer kept on this device last time, if they did (delivery.ts).
+  const [delivery, setDelivery] = useState<DeliveryInput>(() => savedDelivery(buyer.name) ?? emptyDelivery(buyer.name));
+  const [remember, setRemember] = useState(() => savedDelivery(buyer.name) !== null);
   const [showErrors, setShowErrors] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [runs, setRuns] = useState<Record<string, Run>>({});
@@ -167,6 +170,7 @@ export function CombinedCheckoutDialog({
       return;
     }
     if (included.length === 0) return;
+    saveDelivery(buyer.name, remember ? delivery : null);
     toConfirm();
   };
 
@@ -304,6 +308,7 @@ export function CombinedCheckoutDialog({
     body = (
       <Stack sx={{ gap: 2 }}>
         <LazyDeliveryForm value={delivery} onChange={setDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
+        <RememberAddress checked={remember} onChange={setRemember} />
         {notShipping.length > 0 && (
           <Alert severity="warning" role="alert">
             {notShipping.map((s) => s.title).join(", ")} {notShipping.length === 1 ? "doesn't" : "don't"} ship to {delivery.country}

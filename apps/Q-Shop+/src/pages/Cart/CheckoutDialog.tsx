@@ -32,7 +32,8 @@ import { errorMessage } from "../../qdn/hubErrors";
 import { copyText } from "../../utils/clipboard";
 import { CoinPicker } from "./CoinPicker";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
-import { emptyDelivery, focusFirstMissing } from "./delivery";
+import { emptyDelivery, focusFirstMissing, saveDelivery, savedDelivery } from "./delivery";
+import { RememberAddress } from "./RememberAddress";
 import { PendingOrderCard } from "./PendingOrders";
 import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
@@ -104,7 +105,9 @@ export function CheckoutDialog({
   const { coins, coin, rate, rateLoading, rateError, setCoin } = useShopCoin(shop);
   const isDigital = isDigitalOnly(lines);
   const [step, setStep] = useState<Step>("review");
-  const [delivery, setDelivery] = useState<DeliveryInput>(() => emptyDelivery(buyer.name));
+  // The address the buyer kept on this device last time, if they did (delivery.ts).
+  const [delivery, setDelivery] = useState<DeliveryInput>(() => savedDelivery(buyer.name) ?? emptyDelivery(buyer.name));
+  const [remember, setRemember] = useState(() => savedDelivery(buyer.name) !== null);
   const [showErrors, setShowErrors] = useState(false);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [progress, setProgress] = useState<CheckoutStep | null>(null);
@@ -156,6 +159,7 @@ export function CheckoutDialog({
       return;
     }
     if (noShipping) return;
+    saveDelivery(buyer.name, remember ? delivery : null);
     toConfirm();
   };
 
@@ -303,6 +307,7 @@ export function CheckoutDialog({
     body = (
       <Stack sx={{ gap: 2 }}>
         <LazyDeliveryForm value={delivery} onChange={setDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
+        <RememberAddress checked={remember} onChange={setRemember} />
         {noShipping && (
           <Alert severity="warning" role="alert">
             {shop.title || shop.owner} doesn&apos;t ship to {noShipping}
