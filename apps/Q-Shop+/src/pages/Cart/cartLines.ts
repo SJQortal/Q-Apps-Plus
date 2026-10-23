@@ -181,6 +181,27 @@ export function priceLines(
   }
 }
 
+/**
+ * Why a shop's cart can't be checked out right now (the reason shown under
+ * its Check out), or undefined when it can: signed out or without a name
+ * (`gateReason`), the shop not loaded or deleted, items still loading, or
+ * nothing in it for sale.
+ */
+export function checkoutBlock(
+  view: { shop: CartShop | null; shopPhase: LoadPhase; lines: CartViewLine[] },
+  gateReason?: string
+): string | undefined {
+  if (gateReason) return gateReason;
+  if (!view.shop) {
+    if (view.shopPhase === "gone") return "This shop was deleted.";
+    if (view.shopPhase === "failed") return "This shop couldn't be loaded.";
+    return "Waiting for the shop to load…";
+  }
+  if (view.lines.some(isLoadingLine)) return "Loading your items…";
+  if (checkoutLinesOf(view.lines).length === 0) return "Nothing here can be bought right now.";
+  return undefined;
+}
+
 /** `ab12cd…9f3c2a`: enough of an address to recognise it. */
 export function shortAddress(address: string): string {
   return address.length > 18 ? `${address.slice(0, 8)}…${address.slice(-6)}` : address;

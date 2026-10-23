@@ -358,6 +358,87 @@ describe("cart page", () => {
     expect(Object.keys(cartFor(store.getState().cart.carts, real.owner, storeId)!.orders)).toEqual([real.products[1].id]);
   });
 
+  it("checks out several shops together: one review, then each shop paid and its order recorded in turn", async () => {
+    const world = makeWorld({ shops: 2 });
+    const [first, second] = world.shops;
+    const node = installMockNode(world);
+    node.q.on("SEND_COIN", async () => ({ signature: "PAYSIG" }));
+    node.q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    const store = newStore();
+    const add = (shop: typeof first, i: number, quantity = 1) =>
+      store.dispatch(
+        setProductToCart({
+          productId: shop.products[i].id,
+          catalogueId: `q-store-catalogue-${shop.shortStoreId}-CAT0000000`,
+          storeId: `q-store-general-${shop.shortStoreId}`,
+          storeOwner: shop.owner,
+          quantity,
+        })
+      );
+    add(first, 1, 2);
+    add(second, 2);
+    renderCart(store);
+
+    const summary = await screen.findByRole("region", { name: "Summary" });
+    const all = await within(summary).findByRole("button", { name: "Check out all 2 shops" });
+    expect(within(summary).getByText("Total")).toBeInTheDocument();
+    // 2 × 2 QORT and 1 × 3 QORT.
+    expect(within(summary).getByText("7.00")).toBeInTheDocument();
+    fireEvent.click(all);
+
+    const dialog = await screen.findByRole("dialog", { name: "Check out 2 shops" });
+    expect(within(dialog).getByText(first.title)).toBeInTheDocument();
+    expect(within(dialog).getByText(second.title)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Hub asks you to confirm 4 times/)).toBeInTheDocument();
+    await press("Continue");
+    expect(await screen.findByText("You make 2 payments, one after another:")).toBeInTheDocument();
+    await press("Pay 2 shops");
+
+    await waitFor(() => expect(node.q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
+    expect(await screen.findByRole("dialog", { name: "Your orders" })).toBeInTheDocument();
+    expect(screen.getAllByText(/^Order placed\./)).toHaveLength(2);
+    // In the cart's order (the newest cart first): each seller paid for their own, one after the other.
+    expect(node.q.callsFor("SEND_COIN").map((c) => [c.coin, c.amount])).toEqual([
+      ["QORT", "3.00000000"],
+      ["QORT", "4.00000000"],
+    ]);
+    expect(node.q.callsFor("GET_NAME_DATA").map((c) => c.name)).toEqual([second.owner, first.owner]);
+    expect(Object.keys(store.getState().cart.carts)).toEqual([]);
+  });
+
+  it("stops at a declined payment: the shops before it are paid, the ones after stay in the cart", async () => {
+    const world = makeWorld({ shops: 2 });
+    const [first, second] = world.shops;
+    const node = installMockNode(world);
+    let payments = 0;
+    node.q.on("SEND_COIN", async () => {
+      payments += 1;
+      if (payments === 1) throw { error: { cancelled: true }, message: "User declined request" };
+      return { signature: "PAYSIG" };
+    });
+    node.q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    const store = newStore();
+    for (const shop of [first, second]) {
+      store.dispatch(
+        setProductToCart({
+          productId: shop.products[1].id,
+          catalogueId: `q-store-catalogue-${shop.shortStoreId}-CAT0000000`,
+          storeId: `q-store-general-${shop.shortStoreId}`,
+          storeOwner: shop.owner,
+        })
+      );
+    }
+    renderCart(store);
+    fireEvent.click(await within(await screen.findByRole("region", { name: "Summary" })).findByRole("button", { name: "Check out all 2 shops" }));
+    await press("Continue");
+    await press("Pay 2 shops");
+    expect(await screen.findByText("You declined the payment. Nothing was paid; it stays in your cart.")).toBeInTheDocument();
+    expect(screen.getByText("Not paid: it stays in your cart.")).toBeInTheDocument();
+    expect(node.q.callsFor("SEND_COIN")).toHaveLength(1);
+    expect(node.q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+    expect(Object.keys(store.getState().cart.carts)).toHaveLength(2);
+  });
+
   it("keeps the buyer's coin when the node has no rate for it, and pays what the seller priced in it", async () => {
     // The node answers no ARRR rate (no recent trades): every fetch but the order search fails.
     const q = sellerMock({ SEND_COIN: async () => "arrr-txid" });

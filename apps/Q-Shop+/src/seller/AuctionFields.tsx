@@ -74,7 +74,7 @@ export function AuctionFields({ value, onChange }: { value: AuctionFormValues; o
           Runs for
         </Typography>
         {DURATIONS.map((days) => (
-          <Button key={days} variant="outlined" color="inherit" size="small" onClick={() => endIn(days)} sx={{ minHeight: 40 }}>
+          <Button key={days} variant="outlined" color="inherit" size="small" onClick={() => endIn(days)} sx={{ minHeight: 44 }}>
             {days === 1 ? "1 day" : `${days} days`}
           </Button>
         ))}

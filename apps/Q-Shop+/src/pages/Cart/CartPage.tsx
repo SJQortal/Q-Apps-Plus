@@ -13,11 +13,13 @@ import { Cart } from "./Cart";
 export function CartPage() {
   const dispatch = useDispatch();
   const isOpen = useSelector((state: RootState) => state.cart.isOpen);
+  // Several shops get a summary beside their carts (Cart.tsx): room for both.
+  const several = useSelector((state: RootState) => Object.keys(state.cart.carts).length > 1);
   useEffect(() => {
     if (isOpen) dispatch(setIsOpen(false));
   }, [isOpen, dispatch]);
   return (
-    <Page width="list">
+    <Page width={several ? "grid" : "list"}>
       <Cart />
     </Page>
   );

@@ -34,6 +34,26 @@ const ROW_SX = {
   listStyle: "none",
 } as const;
 
+/**
+ * A line: the picture beside the title (Remove at its end), with the stepper
+ * and the line's total under them; all in one row once the shop's list is
+ * 520 px wide (a container query: the list is narrower beside the summary).
+ */
+const LINE_SX = {
+  ...ROW_SX,
+  gridTemplateColumns: `${THUMB}px minmax(0, 1fr) auto`,
+  gridTemplateAreas: `"thumb info remove" "thumb qty total"`,
+  columnGap: 1.5,
+  rowGap: 1,
+  alignItems: "start",
+  "@container (min-width: 520px)": {
+    gridTemplateColumns: `${THUMB}px minmax(0, 1fr) auto minmax(96px, auto) auto`,
+    gridTemplateAreas: `"thumb info qty total remove"`,
+    columnGap: 2,
+    alignItems: "center",
+  },
+} as const;
+
 /** A line while its catalogue loads: shaped like the real row. */
 export function CartItemSkeleton({ fetching }: { fetching?: boolean }) {
   return (
@@ -100,37 +120,32 @@ export function CartItem({
   const unit = forSale ? unitPrice(product, coin, rate) : undefined;
 
   return (
-    <Box component="li" sx={ROW_SX}>
-      <Picture src={image} alt={product?.title ?? ""} size={THUMB} fallback={<ImageOutlinedIcon aria-hidden />} />
-      <Box sx={{ minWidth: 0 }}>
-        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5 }}>
-          <Box sx={{ flex: 1, minWidth: 0, pt: 0.25 }}>
-            {product ? (
-              <Link
-                component={RouterLink}
-                to={productPath(owner, storeId, line.productId, line.catalogueId)}
-                underline="hover"
-                color="text.primary"
-                sx={{
-                  fontWeight: 600,
-                  fontSize: 16,
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  overflow: "hidden",
-                  overflowWrap: "anywhere",
-                }}
-              >
-                {title}
-              </Link>
-            ) : (
-              <Typography sx={{ fontWeight: 600, fontSize: 16 }}>{title}</Typography>
-            )}
-          </Box>
-          <IconButton aria-label={`Remove ${title}`} onClick={onRemove} sx={{ width: 44, height: 44, mt: -1, mr: -1 }}>
-            <DeleteOutlineIcon />
-          </IconButton>
-        </Box>
+    <Box component="li" sx={LINE_SX}>
+      <Box sx={{ gridArea: "thumb" }}>
+        <Picture src={image} alt={product?.title ?? ""} size={THUMB} fallback={<ImageOutlinedIcon aria-hidden />} />
+      </Box>
+      <Box sx={{ gridArea: "info", minWidth: 0, pt: 0.25 }}>
+        {product ? (
+          <Link
+            component={RouterLink}
+            to={productPath(owner, storeId, line.productId, line.catalogueId)}
+            underline="hover"
+            color="text.primary"
+            sx={{
+              fontWeight: 600,
+              fontSize: 16,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {title}
+          </Link>
+        ) : (
+          <Typography sx={{ fontWeight: 600, fontSize: 16 }}>{title}</Typography>
+        )}
 
         {forSale && (
           <Typography variant="body2" color="text.secondary" component="div" sx={{ mt: 0.25 }}>
@@ -155,32 +170,33 @@ export function CartItem({
         )}
         {line.state === "gone" && !quiet && <LineNote>The seller removed this product: left out of checkout</LineNote>}
         {line.state === "failed" && <LineNote>Not available on your node right now: left out of checkout</LineNote>}
-
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 1, mt: 1 }}>
-          {forSale ? (
-            <QuantityStepper quantity={line.quantity} onChange={onQuantity} itemName={title} />
-          ) : line.state === "failed" ? (
-            <Button variant="outlined" onClick={onRetry} sx={{ minHeight: 44 }}>
-              Retry
-            </Button>
-          ) : (
-            <Typography variant="body2" color="text.secondary">
-              Quantity {line.quantity}
-            </Typography>
-          )}
-          {forSale && unit !== undefined && (
-            <PriceTag
-              product={product}
-              coin={coin}
-              rate={rate}
-              quantity={line.quantity}
-              shop={shop}
-              size="medium"
-              sx={{ ml: "auto", fontSize: 16 }}
-            />
-          )}
-        </Box>
       </Box>
+
+      <Box sx={{ gridArea: "qty", display: "flex", alignItems: "center" }}>
+        {forSale ? (
+          <QuantityStepper quantity={line.quantity} onChange={onQuantity} itemName={title} />
+        ) : line.state === "failed" ? (
+          <Button variant="outlined" onClick={onRetry} sx={{ minHeight: 44 }}>
+            Retry
+          </Button>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            Quantity {line.quantity}
+          </Typography>
+        )}
+      </Box>
+      <Box sx={{ gridArea: "total", display: "flex", alignItems: "center", justifyContent: "flex-end", minHeight: 44 }}>
+        {forSale && unit !== undefined && (
+          <PriceTag product={product} coin={coin} rate={rate} quantity={line.quantity} shop={shop} size="medium" sx={{ fontSize: 16 }} />
+        )}
+      </Box>
+      <IconButton
+        aria-label={`Remove ${title}`}
+        onClick={onRemove}
+        sx={{ gridArea: "remove", justifySelf: "end", width: 44, height: 44, mt: -0.75, mr: -1, "@container (min-width: 520px)": { mt: 0, mr: 0 } }}
+      >
+        <DeleteOutlineIcon />
+      </IconButton>
     </Box>
   );
 }

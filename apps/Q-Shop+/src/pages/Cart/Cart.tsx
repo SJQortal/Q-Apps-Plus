@@ -1,14 +1,14 @@
 /**
  * The cart page's body: orders still to finish first, then every shop's
- * cart (newest first), each with its own coin, subtotal and checkout. The
- * original showed one shop's cart in a modal over the shop page, with the
- * coin picker only on the last step; carts now survive a reload and all of
- * them are here.
+ * cart (newest first), each with its own coin, subtotal and checkout, and a
+ * summary with Check out all (several shops at once). The original showed
+ * one shop's cart in a modal over the shop page, with the coin picker only
+ * on the last step; carts now survive a reload and all of them are here.
  */
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
-import { Alert, Button, Snackbar } from "@mui/material";
+import { Alert, Box, Button, Snackbar } from "@mui/material";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import type { RootState } from "../../state/store";
 import {
@@ -24,8 +24,11 @@ import type { PendingOrder } from "../../money/pendingOrders";
 import { PageHeader } from "../../components/layout/Page";
 import { useShellActions } from "../../components/layout/shellState";
 import { EmptyState } from "../../components/common/EmptyState";
-import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
+import { PHONE_MEDIA, useNarrowLayout } from "../../hooks/usePhoneLayout";
 import { CheckoutDialog } from "./CheckoutDialog";
+import { CombinedCheckoutDialog } from "./CombinedCheckoutDialog";
+import { CartSummary } from "./CartSummary";
+import { useCartPricing, type ShopPricing } from "./useCartPricing";
 import { PendingOrdersPanel } from "./PendingOrders";
 import { ShopCart, type CheckoutGate } from "./ShopCart";
 import { useCartData, type ShopCartView } from "./useCartData";
@@ -63,6 +66,11 @@ export function Cart() {
   const [checkout, setCheckout] = useState<OpenCheckout | null>(null);
   const [removed, setRemoved] = useState<RemovedLine | null>(null);
   const [recorded, setRecorded] = useState<PendingOrder | null>(null);
+  const [combined, setCombined] = useState<ShopPricing[] | null>(null);
+  const pricing = useCartPricing(views);
+  const wide = !useNarrowLayout();
+  // A summary, and checking out together, once the cart holds more than one shop.
+  const several = views.length > 1;
 
   const buyer: CheckoutBuyer | null =
     user?.name && user.address && user.publicKey ? { name: user.name, address: user.address, publicKey: user.publicKey } : null;
@@ -130,19 +138,40 @@ export function Cart() {
   };
 
   /** Paid: the order now lives in pending orders until it's on QDN, so the bought lines leave the cart. */
-  const onPaid = () => {
-    if (!checkout) return;
-    const { storeId, storeOwner } = checkout;
-    if (checkout.wholeCart) {
+  const removeBought = (storeId: string, storeOwner: string | null, lines: CartLine[], wholeCart: boolean) => {
+    if (wholeCart) {
       dispatch(removeCartFromCarts({ storeId, storeOwner }));
     } else {
       // Lines left out (not for sale right now) stay, still flagged.
-      for (const line of checkout.lines) {
+      for (const line of lines) {
         dispatch(removeProductFromCart({ storeId, storeOwner, productId: line.productId }));
       }
     }
-    if (removed?.storeId === storeId && removed.storeOwner === storeOwner) setRemoved(null);
+    setRemoved((prev) => (prev?.storeId === storeId && prev.storeOwner === storeOwner ? null : prev));
   };
+
+  const onPaid = () => {
+    if (checkout) removeBought(checkout.storeId, checkout.storeOwner, checkout.lines, checkout.wholeCart);
+  };
+
+  const onPaidCombined = (p: ShopPricing) =>
+    removeBought(p.view.storeId, p.view.owner, p.lines, p.lines.length === Object.keys(p.view.cart.orders).length);
+
+  const openCombined = (ready: ShopPricing[]) => {
+    if (!buyer || ready.length === 0) return;
+    setRecorded(null);
+    setCombined(ready);
+  };
+
+  const summary = (
+    <CartSummary
+      pricing={pricing}
+      gate={gate}
+      sticky={wide}
+      onCheckoutAll={openCombined}
+      onCheckout={(p) => openCheckout(p.view, p.lines, p.leftOut)}
+    />
+  );
 
   return (
     <>
@@ -188,19 +217,26 @@ export function Cart() {
           onAction={() => navigate("/")}
         />
       ) : (
-        views.map((view) => (
-          <ShopCart
-            key={view.key}
-            view={view}
-            gate={gate}
-            onCheckout={openCheckout}
-            onQuantity={changeQuantity}
-            onRemove={remove}
-            onRemoveShop={removeShop}
-            onRetryShop={retryShop}
-            onRetryLines={retryLines}
-          />
-        ))
+        <Box sx={{ display: "grid", gap: 2, alignItems: "start", gridTemplateColumns: wide && several ? "minmax(0, 1fr) 320px" : "minmax(0, 1fr)" }}>
+          {/* Narrower screens: the summary first. */}
+          {!wide && several && summary}
+          <Box sx={{ minWidth: 0 }}>
+            {views.map((view) => (
+              <ShopCart
+                key={view.key}
+                view={view}
+                gate={gate}
+                onCheckout={openCheckout}
+                onQuantity={changeQuantity}
+                onRemove={remove}
+                onRemoveShop={removeShop}
+                onRetryShop={retryShop}
+                onRetryLines={retryLines}
+              />
+            ))}
+          </Box>
+          {wide && several && summary}
+        </Box>
       )}
 
       {checkout && buyer && (
@@ -214,6 +250,8 @@ export function Cart() {
           onPaid={onPaid}
         />
       )}
+
+      {combined && buyer && <CombinedCheckoutDialog shops={combined} buyer={buyer} onClose={() => setCombined(null)} onPaid={onPaidCombined} />}
 
       <Snackbar
         open={removed !== null}

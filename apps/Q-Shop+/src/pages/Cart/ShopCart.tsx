@@ -12,7 +12,7 @@ import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { CartItem } from "./CartItem";
 import { CoinPicker } from "./CoinPicker";
 import { Picture } from "./Picture";
-import { checkoutLinesOf, isLeftOut, isLoadingLine, priceLines, type CartViewLine } from "./cartLines";
+import { checkoutBlock, checkoutLinesOf, isLeftOut, priceLines, type CartViewLine } from "./cartLines";
 import type { ShopCartView } from "./useCartData";
 
 export interface CheckoutGate {
@@ -58,22 +58,9 @@ export function ShopCart({
   const title = shop?.title || view.knownTitle || (gone ? shortStoreIdOf(storeId) : "") || "Shop";
   const lines = checkoutLinesOf(view.lines);
   const leftOut = view.lines.filter(isLeftOut).length;
-  const loading = view.lines.some(isLoadingLine);
   const priced = priceLines(lines, coin, rate, rateLoading, rateError);
 
-  const blocked = !gate.allowed
-    ? gate.reason
-    : !shop
-      ? view.shopPhase === "gone"
-        ? "This shop was deleted."
-        : view.shopPhase === "failed"
-          ? "This shop couldn't be loaded."
-          : "Waiting for the shop to load…"
-      : loading
-        ? "Loading your items…"
-        : lines.length === 0
-          ? "Nothing here can be bought right now."
-          : undefined;
+  const blocked = checkoutBlock(view, gate.allowed ? undefined : (gate.reason ?? "Sign in to check out."));
 
   return (
     <Paper
@@ -142,7 +129,8 @@ export function ShopCart({
         </Alert>
       )}
 
-      <Box component="ul" sx={{ m: 0, p: 0 }} aria-label={`Items from ${title}`}>
+      {/* Its lines lay out by the list's own width (CartItem.tsx). */}
+      <Box component="ul" sx={{ m: 0, p: 0, containerType: "inline-size" }} aria-label={`Items from ${title}`}>
         {view.lines.map((line) => (
           <CartItem
             key={line.productId}
@@ -163,33 +151,46 @@ export function ShopCart({
       </Box>
 
       {!gone && (
-        <Box sx={{ borderTop: 1, borderColor: "divider", pt: 2, display: "grid", gap: 1.5 }}>
-          {shop && <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />}
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-            <Typography sx={{ fontWeight: 700, fontSize: 16 }}>Subtotal</Typography>
-            {priced.ok ? (
-              <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} />
-            ) : (
-              <Typography color="text.secondary">—</Typography>
+        <Box
+          sx={{
+            borderTop: 1,
+            borderColor: "divider",
+            pt: 2,
+            display: "grid",
+            gap: 1.5,
+            // From 600 px: the coin and notes on the left, the subtotal and Check out on the right.
+            gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) auto" },
+            alignItems: "end",
+          }}
+        >
+          <Box sx={{ display: "grid", gap: 1, minWidth: 0 }}>
+            {shop && <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />}
+            {!priced.ok && priced.reason === "price" && priced.missing.length > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {priced.missing.join(", ")} {priced.missing.length === 1 ? "has" : "have"} no price in {coinLabel(coin, shop)}.
+              </Typography>
+            )}
+            {!priced.ok && priced.reason === "no-rate" && (
+              <Typography variant="body2" color="text.secondary">
+                Your node has no {coin} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {coin}. Pick
+                another coin, or remove {priced.missing.length === 1 ? "it" : "them"} to pay in {coin}.
+              </Typography>
+            )}
+            {leftOut > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {leftOut === 1 ? "1 item can't be bought now and is" : `${leftOut} items can't be bought now and are`} left out of checkout.
+              </Typography>
             )}
           </Box>
-          {!priced.ok && priced.reason === "price" && priced.missing.length > 0 && (
-            <Typography variant="body2" color="text.secondary">
-              {priced.missing.join(", ")} {priced.missing.length === 1 ? "has" : "have"} no price in {coinLabel(coin, shop)}.
-            </Typography>
-          )}
-          {!priced.ok && priced.reason === "no-rate" && (
-            <Typography variant="body2" color="text.secondary">
-              Your node has no {coin} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {coin}. Pick
-              another coin, or remove {priced.missing.length === 1 ? "it" : "them"} to pay in {coin}.
-            </Typography>
-          )}
-          {leftOut > 0 && (
-            <Typography variant="body2" color="text.secondary">
-              {leftOut === 1 ? "1 item can't be bought now and is" : `${leftOut} items can't be bought now and are`} left out of checkout.
-            </Typography>
-          )}
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: { xs: "stretch", sm: "flex-end" }, gap: 0.75 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", alignItems: { xs: "stretch", sm: "flex-end" }, gap: 1 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+              <Typography sx={{ fontWeight: 700, fontSize: 16 }}>Subtotal</Typography>
+              {priced.ok ? (
+                <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} />
+              ) : (
+                <Typography color="text.secondary">—</Typography>
+              )}
+            </Box>
             <Button
               variant="contained"
               size="large"
@@ -202,7 +203,7 @@ export function ShopCart({
               Check out
             </Button>
             {blocked && (
-              <Typography id={`${headingId}-why`} variant="body2" color="text.secondary">
+              <Typography id={`${headingId}-why`} variant="body2" color="text.secondary" sx={{ textAlign: { sm: "right" } }}>
                 {blocked}
               </Typography>
             )}
