@@ -155,7 +155,8 @@ describe("BottomNav", () => {
       const store = signedIn();
       store.dispatch(setOwnShopStatus("none"));
       renderNav({ store });
-      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
+      // Named for what it does then (Simon, 2026-10-23).
+      fireEvent.click(screen.getByRole("button", { name: "Create Shop" }));
       expect(store.getState().global.isOpenCreateStoreModal).toBe(true);
       expect(where()).toBe("/");
     });
@@ -181,7 +182,7 @@ describe("BottomNav", () => {
       const store = createAppStore();
       store.dispatch(addUser({ address: "QNoName", publicKey: "pk", name: "", names: [{ name: "", owner: "QNoName" }] }));
       const { actions } = renderNav({ store });
-      fireEvent.click(screen.getByRole("button", { name: "Manage Shop" }));
+      fireEvent.click(screen.getByRole("button", { name: "Create Shop" }));
       expect(actions.signIn).not.toHaveBeenCalled();
       expect(store.getState().notifications.alertTypes.alertInfo).toMatch(/Register a Qortal name/);
     });

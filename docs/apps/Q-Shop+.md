@@ -600,6 +600,10 @@ Simon: *"also if user has the USD or other currency prices set up, please next t
 - **Bundle:** the button adds 3 kB to the first download (1.3 kB gzipped): the rate helpers moved to `money/fiatRates.ts`, so the pricing code stays out of it.
 - **Tests:** 939 → 944 (the button's conditions, drafts blocking, the review and the publish: the mug's QORT price follows, its ARRR price and the ARRR rate don't). **Screens:** quick-rate, seller, home, seller-shop and seller-pricing in Hub 3.0, quick-rate and seller in Classic and White, at five sizes (45 captures): 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe.
 
+### Round 5, 2026-10-23 (evening): Create Shop until there is a shop
+
+Simon: *"if logged in user does not have a shop yet, instead of saying there manage shop call it Create Shop"*: the header's item reads **Create Shop** (with an add-shop icon) for a signed-in account whose name has no shop, or that has no name yet; the phone's bottom bar shows "Create" (named Create Shop for screen readers). It stays Manage Shop while the name's shops are loading (no flicker, and no second shop by mistake) and when signed out. `components/layout/shellState.ts` useSellLabel; tests 944 → 947 (AppShell and BottomNav).
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.

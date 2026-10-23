@@ -14,10 +14,11 @@ import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import ShoppingCartOutlinedIcon from "@mui/icons-material/ShoppingCartOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
+import AddBusinessOutlinedIcon from "@mui/icons-material/AddBusinessOutlined";
 import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
 import { headerFill, primarySoft } from "../../../hub-theme";
 import { useLandscapePhone, usePhoneLayout } from "../../../hooks/usePhoneLayout";
-import { cartLabel, navSection, useCartItemCount, usePendingOrderCount, useSell, type NavSection } from "../shellState";
+import { cartLabel, navSection, useCartItemCount, usePendingOrderCount, useSell, useSellLabel, type NavSection } from "../shellState";
 
 /** Height of the bar without the safe-area inset; the spacer and the toasts use it too. */
 export const BOTTOM_NAV_HEIGHT = 64;
@@ -171,6 +172,7 @@ export function BottomNav() {
   const items = useCartItemCount();
   const pending = usePendingOrderCount();
   const sell = useSell();
+  const creating = useSellLabel() === "Create Shop";
 
   if (!phone) return null;
 
@@ -186,8 +188,10 @@ export function BottomNav() {
       onClick: () => navigate("/cart"),
     },
     { key: "orders", label: "Orders", icon: <ReceiptLongOutlinedIcon />, onClick: () => navigate("/my-orders") },
-    // "Manage Shop" (Simon) doesn't fit a fifth of a 360 px phone: "Manage" shows, screen readers hear it whole.
-    { key: "sell", label: "Manage", name: "Manage Shop", icon: <SellOutlinedIcon />, onClick: sell },
+    // "Manage Shop" (Simon) doesn't fit a fifth of a 360 px phone: "Manage" shows, screen readers hear it whole; "Create" before the account has a shop.
+    creating
+      ? { key: "sell", label: "Create", name: "Create Shop", icon: <AddBusinessOutlinedIcon />, onClick: sell }
+      : { key: "sell", label: "Manage", name: "Manage Shop", icon: <SellOutlinedIcon />, onClick: sell },
   ];
 
   return (

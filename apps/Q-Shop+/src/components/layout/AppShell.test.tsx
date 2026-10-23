@@ -232,6 +232,42 @@ describe("AppShell on desktop", () => {
   });
 });
 
+describe("Manage Shop or Create Shop", () => {
+  function newSellerStore(status: "none" | "loading") {
+    const store = createAppStore();
+    store.dispatch(addUser({ address: ADDRESS, publicKey: "pk", name: "New Seller", names: [{ name: "New Seller", owner: ADDRESS }] }));
+    store.dispatch(setOwnShopStatus(status));
+    return store;
+  }
+
+  it("is Create Shop in the header for a name without a shop, and opens Create shop", () => {
+    restore = mockViewport(DESKTOP);
+    const store = newSellerStore("none");
+    renderShell({ store });
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Orders", "Create Shop"]);
+    fireEvent.click(within(nav).getByRole("button", { name: "Create Shop" }));
+    expect(store.getState().global.isOpenCreateStoreModal).toBe(true);
+  });
+
+  it("stays Manage Shop while the name's shops load, and when signed out", () => {
+    restore = mockViewport(DESKTOP);
+    const { unmount } = renderShell({ store: newSellerStore("loading") });
+    expect(within(screen.getByRole("navigation", { name: "Main" })).getByRole("button", { name: "Manage Shop" })).toBeInTheDocument();
+    unmount();
+    renderShell();
+    expect(within(screen.getByRole("navigation", { name: "Main" })).getByRole("button", { name: "Manage Shop" })).toBeInTheDocument();
+  });
+
+  it("is Create in the phone's bottom bar, named Create Shop", () => {
+    restore = mockViewport(PHONE_PORTRAIT);
+    renderShell({ store: newSellerStore("none") });
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Cart", "Orders", "Create"]);
+    expect(within(nav).getByRole("button", { name: "Create Shop" })).toBeInTheDocument();
+  });
+});
+
 describe("AppShell on a phone", () => {
   it("has the bottom bar instead of the header's navigation, and the account menu as a sheet", async () => {
     restore = mockViewport(PHONE_PORTRAIT);

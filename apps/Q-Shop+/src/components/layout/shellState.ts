@@ -117,6 +117,21 @@ export function useSell(): () => void {
       return;
     }
     if (status === "error") reloadOwnShops();
-    dispatch(setNotification({ msg: "Loading your shops… try Sell again in a moment.", alertType: "info" }));
+    dispatch(setNotification({ msg: "Loading your shops… try again in a moment.", alertType: "info" }));
   }, [name, address, currentStoreId, myStores, status, signIn, reloadOwnShops, navigate, dispatch]);
+}
+
+/**
+ * What the Sell item is called (Simon, 2026-10-23): Create Shop for a
+ * signed-in account that has no shop yet (its name has none, or it has no
+ * name to open one under, which Sell then says), Manage Shop otherwise, and
+ * while the name's shops are still loading, so the label never flickers.
+ */
+export function useSellLabel(): "Manage Shop" | "Create Shop" {
+  const signedIn = useSelector((state: RootState) => !!state.auth.user?.address);
+  const name = useSelector((state: RootState) => state.auth.user?.name);
+  const hasShop = useSelector((state: RootState) => !!state.global.currentStore?.id || state.store.myStores.length > 0);
+  const status = useSelector((state: RootState) => state.global.ownShopStatus);
+  if (!signedIn || hasShop) return "Manage Shop";
+  return !name || status === "none" ? "Create Shop" : "Manage Shop";
 }

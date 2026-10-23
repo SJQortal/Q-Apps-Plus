@@ -1,6 +1,6 @@
 /**
  * The sticky header (docs/DESIGN.md → Layout): the logo and the app's name
- * (home), Shops / Products / Orders / Manage Shop (Simon, 2026-10-22: was "Sell") and the cart on desktop, Settings,
+ * (home), Shops / Products / Orders / Manage Shop (Simon, 2026-10-22: was "Sell"; Create Shop until the account has one) and the cart on desktop, Settings,
  * and the account menu or Sign in; beside Manage Shop, a seller pricing in a currency gets their QORT rate. On phones it slides away when you scroll
  * down and comes back when you scroll up; the navigation lives in BottomNav
  * there, and Settings stays up here (the bar takes five items).
@@ -12,6 +12,7 @@ import { Button, IconButton, Skeleton, Tooltip } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
+import AddBusinessOutlinedIcon from "@mui/icons-material/AddBusinessOutlined";
 import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
@@ -21,7 +22,7 @@ import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { NameAvatar } from "../../common/NameAvatar";
 import PageLoader from "../../common/PageLoader";
 import { CartBadgeIcon } from "../BottomNav/BottomNav";
-import { cartLabel, navSection, useCartItemCount, usePendingOrderCount, useSell, useShellActions } from "../shellState";
+import { cartLabel, navSection, useCartItemCount, usePendingOrderCount, useSell, useSellLabel, useShellActions } from "../shellState";
 import {
   AppTitle,
   AvatarContainer,
@@ -61,6 +62,7 @@ const NavBar: React.FC = () => {
   const items = useCartItemCount();
   const pending = usePendingOrderCount();
   const sell = useSell();
+  const sellLabel = useSellLabel();
   const section = navSection(pathname);
 
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
@@ -127,8 +129,8 @@ const NavBar: React.FC = () => {
               aria-current={section === "sell" ? "page" : undefined}
               onClick={sell}
             >
-              <SellOutlinedIcon aria-hidden />
-              Manage Shop
+              {sellLabel === "Create Shop" ? <AddBusinessOutlinedIcon aria-hidden /> : <SellOutlinedIcon aria-hidden />}
+              {sellLabel}
             </NavLinkButton>
           </DesktopNav>
         )}
