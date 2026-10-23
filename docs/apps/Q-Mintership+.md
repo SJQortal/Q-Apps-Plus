@@ -1343,6 +1343,7 @@ Stage 4 of docs/RELEASE.md, after 1.0.0 was published and #23 merged. Nothing is
   - **Checks:** 2,582 tests, lint, typecheck and build; `node e2e/screens.mjs` on the Page width, poll and Home screens (40 captures, plus 2 at 3840×2160), all 0. The private-wording sweep of every new message and diff found nothing, and there are no Claude lines.
   - **Gitea:** this machine has no Gitea login, so the branch isn't on Gitea yet; Simon needs a fork of crowetic/Q-Mintership-Alpha there. The `gitea` remote in this repo fetches only (its push URL is disabled).
   - **The PR text:** says 1.0.3, 3.0.7, both bases, 780 commits, 2,582 tests. Still no PR on either.
+  - **Gitea only for now** (Simon, 2026-10-23): he forks crowetic/Q-Mintership-Alpha on Gitea, pushes `q-mintership-upstream/4.0.0` to it as `q-mintership-4.0.0` and opens the PR there himself (base `hub-notifications`). No GitHub PR for now.
 - **The PR text:** `.worktrees/pr-q-mintership-4.0.0.md` (from docs/templates/upstream-pr.md), opening with the process change and listing what was dropped and why.
 - **Every name in constants/plus.ts** (branch `q-mintership-plus/plus-names`), so the next upstream round's Ship-as edits values, not 140 files:
   - `APP_NAME` everywhere the screens said "Q-Mintership+";
