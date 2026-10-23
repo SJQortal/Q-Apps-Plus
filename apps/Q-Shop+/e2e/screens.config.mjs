@@ -10,8 +10,9 @@
  * bought from two other shops; buyers' orders to "my-shop" with statuses;
  * reviews; a cart with items from two shops; a paid order still to record.
  * "my-shop" prices four products in USD at the seller's rates; Shop+Plus has
- * arranged its products (Featured) and both have collections. Categories are
- * the fixed list's, plus one from before it ("Paper").
+ * arranged its products (Featured) and both have collections, and runs three
+ * auctions (live with bids, upcoming, and one "Seller Name" won). Categories
+ * are the fixed list's, plus one from before it ("Paper").
  */
 const ME = 'Seller Name';
 const ME_ADDRESS = 'QSeLLeRNameAddressxxxxxxxxxxxx9f3c2a';
@@ -83,8 +84,25 @@ function product(s, p) {
     ...(s.short === 'my-shop' && USD_PRICED.includes(p) && { fiatPrice: { currency: 'USD', value: Math.round((1.5 + p) * 18) / 100, qort: 1.5 + p } }),
     // The product page's product: a formatted description with a video, a PDF and a Q-Tube link, and 7 pictures.
     ...(s.short === 'shop-3' && p === 0 && RICH),
+    // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
+    ...(s.short === 'shop-1' && AUCTIONS[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[p].startingBid }], auction: AUCTIONS[p] }),
   };
 }
+const HOUR = 3_600_000;
+const AUCTIONS = {
+  4: { v: 1, start: now - DAY, end: now + DAY + 5 * HOUR, startingBid: 12, reserve: 30, buyNow: 80, extendMinutes: 5 },
+  6: { v: 1, start: now + 3 * HOUR, end: now + 4 * DAY, startingBid: 5, extendMinutes: 5 },
+  8: { v: 1, start: now - 5 * DAY, end: now - DAY, startingBid: 10, extendMinutes: 5 },
+};
+// Bids (auctions/bids.ts): [product, bidder, amount, created]
+const BIDS = [
+  [4, 'Ann Buyer', 12, now - 20 * HOUR],
+  [4, 'bob+builder', 15, now - 10 * HOUR],
+  [4, 'Zoë Ålund', 18.5, now - 2 * HOUR],
+  [8, 'Ann Buyer', 10, now - 4 * DAY],
+  [8, 'bob+builder', 12, now - 3 * DAY],
+  [8, ME, 15, now - 2 * DAY],
+];
 const RICH = {
   // As Q-Shop+ writes it: the plain description is the formatted one's text (richtext/plainText.ts).
   description: "Hand-thrown, glazed by hand\nEvery mug is one of a kind: the glaze runs its own way in the kiln.\n• Holds 350 ml\n• Food-safe glaze\nSee the rest of the set at our shop (qortal://APP/Q-Shop+/Seller%203/q-store-general-shop-3).\nVideo: Throwing the mug (qortal://VIDEO/Seller%203/q-store-video-MUGVIDEO01)\nPDF: Mug care guide (qortal://APP/Q-Share/share/Seller%203/qshare_file_care_def456_metadata)\nqortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz",
@@ -120,7 +138,14 @@ function dataContainer(s) {
   for (let p = 0; p < s.products; p++) {
     const c = Math.floor(p / 10);
     const pr = product(s, p);
-    products[pr.id] = { created: pr.created, priceQort: pr.price[0].value, category: pr.category, catalogueId: catalogueId(s, c), status: pr.status };
+    products[pr.id] = {
+      created: pr.created,
+      priceQort: pr.price[0].value,
+      category: pr.category,
+      catalogueId: catalogueId(s, c),
+      status: pr.status,
+      ...(pr.auction && { auction: { start: pr.auction.start, end: pr.auction.end } }),
+    };
     if (!catalogues[c]) catalogues[c] = { id: catalogueId(s, c), products: {} };
     catalogues[c].products[pr.id] = true;
   }
@@ -205,6 +230,9 @@ function rows() {
   for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
   statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
   out.push({ name: 'Gold Issuer', service: 'IMAGE', identifier: 'asset81_Gold Bar_aavatar', created: now - DAY, updated: now - DAY, size: 2000 });
+  BIDS.forEach(([p, name, amount, created], i) =>
+    out.push({ name, service: 'DOCUMENT', identifier: `q-store-bid-shop-1-P${String(p).padStart(9, '0')}-BID${String(i).padStart(3, '0')}`, created, updated: created, size: 150, metadata: { title: 'Bid', description: `bid:${amount}` } })
+  );
   return out;
 }
 
@@ -370,7 +398,12 @@ export default {
     { key: 'product-zoom', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('group', { name: 'Pictures' }).getByRole('button').nth(5).waitFor({ timeout: 8000 }); await page.getByRole('button', { name: /^Open picture 1 of/ }).click({ timeout: 4000 }); const d = page.getByRole('dialog'); await d.getByRole('button', { name: 'Zoom in' }).click(); await d.getByRole('button', { name: 'Zoom in' }).click(); await page.waitForTimeout(500); } },
     { key: 'product-collections', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 2)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('navigation', { name: 'Collections' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); } },
     { key: 'cart', path: '/cart', after: async (page) => page.waitForTimeout(900) },
-    { key: 'checkout', path: '/cart', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /check ?out/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+    { key: 'checkout', path: '/cart', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Check out Plus Gadgets', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
+    { key: 'checkout-all', path: '/cart', overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Check out all 2 shops' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Check out 2 shops' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'product-auction', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 4)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText('3 bids').waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
+    { key: 'product-auction-won', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 8)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/^You won!/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
+    { key: 'shop-auctions', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => { await page.getByRole('button', { name: 'Auctions (2)' }).click({ timeout: 8000 }); await page.waitForTimeout(700); } },
+    { key: 'seller-product-auction', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('button', { name: 'Auction', exact: true }).click({ timeout: 10000 }); await d.getByRole('textbox', { name: /^Starting bid/ }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'orders', path: '/my-orders', after: async (page) => page.waitForTimeout(900) },
     { key: 'seller', path: `/product-manager/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-orders', path: `/product-manager/q-store-general-my-shop`, optional: true, after: async (page) => { await page.waitForTimeout(600); await page.getByRole('tab', { name: /orders/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(700); } },
