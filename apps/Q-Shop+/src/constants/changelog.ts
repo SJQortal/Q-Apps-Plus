@@ -35,6 +35,7 @@ export const CHANGELOG: Release[] = [
       "Prices in USD (or another currency, PLN and ISK among them, or a ticker of your own): sellers type their own exchange rates for QORT and ARRR, and every product's QORT and ARRR price follows from them; change a rate and they all change. Nothing is fetched from outside Qortal.",
       "Pay in Qortal assets (Q-Assets) as well as QORT and ARRR, when the shop takes them. Sellers find an asset as they type its name or id; an asset that can't be split is priced and paid in whole units.",
       "A safer checkout: review, delivery and confirm steps with the amount fixed before you pay, and a payment that went through is never lost: if the order can't be recorded, it is kept so you can finish it without paying again.",
+      "Sellers get a clear order mail in Q-Mail: who ordered, the items with prices and the total, the payment, and where to ship it.",
       "Your cart survives a reload, keeps every shop's items apart, shows each item on one row where there's room, and the cart button counts them.",
       "Orders: My orders with status filters and counts; for sellers, an overview, orders to handle, status updates and payment checks against the chain.",
       "Selling: Manage Shop (Manage on phones) opens a seller page with products, orders (opening on the ones to handle), reviews and shop settings, product prices per coin and asset, new products physical unless you pick digital, and big catalogues published in batches.",
