@@ -132,6 +132,8 @@ export function CheckoutDialog({
   const [deliveryProblem, setDeliveryProblem] = useState<string | null>(null);
   const [hasDeliveryPrices, setHasDeliveryPrices] = useState(false);
   const paying = useRef(false);
+  // Bumped by every address change: a delivery read that finishes after one is for the old address, and is dropped.
+  const addressEdits = useRef(0);
   const stepStart = useRef<HTMLDivElement>(null);
   const pending = usePendingOrders(buyer.name);
 
@@ -181,6 +183,7 @@ export function CheckoutDialog({
   };
 
   const changeDelivery = (next: DeliveryInput) => {
+    addressEdits.current += 1;
     setDelivery(next);
     setDeliveryProblem(null);
   };
@@ -199,6 +202,7 @@ export function CheckoutDialog({
     if (noShipping) return;
     setDeliveryProblem(null);
     setQuoting(true);
+    const edits = addressEdits.current;
     let charge: ReturnType<typeof deliveryCharge>;
     try {
       const prices = await loadShopDelivery(shop.owner, shop.id);
@@ -207,6 +211,7 @@ export function CheckoutDialog({
       charge = { ok: false, message: `${shop.title || shop.owner}'s delivery prices couldn't be read from your node right now. Try again.` };
     }
     setQuoting(false);
+    if (edits !== addressEdits.current) return;
     if (!charge.ok) {
       setDeliveryProblem(charge.message);
       return;

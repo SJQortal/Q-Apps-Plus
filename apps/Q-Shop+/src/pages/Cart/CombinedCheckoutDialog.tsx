@@ -138,6 +138,8 @@ export function CombinedCheckoutDialog({
   // Shops that can't deliver there now (their delivery prices: delivery/checkoutDelivery.ts), and why: left out.
   const [undelivered, setUndelivered] = useState<{ key: string; message: string }[]>([]);
   const running = useRef(false);
+  // Bumped by every address change: prices worked out for an address since changed are dropped.
+  const addressEdits = useRef(0);
   const stepStart = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -161,6 +163,7 @@ export function CombinedCheckoutDialog({
   const toConfirm = async () => {
     if (gettingRates) return;
     setGettingRates(true);
+    const edits = addressEdits.current;
     const rates = new Map<string, number | null>();
     for (const coin of new Set(included.map((s) => s.coin).filter(isForeignTicker))) {
       rates.set(coin, await getRate(coin).catch(() => null));
@@ -170,6 +173,7 @@ export function CombinedCheckoutDialog({
     const prices = await Promise.all(shipped.map((s) => loadShopDelivery(s.shop!.owner, s.shop!.id).then((d) => d, () => null)));
     const deliveryOf = new Map(shipped.map((s, i) => [s.view.key, prices[i]]));
     setGettingRates(false);
+    if (edits !== addressEdits.current) return;
     const next: Payment[] = [];
     const missing: string[] = [];
     const notDelivered: { key: string; message: string }[] = [];
@@ -361,7 +365,15 @@ export function CombinedCheckoutDialog({
   } else if (step === "delivery") {
     body = (
       <Stack sx={{ gap: 2 }}>
-        <LazyDeliveryForm value={delivery} onChange={setDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
+        <LazyDeliveryForm
+          value={delivery}
+          onChange={(next) => {
+            addressEdits.current += 1;
+            setDelivery(next);
+          }}
+          showErrors={showErrors}
+          idPrefix={DELIVERY_PREFIX}
+        />
         <RememberAddress checked={remember} onChange={setRemember} />
         {notShipping.length > 0 && (
           <Alert severity="warning" role="alert">

@@ -62,6 +62,8 @@ function setup(opts: {
   shop?: Record<string, unknown>;
   /** The shop's delivery prices (delivery/model.ts), and its product list when they're in a currency. */
   delivery?: { doc: unknown; productList?: unknown };
+  /** Holds the delivery prices' search until it resolves. */
+  deliveryGate?: Promise<void>;
 }) {
   const store = createAppStore();
   store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
@@ -89,6 +91,7 @@ function setup(opts: {
       // The + app's delivery prices (delivery/deliveryDoc.ts): none unless the test gives some, as in the original.
       const json = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body });
       if (String(url).startsWith("/arbitrary/resources/search?") && String(url).includes(`identifier=${DELIVERY_ID}`)) {
+        await opts.deliveryGate;
         return json(opts.delivery ? [{ name: SELLER, service: "DOCUMENT", identifier: DELIVERY_ID }] : []);
       }
       if (opts.delivery && url === resourcePath("DOCUMENT", SELLER, DELIVERY_ID)) return json(opts.delivery.doc);
@@ -403,6 +406,24 @@ describe("checkout (pinned)", () => {
     );
     expect(screen.queryByRole("button", { name: /^Pay / })).not.toBeInTheDocument();
     expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
+  it("drops delivery prices worked out for an address the buyer changed meanwhile", async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ first: 3 })] }, profiles: [], updated: 1 };
+    setup({ items: [{ product: chair, qty: 1 }], delivery: { doc }, deliveryGate: gate });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("button", { name: "Working out delivery…" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Zip code/i), { target: { value: "97002" } });
+    await act(async () => open());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    expect(screen.queryByText("Confirm and pay")).not.toBeInTheDocument();
+    await press("Continue");
+    expect(await screen.findByText("Confirm and pay")).toBeInTheDocument();
   });
 
   it("stops a physical order to a US state the shop doesn't ship to, and lets one it does through", async () => {
