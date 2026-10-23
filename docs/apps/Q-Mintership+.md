@@ -1345,6 +1345,26 @@ Stage 4 of docs/RELEASE.md, after 1.0.0 was published and #23 merged. Nothing is
   - **Checks:** 2,582 tests, lint, typecheck and build; `node e2e/screens.mjs` on the Page width, poll and Home screens (40 captures, plus 2 at 3840×2160), all 0. The private-wording sweep of every new message and diff found nothing, and there are no Claude lines.
   - **Gitea:** this machine has no Gitea login, so the branch isn't on Gitea yet; Simon needs a fork of crowetic/Q-Mintership-Alpha there. The `gitea` remote in this repo fetches only (its push URL is disabled).
   - **The PR text:** says 1.0.3, 3.0.7, both bases, 780 commits, 2,582 tests. Still no PR on either.
+  - **Final check of what ships (2026-10-23, Simon: "make sure the Q-Mintership 4.0.0 will work as it should, no leftovers from the +"):**
+    - **Leftovers fixed:**
+      - Settings → About said "Upstream source" and "Q-Apps+ source". The links now come from `constants/plus.ts` (`ABOUT_LINKS`, both builds), and 4.0.0 shows one, Source code → gitea.qortal.link/crowetic/Q-Mintership-Alpha.
+      - Hub's remembered light/dark was under the kit's `qplus-hub-mode`; on the upstream branch it is `qmintership-hub-mode` (`index.html`, `src/hub-theme/boot.ts`, noted in its README).
+      - The page description said "the Qortal minting forum and nomination boards"; it now says "nominations, Minter Admin decisions and the history of Qortal's MINTER group" (both builds).
+      - Upstream commits `77dba224` (merge) and `cf1e902f` (Ship as).
+    - **Left on purpose:**
+      - What's new's "First published as Q-Mintership+" (the release guide's credit), the README's credits and links to this repo, and comments that cite it.
+      - The `qmp-` QDN prefixes (shared data, so both builds read each other's records) and the `QMP_` dev-test variables.
+      - The theme kit's code names (`qplus` in its theme and file names).
+    - **A fresh clone** of the branch (`npm ci`, then `npm run build`, `npm run lint`, and every test, 2,582) passes; nothing needs the monorepo. `npm audit --omit=dev`: 0 in what ships; the 4 advisories are in dev tools (Vite's dev server, a Vitest helper, source-map-js).
+    - **In a browser** (the built app, the mock node):
+      - every page's title is "… · Q-Mintership";
+      - About says "Q-Mintership 4.0.0", and What's new holds one entry, 4.0.0;
+      - Copy link gives `qortal://APP/Q-Mintership/decisions/…`;
+      - every storage key written starts with `qmintership-`;
+      - no request left the node, and the console had no errors.
+    - **Storage:** Q-Mintership 3's own keys have no prefix, but for 3.0.7's `qmintership-hub-notification-declined-v1`, which no 4.0 key matches; 4.0 never reads or clears keys by prefix. The icon is Q-Mintership 3's own (`modded-circle-2-new-128x128.png`).
+    - **Screenshot check** from the fresh clone: all 140 screens at the five sizes, Hub 3.0 dark, 675 captures: 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations.
+    - **Where it is now:** the GitHub fork branch is at `cf1e902f`. Gitea PR #2 updates when Simon pushes the branch to his fork again.
   - **Gitea only for now** (Simon, 2026-10-23): he forks crowetic/Q-Mintership-Alpha on Gitea, pushes `q-mintership-upstream/4.0.0` to it as `q-mintership-4.0.0` and opens the PR there himself (base `hub-notifications`). No GitHub PR for now.
   - **Opened on Gitea (2026-10-23, 22:18 UTC):** [crowetic/Q-Mintership-Alpha#2](https://gitea.qortal.link/crowetic/Q-Mintership-Alpha/pulls/2), "Q-Mintership 4.0.0: nominate, then approve", from `simon/Q-Mintership-Alpha` `q-mintership-4.0.0` (`7e9bfad5`) into `hub-notifications` (`39153b85`). Gitea says it merges cleanly, and maintainers may edit the branch. Its description is the opening paragraph only (Simon: "the short description is enough"); the full text stays in `.worktrees/pr-q-mintership-4.0.0-gitea.md` for questions in review.
 - **The PR text:** `.worktrees/pr-q-mintership-4.0.0.md` (from docs/templates/upstream-pr.md), opening with the process change and listing what was dropped and why.
