@@ -22,7 +22,7 @@ export const CHANGELOG: Release[] = [
     date: '2026-10-23',
     title: 'Full window on big screens',
     summary:
-      'A new Page width setting: Full window spreads the pages across the whole window, with cards side by side on big screens.',
+      'A new Page width setting: Full window spreads the pages across the whole window, with cards side by side on big screens. Closed Minter Admin polls are kept in History.',
     sections: [
       {
         title: 'For everyone',
@@ -30,6 +30,13 @@ export const CHANGELOG: Release[] = [
           'Settings → Appearance → Page width: Comfortable keeps each page in a centred column, as before; Full window uses the whole width of the window.',
           'In Full window, decisions, nominations and Minter Admin polls sit side by side, as many as fit; so do Home’s and Settings’ sections and History’s months. The Explorer, Activity and their tables, charts and grids use the whole width. Forms keep their width, so fields stay easy to fill in.',
           'Phones look as they did, upright or held sideways.',
+        ],
+      },
+      {
+        title: 'For Minter Admins',
+        notes: [
+          'Closed Minter Admin polls are in History, every one of them, the latest end first: their results, who voted what, and their comments. Decisions lists the open ones, with a link to the closed ones.',
+          'A poll’s own page opens however long ago it closed; before, polls closed more than 31 days ago could no longer be found.',
         ],
       },
     ],
