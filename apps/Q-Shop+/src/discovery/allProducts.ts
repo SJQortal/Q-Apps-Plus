@@ -34,9 +34,11 @@ import { fetchCatalogue } from "../utils/fetchCatalogues";
 import { categoryKey, listedCategory } from "../constants/categories";
 import { RetryCancelled, withPeerRetries } from "../pages/Store/peerRetry";
 import {
+  auctionTimesOf,
   compareRows,
   effectiveStatus,
   isInStock,
+  isOpenAuction,
   isListed,
   productOf,
   productRowsFromContainer,
@@ -152,22 +154,35 @@ export interface AllProductsQuery {
   /** categoryKey()s; none = every category. */
   categories: string[];
   inStockOnly: boolean;
+  /** Only auctions still open (pages/Store/shopData isOpenAuction). */
+  auctionsOnly?: boolean;
   sort: ProductSort;
 }
 
 /** The products a shop page would list (pages/Store/shopData isListed), in stock when asked. */
-export function listedRows(rows: AllProductRow[], inStockOnly: boolean, catalogues: AllCatalogues): AllProductRow[] {
+export function listedRows(rows: AllProductRow[], inStockOnly: boolean, catalogues: AllCatalogues, now = Date.now()): AllProductRow[] {
   return rows.filter(
-    (row) => isListed(row, ownCatalogue(row, catalogues)) && (!inStockOnly || isInStock(row, ownCatalogue(row, catalogues)))
+    (row) => isListed(row, ownCatalogue(row, catalogues)) && (!inStockOnly || isInStock(row, ownCatalogue(row, catalogues), now))
   );
 }
 
+/** When the row's auction runs (its catalogue's terms once loaded), for its card. */
+export function auctionTimesOfRow(row: AllProductRow, catalogues: AllCatalogues) {
+  return auctionTimesOf(row, ownCatalogue(row, catalogues));
+}
+
+/** Whether the row is an auction still open (its catalogue's terms once loaded). */
+export function isOpenAuctionRow(row: AllProductRow, catalogues: AllCatalogues, now: number): boolean {
+  return isOpenAuction(row, ownCatalogue(row, catalogues), now);
+}
+
 /** Listed products, the filters, then the sort; equal ones by key, so the order never shifts as shops arrive. */
-export function filterAndSortAll(rows: AllProductRow[], query: AllProductsQuery, catalogues: AllCatalogues): AllProductRow[] {
+export function filterAndSortAll(rows: AllProductRow[], query: AllProductsQuery, catalogues: AllCatalogues, now = Date.now()): AllProductRow[] {
   const categories = new Set(query.categories);
-  const compare = compareRows(query.sort);
-  return listedRows(rows, query.inStockOnly, catalogues)
+  const compare = compareRows(query.sort, [], now);
+  return listedRows(rows, query.inStockOnly, catalogues, now)
     .filter((row) => categories.size === 0 || categories.has(categoryKey(row.category)))
+    .filter((row) => !query.auctionsOnly || isOpenAuctionRow(row, catalogues, now))
     .sort((a, b) => compare(a, b) || byKey(a, b));
 }
 

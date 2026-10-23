@@ -5,6 +5,8 @@
  * descriptions come from the catalogues as they load, so a search also
  * matches those that are loaded.
  */
+import { auctionRowOf } from "../auctions/catalog";
+
 export interface SellerRow {
   productId: string;
   created: number;
@@ -13,10 +15,13 @@ export interface SellerRow {
   catalogueId: string;
   status: string;
   user?: string;
+  /** When it runs, when it sells by auction (auctions/catalog.ts). */
+  auction?: { start: number; end: number };
 }
 
 export type SellerSort = "newest" | "oldest" | "price-asc" | "price-desc" | "title";
-export type StatusFilter = "all" | "AVAILABLE" | "OUT_OF_STOCK" | "RETIRED";
+/** AUCTION: sold by auction (stored out of stock for the original app; auctions/catalog.ts). */
+export type StatusFilter = "all" | "AVAILABLE" | "AUCTION" | "OUT_OF_STOCK" | "RETIRED";
 
 export const SORT_LABEL: Record<SellerSort, string> = {
   newest: "Newest first",
@@ -38,13 +43,15 @@ export const DEFAULT_FILTERS: SellerFilters = { query: "", status: "all", catego
 
 export type DetailsOf = (row: SellerRow) => { title?: unknown; description?: unknown } | undefined;
 
-/** Status as the index stores it; anything else counts as available, as the shop page shows it. */
-export function statusOf(row: { status?: string }): Exclude<StatusFilter, "all"> {
-  return row.status === "OUT_OF_STOCK" || row.status === "RETIRED" ? row.status : "AVAILABLE";
+/** Status as the index stores it (an auction's row says so); anything else counts as available, as the shop page shows it. */
+export function statusOf(row: { status?: string; auction?: unknown }): Exclude<StatusFilter, "all"> {
+  if (row.status === "RETIRED") return "RETIRED";
+  if (auctionRowOf(row)) return "AUCTION";
+  return row.status === "OUT_OF_STOCK" ? row.status : "AVAILABLE";
 }
 
 export function statusCounts(rows: SellerRow[]): Record<StatusFilter, number> {
-  const counts: Record<StatusFilter, number> = { all: rows.length, AVAILABLE: 0, OUT_OF_STOCK: 0, RETIRED: 0 };
+  const counts: Record<StatusFilter, number> = { all: rows.length, AVAILABLE: 0, AUCTION: 0, OUT_OF_STOCK: 0, RETIRED: 0 };
   for (const row of rows) counts[statusOf(row)] += 1;
   return counts;
 }

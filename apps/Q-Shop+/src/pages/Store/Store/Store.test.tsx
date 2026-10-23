@@ -155,6 +155,37 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(catalogueFetches(node)).toHaveLength(2);
   });
 
+  it("marks auctions, which take bids on their page, and lists only open ones at a tap, the soonest to end first", async () => {
+    const world = makeWorld();
+    const now = Date.now();
+    const products = world.shops[0].products;
+    const auction = (i: number, start: number, end: number) =>
+      (products[i] = { ...products[i], status: "OUT_OF_STOCK", auction: { v: 1, start, end, startingBid: products[i].price[0].value, extendMinutes: 5 } });
+    auction(2, now - 3_600_000, now + 5 * 3_600_000 + 60_000);
+    auction(4, now - 3_600_000, now + 3_600_000 + 60_000);
+    auction(6, now - 9 * 3_600_000, now - 3_600_000);
+    renderShop(world);
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    const card = screen.getByRole("heading", { level: 3, name: "Product 4" }).closest("article")!;
+    expect(within(card).getByText("Auction")).toBeInTheDocument();
+    expect(within(card).getByText(/^Starting bid · Ends in 1h/)).toBeInTheDocument();
+    expect(within(card).getByRole("link", { name: "Bid: Product 4" })).toHaveAttribute("href", expect.stringContaining("q-store-product-my-shop-P000000004"));
+    const ended = screen.getByRole("heading", { level: 3, name: "Product 6" }).closest("article")!;
+    expect(within(ended).getByText("Auction ended")).toBeInTheDocument();
+    expect(within(ended).getByRole("link", { name: "See result: Product 6" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Auctions (2)" }));
+    await waitFor(() => expect(cardTitles()).toEqual(["Product 4", "Product 2"]));
+    expect(screen.getByRole("button", { name: "Auctions (2)" })).toHaveAttribute("aria-pressed", "true");
+    expect(selectValue(selectField("Sort"))).toBe("ending");
+    expect(selectField("Sort")).toHaveTextContent("Ending soonest");
+    // Open auctions count as in stock; the ended one doesn't.
+    fireEvent.click(screen.getByRole("button", { name: "Auctions (2)" }));
+    fireEvent.click(screen.getByLabelText("In stock only"));
+    await waitFor(() => expect(cardTitles()).not.toContain("Product 6"));
+    expect(cardTitles()).toContain("Product 4");
+  });
+
   it("adds one to the cart with the viewed shop's id and owner, and offers to view the cart", async () => {
     const { store } = renderShop(makeWorld());
     const add = await screen.findByRole("button", { name: "Add to cart: Product 11" });

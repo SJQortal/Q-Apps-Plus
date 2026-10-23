@@ -11,6 +11,7 @@ import { Link as RouterLink } from "react-router-dom";
 import { useInView } from "react-intersection-observer";
 import { accentWash } from "../hub-theme";
 import { PriceTag } from "../components/money/PriceTag";
+import { auctionTermsOf } from "../auctions/rules";
 import { productPath } from "../qdn/links";
 import { loadNewProducts, type NewProduct } from "./newProducts";
 import { useLoadedPictures } from "../components/common/useLoadedPictures";
@@ -53,7 +54,9 @@ function ProductTile({ item }: { item: NewProduct }) {
   const detailId = useId();
   const { product } = item;
   const pictures = useLoadedPictures();
-  const outOfStock = product.status === "OUT_OF_STOCK";
+  // An auction is stored out of stock for the original app: it says it's an auction instead.
+  const auction = product.status !== "RETIRED" && auctionTermsOf(product) !== null;
+  const outOfStock = !auction && product.status === "OUT_OF_STOCK";
   return (
     <Box component="li" sx={{ scrollSnapAlign: "start", minWidth: 0 }}>
       <Tile
@@ -64,7 +67,7 @@ function ProductTile({ item }: { item: NewProduct }) {
         <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", bgcolor: pictures.isLoaded(item.image) ? "transparent" : accentWash(theme, 0.08) })}>
           {/* The title is the next text in the link, so the picture adds nothing to its name. */}
           <ProductImage src={item.image} alt="" onLoad={pictures.onLoad(item.image)} />
-          {outOfStock && (
+          {(outOfStock || auction) && (
             <Box
               aria-hidden
               sx={{
@@ -80,7 +83,7 @@ function ProductTile({ item }: { item: NewProduct }) {
                 color: "text.primary",
               }}
             >
-              Out of stock
+              {auction ? "Auction" : "Out of stock"}
             </Box>
           )}
         </Box>
@@ -105,7 +108,7 @@ function ProductTile({ item }: { item: NewProduct }) {
             {/* Medium: the coin name beside a small price would be under 13 px. */}
             <PriceTag product={product} coin="QORT" rate={null} />
             <Typography variant="body2" color="text.secondary" noWrap>
-              {outOfStock ? `Out of stock · ${item.owner}` : item.owner}
+              {auction ? `Auction · ${item.owner}` : outOfStock ? `Out of stock · ${item.owner}` : item.owner}
             </Typography>
           </Box>
         </Box>

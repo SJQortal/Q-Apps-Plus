@@ -74,17 +74,18 @@ import { selectMenuProps } from "../components/common/menuStyle";
 
 export const PRODUCTS_PAGE = 24;
 
-const STATUS_CHIPS: StatusFilter[] = ["all", "AVAILABLE", "OUT_OF_STOCK", "RETIRED"];
-const STATUS_COLOR: Record<string, "success" | "warning" | "default"> = {
+const STATUS_CHIPS: StatusFilter[] = ["all", "AVAILABLE", "AUCTION", "OUT_OF_STOCK", "RETIRED"];
+const STATUS_COLOR: Record<string, "success" | "warning" | "info" | "default"> = {
   AVAILABLE: "success",
+  AUCTION: "info",
   OUT_OF_STOCK: "warning",
   RETIRED: "default",
 };
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
 
-export function StatusChip({ status }: { status: string }) {
-  const s = statusOf({ status });
+export function StatusChip({ status, auction }: { status: string; auction?: unknown }) {
+  const s = statusOf({ status, auction });
   // The status colour is the border; the text stays text.primary, because
   // orange (and blue) text on white is under 4.5:1 in the light themes.
   const tone = STATUS_COLOR[s];
@@ -341,6 +342,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
           {/* On phones the count has its own line, so the buttons never squeeze it. */}
           <Typography sx={{ flex: phone ? "1 1 100%" : 1, minWidth: 0, color: "text.secondary" }}>
             {rows.length === 1 ? "1 product" : `${rows.length} products`}
+            {counts.AUCTION > 0 ? ` · ${counts.AUCTION === 1 ? "1 auction" : `${counts.AUCTION} auctions`}` : ""}
             {counts.OUT_OF_STOCK > 0 ? ` · ${counts.OUT_OF_STOCK} out of stock` : ""}
           </Typography>
           {/* On phones: Add product across the row first, then Arrange and Select side by side. */}
@@ -413,7 +415,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
           </Box>
 
           <Box role="group" aria-label="Status" sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-            {STATUS_CHIPS.map((s) => {
+            {STATUS_CHIPS.filter((s) => s !== "AUCTION" || counts.AUCTION > 0 || filters.status === "AUCTION").map((s) => {
               const selected = filters.status === s;
               return (
                 <Chip
@@ -634,7 +636,7 @@ const ProductRow = memo(function ProductRow({
           )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", color: "text.secondary", fontSize: 14 }}>
             <Box sx={{ display: { xs: "contents", md: "none" } }}>
-              <StatusChip status={row.status} />
+              <StatusChip status={row.status} auction={row.auction} />
               <AmountTag value={row.priceQort} coin="QORT" size="small" />
             </Box>
             {row.category && (
@@ -653,7 +655,7 @@ const ProductRow = memo(function ProductRow({
           <AmountTag value={row.priceQort} coin="QORT" size="small" />
         </Box>
         <Box sx={{ display: { xs: "none", md: "block" } }}>
-          <StatusChip status={row.status} />
+          <StatusChip status={row.status} auction={row.auction} />
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ display: { xs: "none", md: "block" } }}>
           {created}

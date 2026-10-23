@@ -19,7 +19,7 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import type { RootState } from "../state/store";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
-import type { SellerRow } from "./productList";
+import { statusOf as stockOf, type SellerRow } from "./productList";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 import { dropdownPaperSx } from "../components/common/menuStyle";
 
@@ -207,9 +207,9 @@ export function ArrangeDialog({
                   ) : (
                     <Skeleton width="70%" />
                   )}
-                  {row?.status === "OUT_OF_STOCK" && (
+                  {row && (stockOf(row) === "OUT_OF_STOCK" || stockOf(row) === "AUCTION") && (
                     <Typography variant="body2" color="text.secondary">
-                      Out of stock
+                      {stockOf(row) === "AUCTION" ? "Auction" : "Out of stock"}
                     </Typography>
                   )}
                 </Box>

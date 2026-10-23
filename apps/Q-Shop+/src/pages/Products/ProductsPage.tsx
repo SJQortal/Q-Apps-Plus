@@ -61,9 +61,10 @@ import { BottomSheet } from "../../components/common/mobile";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { productLayout, useProductView } from "../../utils/productView";
-import { PRODUCT_SORTS, PRODUCTS_PAGE, searchTerms, type ProductSort } from "../Store/shopData";
+import { AUCTION_SORT, PRODUCT_SORTS, PRODUCTS_PAGE, searchTerms, type ProductSort } from "../Store/shopData";
 import { ProductCard, ProductCardSkeleton } from "../Store/ProductCard/ProductCard";
-import { FETCHING_NOTE, FilterChip, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../Store/ProductList";
+import { AuctionsToggle, FETCHING_NOTE, FilterChip, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../Store/ProductList";
+import { useNow } from "../../hooks/useNow";
 import { AddedToCartSnackbar, type AddedNotice } from "../Store/CartBits";
 import { LocalBoundary, UnavailableCard } from "../Store/LocalBoundary";
 import { visuallyHiddenSx } from "../Store/a11y";
@@ -71,7 +72,9 @@ import {
   catalogueKey,
   categoryKey,
   categoryOptions,
+  auctionTimesOfRow,
   filterAndSortAll,
+  isOpenAuctionRow,
   listedRows,
   productOfRow,
   searchAll,
@@ -84,8 +87,8 @@ import {
 } from "../../discovery/allProducts";
 import { selectMenuProps } from "../../components/common/menuStyle";
 
-function parseProductSort(value: string | null): ProductSort {
-  return PRODUCT_SORTS.some((s) => s.value === value) ? (value as ProductSort) : "newest";
+function parseProductSort(value: string | null): ProductSort | null {
+  return [...PRODUCT_SORTS, AUCTION_SORT].some((s) => s.value === value) ? (value as ProductSort) : null;
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -110,13 +113,19 @@ interface ListQuery {
   /** categoryKey()s */
   categories: string[];
   inStockOnly: boolean;
+  /** Only auctions still open; then by when they end, unless another sort is picked. */
+  auctionsOnly: boolean;
 }
 
-/** The list's state in the URL: `?q=&sort=&category=…&stock=1`, changed in place so Back leaves the page. */
+/** The sort a list has without a `sort` in its URL. */
+const defaultSort = (auctionsOnly: boolean): ProductSort => (auctionsOnly ? "ending" : "newest");
+
+/** The list's state in the URL: `?q=&sort=&category=…&stock=1&auctions=1`, changed in place so Back leaves the page. */
 function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => void } {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
-  const sort = parseProductSort(params.get("sort"));
+  const auctionsOnly = params.get("auctions") === "1";
+  const sort = parseProductSort(params.get("sort")) ?? defaultSort(auctionsOnly);
   const categoryParams = params.getAll("category").join("\u0000");
   const categories = useMemo(
     () => [...new Set(categoryParams.split("\u0000").map(categoryKey).filter(Boolean))],
@@ -132,8 +141,12 @@ function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => vo
             if (patch.q) next.set("q", patch.q);
             else next.delete("q");
           }
+          if (patch.auctionsOnly !== undefined) {
+            if (patch.auctionsOnly) next.set("auctions", "1");
+            else next.delete("auctions");
+          }
           if (patch.sort !== undefined) {
-            if (patch.sort !== "newest") next.set("sort", patch.sort);
+            if (patch.sort !== defaultSort(next.get("auctions") === "1")) next.set("sort", patch.sort);
             else next.delete("sort");
           }
           if (patch.categories !== undefined) {
@@ -151,7 +164,7 @@ function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => vo
     },
     [setParams]
   );
-  return { q, sort, categories, inStockOnly, update };
+  return { q, sort, categories, inStockOnly, auctionsOnly, update };
 }
 
 /**
@@ -261,7 +274,9 @@ export function ProductsPage() {
   const phone = usePhoneLayout();
   const layout = productLayout(useProductView(), phone);
   const userName = useSelector((state: RootState) => state.auth.user?.name ?? "");
-  const { q, sort, categories, inStockOnly, update } = useListQuery();
+  const { q, sort, categories, inStockOnly, auctionsOnly, update } = useListQuery();
+  // Auctions open and close as time passes: the list looks again every 30 s.
+  const now = useNow(30_000);
   const debouncedQ = useDebounced(q, 300);
   const terms = useMemo(() => searchTerms(debouncedQ), [debouncedQ]);
   const searching = terms.length > 0;
@@ -274,18 +289,19 @@ export function ProductsPage() {
 
   // Another sort, categories (to list them, or to filter by them) and a search need every shop's list.
   const pickingCategories = filtersOpen || categoryAnchor !== null;
-  const needAll = sort !== "newest" || categories.length > 0 || searching || pickingCategories;
+  const needAll = sort !== "newest" || categories.length > 0 || searching || pickingCategories || auctionsOnly;
   const { phase, readAll, readMore } = all;
   useEffect(() => {
     if (needAll && phase === "ready") readAll();
   }, [needAll, phase, readAll]);
 
-  const listed = useMemo(() => listedRows(all.rows, inStockOnly, catalogues), [all.rows, inStockOnly, catalogues]);
+  const listed = useMemo(() => listedRows(all.rows, inStockOnly, catalogues, now), [all.rows, inStockOnly, catalogues, now]);
+  const auctions = useMemo(() => listed.filter((row) => isOpenAuctionRow(row, catalogues, now)).length, [listed, catalogues, now]);
   const options = useMemo(() => categoryOptions(listed), [listed]);
   const labels = useMemo(() => new Map(options.map((option) => [option.key, option.label])), [options]);
   const filtered = useMemo(
-    () => filterAndSortAll(all.rows, { categories, inStockOnly, sort }, catalogues),
-    [all.rows, categories, inStockOnly, sort, catalogues]
+    () => filterAndSortAll(all.rows, { categories, inStockOnly, auctionsOnly, sort }, catalogues, now),
+    [all.rows, categories, inStockOnly, auctionsOnly, sort, catalogues, now]
   );
   // Newest first shows what is in its final place; anything else waits for every shop.
   const frontier = all.frontier;
@@ -298,7 +314,7 @@ export function ProductsPage() {
   );
 
   // Paging restarts whenever the list's meaning changes; Back restores it.
-  const listKey = JSON.stringify([sort, categories, inStockOnly, terms]);
+  const listKey = JSON.stringify([sort, categories, inStockOnly, auctionsOnly, terms]);
   const [back] = useState(() => (memory.listKey === listKey ? memory : null));
   const [paging, setPaging] = useState(() => ({ key: listKey, pages: back?.pages ?? 1 }));
   const pages = paging.key === listKey ? paging.pages : 1;
@@ -362,7 +378,7 @@ export function ProductsPage() {
 
   const toggleCategory = (key: string) =>
     update({ categories: categories.includes(key) ? categories.filter((c) => c !== key) : [...categories, key] });
-  const clearFilters = () => update({ categories: [], inStockOnly: false });
+  const clearFilters = () => update({ categories: [], inStockOnly: false, auctionsOnly: false });
   const addToCart = (row: AllProductRow) => {
     const product = productOfRow(row, catalogues);
     dispatch(setProductToCart({ storeId: row.storeId, storeOwner: row.owner, productId: row.productId, catalogueId: row.catalogueId, quantity: 1 }));
@@ -372,7 +388,7 @@ export function ProductsPage() {
 
   const readingAll = `Reading every shop's products… ${all.read} of ${all.total} shops`;
   const categoryProgress = phase !== "ready" || !all.complete ? (phase === "ready" ? readingAll : "Reading the shops…") : null;
-  const activeFilters = categories.length + (inStockOnly ? 1 : 0);
+  const activeFilters = categories.length + (inStockOnly ? 1 : 0) + (auctionsOnly ? 1 : 0);
   const failedCatalogues = Object.values(statuses).filter((s) => s === "failed").length;
   const searchPending = scope ? scope.keys.filter((key) => !catalogues[key] && statuses[key] !== "failed").length : 0;
   const searchScope = useMemo(() => {
@@ -415,7 +431,7 @@ export function ProductsPage() {
       slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 170, flex: { xs: "1 1 150px", sm: "0 0 auto" }, "& .MuiInputBase-root": { minHeight: 44 } }}
     >
-      {PRODUCT_SORTS.map((option) => (
+      {(auctions > 0 || sort === "ending" ? [...PRODUCT_SORTS, AUCTION_SORT] : PRODUCT_SORTS).map((option) => (
         <MenuItem key={option.value} value={option.value}>
           {option.label}
         </MenuItem>
@@ -492,6 +508,8 @@ export function ProductsPage() {
                         compact={layout === "tile" && phone}
                         stacked={phone}
                         shopName={row.shopTitle}
+                        auction={auctionTimesOfRow(row, catalogues)}
+                        now={now}
                       />
                     </LocalBoundary>
                   ) : (
@@ -562,6 +580,7 @@ export function ProductsPage() {
               }}
             />
             {sortSelect}
+            <AuctionsToggle count={auctions} on={auctionsOnly} onChange={(on) => update({ auctionsOnly: on })} exact={all.complete} />
             {phone ? (
               <Button
                 variant={activeFilters ? "contained" : "outlined"}

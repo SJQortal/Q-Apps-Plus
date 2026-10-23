@@ -29,6 +29,7 @@ export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 
 export const STATUS_LABEL: Record<string, string> = {
   AVAILABLE: "Available",
+  AUCTION: "Auction",
   OUT_OF_STOCK: "Out of stock",
   RETIRED: "Retired",
 };

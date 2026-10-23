@@ -3,8 +3,10 @@ import {
   categoriesOf,
   effectiveSort,
   filterAndSortProducts,
+  isInStock,
   isListed,
   matchesSearch,
+  openAuctionCount,
   productRowsFromContainer,
   searchCatalogueIds,
   searchProducts,
@@ -204,5 +206,43 @@ describe("search", () => {
     expect(searchProducts(rows, ["poster"], [CATALOGUE_ID], catalogues).map((r) => r.productId)).toEqual([poster.id]);
     expect(searchProducts(rows, ["poster"], [], catalogues)).toEqual([]);
     expect(searchProducts(rows, ["poster"], [CATALOGUE_ID], {})).toEqual([]);
+  });
+});
+
+describe("auctions in a list", () => {
+  const NOW = 1_800_000_000_000;
+  const H = 3_600_000;
+  const rows = productRowsFromContainer({
+    products: {
+      plain: { created: 5, catalogueId: "c1", priceQort: 3, category: "Art", status: "AVAILABLE" },
+      soon: { created: 1, catalogueId: "c1", priceQort: 9, category: "Art", status: "OUT_OF_STOCK", auction: { start: NOW - H, end: NOW + H } },
+      later: { created: 4, catalogueId: "c1", priceQort: 2, category: "Art", status: "OUT_OF_STOCK", auction: { start: NOW + H, end: NOW + 9 * H } },
+      over: { created: 3, catalogueId: "c1", priceQort: 1, category: "Art", status: "OUT_OF_STOCK", auction: { start: NOW - 9 * H, end: NOW - H } },
+      gone: { created: 2, catalogueId: "c1", priceQort: 1, category: "Art", status: "OUT_OF_STOCK" },
+    },
+  });
+  const ids = (list: ProductRow[]) => list.map((r) => r.productId);
+  const query = { categories: [], inStockOnly: false, sort: "newest" as const };
+
+  it("read the auction's times from the index, and count open ones (running or yet to start) as in stock", () => {
+    expect(rows.find((r) => r.productId === "soon")?.auction).toEqual({ start: NOW - H, end: NOW + H });
+    expect(rows.find((r) => r.productId === "plain")).not.toHaveProperty("auction");
+    expect(ids(rows.filter((r) => isInStock(r, {}, NOW)))).toEqual(["plain", "later", "soon"]);
+    expect(openAuctionCount(rows, {}, NOW)).toBe(2);
+  });
+
+  it("show only open auctions when asked, the soonest to end first", () => {
+    expect(ids(filterAndSortProducts(rows, { ...query, auctionsOnly: true, sort: "ending" }, {}, [], NOW))).toEqual(["soon", "later"]);
+    // Ending soonest in the whole list: open auctions first, then the rest newest first.
+    expect(ids(filterAndSortProducts(rows, { ...query, sort: "ending" }, {}, [], NOW))).toEqual(["soon", "later", "plain", "over", "gone"]);
+    expect(ids(filterAndSortProducts(rows, { ...query, inStockOnly: true }, {}, [], NOW))).toEqual(["plain", "later", "soon"]);
+  });
+
+  it("let the catalogue's terms win once it's loaded", () => {
+    const catalogues: CatalogueMap = {
+      c1: { id: "c1", products: { soon: { status: "OUT_OF_STOCK" }, plain: { status: "AVAILABLE", auction: { v: 1, start: NOW - H, end: NOW + 2 * H, startingBid: 1 } } } } as any,
+    };
+    expect(openAuctionCount(rows, catalogues, NOW)).toBe(1);
+    expect(ids(filterAndSortProducts(rows, { ...query, auctionsOnly: true }, catalogues, [], NOW))).toEqual(["plain"]);
   });
 });

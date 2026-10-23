@@ -1,6 +1,7 @@
 /**
  * A product on the shop page: picture, title, price in the shop's chosen coin
- * (money/ computes it, exactly as checkout will), stock, and Add to cart.
+ * (money/ computes it, exactly as checkout will), stock, and Add to cart; for
+ * an auction, its starting bid in QORT, the time left and Bid (its page).
  * A tile (picture on top) or a row (picture on the left, and on wider
  * screens the start of the description), as the buyer's product view says
  * (utils/productView.ts). Right-click copies the product's link.
@@ -8,6 +9,7 @@
 import { Box, Button, Chip, Link, Skeleton, Typography } from "@mui/material";
 import { visuallyHiddenSx } from "../a11y";
 import AddShoppingCartOutlinedIcon from "@mui/icons-material/AddShoppingCartOutlined";
+import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { Link as RouterLink } from "react-router-dom";
 import type { Product } from "../../../state/features/storeSlice";
@@ -18,6 +20,8 @@ import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../../constants/product-sta
 import ContextMenuResource from "../../../components/common/ContextMenu/ContextMenuResource";
 import { useLoadedPictures } from "../../../components/common/useLoadedPictures";
 import { ProductImage } from "../../../components/common/ProductImage";
+import { scheduledPhase, timeLeft, type AuctionPhase } from "../../../auctions/rules";
+import type { AuctionRow } from "../../../auctions/catalog";
 
 export type ProductCardState = "ready" | "loading" | "fetching" | "failed";
 
@@ -29,6 +33,14 @@ export function mainImageOf(product: Product | undefined): string | undefined {
 }
 
 export type ProductCardLayout = "tile" | "row";
+
+/** An auction's line on a card: "Ends in 2d 4h", by its times. */
+export function auctionCardText(times: AuctionRow, now: number): { phase: AuctionPhase; text: string } {
+  const phase = scheduledPhase(times, now);
+  if (phase === "upcoming") return { phase, text: `Starts in ${timeLeft(times.start - now)}` };
+  if (phase === "live") return { phase, text: `Ends in ${timeLeft(times.end - now)}` };
+  return { phase, text: "Auction ended" };
+}
 
 const cardSx = (layout: ProductCardLayout) =>
   ({
@@ -109,6 +121,8 @@ export function ProductCard({
   compact = false,
   stacked = false,
   shopName,
+  auction = null,
+  now = 0,
 }: {
   product: Product;
   productId: string;
@@ -129,6 +143,9 @@ export function ProductCard({
   stacked?: boolean;
   /** Lists of several shops' products (the Products page): the shop's name under the title, linked to the shop. */
   shopName?: string;
+  /** When it sells by auction: when it runs (the list's `now` says where it stands). */
+  auction?: AuctionRow | null;
+  now?: number;
 }) {
   const title = product.title?.trim() || "Untitled product";
   const image = mainImageOf(product);
@@ -136,6 +153,17 @@ export function ProductCard({
   const available = status === AVAILABLE;
   const label = isOwnProduct ? "Your product" : status === OUT_OF_STOCK ? "Out of stock" : status === RETIRED ? "Retired" : "Add to cart";
   const pictures = useLoadedPictures();
+  // An auction is stored out of stock, for the original app: its card says where the auction stands instead.
+  const auctionLine = auction && status !== RETIRED ? auctionCardText(auction, now) : null;
+  const shopLabel = shopName !== undefined ? ` (${shopName.trim() || owner})` : "";
+  const buttonSx = {
+    mt: layout === "row" && !stacked ? 0 : "auto",
+    minHeight: 44,
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+    ...(compact && { px: 1 }),
+    alignSelf: layout === "row" && !stacked ? "center" : "stretch",
+  } as const;
 
   return (
     <ContextMenuResource link={productLink(owner, storeId, productId, catalogueId)}>
@@ -201,30 +229,50 @@ export function ProductCard({
                 {product.description.trim()}
               </Typography>
             )}
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
-              <PriceTag product={product} coin={coin} rate={rate} shop={shop} />
-              {status === OUT_OF_STOCK && <Chip size="small" label="Out of stock" variant="outlined" />}
-              {status === RETIRED && <Chip size="small" label="Retired" variant="outlined" />}
+            {auctionLine ? (
+              <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+                <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                  {/* Bids are in QORT, whatever coin the shop's prices show in. */}
+                  <PriceTag product={product} coin="QORT" rate={null} shop={shop} />
+                  <Chip size="small" icon={<GavelOutlinedIcon />} label="Auction" variant="outlined" sx={{ fontWeight: 600 }} />
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13, fontVariantNumeric: "tabular-nums" }}>
+                  {auctionLine.phase === "ended" ? auctionLine.text : `Starting bid · ${auctionLine.text}`}
+                </Typography>
+              </Box>
+            ) : (
+              <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                <PriceTag product={product} coin={coin} rate={rate} shop={shop} />
+                {status === OUT_OF_STOCK && <Chip size="small" label="Out of stock" variant="outlined" />}
+                {status === RETIRED && <Chip size="small" label="Retired" variant="outlined" />}
+              </Box>
+            )}
           </Box>
-          </Box>
-          <Button
-            variant={available && !isOwnProduct ? "contained" : "outlined"}
-            startIcon={available && !isOwnProduct && !compact ? <AddShoppingCartOutlinedIcon /> : undefined}
-            disabled={!available || isOwnProduct}
-            onClick={onAddToCart}
-            // Several shops' lists can hold two products of one name: the shop tells them apart.
-            aria-label={available && !isOwnProduct ? `Add to cart: ${title}${shopName !== undefined ? ` (${shopName.trim() || owner})` : ""}` : undefined}
-            sx={{
-              mt: layout === "row" && !stacked ? 0 : "auto",
-              minHeight: 44,
-              flexShrink: 0,
-              whiteSpace: "nowrap",
-              ...(compact && { px: 1 }),
-              alignSelf: layout === "row" && !stacked ? "center" : "stretch",
-            }}
-          >
-            {label}
-          </Button>
+          {auctionLine && !isOwnProduct ? (
+            <Button
+              component={RouterLink}
+              to={path}
+              variant={auctionLine.phase === "live" ? "contained" : "outlined"}
+              color={auctionLine.phase === "live" ? "primary" : "inherit"}
+              startIcon={auctionLine.phase === "live" && !compact ? <GavelOutlinedIcon /> : undefined}
+              aria-label={`${auctionLine.phase === "live" ? "Bid" : auctionLine.phase === "upcoming" ? "View auction" : "See result"}: ${title}${shopLabel}`}
+              sx={buttonSx}
+            >
+              {auctionLine.phase === "live" ? "Bid" : auctionLine.phase === "upcoming" ? "View auction" : "See result"}
+            </Button>
+          ) : (
+            <Button
+              variant={available && !isOwnProduct ? "contained" : "outlined"}
+              startIcon={available && !isOwnProduct && !compact ? <AddShoppingCartOutlinedIcon /> : undefined}
+              disabled={!available || isOwnProduct}
+              onClick={onAddToCart}
+              // Several shops' lists can hold two products of one name: the shop tells them apart.
+              aria-label={available && !isOwnProduct ? `Add to cart: ${title}${shopLabel}` : undefined}
+              sx={buttonSx}
+            >
+              {auctionLine && isOwnProduct ? "Your auction" : label}
+            </Button>
+          )}
         </Box>
       </Box>
     </ContextMenuResource>

@@ -17,7 +17,13 @@ const ids = (list: SellerRow[]) => list.map((r) => r.productId);
 
 describe("the seller's product list", () => {
   it("counts statuses, an unknown status as available", () => {
-    expect(statusCounts(rows)).toEqual({ all: 4, AVAILABLE: 2, OUT_OF_STOCK: 1, RETIRED: 1 });
+    expect(statusCounts(rows)).toEqual({ all: 4, AVAILABLE: 2, AUCTION: 0, OUT_OF_STOCK: 1, RETIRED: 1 });
+  });
+
+  it("counts an auction as an auction, though it's stored out of stock for the original app", () => {
+    const auction = { ...rows[0], productId: "p-clock", status: "OUT_OF_STOCK", auction: { start: 1, end: 2 } };
+    expect(statusCounts([...rows, auction])).toEqual({ all: 5, AVAILABLE: 2, AUCTION: 1, OUT_OF_STOCK: 1, RETIRED: 1 });
+    expect(ids(filterSellerProducts([...rows, auction], { ...DEFAULT_FILTERS, status: "AUCTION" }, detailsOf))).toEqual(["p-clock"]);
   });
 
   it("sorts newest first by default, and by price either way", () => {

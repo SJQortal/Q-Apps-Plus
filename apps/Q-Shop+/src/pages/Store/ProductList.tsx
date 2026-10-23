@@ -1,7 +1,7 @@
 /**
  * The parts of a product list that the shop page and the Products page share
- * (round 5): the grid of tiles or rows, its skeleton, the Grid / List toggle
- * and the category chips.
+ * (round 5): the grid of tiles or rows, its skeleton, the Grid / List toggle,
+ * the category chips and the Auctions toggle.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { Box, Chip, ToggleButton, ToggleButtonGroup } from "@mui/material";
@@ -9,6 +9,7 @@ import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import { CategoryIcon } from "../../components/CategoryIcon";
 import CheckIcon from "@mui/icons-material/Check";
+import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { setProductView } from "../../utils/productView";
 import { primarySoft } from "../../hub-theme";
@@ -43,6 +44,41 @@ export function FilterChip({ label, on, onClick, category }: { label: string; on
       sx={{
         minHeight: 36,
         maxWidth: "100%",
+        fontWeight: on ? 700 : 500,
+        ...(on && { bgcolor: "action.selected", "&:hover": { bgcolor: "action.focus" } }),
+      }}
+    />
+  );
+}
+
+/**
+ * Auctions only, at a tap (sorted by when they end unless the buyer picked
+ * a sort): shown while the list has auctions still open, or while it's on.
+ */
+export function AuctionsToggle({
+  count,
+  on,
+  onChange,
+  exact = true,
+}: {
+  count: number;
+  on: boolean;
+  onChange: (on: boolean) => void;
+  /** False while the list is still being read: no count yet. */
+  exact?: boolean;
+}) {
+  if (count === 0 && !on) return null;
+  return (
+    <Chip
+      icon={on ? <CheckIcon /> : <GavelOutlinedIcon />}
+      label={exact ? `Auctions (${count})` : "Auctions"}
+      onClick={() => onChange(!on)}
+      variant={on ? "filled" : "outlined"}
+      aria-pressed={on}
+      sx={{
+        minHeight: 44,
+        borderRadius: 22,
+        px: 0.5,
         fontWeight: on ? 700 : 500,
         ...(on && { bgcolor: "action.selected", "&:hover": { bgcolor: "action.focus" } }),
       }}

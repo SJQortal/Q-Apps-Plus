@@ -61,6 +61,9 @@ import {
   productOf,
   productRowsFromContainer,
   PRODUCT_SORTS,
+  AUCTION_SORT,
+  auctionTimesOf,
+  openAuctionCount,
   PRODUCTS_PAGE,
   searchCatalogueIds,
   searchProducts,
@@ -72,7 +75,8 @@ import {
 import { productOrderOf } from "../../../qdn/productOrder";
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
 import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
-import { CategoryChips, FETCHING_NOTE, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../ProductList";
+import { AuctionsToggle, CategoryChips, FETCHING_NOTE, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../ProductList";
+import { useNow } from "../../../hooks/useNow";
 import { productLayout, useProductView } from "../../../utils/productView";
 import { ShopHeader, ShopHeaderSkeleton } from "../ShopHeader";
 import { StoreDetails } from "../StoreDetails/StoreDetails";
@@ -123,7 +127,9 @@ function ShopProducts({
   const layout = productLayout(useProductView(), phone);
   const shopCoin = useShopCoin(shop);
   const { catalogues, statuses, load, retryFailed } = useCatalogueLoader(owner);
-  const [filters, setFilters] = useState<Omit<ProductQuery, "sort">>({ categories: [], inStockOnly: false });
+  const [filters, setFilters] = useState<Omit<ProductQuery, "sort">>({ categories: [], inStockOnly: false, auctionsOnly: false });
+  // Auctions open and close as time passes: the list looks again every 30 s.
+  const now = useNow(30_000);
   // The buyer's sort, once they pick one; until then the page's default (effectiveSort).
   const [pickedSort, setPickedSort] = useState<ShopSort | null>(null);
   const [searchText, setSearchText] = useState("");
@@ -165,11 +171,14 @@ function ShopProducts({
   // The seller's order here: the collection's, or the shop's.
   const shopOrder = useMemo(() => productOrderOf(index), [index]);
   const order = collection ? collection.products : shopOrder;
-  const sort = effectiveSort(pickedSort, order.length > 0);
+  // Auctions only: by when they end, unless the buyer picked a sort.
+  const sort = filters.auctionsOnly && !pickedSort ? "ending" : effectiveSort(pickedSort, order.length > 0);
   const query = useMemo<ProductQuery>(() => ({ ...filters, sort }), [filters, sort]);
-  const sortOptions = order.length > 0 ? [FEATURED_SORT, ...PRODUCT_SORTS] : PRODUCT_SORTS;
+  const auctions = useMemo(() => openAuctionCount(rows, catalogues, now), [rows, catalogues, now]);
+  const baseSorts = order.length > 0 ? [FEATURED_SORT, ...PRODUCT_SORTS] : PRODUCT_SORTS;
+  const sortOptions = auctions > 0 || sort === "ending" ? [...baseSorts, AUCTION_SORT] : baseSorts;
   const categories = useMemo(() => categoriesOf(rows), [rows]);
-  const filtered = useMemo(() => filterAndSortProducts(rows, query, catalogues, order), [rows, query, catalogues, order]);
+  const filtered = useMemo(() => filterAndSortProducts(rows, query, catalogues, order, now), [rows, query, catalogues, order, now]);
   const scope = useMemo(() => (searching ? searchCatalogueIds(filtered) : null), [searching, filtered]);
   const results = useMemo(
     () => (scope ? searchProducts(filtered, terms, scope.ids, catalogues) : filtered),
@@ -205,14 +214,14 @@ function ShopProducts({
     return { total: inScope.length, read: inScope.filter((row) => !!catalogues[row.catalogueId]).length };
   }, [scope, filtered, catalogues]);
   const cappedNote = `Only the first ${searchScope.total} products were searched; pick a category to narrow it down.`;
-  const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0);
+  const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0) + (query.auctionsOnly ? 1 : 0);
 
   const toggleCategory = (category: string) =>
     setFilters((q) => ({
       ...q,
       categories: q.categories.includes(category) ? q.categories.filter((c) => c !== category) : [...q.categories, category],
     }));
-  const clearFilters = () => setFilters((q) => ({ ...q, categories: [], inStockOnly: false }));
+  const clearFilters = () => setFilters((q) => ({ ...q, categories: [], inStockOnly: false, auctionsOnly: false }));
 
   const addToCart = (row: ProductRow) => {
     const product = productOf(row, catalogues);
@@ -346,6 +355,8 @@ function ShopProducts({
                       layout={layout}
                       compact={layout === "tile" && phone}
                       stacked={phone}
+                      auction={auctionTimesOf(row, catalogues)}
+                      now={now}
                     />
                   </LocalBoundary>
                 ) : (
@@ -444,6 +455,7 @@ function ShopProducts({
               />
               {sortSelect}
               <CoinPicker shop={shop} shopCoin={shopCoin} />
+              <AuctionsToggle count={auctions} on={!!query.auctionsOnly} onChange={(on) => setFilters((q) => ({ ...q, auctionsOnly: on }))} />
               {phone && (
                 <Button
                   variant={activeFilters ? "contained" : "outlined"}

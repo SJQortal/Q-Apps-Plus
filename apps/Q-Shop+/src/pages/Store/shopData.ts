@@ -13,13 +13,15 @@
 import type { Catalogue } from "../../state/features/globalSlice";
 import type { Product } from "../../state/features/storeSlice";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
+import { auctionRowOf, type AuctionRow } from "../../auctions/catalog";
+import { auctionTermsOf } from "../../auctions/rules";
 
 /** Products per page on the shop page; catalogues are fetched for these only. */
 export const PRODUCTS_PAGE = 20;
 /** A text search reads at most this many catalogues (10 products each). */
 export const SEARCH_CATALOGUE_CAP = 30;
 
-export type ProductSort = "newest" | "oldest" | "price-asc" | "price-desc";
+export type ProductSort = "newest" | "oldest" | "price-asc" | "price-desc" | "ending";
 /** A shop page's sorts: the general ones, and the seller's own order (qdn/productOrder.ts, a collection's order). */
 export type ShopSort = ProductSort | "featured";
 
@@ -29,6 +31,9 @@ export const PRODUCT_SORTS: { value: ProductSort; label: string }[] = [
   { value: "price-asc", label: "Price: low to high" },
   { value: "price-desc", label: "Price: high to low" },
 ];
+
+/** Auctions still open by when they end, then everything else newest first: offered when a list has open auctions. */
+export const AUCTION_SORT: { value: ProductSort; label: string } = { value: "ending", label: "Ending soonest" };
 
 /** The seller's order, offered first on a shop page that has one. */
 export const FEATURED_SORT: { value: ShopSort; label: string } = { value: "featured", label: "Featured" };
@@ -52,11 +57,15 @@ export interface ProductRow {
   category?: string;
   /** The index's status; the catalogue's, once loaded, wins (as in the original). */
   status?: string;
+  /** When it runs, when it sells by auction (auctions/catalog.ts); the catalogue's terms, once loaded, win. */
+  auction?: AuctionRow;
 }
 
 export interface ProductQuery {
   categories: string[];
   inStockOnly: boolean;
+  /** Only auctions still open (running, or yet to start). */
+  auctionsOnly?: boolean;
   sort: ShopSort;
 }
 
@@ -65,6 +74,11 @@ export const DEFAULT_PRODUCT_QUERY: ProductQuery = { categories: [], inStockOnly
 function finiteNumber(value: unknown): number | undefined {
   const n = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
+}
+
+function auctionField(entry: unknown): { auction?: AuctionRow } {
+  const auction = auctionRowOf(entry);
+  return auction ? { auction } : {};
 }
 
 /** The index's products as rows, newest first. Malformed entries are skipped. */
@@ -83,6 +97,7 @@ export function productRowsFromContainer(container: { products?: unknown } | nul
       priceQort: finiteNumber(entry.priceQort),
       category: typeof entry.category === "string" && entry.category ? entry.category : undefined,
       status: typeof entry.status === "string" && entry.status ? entry.status : undefined,
+      ...auctionField(entry),
     });
   }
   return rows.sort((a, b) => b.created - a.created);
@@ -126,8 +141,22 @@ export function isListed(row: ProductRow, catalogues: CatalogueMap): boolean {
   return false;
 }
 
-export function isInStock(row: ProductRow, catalogues: CatalogueMap): boolean {
-  return effectiveStatus(row, catalogues) === AVAILABLE;
+/** When the product's auction runs: its catalogue's terms once loaded, else the index's. */
+export function auctionTimesOf(row: ProductRow, catalogues: CatalogueMap): AuctionRow | null {
+  if (!isCatalogueLoaded(row, catalogues)) return row.auction ?? null;
+  const terms = auctionTermsOf(productOf(row, catalogues));
+  return terms ? { start: terms.start, end: terms.end } : null;
+}
+
+/** An auction still taking bids, or yet to start, by its times (a buy-now can end it sooner; its page knows). */
+export function isOpenAuction(row: ProductRow, catalogues: CatalogueMap, now: number): boolean {
+  const times = auctionTimesOf(row, catalogues);
+  return !!times && now < times.end;
+}
+
+/** For sale: AVAILABLE, or an auction still open (stored out of stock, for the original). */
+export function isInStock(row: ProductRow, catalogues: CatalogueMap, now = Date.now()): boolean {
+  return effectiveStatus(row, catalogues) === AVAILABLE || isOpenAuction(row, catalogues, now);
 }
 
 export function isRetired(status: string | undefined): boolean {
@@ -139,9 +168,17 @@ export function isRetired(status: string | undefined): boolean {
  * `order` (product ids): those it names first, in its order, then the rest
  * newest first.
  */
-export function compareRows(sort: ShopSort, order: string[] = []): (a: ProductRow, b: ProductRow) => number {
+export function compareRows(sort: ShopSort, order: string[] = [], now = Date.now()): (a: ProductRow, b: ProductRow) => number {
   const newest = (a: ProductRow, b: ProductRow) => b.created - a.created;
   switch (sort) {
+    case "ending": {
+      const endOf = (row: ProductRow) => (row.auction && now < row.auction.end ? row.auction.end : Number.POSITIVE_INFINITY);
+      return (a, b) => {
+        const x = endOf(a);
+        const y = endOf(b);
+        return x === y ? newest(a, b) : x < y ? -1 : 1;
+      };
+    }
     case "featured": {
       const at = new Map(order.map((id, i) => [id, i]));
       return (a, b) => {
@@ -171,14 +208,26 @@ export function compareRows(sort: ShopSort, order: string[] = []): (a: ProductRo
   }
 }
 
-/** Category and stock filters, then the sort (`order`: the seller's, for "featured"). Returns a new array. */
-export function filterAndSortProducts(rows: ProductRow[], query: ProductQuery, catalogues: CatalogueMap, order: string[] = []): ProductRow[] {
+/** Category, stock and auction filters, then the sort (`order`: the seller's, for "featured"). Returns a new array. */
+export function filterAndSortProducts(
+  rows: ProductRow[],
+  query: ProductQuery,
+  catalogues: CatalogueMap,
+  order: string[] = [],
+  now = Date.now()
+): ProductRow[] {
   const categories = new Set(query.categories);
   return rows
     .filter((row) => isListed(row, catalogues))
     .filter((row) => categories.size === 0 || (!!row.category && categories.has(row.category)))
-    .filter((row) => !query.inStockOnly || isInStock(row, catalogues))
-    .sort(compareRows(query.sort, order));
+    .filter((row) => !query.inStockOnly || isInStock(row, catalogues, now))
+    .filter((row) => !query.auctionsOnly || isOpenAuction(row, catalogues, now))
+    .sort(compareRows(query.sort, order, now));
+}
+
+/** How many listed products are auctions still open (the Auctions toggle shows when there are any). */
+export function openAuctionCount(rows: ProductRow[], catalogues: CatalogueMap, now: number): number {
+  return rows.filter((row) => isListed(row, catalogues) && isOpenAuction(row, catalogues, now)).length;
 }
 
 /** The words of a search, lower case. */

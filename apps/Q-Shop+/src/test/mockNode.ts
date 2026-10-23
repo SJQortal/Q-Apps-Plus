@@ -151,7 +151,15 @@ export function dataContainerOf(shop: WorldShop) {
   const catalogues = cats.map((id) => ({ id, products: {} as Record<string, true> }));
   shop.products.forEach((p, idx) => {
     const cat = cats[Math.floor(idx / 10)];
-    products[p.id] = { created: p.created, priceQort: p.price[0].value, category: p.category, catalogueId: cat, status: p.status };
+    products[p.id] = {
+      created: p.created,
+      priceQort: p.price[0].value,
+      category: p.category,
+      catalogueId: cat,
+      status: p.status,
+      // An auction's row says when it runs, as Q-Shop+ writes it (auctions/catalog.ts).
+      ...(p.auction && { auction: { start: p.auction.start, end: p.auction.end } }),
+    };
     catalogues[Math.floor(idx / 10)].products[p.id] = true;
   });
   return {
