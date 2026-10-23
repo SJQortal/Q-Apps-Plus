@@ -42,6 +42,7 @@ import { FinishDeletesCard } from "../../seller/FinishDeletesCard";
 import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteProductsDialog";
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
+import { DeliveryTab } from "../../seller/DeliveryTab";
 import { SELLER_TABS, TAB_LABEL, isSellerTab, type SellerTab } from "./sellerTabs";
 
 type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null } | null;
@@ -301,6 +302,7 @@ export const ProductManager = () => {
           {tab === "reviews" && (
             <ReviewsPanel storeId={currentStore.id} storeTitle={currentStore.title} storeImage={currentStore.logo || ""} />
           )}
+          {tab === "delivery" && <DeliveryTab ready={ready} />}
           {tab === "shop" && <ShopTab />}
         </Box>
       </Box>

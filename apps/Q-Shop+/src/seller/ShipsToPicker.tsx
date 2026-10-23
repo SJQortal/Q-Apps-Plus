@@ -238,6 +238,7 @@ export function ShipsToPicker({
   states = null,
   onStatesChange,
   typed,
+  title = "Ships to",
 }: {
   /** The countries it ships to (codes); null while the shop keeps its typed text. */
   value: string[] | null;
@@ -247,6 +248,8 @@ export function ShipsToPicker({
   onStatesChange?: (states: string[] | null) => void;
   /** The shop's typed "Ships to", from before the list. */
   typed?: string;
+  /** Its heading ("Delivers to" in a delivery zone). */
+  title?: string;
 }) {
   const headingId = useId();
   const chosen = useMemo(() => new Set(value ?? []), [value]);
@@ -267,7 +270,7 @@ export function ShipsToPicker({
   return (
     <Box component="section" aria-labelledby={headingId} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
       <Typography id={headingId} sx={{ fontWeight: 600 }}>
-        Ships to
+        {title}
       </Typography>
       <Typography variant="body2" color={summary ? "text.primary" : "text.secondary"} role="status">
         {summary
