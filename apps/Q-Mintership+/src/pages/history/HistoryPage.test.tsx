@@ -6,6 +6,8 @@ import { fetchCallsFor, mockQortalRequest, qortalCalls, qortalCallsFor } from '.
 import { ADDR, NOW, PEOPLE, TIP } from '../../test/world';
 import { historySeenKey, readHistorySeen } from '../../data/historySeen';
 import { DECLINED, addDecline, answerDecrypt } from '../../../e2e/world.mjs';
+import { withAdminPolls } from '../../test/adminPolls';
+import { expectNoAxeViolations } from '../../test/axe';
 import HistoryPage from './HistoryPage';
 
 const WRITES = /INVITE|KICK|BAN|ADMIN|JOIN|SIGN|PUBLISH|VOTE|POLL/;
@@ -440,6 +442,83 @@ describe('History page: the original app', () => {
     expect(
       fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) => p.includes('MAIL_PRIVATE'))
     ).toEqual([]);
+  });
+});
+
+describe('History page: the closed Minter Admin polls', () => {
+  const T = { timeout: 8000 };
+  const CLOSED_Q = 'Should Minter Admins review the stale invites together once a month?';
+  const ARCHIVED_Q = 'Should the Minter Admins meet in Q-Chat once a quarter?';
+  const OPEN_Q = 'Should only level 5+ minters become Minter Admins?';
+  const pollReads = () =>
+    fetchCallsFor('/arbitrary/resources/searchsimple').filter((p) =>
+      /identifier=qmp-admin(poll|vote|comment|share)-/.test(p)
+    );
+
+  // Simon, 2026-10-23: "the closed minter admin polls should go into history".
+  it('lists every closed poll for a Minter Admin, the latest end first, with its results', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'admin',
+      path: '/history',
+      setup: withAdminPolls('admin'),
+    });
+    const section = await screen.findByRole('region', { name: 'Minter Admin polls' }, T);
+    await within(section).findByRole('article', { name: `Minter Admin poll: ${ARCHIVED_Q}` }, T);
+    expect(
+      within(section)
+        .getAllByRole('article')
+        .map((a) => a.getAttribute('aria-label'))
+    ).toEqual([`Minter Admin poll: ${CLOSED_Q}`, `Minter Admin poll: ${ARCHIVED_Q}`]);
+    // Open polls stay on Decisions.
+    expect(within(section).queryByText(OPEN_Q)).toBeNull();
+    const closed = within(section).getByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` });
+    expect(within(closed).getByText('Closed')).toBeVisible();
+    expect(within(closed).getByText(/^Ended 4 days ago · /)).toBeVisible();
+    expect(within(closed).getByText('1 vote came after the end and doesn’t count.')).toBeVisible();
+    expect(within(closed).getByText('You voted Neutral')).toBeVisible();
+    expect(within(closed).queryByRole('button', { name: /^Vote / })).toBeNull();
+    // Closed two months ago: Decisions never read it.
+    const archived = within(section).getByRole('article', {
+      name: `Minter Admin poll: ${ARCHIVED_Q}`,
+    });
+    expect(within(archived).getByText('You voted Yes')).toBeVisible();
+    expect(within(archived).getByRole('button', { name: /^Comments \(1\)/ })).toBeVisible();
+    // Two, fewer than a page.
+    expect(within(section).queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
+    expect(qortalCalls.filter((c) => WRITES.test(String(c.action)))).toEqual([]);
+    await expectNoAxeViolations(section);
+  });
+
+  it('opened from Decisions’ Closed polls, it scrolls into view once its polls are in', async () => {
+    const scrolled: Element[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      await renderPage(<HistoryPage />, {
+        persona: 'admin',
+        path: '/history#history-admin-polls',
+        route: '/history',
+        setup: withAdminPolls('admin'),
+      });
+      const section = await screen.findByRole('region', { name: 'Minter Admin polls' }, T);
+      await within(section).findByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` }, T);
+      expect(scrolled.map((el) => el.id)).toContain('history-admin-polls');
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  it('a member sees no polls, and nothing of them is read or decrypted', async () => {
+    await renderPage(<HistoryPage />, {
+      persona: 'learner',
+      path: '/history',
+      setup: withAdminPolls('learner'),
+    });
+    await eventsList();
+    expect(screen.queryByRole('region', { name: 'Minter Admin polls' })).toBeNull();
+    expect(pollReads()).toEqual([]);
+    expect(qortalCallsFor('DECRYPT_DATA')).toEqual([]);
   });
 });
 
