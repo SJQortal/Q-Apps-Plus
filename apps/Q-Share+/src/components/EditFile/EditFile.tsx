@@ -13,9 +13,11 @@ import type { RootState } from "../../state/store";
 import { fetchAndEvaluateVideos } from "../../utils/fetchVideos";
 import {
   buildSharePublish,
+  shareThumbnail,
   toMultiplePublish,
   type FileRef,
   type MultiplePublishRequest,
+  type ShareThumbnail,
 } from "../../utils/publishPayload";
 import { invalidateQdnSearches } from "../../utils/qdnSearch";
 import { queue } from "../../utils/queue";
@@ -29,9 +31,18 @@ import {
   type ReplacedVersions,
   versionOnQdn,
 } from "../common/MultiplePublish/MultiplePublishAll";
-import { draftFromRef, publishErrorMessage, toPublishInputs } from "../PublishFile/shareDraft";
+import {
+  draftFromRef,
+  keptFilesText,
+  thumbnailNotOnQdnText,
+  landedRefs,
+  newFileRefs,
+  publishErrorMessage,
+  toPublishInputs,
+} from "../PublishFile/shareDraft";
 import { ShareForm } from "../PublishFile/ShareForm";
 import { useShareDraft } from "../PublishFile/useShareDraft";
+import { useShareThumbnail } from "../PublishFile/useShareThumbnail";
 
 /**
  * Shares whose last update was left unconfirmed: Hub may still finish it, so
@@ -71,8 +82,16 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     description: share.htmlDescription || (share.fullDescription ? `<p>${share.fullDescription}</p>` : ""),
   });
   const editCategories = useMemo(() => getCategoriesFromObject(share), [share]);
+  const existingThumbnail = shareThumbnail(share);
+  const thumbnail = useShareThumbnail(
+    draft.files,
+    existingThumbnail ? { kind: "existing", ref: existingThumbnail } : { kind: "none" }
+  );
+  const [newThumbnail, setNewThumbnail] = useState<ShareThumbnail | null>(null);
   const categoryListRef = useRef<CategoryListRef>(null);
   const [publishes, setPublishes] = useState<MultiplePublishRequest | null>(null);
+  // Where each new draft file goes on QDN in the update under way, by draft key.
+  const [fileRefs, setFileRefs] = useState<Record<string, FileRef>>({});
   const [pendingUpdate, setPendingUpdate] = useState<Record<string, unknown> | null>(null);
   // An update reuses the details identifier, so after a timeout QDN must
   // show a version newer than the one being replaced before it counts. That
@@ -119,13 +138,15 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     preparing.current = true;
     setIsPreparing(true);
     try {
-      const { resources, fileObject } = await buildSharePublish({
+      const thumb = await thumbnail.resolve();
+      const { resources, fileObject, fileReferences } = await buildSharePublish({
         name: username,
         title: draft.title,
         descriptionHtml: draft.description,
         categoryFetchString: categories.getCategoriesFetchString(),
         categoriesObject: categories.categoriesToObject(),
         files: toPublishInputs(draft.files),
+        thumbnail: thumb,
         edit: { identifier: share.id, version: share.version, commentsId: share.commentsId },
       });
       let before: number | undefined;
@@ -135,8 +156,11 @@ function EditShareDialog({ share }: EditShareDialogProps) {
         // Unknown: then only Hub's answer or its status message confirms the details.
       }
       setReplaces({ [share.id]: before });
-      setPendingUpdate({ ...share, ...fileObject });
+      // A removed thumbnail leaves the field out of the JSON: clear the stored copy's too.
+      setPendingUpdate({ ...share, ...fileObject, thumbnail: fileObject.thumbnail });
+      setNewThumbnail(thumb && "file" in thumb ? (fileObject.thumbnail ?? null) : null);
       unconfirmedUpdates.delete(share.id);
+      setFileRefs(newFileRefs(draft.files, fileReferences));
       setPublishes(toMultiplePublish(resources));
     } catch (error) {
       dispatch(setNotification({ msg: publishErrorMessage(error, "Failed to publish update"), alertType: "error" }));
@@ -188,11 +212,25 @@ function EditShareDialog({ share }: EditShareDialogProps) {
     if (detailsId && published.includes(detailsId)) {
       // The share's details are updated on QDN; only some new files are not.
       const missing = resources.filter((r) => r.service === "FILE" && !published.includes(r.identifier)).length;
-      if (missing > 0) onPublished(`Share updated, but ${filesNotOnQdnText(missing, "new file")}`, "info");
+      const thumbMissing = Boolean(newThumbnail && !published.includes(newThumbnail.identifier));
+      const notes = [
+        missing > 0 ? filesNotOnQdnText(missing, "new file") : "",
+        thumbMissing ? thumbnailNotOnQdnText(missing > 0, "new thumbnail") : "",
+      ].filter(Boolean);
+      if (notes.length > 0) onPublished(`Share updated, but ${notes.join(" ")}`, "info");
       else onPublished();
       return;
     }
     setPublishes(null);
+    // New files that landed stay in the draft as references: the next
+    // Publish update lists them without sending them again.
+    const landed = landedRefs(fileRefs, published);
+    const landedCount = Object.keys(landed).length;
+    if (newThumbnail && published.includes(newThumbnail.identifier)) thumbnail.set({ kind: "existing", ref: newThumbnail });
+    if (landedCount > 0) {
+      draft.keepPublished(landed);
+      dispatch(setNotification({ msg: keptFilesText(landedCount, Object.keys(fileRefs).length), alertType: "info" }));
+    }
     if (stopped?.uncertain) {
       unconfirmedUpdates.add(share.id);
       // The stored copy is the version this update may yet replace. Ask the
@@ -240,7 +278,7 @@ function EditShareDialog({ share }: EditShareDialogProps) {
           </>
         }
       >
-        <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={editCategories} />
+        <ShareForm draft={draft} categoryListRef={categoryListRef} initialCategories={editCategories} thumbnail={thumbnail} />
       </ResponsiveDialog>
 
       <PublishAgainDialog

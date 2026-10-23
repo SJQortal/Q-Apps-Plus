@@ -1,11 +1,12 @@
 import { ClearFieldButton } from "../../components/common/ClearFieldButton";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
   Button,
   Chip,
   CircularProgress,
+  Divider,
   Skeleton,
   TextField,
   ToggleButton,
@@ -13,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import TravelExploreOutlinedIcon from "@mui/icons-material/TravelExploreOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import { useNavigate } from "react-router-dom";
 import { BottomSheet } from "../../components/common/mobile/BottomSheet";
@@ -36,6 +38,9 @@ import { requestOpenPublish } from "../../constants/events.ts";
 
 export type { SortOrder } from "../../utils/settings.ts";
 import type { SortOrder } from "../../utils/settings.ts";
+
+// Loads with the first Explore collections, not with Home.
+const ExploreCollectionsDialog = lazy(() => import("../Collections/ExploreCollectionsDialog.tsx"));
 
 /** The filters a search ran with; the form fields may have changed since. */
 interface AppliedFilters {
@@ -99,6 +104,9 @@ export const Home = () => {
   const [sort, setSort] = useState<SortOrder>(restored?.sort ?? settings.defaultSort);
   const [following, setFollowing] = useState(restored?.following ?? false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Explore collections: mounted from its first opening, so its search and list stay while Home does.
+  const [exploreOpen, setExploreOpen] = useState(false);
+  const [exploreMounted, setExploreMounted] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   // A next page failed: the rows stay, with a Retry for that page.
@@ -285,6 +293,23 @@ export const Home = () => {
     </ToggleButtonGroup>
   );
 
+  // Under the filters: other people's collections, in a window of their own.
+  const exploreButton = (
+    <Button
+      variant="outlined"
+      fullWidth
+      startIcon={<TravelExploreOutlinedIcon />}
+      onClick={() => {
+        if (phone) setFiltersOpen(false);
+        setExploreMounted(true);
+        setExploreOpen(true);
+      }}
+      sx={{ minHeight: 44 }}
+    >
+      Explore collections
+    </Button>
+  );
+
   const filterForm = (
     <Box
       component="form"
@@ -422,6 +447,8 @@ export const Home = () => {
         // page, refresh and chip reads them through categoryListRef.
         <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters and sort" keepMounted>
           {filterForm}
+          <Divider sx={{ my: 2 }} />
+          {exploreButton}
         </BottomSheet>
       ) : (
         <FiltersRail>
@@ -429,8 +456,15 @@ export const Home = () => {
             Filters
           </Typography>
           {filterForm}
+          <Divider />
+          {exploreButton}
         </FiltersRail>
       )}
+      {exploreMounted ? (
+        <Suspense fallback={null}>
+          <ExploreCollectionsDialog open={exploreOpen} onClose={() => setExploreOpen(false)} />
+        </Suspense>
+      ) : null}
 
       <Box ref={listColumn} sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
         <Box

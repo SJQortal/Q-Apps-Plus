@@ -48,7 +48,7 @@ describe('CollectionsPage', () => {
     renderWithProviders(<CollectionsPage />, { initialEntries: ['/collections'] });
 
     expect(await screen.findByRole('button', { name: 'Open Docs' })).toBeInTheDocument();
-    expect(await screen.findByText('2 items')).toBeInTheDocument();
+    expect(await screen.findByText('2 shares')).toBeInTheDocument();
     const [first] = fetchCallsMatching('/arbitrary/resources/search');
     expect(first).toContain('name=alice');
     expect(first).toContain('identifier=qshare_collection_');
@@ -60,7 +60,7 @@ describe('CollectionsPage', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'All' }));
     expect(await screen.findByRole('button', { name: "Open Bob's picks" })).toBeInTheDocument();
-    expect(await screen.findByText('1 item')).toBeInTheDocument();
+    expect(await screen.findByText('1 share')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Docs' })).toBeInTheDocument();
     // Carol's collection was "deleted" (republished with no items): once its body is known it stays out of All.
     await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(3));

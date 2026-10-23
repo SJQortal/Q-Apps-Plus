@@ -88,6 +88,18 @@ export const RowIcon = styled("img")(({ theme }) => ({
   flexShrink: 0,
 }));
 
+/** A row's 44 px square holding a thumbnail over the icon it replaces once loaded. */
+export const RowArt = styled("span")({
+  position: "relative",
+  width: 44,
+  height: 44,
+  flexShrink: 0,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  "& > img:last-child": { position: "absolute", inset: 0 },
+});
+
 export const VideoCardTitle = styled(Typography)(({ theme }) => ({
   fontSize: 15,
   fontWeight: 600,
@@ -232,17 +244,29 @@ export const CardMainStatic = styled("div")(({ theme }) => cardMain(theme));
  * 266 px tall and a full-height card would fill the list.
  */
 export const CardArt = styled("span")(({ theme }) => ({
+  position: "relative",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   width: "100%",
-  height: 96,
+  // Wide enough for a picture to read: thumbnails fill it, icons sit in the middle.
+  aspectRatio: "16 / 10",
   flexShrink: 0,
+  overflow: "hidden",
   backgroundColor: primarySoft(theme),
   color: theme.palette.text.secondary,
-  [phone]: { height: 80 },
-  [landscapePhone]: { height: 48 },
+  [landscapePhone]: { aspectRatio: "auto", height: 64 },
 }));
+
+/** A share's thumbnail (or its own image) filling the card's art. */
+export const CardPicture = styled("img")({
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+});
 
 /**
  * The whole icon, never cropped: Video and Book are wider than tall (about

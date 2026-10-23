@@ -14,6 +14,8 @@ import type { RootState } from "../../state/store";
 import { collectionKey, collectionPath, type CollectionSummary } from "../../utils/collections";
 import { avatarUrl, profilePath } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
+import { allCollectionItems, folderCount, isDeletedCollection } from "../../utils/collectionFolders";
+import { CollectionCover } from "./CollectionCover";
 import { CollectionDialog } from "./CollectionDialog";
 import { useCollectionList } from "./useCollectionList";
 import {
@@ -31,27 +33,49 @@ import {
 
 type TabId = "mine" | "all";
 
-const countLabel = (n: number) => `${n} ${n === 1 ? "item" : "items"}`;
+const countLabel = (n: number) => `${n} ${n === 1 ? "share" : "shares"}`;
 
-export function CollectionCard({ row }: { row: CollectionSummary }) {
+/** `onOpen` runs as the card or its publisher is opened (a window holding it closes). */
+export function CollectionCard({ row, onOpen }: { row: CollectionSummary; onOpen?: () => void }) {
   const navigate = useNavigate();
+  const phone = usePhoneLayout();
   const collection = useSelector((state: RootState) => state.collections.byKey[collectionKey(row.name, row.identifier)]);
   const title = row.title || collection?.title || "Untitled collection";
+  const shares = collection ? allCollectionItems(collection).length : 0;
+  const folders = collection ? folderCount(collection) : 0;
   return (
     <CardItem>
-      <CardButton onClick={() => navigate(collectionPath(row.name, row.identifier))} aria-label={`Open ${title}`}>
-        <CardTitle>{title}</CardTitle>
-        {row.description ? <CardDescription>{row.description}</CardDescription> : null}
-        <CardMeta>
-          {collection ? (
-            <span>{collection.items.length === 0 ? "Empty" : countLabel(collection.items.length)}</span>
-          ) : (
-            <Skeleton variant="text" width={52} sx={{ display: "inline-block" }} />
-          )}
-          {row.updated ? <span>· updated {formatDate(row.updated)}</span> : null}
-        </CardMeta>
+      <CardButton
+        onClick={() => {
+          onOpen?.();
+          navigate(collectionPath(row.name, row.identifier));
+        }}
+        aria-label={`Open ${title}`}
+        sx={{ flexDirection: "row", alignItems: "center", gap: 1.5 }}
+      >
+        <CollectionCover cover={collection?.cover} size={phone ? 56 : 64} />
+        <Box sx={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, flex: 1 }}>
+          <CardTitle>{title}</CardTitle>
+          {row.description ? <CardDescription>{row.description}</CardDescription> : null}
+          <CardMeta>
+            {collection ? (
+              <span>{shares === 0 && folders === 0 ? "Empty" : countLabel(shares)}</span>
+            ) : (
+              <Skeleton variant="text" width={52} sx={{ display: "inline-block" }} />
+            )}
+            {folders > 0 ? <span>· {folders} {folders === 1 ? "folder" : "folders"}</span> : null}
+            {collection?.copiedFrom ? <span>· copied from {collection.copiedFrom.name}</span> : null}
+            {row.updated ? <span>· updated {formatDate(row.updated)}</span> : null}
+          </CardMeta>
+        </Box>
       </CardButton>
-      <PublisherLink onClick={() => navigate(profilePath(row.name))} aria-label={`Shares by ${row.name}`}>
+      <PublisherLink
+        onClick={() => {
+          onOpen?.();
+          navigate(profilePath(row.name));
+        }}
+        aria-label={`Shares by ${row.name}`}
+      >
         <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(row.name)} alt="" slotProps={{ img: { loading: "lazy" } }} />
         <span>{row.name}</span>
       </PublisherLink>
@@ -79,13 +103,13 @@ export function CollectionsPage() {
     }
   }, [tab, myName, loading, error, mineName, rows, dispatch]);
 
-  const visible =
-    tab === "all"
-      ? rows.filter((row) => {
-          const known = byKey[collectionKey(row.name, row.identifier)];
-          return !known || known.items.length > 0;
-        })
-      : rows;
+  // Deleted collections go from every list as soon as their body says so
+  // (at once on this device); others' empty ones too, as before the flag.
+  const visible = rows.filter((row) => {
+    const known = byKey[collectionKey(row.name, row.identifier)];
+    if (!known) return true;
+    return tab === "all" ? allCollectionItems(known).length > 0 : !isDeletedCollection(known);
+  });
 
   const goBack = useSafeBack("/");
   const newButton = myName ? (

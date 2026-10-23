@@ -17,20 +17,20 @@ import BookmarkAddOutlinedIcon from "@mui/icons-material/BookmarkAddOutlined";
 import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
 import BookmarkBorderOutlinedIcon from "@mui/icons-material/BookmarkBorderOutlined";
 import CheckIcon from "@mui/icons-material/Check";
+import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { BottomSheet } from "../mobile/BottomSheet";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { CollectionDialog } from "../../../pages/Collections/CollectionDialog";
 import { upsertCollection } from "../../../state/features/collectionsSlice";
 import { setNotification } from "../../../state/features/notificationsSlice";
 import {
-  buildCollectionBody,
   collectionKey,
+  editCollectionBody,
   fetchCollection,
-  hasItem,
   publishCollection,
-  toggleItem,
   type CollectionSummary,
 } from "../../../utils/collections";
+import { containerOptions, containsItem, findFolder, hasItemIn, toggleItemIn } from "../../../utils/collectionFolders";
 import { isHubDecline } from "../../../utils/hubErrors";
 import { useMyCollections } from "./useMyCollections";
 
@@ -45,7 +45,8 @@ export interface SaveToCollectionButtonProps {
 const LABEL = "Add to collection";
 
 /**
- * Add a share to one of the signed-in name's collections. Opens a bottom
+ * Add a share to one of the signed-in name's collections, or to a folder in
+ * one: each collection is listed with its folders below it. Opens a bottom
  * sheet on phones and a menu on wider screens; each toggle republishes that
  * collection (one Hub confirmation). Renders nothing when not signed in.
  * Called "Add to collection", not "Save": on the share page "Save" is the
@@ -70,7 +71,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
     () =>
       (mine ?? []).filter((row) => {
         const collection = byKey[collectionKey(row.name, row.identifier)];
-        return collection ? hasItem(collection, item) : false;
+        return collection ? containsItem(collection, item) : false;
       }),
     [mine, byKey, item]
   );
@@ -90,7 +91,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
     setSheetOpen(false);
   };
 
-  const toggle = async (row: CollectionSummary) => {
+  const toggle = async (row: CollectionSummary, folderId: string | null = null) => {
     closePicker();
     const key = collectionKey(row.name, row.identifier);
     let current = byKey[key];
@@ -103,21 +104,22 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
       dispatch(setNotification({ msg: `Could not load ${row.title || "that collection"}`, alertType: "error" }));
       return;
     }
-    const adding = !hasItem(current, item);
-    const next = toggleItem(current, item);
-    const body = buildCollectionBody({
-      title: next.title,
-      description: next.description,
-      items: next.items,
-      created: next.created,
-    });
+    const adding = !hasItemIn(current, folderId, item);
+    const next = toggleItemIn(current, folderId, item);
+    const body = editCollectionBody(next);
+    const place = folderId ? findFolder(current, folderId)?.folder.title || "the folder" : null;
     dispatch(upsertCollection({ ...next, ...body }));
     try {
-      const published = await publishCollection({ name: row.name, identifier: row.identifier, body });
+      const published = await publishCollection({
+        name: row.name,
+        identifier: row.identifier,
+        body,
+        previous: current,
+      });
       dispatch(upsertCollection(published));
       dispatch(
         setNotification({
-          msg: adding ? `Added to ${published.title}` : `Removed from ${published.title}`,
+          msg: adding ? `Added to ${place ?? published.title}` : `Removed from ${place ?? published.title}`,
           alertType: "success",
         })
       );
@@ -148,28 +150,43 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
           <ListItemText primary="No collections yet" secondary="Make one below" />
         </MenuItem>
       ) : null}
-      {(mine ?? []).map((row) => {
+      {(mine ?? []).flatMap((row) => {
         const key = collectionKey(row.name, row.identifier);
         const collection = byKey[key];
-        const checked = collection ? hasItem(collection, item) : false;
-        return (
-          <MenuItem
-            key={key}
-            role="menuitemcheckbox"
-            aria-checked={checked}
-            onClick={() => toggle(row)}
-            sx={{ minHeight: 48 }}
-          >
-            <ListItemIcon sx={{ minWidth: 36 }}>
-              {checked ? <CheckIcon color="primary" /> : <BookmarkBorderOutlinedIcon sx={{ opacity: 0.6 }} />}
-            </ListItemIcon>
-            <ListItemText
-              primary={row.title || row.identifier}
-              secondary={collection ? (collection.items.length === 0 ? "Empty" : `${collection.items.length} ${collection.items.length === 1 ? "item" : "items"}`) : undefined}
-              slotProps={{ primary: { noWrap: true } }}
-            />
-          </MenuItem>
-        );
+        // The collection itself, then its folders in tree order, indented.
+        const places = collection ? containerOptions(collection) : [{ id: null, title: row.title, depth: 0 }];
+        return places.map((place) => {
+          const checked = collection ? hasItemIn(collection, place.id, item) : false;
+          const container = collection ? (place.id ? findFolder(collection, place.id)?.folder : collection) : null;
+          const count = container?.items.length ?? 0;
+          const label =
+            place.id === null ? row.title || collection?.title || row.identifier : place.title || "Untitled folder";
+          return (
+            <MenuItem
+              key={`${key}/${place.id ?? ""}`}
+              role="menuitemcheckbox"
+              aria-checked={checked}
+              aria-label={place.id === null ? label : `${label}, in ${row.title || collection?.title || "collection"}`}
+              onClick={() => toggle(row, place.id)}
+              sx={{ minHeight: 48, pl: 2 + Math.min(place.depth, 4) * 2 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                {checked ? (
+                  <CheckIcon color="primary" />
+                ) : place.id === null ? (
+                  <BookmarkBorderOutlinedIcon sx={{ opacity: 0.6 }} />
+                ) : (
+                  <FolderOutlinedIcon sx={{ opacity: 0.6 }} />
+                )}
+              </ListItemIcon>
+              <ListItemText
+                primary={label}
+                secondary={container ? (count === 0 ? "Empty" : `${count} ${count === 1 ? "share" : "shares"}`) : undefined}
+                slotProps={{ primary: { noWrap: true } }}
+              />
+            </MenuItem>
+          );
+        });
       })}
       <Divider />
       <MenuItem
