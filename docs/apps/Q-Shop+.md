@@ -581,7 +581,7 @@ Simon, from Hub and Q-Mail:
 
 Simon, from the seller page: *"the buttons at the bottom, make them the same as on the top, the overview, products, Collections ... also I would like a new tab, Delivery, and there user can set a specific delivery for each country or region, and also adjusted for each product. so it would be best if user could add Shipping profiles, and there the specific delivery details and add products there (also making sure the delivery can be set in set currency like USD and from there QORT price adjusted)"*
 
-- **The Overview's links** at its foot are the tab bar's tabs, from the same list and in its order (Overview, Products, Collections, Orders, Reviews, Delivery, Shop); Overview is marked as the page you're on and takes you back to its top.
+- **The Overview's links** at its foot are the tab bar's tabs, from the same list and in its order (Overview, Products, Collections, Orders, Reviews, Delivery, Shop); Overview is marked as the page you're on and takes you back to its top. **Then removed** (Simon, later that evening: *"also no need for these buttons at the bottom"*): the tab bar above leads everywhere; the tiles and All orders still open their tabs.
 - **A Delivery tab** (`seller/DeliveryTab.tsx`): a **General** profile for every product not in another, and **shipping profiles** the seller adds, names and gives products (picked from the shop's, searchable, with their pictures; a product is in one profile at a time, and digital ones are never delivered). Each profile has **zones**: where (the Ships to picker: regions, countries, the USA and its states), the **first item**, **each extra item** and **free delivery from** an amount of the profile's items (the zone form shows a worked example: 1 item, 3 items, free from). A profile with no zones delivers free wherever the shop ships.
 - **The currency:** prices are in the shop's pricing currency when it has one (Shop → Prices: USD, PLN…) and in QORT otherwise. At checkout, a fee in a currency gets its QORT (and ARRR, when the shop takes it) price from the shop's own rates, as its products do; when the shop's currency changes, the tab says so and offers to switch (the amounts stay as typed, to check).
 - **Stored** as one DOCUMENT of the seller's, `q-store-delivery-<short>` (Data contract), drafted in the tab and published with one confirmation.
@@ -603,6 +603,15 @@ Simon: *"also if user has the USD or other currency prices set up, please next t
 ### Round 5, 2026-10-23 (evening): Create Shop until there is a shop
 
 Simon: *"if logged in user does not have a shop yet, instead of saying there manage shop call it Create Shop"*: the header's item reads **Create Shop** (with an add-shop icon) for a signed-in account whose name has no shop, or that has no name yet; the phone's bottom bar shows "Create" (named Create Shop for screen readers). It stays Manage Shop while the name's shops are loading (no flicker, and no second shop by mistake) and when signed out. `components/layout/shellState.ts` useSellLabel; tests 944 → 947 (AppShell and BottomNav).
+
+### Round 5, 2026-10-23 (evening): Shop Settings, centred tabs, no Overview links
+
+Simon, from Hub: *"this view in the Shop tab could be nicely centered and the tab itself should be called Shop Settings, also the reviews window it to wide, should be nicely adjusted and centered"*, then *"also no need for these buttons at the bottom"*:
+- The **Shop** tab is **Shop Settings** (the hints that said "Shop → Prices" too).
+- **Reviews, Delivery and Shop Settings** read as one centred column, 880 px, the same for the three so nothing jumps between them (`CENTRED_TABS` in `pages/ProductManager/sellerTabs.ts`); Overview, Products, Collections and Orders keep the page's width for their lists and grids. Delivery wasn't named, but its cards stretched the same way.
+- The Overview's links at its foot are gone.
+- A new **seller-reviews** screen found that the reviews' h3 titles had no h2 above them there (axe heading-order); the list has a visually hidden Reviews heading now.
+- **Screens:** seller-reviews, seller-shop, seller-delivery, seller and shop in Hub 3.0, Classic and White at five sizes: 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe.
 
 ## Community feedback
 
