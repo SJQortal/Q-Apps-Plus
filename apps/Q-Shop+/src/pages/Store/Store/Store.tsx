@@ -231,7 +231,7 @@ function ShopProducts({
     setFilters((q) => ({ ...q, categories: [], inStockOnly: false, auctionsOnly: false }));
     setPrice({ min: "", max: "" });
   };
-  const priceFields = <PriceRangeFields min={price.min} max={price.max} onChange={setPrice} />;
+  const priceFields = <PriceRangeFields min={price.min} max={price.max} onChange={setPrice} titled={!phone} />;
 
   const addToCart = (row: ProductRow) => {
     const product = productOf(row, catalogues);

@@ -4,7 +4,7 @@
  * the category chips and the Auctions toggle.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Box, Chip, InputAdornment, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Box, Chip, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import { CategoryIcon } from "../../components/CategoryIcon";
@@ -92,36 +92,43 @@ function cleanPrice(text: string): string {
   return rest.length ? `${whole}.${rest.join("").slice(0, 8)}` : whole;
 }
 
-/** A price range in QORT: two small fields, either may stay empty. */
+/** A price range in QORT: two small fields, either may stay empty ("Price" before them unless a heading says so). */
 export function PriceRangeFields({
   min,
   max,
   onChange,
+  titled = true,
 }: {
   min: string;
   max: string;
   onChange: (range: { min: string; max: string }) => void;
+  titled?: boolean;
 }) {
-  const field = (label: string, value: string, set: (text: string) => void) => (
+  const field = (label: "Min" | "Max", value: string, set: (text: string) => void) => (
     <TextField
       size="small"
       label={label}
       value={value}
       onChange={(event) => set(cleanPrice(event.target.value))}
-      sx={{ width: 120, "& .MuiInputBase-root": { minHeight: 44 } }}
-      slotProps={{
-        htmlInput: { inputMode: "decimal", autoComplete: "off" },
-        input: { endAdornment: <InputAdornment position="end">QORT</InputAdornment> },
-      }}
+      sx={{ width: 96, "& .MuiInputBase-root": { minHeight: 44 } }}
+      slotProps={{ htmlInput: { inputMode: "decimal", autoComplete: "off", "aria-label": `${label} price in QORT` } }}
     />
   );
   return (
     <Box role="group" aria-label="Price in QORT" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-      {field("Min price", min, (text) => onChange({ min: text, max }))}
+      {titled && (
+        <Typography variant="body2" color="text.secondary" aria-hidden>
+          Price
+        </Typography>
+      )}
+      {field("Min", min, (text) => onChange({ min: text, max }))}
       <Typography color="text.secondary" aria-hidden>
         –
       </Typography>
-      {field("Max price", max, (text) => onChange({ min, max: text }))}
+      {field("Max", max, (text) => onChange({ min, max: text }))}
+      <Typography variant="body2" color="text.secondary" aria-hidden>
+        QORT
+      </Typography>
     </Box>
   );
 }

@@ -393,7 +393,7 @@ export function ProductsPage() {
   const toggleCategory = (key: string) =>
     update({ categories: categories.includes(key) ? categories.filter((c) => c !== key) : [...categories, key] });
   const clearFilters = () => update({ categories: [], inStockOnly: false, auctionsOnly: false, min: "", max: "" });
-  const priceFields = <PriceRangeFields min={min} max={max} onChange={(range) => update(range)} />;
+  const priceFields = <PriceRangeFields min={min} max={max} onChange={(range) => update(range)} titled={!phone} />;
   const addToCart = (row: AllProductRow) => {
     const product = productOfRow(row, catalogues);
     dispatch(setProductToCart({ storeId: row.storeId, storeOwner: row.owner, productId: row.productId, catalogueId: row.catalogueId, quantity: 1 }));

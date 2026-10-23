@@ -191,10 +191,10 @@ describe("shop page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
     const before = catalogueFetches(node).length;
     // Product p costs 1 + p QORT.
-    fireEvent.change(screen.getByRole("textbox", { name: "Min price" }), { target: { value: "4" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "Max price" }), { target: { value: "6,5" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Min price in QORT" }), { target: { value: "4" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Max price in QORT" }), { target: { value: "6,5" } });
     await waitFor(() => expect(cardTitles()).toEqual(["Product 5", "Product 4", "Product 3"]));
-    expect(screen.getByRole("textbox", { name: "Max price" })).toHaveValue("6.5");
+    expect(screen.getByRole("textbox", { name: "Max price in QORT" })).toHaveValue("6.5");
     expect(catalogueFetches(node)).toHaveLength(before);
   });
 
