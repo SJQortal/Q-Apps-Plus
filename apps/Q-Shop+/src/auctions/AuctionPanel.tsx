@@ -23,10 +23,10 @@ import { parseAmount, sanitizeAmountInput } from "../seller/productDraft";
 import { usePendingOrders } from "../pages/Cart/usePendingOrders";
 import type { CheckoutBuyer } from "../money/checkout";
 import { useAuction } from "./useAuction";
-import { placeBid } from "./placeBid";
+import { placeBid, TOO_MANY_BIDS } from "./placeBid";
 import { auctionCheckoutShop, wonLine } from "./auctionCheckout";
 import { isAuctionPaid, noteAuctionPaid } from "./paid";
-import { timeLeft, type AuctionTerms, type Bid } from "./rules";
+import { MAX_BID, timeLeft, type AuctionTerms, type Bid } from "./rules";
 
 const CheckoutDialog = lazy(() => import("../pages/Cart/CheckoutDialog").then((m) => ({ default: m.CheckoutDialog })));
 const bidUid = new ShortUniqueId({ length: 6 });
@@ -122,6 +122,10 @@ export function AuctionPanel({
       setNotice({ severity: "error", text: `Bid at least ${qort(state.minNext)}.` });
       return;
     }
+    if (value > MAX_BID) {
+      setNotice({ severity: "error", text: `A bid can be at most ${qort(MAX_BID)}.` });
+      return;
+    }
     setBusy(true);
     const outcome = await placeBid({ name: user.name, productId, storeId, seller: owner, amount: value, uid: bidUid(), latest: auction.refresh });
     setBusy(false);
@@ -154,9 +158,11 @@ export function AuctionPanel({
     }
     setChecking(true);
     setNotice(null);
-    const latest = await auction.refresh();
+    const read = await auction.refresh();
     setChecking(false);
-    if (!latest) return setNotice({ severity: "error", text: "Couldn't confirm the result with your node. Try again in a moment." });
+    if (!read) return setNotice({ severity: "error", text: "Couldn't confirm the result with your node. Try again in a moment." });
+    if (!read.complete) return setNotice({ severity: "error", text: TOO_MANY_BIDS });
+    const latest = read.state;
     if (!latest.winner || latest.winner.id !== winner.id) return setNotice({ severity: "warning", text: "The result changed with the latest bids. Check it again." });
     setCheckout(latest.winner);
   };
@@ -381,7 +387,7 @@ export function AuctionPanel({
         </Alert>
       )}
       {auction.stale && <Typography variant="body2" color="text.secondary">Couldn&apos;t check for new bids just now; trying again.</Typography>}
-      {auction.incomplete && <Typography variant="body2" color="text.secondary">Only the first 1,000 bids were read.</Typography>}
+      {auction.incomplete && <Alert severity="warning">{TOO_MANY_BIDS}</Alert>}
 
       {action}
 
@@ -447,7 +453,7 @@ export function AuctionPanel({
         {ignored > 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             {ignored === 1 ? "1 more bid doesn't count" : `${ignored} more bids don't count`}: too low when placed, outside the auction&apos;s times, the seller&apos;s
-            own, or changed after it was placed.
+            own, changed after it was placed, or voided by the seller.
           </Typography>
         )}
       </Collapse>
@@ -469,7 +475,8 @@ export function AuctionPanel({
             checkout, in QORT, and the seller sends it as with any order.
           </Typography>
           <Typography component="li" variant="body2">
-            A bid changed or deleted after it was placed no longer counts.{" "}
+            A bid changed or deleted after it was placed no longer counts, nor one the seller voids (an absurd bid, or a winner who didn&apos;t pay; the next bid can
+            then win).{" "}
             <Link component="button" type="button" variant="body2" onClick={() => void auction.refresh()} sx={{ verticalAlign: "baseline" }}>
               Check for new bids
             </Link>

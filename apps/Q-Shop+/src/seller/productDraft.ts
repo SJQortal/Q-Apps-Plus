@@ -74,6 +74,8 @@ export interface AuctionFormValues {
   buyNow: string;
   /** Minutes a late bid moves the end; "0" turns it off. */
   extendMinutes: string;
+  /** Bids the seller voided (their ids): they no longer count. */
+  voided?: string[];
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -104,7 +106,16 @@ function auctionFormOf(terms: AuctionTerms): AuctionFormValues {
     reserve: text(terms.reserve),
     buyNow: text(terms.buyNow),
     extendMinutes: String(terms.extendMinutes),
+    voided: terms.voided ?? [],
   };
+}
+
+/** The terms with the form's voided bids (none: no field, as before any void). */
+function withVoids(terms: AuctionTerms, voided: string[] | undefined): AuctionTerms {
+  const ids = [...new Set((voided ?? []).filter((id) => typeof id === "string" && id))].slice(0, 500);
+  const rest = { ...terms };
+  delete rest.voided;
+  return ids.length ? { ...rest, voided: ids } : rest;
 }
 
 function sameTerms(a: AuctionTerms, b: AuctionTerms): boolean {
@@ -151,7 +162,8 @@ export function auctionFromForm(form: AuctionFormValues, now: number, saved?: Au
     ...(buyNow !== undefined && { buyNow: roundQort(buyNow) }),
     extendMinutes: Number.isFinite(extend) ? Math.max(0, Math.min(60, Math.floor(extend))) : DEFAULT_EXTEND_MINUTES,
   };
-  if (saved && sameTerms(terms, saved)) return { terms: saved };
+  // Voiding bids is the seller's at any time (an absurd bid, a winner who didn't pay); the rest follows the rules above.
+  if (saved && sameTerms(terms, saved)) return { terms: withVoids(saved, form.voided) };
   if (saved && now >= saved.start && now < saved.end) {
     if (!sameTerms({ ...terms, end: saved.end }, saved)) return { problem: "Bidding has started: only the end can change now, to later" };
     if (terms.end < saved.end) return { problem: "Bidding has started: the end can only move later" };
@@ -160,7 +172,7 @@ export function auctionFromForm(form: AuctionFormValues, now: number, saved?: Au
     return { problem: "This auction has ended. To run it again, clear Starts (or set a new start) and set a new end" };
   }
   const problem = auctionTermsProblem(terms, now);
-  return problem ? { problem } : { terms };
+  return problem ? { problem } : { terms: withVoids(terms, form.voided) };
 }
 
 /**

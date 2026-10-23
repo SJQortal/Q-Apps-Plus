@@ -365,7 +365,7 @@ describe("an auction (auctions/rules.ts)", () => {
     const product = { ...mug, status: "OUT_OF_STOCK", auction: terms };
     const form = formValuesFor(product, coins);
     expect(form.sale).toBe("auction");
-    expect(form.auction).toEqual({ startingBid: "3", start: toLocalInput(terms.start), end: toLocalInput(terms.end), reserve: "", buyNow: "", extendMinutes: "0" });
+    expect(form.auction).toEqual({ startingBid: "3", start: toLocalInput(terms.start), end: toLocalInput(terms.end), reserve: "", buyNow: "", extendMinutes: "0", voided: [] });
     expect(fromLocalInput(form.auction!.end)).toBe(terms.end);
     expect(validateProductForm({ ...form, description: "<p>Sold</p>" }, coins, { now, savedAuction: terms, oldCategory: "Kitchen" })).toBeNull();
     const edited = editedProductDraft({ base: product, values: { ...form, description: "<p>Sold</p>" }, coins, name: SELLER, now }) as Record<string, unknown>;
@@ -397,6 +397,15 @@ describe("an auction (auctions/rules.ts)", () => {
     expect(auctionFromForm({ ...form, start: "", end: toLocalInput(after + 24 * HOUR) }, after, terms)).toEqual({
       terms: { ...terms, start: after, end: after + 24 * HOUR },
     });
+  });
+
+  it("lets the seller void bids at any time, even once it has ended, keeping the rest of the terms", () => {
+    const terms = { v: 1 as const, start: now - 9 * HOUR, end: now - HOUR, startingBid: 3, extendMinutes: 5 };
+    const form = formValuesFor({ ...mug, status: "OUT_OF_STOCK", auction: terms }, coins).auction!;
+    expect(form.voided).toEqual([]);
+    expect(auctionFromForm({ ...form, voided: ["bid-1", "bid-1", "bid-2"] }, now, terms)).toEqual({ terms: { ...terms, voided: ["bid-1", "bid-2"] } });
+    // Un-voiding them all leaves no field, as before.
+    expect(auctionFromForm({ ...form, voided: [] }, now, { ...terms, voided: ["bid-1"] })).toEqual({ terms });
   });
 
   it("can be retired, and stays out of stock for the original app otherwise", () => {

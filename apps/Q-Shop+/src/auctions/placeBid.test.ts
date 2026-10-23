@@ -14,7 +14,7 @@ const args = (overrides: Partial<Parameters<typeof placeBid>[0]> = {}): Paramete
   seller: "Seller",
   amount: 12,
   uid: "UID123",
-  latest: async () => live,
+  latest: async () => ({ state: live, complete: true }),
   clock: () => T0 + 120_000,
   ...overrides,
 });
@@ -30,15 +30,18 @@ describe("placing a bid", () => {
     const outcome = await placeBid(args({ send }));
     expect(outcome).toEqual({ kind: "placed", bid: { id: "q-store-bid-my-shop-AbCdEf1234-UID123", bidder: "Ann", amount: 12, created: T0 + 120_000 } });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send.mock.calls[0]).toEqual([expect.objectContaining({ identifier: "q-store-bid-my-shop-AbCdEf1234-UID123", description: "bid:12" }), 300_000]);
+    expect(send.mock.calls[0]).toEqual([expect.objectContaining({ identifier: "q-store-bid-my-shop-AbCdEf1234-UID123", description: "bid:12;to:Seller" }), 300_000]);
   });
 
   it("publishes nothing when the latest bids are beyond it, it has closed, or the node can't say", async () => {
     const send = vi.fn(async () => ({}));
     const beaten = auctionState(terms, [{ id: "x", bidder: "Cy", amount: 20, created: T0 + 30_000 }], T0 + 60_000, "Seller");
-    expect(await placeBid(args({ send, latest: async () => beaten }))).toEqual({ kind: "outbid", state: beaten });
+    expect(await placeBid(args({ send, latest: async () => ({ state: beaten, complete: true }) }))).toEqual({ kind: "outbid", state: beaten });
     const ended = auctionState(terms, [], T0 + 7_200_000, "Seller");
-    expect(await placeBid(args({ send, latest: async () => ended }))).toEqual({ kind: "closed", state: ended });
+    expect(await placeBid(args({ send, latest: async () => ({ state: ended, complete: true }) }))).toEqual({ kind: "closed", state: ended });
+    // More bids than the app reads: the result can't be checked, so no bid.
+    expect(await placeBid(args({ send, latest: async () => ({ state: live, complete: false }) }))).toMatchObject({ kind: "failed", message: expect.stringMatching(/more bids than the app can read/) });
+    expect(await placeBid(args({ send, amount: 20_000_000 }))).toMatchObject({ kind: "failed", message: expect.stringMatching(/at most 10,000,000 QORT/) });
     expect(await placeBid(args({ send, latest: async () => null }))).toMatchObject({ kind: "failed" });
     expect(send).not.toHaveBeenCalled();
   });

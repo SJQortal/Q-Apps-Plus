@@ -231,7 +231,7 @@ function rows() {
   statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
   out.push({ name: 'Gold Issuer', service: 'IMAGE', identifier: 'asset81_Gold Bar_aavatar', created: now - DAY, updated: now - DAY, size: 2000 });
   BIDS.forEach(([p, name, amount, created], i) =>
-    out.push({ name, service: 'DOCUMENT', identifier: `q-store-bid-shop-1-P${String(p).padStart(9, '0')}-BID${String(i).padStart(3, '0')}`, created, updated: created, size: 150, metadata: { title: 'Bid', description: `bid:${amount}` } })
+    out.push({ name, service: 'DOCUMENT', identifier: `q-store-bid-shop-1-P${String(p).padStart(9, '0')}-BID${String(i).padStart(3, '0')}`, created, updated: created, size: 150, metadata: { title: 'Bid', description: `bid:${amount};to:${encodeURIComponent('Shop+Plus')}` } })
   );
   return out;
 }

@@ -7,10 +7,11 @@
 import { errorMessage, isHubDecline, isHubTimeout } from "../qdn/hubErrors";
 import { invalidateQdnSearches, resourceExists } from "../qdn/search";
 import { buildBidPublish } from "./bids";
-import { roundQort, type AuctionState, type Bid } from "./rules";
+import { MAX_BID, roundQort, type AuctionState, type Bid } from "./rules";
 import { BID_BASE } from "../qdn/identifiers";
 
 export const BID_PUBLISH_TIMEOUT_MS = 5 * 60_000;
+export const TOO_MANY_BIDS = "This auction has more bids than the app can read (1,000), so its result can't be checked here: it takes no bids or payments. Ask the seller.";
 const EPSILON = 1e-9;
 
 export type BidOutcome =
@@ -30,14 +31,17 @@ export async function placeBid(args: {
   amount: number;
   uid: string;
   /** The latest result from QDN (useAuction's refresh), or null when the node didn't answer. */
-  latest: () => Promise<AuctionState | null>;
+  latest: () => Promise<{ state: AuctionState; complete: boolean } | null>;
   send?: (request: Record<string, unknown>, timeout: number) => Promise<unknown>;
   clock?: () => number;
 }): Promise<BidOutcome> {
   const send = args.send ?? ((r, t) => qortalRequestWithTimeout(r as never, t));
   const clock = args.clock ?? Date.now;
-  const state = await args.latest();
-  if (!state) return { kind: "failed", message: "Couldn't read the latest bids from your node. Try again in a moment." };
+  const read = await args.latest();
+  if (!read) return { kind: "failed", message: "Couldn't read the latest bids from your node. Try again in a moment." };
+  if (!read.complete) return { kind: "failed", message: TOO_MANY_BIDS };
+  const { state } = read;
+  if (!(args.amount > 0) || args.amount > MAX_BID) return { kind: "failed", message: `A bid can be at most ${MAX_BID.toLocaleString("en-US")} QORT.` };
   if (state.phase !== "live") return { kind: "closed", state };
   if (args.amount + EPSILON < state.minNext) return { kind: "outbid", state };
   const now = clock();

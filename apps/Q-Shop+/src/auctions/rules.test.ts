@@ -51,6 +51,15 @@ describe("auction rules", () => {
     expect(auctionState({ ...terms, extendMinutes: 0 }, [late, later], T0 + 64 * MIN, "Seller").accepted).toEqual([late]);
   });
 
+  it("leave out bids the seller voided, so the next bid wins, and bids over the cap", () => {
+    const ann = bid("Ann", 20, 5);
+    const bob = bid("Bob", 30, 6);
+    const troll = bid("Troll", 20_000_000, 7);
+    expect(auctionState(terms, [ann, bob, troll], T0 + 70 * MIN, "Seller").winner?.bidder).toBe("Bob");
+    expect(auctionState({ ...terms, voided: [bob.id] }, [ann, bob, troll], T0 + 70 * MIN, "Seller").winner?.bidder).toBe("Ann");
+    expect(auctionTermsOf({ auction: { ...terms, voided: ["x", 7, "y".repeat(65)] } })?.voided).toEqual(["x"]);
+  });
+
   it("end at once with a buy-now bid, which wins", () => {
     const state = auctionState({ ...terms, buyNow: 100 }, [bid("Ann", 20, 5), bid("Bob", 100, 10), bid("Cy", 150, 11)], T0 + 15 * MIN, "Seller");
     expect(state.boughtNow).toBe(true);

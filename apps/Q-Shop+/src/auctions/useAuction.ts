@@ -45,8 +45,8 @@ export interface Auction {
   read: number;
   /** Bids published from here that the node doesn't list yet. */
   placed: Bid[];
-  /** Reads the bids again past the cache: the result then, or null when the node didn't answer. */
-  refresh: () => Promise<AuctionState | null>;
+  /** Reads the bids again past the cache: the result then (and whether every bid was read), or null when the node didn't answer. */
+  refresh: () => Promise<{ state: AuctionState; complete: boolean } | null>;
   /** A bid just published from here. */
   notePlaced: (bid: Bid) => void;
 }
@@ -58,11 +58,11 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
   const current: Loaded = loaded.key === productId ? loaded : { key: productId, status: "loading", bids: [], complete: true, stale: false };
 
   const load = useCallback(
-    async (fresh: boolean): Promise<Bid[] | null> => {
+    async (fresh: boolean): Promise<{ bids: Bid[]; complete: boolean } | null> => {
       try {
-        const { bids, complete } = await fetchBids(productId, { fresh });
-        setLoaded({ key: productId, status: "ready", bids, complete, stale: false });
-        return bids;
+        const read = await fetchBids(productId, seller, { fresh });
+        setLoaded({ key: productId, status: "ready", bids: read.bids, complete: read.complete, stale: false });
+        return read;
       } catch {
         setLoaded((prev) =>
           prev.key === productId && prev.status === "ready"
@@ -72,13 +72,13 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
         return null;
       }
     },
-    [productId]
+    [productId, seller]
   );
 
   // The first read may come from the session's cache (2 minutes); polls and refreshes don't.
   useEffect(() => {
     let cancelled = false;
-    fetchBids(productId).then(
+    fetchBids(productId, seller).then(
       ({ bids, complete }) => {
         if (!cancelled) setLoaded({ key: productId, status: "ready", bids, complete, stale: false });
       },
@@ -89,38 +89,44 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
     return () => {
       cancelled = true;
     };
-  }, [productId]);
+  }, [productId, seller]);
 
   const state = auctionState(terms, current.bids, now, seller);
   const settling = state.phase === "ended" && now - state.end < SETTLE_MS;
-  const watching = state.phase === "live" || settling;
+  // Past 1,000 rows the result can't be trusted (bidding and paying stop): no polling either.
+  const watching = (state.phase === "live" || settling) && current.complete;
   const fast = settling || (state.phase === "live" && state.end - now < NEAR_END_MS);
 
   const lastRead = useRef(0);
   useEffect(() => {
     if (!watching) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let reading = false;
     let failures = 0;
     let stopped = false;
     const every = fast ? POLL_NEAR_END_MS : POLL_MS;
+    const clear = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+    };
+    // One timer at a time: a read in flight schedules the next itself.
     const schedule = () => {
+      clear();
       if (stopped || document.hidden) return;
       timer = setTimeout(tick, Math.min(MAX_BACKOFF_MS, every * 2 ** failures));
     };
     const tick = async () => {
       timer = undefined;
+      reading = true;
       lastRead.current = Date.now();
-      const bids = await load(true);
-      failures = bids ? 0 : failures + 1;
+      const read = await load(true);
+      reading = false;
+      failures = read ? 0 : failures + 1;
       schedule();
     };
     const onVisibility = () => {
-      if (document.hidden) {
-        if (timer !== undefined) clearTimeout(timer);
-        timer = undefined;
-        return;
-      }
-      if (timer !== undefined) return;
+      if (document.hidden) return clear();
+      if (timer !== undefined || reading) return;
       // Back on the tab: read now if the last read is older than a poll, else wait for the next one.
       if (Date.now() - lastRead.current >= every) void tick();
       else schedule();
@@ -129,15 +135,15 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       stopped = true;
-      if (timer !== undefined) clearTimeout(timer);
+      clear();
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [watching, fast, load]);
 
   const refresh = useCallback(async () => {
     lastRead.current = Date.now();
-    const bids = await load(true);
-    return bids ? auctionState(terms, bids, Date.now(), seller) : null;
+    const read = await load(true);
+    return read ? { state: auctionState(terms, read.bids, Date.now(), seller), complete: read.complete } : null;
   }, [load, terms, seller]);
 
   const notePlaced = useCallback((bid: Bid) => setPlaced((prev) => [...prev.filter((b) => b.id !== bid.id), bid]), []);

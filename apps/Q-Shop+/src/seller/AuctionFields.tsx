@@ -8,6 +8,7 @@ import { CoinIcon } from "../components/money/CoinIcon";
 import { selectMenuProps } from "../components/common/menuStyle";
 import { useNow } from "../hooks/useNow";
 import type { AuctionTerms } from "../auctions/rules";
+import { VoidBids } from "./VoidBids";
 import { sanitizeAmountInput, toLocalInput, type AuctionFormValues } from "./productDraft";
 
 const DURATIONS = [1, 3, 7, 14];
@@ -41,11 +42,16 @@ export function AuctionFields({
   value,
   onChange,
   saved = null,
+  productId = null,
+  seller = null,
 }: {
   value: AuctionFormValues;
   onChange: (next: AuctionFormValues) => void;
   /** The auction as published, when editing one: once bidding starts its terms are the bidders' (productDraft.ts auctionFromForm). */
   saved?: AuctionTerms | null;
+  /** The product and its seller, when editing a published auction: its bids can be voided. */
+  productId?: string | null;
+  seller?: string | null;
 }) {
   const now = useNow(30_000);
   const running = !!saved && now >= saved.start && now < saved.end;
@@ -138,6 +144,9 @@ export function AuctionFields({
           </MenuItem>
         ))}
       </TextField>
+      {saved && productId && seller && now >= saved.start && (
+        <VoidBids productId={productId} seller={seller} terms={saved} voided={value.voided ?? []} onChange={(voided) => set("voided", voided)} />
+      )}
       <Typography variant="body2" color="text.secondary">
         Bids and the winner&apos;s payment are in QORT. Each bid is a small publish on QDN by the bidder. Q-Shop, the original app, shows this
         product as out of stock, so it can&apos;t be bought there at a fixed price.

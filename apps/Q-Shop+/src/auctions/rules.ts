@@ -35,6 +35,8 @@ export interface AuctionTerms {
   buyNow?: number;
   /** Late bids move the end this many minutes past them; 0: off. */
   extendMinutes: number;
+  /** Bids the seller voided (their ids): an absurd bid, or a winner who didn't pay. They don't count. */
+  voided?: string[];
 }
 
 export interface Bid {
@@ -78,6 +80,18 @@ export function roundQort(value: number): number {
   return Math.round(value * 1e8) / 1e8;
 }
 
+/**
+ * The most a bid can be: bidders pay nothing until they win, so without a
+ * cap one absurd bid could hold an auction for good (the seller can void it,
+ * Bid.voided below); and 8 decimals stay exact below it.
+ */
+export const MAX_BID = 10_000_000;
+
+/** An amount as a bid writes it: plain decimals, never "1e-7" or "1e+21". */
+export function amountString(value: number): string {
+  return roundQort(value).toFixed(8).replace(/\.?0+$/, "");
+}
+
 /** The least a bid must beat the leading one by: a step that grows with the price. */
 export function bidStep(high: number): number {
   if (high < 1) return 0.01;
@@ -113,12 +127,20 @@ export function auctionTermsOf(product: unknown): AuctionTerms | null {
     ...(positive(raw.reserve) && { reserve: roundQort(raw.reserve) }),
     ...(positive(raw.buyNow) && raw.buyNow > raw.startingBid && { buyNow: roundQort(raw.buyNow) }),
     extendMinutes: extend,
+    ...voidedField(raw.voided),
   };
+}
+
+function voidedField(value: unknown): { voided?: string[] } {
+  if (!Array.isArray(value)) return {};
+  const ids = value.filter((id): id is string => typeof id === "string" && id.length <= 64).slice(0, 500);
+  return ids.length ? { voided: ids } : {};
 }
 
 /** The result so far (see above). `seller`'s own bids never count. */
 export function auctionState(terms: AuctionTerms, bids: readonly Bid[], now: number, seller: string): AuctionState {
   const ordered = [...bids].sort((a, b) => a.created - b.created || a.id.localeCompare(b.id));
+  const voided = new Set(terms.voided ?? []);
   const extendMs = terms.extendMinutes * 60_000;
   let end = terms.end;
   let high: Bid | null = null;
@@ -126,7 +148,7 @@ export function auctionState(terms: AuctionTerms, bids: readonly Bid[], now: num
   const accepted: Bid[] = [];
   for (const bid of ordered) {
     if (boughtNow) break;
-    if (bid.edited || bid.bidder === seller || !positive(bid.amount)) continue;
+    if (bid.edited || bid.bidder === seller || !positive(bid.amount) || bid.amount > MAX_BID || voided.has(bid.id)) continue;
     if (bid.created < terms.start || bid.created > end) continue;
     if (bid.amount + EPSILON < minimumBid(terms, high ? high.amount : null)) continue;
     accepted.push(bid);
@@ -155,6 +177,7 @@ export function auctionState(terms: AuctionTerms, bids: readonly Bid[], now: num
 /** Problems with terms a seller typed (the form's checks), or null. */
 export function auctionTermsProblem(terms: { start: number; end: number; startingBid: number; reserve?: number; buyNow?: number }, now: number): string | null {
   if (!positive(terms.startingBid)) return "Set a starting bid above 0";
+  if (terms.startingBid > MAX_BID || (terms.reserve ?? 0) > MAX_BID || (terms.buyNow ?? 0) > MAX_BID) return `Prices go up to ${MAX_BID.toLocaleString("en-US")} QORT`;
   if (!(terms.end > terms.start)) return "The auction must end after it starts";
   if (terms.end <= now) return "The end must be in the future";
   if (terms.end - terms.start > MAX_AUCTION_DAYS * 86_400_000) return `An auction runs at most ${MAX_AUCTION_DAYS} days`;

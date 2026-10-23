@@ -43,7 +43,7 @@ function auctionWorld(auction: Record<string, unknown>) {
   return world;
 }
 
-const bid = (name: string, uid: string, amount: number, created: number): BidRow => ({ name, identifier: `${PREFIX}${uid}`, created, description: `bid:${amount}` });
+const bid = (name: string, uid: string, amount: number, created: number): BidRow => ({ name, identifier: `${PREFIX}${uid}`, created, description: `bid:${amount};to:Seller%20Name` });
 
 function renderAuction(world: World, bids: () => BidRow[], me: string | null = "Buyer+One") {
   const node = installMockNode(world);
@@ -112,7 +112,7 @@ describe("an auction on its product page", { timeout: 20_000 }, () => {
     // The page's read, then a fresh one just before the publish.
     expect(bidSearches).toHaveLength(2);
     const [publish] = node.q.callsFor("PUBLISH_QDN_RESOURCE");
-    expect(publish).toMatchObject({ name: "Buyer+One", service: "DOCUMENT", filename: "bid.json", title: "Bid", description: "bid:14" });
+    expect(publish).toMatchObject({ name: "Buyer+One", service: "DOCUMENT", filename: "bid.json", title: "Bid", description: "bid:14;to:Seller%20Name" });
     expect(String(publish.identifier)).toMatch(new RegExp(`^${PREFIX}[A-Za-z0-9]{6}$`));
     expect(base64ToJson(String(publish.data64))).toMatchObject({ v: 1, productId: P11, storeId: STORE_ID, seller: "Seller Name", amount: 14, coin: "QORT" });
   });

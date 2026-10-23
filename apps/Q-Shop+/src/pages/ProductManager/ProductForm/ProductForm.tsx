@@ -388,7 +388,13 @@ export const ProductForm = ({
           </ToggleButtonGroup>
         </Box>
         {values.sale === "auction" && values.auction && (
-          <AuctionFields value={values.auction} onChange={(auction) => onChange((prev) => ({ ...prev, auction }))} saved={auctionTermsOf(saved)} />
+          <AuctionFields
+            value={values.auction}
+            onChange={(auction) => onChange((prev) => ({ ...prev, auction }))}
+            saved={auctionTermsOf(saved)}
+            productId={typeof saved?.id === "string" ? saved.id : null}
+            seller={publisher}
+          />
         )}
         {values.sale !== "auction" && pricing && (
           <TextField
