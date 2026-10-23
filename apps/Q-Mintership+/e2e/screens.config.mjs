@@ -818,7 +818,8 @@ export default {
         );
         await page.reload({ waitUntil: 'load' });
         await settle(page);
-        await page.getByRole('combobox', { name: 'Page width' }).waitFor({ timeout: 8000 });
+        // Page width isn't offered on phones (it changes nothing there): Motion is on every size.
+        await page.getByRole('combobox', { name: 'Motion' }).waitFor({ timeout: 8000 });
       },
     },
     {
