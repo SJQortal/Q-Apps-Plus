@@ -257,6 +257,10 @@ export default function PdfViewer({
       </Box>
       <Box
         ref={stageRef}
+        // Keyboard users scroll a zoomed page too (axe scrollable-region-focusable).
+        tabIndex={0}
+        role="region"
+        aria-label={`${title}, page`}
         // Light: a light frame; Dim and Smart: a dark one, in every app theme.
         sx={{
           position: "relative",
