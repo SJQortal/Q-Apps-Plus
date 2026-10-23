@@ -171,11 +171,19 @@ export function isRetired(status: string | undefined): boolean {
  * `order` (product ids): those it names first, in its order, then the rest
  * newest first.
  */
-export function compareRows(sort: ShopSort, order: string[] = [], now = Date.now()): (a: ProductRow, b: ProductRow) => number {
+export function compareRows(
+  sort: ShopSort,
+  order: string[] = [],
+  now = Date.now(),
+  timesOf: (row: ProductRow) => AuctionRow | null = (row) => row.auction ?? null
+): (a: ProductRow, b: ProductRow) => number {
   const newest = (a: ProductRow, b: ProductRow) => b.created - a.created;
   switch (sort) {
     case "ending": {
-      const endOf = (row: ProductRow) => (row.auction && now < row.auction.end ? row.auction.end : Number.POSITIVE_INFINITY);
+      const endOf = (row: ProductRow) => {
+        const times = timesOf(row);
+        return times && now < times.end ? times.end : Number.POSITIVE_INFINITY;
+      };
       return (a, b) => {
         const x = endOf(a);
         const y = endOf(b);
@@ -226,7 +234,8 @@ export function filterAndSortProducts(
     .filter((row) => !query.inStockOnly || isInStock(row, catalogues, now))
     .filter((row) => !query.auctionsOnly || isOpenAuction(row, catalogues, now))
     .filter((row) => inPriceRange(row, query.minQort, query.maxQort))
-    .sort(compareRows(query.sort, order, now));
+    // When an auction ends: its catalogue's terms once loaded, as the filters read them.
+    .sort(compareRows(query.sort, order, now, (row) => auctionTimesOf(row, catalogues)));
 }
 
 /** Within the range, by the index's QORT price; a product without one is out once there's a bound. */
