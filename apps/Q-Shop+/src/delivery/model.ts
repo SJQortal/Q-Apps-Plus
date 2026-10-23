@@ -16,7 +16,8 @@
  *
  * At checkout, a physical order's products are grouped by profile; each
  * group pays its zone's price for where it goes (the first zone that has the
- * country, and the state in the United States when the zone names states):
+ * country; in the United States a zone naming the state before one for the
+ * whole country):
  * `first`, plus `extra` for each item after the first, nothing once the
  * group's items reach `freeOver`. A product whose profile has no zone there
  * can't be delivered there. A profile without zones delivers free.
@@ -133,15 +134,20 @@ export function profileFor(doc: DeliveryDoc, productId: string): DeliveryProfile
   return doc.profiles.find((p) => p.products.includes(productId)) ?? null;
 }
 
-/** The zone that delivers to the country (and its state in the United States), or null. */
+/**
+ * The zone that delivers to the country (and its state in the United States),
+ * or null. In the United States a zone naming the state comes before one for
+ * the whole country ("USA $6", then "West Coast $4" wins for Oregon);
+ * otherwise the first zone listed.
+ */
 export function zoneFor(zones: readonly DeliveryZone[], countryCodeValue: string, stateCodeValue: string | null): DeliveryZone | null {
-  return (
-    zones.find((z) => {
-      if (!z.countries.includes(countryCodeValue)) return false;
-      if (countryCodeValue === US && z.states && stateCodeValue) return z.states.includes(stateCodeValue);
-      return true;
-    }) ?? null
-  );
+  const here = zones.filter((z) => z.countries.includes(countryCodeValue));
+  if (countryCodeValue !== US) return here[0] ?? null;
+  if (stateCodeValue) {
+    const named = here.find((z) => z.states?.includes(stateCodeValue));
+    if (named) return named;
+  }
+  return here.find((z) => !z.states) ?? (stateCodeValue ? null : (here[0] ?? null));
 }
 
 /** A product's price in the doc's currency (its own fiat price, else its QORT price at the rate), for Free over. */

@@ -58,6 +58,11 @@ describe("delivery prices", () => {
     const us = doc({ general: { zones: [{ id: "west", countries: ["US"], states: ["OR", "WA"], first: 8 }] }, profiles: [] });
     expect(quote(us, [line("ghee", 1, 10)], "United States", "Oregon")).toMatchObject({ kind: "charge", fee: 8 });
     expect(quote(us, [line("ghee", 1, 10)], "United States", "Texas").kind).toBe("unavailable");
+    // A zone naming the state comes before the whole country's, wherever it is listed.
+    const both = doc({ general: { zones: [{ id: "usa", countries: ["US", "CA"], first: 6 }, { id: "west", countries: ["US"], states: ["OR"], first: 4 }] }, profiles: [] });
+    expect(quote(both, [line("ghee", 1, 10)], "United States", "Oregon")).toMatchObject({ kind: "charge", fee: 4 });
+    expect(quote(both, [line("ghee", 1, 10)], "United States", "Texas")).toMatchObject({ kind: "charge", fee: 6 });
+    expect(quote(both, [line("ghee", 1, 10)], "Canada")).toMatchObject({ kind: "charge", fee: 6 });
   });
 
   it("in QORT need no rates; in a currency the shop no longer prices in, can't be worked out", () => {
