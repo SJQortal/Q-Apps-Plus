@@ -115,7 +115,7 @@ const RICH = {
   htmlDescription:
     '<h2>Hand-thrown, glazed by hand</h2><p>Every mug is <strong>one of a kind</strong>: the glaze runs its own way in the kiln.</p><ul><li>Holds 350 ml</li><li>Food-safe glaze</li></ul>' +
     '<p>See the rest of the set at <a href="qortal://APP/Q-Shop+/Seller%203/q-store-general-shop-3">our shop</a>.</p>' +
-    '<div class="qshop-embed" data-kind="video" data-name="Seller 3" data-identifier="q-store-video-MUGVIDEO01" data-title="Throwing the mug">Video: Throwing the mug</div>' +
+    '<div class="qshop-embed" data-kind="video" data-name="Seller 3" data-identifier="q-store-video-MUGVIDEO01" data-title="Throwing the mug" data-thumb-name="Seller 3" data-thumb-identifier="q-store-thumb-MUGTHUMB01">Video: Throwing the mug</div>' +
     '<div class="qshop-embed" data-kind="file" data-name="Seller 3" data-identifier="qshare_file_care_abc123" data-title="Mug care guide" data-filename="mug-care.pdf" data-mimetype="application/pdf" data-size="48211" data-link="qortal://APP/Q-Share/share/Seller%203/qshare_file_care_def456_metadata">PDF: Mug care guide</div>' +
     '<p><a href="qortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz">qortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz</a></p>',
   morePictures: { id: 'q-store-pictures-shop-3-P000000000', count: 4, sig: '4-a-b' },
