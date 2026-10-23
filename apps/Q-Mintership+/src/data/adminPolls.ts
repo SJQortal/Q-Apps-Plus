@@ -1,12 +1,13 @@
 /**
  * Minter Admin polls as one admin reads them (docs/apps/Q-Mintership+.md →
- * Reads). Only for Minter Admins, only while Decisions or a poll's page is
- * open; Home reuses what those read and reads nothing itself.
+ * Reads). Only for Minter Admins, only while Decisions, History or a poll's
+ * page is open; Home reuses what Decisions read and reads nothing itself.
  *
  * - **Searches:** `searchsimple?service=DOCUMENT_PRIVATE&identifier=<prefix>&prefix=true&reverse=true`,
- *   one per prefix (polls, votes, comments, shares), 100 a page, at most 3
- *   pages, records created in the last 62 days (a poll lasts at most 30 days
- *   and stays listed 31 days after it ends).
+ *   one per prefix (polls, votes, comments, shares), 100 a page. Decisions
+ *   reads at most 3 pages, records created in the last 62 days (a poll lasts
+ *   at most 30 days and stays listed 31 days after it ends). History and an
+ *   older poll's own page read all time, at most 10 pages (PollScope).
  * - **Bodies** only from names whose owner is a current Minter Admin who can
  *   sign: `/arbitrary/DOCUMENT_PRIVATE/{name}/{identifier}?encoding=base64`,
  *   then Hub's `DECRYPT_DATA { encryptedData }` (no dialog), each once per
@@ -37,8 +38,15 @@ import {
   VOTE_PREFIX,
   fromData64,
   parseShare,
+  type PollRecord,
 } from './adminPollRecords';
-import { adminPollsKey, pollDecryptRetries, retryPollDecrypts } from './adminPollKeys';
+import {
+  adminPollsKey,
+  closedPollsKey,
+  onePollKey,
+  pollDecryptRetries,
+  retryPollDecrypts,
+} from './adminPollKeys';
 import { getText, seg } from './core';
 import { getAdmins } from './group';
 import { QdnDeletedError, fetchQdnText, mapLimit, quick, searchQdn } from './qdn';
@@ -47,6 +55,7 @@ import type { AccountInfo } from './types';
 import {
   SEARCH_LOOKBACK_MS,
   groupPollRows,
+  isPollOpen,
   isPollShown,
   needsShareRead,
   pollRowTime,
@@ -62,6 +71,31 @@ import {
 
 /** Pages of 100 rows read at most per prefix, newest first. */
 export const ADMIN_POLL_PAGES = 3;
+/** The same over all time (History, an older poll's page): 1,000 rows per prefix. */
+export const ALL_TIME_POLL_PAGES = 10;
+/** History lists this many closed polls, and this many more per Show more. */
+export const POLL_HISTORY_PAGE = 10;
+
+/**
+ * Which polls a read is for:
+ * - `listed`: Decisions, Home and a poll's page: open, or ended in the last 31 days;
+ * - `closed`: History: the `count` that ended most recently, of all time;
+ * - `poll`: the page of a poll that is no longer listed: that one, of all time.
+ * Only the polls kept have their votes and shares read and decrypted.
+ */
+export type PollScope =
+  { kind: 'listed' } | { kind: 'closed'; count: number } | { kind: 'poll'; id: string };
+
+const LISTED: PollScope = { kind: 'listed' };
+
+/** The read store's key for a scope (data/adminPollKeys.ts). */
+export function pollScopeKey(viewer: string, scope: PollScope): string {
+  return scope.kind === 'closed'
+    ? closedPollsKey(viewer, scope.count)
+    : scope.kind === 'poll'
+      ? onePollKey(viewer, scope.id)
+      : adminPollsKey(viewer);
+}
 const HOUR = 3_600_000;
 const MISS_FIRST_MS = 2 * 60_000;
 const MISS_MAX_MS = 15 * 60_000;
@@ -78,6 +112,8 @@ export interface AdminPollsData {
   truncated: boolean;
   /** Polls whose body Hub didn't decrypt this time (not "not encrypted to you"): said, with Retry. */
   undecrypted: number;
+  /** History: more closed polls than `count` (Show more). */
+  more?: boolean;
   loadedAt: number;
 }
 
@@ -193,15 +229,17 @@ const EMPTY = (viewer: string, signers: string[]): AdminPollsData => ({
 });
 
 /**
- * Every listed Minter Admin poll the viewer can read, with what is needed
- * to show it. Key `adminpolls:list:<viewer>`.
+ * The Minter Admin polls of `scope` the viewer can read, with what is needed
+ * to show them. Key `adminpolls:list:<viewer>` (listed),
+ * `adminpolls:closed:<viewer>:<count>` or `adminpolls:poll:<viewer>:<id>`.
  */
 export function loadAdminPolls(
   viewer: string,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; scope?: PollScope } = {}
 ): Promise<AdminPollsData> {
+  const scope = options.scope ?? LISTED;
   return fetchQuery(
-    adminPollsKey(viewer),
+    pollScopeKey(viewer, scope),
     async () => {
       const force = options.force;
       const admins = await getAdmins();
@@ -210,13 +248,12 @@ export function loadAdminPolls(
       if (!signers.includes(viewer)) return EMPTY(viewer, signers);
 
       const now = Date.now();
-      // Rounded to the hour, so the searches' own cache keys hold for an hour.
-      const after = Math.floor((now - SEARCH_LOOKBACK_MS) / HOUR) * HOUR;
+      const listedScope = scope.kind === 'listed';
+      // Rounded to the hour, so the searches' own cache keys hold for an hour; all time otherwise.
+      const after = listedScope ? Math.floor((now - SEARCH_LOOKBACK_MS) / HOUR) * HOUR : undefined;
+      const maxPages = listedScope ? ADMIN_POLL_PAGES : ALL_TIME_POLL_PAGES;
       const search = (identifier: string) =>
-        searchQdn(
-          { service: ADMIN_POLL_SERVICE, identifier, after, maxPages: ADMIN_POLL_PAGES },
-          { force }
-        );
+        searchQdn({ service: ADMIN_POLL_SERVICE, identifier, after, maxPages }, { force });
       const [polls, votes, comments, shares] = await Promise.all([
         search(POLL_PREFIX),
         search(VOTE_PREFIX),
@@ -286,19 +323,43 @@ export function loadAdminPolls(
         shares: unread(g.shares),
         comments: g.comments,
       }));
+      // A poll's own page: only that one is read.
+      const candidates =
+        scope.kind === 'poll' ? sources.filter((src) => src.pollId === scope.id) : sources;
       await readAll(
-        sources,
+        candidates,
         (src) => src.polls,
         (src, reads) => (src.polls = reads)
       );
 
-      // 2. Votes, for polls that are listed, or might be through a share.
+      // 2. Votes, for the polls of the scope, or that might be through a share.
+      const inScope = (poll: PollRecord) =>
+        scope.kind === 'listed'
+          ? isPollShown(poll, now)
+          : scope.kind === 'closed'
+            ? !isPollOpen(poll, now)
+            : true;
       const maybeShown = (src: PollSources) => {
         const direct = resolvePoll({ ...src, shares: [] }, ctx);
-        if (direct) return isPollShown(direct.poll, now);
+        if (direct) return inScope(direct.poll);
         return fromAdmin(src.shares.map((s) => s.row)).length > 0;
       };
-      const wanted = sources.filter(maybeShown);
+      let wanted = candidates.filter(maybeShown);
+      // History: the `count` that ended last. One readable only through a share has no end
+      // until its share is read: those few are read too, and the page is cut once they are.
+      let more = false;
+      if (scope.kind === 'closed') {
+        const endOf = new Map<PollSources, number>();
+        for (const src of wanted) {
+          const direct = resolvePoll({ ...src, shares: [] }, ctx);
+          if (direct) endOf.set(src, direct.poll.endsAt);
+        }
+        const known = wanted
+          .filter((src) => endOf.has(src))
+          .sort((a, b) => (endOf.get(b) as number) - (endOf.get(a) as number));
+        more = known.length > scope.count;
+        wanted = [...known.slice(0, scope.count), ...wanted.filter((src) => !endOf.has(src))];
+      }
       await readAll(
         wanted,
         (src) => src.votes,
@@ -325,16 +386,25 @@ export function loadAdminPolls(
       }
       await resolve(named);
 
-      // Only what can be listed (the bodies stay cached either way).
-      const listed = wanted.filter((src) => {
+      // Only what the scope shows (the bodies stay cached either way).
+      let listed = wanted.filter((src) => {
         const resolved = resolvePoll(src, ctx, validShares(src, ctx));
-        return resolved !== null && isPollShown(resolved.poll, now);
+        return resolved !== null && inScope(resolved.poll);
       });
+      if (scope.kind === 'closed') {
+        const end = (src: PollSources) =>
+          resolvePoll(src, ctx, validShares(src, ctx))?.poll.endsAt ?? 0;
+        listed = listed.sort((a, b) => end(b) - end(a));
+        if (listed.length > scope.count) {
+          more = true;
+          listed = listed.slice(0, scope.count);
+        }
+      }
       // Polls left out only because Hub didn't decrypt them this time: never an empty list in silence.
       const shown = new Set(listed);
       const hubFailed = (reads: ReadRow[]) =>
         reads.some((r) => r.body.status === 'unavailable' && r.body.hub);
-      const undecrypted = sources.filter(
+      const undecrypted = candidates.filter(
         (src) => !shown.has(src) && (hubFailed(src.polls) || hubFailed(src.shares))
       ).length;
 
@@ -345,6 +415,7 @@ export function loadAdminPolls(
         sources: listed,
         truncated,
         undecrypted,
+        ...(scope.kind === 'closed' ? { more } : {}),
         loadedAt: Date.now(),
       };
     },

@@ -1849,6 +1849,7 @@ export const ADMIN_POLL_IDS = {
   shared: 'shared04',
   locked: 'locked05',
   notAdmin: 'notadm06',
+  archived: 'archiv07',
 };
 
 /**
@@ -1864,7 +1865,9 @@ export const ADMIN_POLL_IDS = {
  * - open, not encrypted to Avery, but shared with every Minter Admin by
  *   Admin D ΑΩ, with the votes Avery can't read;
  * - one encrypted to the others only, never shared (Avery can't see it);
- * - one published by Nora Nominator, who isn't a Minter Admin (ignored).
+ * - one published by Nora Nominator, who isn't a Minter Admin (ignored);
+ * - closed about two months ago, before the 62 days Decisions reads: only
+ *   History (and its own page) show it.
  *
  * Returns the ids and two comment identifiers.
  */
@@ -2060,6 +2063,31 @@ export function addAdminPolls(world) {
     NOW - DAY,
     7,
     'A poll from someone who is not a Minter Admin?',
+    signers
+  );
+
+  // 7. Asked 75 days ago for 10 days: older than Decisions reads.
+  const P7 = ADMIN_POLL_IDS.archived;
+  const t7 = NOW - 75 * DAY;
+  ask(
+    P7,
+    extra(4),
+    t7,
+    10,
+    'Should the Minter Admins meet in Q-Chat once a quarter?',
+    signers,
+    'A fixed time to talk through what is waiting, instead of only comments.'
+  );
+  vote(P7, extra(4), 'yes', t7 + 3_600_000, signers);
+  vote(P7, ADDR.admin, 'yes', t7 + DAY, signers);
+  vote(P7, extra(6), 'no', t7 + 2 * DAY, signers);
+  vote(P7, extra(9), 'yes', t7 + 3 * DAY, signers);
+  comment(
+    P7,
+    'm1n2o3',
+    extra(6),
+    t7 + 2 * DAY + 600_000,
+    'Comments work fine for me; a fixed time is hard across time zones.',
     signers
   );
 
