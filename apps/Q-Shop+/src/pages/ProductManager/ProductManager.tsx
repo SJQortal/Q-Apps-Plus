@@ -278,7 +278,8 @@ export const ProductManager = () => {
             value={tab}
             onChange={(_, value) => setTab(value)}
             variant="scrollable"
-            scrollButtons="auto"
+            // MUI's "auto" measured the bar as overflowing on some loads at 1280 px (arrows beside six tabs that fit); phones scroll it by touch.
+            scrollButtons={false}
             aria-label="Seller tools"
             sx={{ "& .MuiTab-root": { minHeight: 48, minWidth: 0, px: { xs: 1.5, sm: 2 }, textTransform: "none", fontWeight: 600 } }}
           >
