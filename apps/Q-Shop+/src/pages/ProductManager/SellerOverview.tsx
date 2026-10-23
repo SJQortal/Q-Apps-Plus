@@ -22,8 +22,8 @@ import { sellerStatusCounts, splitSellerItems } from "../../orders/listView";
 import { OrderCard } from "../../orders/components/OrderCard";
 import { OrderListSkeleton } from "../../orders/components/OrderListView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
+import { SELLER_TABS, TAB_LABEL, type SellerTab } from "./sellerTabs";
 
-export type SellerTab = "products" | "orders" | "reviews" | "shop";
 
 const LATEST = 5;
 
@@ -225,18 +225,18 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
 
       {onOpenTab && (
         <Box component="nav" aria-label="Manage your shop" sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          <Button variant="outlined" onClick={() => onOpenTab("products")} sx={{ minHeight: 44 }}>
-            Products
-          </Button>
-          <Button variant="outlined" onClick={() => onOpenTab("orders")} sx={{ minHeight: 44 }}>
-            Orders
-          </Button>
-          <Button variant="outlined" onClick={() => onOpenTab("reviews")} sx={{ minHeight: 44 }}>
-            Reviews
-          </Button>
-          <Button variant="outlined" onClick={() => onOpenTab("shop")} sx={{ minHeight: 44 }}>
-            Shop details
-          </Button>
+          {SELLER_TABS.map((t) =>
+            t === "overview" ? (
+              // The page you're on, as in the tab bar: it takes you back to its top.
+              <Button key={t} variant="contained" aria-current="page" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} sx={{ minHeight: 44 }}>
+                {TAB_LABEL[t]}
+              </Button>
+            ) : (
+              <Button key={t} variant="outlined" onClick={() => onOpenTab(t)} sx={{ minHeight: 44 }}>
+                {TAB_LABEL[t]}
+              </Button>
+            )
+          )}
         </Box>
       )}
 

@@ -42,21 +42,7 @@ import { FinishDeletesCard } from "../../seller/FinishDeletesCard";
 import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteProductsDialog";
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
-
-export const SELLER_TABS = ["overview", "products", "collections", "orders", "reviews", "shop"] as const;
-export type SellerTab = (typeof SELLER_TABS)[number];
-const TAB_LABEL: Record<SellerTab, string> = {
-  overview: "Overview",
-  products: "Products",
-  collections: "Collections",
-  orders: "Orders",
-  reviews: "Reviews",
-  shop: "Shop",
-};
-
-function isSellerTab(value: string | null): value is SellerTab {
-  return !!value && (SELLER_TABS as readonly string[]).includes(value);
-}
+import { SELLER_TABS, TAB_LABEL, isSellerTab, type SellerTab } from "./sellerTabs";
 
 type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null } | null;
 type DeleteRequest = { key: number; products: ProductToDelete[]; onDeleted?: () => void } | null;
@@ -278,7 +264,7 @@ export const ProductManager = () => {
             value={tab}
             onChange={(_, value) => setTab(value)}
             variant="scrollable"
-            // MUI's "auto" measured the bar as overflowing on some loads at 1280 px (arrows beside six tabs that fit); phones scroll it by touch.
+            // MUI's "auto" measured the bar as overflowing on some loads at 1280 px (arrows beside tabs that fit); phones scroll it by touch.
             scrollButtons={false}
             aria-label="Seller tools"
             sx={{ "& .MuiTab-root": { minHeight: 48, minWidth: 0, px: { xs: 1.5, sm: 2 }, textTransform: "none", fontWeight: 600 } }}

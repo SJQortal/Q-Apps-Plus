@@ -263,6 +263,12 @@ describe("the seller overview", () => {
     expect(onOpenTab).toHaveBeenLastCalledWith("products");
     fireEvent.click(screen.getByRole("button", { name: "Reviews" }));
     expect(onOpenTab).toHaveBeenLastCalledWith("reviews");
+    // The links at its foot are the tab bar's, in its order, Overview marked as the page you're on.
+    const nav = screen.getByRole("navigation", { name: "Manage your shop" });
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Overview", "Products", "Collections", "Orders", "Reviews", "Shop"]);
+    expect(within(nav).getByRole("button", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+    fireEvent.click(within(nav).getByRole("button", { name: "Collections" }));
+    expect(onOpenTab).toHaveBeenLastCalledWith("collections");
   });
 
   it("opens only the latest orders and the ones it needs to count, and Orders opens the rest", async () => {
