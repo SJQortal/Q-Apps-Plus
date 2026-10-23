@@ -247,7 +247,7 @@ describe("the seller's Orders tab", () => {
 });
 
 describe("the seller overview", () => {
-  it("counts orders by status and products, lists the latest orders, and links to the tabs", async () => {
+  it("counts orders by status and products, lists the latest orders, and opens their tabs", async () => {
     installMockNode(world());
     const onOpenTab = vi.fn();
     renderWithProviders(<SellerOverview storeId={STORE_ID} onOpenTab={onOpenTab} />, { store: sellerStore() });
@@ -261,14 +261,10 @@ describe("the seller overview", () => {
     expect(onOpenTab).toHaveBeenLastCalledWith("orders");
     fireEvent.click(screen.getByRole("button", { name: /2\s*Products/ }));
     expect(onOpenTab).toHaveBeenLastCalledWith("products");
-    fireEvent.click(screen.getByRole("button", { name: "Reviews" }));
-    expect(onOpenTab).toHaveBeenLastCalledWith("reviews");
-    // The links at its foot are the tab bar's, in its order, Overview marked as the page you're on.
-    const nav = screen.getByRole("navigation", { name: "Manage your shop" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Overview", "Products", "Collections", "Orders", "Reviews", "Delivery", "Shop Settings"]);
-    expect(within(nav).getByRole("button", { name: "Overview" })).toHaveAttribute("aria-current", "page");
-    fireEvent.click(within(nav).getByRole("button", { name: "Delivery" }));
-    expect(onOpenTab).toHaveBeenLastCalledWith("delivery");
+    fireEvent.click(screen.getByRole("button", { name: /All orders/ }));
+    expect(onOpenTab).toHaveBeenLastCalledWith("orders");
+    // No links at its foot: the tab bar above leads to the rest (Simon, 2026-10-23).
+    expect(screen.queryByRole("navigation", { name: "Manage your shop" })).not.toBeInTheDocument();
   });
 
   it("opens only the latest orders and the ones it needs to count, and Orders opens the rest", async () => {

@@ -1,8 +1,9 @@
 /**
  * The seller's overview of a shop (the seller page's first tab): tiles for
  * the orders to handle, shipped and refunded (counted over the orders loaded
- * so far, "+" while more pages exist), the products in the shop, the five
- * latest orders, and links to the other tabs.
+ * so far, "+" while more pages exist), the products in the shop, and the
+ * five latest orders. The tiles and All orders open their tabs; the tab bar
+ * above is the way to the rest (Simon, 2026-10-23: no links at the foot).
  */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
@@ -22,7 +23,7 @@ import { sellerStatusCounts, splitSellerItems } from "../../orders/listView";
 import { OrderCard } from "../../orders/components/OrderCard";
 import { OrderListSkeleton } from "../../orders/components/OrderListView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
-import { SELLER_TABS, TAB_LABEL, type SellerTab } from "./sellerTabs";
+import type { SellerTab } from "./sellerTabs";
 
 
 const LATEST = 5;
@@ -222,23 +223,6 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
           </Box>
         )}
       </Box>
-
-      {onOpenTab && (
-        <Box component="nav" aria-label="Manage your shop" sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-          {SELLER_TABS.map((t) =>
-            t === "overview" ? (
-              // The page you're on, as in the tab bar: it takes you back to its top.
-              <Button key={t} variant="contained" aria-current="page" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} sx={{ minHeight: 44 }}>
-                {TAB_LABEL[t]}
-              </Button>
-            ) : (
-              <Button key={t} variant="outlined" onClick={() => onOpenTab(t)} sx={{ minHeight: 44 }}>
-                {TAB_LABEL[t]}
-              </Button>
-            )
-          )}
-        </Box>
-      )}
 
       <ShowOrder open={dialogOpen && !!opened} onClose={() => setDialogOpen(false)} order={opened} role="seller" />
     </Box>
