@@ -70,5 +70,23 @@
     "minting_status": "Status da mineração",
     "node_uptime": "Tempo de atividade do nó",
     "sync_status": "Status da sincronização"
+  },
+  "header": {
+    "node": "nó",
+    "settings": "definições",
+    "navigation": "navegação"
+  },
+  "settings": {
+    "account": "conta",
+    "appearance": "aparência",
+    "about": "sobre",
+    "copy_address": "copiar endereço",
+    "copied": "copiado",
+    "changelog": "novidades",
+    "upstream": "app original: Qortal/Q-Node",
+    "source": "código-fonte: SJQortal/Q-Apps-Plus",
+    "not_signed_in": "sessão não iniciada",
+    "no_name": "nenhum nome registado",
+    "about_blurb": "O Q-Node+ é a versão do Simon da app oficial Q-Node do Qortal. Usa a mesma API do nó, por isso tudo o que alterar aqui também aparece na app original."
   }
 }

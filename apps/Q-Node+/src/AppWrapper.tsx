@@ -4,7 +4,6 @@ import { publicSalt } from './qapp-config';
 import { TIME_MINUTES_3_IN_MILLISECONDS } from './common/constants';
 
 export const AppWrapper = () => {
-
   return (
     <GlobalProvider
       config={{

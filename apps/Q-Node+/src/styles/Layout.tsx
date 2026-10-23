@@ -1,16 +1,35 @@
 import { Outlet } from 'react-router-dom';
+import { Box } from '@mui/material';
 import { useIframe } from '../hooks/useIframeListener';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
+import { NavRail } from '../components/layout/NavRail';
+import { BottomNav, BOTTOM_NAV_HEIGHT } from '../components/layout/BottomNav';
 
 const Layout = () => {
   useIframe();
+  const phone = usePhoneLayout();
+
   return (
-    <>
-      {/* Add Header here */}
-      <main>
-        <Outlet /> {/* This is where page content will be rendered */}
-      </main>
-      {/* Add Footer here */}
-    </>
+    <Box sx={{ display: 'flex', minHeight: '100dvh', width: '100%' }}>
+      {phone ? null : <NavRail />}
+      <Box
+        component="main"
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          height: '100dvh',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          pb: phone
+            ? `calc(${BOTTOM_NAV_HEIGHT}px + var(--qp-safe-bottom))`
+            : 0,
+        }}
+      >
+        <Outlet />
+      </Box>
+      {phone ? <BottomNav /> : null}
+    </Box>
   );
 };
 

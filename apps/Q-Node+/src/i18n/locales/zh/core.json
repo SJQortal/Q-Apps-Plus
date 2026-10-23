@@ -72,5 +72,23 @@
     "minting_status": "铸造状态",
     "node_uptime": "节点运行时间",
     "sync_status": "同步状态"
+  },
+  "header": {
+    "node": "节点",
+    "settings": "设置",
+    "navigation": "导航"
+  },
+  "settings": {
+    "account": "账户",
+    "appearance": "外观",
+    "about": "关于",
+    "copy_address": "复制地址",
+    "copied": "已复制",
+    "changelog": "更新内容",
+    "upstream": "原版应用：Qortal/Q-Node",
+    "source": "源代码：SJQortal/Q-Apps-Plus",
+    "not_signed_in": "未登录",
+    "no_name": "没有注册名称",
+    "about_blurb": "Q-Node+ 是 Simon 制作的 Qortal 官方 Q-Node 应用版本。它使用相同的节点 API，因此你在这里所做的更改在原版应用中同样可见。"
   }
 }
