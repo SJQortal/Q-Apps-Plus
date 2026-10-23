@@ -21,6 +21,13 @@ export const PICTURES_BASE = "q-store-pictures";
 export const VIDEO_BASE = "q-store-video";
 /** + app, additive (round 5): a product video's thumbnail, a THUMBNAIL of the seller's (richtext/qortalSources.ts). */
 export const THUMB_BASE = "q-store-thumb";
+/** + app, additive (round 5): a shop's delivery prices, its shipping profiles (delivery/model.ts). */
+export const DELIVERY_BASE = "q-store-delivery";
+
+/** A shop's delivery prices: `q-store-delivery-<shortStoreId>`, under the shop's owner. */
+export function deliveryIdentifier(shortStoreId: string): string {
+  return `${DELIVERY_BASE}-${shortStoreId}`;
+}
 /** + app, additive (round 5): a bid on an auction (auctions/bids.ts), published by the bidder. */
 export const BID_BASE = "q-store-bid";
 
