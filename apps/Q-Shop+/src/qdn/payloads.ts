@@ -64,6 +64,11 @@ export interface StoreFields {
    * description instead of the description's start. Omitted when empty.
    */
   metaDescription?: string;
+  /**
+   * + app, additive: the countries it ships to (ISO codes, constants/shipping.ts);
+   * `shipsTo` then says them in words. Left out when empty.
+   */
+  shippingCountries?: string[];
 }
 
 /**
@@ -76,6 +81,15 @@ export interface StoreFields {
 export function storeMetaDescription(description: string, supportedCoins: string[], metaDescription?: string): string {
   const text = metaDescription?.trim() || description;
   return `**coins:QORTtrue,ARRR${supportedCoins.includes("ARRR")}**` + text.slice(0, 180);
+}
+
+/** The shop object with `shippingCountries` set, or without it when the list is empty; unchanged when not given. */
+function withShippingCountries<T extends Record<string, any>>(obj: T, codes: string[] | undefined): T {
+  if (codes === undefined) return obj;
+  if (codes.length > 0) return { ...obj, shippingCountries: [...codes] };
+  const rest = { ...obj };
+  delete rest.shippingCountries;
+  return rest;
 }
 
 /** The shop object with `metaDescription` set, or without it when there is none. */
@@ -108,22 +122,25 @@ export function buildCreateStorePublish(args: {
 }) {
   const { name, shortStoreId, fields, created } = args;
   const identifier = storeIdentifier(shortStoreId);
-  const storeObj = withMetaDescription(
-    withAssets(
-      {
-        title: fields.title,
-        description: fields.description,
-        location: fields.location,
-        shipsTo: fields.shipsTo,
-        created,
-        shortStoreId,
-        logo: fields.logo,
-        foreignCoins: fields.foreignCoins,
-        supportedCoins: fields.supportedCoins,
-      },
-      fields.acceptedAssets
+  const storeObj = withShippingCountries(
+    withMetaDescription(
+      withAssets(
+        {
+          title: fields.title,
+          description: fields.description,
+          location: fields.location,
+          shipsTo: fields.shipsTo,
+          created,
+          shortStoreId,
+          logo: fields.logo,
+          foreignCoins: fields.foreignCoins,
+          supportedCoins: fields.supportedCoins,
+        },
+        fields.acceptedAssets
+      ),
+      fields.metaDescription
     ),
-    fields.metaDescription
+    fields.shippingCountries
   );
   const dataContainer = emptyDataContainer(identifier, shortStoreId, name);
   const resourceStore: PublishResource = {
@@ -186,7 +203,7 @@ export function buildEditStorePublish(args: {
       storeObj = rest;
     }
   }
-  storeObj = withMetaDescription(storeObj, fields.metaDescription);
+  storeObj = withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries);
   return {
     storeObj,
     request: {

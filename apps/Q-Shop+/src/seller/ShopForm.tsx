@@ -24,6 +24,7 @@ import { COINS, FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../m
 import { isHubDecline } from "../qdn/hubErrors";
 import { AssetPicker } from "./AssetPicker";
 import { MAX_META_DESCRIPTION, MAX_SHOP_TITLE, SHOP_CARD_TEXT_WIDTH, addressWarning, type ShopFormValues } from "./shopFields";
+import { ShipsToPicker } from "./ShipsToPicker";
 
 export const SectionTitle = ({ children, as = "h3" }: { children: string; as?: "h2" | "h3" }) => (
   <Typography
@@ -118,14 +119,7 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           )}
         </Box>
         <TextField label="Location" value={values.location} onChange={(e) => set("location", e.target.value)} required fullWidth />
-        <TextField
-          label="Ships to"
-          value={values.shipsTo}
-          onChange={(e) => set("shipsTo", e.target.value)}
-          required
-          fullWidth
-          helperText="Where you deliver physical products, e.g. Worldwide or Europe"
-        />
+        <ShipsToPicker value={values.shippingCountries} onChange={(codes) => set("shippingCountries", codes)} typed={values.shipsTo} />
       </Box>
 
       <Box component="section" aria-label="Payments" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>

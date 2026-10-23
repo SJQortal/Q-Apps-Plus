@@ -21,6 +21,7 @@ import { CopyLinkButton } from "./CopyLinkButton";
 import { roundToHalf } from "./reviewsData";
 import type { ShopReviews } from "./useShopData";
 import { orderCountLabel, type OrderCount } from "./orderCount";
+import { ShippingCountriesButton } from "./ShippingCountries";
 import { useLoadedPictures } from "../../components/common/useLoadedPictures";
 
 const panelSx = {
@@ -229,7 +230,9 @@ export function ShopHeader({
             {shop.shipsTo ? (
               <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
                 <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
-                <span>Ships to {shop.shipsTo}</span>
+                <span>
+                  Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop} />
+                </span>
               </Typography>
             ) : null}
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>

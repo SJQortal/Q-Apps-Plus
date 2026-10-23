@@ -36,6 +36,7 @@ import { emptyDelivery, focusFirstMissing } from "./delivery";
 import { PendingOrderCard } from "./PendingOrders";
 import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
+import { shipsToCountry } from "../../constants/shipping";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
 
@@ -145,12 +146,16 @@ export function CheckoutDialog({
     else setStep("delivery");
   };
 
+  // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here.
+  const noShipping = !isDigital && delivery.country && !shipsToCountry(shop, delivery.country) ? delivery.country : null;
+
   const fromDelivery = () => {
     if (missingDeliveryFields(delivery).length > 0) {
       setShowErrors(true);
       focusFirstMissing(DELIVERY_PREFIX, delivery);
       return;
     }
+    if (noShipping) return;
     toConfirm();
   };
 
@@ -295,11 +300,21 @@ export function CheckoutDialog({
       </>
     );
   } else if (step === "delivery") {
-    body = <LazyDeliveryForm value={delivery} onChange={setDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />;
+    body = (
+      <Stack sx={{ gap: 2 }}>
+        <LazyDeliveryForm value={delivery} onChange={setDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
+        {noShipping && (
+          <Alert severity="warning" role="alert">
+            {shop.title || shop.owner} doesn&apos;t ship to {noShipping}
+            {shop.shipsTo ? `: it ships to ${shop.shipsTo}` : ""}. Pick another address, or ask the seller.
+          </Alert>
+        )}
+      </Stack>
+    );
     actions = (
       <>
         <Button onClick={() => setStep("review")}>Back</Button>
-        <Button variant="contained" onClick={fromDelivery}>
+        <Button variant="contained" onClick={fromDelivery} disabled={!!noShipping}>
           Continue
         </Button>
       </>

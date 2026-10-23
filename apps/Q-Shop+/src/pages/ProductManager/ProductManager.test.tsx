@@ -165,7 +165,7 @@ describe("which of the seller's shops the seller page shows", () => {
     fireEvent.change(field(/^Title/), { target: { value: TITLE_B } });
     fireEvent.change(field(/^Description/), { target: { value: "More mugs" } });
     fireEvent.change(field(/^Location/), { target: { value: "Lisbon" } });
-    fireEvent.change(field(/^Ships to/), { target: { value: "Europe" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Worldwide" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Create shop" }));
 
     await expectSellerPage(store, SHOP_B, TITLE_B);

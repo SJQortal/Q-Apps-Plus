@@ -7,6 +7,7 @@
  * `metaDescription` are the + app's additive fields.
  */
 import { FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
+import { shippingCountriesOf, shippingSummary } from "../constants/shipping";
 import type { StoreFields } from "../qdn/payloads";
 
 export interface ShopFormValues {
@@ -16,7 +17,10 @@ export interface ShopFormValues {
   /** The short text under the shop in lists (empty: the start of the description). */
   metaDescription: string;
   location: string;
+  /** The typed "Ships to" (shops from before the country list; kept while the list is unused). */
   shipsTo: string;
+  /** The countries it ships to (constants/shipping.ts); null keeps the typed text. */
+  shippingCountries: string[] | null;
   /** Coins the shop takes besides QORT. */
   coins: Record<ForeignTicker, boolean>;
   /** Payout address per coin, kept while a coin is switched off. */
@@ -49,6 +53,7 @@ export function shopFormValues(store?: {
   metaDescription?: unknown;
   location?: string;
   shipsTo?: string;
+  shippingCountries?: unknown;
   supportedCoins?: string[];
   foreignCoins?: Record<string, string>;
   acceptedAssets?: ShopAsset[];
@@ -61,6 +66,8 @@ export function shopFormValues(store?: {
     metaDescription: typeof store?.metaDescription === "string" ? store.metaDescription : "",
     location: store?.location ?? "",
     shipsTo: store?.shipsTo ?? "",
+    // A new shop picks countries; an older one keeps its typed text until the seller ticks some.
+    shippingCountries: shippingCountriesOf(store) ?? (store ? null : []),
     coins: perTicker((t) => supported.includes(t)),
     addresses: perTicker((t) => (typeof store?.foreignCoins?.[t] === "string" ? store.foreignCoins[t] : "")),
     assets: Array.isArray(store?.acceptedAssets)
@@ -78,7 +85,8 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
     description: values.description.trim(),
     metaDescription: values.metaDescription.trim(),
     location: values.location.trim(),
-    shipsTo: values.shipsTo.trim(),
+    shipsTo: values.shippingCountries && values.shippingCountries.length > 0 ? shippingSummary(values.shippingCountries) : values.shipsTo.trim(),
+    ...(values.shippingCountries !== null && { shippingCountries: values.shippingCountries }),
     logo: values.logo ?? "",
     foreignCoins,
     supportedCoins,
@@ -93,7 +101,9 @@ export function validateShopForm(values: ShopFormValues): string | null {
   if (!values.description.trim()) return "Add a description";
   if (values.metaDescription.trim().length > MAX_META_DESCRIPTION) return `Shorten the meta description to ${MAX_META_DESCRIPTION} characters: more doesn't fit under a shop`;
   if (!values.location.trim()) return "Add a location";
-  if (!values.shipsTo.trim()) return "Say where the shop ships to";
+  if (values.shippingCountries !== null ? values.shippingCountries.length === 0 : !values.shipsTo.trim()) {
+    return "Tick where the shop ships to (Worldwide for anywhere)";
+  }
   for (const t of FOREIGN_TICKERS) {
     if (values.coins[t] && !values.addresses[t].trim()) return `Add your ${t} payout address, or switch ${t} off`;
   }

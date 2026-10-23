@@ -24,6 +24,7 @@ import {
   viewedStore,
 } from "../test/fixtures/shop";
 import { buildCreateStorePublish, buildEditStorePublish, buildRecreateDataContainerPublish } from "../qdn/payloads";
+import { SHIPPING_REGIONS } from "../constants/shipping";
 import CreateStoreModal from "../components/modals/CreateStoreModal";
 import EditStoreModal from "../components/modals/EditStoreModal";
 import { RecreateShopDataDialog } from "./RecreateShopDataDialog";
@@ -157,7 +158,8 @@ describe("create shop", () => {
     fireEvent.change(field(/^Title/), { target: { value: "Seller's Shop" } });
     fireEvent.change(field(/^Description/), { target: { value: "Mugs" } });
     fireEvent.change(field(/^Location/), { target: { value: "Lisbon" } });
-    fireEvent.change(field(/^Ships to/), { target: { value: "Europe" } });
+    // Ships to: every country of Europe (seller/ShipsToPicker.tsx).
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Europe/ }));
   }
 
   it("cleans the id as the original did, previews it, and publishes the original's STORE + empty product list", async () => {
@@ -188,9 +190,11 @@ describe("create shop", () => {
         logo: LOGO,
         foreignCoins: { ARRR: "" },
         supportedCoins: ["QORT"],
+        shippingCountries: [...SHIPPING_REGIONS[0].codes],
       },
     });
     expect(pub).toEqual(expected.request);
+    expect(store0.shippingCountries).toHaveLength(SHIPPING_REGIONS[0].codes.length);
     expect(Object.keys(store0)).toEqual(Object.keys(expected.storeObj));
     expect(store.getState().global.currentStore?.id).toBe("q-store-general-My-Shop");
     expect(store.getState().global.ownShopStatus).toBe("ready");
@@ -249,7 +253,7 @@ describe("create shop over a deleted one", () => {
     fireEvent.change(field(/^Title/), { target: { value: "Seller's Shop" } });
     fireEvent.change(field(/^Description/), { target: { value: "Mugs" } });
     fireEvent.change(field(/^Location/), { target: { value: "Lisbon" } });
-    fireEvent.change(field(/^Ships to/), { target: { value: "Europe" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Europe/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create shop" }));
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith("q-store-general-My-Shop"));
     const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
@@ -272,7 +276,7 @@ describe("create shop over a deleted one", () => {
     fireEvent.change(field(/^Title/), { target: { value: "Seller's Shop" } });
     fireEvent.change(field(/^Description/), { target: { value: "Mugs" } });
     fireEvent.change(field(/^Location/), { target: { value: "Lisbon" } });
-    fireEvent.change(field(/^Ships to/), { target: { value: "Europe" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Europe/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create shop" }));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(isRecentlyDeletedShop(SELLER, "q-store-general-My-Shop")).toBe(false);
@@ -313,6 +317,24 @@ describe("edit shop", () => {
     expect(req).toEqual(expected.request);
     expect(decodeData64(req.data64).foreignCoins).toEqual({ ARRR: ARRR_ADDRESS });
     expect(req.description.startsWith("**coins:QORTtrue,ARRRtrue**")).toBe(true);
+  });
+
+  it("keeps an older shop's typed Ships to until countries are ticked, then publishes the list and says it in words", async () => {
+    const { q, onClose } = setup();
+    expect(screen.getByText(/Now: "Europe" \(typed before\)/)).toBeInTheDocument();
+    // Europe, less Russia, opened to its countries.
+    fireEvent.click(screen.getByRole("checkbox", { name: /^Europe/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Choose countries in Europe" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Countries in Europe" })).getByRole("checkbox", { name: "Russian Federation" }));
+    expect(screen.getByRole("checkbox", { name: /^Europe/ })).toHaveAttribute("data-indeterminate", "true");
+    expect(screen.getByText(/^Europe \(except Russian Federation\) · 51 countries$/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const [req] = q.callsFor("PUBLISH_QDN_RESOURCE") as any[];
+    const saved = decodeData64(req.data64);
+    expect(saved.shipsTo).toBe("Europe (except Russian Federation)");
+    expect(saved.shippingCountries).toHaveLength(51);
+    expect(saved.shippingCountries).not.toContain("RU");
   });
 
   it("asks for a meta description short enough for a shop card, and shows how the card reads", async () => {

@@ -22,6 +22,7 @@ import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
 import AddShoppingCartOutlinedIcon from "@mui/icons-material/AddShoppingCartOutlined";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
 import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
@@ -37,6 +38,7 @@ import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status
 import { useCatalogue, useViewedShop } from "../Store/useShopData";
 import { useMorePictures } from "../../hooks/useMorePictures";
 import { ProductDescription, ProductMedia, useDescriptionParts } from "../../richtext/ProductDescription";
+import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
@@ -282,6 +284,15 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             </Box>
           )}
           {stockLine(product.status)}
+          {/* Where the shop ships, for something it ships (constants/shipping.ts). */}
+          {product.type !== "digital" && typeof shop?.shipsTo === "string" && shop.shipsTo && (
+            <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+              <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
+              <span>
+                Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop as { shippingCountries?: unknown; title?: string }} />
+              </span>
+            </Typography>
+          )}
           {isOwner ? (
             <Alert
               severity="info"

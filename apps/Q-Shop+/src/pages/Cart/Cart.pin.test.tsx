@@ -52,13 +52,13 @@ vi.mock("short-unique-id", () => ({
 
 const NOW = 1761000000000;
 
-function setup(opts: { coin?: "QORT" | "ARRR"; items: { product: any; qty: number }[]; rate?: string }) {
+function setup(opts: { coin?: "QORT" | "ARRR"; items: { product: any; qty: number }[]; rate?: string; shop?: Record<string, unknown> }) {
   const store = createAppStore();
   store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
   store.dispatch(setStoreId(STORE_ID));
   store.dispatch(setStoreOwner(SELLER));
   store.dispatch(setCurrentViewedStore(viewedStore));
-  store.dispatch(addToHashMapStores({ ...viewedStore, owner: SELLER, isValid: true }));
+  store.dispatch(addToHashMapStores({ ...viewedStore, ...opts.shop, owner: SELLER, isValid: true }));
   store.dispatch(setCatalogueHashMap({ ...catalogue, user: SELLER, isValid: true }));
   for (const { product, qty } of opts.items) {
     for (let i = 0; i < qty; i++) {
@@ -294,5 +294,22 @@ describe("checkout (pinned)", () => {
     expect(html).toContain("Delivery Information");
     expect(html).toContain(`Qortal Username: ${BUYER}`);
     expect(html).toContain("State: Oregon");
+  });
+
+  it("stops a physical order to a country the shop doesn't ship to, before anything is paid (constants/shipping.ts)", async () => {
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], shop: { shippingCountries: ["IS", "NO"], shipsTo: "Iceland and Norway" } });
+    await openCheckout();
+    await press("Continue");
+    await screen.findByLabelText(/Customer name/i);
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "Germany" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Germany" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(`${STORE_TITLE} doesn't ship to Germany: it ships to Iceland and Norway.`);
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" })).toBeDisabled();
+    const country = screen.getByRole("combobox", { name: /Country/ });
+    fireEvent.change(country, { target: { value: "" } });
+    fireEvent.change(country, { target: { value: "Icel" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Iceland" }));
+    await waitFor(() => expect(screen.queryByText(/doesn't ship to/)).toBeNull());
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
   });
 });

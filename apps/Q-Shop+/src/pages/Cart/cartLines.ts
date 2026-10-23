@@ -39,6 +39,9 @@ export interface CartViewLine {
 /** The shop as checkout needs it, plus what the cart shows. */
 export interface CartShop extends CheckoutShop {
   logo?: string;
+  /** Where it ships (constants/shipping.ts): checked against the delivery country. */
+  shippingCountries?: string[];
+  shipsTo?: string;
 }
 
 /** Only products the seller marks AVAILABLE can be bought, as in the original's product card. */
@@ -138,6 +141,8 @@ export function cartShopFrom(storeId: string, owner: string, store: any): CartSh
         : undefined,
     acceptedAssets: assets,
     logo: typeof store?.logo === "string" ? store.logo : undefined,
+    ...(Array.isArray(store?.shippingCountries) && { shippingCountries: store.shippingCountries.filter((c: unknown): c is string => typeof c === "string") }),
+    ...(typeof store?.shipsTo === "string" && { shipsTo: store.shipsTo }),
   };
 }
 

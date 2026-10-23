@@ -21,6 +21,8 @@ export interface CurrentStore {
   acceptedAssets?: { id: number; name: string }[];
   /** + app, additive: the shop's short text for lists (qdn/payloads.ts StoreFields). */
   metaDescription?: string;
+  /** + app, additive: the countries it ships to (constants/shipping.ts). */
+  shippingCountries?: string[];
   id: string;
   title: string;
   description: string;
