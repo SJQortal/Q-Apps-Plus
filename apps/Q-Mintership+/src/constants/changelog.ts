@@ -35,7 +35,7 @@ export const CHANGELOG: Release[] = [
       {
         title: 'For Minter Admins',
         notes: [
-          'Closed Minter Admin polls are in History, every one of them, the latest end first: their results, who voted what, and their comments. Decisions lists the open ones, with a link to the closed ones.',
+          'Closed Minter Admin polls are in History, among the decisions, by when voting ended: the question, who asked, the result and your vote, and a link to the poll. Minter Admin polls, a type of its own in History, shows them alone. Decisions lists the open ones, with a link to the closed ones.',
           'A poll’s own page opens however long ago it closed; before, polls closed more than 31 days ago could no longer be found.',
         ],
       },
