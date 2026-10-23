@@ -31,6 +31,7 @@ import { OUTCOME_LABEL, type TimelineEvent, type TimelineKind } from '../../../d
 import { PersonChip, PersonInline } from '../../../components/common/Person';
 import { ExpandChevron } from '../../../components/common/ExpandChevron';
 import { SmoothReveal } from '../../../components/common/SmoothReveal';
+import { flowColumns, SECTION_COLUMN } from '../../../components/layout/flowColumns';
 import { alikeEvents } from './alikeEvents';
 import { ToneChip } from '../../../components/common/Section';
 import { useDisplayName } from '../../../hooks/useDisplayName';
@@ -393,9 +394,10 @@ export function TimelineList({
     else months.push({ month, events: [event] });
   }
   return (
-    <Box aria-label={label} role="group" sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+    // A month under another; side by side in Full window on a big screen, newest first.
+    <Box aria-label={label} role="group" sx={{ ...flowColumns(SECTION_COLUMN), gap: 1 }}>
       {months.map(({ month, events: list }) => (
-        <Fragment key={month}>
+        <Box key={month} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Typography
             variant="body2"
             color="text.secondary"
@@ -435,7 +437,7 @@ export function TimelineList({
               )}
             </Box>
           </ListCard>
-        </Fragment>
+        </Box>
       ))}
     </Box>
   );

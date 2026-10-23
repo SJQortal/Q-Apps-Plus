@@ -23,6 +23,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { ThemePicker } from '../../hub-theme';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';
+import { SECTION_COLUMN } from '../../components/layout/flowColumns';
 import { useNavHas } from '../../components/layout/useNavHas';
 import { ChangelogDialog } from '../../components/Settings/ChangelogDialog';
 import { NotificationSettings } from './NotificationSettings';
@@ -32,6 +33,8 @@ import { NameAvatar } from '../../components/common/NameAvatar';
 import { Section, ToneChip } from '../../components/common/Section';
 import { useMyStatus } from '../../hooks/useData';
 import { useFullExplorer } from '../../hooks/useFullExplorer';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
+import { useLandscapeFrame } from '../../utils/hubFrame';
 import { signIn, useSession } from '../../state/session';
 import { clearRecent, useRecent } from '../../state/explorer';
 import {
@@ -41,11 +44,13 @@ import {
   timeDisplayAtom,
   decisionsOrderAtom,
   explorerRememberAtom,
+  pageWidthAtom,
   activityFirstReadAtom,
   activityHiddenMarksAtom,
   clampActivityRead,
   type DecisionsOrder,
   type MotionSetting,
+  type PageWidth,
   type TimeDisplay,
 } from '../../state/settings';
 import { APP_VERSION } from '../../constants/app';
@@ -175,6 +180,10 @@ export default function SettingsPage() {
   const { status } = useMyStatus();
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [motion, setMotion] = useAtom(motionAtom);
+  const [pageWidth, setPageWidth] = useAtom(pageWidthAtom);
+  // A phone, upright or sideways, keeps its layout whatever Page width says: no row for it.
+  const phoneFrame = usePhoneLayout();
+  const landscape = useLandscapeFrame();
   const [timeDisplay, setTimeDisplay] = useAtom(timeDisplayAtom);
   const [decisionsOrder, setDecisionsOrder] = useAtom(decisionsOrderAtom);
   const [celebrate, setCelebrate] = useAtom(celebrateAtom);
@@ -200,7 +209,7 @@ export default function SettingsPage() {
   return (
     <>
       <PageHeader title="Settings" back={inNav ? undefined : PATHS.home} />
-      <PageBody $maxWidth={720}>
+      <PageBody $maxWidth={720} $flow={SECTION_COLUMN}>
         <Section title="Account" id="settings-account">
           <Card>
             {session.status === 'ready' ? (
@@ -263,6 +272,25 @@ export default function SettingsPage() {
         <Section title="Appearance" id="settings-appearance">
           <ThemePicker />
           <Card>
+            {phoneFrame || landscape ? null : (
+              <Row>
+                <SettingText
+                  id="page-width-label"
+                  title="Page width"
+                  hint="Comfortable keeps pages in a centred column. Full window uses the whole window, with cards side by side on big screens; forms keep their width."
+                />
+                <Select
+                  size="small"
+                  value={pageWidth === 'full' ? 'full' : 'comfortable'}
+                  onChange={(e) => setPageWidth(e.target.value as PageWidth)}
+                  labelId="page-width-label"
+                  sx={{ minHeight: 44 }}
+                >
+                  <MenuItem value="comfortable">Comfortable</MenuItem>
+                  <MenuItem value="full">Full window</MenuItem>
+                </Select>
+              </Row>
+            )}
             <Row>
               <SettingText
                 id="motion-label"

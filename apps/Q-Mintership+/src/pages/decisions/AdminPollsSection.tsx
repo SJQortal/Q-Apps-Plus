@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Section } from '../../components/common/Section';
+import { CARD_COLUMN } from '../../components/layout/flowColumns';
 import {
   CardSkeleton,
   EmptyState,
@@ -87,6 +88,7 @@ export default function AdminPollsSection({
       accent={sectionAccent(theme, 'polls')}
       icon={<SECTION_ICON.polls />}
       id={ADMIN_POLLS_SECTION_ID}
+      flow={CARD_COLUMN}
     >
       <Typography variant="body2" color="text.secondary">
         Questions for the Minter Admins. Questions, votes and comments here are encrypted to the

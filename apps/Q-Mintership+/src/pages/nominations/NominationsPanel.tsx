@@ -12,6 +12,7 @@ import { Box, Button, Chip, InputAdornment, TextField, Typography } from '@mui/m
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { Section } from '../../components/common/Section';
+import { CARD_COLUMN, flowColumns } from '../../components/layout/flowColumns';
 import {
   EmptyState,
   ErrorState,
@@ -209,8 +210,8 @@ export function NominationsPanel({
               listStyle: 'none',
               m: 0,
               p: 0,
-              display: 'flex',
-              flexDirection: 'column',
+              // One under another; side by side in Full window on a big screen.
+              ...flowColumns(CARD_COLUMN),
               gap: 1.5,
             }}
           >

@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconButton, Tooltip } from '@mui/material';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { PageBody } from '../../components/layout/PageBody';
+import { SECTION_COLUMN } from '../../components/layout/flowColumns';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { useNavHas } from '../../components/layout/useNavHas';
 import { NominationCard } from '../../components/nomination/NominationCard';
@@ -210,7 +211,8 @@ export default function HomePage() {
           </>
         }
       />
-      <PageBody>
+      {/* Full window on a big screen: its sections side by side. */}
+      <PageBody $flow={SECTION_COLUMN}>
         {status && my.isError ? (
           <ErrorState
             compact

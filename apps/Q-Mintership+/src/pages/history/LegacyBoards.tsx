@@ -18,6 +18,7 @@ import {
   TruncatedNote,
 } from '../../components/common/states';
 import { Section } from '../../components/common/Section';
+import { flowColumns, SECTION_COLUMN } from '../../components/layout/flowColumns';
 import { formatCount, sentenceStart } from '../../utils/format';
 import { LegacyCardItem } from './parts/LegacyCardItem';
 import { ORIGINAL_APP_NAME, ORIGINAL_WORDS } from '../../constants/plus';
@@ -67,7 +68,8 @@ export function LegacyBoards({
         <Box
           component="ul"
           aria-label={`Cards from ${ORIGINAL_WORDS.app}, newest first`}
-          sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 1 }}
+          // One under another; side by side in Full window on a big screen.
+          sx={{ listStyle: 'none', m: 0, p: 0, ...flowColumns(SECTION_COLUMN), gap: 1 }}
         >
           {cards.slice(0, shown).map((row) => (
             <li key={row.identifier}>

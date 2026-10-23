@@ -126,7 +126,7 @@ export default function AskPage() {
         subtitle="Ask a question, pick its answers and how long."
         back={decisionsKindPath('askAdmins')}
       />
-      <PageBody $maxWidth={680}>{body}</PageBody>
+      <PageBody $form>{body}</PageBody>
     </>
   );
 }

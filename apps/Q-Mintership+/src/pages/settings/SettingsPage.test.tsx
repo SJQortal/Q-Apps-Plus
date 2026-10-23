@@ -3,12 +3,32 @@ import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { getDefaultStore } from 'jotai';
 import { renderPage } from '../../test/render';
+import { fullWindowMaxWidth } from '../../test/fullWindow';
 import { MUTED_NAMES_KEY, mutedNamesAtom } from '../../state/comments';
 import SettingsPage from './SettingsPage';
-import { SETTINGS_KEYS, decisionsOrderAtom } from '../../state/settings';
+import { SETTINGS_KEYS, decisionsOrderAtom, pageWidthAtom } from '../../state/settings';
 import { RECENT_KEY, recentAtom, recordRecent, resetExplorerState } from '../../state/explorer';
 
-afterEach(() => vi.useRealTimers());
+const originalMatchMedia = window.matchMedia;
+afterEach(() => {
+  vi.useRealTimers();
+  getDefaultStore().set(pageWidthAtom, 'comfortable');
+  window.matchMedia = originalMatchMedia;
+});
+
+/** matchMedia for a frame of `width` × `height` (as DecisionsTabs.test.tsx does). */
+function frame(width: number, height: number) {
+  window.matchMedia = ((query: string) => {
+    const sizes = [...query.matchAll(/\((min|max)-(width|height):\s*([\d.]+)px\)/g)];
+    const matches =
+      sizes.length > 0 &&
+      sizes.every(([, edge, side, value]) => {
+        const size = side === 'width' ? width : height;
+        return edge === 'min' ? size >= Number(value) : size <= Number(value);
+      });
+    return { ...originalMatchMedia(query), matches };
+  }) as typeof window.matchMedia;
+}
 
 describe('Settings', () => {
   it('chooses the Decisions order for everyone: most urgent first, or by type', async () => {
@@ -23,6 +43,39 @@ describe('Settings', () => {
     expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEYS.decisionsOrder) ?? 'null')).toBe(
       'type'
     );
+  });
+
+  it('chooses the Page width: Comfortable, or Full window with the sections side by side', async () => {
+    const u = userEvent.setup();
+    await renderPage(<SettingsPage />, { persona: 'admin', path: '/settings' });
+    const width = await screen.findByRole('combobox', { name: 'Page width' });
+    expect(width).toHaveTextContent('Comfortable');
+    const page = screen.getByRole('region', { name: 'Account' }).parentElement!;
+    expect(getComputedStyle(page).maxWidth).toBe('720px');
+    expect(fullWindowMaxWidth(page)).toBeNull();
+    await u.click(width);
+    await u.click(await screen.findByRole('option', { name: 'Full window' }));
+    expect(width).toHaveTextContent('Full window');
+    expect(JSON.parse(window.localStorage.getItem(SETTINGS_KEYS.pageWidth) ?? 'null')).toBe('full');
+    // Settings itself follows at once: across the window, its sections side by side.
+    expect(fullWindowMaxWidth(page)).toBe('none');
+    expect(getComputedStyle(page).display).toBe('grid');
+  });
+
+  it('leaves Page width out on a phone, upright or sideways, where it changes nothing', async () => {
+    for (const [width, height] of [
+      [390, 844],
+      [844, 390],
+    ]) {
+      frame(width, height);
+      const { unmount } = await renderPage(<SettingsPage />, {
+        persona: 'admin',
+        path: '/settings',
+      });
+      expect(await screen.findByRole('combobox', { name: 'Motion' })).toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Page width' })).toBeNull();
+      unmount();
+    }
   });
 
   it('shows the signed-in account with its MINTER roles', async () => {
