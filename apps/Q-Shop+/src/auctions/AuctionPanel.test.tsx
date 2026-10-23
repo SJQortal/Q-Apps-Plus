@@ -147,6 +147,15 @@ describe("an auction on its product page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(within(dialog).getAllByText("15.50").length).toBeGreaterThan(0));
   });
 
+  it("warns a winner who ordered at the shop after it ended (paid from another device, likely)", async () => {
+    const now = Date.now();
+    const world = auctionWorld({ v: 1, start: now - 3 * DAY, end: now - DAY, startingBid: 10, extendMinutes: 5 });
+    world.orders.push({ identifier: "q-store-order-my-shop-ORDERxxxx9", buyer: "Buyer+One", created: now - 3_600_000, json: {} });
+    renderAuction(world, () => [bid("Buyer+One", "MINE01", 15.5, now - 2 * DAY)]);
+    expect(await screen.findByText(/You placed an order at this shop after the auction ended/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Pay 15.50 QORT" })).toBeEnabled();
+  });
+
   it("tells a winner who paid from here where the order is, and others who won", async () => {
     const now = Date.now();
     const rows = [bid("Buyer+One", "MINE01", 15.5, now - 2 * DAY)];

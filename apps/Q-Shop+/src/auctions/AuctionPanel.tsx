@@ -4,7 +4,7 @@
  * result. The winner pays the winning bid through the shop's checkout, in
  * QORT; the seller sees who won and can message them.
  */
-import { lazy, Suspense, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
@@ -19,6 +19,8 @@ import { AmountTag } from "../components/money/PriceTag";
 import { CoinIcon } from "../components/money/CoinIcon";
 import { formatPrice } from "../money/pricing";
 import { mailToLink } from "../qdn/links";
+import { searchQdn } from "../qdn/search";
+import { shopOrdersPrefix, shortStoreIdOf } from "../qdn/identifiers";
 import { parseAmount, sanitizeAmountInput } from "../seller/productDraft";
 import { usePendingOrders } from "../pages/Cart/usePendingOrders";
 import type { CheckoutBuyer } from "../money/checkout";
@@ -84,7 +86,7 @@ export function AuctionPanel({
   const [checking, setChecking] = useState(false);
   const [checkout, setCheckout] = useState<Bid | null>(null);
   const [paidNow, setPaidNow] = useState<string | null>(null);
-  const pending = usePendingOrders(user?.name);
+  const pendingOrders = usePendingOrders(user?.name);
 
   const myNames = useMemo(() => new Set([user?.name, ...(user?.names ?? []).map((n) => n.name)].filter((n): n is string => !!n)), [user]);
   const buyer: CheckoutBuyer | null =
@@ -92,10 +94,13 @@ export function AuctionPanel({
   const high = state.high;
   const winner = state.winner;
   const iLead = !!high && myNames.has(high.bidder);
-  const iWon = !!winner && !auction.settling && myNames.has(winner.bidder);
+  // Just ended, or its winner being checked against the chain: the result isn't final yet.
+  const pending = auction.settling || auction.confirming;
+  const iWon = !!winner && !pending && myNames.has(winner.bidder);
   const paid = !!winner && (paidNow === winner.id || isAuctionPaid(productId, winner.id));
-  const unfinished = pending.some((order) => order.details && Object.prototype.hasOwnProperty.call(order.details, productId));
+  const unfinished = pendingOrders.some((order) => order.details && Object.prototype.hasOwnProperty.call(order.details, productId));
   const extended = state.end > terms.end && !state.boughtNow;
+  const orderedSince = useOrderedSince(iWon && !paid && winner ? winner.bidder : null, storeId, state.end);
   const live = state.phase === "live";
   const loading = auction.status === "loading";
 
@@ -170,7 +175,7 @@ export function AuctionPanel({
   let phaseText: string;
   if (state.phase === "upcoming") phaseText = `Starts in ${timeLeft(terms.start - now)}`;
   else if (live) phaseText = `Ends in ${timeLeft(state.end - now)}`;
-  else if (auction.settling) phaseText = "Just ended";
+  else if (pending) phaseText = "Just ended";
   else phaseText = "Ended";
 
   const whenLine =
@@ -189,8 +194,8 @@ export function AuctionPanel({
     action =
       state.phase !== "ended" ? (
         <Alert severity="info">This is your auction. Bids show here as they come in; you can&apos;t bid on it yourself.</Alert>
-      ) : auction.settling ? (
-        <SettlingNote />
+      ) : pending ? (
+        <SettlingNote confirming={auction.confirming} />
       ) : winner ? (
         <Alert
           severity="success"
@@ -259,8 +264,8 @@ export function AuctionPanel({
         </Typography>
       </Box>
     );
-  } else if (auction.settling) {
-    action = <SettlingNote />;
+  } else if (pending) {
+    action = <SettlingNote confirming={auction.confirming} />;
   } else if (winner && iWon) {
     action = paid ? (
       <Alert
@@ -300,9 +305,15 @@ export function AuctionPanel({
         >
           {checking ? "Checking the result…" : `Pay ${qort(winner.amount)}`}
         </Button>
-        <Typography variant="body2" color="text.secondary">
-          Paid already on another device? Check My orders before you pay.
-        </Typography>
+        {orderedSince ? (
+          <Alert severity="warning">
+            You placed an order at this shop after the auction ended. If it was for this, don&apos;t pay again: check My orders.
+          </Alert>
+        ) : (
+          <Typography variant="body2" color="text.secondary">
+            Paid already on another device? Check My orders before you pay.
+          </Typography>
+        )}
       </Box>
     );
   } else if (winner) {
@@ -388,6 +399,12 @@ export function AuctionPanel({
       )}
       {auction.stale && <Typography variant="body2" color="text.secondary">Couldn&apos;t check for new bids just now; trying again.</Typography>}
       {auction.incomplete && <Alert severity="warning">{TOO_MANY_BIDS}</Alert>}
+      {auction.late > 0 && (
+        <Typography variant="body2" color="text.secondary">
+          {auction.late === 1 ? "1 bid doesn't count" : `${auction.late} bids don't count`}: the chain confirmed {auction.late === 1 ? "it" : "them"} later than
+          {auction.late === 1 ? " it claims" : " they claim"}.
+        </Typography>
+      )}
 
       {action}
 
@@ -503,11 +520,37 @@ export function AuctionPanel({
   );
 }
 
-function SettlingNote() {
+function SettlingNote({ confirming }: { confirming: boolean }) {
   return (
     <Box role="status" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
       <CircularProgress size={16} aria-hidden />
-      <Typography variant="body2">Confirming the result: bids from the last seconds can take a minute or two to show.</Typography>
+      <Typography variant="body2">
+        {confirming
+          ? "Confirming the result: checking the winning bid's time against the chain."
+          : "Confirming the result: bids from the last seconds can take a minute or two to show."}
+      </Typography>
     </Box>
   );
+}
+
+/**
+ * Whether the winner has an order at this shop placed after the auction
+ * ended: likely this one, paid from another device (this device remembers
+ * only its own payments). One search of their orders there.
+ */
+function useOrderedSince(buyer: string | null, storeId: string, since: number): boolean {
+  const key = buyer ? `${buyer}\n${storeId}\n${since}` : "";
+  const [found, setFound] = useState<{ key: string; value: boolean }>({ key: "", value: false });
+  useEffect(() => {
+    if (!buyer) return;
+    let alive = true;
+    searchQdn({ service: "DOCUMENT_PRIVATE", identifier: shopOrdersPrefix(shortStoreIdOf(storeId)), prefix: true, name: buyer, exactmatchnames: true, limit: 20, reverse: true }).then(
+      (rows) => alive && setFound({ key, value: rows.some((row) => row.name === buyer && Number(row.created) >= since) }),
+      () => alive && setFound({ key, value: false })
+    );
+    return () => {
+      alive = false;
+    };
+  }, [buyer, storeId, since, key]);
+  return found.key === key && found.value;
 }

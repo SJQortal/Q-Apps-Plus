@@ -8,10 +8,16 @@
  * last seconds can take that long to be listed, and could still win or
  * extend it). Only while the tab is shown, backing off to 2 minutes while
  * the node doesn't answer. Before and after that, the bids are read once.
+ *
+ * Once it has ended (and settled), its winner is checked against the chain
+ * (auctions/confirm.ts): a bid Core confirmed later than it claims is left
+ * out, and the next one is checked. Until then the result is "being
+ * confirmed" and can't be paid.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "../hooks/useNow";
 import { fetchBids } from "./bids";
+import { lateWinningBids } from "./confirm";
 import { auctionState, type AuctionState, type AuctionTerms, type Bid } from "./rules";
 
 export const POLL_MS = 30_000;
@@ -19,6 +25,7 @@ export const POLL_NEAR_END_MS = 10_000;
 export const NEAR_END_MS = 5 * 60_000;
 export const SETTLE_MS = 3 * 60_000;
 const MAX_BACKOFF_MS = 120_000;
+const NONE: string[] = [];
 
 type LoadStatus = "loading" | "ready" | "failed";
 
@@ -37,6 +44,10 @@ export interface Auction {
   status: LoadStatus;
   /** It ended under 3 minutes ago: late bids may still be listed. */
   settling: boolean;
+  /** It has ended, and its winner is being checked against the chain. */
+  confirming: boolean;
+  /** Bids left out because the chain confirmed them later than they claim. */
+  late: number;
   /** More bids than were read (over 1,000). */
   incomplete: boolean;
   /** Asking the node again failed; what's shown may be behind. */
@@ -91,8 +102,26 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
     };
   }, [productId, seller]);
 
-  const state = auctionState(terms, current.bids, now, seller);
+  // Winners the chain shows were placed late (checked once the auction has ended and settled).
+  const [late, setLate] = useState<{ bids: Bid[] | null; ids: string[] }>({ bids: null, ids: [] });
+  const lateIds = late.bids === current.bids ? late.ids : NONE;
+  const checked = useMemo(() => (lateIds.length ? { ...terms, voided: [...(terms.voided ?? []), ...lateIds] } : terms), [terms, lateIds]);
+  const state = auctionState(checked, current.bids, now, seller);
   const settling = state.phase === "ended" && now - state.end < SETTLE_MS;
+  const checkWinner = state.phase === "ended" && !settling && current.status === "ready" && current.complete;
+  const confirming = checkWinner && late.bids !== current.bids;
+  useEffect(() => {
+    if (!checkWinner) return;
+    let alive = true;
+    const bids = current.bids;
+    lateWinningBids(terms, bids, seller, Date.now()).then(
+      (ids) => alive && setLate({ bids, ids }),
+      () => alive && setLate({ bids, ids: [] })
+    );
+    return () => {
+      alive = false;
+    };
+  }, [checkWinner, current.bids, terms, seller]);
   // Past 1,000 rows the result can't be trusted (bidding and paying stop): no polling either.
   const watching = (state.phase === "live" || settling) && current.complete;
   const fast = settling || (state.phase === "live" && state.end - now < NEAR_END_MS);
@@ -143,8 +172,8 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
   const refresh = useCallback(async () => {
     lastRead.current = Date.now();
     const read = await load(true);
-    return read ? { state: auctionState(terms, read.bids, Date.now(), seller), complete: read.complete } : null;
-  }, [load, terms, seller]);
+    return read ? { state: auctionState(checked, read.bids, Date.now(), seller), complete: read.complete } : null;
+  }, [load, checked, seller]);
 
   const notePlaced = useCallback((bid: Bid) => setPlaced((prev) => [...prev.filter((b) => b.id !== bid.id), bid]), []);
 
@@ -153,6 +182,8 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
     now,
     status: current.status,
     settling,
+    confirming,
+    late: lateIds.length,
     incomplete: !current.complete,
     stale: current.stale,
     read: current.bids.length,
