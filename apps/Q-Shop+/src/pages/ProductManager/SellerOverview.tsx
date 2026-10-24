@@ -30,6 +30,7 @@ import { RecentActivity } from "./RecentActivity";
 import { buildActivity, useShopFavorites } from "../../seller/activity";
 import { useShopReviews } from "../Store/useShopData";
 import { shortStoreIdOf } from "../../qdn/identifiers";
+import { sameName } from "../../orders/reads";
 import type { SellerTab } from "./sellerTabs";
 
 
@@ -245,6 +246,7 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
                 <OrderCard
                   item={item}
                   role="seller"
+                  review={shopReviews.reviews.find((r) => sameName(r.name, item.row.user))}
                   onOpen={(order) => {
                     setOpenId(order.id);
                     setDialogOpen(true);

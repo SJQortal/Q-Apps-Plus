@@ -5,7 +5,7 @@
  * or Delivered opens the order, a review opens it, a favourite product
  * links to the product.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { Box, Button, ButtonBase, Rating, Skeleton, Typography } from "@mui/material";
 import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
@@ -56,50 +56,46 @@ export function RecentActivity({
     if (cataloguesKey) request(cataloguesKey.split("|"));
   }, [cataloguesKey, request]);
 
-  const rows = useMemo(
-    () =>
-      visible.map((a) => {
-        let icon: ReactNode = null;
-        let text: ReactNode = "";
-        let detail: ReactNode = null;
-        let action: { onClick: () => void } | { to: string } | null = null;
-        if (a.kind === "order") {
-          icon = <ShoppingBagOutlinedIcon />;
-          text = `${a.name} placed an order`;
-          const order = a.item.order;
-          detail = order ? itemSummary(orderItems(order)) : null;
-          if (order) action = { onClick: () => onOpenOrder(order) };
-        } else if (a.kind === "delivered") {
-          icon = <CheckCircleOutlinedIcon />;
-          const order = a.item.order;
-          text = order && isDigitalOrder(order) ? `${a.name} marked their order received` : `${a.name} marked their order delivered`;
-          detail = order ? itemSummary(orderItems(order)) : null;
-          if (order) action = { onClick: () => onOpenOrder(order) };
-        } else if (a.kind === "review") {
-          icon = <RateReviewOutlinedIcon />;
-          text = `${a.name} reviewed your shop`;
-          detail = (
-            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", columnGap: 1 }}>
-              <Rating component="span" value={a.review.rating} precision={0.5} readOnly size="small" aria-label={`${a.review.rating} out of 5 stars`} />
-              {a.review.title && <span>“{a.review.title}”</span>}
-            </Box>
-          );
-          action = { onClick: () => setReview(a.review) };
-        } else if (a.kind === "favorite") {
-          icon = <FavoriteBorderOutlinedIcon />;
-          const fav = a.favorite;
-          if (fav.kind === "shop") {
-            text = `${a.name} added your shop to their favourites`;
-          } else {
-            const title = fav.catalogueId && fav.productId ? titleOf(productOf(fav.catalogueId, fav.productId)) : "";
-            text = `${a.name} added ${title || "a product"} to their favourites`;
-            if (fav.catalogueId && fav.productId) action = { to: productPath(owner, storeId, fav.productId, fav.catalogueId) };
-          }
-        }
-        return { a, icon, text, detail, action };
-      }),
-    [visible, onOpenOrder, owner, storeId, productOf]
-  );
+  const rows = visible.map((a) => {
+    let icon: ReactNode = null;
+    let text: ReactNode = "";
+    let detail: ReactNode = null;
+    let action: { onClick: () => void } | { to: string } | null = null;
+    if (a.kind === "order") {
+      icon = <ShoppingBagOutlinedIcon />;
+      text = `${a.name} placed an order`;
+      const order = a.item.order;
+      detail = order ? itemSummary(orderItems(order)) : null;
+      if (order) action = { onClick: () => onOpenOrder(order) };
+    } else if (a.kind === "delivered") {
+      icon = <CheckCircleOutlinedIcon />;
+      const order = a.item.order;
+      text = order && isDigitalOrder(order) ? `${a.name} marked their order received` : `${a.name} marked their order delivered`;
+      detail = order ? itemSummary(orderItems(order)) : null;
+      if (order) action = { onClick: () => onOpenOrder(order) };
+    } else if (a.kind === "review") {
+      icon = <RateReviewOutlinedIcon />;
+      text = `${a.name} reviewed your shop`;
+      detail = (
+        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", flexWrap: "wrap", columnGap: 1 }}>
+          <Rating component="span" value={a.review.rating} precision={0.5} readOnly size="small" aria-label={`${a.review.rating} out of 5 stars`} />
+          {a.review.title && <span>“{a.review.title}”</span>}
+        </Box>
+      );
+      action = { onClick: () => setReview(a.review) };
+    } else if (a.kind === "favorite") {
+      icon = <FavoriteBorderOutlinedIcon />;
+      const fav = a.favorite;
+      if (fav.kind === "shop") {
+        text = `${a.name} added your shop to their favourites`;
+      } else {
+        const title = fav.catalogueId && fav.productId ? titleOf(productOf(fav.catalogueId, fav.productId)) : "";
+        text = `${a.name} added ${title || "a product"} to their favourites`;
+        if (fav.catalogueId && fav.productId) action = { to: productPath(owner, storeId, fav.productId, fav.catalogueId) };
+      }
+    }
+    return { a, icon, text, detail, action };
+  });
 
   if (loading && items.length === 0) {
     return (
