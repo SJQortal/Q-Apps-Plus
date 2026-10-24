@@ -136,6 +136,24 @@ describe("arranging the shop", () => {
     );
   });
 
+  it("with collections, arranges only the products in none, and keeps the collections' products in the saved order after them", async () => {
+    const index = { ...dataContainer, collectionsId: DOC_ID, productOrder: [mug.id, chair.id, poster.id] };
+    stubNode({ index, collections: { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id] }] } });
+    const { q } = setup("products", index, { PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
+    // The list: the collection first, under its line, then the rest in the shop's order.
+    const list = await screen.findByRole("list", { name: "Products" });
+    await waitFor(() => expect(within(list).getByRole("heading", { level: 2, name: "Mugs" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Arrange" }));
+    const dialog = await screen.findByRole("dialog", { name: "Arrange your shop" });
+    await waitFor(() => expect(order(dialog)).toEqual(["Chair", "Poster"]));
+    expect(within(dialog).getByText(/Your collections' products come first/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Move up: Poster" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish order" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const [resource] = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    expect(decodeData64(resource.data64).productOrder).toEqual([poster.id, chair.id, mug.id]);
+  });
+
   it("starts from the shop's order, products added since at the end; Newest first publishes an empty order", async () => {
     const ordered = { ...dataContainer, productOrder: [chair.id, mug.id] };
     stubNode();

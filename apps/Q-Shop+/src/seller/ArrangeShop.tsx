@@ -16,20 +16,27 @@ import { useSelector } from "react-redux";
 import { Alert } from "@mui/material";
 import type { RootState } from "../state/store";
 import { arrangeProducts, productOrderOf } from "../qdn/productOrder";
-import { useShopCollections } from "../pages/Store/useShopCollections";
+import type { ShopCollection } from "../qdn/collections";
 import { ArrangeDialog } from "./ArrangeDialog";
 import { FormError } from "./FormError";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import type { SellerRow } from "./productList";
 import { useProductOrder } from "./useProductOrder";
 
-export function ArrangeShop({ onClose, onPublished }: { onClose: () => void; /** The order landed: the Products list shows it. */ onPublished?: () => void }) {
+export function ArrangeShop({
+  collections,
+  onClose,
+  onPublished,
+}: {
+  /** The shop's published collections (the Products tab reads them): their products come first, so they aren't arranged here. */
+  collections: readonly Pick<ShopCollection, "products">[];
+  onClose: () => void;
+  /** The order landed: the Products list shows it. */
+  onPublished?: () => void;
+}) {
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
-  const owner = useSelector((state: RootState) => state.global.currentStore?.owner || state.auth.user?.name || "");
-  const storeId = useSelector((state: RootState) => state.global.currentStore?.id ?? "");
-  const collections = useShopCollections(owner, storeId, dataContainer).collections;
   const o = useProductOrder();
 
   const { inCollections, listed, newest, current } = useMemo(() => {

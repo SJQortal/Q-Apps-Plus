@@ -574,7 +574,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
           </Box>
         </BottomSheet>
       )}
-      {arranging && <ArrangeShop onClose={() => setArranging(false)} onPublished={() => setChosenSort(null)} />}
+      {arranging && <ArrangeShop collections={shopCollections} onClose={() => setArranging(false)} onPublished={() => setChosenSort(null)} />}
     </Box>
   );
 }
