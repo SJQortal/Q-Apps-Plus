@@ -203,10 +203,21 @@ export function ProductGrid({ children, layout, ...rest }: { children: ReactNode
  * in Featured (qdn/productOrder.ts featuredOrder). The title opens the
  * collection when there is one.
  */
-export function SectionDivider({ title, to, first = false }: { title: string; to?: string; first?: boolean }) {
+export function SectionDivider({
+  title,
+  to,
+  first = false,
+  heading = "h3",
+}: {
+  title: string;
+  to?: string;
+  first?: boolean;
+  /** The heading level under the page's own headings. */
+  heading?: "h2" | "h3";
+}) {
   return (
     <Box component="li" data-section sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 1.5, pt: first ? 0 : 1.5 }}>
-      <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: "anywhere" }}>
+      <Typography component={heading} sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: "anywhere" }}>
         {to ? (
           <Link component={RouterLink} to={to} color="inherit" underline="hover">
             {title}

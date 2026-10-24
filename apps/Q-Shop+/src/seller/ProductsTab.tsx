@@ -526,6 +526,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                         key={`section-${row.productId}`}
                         title={section !== null && section >= 0 ? shopCollections[section]?.title || "Collection" : "Not in a collection"}
                         first={i === 0}
+                        heading="h2"
                       />
                     ),
                     <ProductRow

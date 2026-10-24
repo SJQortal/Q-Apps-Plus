@@ -818,7 +818,7 @@ describe("sorting the products by their columns", () => {
     const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
     store.dispatch(setDataContainer({ ...dataContainer, collectionsId, productOrder: [chair.id, mug.id] }));
     const list = await screen.findByRole("list", { name: "Products" });
-    await waitFor(() => expect(within(list).getAllByRole("listitem").map((li) => li.querySelector("h3")?.textContent ?? within(li).queryByText(/^(Mug|Poster|Chair)$/)?.textContent)).toEqual(["Mugs", "Mug", "Not in a collection", "Chair", "Poster"]));
+    await waitFor(() => expect(within(list).getAllByRole("listitem").map((li) => li.querySelector("h2")?.textContent ?? within(li).queryByText(/^(Mug|Poster|Chair)$/)?.textContent)).toEqual(["Mugs", "Mug", "Not in a collection", "Chair", "Poster"]));
     expect(selectValue(selectField("Sort"))).toBe("featured");
     expect(within(list).getAllByText(/in shop order/).map((el) => el.parentElement?.textContent)).toEqual(["1 in shop order", "2 in shop order", "3 in shop order"]);
   });
