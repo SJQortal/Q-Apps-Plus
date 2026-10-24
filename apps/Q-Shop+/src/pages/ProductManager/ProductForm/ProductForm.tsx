@@ -88,7 +88,9 @@ const panelSx = {
   gap: 2,
   minWidth: 0,
   p: { xs: 0, md: 2 },
-  border: { xs: 0, md: 1 },
+  // Width and style apart: a responsive `border` shorthand would reset the colour to the text's.
+  borderWidth: { xs: 0, md: 1 },
+  borderStyle: "solid",
   borderColor: "divider",
   borderRadius: 2,
 } as const;
