@@ -315,7 +315,7 @@ export function VariantsEditor({
   images: string[];
   /** The items' price unit: QORT, or the shop's currency. */
   unit: string;
-  /** The product's price as typed, each item's when it has none of its own. */
+  /** The product's price as typed ("12", or "12 QORT" when it isn't in the items' unit), each item's when it has none of its own. */
   basePrice: string;
   onImageError?: (message: string) => void;
   /** Editing a published group: the products taken out of it so far. */
@@ -474,7 +474,8 @@ export function VariantsEditor({
                         label="Price"
                         value={row.price}
                         onChange={(e) => setRow(key, { price: cleanPrice(e.target.value) })}
-                        placeholder={basePrice || "Same"}
+                        // Empty: its own QORT price (an edited item that has one), or the product's.
+                        placeholder={row.qort ? `${row.qort} QORT` : basePrice}
                         slotProps={{
                           htmlInput: { inputMode: "decimal", autoComplete: "off", "aria-label": `Price of ${label} in ${unit}` },
                           input: { endAdornment: <InputAdornment position="end">{unit}</InputAdornment> },
@@ -542,7 +543,7 @@ export function VariantsEditor({
           )}
           {items.length > 0 && total <= MAX_VARIANTS && (
             <Typography variant="body2" color="text.secondary">
-              Each item is a product of its own (so Q-Shop lists them too), named for its variant and value. An empty price is the product&apos;s. Its
+              Each item is a product of its own (so Q-Shop lists them too), named for its variant and value. An empty price is the product&apos;s (without one, give each item a price). Its
               picture is its own, else its variant&apos;s, else the product&apos;s first; these come on top of the product&apos;s pictures.
             </Typography>
           )}

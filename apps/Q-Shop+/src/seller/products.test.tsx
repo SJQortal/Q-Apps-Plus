@@ -958,3 +958,36 @@ describe("editing a product in variants", () => {
   });
 });
 
+describe("variants in a shop that prices in a currency", () => {
+  it("prices each item in USD with no product price, the QORT following the shop's rates", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer({ ...dataContainer, fiatPricing: { currency: "USD", rates: { QORT: 0.2 }, updated: 1 } }));
+    fireEvent.click(screen.getByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add product" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Glasses" } });
+    await pickCategory(dialog, "glasses", "Health & Beauty");
+    const variants = within(dialog).getByRole("region", { name: "Variants" });
+    fireEvent.click(within(variants).getByRole("switch", { name: /It comes in variants/ }));
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 1" }), { target: { value: "Round" } });
+    const round = within(variants).getByRole("textbox", { name: "Round: add values" });
+    fireEvent.change(round, { target: { value: "Pale, Orange" } });
+    fireEvent.keyDown(round, { key: "Enter" });
+    const items = within(variants).getByRole("list", { name: "Items" });
+    // In USD although no price was typed for the product.
+    fireEvent.change(within(items).getByRole("textbox", { name: "Price of Round / Pale in USD" }), { target: { value: "4" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
+    expect(await within(dialog).findByText("Set a price for Round / Orange, or one for the product.")).toBeInTheDocument();
+    fireEvent.change(within(items).getByRole("textbox", { name: "Price of Round / Orange in USD" }), { target: { value: "5" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(2));
+    const drafts = Object.values(store.getState().global.productsToSave) as any[];
+    expect(drafts.map((d) => [d.title, d.fiatPrice?.value, d.price[0].value])).toEqual([
+      ["Glasses — Round / Pale", 4, 20],
+      ["Glasses — Round / Orange", 5, 25],
+    ]);
+  });
+});
+

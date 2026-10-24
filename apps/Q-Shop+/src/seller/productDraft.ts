@@ -305,6 +305,8 @@ export function validateProductForm(
     savedAuction?: AuctionTerms | null;
     /** In variants, each item can bring its own picture (variants/drafts.ts checks each has one). */
     imagesOptional?: boolean;
+    /** In variants, each item can bring its own price (variants/drafts.ts checks each has one). */
+    priceOptional?: boolean;
   } = {}
 ): string | null {
   if (values.images.length === 0 && !options.imagesOptional) return "Add at least one image";
@@ -324,7 +326,8 @@ export function validateProductForm(
   if (fiatText && typedFiat(values, options.pricing) === null) return `Check the ${options.pricing?.currency} price`;
   // A price in the shop's currency gives the QORT and ARRR prices.
   const fromFiat = !!fiatText;
-  if (!fromFiat && !(parseAmount(values.prices.QORT ?? "") > 0)) return "Set a price in QORT above 0";
+  const qortText = (values.prices.QORT ?? "").trim();
+  if (!fromFiat && !(parseAmount(qortText) > 0) && !(options.priceOptional && !qortText)) return "Set a price in QORT above 0";
   for (const coin of coins) {
     if (coin === "QORT" || (fromFiat && coin === "ARRR")) continue;
     const text = (values.prices[coin] ?? "").trim();

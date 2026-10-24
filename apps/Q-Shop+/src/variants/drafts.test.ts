@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProductFormValues } from "../seller/productDraft";
-import { formValuesFor } from "../seller/productDraft";
-import { groupEditDrafts, groupFormValues, itemPicture, removedMembers, rowKey, variantDrafts, variantFormProblem, type VariantFormValues } from "./drafts";
+import { formValuesFor, validateProductForm } from "../seller/productDraft";
+import { groupEditDrafts, groupFormValues, itemPicture, removedMembers, rowKey, variantDrafts, variantFormProblem, variantPriceUnit, type VariantFormValues } from "./drafts";
 import { valuesKey } from "./model";
 
 const A = "data:image/webp;base64,AAA";
@@ -235,3 +235,51 @@ describe("editing a published group", () => {
     expect(drafts.every((d) => !d.isUpdate)).toBe(true);
   });
 });
+
+describe("item prices in the shop's currency", () => {
+  const pricing = { currency: "USD", rates: { QORT: 0.2 }, updated: 1 };
+  const noPrice: ProductFormValues = { ...values, prices: { QORT: "" }, fiat: "" };
+
+  it("are in the currency whenever the shop has one, with a product price or not", () => {
+    expect(variantPriceUnit(noPrice, pricing)).toBe("USD");
+    expect(variantPriceUnit(values, pricing)).toBe("USD");
+    expect(variantPriceUnit(values, null)).toBe("QORT");
+  });
+
+  it("need no product price when every item has one; else they say which lacks one", () => {
+    const priced = form({ rows: { [valuesKey(["Round", "Pale"])]: { price: "5", picture: null }, [valuesKey(["Round", "Orange"])]: { price: "6", picture: null } } });
+    expect(variantFormProblem(priced, noPrice, pricing)).toBe("Set a price for Square / Pale, or one for the product.");
+    const all = form({ rows: { ...priced.rows, [valuesKey(["Square", "Pale"])]: { price: "7", picture: null } } });
+    expect(variantFormProblem(all, noPrice, pricing)).toBeNull();
+    expect(validateProductForm(noPrice, ["QORT"], { pricing, priceOptional: true })).toBeNull();
+    expect(validateProductForm(noPrice, ["QORT"], { pricing })).toBe("Set a price in QORT above 0");
+    n = 0;
+    const drafts = variantDrafts({ values: noPrice, form: all, coins: ["QORT"], storeId: "q-store-general-my-shop", name: "S", uid, now: 1, pricing });
+    expect(drafts.map((d) => [(d as { fiatPrice?: { value: number } }).fiatPrice?.value, (d.price as { value: number }[])[0].value])).toEqual([
+      [5, 25],
+      [6, 30],
+      [7, 35],
+    ]);
+  });
+
+  it("an edited item priced in QORT only keeps that price until one is typed in the currency", () => {
+    n = 0;
+    const qortGroup = variantDrafts({ values, form: form({ rows: { [valuesKey(["Round", "Orange"])]: { price: "12", picture: ORANGE } } }), coins: ["QORT"], storeId: "q-store-general-my-shop", name: "S", uid, now: 1 });
+    const members = qortGroup.map((d) => ({ ...d, catalogueId: "CAT" })) as (Record<string, any> & { id: string })[];
+    // The shop has prices in USD since; the lead gets one, the others not yet.
+    members[0] = { ...members[0], fiatPrice: { currency: "USD", value: 2, qort: 10 } };
+    const lead = { ...formValuesFor(members[0], ["QORT"], pricing), title: "Glasses" };
+    const f = groupFormValues({ variant: members[0].variant, members, lead, coins: ["QORT"], pricing });
+    const [round, square] = f.options;
+    expect(f.rows[rowKey(round, "Orange")]).toMatchObject({ price: "", qort: "12" });
+    expect(f.rows[rowKey(square, "Pale")]).toMatchObject({ price: "", qort: "10" });
+    const typed: VariantFormValues = { ...f, rows: { ...f.rows, [rowKey(square, "Pale")]: { ...f.rows[rowKey(square, "Pale")], price: "3" } } };
+    const { drafts } = groupEditDrafts({ values: lead, form: typed, group: members[0].variant.group, members, coins: ["QORT"], storeId: "q-store-general-my-shop", name: "S", uid, now: 2, pricing });
+    expect(drafts.map((d) => [d.id, (d.fiatPrice as { value: number } | undefined)?.value ?? null, d.price[0].value])).toEqual([
+      [members[0].id, 2, 10],
+      [members[1].id, null, 12],
+      [members[2].id, 3, 15],
+    ]);
+  });
+});
+

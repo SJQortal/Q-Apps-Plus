@@ -183,7 +183,7 @@ function ProductEditor({ open, onClose, product, onDelete, group = null }: Produ
     }
     const now = Date.now();
     const inVariants = (!product || !!group) && !!values.variants && values.sale !== "auction";
-    const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product), imagesOptional: inVariants });
+    const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product), imagesOptional: inVariants, priceOptional: inVariants });
     if (invalid) return setError(invalid);
     const { variants, ...form } = values;
     const trimmed = { ...form, title: values.title.trim(), category: values.category.trim() };

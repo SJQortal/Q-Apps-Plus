@@ -167,6 +167,10 @@ export const ProductForm = ({
   // A price in the shop's currency gives the QORT and ARRR prices; only asset prices are typed then.
   const otherCoins = coins.filter((c) => c !== "QORT" && !(fiat !== null && c === "ARRR"));
   const stale = pricing && !(values.fiat ?? "").trim() ? staleFiatPriceOf(saved, pricing.currency) : null;
+  // Variants are priced in the shop's currency when it has one (variants/drafts.ts); the product's price shows in theirs, or in QORT.
+  const itemUnit = variantPriceUnit(values, pricing);
+  const qortText = (values.prices.QORT ?? "").trim();
+  const basePrice = fiat !== null ? (values.fiat ?? "") : qortText ? (itemUnit === "QORT" ? qortText : `${qortText} QORT`) : "";
 
   const removeImage = (index: number) => onChange((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
   const makeMain = (index: number) =>
@@ -429,7 +433,8 @@ export const ProductForm = ({
           label="Price in QORT"
           value={values.prices.QORT ?? ""}
           onChange={(e) => setPrice("QORT", e.target.value)}
-          required
+          // In variants, each item can have its own price instead.
+          required={!values.variants}
           fullWidth
           slotProps={{
             htmlInput: { inputMode: "decimal", autoComplete: "off" },
@@ -511,8 +516,8 @@ export const ProductForm = ({
             value={values.variants ?? null}
             onChange={(variants) => onChange((prev) => ({ ...prev, variants }))}
             images={values.images}
-            unit={variantPriceUnit(values, pricing)}
-            basePrice={variantPriceUnit(values, pricing) === "QORT" ? (values.prices.QORT ?? "") : (values.fiat ?? "")}
+            unit={itemUnit}
+            basePrice={basePrice}
             onImageError={onImageError}
             group={variantGroup}
           />
