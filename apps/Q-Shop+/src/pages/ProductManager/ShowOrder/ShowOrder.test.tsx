@@ -14,10 +14,11 @@ import { setCurrentStore } from "../../../state/features/globalSlice";
 import { deliveredLoaded, statusesLoaded } from "../../../state/features/orderSlice";
 import { resetAssetCache } from "../../../qdn/assets";
 import { resetAssetNamesFromNode } from "../../../orders/useOrderCoin";
-import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, poster } from "../../../test/fixtures/shop";
+import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, SHORT_STORE_ID, STORE_TITLE, poster } from "../../../test/fixtures/shop";
 import { fetchRetry, resetOrderReadCaches } from "../../../orders/reads";
 import { addStatus, orderId, orderJson } from "../../../orders/testing";
 import { SENDER_NOTE } from "../../../orders/payment";
+import { resetQdnCaches } from "../../../qdn/search";
 import { ShowOrder } from "./ShowOrder";
 
 const ID = orderId("ORDERxxxx1");
@@ -390,5 +391,65 @@ describe("delivered", () => {
     const dialog = screen.getByRole("dialog");
     await waitFor(() => expect(within(dialog).queryByText("You marked it delivered")).toBeNull());
     expect(within(dialog).getByText("Refunded")).toBeInTheDocument();
+  });
+
+  it("the buyer's review shows as published at once, with View review", async () => {
+    resetQdnCaches();
+    const fetchMock = vi.fn(async (_url: string) => ({ ok: true, json: async () => [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const q = installQortalMock({
+      LIST_QDN_RESOURCES: async () => ({ resources: [] }),
+      PUBLISH_QDN_RESOURCE: async () => ({ signature: "x" }),
+    });
+    const { store } = setup("buyer", orderJson(), { status: "Received" });
+    store.dispatch(deliveredLoaded([{ orderId: ID, info: { at: 1762000000000 } }]));
+    const dialog = screen.getByRole("dialog");
+    // One search for the buyer's own review of this shop, under their name only.
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Write a review" }));
+    expect(fetchMock.mock.calls.map(([url]) => url).filter((url) => url.includes("q-store-review-"))).toEqual([
+      `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=q-store-review-${SHORT_STORE_ID}-&name=${encodeURIComponent(BUYER)}&limit=20&offset=0&includemetadata=true&reverse=true&exactmatchnames=true&prefix=true`,
+    ]);
+
+    const form = screen.getByRole("dialog", { name: `Review ${STORE_TITLE}` });
+    fireEvent.click(within(form).getByLabelText("4 Stars"));
+    fireEvent.change(within(form).getByLabelText(/^Title/), { target: { value: "Lovely mug" } });
+    fireEvent.change(within(form).getByLabelText(/^Your review/), { target: { value: "Arrived quickly." } });
+    fireEvent.click(within(form).getByRole("button", { name: "Publish review" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+
+    // Before the node lists it: published, and no second Write a review.
+    expect(await within(dialog).findByText(/Your review of .+ is published\./)).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Write a review" })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "View review" }));
+    const view = screen.getByRole("dialog", { name: `Your review of ${STORE_TITLE}` });
+    expect(within(view).getByText("Lovely mug")).toBeInTheDocument();
+    expect(within(view).getByText("Arrived quickly.")).toBeInTheDocument();
+    expect(within(view).getByRole("button", { name: "Write a new review" })).toBeInTheDocument();
+  });
+
+  it("a review the buyer published earlier is found, and View review shows it", async () => {
+    resetQdnCaches();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url.includes("q-store-review-")
+            ? [
+                // A longer shop id under the same prefix doesn't count.
+                { name: BUYER, identifier: `q-store-review-${SHORT_STORE_ID}-2-REVIEWxxx9-10`, created: 9, metadata: { title: "Other shop" } },
+                { name: BUYER, identifier: `q-store-review-${SHORT_STORE_ID}-REVIEWxxx1-50`, created: 8, metadata: { title: "Great", description: "Five stars" } },
+              ]
+            : [],
+      }))
+    );
+    installQortalMock({});
+    const { store } = setup("buyer", orderJson(), { status: "Received" });
+    store.dispatch(deliveredLoaded([{ orderId: ID, info: { at: 1762000000000 } }]));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("button", { name: "View review" }));
+    const view = screen.getByRole("dialog", { name: `Your review of ${STORE_TITLE}` });
+    expect(within(view).getByText("Great")).toBeInTheDocument();
+    expect(within(view).queryByText("Other shop")).toBeNull();
   });
 });

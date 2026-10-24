@@ -239,6 +239,8 @@ const reviews = [
   { name: 'bob+builder', short: 'my-shop', uid: 'REVIEWBBB2', rating: 3.5, title: 'Good, slow shipping', description: 'Nice product but it took three weeks.' },
   { name: 'Zoë Ålund', short: 'my-shop', uid: 'REVIEWCCC3', rating: 4, title: 'Nice', description: 'As described.' },
   { name: ME, short: 'shop-1', uid: 'REVIEWDDD4', rating: 4.5, title: 'Great gadgets', description: 'Quick delivery.' },
+  // The buyer's review of the shop they marked delivered: the order offers View review.
+  { name: ME, short: 'shop-2', uid: 'REVIEWEEE5', rating: 5, title: 'Beautiful bowls', description: 'Each one a little different, all lovely. Packed in straw.' },
 ];
 
 const orderJson = (shop, buyer, lines, extra = {}) => {
@@ -562,7 +564,13 @@ export default {
     } },
     { key: 'order-delivered-review', path: '/my-orders', overlay: true, after: async (page) => {
       await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Ålund Ceramics/ }).click({ timeout: 8000 });
-      await page.getByRole('dialog').getByRole('button', { name: 'Write a review' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.getByRole('dialog').getByRole('button', { name: 'View review' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'order-review-view', path: '/my-orders', overlay: true, after: async (page) => {
+      await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Ålund Ceramics/ }).click({ timeout: 8000 });
+      await page.getByRole('dialog').getByRole('button', { name: 'View review' }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: /^Your review of/ }).waitFor({ timeout: 8000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller', path: `/product-manager/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },

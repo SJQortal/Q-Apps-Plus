@@ -36,7 +36,7 @@ import { normalizeShopJson } from "../../discovery/shopJson";
 import { markShopDeleted, primeShopDetails } from "../../discovery/shopDetails";
 import { isJsonFromBeforeDelete } from "../../qdn/deleted";
 import { RetryCancelled, withPeerRetries } from "./peerRetry";
-import { fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
+import { fetchMyReview, fetchReviewRows, shopReviewsFrom, summarizeReviews, type ShopReview } from "./reviewsData";
 
 /**
  * loading → (fetching →) ready, or not there: missing (doesn't exist) /
@@ -469,4 +469,42 @@ export function useShopReviews(storeId: string, owner: string | null | undefined
     capped: current ? !current.complete : false,
     reload,
   };
+}
+
+/**
+ * The signed-in buyer's own review of a shop: one small search under their
+ * name, and a review they publish here shows at once (`store.storeReviews`).
+ * An empty storeId or name reads nothing.
+ */
+export function useMyShopReview(storeId: string, name: string): { status: "loading" | "ready" | "error"; review: ShopReview | null } {
+  const shortStoreId = shortStoreIdOf(storeId);
+  const published = useSelector((state: RootState) => state.store.storeReviews) as StoreReview[];
+  const key = `${shortStoreId}\n${name}`;
+  const [result, setResult] = useState<{ key: string; status: "ready" | "error"; review: ShopReview | null } | null>(null);
+
+  useEffect(() => {
+    if (!shortStoreId || !name) return;
+    let alive = true;
+    fetchMyReview(shortStoreId, name).then(
+      (review) => {
+        if (alive) setResult({ key, status: "ready", review });
+      },
+      () => {
+        if (alive) setResult({ key, status: "error", review: null });
+      }
+    );
+    return () => {
+      alive = false;
+    };
+  }, [key, name, shortStoreId]);
+
+  const current = result?.key === key ? result : null;
+  const review = useMemo(() => {
+    if (!shortStoreId || !name) return null;
+    const mine = (published as ShopReview[]).filter((r) => r.name === name);
+    return shopReviewsFrom([], shortStoreId, null, current?.review ? [current.review, ...mine] : mine)[0] ?? null;
+  }, [current, name, published, shortStoreId]);
+  // A review published here counts even while (or when) the search fails.
+  const status = !shortStoreId || !name || review ? "ready" : current ? current.status : "loading";
+  return { status, review };
 }

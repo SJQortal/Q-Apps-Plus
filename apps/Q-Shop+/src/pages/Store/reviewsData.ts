@@ -167,6 +167,36 @@ export async function hasOrderAtShop(shortStoreId: string, name: string, options
   return false;
 }
 
+/**
+ * The latest review `name` published for the shop, or null: a search under
+ * that name only, a few pages deep for the same reason as hasOrderAtShop.
+ */
+export async function fetchMyReview(shortStoreId: string, name: string, options: { fresh?: boolean } = {}): Promise<ShopReview | null> {
+  if (!shortStoreId || !name) return null;
+  for (let page = 0; page < 3; page++) {
+    const rows = await searchQdn(
+      {
+        service: "DOCUMENT",
+        identifier: shopReviewsPrefix(shortStoreId),
+        prefix: true,
+        name,
+        exactmatchnames: true,
+        includemetadata: true,
+        limit: 20,
+        offset: page * 20,
+      },
+      options
+    );
+    // Newest first: the first review of this shop under the name is the latest.
+    for (const row of rows) {
+      const review = row.name === name ? reviewFromRow(row, shortStoreId) : null;
+      if (review) return review;
+    }
+    if (rows.length < 20) return null;
+  }
+  return null;
+}
+
 /** After a review is published: drop cached review searches so the next read is fresh. */
 export function isReviewSearchUrl(url: string): boolean {
   return url.includes(`identifier=${REVIEW_BASE}-`);

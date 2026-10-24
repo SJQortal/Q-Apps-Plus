@@ -46,6 +46,8 @@ import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
 import { PaymentDetails } from "./PaymentDetails";
 import { StatusEditor, type StatusDraft } from "./StatusEditor";
 import { AddReview } from "../../Store/StoreReviews/AddReview/AddReview";
+import { StoreReviewCard } from "../../Store/StoreReviews/StoreReviewCard";
+import { useMyShopReview } from "../../Store/useShopData";
 
 export interface ShowOrderProps {
   open: boolean;
@@ -143,7 +145,6 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const status = useSelector((state: RootState) => (order ? state.order.statuses[order.id] ?? null : null));
   // The buyer's "it arrived" (orders/delivered.ts): null when there is none, undefined while not read.
   const delivered = useSelector((state: RootState) => (order ? state.order.delivered[order.id] : undefined));
-  const [reviewing, setReviewing] = useState(false);
   // The seller's view never names the coin from the buyer's own text (orders/useOrderCoin.ts).
   const coinView = useOrderCoinView(order, role);
   const sellerName = role === "seller" ? me?.name || order?.sellerName || "" : order?.sellerName || "";
@@ -293,8 +294,9 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
               at={delivered.at}
               sending={!!delivered.sending}
               digital={digital}
-              onReview={mine && storeId && !delivered.sending ? () => setReviewing(true) : undefined}
+              reviewStoreId={mine && storeId && !delivered.sending ? storeId : undefined}
               shop={order.storeName || order.sellerName || "the shop"}
+              storeTitle={order.storeName || ""}
             />
           )}
           {canMarkDelivered && (
@@ -428,16 +430,14 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
           Order {order.id}
         </Typography>
       </Box>
-      {reviewing && storeId && (
-        <AddReview open storeId={storeId} storeTitle={order.storeName || ""} onClose={() => setReviewing(false)} />
-      )}
     </ResponsiveDialog>
   );
 }
 
 /**
- * "Delivered": the buyer's own (with Write a review), or the buyer's for the
- * seller to see. While it is being published, it says so.
+ * "Delivered": the buyer's own (with Write a review, or View review once
+ * they have one for the shop, at once after publishing it), or the buyer's
+ * for the seller to see. While it is being published, it says so.
  */
 function DeliveredNote({
   who,
@@ -445,7 +445,8 @@ function DeliveredNote({
   sending,
   digital,
   shop,
-  onReview,
+  storeTitle,
+  reviewStoreId,
 }: {
   /** The buyer's name for the seller; null for the buyer themself. */
   who: string | null;
@@ -454,9 +455,18 @@ function DeliveredNote({
   /** A digital order is received, not delivered. */
   digital: boolean;
   shop: string;
-  onReview?: () => void;
+  /** The shop's own title, for the review dialog. */
+  storeTitle?: string;
+  /** The shop the buyer can review here; unset for the seller and while sending. */
+  reviewStoreId?: string;
 }) {
+  const me = useSelector((state: RootState) => state.auth.user);
+  const mine = useMyShopReview(reviewStoreId ?? "", reviewStoreId ? me?.name ?? "" : "");
+  const [writing, setWriting] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const review = reviewStoreId ? mine.review : null;
   const date = at ? formatOrderDate(at) : "";
+  const on = date ? `On ${date}. ` : "";
   return (
     <Box
       role="status"
@@ -479,14 +489,52 @@ function DeliveredNote({
         </Typography>
         {!sending && (
           <Typography variant="body2" color="text.secondary">
-            {who ? (date ? `On ${date}.` : "") : `${date ? `On ${date}. ` : ""}How was ${shop}? A review helps other buyers.`}
+            {who ? on.trim() : review ? `${on}Your review of ${shop} is published.` : `${on}How was ${shop}? A review helps other buyers.`}
           </Typography>
         )}
       </Box>
-      {onReview && (
-        <Button variant="contained" startIcon={<RateReviewOutlinedIcon />} onClick={onReview} sx={{ minHeight: 44 }}>
-          Write a review
-        </Button>
+      {reviewStoreId &&
+        (review ? (
+          <Button variant="outlined" color="inherit" startIcon={<RateReviewOutlinedIcon />} onClick={() => setViewing(true)} sx={{ minHeight: 44 }}>
+            View review
+          </Button>
+        ) : mine.status === "loading" ? (
+          <Skeleton variant="rounded" width={160} height={44} />
+        ) : (
+          <Button variant="contained" startIcon={<RateReviewOutlinedIcon />} onClick={() => setWriting(true)} sx={{ minHeight: 44 }}>
+            Write a review
+          </Button>
+        ))}
+      {reviewStoreId && review && viewing && (
+        <ResponsiveDialog
+          open
+          onClose={() => setViewing(false)}
+          title={`Your review of ${shop}`}
+          actions={
+            <>
+              <Button
+                color="inherit"
+                onClick={() => {
+                  setViewing(false);
+                  setWriting(true);
+                }}
+              >
+                Write a new review
+              </Button>
+              <Button variant="contained" onClick={() => setViewing(false)}>
+                Close
+              </Button>
+            </>
+          }
+        >
+          <StoreReviewCard review={review} orderedHere />
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            A new review replaces this one.
+          </Typography>
+        </ResponsiveDialog>
+      )}
+      {reviewStoreId && writing && (
+        <AddReview open storeId={reviewStoreId} storeTitle={storeTitle ?? ""} onClose={() => setWriting(false)} />
       )}
     </Box>
   );
