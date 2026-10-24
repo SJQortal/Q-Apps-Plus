@@ -36,4 +36,17 @@ describe("the variants editor", () => {
     fireEvent.click(within(await screen.findByRole("dialog", { name: "Colour of Orange" })).getByRole("button", { name: "No colour" }));
     expect((onChange.mock.lastCall![0] as VariantFormValues).options[0].values[1]).toEqual({ name: "Orange" });
   });
+
+  it("gives each item a price in the shop's Q-Asset, the product's showing when it has none", () => {
+    const onChange = vi.fn();
+    renderWithProviders(
+      <VariantsEditor value={form} onChange={onChange} images={[]} unit="QORT" basePrice="10" extraCoins={[{ coin: "ASSET:81", label: "Gold Bar", whole: true, base: "3" }]} />
+    );
+    const field = screen.getByRole("textbox", { name: "Price of Round / Orange in Gold Bar" });
+    expect(field).toHaveAttribute("placeholder", "3");
+    // Gold Bar can't be split: whole units only.
+    fireEvent.change(field, { target: { value: "4.5" } });
+    expect((onChange.mock.lastCall![0] as VariantFormValues).rows["Round\u0000Orange"]).toMatchObject({ coins: { "ASSET:81": "45" } });
+  });
 });
+

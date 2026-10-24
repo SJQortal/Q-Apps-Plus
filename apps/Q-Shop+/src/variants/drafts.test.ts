@@ -283,3 +283,33 @@ describe("item prices in the shop's currency", () => {
   });
 });
 
+describe("item prices in the shop's other coins", () => {
+  const coins = ["QORT", "ASSET:81"];
+  const withAsset: ProductFormValues = { ...values, prices: { QORT: "10", "ASSET:81": "3" } };
+
+  it("an item's own Q-Asset price wins over the product's; the others take the product's", () => {
+    n = 0;
+    const f = form({ rows: { [valuesKey(["Round", "Orange"])]: { price: "", picture: null, coins: { "ASSET:81": "5" } } } });
+    expect(variantFormProblem(f, withAsset, null)).toBeNull();
+    const drafts = variantDrafts({ values: withAsset, form: f, coins, storeId: "q-store-general-my-shop", name: "S", uid, now: 1 });
+    expect(drafts.map((d) => (d.price as { currency: string; value: number }[]).find((p) => p.currency === "ASSET:81")?.value)).toEqual([3, 5, 3]);
+  });
+
+  it("checks them, whole units for an asset that can't be split", () => {
+    const bad = form({ rows: { [valuesKey(["Round", "Pale"])]: { price: "", picture: null, coins: { "ASSET:81": "x" } } } });
+    expect(variantFormProblem(bad, withAsset, null, { label: () => "Gold Bar" })).toBe("Check the Gold Bar price of Round / Pale.");
+    const split = form({ rows: { [valuesKey(["Round", "Pale"])]: { price: "", picture: null, coins: { "ASSET:81": "1.5" } } } });
+    expect(variantFormProblem(split, withAsset, null, { label: () => "Gold Bar", wholeOnly: ["ASSET:81"] })).toBe("Use whole units for the Gold Bar price of Round / Pale: it can't be split.");
+  });
+
+  it("an edited group keeps each item's own Q-Asset price", () => {
+    n = 0;
+    const f = form({ rows: { [valuesKey(["Square", "Pale"])]: { price: "", picture: null, coins: { "ASSET:81": "7" } } } });
+    const members = variantDrafts({ values: withAsset, form: f, coins, storeId: "q-store-general-my-shop", name: "S", uid, now: 1 }).map((d) => ({ ...d, catalogueId: "CAT" })) as (Record<string, any> & { id: string })[];
+    const lead = { ...formValuesFor(members[0], coins), title: "Glasses" };
+    const g = groupFormValues({ variant: members[0].variant, members, lead, coins });
+    expect(g.rows[rowKey(g.options[1], "Pale")].coins).toEqual({ "ASSET:81": "7" });
+    expect(g.rows[rowKey(g.options[0], "Orange")].coins).toBeUndefined();
+  });
+});
+

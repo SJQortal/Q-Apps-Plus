@@ -21,7 +21,6 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
@@ -142,11 +141,10 @@ function PictureButton({ picture, label, onPick, onError }: { picture: string | 
           </IconButton>
         </>
       ) : (
-        <Tooltip title="Add a picture">
-          <IconButton aria-label={`Add a picture of ${label}`} onClick={choose} disabled={busy} sx={{ width: 44, height: 44, border: 1, borderStyle: "dashed", borderColor: "divider", borderRadius: 1 }}>
-            <AddPhotoAlternateOutlinedIcon />
-          </IconButton>
-        </Tooltip>
+        // No tooltip: its label says it, and a tooltip opened by focus on a phone sits outside the page's landmarks.
+        <IconButton aria-label={`Add a picture of ${label}`} onClick={choose} disabled={busy} sx={{ width: 44, height: 44, border: 1, borderStyle: "dashed", borderColor: "divider", borderRadius: 1 }}>
+          <AddPhotoAlternateOutlinedIcon />
+        </IconButton>
       )}
     </Box>
   );
@@ -307,6 +305,7 @@ export function VariantsEditor({
   basePrice,
   onImageError,
   group = null,
+  extraCoins = [],
 }: {
   /** null: no variants. */
   value: VariantFormValues | null;
@@ -320,6 +319,8 @@ export function VariantsEditor({
   onImageError?: (message: string) => void;
   /** Editing a published group: the products taken out of it so far. */
   group?: { removed: RemovedItem[] } | null;
+  /** The shop's other coins an item can have its own price in (variants/drafts.ts itemExtraCoins), with the product's price in each. */
+  extraCoins?: { coin: string; label: string; whole: boolean; base: string }[];
 }) {
   const on = value !== null;
   const form = value ?? EMPTY_VARIANTS;
@@ -483,6 +484,22 @@ export function VariantsEditor({
                         }}
                         sx={{ width: 170 }}
                       />
+                      {extraCoins.map(({ coin, label: coinName, whole, base }) => (
+                        <TextField
+                          key={coin}
+                          size="small"
+                          label="Price"
+                          value={row.coins?.[coin] ?? ""}
+                          onChange={(e) => setRow(key, { coins: { ...row.coins, [coin]: whole ? e.target.value.replace(/\D/g, "") : sanitizeAmountInput(e.target.value) } })}
+                          placeholder={base}
+                          slotProps={{
+                            htmlInput: { inputMode: whole ? "numeric" : "decimal", autoComplete: "off", "aria-label": `Price of ${label} in ${coinName}` },
+                            input: { endAdornment: <InputAdornment position="end">{coinName}</InputAdornment> },
+                            inputLabel: { shrink: true },
+                          }}
+                          sx={{ width: 170 }}
+                        />
+                      ))}
                       <Box role="group" aria-label={`Picture of ${label}`} sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}>
                         {images.length > 0 && (
                           <ToggleButtonGroup

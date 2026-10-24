@@ -19,7 +19,7 @@ import ShortUniqueId from "short-unique-id";
 import type { RootState } from "../../../state/store";
 import { removeFromProductsToSave, setProductsToSave } from "../../../state/features/globalSlice";
 import { ResponsiveDialog } from "../../../components/common/mobile";
-import { assetCoinId, shopAssets, shopCoins } from "../../../money/coins";
+import { assetCoinId, coinLabel, shopAssets, shopCoins } from "../../../money/coins";
 import { assetInfo } from "../../../qdn/assets";
 import { ProductForm } from "../ProductForm/ProductForm";
 import { FormError } from "../../../seller/FormError";
@@ -186,11 +186,12 @@ function ProductEditor({ open, onClose, product, onDelete, group = null }: Produ
     const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product), imagesOptional: inVariants, priceOptional: inVariants });
     if (invalid) return setError(invalid);
     const { variants, ...form } = values;
+    const coinChecks = { label: (coin: string) => coinLabel(coin, currentStore), wholeOnly };
     const trimmed = { ...form, title: values.title.trim(), category: values.category.trim() };
     // A group: a draft for each item, new ones too; those taken out retired, or dropped while only drafts.
     if (group && variants) {
       if (picturesPending) return setError("The product's pictures are still being read from your node. Save once they are in.");
-      const problem = variantFormProblem(variants, trimmed, pricing);
+      const problem = variantFormProblem(variants, trimmed, pricing, coinChecks);
       if (problem) return setError(problem);
       const { drafts, dropped } = groupEditDrafts({
         values: trimmed,
@@ -211,7 +212,7 @@ function ProductEditor({ open, onClose, product, onDelete, group = null }: Produ
     }
     // A new product in variants: one draft each (variants/drafts.ts).
     if (inVariants && variants) {
-      const problem = variantFormProblem(variants, trimmed, pricing);
+      const problem = variantFormProblem(variants, trimmed, pricing, coinChecks);
       if (problem) return setError(problem);
       for (const draft of variantDrafts({ values: trimmed, form: variants, coins, storeId: currentStore.id, name, uid: () => uid(), now, pricing })) {
         dispatch(setProductsToSave(draft));

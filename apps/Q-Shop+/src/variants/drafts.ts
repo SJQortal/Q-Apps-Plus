@@ -50,6 +50,11 @@ export interface VariantRowValues {
    * price in the shop's currency, kept while no price is typed for it.
    */
   qort?: string;
+  /**
+   * Its own price in the shop's other coins (`ASSET:<id>`, and ARRR when it
+   * doesn't follow the currency), by coin; empty or absent: the product's.
+   */
+  coins?: Record<string, string>;
 }
 
 /** A variant as the form holds it: with a picture of its own for its items. */
@@ -119,6 +124,16 @@ export function variantPriceUnit(_values: ProductFormValues, pricing: FiatPricin
   return pricing ? pricing.currency : "QORT";
 }
 
+/**
+ * The shop's coins an item can have its own price in besides its main one
+ * (Simon, 2026-10-24: "for the variants the price in Q-asset that was
+ * selected for the shop can also be added"): its Q-Assets, and ARRR unless
+ * it follows the shop's currency.
+ */
+export function itemExtraCoins(coins: string[], pricing: FiatPricing | null | undefined): string[] {
+  return coins.filter((c) => c !== "QORT" && !(pricing && c === "ARRR"));
+}
+
 /** The product's own price is set: in the shop's currency, or in QORT. */
 export function hasBasePrice(values: ProductFormValues, pricing: FiatPricing | null | undefined): boolean {
   return typedFiat(values, pricing) !== null || parseAmount(values.prices.QORT ?? "") > 0;
@@ -132,7 +147,12 @@ export function itemPicture(form: VariantFormValues, values: ProductFormValues, 
 }
 
 /** What's wrong with the variants as typed, or null. */
-export function variantFormProblem(form: VariantFormValues, values: ProductFormValues, pricing: FiatPricing | null | undefined): string | null {
+export function variantFormProblem(
+  form: VariantFormValues,
+  values: ProductFormValues,
+  pricing: FiatPricing | null | undefined,
+  coinOptions: { label?: (coin: string) => string; wholeOnly?: string[] } = {}
+): string | null {
   if (form.options.some((o) => !o.name.trim() && o.values.some((v) => v.name.trim()))) return "Name each variant (Round, Large…).";
   const options = usedOptions(form);
   if (options.length === 0) return "Add a variant, or turn variants off.";
@@ -153,6 +173,13 @@ export function variantFormProblem(form: VariantFormValues, values: ProductFormV
     const price = row.price.trim();
     if (price && !(new RegExp(`^\\d*\\.?\\d{0,${decimals}}$`).test(price) && Number(price) > 0)) return `Check the price of ${variantLabel(item)}.`;
     if (!price && !row.qort && !hasBasePrice(values, pricing)) return `Set a price for ${variantLabel(item)}, or one for the product.`;
+    for (const [coin, text] of Object.entries(row.coins ?? {})) {
+      const amount = text.trim();
+      if (!amount) continue;
+      const name = coinOptions.label?.(coin) ?? coin;
+      if (!(parseAmount(amount) > 0)) return `Check the ${name} price of ${variantLabel(item)}.`;
+      if (coinOptions.wholeOnly?.includes(coin) && !Number.isInteger(parseAmount(amount))) return `Use whole units for the ${name} price of ${variantLabel(item)}: it can't be split.`;
+    }
     if (!itemPicture(form, values, item)) return `Add a picture for ${variantLabel(item)}: its own, its variant's, or the product's.`;
   }
   return null;
@@ -204,16 +231,20 @@ function itemValues(
     : [own ?? values.images[0]].filter((img): img is string => !!img);
   const price = row.price.trim();
   const inFiat = variantPriceUnit(values, pricing) !== "QORT";
+  // Its own prices in other coins (a Q-Asset…) over the product's.
+  const coinPrices = Object.fromEntries(Object.entries(row.coins ?? {}).filter(([, text]) => text.trim()).map(([coin, text]) => [coin, text.trim()]));
+  const prices = { ...values.prices, ...coinPrices };
   return {
     ...values,
     title: variantTitle(values.title, item),
     images,
+    prices,
     ...(price
       ? inFiat
         ? { fiat: price }
-        : { prices: { ...values.prices, QORT: price } }
+        : { prices: { ...prices, QORT: price } }
       : // An edited item with a QORT price of its own (none in the currency) keeps it.
-        row.qort && { fiat: "", prices: { ...values.prices, QORT: row.qort } }),
+        row.qort && { fiat: "", prices: { ...prices, QORT: row.qort } }),
   };
 }
 
@@ -258,6 +289,11 @@ export function groupFormValues(args: {
     } else if (qortOf(own) && (fiatOf(lead) || qortOf(own) !== qortOf(lead))) {
       // Priced in QORT only, unlike the product: it keeps that price until one is typed.
       row.qort = qortOf(own);
+    }
+    // Its own price in another coin, where it differs from the product's.
+    for (const coin of itemExtraCoins(coins, pricing)) {
+      const mine = (own.prices[coin] ?? "").trim();
+      if (mine && mine !== (lead.prices[coin] ?? "").trim()) row.coins = { ...row.coins, [coin]: mine };
     }
     rows[rowKey(option, item[1])] = row;
   }

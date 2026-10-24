@@ -52,7 +52,7 @@ import {
 import { AuctionFields } from "../../../seller/AuctionFields";
 import { auctionTermsOf } from "../../../auctions/rules";
 import { VariantsEditor, type RemovedItem } from "../../../variants/VariantsEditor";
-import { variantPriceUnit } from "../../../variants/drafts";
+import { itemExtraCoins, variantPriceUnit } from "../../../variants/drafts";
 
 interface ProductFormProps {
   values: ProductFormValues;
@@ -520,6 +520,7 @@ export const ProductForm = ({
             basePrice={basePrice}
             onImageError={onImageError}
             group={variantGroup}
+            extraCoins={itemExtraCoins(coins, pricing).map((coin) => ({ coin, label: coinLabel(coin, shop), whole: wholeOnly.includes(coin), base: values.prices[coin] ?? "" }))}
           />
         </Box>
       )}
