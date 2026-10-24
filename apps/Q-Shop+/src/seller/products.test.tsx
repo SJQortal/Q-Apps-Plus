@@ -815,45 +815,55 @@ describe("sorting the products by their columns", () => {
 
 
 describe("adding a product in variants", () => {
-  it("makes a draft per variant, named for it, and publishes the group on the product list", async () => {
+  it("makes a draft per item (each variant's own values), and publishes the group on the product list", async () => {
     installVisibleIntersectionObserver();
     stubNode();
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true }, `/product-manager/${STORE_ID}?tab=products`);
     fireEvent.click(screen.getByRole("button", { name: "Add product" }));
     const dialog = await screen.findByRole("dialog", { name: "Add product" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
-    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "T-shirt" } });
-    await pickCategory(dialog, "shirt", "Clothing, Shoes & Accessories");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Glasses" } });
+    await pickCategory(dialog, "glasses", "Health & Beauty");
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^Price in QORT/ }), { target: { value: "10" } });
 
     const variants = within(dialog).getByRole("region", { name: "Variants" });
     fireEvent.click(within(variants).getByRole("switch", { name: /It comes in variants/ }));
-    fireEvent.change(within(variants).getByRole("textbox", { name: "Option 1" }), { target: { value: "Size" } });
-    const sizes = within(variants).getByRole("textbox", { name: "Size: add values" });
-    fireEvent.change(sizes, { target: { value: "S, M" } });
-    fireEvent.keyDown(sizes, { key: "Enter" });
-    const list = within(variants).getByRole("list", { name: "Variants" });
-    expect(within(list).getAllByRole("listitem").map((li) => li.textContent)).toEqual([expect.stringContaining("S"), expect.stringContaining("M")]);
-    fireEvent.change(within(list).getByRole("textbox", { name: "Price of M in QORT" }), { target: { value: "12" } });
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 1" }), { target: { value: "Round" } });
+    const round = within(variants).getByRole("textbox", { name: "Round: add values" });
+    fireEvent.change(round, { target: { value: "Pale, Orange" } });
+    fireEvent.keyDown(round, { key: "Enter" });
+    // Orange first: Alt and the arrow keys move a value, as a drag does.
+    fireEvent.keyDown(within(variants).getByLabelText("Orange: Alt and the arrow keys move it"), { key: "ArrowLeft", altKey: true });
+    fireEvent.click(within(variants).getByRole("button", { name: "Add another variant" }));
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 2" }), { target: { value: "Square" } });
+    const items = within(variants).getByRole("list", { name: "Items" });
+    expect(within(items).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      expect.stringContaining("Round / Orange"),
+      expect.stringContaining("Round / Pale"),
+      expect.stringContaining("Square"),
+    ]);
+    fireEvent.change(within(items).getByRole("textbox", { name: "Price of Square in QORT" }), { target: { value: "12" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
 
-    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(2));
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(3));
     const drafts = Object.values(store.getState().global.productsToSave) as any[];
     expect(drafts.map((d) => [d.title, d.price[0].value])).toEqual([
-      ["T-shirt — S", 10],
-      ["T-shirt — M", 12],
+      ["Glasses — Round / Orange", 10],
+      ["Glasses — Round / Pale", 10],
+      ["Glasses — Square", 12],
     ]);
-    expect(screen.getByRole("heading", { name: "Ready to publish: 2 products" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Ready to publish: 3 products" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     const list_ = decodeData64(call.resources.at(-1).data64);
     const group = drafts[0].variant.group;
-    expect(list_.variantGroups).toEqual({ [group]: { title: "T-shirt", options: [{ name: "Size", values: ["S", "M"] }], display: "bundle", lead: drafts[0].id } });
-    expect(list_.products[drafts[1].id]).toMatchObject({ priceQort: 12, status: "AVAILABLE", variant: { group, values: ["M"] } });
-    // Each variant is a product of the original's shape, its variant beside the rest.
+    expect(list_.variantGroups).toEqual({
+      [group]: { title: "Glasses", options: [{ name: "Round", values: [{ name: "Orange" }, { name: "Pale" }] }, { name: "Square", values: [] }], display: "bundle", lead: drafts[0].id },
+    });
+    expect(list_.products[drafts[2].id]).toMatchObject({ priceQort: 12, status: "AVAILABLE", variant: { group, values: ["Square"] } });
     const catalogue = decodeData64(call.resources[0].data64);
-    expect(catalogue.products[drafts[0].id]).toMatchObject({ title: "T-shirt — S", variant: { group, values: ["S"], lead: drafts[0].id } });
+    expect(catalogue.products[drafts[0].id]).toMatchObject({ title: "Glasses — Round / Orange", variant: { group, values: ["Round", "Orange"], lead: drafts[0].id } });
   });
 });

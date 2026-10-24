@@ -4,12 +4,17 @@
  * (toggle) if he wants the products to display separately … or to bundle the
  * variants into one product listing").
  *
- * Each variant is a product of its own: its id, price, stock and pictures. So
+ * The seller names variants (Round, Square…), each with values of its own
+ * (Pale, Orange…, each with a colour if it has one); every variant's value is
+ * an item, and a variant with no values is one (Simon, 2026-10-24: "instead
+ * of variant and its values, it mixes different variant values").
+ *
+ * Each item is a product of its own: its id, price, stock and pictures. So
  * the cart, checkout and orders don't change, and the original Q-Shop lists
- * each as an item for sale, named for its options ("T-shirt — Red / L"). A
- * group ties them, additively:
- * - each variant's product (catalogue) gains
- *   `variant: {group, title, options: [{name, values}], values, display, lead}`;
+ * each as an item for sale, named for it ("Glasses — Round / Pale"). A group
+ * ties them, additively:
+ * - each item's product (catalogue) gains
+ *   `variant: {group, title, options: [{name, values: [{name, color?}]}], values: [variant, value?], display, lead}`;
  *   the lead (the first variant) carries the product's pictures, the others
  *   only their own, so a group of 24 doesn't copy 10 pictures 24 times; a
  *   variant's page shows its picture, then the lead's;
@@ -20,17 +25,25 @@
  */
 import { jsonToBase64, type CatalogueDoc, type DataContainerDoc, type ProductDraft, type PublishResource } from "../qdn/payloads";
 
-export const MAX_VARIANT_OPTIONS = 3;
+/** Variants (Round, Square…), values each, and items in all. */
+export const MAX_VARIANT_OPTIONS = 8;
 export const MAX_OPTION_VALUES = 12;
-export const MAX_VARIANTS = 24;
+export const MAX_VARIANTS = 30;
 export const MAX_OPTION_TEXT = 40;
 
 /** bundle: one listing, buyers choose the variant; separate: each variant listed on its own, its own picture on the card. */
 export type VariantDisplay = "bundle" | "separate";
 
+export interface VariantValue {
+  name: string;
+  /** A colour to show it by (a lens, a glaze): "#rrggbb". */
+  color?: string;
+}
+
+/** A variant (Round) and its own values (Pale, Orange…). */
 export interface VariantOption {
   name: string;
-  values: string[];
+  values: VariantValue[];
 }
 
 export interface ProductVariant {
@@ -38,7 +51,7 @@ export interface ProductVariant {
   /** The listing's title, without the options. */
   title: string;
   options: VariantOption[];
-  /** This variant's value of each option, in the options' order. */
+  /** Which item it is: its variant, and its value when the variant has values. */
   values: string[];
   display: VariantDisplay;
   /** The variant that carries the product's pictures (the first). */
@@ -60,16 +73,35 @@ export interface VariantRow {
 const text = (value: unknown, max = MAX_OPTION_TEXT) => (typeof value === "string" ? value.trim().slice(0, max) : "");
 const isId = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(value);
 
+const COLOR = /^#[0-9a-fA-F]{6}$/;
+
+function valueOf(raw: unknown): VariantValue | null {
+  const name = text((raw as { name?: unknown })?.name);
+  if (!name) return null;
+  const color = (raw as { color?: unknown }).color;
+  return typeof color === "string" && COLOR.test(color) ? { name, color: color.toLowerCase() } : { name };
+}
+
 function optionsOf(raw: unknown): VariantOption[] | null {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_VARIANT_OPTIONS) return null;
   const options: VariantOption[] = [];
   for (const o of raw) {
     const name = text((o as { name?: unknown })?.name);
-    const values = Array.isArray((o as { values?: unknown })?.values) ? ((o as { values: unknown[] }).values.map((v) => text(v)).filter(Boolean)) : [];
-    if (!name || values.length === 0 || values.length > MAX_OPTION_VALUES || new Set(values).size !== values.length) return null;
-    options.push({ name, values });
+    const list = (o as { values?: unknown })?.values;
+    const values = Array.isArray(list) ? list.map(valueOf) : [];
+    if (!name || values.some((v) => !v) || values.length > MAX_OPTION_VALUES) return null;
+    const clean = values as VariantValue[];
+    if (new Set(clean.map((v) => v.name)).size !== clean.length) return null;
+    options.push({ name, values: clean });
   }
   return new Set(options.map((o) => o.name)).size === options.length ? options : null;
+}
+
+/** Whether `values` names an item of the options: a variant with no values, or a variant and one of its values. */
+function isItem(options: VariantOption[], values: string[]): boolean {
+  const option = options.find((o) => o.name === values[0]);
+  if (!option) return false;
+  return option.values.length === 0 ? values.length === 1 : values.length === 2 && option.values.some((v) => v.name === values[1]);
 }
 
 const displayOf = (value: unknown): VariantDisplay => (value === "separate" ? "separate" : "bundle");
@@ -80,7 +112,7 @@ export function variantOf(product: unknown): ProductVariant | null {
   if (!v || typeof v !== "object" || !isId(v.group)) return null;
   const options = optionsOf(v.options);
   const values = Array.isArray(v.values) ? v.values.map((x) => text(x)) : [];
-  if (!options || values.length !== options.length || values.some((x, i) => !options[i].values.includes(x))) return null;
+  if (!options || !isItem(options, values)) return null;
   const lead = typeof v.lead === "string" && v.lead.length <= 80 ? v.lead : "";
   return { group: v.group, title: text(v.title, 180) || "Product", options, values, display: displayOf(v.display), lead };
 }
@@ -111,25 +143,34 @@ export function variantGroupsOf(index: unknown): Record<string, VariantGroup> {
   return out;
 }
 
-/** Every combination of the options' values, in order, at most MAX_VARIANTS. */
-export function combinations(options: VariantOption[]): string[][] {
-  let out: string[][] = [[]];
+/** Every item, in order: each variant's values, or the variant alone when it has none. At most MAX_VARIANTS. */
+export function variantItems(options: VariantOption[]): string[][] {
+  const out: string[][] = [];
   for (const option of options) {
-    const next: string[][] = [];
-    for (const head of out) for (const value of option.values) next.push([...head, value]);
-    out = next.slice(0, MAX_VARIANTS);
+    if (option.values.length === 0) out.push([option.name]);
+    else for (const value of option.values) out.push([option.name, value.name]);
   }
-  return options.length === 0 ? [] : out;
+  return out.slice(0, MAX_VARIANTS);
 }
 
-/** "T-shirt — Red / L": the variant's product title, as the original lists it. */
+/** How many items the options make (before the cap). */
+export function itemCount(options: VariantOption[]): number {
+  return options.reduce((n, o) => n + Math.max(1, o.values.length), 0);
+}
+
+/** "Glasses — Round / Pale": the item's product title, as the original lists it. */
 export function variantTitle(title: string, values: string[]): string {
   return `${title.trim()} — ${values.join(" / ")}`;
 }
 
-/** "Colour: Red · Size: L" */
-export function variantLabel(options: VariantOption[], values: string[]): string {
-  return options.map((o, i) => `${o.name}: ${values[i]}`).join(" · ");
+/** "Round / Pale" */
+export function variantLabel(values: string[]): string {
+  return values.join(" / ");
+}
+
+/** An item's value's colour, when it has one. */
+export function colorOf(options: VariantOption[], values: string[]): string | undefined {
+  return options.find((o) => o.name === values[0])?.values.find((v) => v.name === values[1])?.color;
 }
 
 export const valuesKey = (values: string[]) => values.join("\u0000");
@@ -241,8 +282,12 @@ export function variantSiblings(index: unknown, group: string): VariantSibling[]
   return out;
 }
 
-/** The variant a choice leads to: the same values with this option changed, else the first that has it. */
-export function variantFor(siblings: VariantSibling[], current: string[], option: number, value: string): VariantSibling | null {
-  const wanted = current.map((v, i) => (i === option ? value : v));
-  return siblings.find((s) => valuesKey(s.values) === valuesKey(wanted)) ?? siblings.find((s) => s.values[option] === value) ?? null;
+/** The item a variant's choice leads to: the same value in that variant when it has it, else its first item. */
+export function itemForVariant(siblings: VariantSibling[], current: string[], variant: string): VariantSibling | null {
+  return siblings.find((s) => s.values[0] === variant && s.values[1] === current[1]) ?? siblings.find((s) => s.values[0] === variant) ?? null;
+}
+
+/** The item a value's choice leads to, within the current variant. */
+export function itemForValue(siblings: VariantSibling[], current: string[], value: string): VariantSibling | null {
+  return siblings.find((s) => valuesKey(s.values) === valuesKey([current[0], value])) ?? null;
 }

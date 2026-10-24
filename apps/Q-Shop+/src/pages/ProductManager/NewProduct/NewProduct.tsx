@@ -113,12 +113,13 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
     const now = Date.now();
-    const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product) });
+    const inVariants = !product && !!values.variants && values.sale !== "auction";
+    const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product), imagesOptional: inVariants });
     if (invalid) return setError(invalid);
     const { variants, variantDisplay, ...form } = values;
     const trimmed = { ...form, title: values.title.trim(), category: values.category.trim() };
     // A new product in variants: one draft each (variants/drafts.ts).
-    if (!product && variants && values.sale !== "auction") {
+    if (inVariants && variants) {
       const problem = variantFormProblem(variants, trimmed, pricing);
       if (problem) return setError(problem);
       for (const draft of variantDrafts({ values: trimmed, form: variants, coins, storeId: currentStore.id, name, uid: () => uid(), now, pricing })) {

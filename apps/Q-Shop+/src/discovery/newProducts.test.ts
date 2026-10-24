@@ -36,8 +36,8 @@ describe("new products", () => {
   });
 
   it("shows a group of variants listed as one once, by the group's title; variants listed apart each", () => {
-    const options = [{ name: "Size", values: ["S", "M"] }];
-    const v = (values: string[], display: string, group = "G1") => ({ variant: { group, title: "T-shirt", options, values, display, lead: "p1" } });
+    const options = [{ name: "Size", values: [{ name: "S" }, { name: "M" }] }];
+    const v = (values: string[], display: string, group = "G1") => ({ variant: { group, title: "T-shirt", options, values: ["Size", ...values], display, lead: "p1" } });
     const items = newProductsFrom(
       [
         {

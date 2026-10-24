@@ -509,6 +509,7 @@ export const ProductForm = ({
             images={values.images}
             unit={variantPriceUnit(values, pricing)}
             basePrice={variantPriceUnit(values, pricing) === "QORT" ? (values.prices.QORT ?? "") : (values.fiat ?? "")}
+            onImageError={onImageError}
           />
         </Box>
       )}
@@ -516,11 +517,11 @@ export const ProductForm = ({
         <Box component="section" aria-label="Variant" sx={[panelSx, { gridColumn: "1 / -1" }]}>
           <SectionTitle>Variant</SectionTitle>
           <Typography>
-            One variant of <strong>{savedVariant.title}</strong>: {variantLabel(savedVariant.options, savedVariant.values)}.
+            One item of <strong>{savedVariant.title}</strong>: {variantLabel(savedVariant.values)}.
           </Typography>
           <Box>
             <Typography id="variant-display-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-              In the shop&apos;s lists, its variants show as
+              In the shop&apos;s lists, its items show as
             </Typography>
             <ToggleButtonGroup
               exclusive
@@ -530,7 +531,7 @@ export const ProductForm = ({
               sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
             >
               <ToggleButton value="bundle">One listing, buyers choose</ToggleButton>
-              <ToggleButton value="separate">Each variant on its own</ToggleButton>
+              <ToggleButton value="separate">Each item on its own</ToggleButton>
             </ToggleButtonGroup>
           </Box>
         </Box>
