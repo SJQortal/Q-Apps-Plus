@@ -309,7 +309,7 @@ describe("home page", () => {
       expect(node.summary().resources).toEqual({});
     });
 
-    it("Pays in Qortal assets reads the shops' JSON to find the ones that take one", async () => {
+    it("Pays in Q-Assets reads the shops' JSON to find the ones that take one", async () => {
       const world = makeWorld();
       world.shops[4].acceptedAssets = [{ id: 81, name: "Gold" }];
       const { node } = renderHome({ world, path: "/?pay=assets", allInView: true });
@@ -325,7 +325,7 @@ describe("home page", () => {
       expect(node.summary().resources).toEqual({});
     });
 
-    it("Pays in Qortal assets finds a shop that added one once the index shows it changed, reading only that shop again", async () => {
+    it("Pays in Q-Assets finds a shop that added one once the index shows it changed, reading only that shop again", async () => {
       const world = makeWorld();
       world.shops[4].acceptedAssets = [{ id: 81, name: "Gold" }];
       const first = renderHome({ world, path: "/?pay=assets", allInView: true });

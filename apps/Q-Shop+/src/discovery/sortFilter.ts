@@ -30,13 +30,16 @@ export function sortNeedsActivity(sort: ShopSort): boolean {
   return sort === "active" || sort === "products";
 }
 
-/** "" = any coin; a foreign ticker; or "assets" = takes at least one Qortal asset. */
+/**
+ * "" = every shop (all take QORT, so it is labelled QORT: Simon, 2026-10-24); a foreign ticker;
+ * or "assets" = takes at least one Qortal asset (labelled Q-Assets, the app's name).
+ */
 export type PayFilter = "" | ForeignTicker | "assets";
 
 export const PAY_FILTERS: { value: PayFilter; label: string; short: string }[] = [
-  { value: "", label: "Any coin", short: "Any" },
+  { value: "", label: "QORT", short: "QORT" },
   ...FOREIGN_TICKERS.map((ticker) => ({ value: ticker as PayFilter, label: COINS[ticker].label, short: ticker })),
-  { value: "assets", label: "Qortal assets", short: "Assets" },
+  { value: "assets", label: "Q-Assets", short: "Q-Assets" },
 ];
 
 export function parsePay(value: string | null | undefined): PayFilter {
@@ -49,7 +52,7 @@ export function payNeedsDetails(pay: PayFilter): boolean {
 }
 
 export function payLabel(pay: PayFilter): string {
-  return PAY_FILTERS.find((p) => p.value === pay)?.label ?? "Any coin";
+  return PAY_FILTERS.find((p) => p.value === pay)?.label ?? "QORT";
 }
 
 /**

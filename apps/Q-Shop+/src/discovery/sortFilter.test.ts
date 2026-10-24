@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterShops, lastActive, parsePay, parseSort, payMatch, sortShops } from "./sortFilter";
+import { filterShops, lastActive, parsePay, parseSort, payMatch, sortShops, PAY_FILTERS, payLabel } from "./sortFilter";
 import { buildRatingsIndex } from "./ratings";
 import { buildActivityIndex } from "./activity";
 import { shopKey, type ShopEntry } from "./shopIndex";
@@ -152,5 +152,13 @@ describe("filtering shops", () => {
     const result = filterShops([arrr, plain, other], { pay: "", mine: new Set([plain.key]) }, () => undefined);
     expect(result.shops).toEqual([plain]);
     expect(result.considered).toBe(1);
+  });
+});
+
+describe("the Pays in filter's names", () => {
+  it("calls every shop QORT (all take it) and the asset filter Q-Assets", () => {
+    expect(PAY_FILTERS.map((p) => p.label)).toEqual(["QORT", "Pirate Chain (ARRR)", "Q-Assets"]);
+    expect(payLabel("")).toBe("QORT");
+    expect(payLabel("assets")).toBe("Q-Assets");
   });
 });

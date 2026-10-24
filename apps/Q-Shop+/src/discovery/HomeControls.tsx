@@ -208,7 +208,7 @@ export function SortFilterSheet(props: SortFilterProps) {
           {sort !== "newest" && (
             <RemovableChip label={SHOP_SORTS.find((s) => s.value === sort)?.label ?? ""} onRemove={() => onSort("newest")} />
           )}
-          {pay && <RemovableChip label={`Pays in ${pay === "assets" ? "assets" : pay}`} onRemove={() => onPay("")} />}
+          {pay && <RemovableChip label={`Pays in ${pay === "assets" ? "Q-Assets" : pay}`} onRemove={() => onPay("")} />}
           {mine && <RemovableChip label="My shops" onRemove={() => onMine(false)} />}
         </Box>
       )}
