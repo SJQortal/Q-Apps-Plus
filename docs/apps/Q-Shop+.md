@@ -661,6 +661,16 @@ Simon: *"for all the variants and values, I want the images of all variants and 
 - **Screens:** product-variants, seller-edit-variants and seller-edit-variants-removed (new; the seller's test shop gains a three-item linen apron across two catalogues, listed apart), with products and seller-products, at five sizes in Hub 3.0, Classic and White: 0 console errors, 0 overflow, 0 unlabelled buttons and 0 axe violations in the final run of each screen (75 captures; the 10 Hub 3.0 ones of the touched screens again after the last fix). The first run's misses were the new screens' own selectors (the 1280 row's name starts with its shop-order place; the search is a searchbox); it also had one axe "region" on a single 360×740 White capture of the editor, which three later runs didn't repeat. A one-item "Taken out" note now says "it", not "them".
 - **Tests:** 980 → 991: the gallery's order, sharing, captions and choices; the product page choosing an item by its picture and a picture by its item; the group form's rows (prices, pictures, stock); saving a renamed group with a value added, one taken out (retired, out of the group) and one out of stock; an item moved first leading; drafts dropped from a group never published; the seller page opening the whole group from an item in another catalogue and saving all three.
 
+### Round 5, 2026-10-24: smooth switching between collections
+
+Simon: *"when changing between collections on shop page, make the transitions smooth, now they jump rapidly"*. Two things jumped: opening a collection snapped the page to its heading, and the products swapped in one frame, so the page's height (and the scroll with it) snapped too. Now (`hooks/useSmoothSwap.ts`):
+- the page scrolls to the collection **smoothly**, and only when its heading is out of view (a tapped card usually leaves it in view, so the page stays put);
+- the products section's **height eases** from the old list's to the new one's (280 ms), so what is under it doesn't snap;
+- the collection's header and products **fade in** from a little below (240 ms);
+- with reduced motion, nothing moves and the scroll is instant, as before.
+- **Checked** in Chromium on the built app with the screens' mock node, sampling every frame: at 1280, opening a collection scrolls 0 → 604 px over about 400 ms while the section eases 1373 → 797 px and the products fade in; switching between collections with the heading in view leaves the scroll alone; All products eases back to 1373 px. The same at 390×844; instant with reduced motion. Screens shop and shop-collection (Hub 3.0, five sizes): clean. The old height comes from a ResizeObserver, so no render forces a layout.
+- **Tests:** 991 → 993 (the hook: heights and fade only on a change; nothing with reduced motion).
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
