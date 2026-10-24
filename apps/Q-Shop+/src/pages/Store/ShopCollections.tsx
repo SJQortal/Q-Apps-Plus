@@ -182,7 +182,8 @@ export function CollectionHeader({
   headingRef?: Ref<HTMLHeadingElement>;
 }) {
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
+    // It fades in with the collection's products (hooks/useSmoothSwap.ts).
+    <Box data-swap sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
         {collection.image && <Picture src={collection.image} size={88} />}
         <Box sx={{ minWidth: 0, flex: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>

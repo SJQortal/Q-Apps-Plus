@@ -13,6 +13,9 @@
  * A shop with collections (qdn/collections.ts) shows them as a row of cards
  * above the products; `?collection=<id>` shows one collection's products,
  * under its picture, title and description, with the same filters and sorts.
+ * Changing collection eases (hooks/useSmoothSwap.ts): the section's height
+ * glides, the new products fade in, and the page scrolls smoothly to the
+ * collection only when its heading is out of view.
  * Products show as a grid of tiles or a list of rows (utils/productView.ts:
  * the buyer's choice, kept in Settings; by default rows on phones).
  *
@@ -78,6 +81,7 @@ import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } fr
 import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
 import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../ProductList";
 import { useNow } from "../../../hooks/useNow";
+import { prefersReducedMotion, useSmoothSwap } from "../../../hooks/useSmoothSwap";
 import { productLayout, useProductView } from "../../../utils/productView";
 import { ShopHeader, ShopHeaderSkeleton } from "../ShopHeader";
 import { StoreDetails } from "../StoreDetails/StoreDetails";
@@ -160,9 +164,14 @@ function ShopProducts({
   useEffect(() => {
     const heading = collectionHeading.current;
     if (!openedId || !heading) return;
-    if (typeof heading.scrollIntoView === "function") heading.scrollIntoView({ block: "start" });
+    // A tapped card usually leaves it in view: the page stays put. Else a smooth scroll to it.
+    const top = heading.getBoundingClientRect().top;
+    const inView = top >= 64 && top <= window.innerHeight * 0.6;
+    if (!inView && typeof heading.scrollIntoView === "function") heading.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
     heading.focus({ preventScroll: true });
   }, [openedId]);
+  const productsSection = useRef<HTMLElement>(null);
+  useSmoothSwap(productsSection, openedId ?? "");
   const waitingForCollection = !!collectionId && (collections.status === "loading" || collections.status === "fetching");
   const collectionsUnreadable = !!collectionId && collections.status === "unavailable";
   const collectionGone = !!collectionId && !collection && !waitingForCollection && !collectionsUnreadable && productsStatus === "ready";
@@ -408,7 +417,7 @@ function ShopProducts({
           onRetry={collections.retry}
         />
       )}
-      <Box component="section" aria-labelledby="shop-products-heading" sx={{ mt: 3 }}>
+      <Box ref={productsSection} component="section" aria-labelledby="shop-products-heading" sx={{ mt: 3 }}>
         {collection ? (
           <CollectionHeader
             owner={owner}
@@ -516,7 +525,7 @@ function ShopProducts({
           </Box>
         )}
 
-        {body}
+        <Box data-swap>{body}</Box>
 
         {phone && (
           <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
