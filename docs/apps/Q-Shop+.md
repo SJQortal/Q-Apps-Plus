@@ -682,6 +682,14 @@ Simon: *"for the buyers, there should be mark as 'Delivered' options after the p
 - **Screens:** orders, order-mark-delivered and order-delivered-review (new), seller-orders and seller (the Overview), at five sizes in Hub 3.0, Classic and White: 75 captures, 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations. The screens' buyer has one order shipped (to mark) and one delivered; the seller has one delivered by its buyer.
 - **Tests:** 993 → 1002: the identifier and publish (pinned shape); Delivered over Received and Shipped but not Refunded, and nothing before the seller's status is read; the buyer's list (one search; another name's confirmation ignored), the shop's list (a shop whose id starts the same ignored); marking (shown at once, put back on a decline); My orders marking a shipped order and opening the review, nothing to mark before it ships; the seller's view and a refund winning. The order-status pin now also expects the dialog's one delivered search beside the status read it pins.
 
+### Round 5, 2026-10-24: variants priced in the shop's currency; the vanishing description
+
+Simon: *"when I am adding product and eddited price, the description dissapeared, also make sure that in ariants user can add USD price if he has USD or other currency price set up (not only when he adds the USD price at the top …)"*:
+- **Variant prices in the currency** (`variants/drafts.ts` variantPriceUnit): a shop that prices in a currency (Shop Settings → Prices) prices every item in it, whether or not the product has a price, and the item's QORT (and ARRR) follow the shop's rates. The product's own price is then optional: without one, each item needs its own ("Set a price for Round / Orange, or one for the product."). An empty item price is the product's, shown as its placeholder ("4", or "10 QORT" when the product is priced in QORT). In an edited group, an item that has a QORT price of its own but none in the currency keeps it (shown as "12 QORT") until a price is typed for it, so opening and saving a group never changes its prices.
+- **The description:** not reproduced. In Chromium against the built app (the screens' mock node) the description stayed through every way of editing a price I could find: Add and Edit, USD then QORT then cleared, ARRR, Auction and back, variants on with each item's price, at 1280, 700 and 390×844 (touch), and across the 600 px phone breakpoint (which remounts the editor; it comes back from the form). The draft keeps it too (added, opened again from Ready to publish, re-priced, saved). The test Hub wasn't running, so it's still to try in Hub: Follow-up 67.
+- **Screens:** seller-add-variants and seller-edit-variants (Hub 3.0, five sizes): clean; the seller's test shop prices in USD, so its items now show USD fields.
+- **Tests:** 1002 → 1006 (the unit; no product price with every item priced, and the message when one isn't; an edited QORT-only item keeping its price; the seller page adding items in USD with no product price).
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
@@ -707,6 +715,10 @@ Simon: *"for the buyers, there should be mark as 'Delivered' options after the p
 64. **Public:** the confirmation is a public DOCUMENT (an order's id is public already, so it only adds "it arrived"). OK, or encrypt it to the seller (one key lookup and a decrypt per confirmation to read)?
 65. **No undo:** a buyer who taps it by mistake declines Hub's dialog; once published it stays. Add "Not arrived after all"?
 66. **Reviews:** anyone with an order can still review a shop (as the original), and the review shows "Ordered here". Only after Delivered, and show "Delivered" on those reviews instead?
+
+**Round 5, 2026-10-24: question for Simon on the product form (67)**
+
+67. **The description that vanished after editing a price:** I couldn't make it happen outside Hub (see the round's notes). Which steps, exactly: Add or Edit, which price field (USD, QORT, a variant's), was the description typed or pasted, and with a video or file in it? Was the dialog full screen (a narrow Hub window), and did it come back after closing and reopening?
 
 **Round 5, 2026-10-24: questions for Simon on favourites (51–54)**
 
