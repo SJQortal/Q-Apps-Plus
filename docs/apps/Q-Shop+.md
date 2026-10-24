@@ -723,6 +723,14 @@ Simon (a Hub screenshot of New products): *"I would like this slight zoom when h
 - **Zoom:** a collection's picture and a New products tile's picture come a little closer under the pointer (5 %, 300 ms), as product cards' do; not on touch screens or with reduced motion.
 - **Screens:** home, shop, shop-collection, products, cart, product, favorites-products and seller-products (Hub 3.0, five sizes): clean, pictures at their frames' sizes.
 
+### Round 5, 2026-10-24: Review published, and View review, on the order
+
+Simon: *"after writing a review, it should optimistically show review published, and add option for customer to view the review, otherwise it still sits on write a review"*:
+- **The order's Delivered note:** once the buyer publishes a review there (or anywhere in the app), it says "Your review of <shop> is published." at once, before the node lists it, and **Write a review** becomes **View review**. That opens "Your review of <shop>": the review card (full text, stars, date) with **Write a new review** (which replaces it) and Close.
+- **Earlier reviews too:** the note looks for the buyer's own review of the shop with one search under their name only (`q-store-review-<shortStoreId>-` prefix, `name=`, 20 rows, up to 3 pages because the prefix also matches longer shop ids; the shop is compared exactly). Only for the buyer's own delivered order; cached for the session and dropped when a review is published. While it reads, the button is a placeholder; if it fails, Write a review stays. No data change.
+- **Screens:** order-delivered-review (now View review: the screens' buyer has reviewed the shop they marked delivered) and order-review-view (new), five sizes in Hub 3.0, Classic and White: 30 captures, clean, after the outlined View review had too little contrast on the note's grey in Classic (now neutral, like the app's other outlined buttons).
+- **Tests:** 1016 → 1018: published at once with View review and the one search's URL; an earlier review found, and another shop sharing the prefix ignored.
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
