@@ -991,3 +991,21 @@ describe("variants in a shop that prices in a currency", () => {
   });
 });
 
+describe("auctions in the Products tab", () => {
+  it("say when they start and end, in the past tense once passed", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const now = Date.now();
+    const index = structuredClone(dataContainer) as any;
+    index.products[mug.id].auction = { start: now + 2 * 86_400_000, end: now + 5 * 86_400_000 };
+    index.products[poster.id].auction = { start: now - 5 * 86_400_000, end: now - 86_400_000 };
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer(index));
+    const list = await screen.findByRole("list", { name: "Products" });
+    const rowOf = (name: string) => within(list).getByRole("button", { name: new RegExp(`\\b${name}\\b`) });
+    await waitFor(() => expect(rowOf("Mug")).toHaveTextContent(/Starts .+ · Ends /));
+    expect(rowOf("Poster")).toHaveTextContent(/Started .+ · Ended /);
+    expect(rowOf("Chair")).not.toHaveTextContent(/Starts|Started/);
+  });
+});
+

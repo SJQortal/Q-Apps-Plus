@@ -55,6 +55,9 @@ import { stickyBelowHeader } from "../components/layout/Navbar/Navbar-styles";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
 import { CategoryIcon } from "../components/CategoryIcon";
 import { STATUS_LABEL, productForEdit, productFromIndexRow } from "./productDraft";
+import { auctionRowOf } from "../auctions/catalog";
+import { useNow } from "../hooks/useNow";
+import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import {
   DEFAULT_FILTERS,
   SORT_COLUMNS,
@@ -91,6 +94,26 @@ const STATUS_COLOR: Record<string, "success" | "warning" | "info" | "default"> =
 };
 
 const dateFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
+const auctionTimeFormat = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+
+/**
+ * An auction's start and end on its row (Simon, 2026-10-24: "show when it
+ * starts and finishes on the products list"), from its product-list row, in
+ * the past tense once passed.
+ */
+function AuctionTimes({ row }: { row: unknown }) {
+  const now = useNow(60_000);
+  const times = auctionRowOf(row);
+  if (!times) return null;
+  return (
+    <Box component="span" sx={{ display: "inline-flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+      <GavelOutlinedIcon sx={{ fontSize: 18, mt: "1px", flexShrink: 0 }} aria-hidden />
+      <Box component="span" sx={{ minWidth: 0 }}>
+        {now >= times.start ? "Started" : "Starts"} {auctionTimeFormat.format(times.start)} · {now >= times.end ? "Ended" : "Ends"} {auctionTimeFormat.format(times.end)}
+      </Box>
+    </Box>
+  );
+}
 
 export function StatusChip({ status, auction }: { status: string; auction?: unknown }) {
   const s = statusOf({ status, auction });
@@ -730,6 +753,7 @@ const ProductRow = memo(function ProductRow({
                 {row.category}
               </Box>
             )}
+            <AuctionTimes row={row} />
             {edited && (
               <Chip size="small" variant="outlined" label="Edited, not published" sx={{ color: "text.primary", borderColor: "info.main" }} />
             )}
