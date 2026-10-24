@@ -84,11 +84,22 @@ function product(s, p) {
     ...(s.short === 'my-shop' && USD_PRICED.includes(p) && { fiatPrice: { currency: 'USD', value: Math.round((1.5 + p) * 18) / 100, qort: 1.5 + p } }),
     // The product page's product: a formatted description with a video, a PDF and a Q-Tube link, and 7 pictures.
     ...(s.short === 'shop-3' && p === 0 && RICH),
+    ...(variantOfFixture(s, p) && { title: `Hand-thrown mug — ${VARIANT_COMBOS[p].join(' / ')}`, type: 'physical', price: [{ currency: 'qort', value: 18 + p * 2 }], status: p === 3 ? 'OUT_OF_STOCK' : 'AVAILABLE', variant: variantOfFixture(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
     ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
   };
 }
 const HOUR = 3_600_000;
+// Variants (variants/model.ts): Ålund Ceramics' products 0–3 are one mug in four (Glaze × Size), bundled, the first the lead.
+const VARIANT_OPTIONS = [
+  { name: 'Glaze', values: ['Celadon', 'Tenmoku'] },
+  { name: 'Size', values: ['250 ml', '350 ml'] },
+];
+const VARIANT_COMBOS = [['Celadon', '250 ml'], ['Celadon', '350 ml'], ['Tenmoku', '250 ml'], ['Tenmoku', '350 ml']];
+const variantOfFixture = (s, p) =>
+  s.short === 'shop-2' && p < 4
+    ? { group: 'MUGGROUP01', title: 'Hand-thrown mug', options: VARIANT_OPTIONS, values: VARIANT_COMBOS[p], display: 'bundle', lead: productId(s, 0) }
+    : null;
 // Delivery prices (delivery/model.ts): the seller's own in USD, with a profile for heavy items; Plus Gadgets' in QORT.
 const DELIVERY = {
   'my-shop': {
@@ -175,6 +186,7 @@ function dataContainer(s) {
       catalogueId: catalogueId(s, c),
       status: pr.status,
       ...(pr.auction && { auction: { start: pr.auction.start, end: pr.auction.end } }),
+      ...(pr.variant && { variant: { group: pr.variant.group, values: pr.variant.values } }),
     };
     if (!catalogues[c]) catalogues[c] = { id: catalogueId(s, c), products: {} };
     catalogues[c].products[pr.id] = true;
@@ -188,6 +200,7 @@ function dataContainer(s) {
     id: `${s.id}-datacontainer`,
     ...(collectionsOf(s) && { collectionsId: `q-store-collections-${s.short}` }),
     ...(s.short === 'shop-1' && { productOrder: [productId(s, 3), productId(s, 0), productId(s, 7)] }),
+    ...(s.short === 'shop-2' && { variantGroups: { MUGGROUP01: { title: 'Hand-thrown mug', options: VARIANT_OPTIONS, display: 'bundle', lead: productId(s, 0) } } }),
     ...(s.short === 'my-shop' && { fiatPricing: { currency: 'USD', rates: { QORT: 0.18, ARRR: 0.25 }, updated: now - DAY } }),
     // The seller arranged a few: the Products tab shows each one's place in the shop order.
     ...(s.short === 'my-shop' && { productOrder: [productId(s, 7), productId(s, 2), productId(s, 10)] }),
@@ -434,11 +447,31 @@ export default {
   // overlay: a sheet, dialog or menu is open, so capture the viewport, not the full page.
   screens: [
     { key: 'home', path: '/', after: async (page) => page.waitForSelector('a[href*="q-store-general-"]', { timeout: 8000 }).catch(() => {}) },
+    { key: 'shop-variants', path: `/${encodeURIComponent('Zoë Ålund')}/q-store-general-shop-2`, after: async (page) => { await page.getByText('4 options').waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'product-variants', path: `/${encodeURIComponent('Zoë Ålund')}/q-store-general-shop-2/${productId(shops[2], 1)}/${catalogueId(shops[2], 0)}`, after: async (page) => { await page.getByRole('region', { name: 'Variants' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'seller-add-variants', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Add product' });
+      await d.getByRole('textbox', { name: /^Title/ }).fill('Linen apron');
+      await d.getByRole('switch', { name: /It comes in variants/ }).click({ timeout: 4000 });
+      await d.getByRole('textbox', { name: 'Option 1', exact: true }).fill('Colour');
+      const values = d.getByRole('textbox', { name: 'Colour: add values' });
+      await values.fill('Sand, Olive, Rust');
+      await values.press('Enter');
+      await d.getByRole('button', { name: 'Add another option' }).click();
+      await d.getByRole('textbox', { name: 'Option 2', exact: true }).fill('Size');
+      const sizes = d.getByRole('textbox', { name: 'Size: add values' });
+      await sizes.fill('S, M');
+      await sizes.press('Enter');
+      await d.getByRole('list', { name: 'Variants' }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-product-form-wide', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Add product' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'favorites', path: '/favorites', after: async (page) => { await page.getByRole('list', { name: 'Favourite shops' }).getByRole('heading').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'favorites-products', path: '/favorites?tab=products', after: async (page) => { await page.getByRole('list', { name: 'Favourite products' }).getByRole('link').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'home-favorites', path: '/?sort=favorites', after: async (page) => page.waitForTimeout(1200) },
     { key: 'shop-card-menu', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: 'More for Plus Gadgets' }).click({ timeout: 8000 }); await page.waitForTimeout(500); } },
-    { key: 'product-favorite', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 3)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('button', { name: /from favourites$/ }).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
+    { key: 'product-favorite', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 3)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('button', { name: 'In your favourites' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'home-search', path: '/?q=shop', after: async (page) => page.waitForTimeout(800) },
     { key: 'home-filters', path: '/', mobileOnly: true, overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /filter|sort/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'products', path: '/products', after: async (page) => page.waitForTimeout(900) },
