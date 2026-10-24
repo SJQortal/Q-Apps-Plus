@@ -112,7 +112,7 @@ export const ProductManager = () => {
   );
   // From the product form: the form closes once the product is deleted.
   const askDeleteFromForm = useCallback(
-    (product: ProductToDelete) => askDelete([product], () => setProductDialog(null)),
+    (products: ProductToDelete[]) => askDelete(products, () => setProductDialog(null)),
     [askDelete]
   );
 

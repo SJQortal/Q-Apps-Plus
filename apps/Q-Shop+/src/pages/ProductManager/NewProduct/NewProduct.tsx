@@ -5,14 +5,19 @@
  * together from "Ready to publish". The objects come from
  * seller/productDraft.ts (the original's shapes; ProductManager.pin pins them).
  * A published product also has Delete, which the seller page asks about first.
+ *
+ * A product in variants (variants/model.ts) is edited with its whole group:
+ * the dialog reads the group's other products first (useVariantGroup), then
+ * the form starts from the lead with every item, and saving makes a draft
+ * for each (variants/drafts.ts groupEditDrafts). Delete takes them all.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Box, Button, Typography } from "@mui/material";
+import { Box, Button, Skeleton, Typography } from "@mui/material";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import ShortUniqueId from "short-unique-id";
 import type { RootState } from "../../../state/store";
-import { setProductsToSave } from "../../../state/features/globalSlice";
+import { removeFromProductsToSave, setProductsToSave } from "../../../state/features/globalSlice";
 import { ResponsiveDialog } from "../../../components/common/mobile";
 import { assetCoinId, shopAssets, shopCoins } from "../../../money/coins";
 import { assetInfo } from "../../../qdn/assets";
@@ -23,8 +28,9 @@ import { fiatPricingOf } from "../../../money/fiatPricing";
 import { needsMorePictures } from "../../../qdn/productPictures";
 import { auctionTermsOf } from "../../../auctions/rules";
 import { useMorePictures } from "../../../hooks/useMorePictures";
-import { variantDrafts, variantFormProblem } from "../../../variants/drafts";
-import { variantOf } from "../../../variants/model";
+import { groupEditDrafts, groupFormValues, removedMembers, variantDrafts, variantFormProblem } from "../../../variants/drafts";
+import { variantLabel, variantOf, type ProductVariant } from "../../../variants/model";
+import { useVariantGroup } from "../../../variants/useVariantGroup";
 import {
   editedProductDraft,
   formValuesFor,
@@ -43,15 +49,65 @@ export interface ProductDialogProps {
    * productForEdit merges it, or a draft. Null adds a new product.
    */
   product: (Record<string, any> & { id: string }) | null;
-  /** Delete this (published) product; the form stays open until it is deleted. */
-  onDelete?: (product: { id: string; catalogueId?: string; title?: string }) => void;
+  /** Delete this (published) product, or a group's products; the form stays open until they are deleted. */
+  onDelete?: (products: { id: string; catalogueId?: string; title?: string }[]) => void;
+}
+
+type Base = Record<string, any> & { id: string };
+
+/** A variant group being edited: its products, the lead first among equals. */
+interface EditedGroup {
+  variant: ProductVariant;
+  members: Base[];
 }
 
 function sameValues(a: ProductFormValues, b: ProductFormValues): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function ProductDialog({ open, onClose, product, onDelete }: ProductDialogProps) {
+export function ProductDialog(props: ProductDialogProps) {
+  const variant = props.product ? variantOf(props.product) : null;
+  if (props.product && variant) return <GroupDialog {...props} product={props.product} variant={variant} />;
+  return <ProductEditor {...props} />;
+}
+
+/** A variant's dialog: its group's products are read first, then the form edits them all. */
+function GroupDialog(props: ProductDialogProps & { product: Base; variant: ProductVariant }) {
+  const { product, variant, ...rest } = props;
+  const group = useVariantGroup(product, variant);
+  if (group.status === "ready") return <ProductEditor {...rest} product={group.lead} group={{ variant: group.variant, members: group.members }} />;
+  return (
+    <ResponsiveDialog
+      open={props.open}
+      onClose={props.onClose}
+      title="Edit product"
+      maxWidth="sm"
+      actions={
+        <>
+          <Button color="inherit" onClick={props.onClose}>
+            Cancel
+          </Button>
+          {group.status === "failed" && (
+            <Button variant="contained" onClick={group.retry}>
+              Try again
+            </Button>
+          )}
+        </>
+      }
+    >
+      {group.status === "failed" ? (
+        <Typography role="alert">Some of {variant.title}&apos;s items couldn&apos;t be read from your node, so they can&apos;t be edited together yet.</Typography>
+      ) : (
+        <Box role="status" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Typography>Reading all of {variant.title}&apos;s items…</Typography>
+          <Skeleton variant="rounded" height={120} />
+        </Box>
+      )}
+    </ResponsiveDialog>
+  );
+}
+
+function ProductEditor({ open, onClose, product, onDelete, group = null }: ProductDialogProps & { group?: EditedGroup | null }) {
   const dispatch = useDispatch();
   const name = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
@@ -80,7 +136,10 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     const start = formValuesFor(product, coins, pricing);
     // A listed category saved in another spelling shows as the list's; an old one trimmed, as oldCategoryOf
     // gives it (the original saved categories as typed, spaces and all).
-    return { ...start, category: listedCategory(start.category) ?? start.category.trim() };
+    const values = { ...start, category: listedCategory(start.category) ?? start.category.trim() };
+    // A group: the lead's fields under the group's title, and every item.
+    if (!group) return values;
+    return { ...values, title: group.variant.title, variants: groupFormValues({ variant: group.variant, members: group.members, lead: values, coins, pricing }) };
   });
   const [values, setValues] = useState<ProductFormValues>(initial);
   // A published product's pictures past the third are in a document of their own (qdn/productPictures.ts):
@@ -98,8 +157,18 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const editingPublished = !!product && (!!product.isUpdate || !!product.catalogueId);
-  // In the shop's product list (not just a draft): it can be deleted.
-  const listed = !!product && !!dataContainer?.products?.[product.id];
+  // In the shop's product list (not just a draft): it can be deleted; a group's listed products together.
+  const listedProducts = (group ? group.members : product ? [product] : []).filter((p) => !!dataContainer?.products?.[p.id]);
+  const removed = useMemo(
+    () =>
+      group && values.variants
+        ? removedMembers(values.variants, group.members).map((m) => ({
+            label: variantLabel(variantOf(m)?.values ?? []) || String(m.title ?? ""),
+            draft: !m.isUpdate && !m.catalogueId,
+          }))
+        : [],
+    [group, values.variants]
+  );
 
   const requestClose = () => {
     if (!sameValues(values, initial)) setConfirmDiscard(true);
@@ -113,11 +182,33 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
     const now = Date.now();
-    const inVariants = !product && !!values.variants && values.sale !== "auction";
+    const inVariants = (!product || !!group) && !!values.variants && values.sale !== "auction";
     const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product), imagesOptional: inVariants });
     if (invalid) return setError(invalid);
-    const { variants, variantDisplay, ...form } = values;
+    const { variants, ...form } = values;
     const trimmed = { ...form, title: values.title.trim(), category: values.category.trim() };
+    // A group: a draft for each item, new ones too; those taken out retired, or dropped while only drafts.
+    if (group && variants) {
+      if (picturesPending) return setError("The product's pictures are still being read from your node. Save once they are in.");
+      const problem = variantFormProblem(variants, trimmed, pricing);
+      if (problem) return setError(problem);
+      const { drafts, dropped } = groupEditDrafts({
+        values: trimmed,
+        form: variants,
+        group: group.variant.group,
+        members: group.members,
+        coins,
+        storeId: currentStore.id,
+        name,
+        uid: () => uid(),
+        now,
+        pricing,
+      });
+      for (const id of dropped) dispatch(removeFromProductsToSave(id));
+      for (const draft of drafts) dispatch(setProductsToSave(draft));
+      onClose();
+      return;
+    }
     // A new product in variants: one draft each (variants/drafts.ts).
     if (inVariants && variants) {
       const problem = variantFormProblem(variants, trimmed, pricing);
@@ -128,12 +219,9 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
       onClose();
       return;
     }
-    let draft: Record<string, unknown> & { id: string } = product
+    const draft = product
       ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing, picturesKept: picturesPending, now })
       : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now, pricing });
-    // An existing variant keeps its group, with the lists' choice as now set.
-    const variant = product ? variantOf(product) : null;
-    if (variant && variantDisplay && variantDisplay !== variant.display) draft = { ...draft, variant: { ...(product!.variant as object), display: variantDisplay } };
     dispatch(setProductsToSave(draft));
     onClose();
   };
@@ -148,20 +236,22 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
         dismissible={false}
         actions={
           <>
-            {onDelete && listed && product && (
+            {onDelete && listedProducts.length > 0 && (
               <Button
                 color="error"
                 startIcon={<DeleteOutlineOutlinedIcon />}
                 onClick={() =>
-                  onDelete({
-                    id: product.id,
-                    catalogueId: typeof product.catalogueId === "string" ? product.catalogueId : undefined,
-                    title: String(product.title || values.title || "").trim() || undefined,
-                  })
+                  onDelete(
+                    listedProducts.map((p) => ({
+                      id: p.id,
+                      catalogueId: typeof p.catalogueId === "string" ? p.catalogueId : undefined,
+                      title: String(p.title || (group ? "" : values.title) || "").trim() || undefined,
+                    }))
+                  )
                 }
                 sx={{ mr: "auto" }}
               >
-                Delete
+                {group && listedProducts.length > 1 ? `Delete all ${listedProducts.length}` : "Delete"}
               </Button>
             )}
             <Button color="inherit" onClick={requestClose}>
@@ -197,6 +287,7 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
                 ? { status: more.status, count: more.count, onRetry: more.retry }
                 : null
             }
+            variantGroup={group && { removed }}
           />
           <FormError message={error} />
         </Box>

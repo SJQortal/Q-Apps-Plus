@@ -9,11 +9,18 @@
  * product's first. Those of the variants and items come on top of the
  * product's (up to 10), so a group can have many more pictures than one
  * product; the product's own aren't needed when every item has one.
+ *
+ * A published group is edited as one (Simon, 2026-10-24: "edditing any even
+ * if user chose each item on its own, edits all of those"): the form starts
+ * from its items (groupFormValues), and saving makes a draft for each, new
+ * items included; an item taken out is retired, or dropped while it is only
+ * a draft (groupEditDrafts).
  */
 import { priceDecimals, type FiatPricing } from "../money/fiatPricing";
 import { MAX_PRODUCT_PICTURES as MAX_PRODUCT_IMAGES } from "../qdn/productPictures";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
-import { newProductDraft, typedFiat, type ProductFormValues } from "../seller/productDraft";
+import { editedProductDraft, formValuesFor, newProductDraft, typedFiat, type ProductFormValues } from "../seller/productDraft";
+import { RETIRED } from "../constants/product-status";
 import {
   MAX_OPTION_TEXT,
   MAX_OPTION_VALUES,
@@ -21,8 +28,8 @@ import {
   MAX_VARIANT_OPTIONS,
   itemCount,
   valuesKey,
-  variantItems,
   variantLabel,
+  variantOf,
   variantTitle,
   type ProductVariant,
   type VariantDisplay,
@@ -34,11 +41,51 @@ export interface VariantRowValues {
   price: string;
   /** Its own picture (one of the product's, or one added for it), or none. */
   picture: string | null;
+  /** In an edited group: the item's product (none for a new item). */
+  productId?: string;
+  /** In an edited group: its stock (a new item is available). */
+  status?: string;
 }
 
 /** A variant as the form holds it: with a picture of its own for its items. */
 export interface VariantFormOption extends VariantOption {
   picture?: string | null;
+  /** The form's own (never stored): its items keep their rows while it is renamed. */
+  id?: string;
+}
+
+let lastOptionId = 0;
+
+/** A new, empty variant. */
+export function newFormOption(): VariantFormOption {
+  lastOptionId += 1;
+  return { id: `v${lastOptionId}`, name: "", values: [], picture: null };
+}
+
+/** The key of an item's row: its variant (by its id, else its name) and its value. */
+export function rowKey(option: VariantFormOption, value?: string): string {
+  const variant = option.id ?? option.name.trim();
+  return value === undefined ? variant : valuesKey([variant, value]);
+}
+
+export interface FormItem {
+  values: string[];
+  key: string;
+}
+
+/** Every item as typed, in order (variants/model.ts variantItems), with its row's key. At most MAX_VARIANTS. */
+export function formItems(form: VariantFormValues): FormItem[] {
+  const out: FormItem[] = [];
+  for (const o of usedOptions(form)) {
+    if (o.values.length === 0) out.push({ values: [o.name], key: rowKey(o) });
+    else for (const v of o.values) out.push({ values: [o.name, v.name], key: rowKey(o, v.name) });
+  }
+  return out.slice(0, MAX_VARIANTS);
+}
+
+/** The options as stored: names, values and colours. */
+function storedOptions(used: VariantFormOption[]): VariantOption[] {
+  return used.map((o) => ({ name: o.name, values: o.values.map((v) => (v.color ? { name: v.name, color: v.color } : { name: v.name })) }));
 }
 
 export interface VariantFormValues {
@@ -64,8 +111,9 @@ export function variantPriceUnit(values: ProductFormValues, pricing: FiatPricing
 
 /** The picture an item shows: its own, its variant's, or the product's first. */
 export function itemPicture(form: VariantFormValues, values: ProductFormValues, item: string[]): string | null {
-  const row = form.rows[valuesKey(item)] ?? NO_ROW;
-  return row.picture ?? form.options.find((o) => o.name.trim() === item[0])?.picture ?? values.images[0] ?? null;
+  const option = form.options.find((o) => o.name.trim() === item[0]);
+  const row = form.rows[option ? rowKey(option, item[1]) : valuesKey(item)] ?? NO_ROW;
+  return row.picture ?? option?.picture ?? values.images[0] ?? null;
 }
 
 /** What's wrong with the variants as typed, or null. */
@@ -85,8 +133,8 @@ export function variantFormProblem(form: VariantFormValues, values: ProductFormV
   if (total > MAX_VARIANTS) return `That makes ${total} items: ${MAX_VARIANTS} at most. Use fewer values.`;
   const unit = variantPriceUnit(values, pricing);
   const decimals = unit === "QORT" ? 8 : priceDecimals(unit);
-  for (const item of variantItems(options)) {
-    const row = form.rows[valuesKey(item)] ?? NO_ROW;
+  for (const { values: item, key } of formItems(form)) {
+    const row = form.rows[key] ?? NO_ROW;
     const price = row.price.trim();
     if (price && !(new RegExp(`^\\d*\\.?\\d{0,${decimals}}$`).test(price) && Number(price) > 0)) return `Check the price of ${variantLabel(item)}.`;
     if (!itemPicture(form, values, item)) return `Add a picture for ${variantLabel(item)}: its own, its variant's, or the product's.`;
@@ -112,24 +160,130 @@ export function variantDrafts(args: {
 }) {
   const { values, form, coins, storeId, name, now, pricing } = args;
   const used = usedOptions(form);
-  const options: VariantOption[] = used.map((o) => ({ name: o.name, values: o.values.map((v) => (v.color ? { name: v.name, color: v.color } : { name: v.name })) }));
+  const options = storedOptions(used);
   const group = args.uid();
-  const items = variantItems(options);
-  const inFiat = variantPriceUnit(values, pricing) !== "QORT";
+  const items = formItems(form);
   const uids = items.map(() => args.uid());
   const leadId = productIdentifier(shortStoreIdOf(storeId), uids[0]);
-  return items.map((item, i) => {
-    const row = form.rows[valuesKey(item)] ?? NO_ROW;
-    const own = row.picture ?? used.find((o) => o.name === item[0])?.picture ?? null;
-    const images = i === 0 ? [...new Set([own, ...values.images].filter((img): img is string => !!img))].slice(0, MAX_PRODUCT_IMAGES) : [own ?? values.images[0]];
-    const price = row.price.trim();
-    const priced: ProductFormValues = {
-      ...values,
-      title: variantTitle(values.title, item),
-      images,
-      ...(price && (inFiat ? { fiat: price } : { prices: { ...values.prices, QORT: price } })),
-    };
+  return items.map(({ values: item, key }, i) => {
+    const priced = itemValues(values, form, used, item, form.rows[key] ?? NO_ROW, i === 0, pricing);
     const variant: ProductVariant = { group, title: values.title.trim(), options, values: item, display: form.display, lead: leadId };
     return { ...newProductDraft({ values: priced, coins, storeId, name, uid: uids[i], now, pricing }), variant };
   });
+}
+
+/** An item's own values: named for its variant and value, its pictures (the lead's own, then the product's) and its price. */
+function itemValues(
+  values: ProductFormValues,
+  form: VariantFormValues,
+  used: VariantFormOption[],
+  item: string[],
+  row: VariantRowValues,
+  lead: boolean,
+  pricing: FiatPricing | null | undefined
+): ProductFormValues {
+  const own = row.picture ?? used.find((o) => o.name === item[0])?.picture ?? null;
+  const images = lead
+    ? [...new Set([own, ...values.images].filter((img): img is string => !!img))].slice(0, MAX_PRODUCT_IMAGES)
+    : [own ?? values.images[0]].filter((img): img is string => !!img);
+  const price = row.price.trim();
+  const inFiat = variantPriceUnit(values, pricing) !== "QORT";
+  return {
+    ...values,
+    title: variantTitle(values.title, item),
+    images,
+    ...(price && (inFiat ? { fiat: price } : { prices: { ...values.prices, QORT: price } })),
+  };
+}
+
+type Base = Record<string, any> & { id: string };
+
+/**
+ * An edited group as the form starts from it: its variants and values (with
+ * their colours), how lists show it, and a row for each of its items: its
+ * product and stock, its price when it isn't the lead's, and its picture
+ * when it isn't the product's first. The product's own fields and pictures
+ * are the lead's (`lead`, as formValuesFor gives them).
+ */
+export function groupFormValues(args: {
+  variant: ProductVariant;
+  members: Base[];
+  lead: ProductFormValues;
+  coins: string[];
+  pricing?: FiatPricing | null;
+}): VariantFormValues {
+  const { variant, members, lead, coins, pricing } = args;
+  const options: VariantFormOption[] = variant.options.map((o, i) => ({ id: `g${i}`, name: o.name, values: o.values.map((v) => ({ ...v })), picture: null }));
+  const unit = variantPriceUnit(lead, pricing);
+  const priceOf = (v: ProductFormValues) => (unit === "QORT" ? (v.prices.QORT ?? "") : (v.fiat ?? "")).trim();
+  const rows: Record<string, VariantRowValues> = {};
+  for (const member of members) {
+    const item = variantOf(member)?.values;
+    const option = item && options.find((o) => o.name === item[0]);
+    if (!item || !option) continue;
+    const own = formValuesFor(member, coins, pricing);
+    const price = priceOf(own);
+    const picture = own.images[0] ?? null;
+    rows[rowKey(option, item[1])] = {
+      productId: member.id,
+      status: own.status,
+      price: price && price !== priceOf(lead) ? price : "",
+      picture: picture && picture !== lead.images[0] ? picture : null,
+    };
+  }
+  return { options, display: variant.display, rows };
+}
+
+/** The group's products the form no longer has as items (a value or a variant taken out). */
+export function removedMembers(form: VariantFormValues, members: Base[]): Base[] {
+  const kept = new Set(formItems(form).map((item) => form.rows[item.key]?.productId).filter(Boolean));
+  return members.filter((m) => !kept.has(m.id));
+}
+
+/**
+ * An edited group's drafts: each item's product edited (or a new one for a
+ * new item), named, priced and pictured as variantDrafts does, with its own
+ * stock; the first is the lead. A product taken out is retired and leaves
+ * the group (it stays in Products to delete), or is `dropped` from the
+ * drafts while it was never published.
+ */
+export function groupEditDrafts(args: {
+  values: ProductFormValues;
+  form: VariantFormValues;
+  group: string;
+  members: Base[];
+  coins: string[];
+  storeId: string;
+  name: string;
+  uid: () => string;
+  now: number;
+  pricing?: FiatPricing | null;
+}): { drafts: Base[]; dropped: string[] } {
+  const { values, form, group, members, coins, storeId, name, now, pricing } = args;
+  const used = usedOptions(form);
+  const options = storedOptions(used);
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const plan = formItems(form).map(({ values: item, key }) => {
+    const row = form.rows[key] ?? NO_ROW;
+    const base = row.productId ? byId.get(row.productId) : undefined;
+    const uid = base ? "" : args.uid();
+    return { item, row, base, uid, id: base?.id ?? productIdentifier(shortStoreIdOf(storeId), uid) };
+  });
+  const lead = plan[0]?.id ?? "";
+  const drafts: Base[] = plan.map(({ item, row, base, uid }, i) => {
+    const priced = { ...itemValues(values, form, used, item, row, i === 0, pricing), status: row.status ?? "AVAILABLE" };
+    const variant: ProductVariant = { group, title: values.title.trim(), options, values: item, display: form.display, lead };
+    const draft = base ? editedProductDraft({ base, values: priced, coins, name, pricing, now }) : newProductDraft({ values: priced, coins, storeId, name, uid, now, pricing });
+    return { ...draft, variant };
+  });
+  const dropped: string[] = [];
+  for (const member of removedMembers(form, members)) {
+    if (!member.isUpdate && !member.catalogueId) {
+      dropped.push(member.id);
+      continue;
+    }
+    const { variant: _left, ...rest } = member;
+    drafts.push({ ...rest, isUpdate: true, status: RETIRED, user: name });
+  }
+  return { drafts, dropped };
 }

@@ -4,12 +4,15 @@
  * a colour for any value and a picture for any variant; how lists show
  * them; and each item's price and picture. Values and variants move by
  * dragging, or with Alt and the arrow keys. Off: one product, as before.
+ * An edited group (`group`) is always in variants; each item has its stock,
+ * a new one says so, and those taken out are listed.
  */
 import { useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
 import {
   Box,
   Button,
   ButtonBase,
+  Chip,
   FormControlLabel,
   IconButton,
   InputAdornment,
@@ -30,11 +33,18 @@ import FormatColorResetOutlinedIcon from "@mui/icons-material/FormatColorResetOu
 import { compressImage } from "../components/common/ImageUploader";
 import { sanitizeAmountInput } from "../seller/productDraft";
 import { priceDecimals, sanitizeFiatInput } from "../money/fiatPricing";
-import { MAX_OPTION_TEXT, MAX_OPTION_VALUES, MAX_VARIANTS, MAX_VARIANT_OPTIONS, itemCount, valuesKey, variantItems, variantLabel, type VariantDisplay, type VariantValue } from "./model";
-import { NO_ROW, usedOptions, type VariantFormOption, type VariantFormValues } from "./drafts";
+import { MAX_OPTION_TEXT, MAX_OPTION_VALUES, MAX_VARIANTS, MAX_VARIANT_OPTIONS, itemCount, variantLabel, type VariantDisplay, type VariantValue } from "./model";
+import { NO_ROW, formItems, newFormOption, usedOptions, type VariantFormOption, type VariantFormValues } from "./drafts";
 import { SWATCHES } from "./swatches";
 
-export const EMPTY_VARIANTS: VariantFormValues = { options: [{ name: "", values: [], picture: null }], display: "bundle", rows: {} };
+export const EMPTY_VARIANTS: VariantFormValues = { options: [{ id: "v0", name: "", values: [], picture: null }], display: "bundle", rows: {} };
+
+/** An edited group's product that is no longer one of its items. */
+export interface RemovedItem {
+  label: string;
+  /** Never published: it just leaves the drafts. */
+  draft: boolean;
+}
 
 /** The list with the item at `from` moved to `to`. */
 export function moved<T>(list: T[], from: number, to: number): T[] {
@@ -296,6 +306,7 @@ export function VariantsEditor({
   unit,
   basePrice,
   onImageError,
+  group = null,
 }: {
   /** null: no variants. */
   value: VariantFormValues | null;
@@ -307,6 +318,8 @@ export function VariantsEditor({
   /** The product's price as typed, each item's when it has none of its own. */
   basePrice: string;
   onImageError?: (message: string) => void;
+  /** Editing a published group: the products taken out of it so far. */
+  group?: { removed: RemovedItem[] } | null;
 }) {
   const on = value !== null;
   const form = value ?? EMPTY_VARIANTS;
@@ -316,7 +329,7 @@ export function VariantsEditor({
   const dragOption = useReorder("variants", moveOption);
   const used = usedOptions(form);
   const total = itemCount(used);
-  const items = variantItems(used);
+  const items = formItems(form);
   const cleanPrice = (text: string) => (unit === "QORT" ? sanitizeAmountInput(text) : sanitizeFiatInput(text, priceDecimals(unit)));
   const setRow = (key: string, patch: Partial<typeof NO_ROW>) => set({ rows: { ...form.rows, [key]: { ...(form.rows[key] ?? NO_ROW), ...patch } } });
 
@@ -331,18 +344,24 @@ export function VariantsEditor({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <FormControlLabel
-        control={<Switch checked={on} onChange={(_, next) => onChange(next ? EMPTY_VARIANTS : null)} />}
-        label={
-          <Box>
-            <Typography sx={{ fontWeight: 600 }}>It comes in variants</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Shapes, sizes, kits… each with its own values (colours, scents…), price, stock and picture.
-            </Typography>
-          </Box>
-        }
-        sx={{ alignItems: "flex-start", m: 0, gap: 1, "& .MuiSwitch-root": { mt: -0.5 } }}
-      />
+      {group ? (
+        <Typography variant="body2" color="text.secondary">
+          Every item of this product changes together: its title, description, pictures and price, and the variants below.
+        </Typography>
+      ) : (
+        <FormControlLabel
+          control={<Switch checked={on} onChange={(_, next) => onChange(next ? EMPTY_VARIANTS : null)} />}
+          label={
+            <Box>
+              <Typography sx={{ fontWeight: 600 }}>It comes in variants</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Shapes, sizes, kits… each with its own values (colours, scents…), price, stock and picture.
+              </Typography>
+            </Box>
+          }
+          sx={{ alignItems: "flex-start", m: 0, gap: 1, "& .MuiSwitch-root": { mt: -0.5 } }}
+        />
+      )}
       {on && (
         <>
           <Box component="ol" aria-label="Variants and their values" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 2 }}>
@@ -379,6 +398,8 @@ export function VariantsEditor({
                   <IconButton
                     aria-label={`Remove ${name}`}
                     onClick={() => (form.options.length === 1 ? onChange(null) : set({ options: form.options.filter((_, j) => j !== i) }))}
+                    // A group keeps a variant (its last can't go: the product would have none).
+                    disabled={!!group && form.options.length === 1}
                     sx={{ width: 44, height: 44 }}
                   >
                     <CloseIcon />
@@ -388,7 +409,7 @@ export function VariantsEditor({
             })}
           </Box>
           {form.options.length < MAX_VARIANT_OPTIONS && (
-            <Button startIcon={<AddIcon />} onClick={() => set({ options: [...form.options, { name: "", values: [], picture: null }] })} sx={{ alignSelf: "flex-start", minHeight: 44 }}>
+            <Button startIcon={<AddIcon />} onClick={() => set({ options: [...form.options, newFormOption()] })} sx={{ alignSelf: "flex-start", minHeight: 44 }}>
               Add another variant
             </Button>
           )}
@@ -428,8 +449,7 @@ export function VariantsEditor({
               `Items (${items.length})`,
               "variants-items-label",
               <Box component="ul" aria-label="Items" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-                {items.map((item, i) => {
-                  const key = valuesKey(item);
+                {items.map(({ values: item, key }, i) => {
                   const row = form.rows[key] ?? NO_ROW;
                   const label = variantLabel(item);
                   const color = used.find((o) => o.name === item[0])?.values.find((v) => v.name === item[1])?.color;
@@ -447,6 +467,7 @@ export function VariantsEditor({
                             </Typography>
                           )}
                         </Typography>
+                        {group && !row.productId && <Chip size="small" color="primary" variant="outlined" label="New" />}
                       </Box>
                       <TextField
                         size="small"
@@ -480,6 +501,19 @@ export function VariantsEditor({
                         )}
                         <PictureButton picture={own} label={label} onPick={(picture) => setRow(key, { picture })} onError={onImageError} />
                       </Box>
+                      {group && row.productId && (
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={row.status !== "OUT_OF_STOCK"}
+                              onChange={(_, inStock) => setRow(key, { status: inStock ? "AVAILABLE" : "OUT_OF_STOCK" })}
+                              slotProps={{ input: { "aria-label": `In stock: ${label}` } }}
+                            />
+                          }
+                          label="In stock"
+                          sx={{ m: 0, minHeight: 44 }}
+                        />
+                      )}
                     </Box>
                   );
                 })}
@@ -489,6 +523,22 @@ export function VariantsEditor({
             <Typography variant="body2" color="text.secondary">
               Name a variant: its items show here.
             </Typography>
+          )}
+          {group && group.removed.length > 0 && (
+            <Box role="status" sx={{ p: 1.5, borderRadius: 1.5, bgcolor: "action.hover" }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Taken out: {group.removed.map((r) => r.label).join(", ")}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {group.removed.every((r) => r.draft)
+                  ? group.removed.length === 1
+                    ? "It leaves your drafts when you save."
+                    : "They leave your drafts when you save."
+                  : group.removed.length === 1
+                    ? "Saving retires it: buyers no longer see it, and it stays in Products, where you can delete it."
+                    : "Saving retires them: buyers no longer see them, and they stay in Products, where you can delete them."}
+              </Typography>
+            </Box>
           )}
           {items.length > 0 && total <= MAX_VARIANTS && (
             <Typography variant="body2" color="text.secondary">

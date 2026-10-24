@@ -867,3 +867,94 @@ describe("adding a product in variants", () => {
     expect(catalogue.products[drafts[0].id]).toMatchObject({ title: "Glasses — Round / Orange", variant: { group, values: ["Round", "Orange"], lead: drafts[0].id } });
   });
 });
+
+describe("editing a product in variants", () => {
+  /** Glasses as published: Round / Pale (the lead) and Round / Orange in the fixture's catalogue, Square / Pale in a second. */
+  function glasses() {
+    const CAT2 = `q-store-catalogue-${SHORT_STORE_ID}-CATxxxxxx2`;
+    const options = [
+      { name: "Round", values: [{ name: "Pale" }, { name: "Orange", color: "#f97316" }] },
+      { name: "Square", values: [{ name: "Pale" }] },
+    ];
+    const id = (s: string) => `q-store-product-${SHORT_STORE_ID}-${s}`;
+    const items = [
+      { id: id("GLASSPALE1"), values: ["Round", "Pale"], images: ["data:image/webp;base64,UEFMRQ==", "data:image/webp;base64,UFJPRA=="], catalogueId: CATALOGUE_ID, price: 10 },
+      { id: id("GLASSORNG2"), values: ["Round", "Orange"], images: ["data:image/webp;base64,T1JORw=="], catalogueId: CATALOGUE_ID, price: 12 },
+      { id: id("GLASSSQRE3"), values: ["Square", "Pale"], images: ["data:image/webp;base64,U1FSRQ=="], catalogueId: CAT2, price: 10 },
+    ];
+    const lead = items[0].id;
+    const products = items.map((it) => ({
+      ...mug,
+      id: it.id,
+      title: `Glasses — ${it.values.join(" / ")}`,
+      description: "Blue-light blocking",
+      type: "physical",
+      category: "Health & Beauty",
+      images: it.images,
+      price: [{ currency: "qort", value: it.price }],
+      catalogueId: it.catalogueId,
+      variant: { group: "GLASSES001", title: "Glasses", options, values: it.values, display: "separate", lead },
+    }));
+    const cat1 = structuredClone(catalogue) as any;
+    const cat2 = { id: CAT2, products: {} as Record<string, unknown> };
+    for (const p of products) (p.catalogueId === CATALOGUE_ID ? cat1 : cat2).products[p.id] = p;
+    const index = structuredClone(dataContainer) as any;
+    for (const p of products) {
+      index.products[p.id] = { created: p.created, priceQort: p.price[0].value, category: p.category, catalogueId: p.catalogueId, status: "AVAILABLE", variant: { group: "GLASSES001", values: p.variant.values } };
+    }
+    index.catalogues.push({ id: CAT2, products: { [products[2].id]: true } });
+    index.variantGroups = { GLASSES001: { title: "Glasses", options, display: "separate", lead } };
+    return { products, cat1, cat2, index, CAT2 };
+  }
+
+  it("opens the whole group from any item, and saves each item: taken out, out of stock, renamed", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const g = glasses();
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
+    store.dispatch(setDataContainer(g.index));
+    const q = installQortalMock({ FETCH_QDN_RESOURCE: async (req: any) => structuredClone(req.identifier === g.CAT2 ? g.cat2 : g.cat1) });
+    renderWithProviders(
+      <Routes>
+        <Route path="/product-manager/:store" element={<ProductManager />} />
+      </Routes>,
+      { store, initialEntries: [`/product-manager/${STORE_ID}?tab=products`] }
+    );
+    // Square / Pale, in the second catalogue: the form reads the first for its group.
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Glasses — Square \/ Pale\b/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    const variants = await within(dialog).findByRole("region", { name: "Variants" });
+    expect(q.callsFor("FETCH_QDN_RESOURCE").map((c: any) => c.identifier).sort()).toEqual([CATALOGUE_ID, g.CAT2].sort());
+    expect(within(dialog).getByRole("textbox", { name: /^Title/ })).toHaveValue("Glasses");
+    // The lead's pictures are the product's.
+    expect(within(dialog).getByRole("list", { name: "Pictures (2 of 10)" })).toBeInTheDocument();
+    const items = within(variants).getByRole("list", { name: "Items" });
+    expect(within(items).getAllByRole("listitem").map((li) => li.textContent?.match(/^[^·]+?(?= ·|Price)/)?.[0].trim())).toEqual(["Round / Pale", "Round / Orange", "Square / Pale"]);
+    expect(within(items).getByRole("textbox", { name: "Price of Round / Orange in QORT" })).toHaveValue("12");
+    expect(within(dialog).queryByRole("group", { name: "Status" })).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Delete all 3" })).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Blue-light glasses" } });
+    fireEvent.click(within(variants).getByRole("button", { name: "Remove Orange" }));
+    expect(within(variants).getByRole("status")).toHaveTextContent("Taken out: Round / Orange");
+    fireEvent.click(within(variants).getByRole("switch", { name: "In stock: Square / Pale" }));
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 1" }), { target: { value: "Oval" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(3));
+    const saved = store.getState().global.productsToSave as Record<string, any>;
+    const [pale, orange, square] = g.products.map((p) => saved[p.id]);
+    expect([pale.title, pale.status, pale.isUpdate, pale.images]).toEqual(["Blue-light glasses — Oval / Pale", "AVAILABLE", true, g.products[0].images]);
+    expect([square.title, square.status, square.images]).toEqual(["Blue-light glasses — Square / Pale", "OUT_OF_STOCK", g.products[2].images]);
+    expect(square.variant).toMatchObject({ group: "GLASSES001", title: "Blue-light glasses", values: ["Square", "Pale"], display: "separate", lead: g.products[0].id });
+    expect(square.variant.options).toEqual([
+      { name: "Oval", values: [{ name: "Pale" }] },
+      { name: "Square", values: [{ name: "Pale" }] },
+    ]);
+    // Taken out: retired, out of the group, as it was otherwise.
+    expect([orange.title, orange.status, orange.isUpdate, orange.variant]).toEqual(["Glasses — Round / Orange", "RETIRED", true, undefined]);
+  });
+});
+

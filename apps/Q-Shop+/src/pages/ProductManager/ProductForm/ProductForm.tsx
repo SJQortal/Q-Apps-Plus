@@ -51,9 +51,8 @@ import {
 } from "../../../seller/productDraft";
 import { AuctionFields } from "../../../seller/AuctionFields";
 import { auctionTermsOf } from "../../../auctions/rules";
-import { VariantsEditor } from "../../../variants/VariantsEditor";
+import { VariantsEditor, type RemovedItem } from "../../../variants/VariantsEditor";
 import { variantPriceUnit } from "../../../variants/drafts";
-import { variantLabel, variantOf, type VariantDisplay } from "../../../variants/model";
 
 interface ProductFormProps {
   values: ProductFormValues;
@@ -82,6 +81,8 @@ interface ProductFormProps {
   /** The name the shop publishes under: videos and PDFs added in the description are published by it. */
   publisher?: string | null;
   shopTitle?: string;
+  /** Editing a variant group (variants/drafts.ts): its items' stock is theirs, and it sells at a price. */
+  variantGroup?: { removed: RemovedItem[] } | null;
 }
 
 /** One part of the form: a panel of its own on wider screens, plain on phones. */
@@ -122,6 +123,7 @@ export const ProductForm = ({
   picturesLoad = null,
   publisher = null,
   shopTitle,
+  variantGroup = null,
 }: ProductFormProps) => {
   const picturesLocked = !!picturesLoad;
   const descriptionLabel = useId();
@@ -161,7 +163,6 @@ export const ProductForm = ({
       prices: { ...prev.prices, [coin]: wholeOnly.includes(coin) ? text.replace(/\D/g, "") : sanitizeAmountInput(text) },
     }));
   const title = values.title.trim() || "Product";
-  const savedVariant = saved ? variantOf(saved) : null;
   const fiat = typedFiat(values, pricing);
   // A price in the shop's currency gives the QORT and ARRR prices; only asset prices are typed then.
   const otherCoins = coins.filter((c) => c !== "QORT" && !(fiat !== null && c === "ARRR"));
@@ -335,7 +336,7 @@ export const ProductForm = ({
             </ToggleButtonGroup>
           </Box>
         )}
-        {editing && values.sale !== "auction" && (
+        {editing && values.sale !== "auction" && !variantGroup && (
           <Box>
             <Typography id="product-status-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
               Status
@@ -359,33 +360,36 @@ export const ProductForm = ({
 
       <Box component="section" aria-label="Price" sx={panelSx}>
         <SectionTitle>Price</SectionTitle>
-        <Box>
-          <Typography id="product-sale-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-            How it sells
-          </Typography>
-          <ToggleButtonGroup
-            exclusive
-            value={values.sale ?? "fixed"}
-            onChange={(_, sale: "fixed" | "auction" | null) =>
-              sale &&
-              onChange((prev) => ({
-                ...prev,
-                sale,
-                // A first auction starts from the QORT price typed so far.
-                ...(sale === "auction" && {
-                  auction: prev.auction ?? { ...defaultAuctionValues(Date.now()), startingBid: prev.prices.QORT ?? "" },
-                }),
-                // An auction is stored out of stock (for the original); back at a price, it's for sale again.
-                ...(sale === "fixed" && prev.sale === "auction" && { status: "AVAILABLE" }),
-              }))
-            }
-            aria-labelledby="product-sale-label"
-            sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 2.5, textTransform: "none" } }}
-          >
-            <ToggleButton value="fixed">Fixed price</ToggleButton>
-            <ToggleButton value="auction">Auction</ToggleButton>
-          </ToggleButtonGroup>
-        </Box>
+        {/* A group sells at a price (auctions are one of a kind). */}
+        {!variantGroup && (
+          <Box>
+            <Typography id="product-sale-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              How it sells
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              value={values.sale ?? "fixed"}
+              onChange={(_, sale: "fixed" | "auction" | null) =>
+                sale &&
+                onChange((prev) => ({
+                  ...prev,
+                  sale,
+                  // A first auction starts from the QORT price typed so far.
+                  ...(sale === "auction" && {
+                    auction: prev.auction ?? { ...defaultAuctionValues(Date.now()), startingBid: prev.prices.QORT ?? "" },
+                  }),
+                  // An auction is stored out of stock (for the original); back at a price, it's for sale again.
+                  ...(sale === "fixed" && prev.sale === "auction" && { status: "AVAILABLE" }),
+                }))
+              }
+              aria-labelledby="product-sale-label"
+              sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 2.5, textTransform: "none" } }}
+            >
+              <ToggleButton value="fixed">Fixed price</ToggleButton>
+              <ToggleButton value="auction">Auction</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
         {values.sale === "auction" && values.auction && (
           <AuctionFields
             value={values.auction}
@@ -499,8 +503,8 @@ export const ProductForm = ({
           </Typography>
         </Box>
       </Box>
-      {/* A new product at a price can come in variants; an existing variant says which it is. */}
-      {!saved && values.sale !== "auction" && (
+      {/* A new product at a price can come in variants; a group is edited with all its items. */}
+      {(!saved || variantGroup) && values.sale !== "auction" && (
         <Box component="section" aria-label="Variants" sx={[panelSx, { gridColumn: "1 / -1" }]}>
           <SectionTitle>Variants</SectionTitle>
           <VariantsEditor
@@ -510,30 +514,8 @@ export const ProductForm = ({
             unit={variantPriceUnit(values, pricing)}
             basePrice={variantPriceUnit(values, pricing) === "QORT" ? (values.prices.QORT ?? "") : (values.fiat ?? "")}
             onImageError={onImageError}
+            group={variantGroup}
           />
-        </Box>
-      )}
-      {savedVariant && (
-        <Box component="section" aria-label="Variant" sx={[panelSx, { gridColumn: "1 / -1" }]}>
-          <SectionTitle>Variant</SectionTitle>
-          <Typography>
-            One item of <strong>{savedVariant.title}</strong>: {variantLabel(savedVariant.values)}.
-          </Typography>
-          <Box>
-            <Typography id="variant-display-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-              In the shop&apos;s lists, its items show as
-            </Typography>
-            <ToggleButtonGroup
-              exclusive
-              value={values.variantDisplay ?? savedVariant.display}
-              onChange={(_, display: VariantDisplay | null) => display && onChange((prev) => ({ ...prev, variantDisplay: display }))}
-              aria-labelledby="variant-display-label"
-              sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
-            >
-              <ToggleButton value="bundle">One listing, buyers choose</ToggleButton>
-              <ToggleButton value="separate">Each item on its own</ToggleButton>
-            </ToggleButtonGroup>
-          </Box>
         </Box>
       )}
     </Box>

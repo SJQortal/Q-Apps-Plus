@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ProductFormValues } from "../seller/productDraft";
-import { itemPicture, variantDrafts, variantFormProblem, type VariantFormValues } from "./drafts";
+import { formValuesFor } from "../seller/productDraft";
+import { groupEditDrafts, groupFormValues, itemPicture, removedMembers, rowKey, variantDrafts, variantFormProblem, type VariantFormValues } from "./drafts";
 import { valuesKey } from "./model";
 
 const A = "data:image/webp;base64,AAA";
@@ -110,5 +111,127 @@ describe("the form's variants", () => {
     });
     expect(drafts.map((d) => (d as { fiatPrice?: { value: number } }).fiatPrice?.value)).toEqual([5, 6, 5]);
     expect(drafts.map((d) => (d.price as { value: number }[])[0].value)).toEqual([25, 30, 25]);
+  });
+});
+
+describe("editing a published group", () => {
+  const CAT = "q-store-catalogue-my-shop-CAT0000001";
+  /** The group as published: Round / Pale (the lead), Round / Orange at 12 with its picture, Square / Pale. */
+  function published() {
+    n = 0;
+    const drafts = variantDrafts({
+      values,
+      form: form({ rows: { [valuesKey(["Round", "Orange"])]: { price: "12", picture: ORANGE } } }),
+      coins: ["QORT"],
+      storeId: "q-store-general-my-shop",
+      name: "Seller Name",
+      uid,
+      now: 1000,
+    });
+    // As the edit form gets them (seller/productDraft.ts productForEdit): with their catalogue.
+    return drafts.map((d, i) => ({ ...d, catalogueId: CAT, status: i === 2 ? "OUT_OF_STOCK" : "AVAILABLE" })) as (Record<string, any> & { id: string })[];
+  }
+
+  it("starts from its items: the lead's fields, each item's product, stock, own price and own picture", () => {
+    const members = published();
+    const lead = { ...formValuesFor(members[0], ["QORT"]), title: "Glasses" };
+    const f = groupFormValues({ variant: members[0].variant, members, lead, coins: ["QORT"] });
+    expect(f.options.map((o) => [o.name, o.values])).toEqual([
+      ["Round", [{ name: "Pale" }, { name: "Orange", color: "#f97316" }]],
+      ["Square", [{ name: "Pale" }]],
+    ]);
+    const round = f.options[0];
+    const square = f.options[1];
+    // The lead's pictures are the product's (Round's picture first), so its row has none of its own;
+    // Square / Pale's picture is one of the product's.
+    expect(lead.images).toEqual([ROUND, A, B, C]);
+    expect(f.rows).toEqual({
+      [rowKey(round, "Pale")]: { productId: members[0].id, status: "AVAILABLE", price: "", picture: null },
+      [rowKey(round, "Orange")]: { productId: members[1].id, status: "AVAILABLE", price: "12", picture: ORANGE },
+      [rowKey(square, "Pale")]: { productId: members[2].id, status: "OUT_OF_STOCK", price: "", picture: A },
+    });
+    expect(removedMembers(f, members)).toEqual([]);
+  });
+
+  it("saves every item: renamed, re-priced, a new value, one taken out (retired, out of the group)", () => {
+    const members = published();
+    const lead = { ...formValuesFor(members[0], ["QORT"]), title: "Glasses" };
+    const start = groupFormValues({ variant: members[0].variant, members, lead, coins: ["QORT"] });
+    // Round is renamed Oval (its items keep their products); Orange goes; Blue comes; Square is back in stock.
+    const [round, square] = start.options;
+    const edited: VariantFormValues = {
+      ...start,
+      display: "separate",
+      options: [
+        { ...round, name: "Oval", values: [{ name: "Pale" }, { name: "Blue", color: "#2563eb" }] },
+        square,
+      ],
+      rows: { ...start.rows, [rowKey(square, "Pale")]: { ...start.rows[rowKey(square, "Pale")], status: "AVAILABLE" } },
+    };
+    expect(removedMembers(edited, members).map((m) => m.id)).toEqual([members[1].id]);
+    const { drafts, dropped } = groupEditDrafts({
+      values: { ...lead, title: "Blue-light glasses", prices: { QORT: "11" } },
+      form: edited,
+      group: members[0].variant.group,
+      members,
+      coins: ["QORT"],
+      storeId: "q-store-general-my-shop",
+      name: "Seller Name",
+      uid,
+      now: 2000,
+    });
+    expect(dropped).toEqual([]);
+    expect(drafts.map((d) => [d.id, d.title, d.price[0].value, d.status, d.isUpdate ?? false])).toEqual([
+      [members[0].id, "Blue-light glasses — Oval / Pale", 11, "AVAILABLE", true],
+      ["q-store-product-my-shop-UID0000005", "Blue-light glasses — Oval / Blue", 11, "AVAILABLE", false],
+      [members[2].id, "Blue-light glasses — Square / Pale", 11, "AVAILABLE", true],
+      // Taken out: retired as it was, no longer in the group.
+      [members[1].id, "Glasses — Round / Orange", 12, "RETIRED", true],
+    ]);
+    expect(drafts[3].variant).toBeUndefined();
+    const group = members[0].variant.group;
+    for (const d of drafts.slice(0, 3)) {
+      expect(d.variant).toMatchObject({
+        group,
+        title: "Blue-light glasses",
+        options: [
+          { name: "Oval", values: [{ name: "Pale" }, { name: "Blue", color: "#2563eb" }] },
+          { name: "Square", values: [{ name: "Pale" }] },
+        ],
+        display: "separate",
+        lead: members[0].id,
+      });
+    }
+    // The lead keeps the product's pictures; the new item shows the product's first, Square its own.
+    expect(drafts[0].images).toEqual([ROUND, A, B, C]);
+    expect(drafts[1].images).toEqual([ROUND]);
+    expect(drafts[2].images).toEqual([A]);
+  });
+
+  it("an item moved first leads, and a group never published leaves its taken-out drafts", () => {
+    const members = published().map(({ catalogueId: _c, ...d }) => d as Record<string, any> & { id: string });
+    const lead = { ...formValuesFor(members[0], ["QORT"]), title: "Glasses" };
+    const start = groupFormValues({ variant: members[0].variant, members, lead, coins: ["QORT"] });
+    const [round, square] = start.options;
+    const edited: VariantFormValues = { ...start, options: [square, { ...round, values: [{ name: "Pale" }] }] };
+    const { drafts, dropped } = groupEditDrafts({
+      values: lead,
+      form: edited,
+      group: members[0].variant.group,
+      members,
+      coins: ["QORT"],
+      storeId: "q-store-general-my-shop",
+      name: "Seller Name",
+      uid,
+      now: 2000,
+    });
+    expect(dropped).toEqual([members[1].id]);
+    expect(drafts.map((d) => d.id)).toEqual([members[2].id, members[0].id]);
+    expect(drafts.every((d) => d.variant.lead === members[2].id)).toBe(true);
+    // Square / Pale now carries its picture, then the product's; the old lead shows the product's first.
+    expect(drafts[0].images).toEqual([A, ROUND, B, C]);
+    expect(drafts[1].images).toEqual([ROUND]);
+    // Still drafts of new products.
+    expect(drafts.every((d) => !d.isUpdate)).toBe(true);
   });
 });
