@@ -90,12 +90,12 @@ function product(s, p) {
   };
 }
 const HOUR = 3_600_000;
-// Variants (variants/model.ts): Ålund Ceramics' products 0–3 are one mug in four (Glaze × Size), bundled, the first the lead.
+// Variants (variants/model.ts): Ålund Ceramics' products 0–3 are one mug in four items (a variant's own glazes), bundled, the first the lead.
 const VARIANT_OPTIONS = [
-  { name: 'Glaze', values: ['Celadon', 'Tenmoku'] },
-  { name: 'Size', values: ['250 ml', '350 ml'] },
+  { name: '250 ml', values: [{ name: 'Celadon', color: '#9fc5a8' }, { name: 'Tenmoku', color: '#5b3a29' }] },
+  { name: '350 ml', values: [{ name: 'Celadon', color: '#9fc5a8' }, { name: 'Tenmoku', color: '#5b3a29' }] },
 ];
-const VARIANT_COMBOS = [['Celadon', '250 ml'], ['Celadon', '350 ml'], ['Tenmoku', '250 ml'], ['Tenmoku', '350 ml']];
+const VARIANT_COMBOS = [['250 ml', 'Celadon'], ['250 ml', 'Tenmoku'], ['350 ml', 'Celadon'], ['350 ml', 'Tenmoku']];
 const variantOfFixture = (s, p) =>
   s.short === 'shop-2' && p < 4
     ? { group: 'MUGGROUP01', title: 'Hand-thrown mug', options: VARIANT_OPTIONS, values: VARIANT_COMBOS[p], display: 'bundle', lead: productId(s, 0) }
@@ -454,16 +454,16 @@ export default {
       const d = page.getByRole('dialog', { name: 'Add product' });
       await d.getByRole('textbox', { name: /^Title/ }).fill('Linen apron');
       await d.getByRole('switch', { name: /It comes in variants/ }).click({ timeout: 4000 });
-      await d.getByRole('textbox', { name: 'Option 1', exact: true }).fill('Colour');
-      const values = d.getByRole('textbox', { name: 'Colour: add values' });
-      await values.fill('Sand, Olive, Rust');
+      await d.getByRole('textbox', { name: 'Variant 1', exact: true }).fill('Round');
+      const values = d.getByRole('textbox', { name: 'Round: add values' });
+      await values.fill('Pale, Orange, Red');
       await values.press('Enter');
-      await d.getByRole('button', { name: 'Add another option' }).click();
-      await d.getByRole('textbox', { name: 'Option 2', exact: true }).fill('Size');
-      const sizes = d.getByRole('textbox', { name: 'Size: add values' });
-      await sizes.fill('S, M');
+      await d.getByRole('button', { name: 'Add another variant' }).click();
+      await d.getByRole('textbox', { name: 'Variant 2', exact: true }).fill('Square');
+      const sizes = d.getByRole('textbox', { name: 'Square: add values' });
+      await sizes.fill('Pale');
       await sizes.press('Enter');
-      await d.getByRole('list', { name: 'Variants' }).scrollIntoViewIfNeeded();
+      await d.getByRole('list', { name: 'Items' }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
     } },
     { key: 'seller-product-form-wide', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Add product' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
