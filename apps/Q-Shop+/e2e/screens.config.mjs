@@ -515,6 +515,12 @@ export default {
     { key: 'products-categories', path: '/products', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^(Categories|Filters)/ }).first().click({ timeout: 2500 }); await page.getByRole('checkbox').first().waitFor({ timeout: 4000 }); await page.waitForTimeout(600); } },
     { key: 'products-chosen', path: `/products?category=${encodeURIComponent('collectibles & art')}&category=paper&sort=price-asc`, after: async (page) => page.waitForTimeout(900) },
     { key: 'shop', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => page.waitForTimeout(900) },
+    // The buyer has an order here not marked delivered yet: the reviews ask them to mark it first.
+    { key: 'shop-reviews-buyer', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: /Open reviews$/ }).click({ timeout: 8000 });
+      await page.getByText(/mark it delivered \(or received\) in My orders/).waitFor({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
     { key: 'shop-own', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
     { key: 'product', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, after: async (page) => page.waitForTimeout(900) },
     { key: 'product-pdf', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.waitForTimeout(1000); } },
@@ -548,8 +554,8 @@ export default {
     { key: 'seller-product-auction', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('button', { name: 'Auction', exact: true }).click({ timeout: 10000 }); await d.getByRole('textbox', { name: /^Starting bid/ }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'orders', path: '/my-orders', after: async (page) => page.waitForTimeout(900) },
     { key: 'order-mark-delivered', path: '/my-orders', overlay: true, after: async (page) => {
-      await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Arrived\?/ }).click({ timeout: 8000 });
-      await page.getByRole('dialog').getByRole('button', { name: 'Mark as delivered' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Arrived\?|Got it\?/ }).click({ timeout: 8000 });
+      await page.getByRole('dialog').getByRole('button', { name: /^Mark as (delivered|received)$/ }).scrollIntoViewIfNeeded({ timeout: 8000 });
       await page.waitForTimeout(400);
     } },
     { key: 'order-delivered-review', path: '/my-orders', overlay: true, after: async (page) => {

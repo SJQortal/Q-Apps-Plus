@@ -690,6 +690,15 @@ Simon: *"when I am adding product and eddited price, the description dissapeared
 - **Screens:** seller-add-variants and seller-edit-variants (Hub 3.0, five sizes): clean; the seller's test shop prices in USD, so its items now show USD fields.
 - **Tests:** 1002 → 1006 (the unit; no product price with every item priced, and the message when one isn't; an edited QORT-only item keeping its price; the seller page adding items in USD with no product price).
 
+### Round 5, 2026-10-24: Simon's answers on Delivered (Follow-ups 63, 64, 66)
+
+Simon: *"make digital orders as Received, public note ok, reviews should require delivered/received order, and the reviews can say Ordered here, thats fine"*:
+- **Digital orders** (63): nothing to ship, so the buyer can mark one **received** as soon as it is placed (seller status Received or Shipped, never Refunded). It says so: the card's "Got it? Open it to mark it received.", the order's **Got it?** / **Mark as received**, "You marked it received", and for the seller "<buyer> says they received it". It shows and counts as Delivered, with the same small publish (`q-store-delivered-…`).
+- **Public** (64): kept as is.
+- **Reviews need it** (66; `orders/delivered.ts` canReviewShop): a name may review a shop when one of its own orders there is marked delivered or received. Two searches (its orders at the shop and its confirmations for it, the shop compared exactly), and the confirmation must be for one of its own orders. With orders but none marked: "Once your order arrives, mark it delivered (or received) in My orders, then review the shop." and a My orders link; with none: "Only buyers who received an order from this shop can review it." Reviews published before (and the original's) still show; "Ordered here" stays. The original Q-Shop still lets any buyer with an order review.
+- **Screens:** orders, order-mark-delivered (now the digital order: Mark as received) and shop-reviews-buyer (new: the reviews asking to mark the order first), Hub 3.0, five sizes: clean.
+- **Tests:** 1006 → 1009.
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
@@ -711,10 +720,10 @@ Simon: *"when I am adding product and eddited price, the description dissapeared
 
 **Round 5, 2026-10-24: questions for Simon on Delivered (63–66)**
 
-63. **When it can be marked:** only once the seller says Shipped. Also for orders the seller never updates (after some days), or digital ones still at Received?
-64. **Public:** the confirmation is a public DOCUMENT (an order's id is public already, so it only adds "it arrived"). OK, or encrypt it to the seller (one key lookup and a decrypt per confirmation to read)?
+63. ~~When it can be marked~~ **answered**: digital orders are received at once. Was: **When it can be marked:** only once the seller says Shipped. Also for orders the seller never updates (after some days), or digital ones still at Received?
+64. ~~Public~~ **answered: OK.** Was: **Public:** the confirmation is a public DOCUMENT (an order's id is public already, so it only adds "it arrived"). OK, or encrypt it to the seller (one key lookup and a decrypt per confirmation to read)?
 65. **No undo:** a buyer who taps it by mistake declines Hub's dialog; once published it stays. Add "Not arrived after all"?
-66. **Reviews:** anyone with an order can still review a shop (as the original), and the review shows "Ordered here". Only after Delivered, and show "Delivered" on those reviews instead?
+66. ~~Reviews~~ **answered**: need a delivered or received order; "Ordered here" stays. Was: **Reviews:** anyone with an order can still review a shop (as the original), and the review shows "Ordered here". Only after Delivered, and show "Delivered" on those reviews instead?
 
 **Round 5, 2026-10-24: question for Simon on the product form (67)**
 
