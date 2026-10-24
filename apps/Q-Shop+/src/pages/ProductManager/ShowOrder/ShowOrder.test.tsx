@@ -452,4 +452,31 @@ describe("delivered", () => {
     expect(within(view).getByText("Great")).toBeInTheDocument();
     expect(within(view).queryByText("Other shop")).toBeNull();
   });
+
+  it("the seller sees the buyer's review of the shop, and opens it", async () => {
+    resetQdnCaches();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url.includes("q-store-review-")
+            ? [
+                { name: "Someone Else", identifier: `q-store-review-${SHORT_STORE_ID}-REVIEWxxx2-30`, created: 9, metadata: { title: "Meh" } },
+                { name: BUYER, identifier: `q-store-review-${SHORT_STORE_ID}-REVIEWxxx1-45`, created: 8, metadata: { title: "Lovely mug", description: "Fast." } },
+              ]
+            : [],
+      }))
+    );
+    installQortalMock({ GET_NAME_DATA: async () => ({ owner: BUYER_ADDRESS }) });
+    setup("seller", orderJson(), { status: "Shipped" });
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByText(`${BUYER} reviewed your shop`)).toBeInTheDocument();
+    expect(within(dialog).getByText(/“Lovely mug”/)).toBeInTheDocument();
+    expect(within(dialog).getByRole("img", { name: "4.5 out of 5 stars" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "View review" }));
+    const view = screen.getByRole("dialog", { name: `${BUYER}'s review` });
+    expect(within(view).getByText("Fast.")).toBeInTheDocument();
+    expect(within(view).queryByRole("button", { name: "Write a new review" })).toBeNull();
+  });
 });

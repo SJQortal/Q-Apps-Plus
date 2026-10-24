@@ -4,7 +4,7 @@
  * search by buyer over the loaded orders, and the order in a dialog where
  * the seller updates its status.
  */
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Box, CircularProgress, IconButton, InputAdornment, TextField, Tooltip, Typography } from "@mui/material";
 import RefreshOutlinedIcon from "@mui/icons-material/RefreshOutlined";
@@ -19,9 +19,14 @@ import { OrderListSkeleton, OrderListView } from "../../orders/components/OrderL
 import type { StatusFilter } from "../../orders/status";
 import { sellerStatusCounts, splitSellerItems } from "../../orders/listView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
+import { useShopReviews } from "../Store/useShopData";
+import { sameName } from "../../orders/reads";
 
 export function OrdersTab() {
   const list = useShopOrders();
+  // Buyers' reviews of the shop (the Reviews tab's search): their stars show on their orders.
+  const { reviews } = useShopReviews(list.shop?.storeId ?? "", list.seller || null);
+  const reviewOf = useCallback((name: string) => reviews.find((r) => sameName(r.name, name)), [reviews]);
   const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
   // Opens on "To handle" while there are orders to handle, else on All, until
   // the seller picks a filter (Simon, 2026-10-22, Follow-up 10).
@@ -109,6 +114,7 @@ export function OrdersTab() {
           setDialogOpen(true);
         }}
         errorText="Couldn't load your shop's orders"
+        reviewOf={reviewOf}
         empty={
           <EmptyState
             icon={<ReceiptLongOutlinedIcon />}

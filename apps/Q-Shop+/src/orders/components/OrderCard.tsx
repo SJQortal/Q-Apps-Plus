@@ -1,4 +1,5 @@
-import { Box, Button, ButtonBase, CircularProgress, Skeleton, Typography } from "@mui/material";
+import { Box, Button, ButtonBase, CircularProgress, Rating, Skeleton, Typography } from "@mui/material";
+import { visuallyHiddenSx } from "../../pages/Store/a11y";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import type { Order } from "../../state/features/orderSlice";
 import { NameAvatar } from "../../components/common/NameAvatar";
@@ -65,11 +66,14 @@ export function OrderCard({
   role,
   onOpen,
   onRetry,
+  review,
 }: {
   item: OrderListItem;
   role: OrderRole;
   onOpen: (order: Order) => void;
   onRetry: (row: Order) => void;
+  /** For the seller: the buyer's review of the shop, shown as its stars. */
+  review?: { rating: number };
 }) {
   const { row, order, openState, status } = item;
   // The seller's cards never name the coin from the buyer's own text (orders/useOrderCoin.ts).
@@ -161,8 +165,16 @@ export function OrderCard({
         >
           {itemSummary(items)}
         </Typography>
-        <Box component="span" sx={{ mt: 0.5 }}>
+        <Box component="span" sx={{ mt: 0.5, display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.5 }}>
           <AmountTag value={orderTotal(order)} coin={coin.coin} shop={coin.settings} size="small" />
+          {review && (
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+              <Rating value={review.rating} precision={0.5} readOnly size="small" aria-hidden />
+              <Typography component="span" variant="body2" color="text.secondary">
+                Reviewed<Box component="span" sx={visuallyHiddenSx}>{` ${review.rating} out of 5 stars`}</Box>
+              </Typography>
+            </Box>
+          )}
         </Box>
         {/* Shipped (a digital order: placed) and not marked yet: the order's dialog has Mark as delivered (orders/delivered.ts). */}
         {role === "buyer" && item.delivered === null && status?.state === "known" && (normalizeStatus(status.status) === "Shipped" || (digital && normalizeStatus(status.status) === "Received")) && (

@@ -21,7 +21,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import { Link as RouterLink } from "react-router-dom";
-import { Alert, Box, Button, Divider, Link, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, Divider, Link, Rating, Skeleton, Typography } from "@mui/material";
 import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
@@ -47,7 +47,9 @@ import { PaymentDetails } from "./PaymentDetails";
 import { StatusEditor, type StatusDraft } from "./StatusEditor";
 import { AddReview } from "../../Store/StoreReviews/AddReview/AddReview";
 import { StoreReviewCard } from "../../Store/StoreReviews/StoreReviewCard";
-import { useMyShopReview } from "../../Store/useShopData";
+import { useMyShopReview, useShopReviews } from "../../Store/useShopData";
+import { formatReviewDate } from "../../Store/StoreReviews/StoreReviewCard";
+import type { ShopReview } from "../../Store/reviewsData";
 
 export interface ShowOrderProps {
   open: boolean;
@@ -170,6 +172,11 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         : { status: "", note: "" };
   const setDraft = (next: StatusDraft) => setDraftState({ key: draftKey, orderId: order?.id ?? "", draft: next });
   const [retrying, setRetrying] = useState(false);
+
+  // The seller sees the buyer's review of the shop, from the shop's shared review search.
+  const sellerShopId = role === "seller" && order ? ((orderItems(order).find((i) => i.product?.storeId)?.product?.storeId as string | undefined) ?? "") : "";
+  const shopReviews = useShopReviews(sellerShopId, sellerName || null);
+  const buyerReview = sellerShopId && order ? (shopReviews.reviews.find((r) => sameName(r.name, order.user)) ?? null) : null;
 
   if (!order) return null;
 
@@ -299,6 +306,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
               storeTitle={order.storeName || ""}
             />
           )}
+          {buyerReview && <BuyerReviewNote review={buyerReview} />}
           {canMarkDelivered && (
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, border: 1, borderColor: "divider" }}>
               <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
@@ -506,36 +514,76 @@ function DeliveredNote({
           </Button>
         ))}
       {reviewStoreId && review && viewing && (
-        <ResponsiveDialog
-          open
-          onClose={() => setViewing(false)}
+        <ReviewDialog
+          review={review}
           title={`Your review of ${shop}`}
-          actions={
-            <>
-              <Button
-                color="inherit"
-                onClick={() => {
-                  setViewing(false);
-                  setWriting(true);
-                }}
-              >
-                Write a new review
-              </Button>
-              <Button variant="contained" onClick={() => setViewing(false)}>
-                Close
-              </Button>
-            </>
-          }
-        >
-          <StoreReviewCard review={review} orderedHere />
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            A new review replaces this one.
-          </Typography>
-        </ResponsiveDialog>
+          onClose={() => setViewing(false)}
+          onWriteNew={() => {
+            setViewing(false);
+            setWriting(true);
+          }}
+        />
       )}
       {reviewStoreId && writing && (
         <AddReview open storeId={reviewStoreId} storeTitle={storeTitle ?? ""} onClose={() => setWriting(false)} />
       )}
+    </Box>
+  );
+}
+
+/** One review, opened from an order: the buyer's own (who can write a new one), or the buyer's for the seller. */
+export function ReviewDialog({ review, title, onClose, onWriteNew }: { review: ShopReview; title: string; onClose: () => void; onWriteNew?: () => void }) {
+  return (
+    <ResponsiveDialog
+      open
+      onClose={onClose}
+      title={title}
+      actions={
+        <>
+          {onWriteNew && (
+            <Button color="inherit" onClick={onWriteNew}>
+              Write a new review
+            </Button>
+          )}
+          <Button variant="contained" onClick={onClose}>
+            Close
+          </Button>
+        </>
+      }
+    >
+      <StoreReviewCard review={review} orderedHere />
+      {onWriteNew && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          A new review replaces this one.
+        </Typography>
+      )}
+    </ResponsiveDialog>
+  );
+}
+
+/**
+ * For the seller: the buyer's review of the shop (their latest, as the
+ * Reviews tab counts it), with its stars and title, and View review.
+ */
+function BuyerReviewNote({ review }: { review: ShopReview }) {
+  const [viewing, setViewing] = useState(false);
+  const date = formatReviewDate(review.created);
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}>
+      <RateReviewOutlinedIcon color="primary" aria-hidden />
+      <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{review.name} reviewed your shop</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1 }}>
+          <Rating value={review.rating} precision={0.5} readOnly size="small" aria-label={`${review.rating} out of 5 stars`} />
+          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+            {[date, review.title ? `“${review.title}”` : ""].filter(Boolean).join(" · ")}
+          </Typography>
+        </Box>
+      </Box>
+      <Button variant="outlined" color="inherit" startIcon={<RateReviewOutlinedIcon />} onClick={() => setViewing(true)} sx={{ minHeight: 44 }}>
+        View review
+      </Button>
+      {viewing && <ReviewDialog review={review} title={`${review.name}'s review`} onClose={() => setViewing(false)} />}
     </Box>
   );
 }

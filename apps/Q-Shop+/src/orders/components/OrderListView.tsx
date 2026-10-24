@@ -145,6 +145,7 @@ export function OrderListView({
   onOpen,
   empty,
   errorText,
+  reviewOf,
 }: {
   role: OrderRole;
   list: OrderList;
@@ -156,6 +157,8 @@ export function OrderListView({
   /** The empty state when there are no orders at all. */
   empty: ReactNode;
   errorText: string;
+  /** The seller's list: a buyer's review of the shop, by name (its stars show on their orders). */
+  reviewOf?: (name: string) => { rating: number } | undefined;
 }) {
   const { items, meta } = list;
   const seller = role === "seller" ? list.seller : "";
@@ -246,7 +249,7 @@ export function OrderListView({
           >
             {shown.map((item) => (
               <Box component="li" key={item.row.id} sx={{ minWidth: 0 }}>
-                <OrderCard item={item} role={role} onOpen={onOpen} onRetry={(row) => void list.retry(row)} />
+                <OrderCard item={item} role={role} onOpen={onOpen} onRetry={(row) => void list.retry(row)} review={reviewOf?.(item.row.user)} />
               </Box>
             ))}
           </Box>
