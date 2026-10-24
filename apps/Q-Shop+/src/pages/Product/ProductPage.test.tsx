@@ -81,6 +81,17 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("navigation", { name: "Collections" })).toBeNull();
   });
 
+  it("opens at the top of the page, not where the list it came from was scrolled to", async () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal("scrollTo", scrollTo);
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockReturnValue(1800);
+    renderProduct(makeWorld(), pathOf(P11));
+    expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, left: 0, behavior: "instant" });
+    scrollY.mockRestore();
+  });
+
   it("names the collections the product is in, each linked to it on the shop page (Follow-up 15)", async () => {
     const world = makeWorld();
     world.shops[0].collections = [

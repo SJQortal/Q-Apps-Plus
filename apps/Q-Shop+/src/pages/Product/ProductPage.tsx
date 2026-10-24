@@ -18,7 +18,7 @@
  * pictures) swaps the product in place, so the gallery, its full-screen
  * viewer and the video under it stay as they are (variants/gallery.ts).
  */
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, Divider, IconButton, InputBase, Link, Skeleton, Typography } from "@mui/material";
@@ -42,6 +42,7 @@ import { collectionPath, decodeParam, productLink, productPath, storePath } from
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
 import { useCatalogue, useCatalogueLoader, useViewedShop } from "../Store/useShopData";
 import { useMorePictures } from "../../hooks/useMorePictures";
+import { useLandAtTop } from "../../hooks/useLandAtTop";
 import { ProductDescription, ProductMedia, useDescriptionParts } from "../../richtext/ProductDescription";
 import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { useShopCollections } from "../Store/useShopCollections";
@@ -198,6 +199,14 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   // from every item's catalogue, read once the product's own is in.
   const variant = useMemo(() => variantOf(product), [product]);
   const siblings = useMemo(() => (variant ? variantSiblings(index, variant.group) : []), [index, variant]);
+  // Each product opens at its top (hooks/useLandAtTop.ts); picking another item of the same variants stays put.
+  const landing = useRef<HTMLDivElement>(null);
+  const [landedGroup, setLandedGroup] = useState<{ key: string; ids: string[] }>({ key: productId, ids: [productId] });
+  let group = landedGroup.ids.includes(productId) ? landedGroup : { key: productId, ids: [productId] };
+  const siblingIds = siblings.map((s) => s.productId);
+  if (siblingIds.includes(productId) && siblingIds.some((id) => !group.ids.includes(id))) group = { key: group.key, ids: [...new Set([...group.ids, ...siblingIds])] };
+  if (group !== landedGroup) setLandedGroup(group);
+  useLandAtTop(landing, group.key);
   const groupLoader = useCatalogueLoader(owner);
   const loadGroup = groupLoader.load;
   const groupCatalogues = status === "ready" ? [...new Set(siblings.map((s) => s.catalogueId))].join("|") : "";
@@ -453,38 +462,40 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
 
   return (
     <Page width="grid">
-      <PageHeader
-        back
-        backTo={shopPath}
-        title={title}
-        subtitle={
-          <>
-            From{" "}
-            <Link component={RouterLink} to={shopPath} color="inherit" underline="always">
-              {shopName}
-            </Link>{" "}
-            by {owner}
-          </>
-        }
-        actions={!isOwner ? <CartButton /> : undefined}
-      />
-      {/* A product with data this page can't show leaves the header and navigation in place. */}
-      {/* A new boundary (and content) for another product; a variant's items share one. */}
-      <LocalBoundary
-        key={variant ? `group\n${variant.group}` : `product\n${catalogueId}\n${productId}`}
-        label={`The product ${productId}`}
-        fallback={
-          <EmptyState
-            icon={<SearchOffOutlinedIcon />}
-            title="This product couldn't be shown"
-            description="Its listing has data this app can't read."
-            actionLabel="Go to the shop"
-            onAction={() => navigate(shopPath)}
-          />
-        }
-      >
-        {content}
-      </LocalBoundary>
+      <Box ref={landing}>
+        <PageHeader
+          back
+          backTo={shopPath}
+          title={title}
+          subtitle={
+            <>
+              From{" "}
+              <Link component={RouterLink} to={shopPath} color="inherit" underline="always">
+                {shopName}
+              </Link>{" "}
+              by {owner}
+            </>
+          }
+          actions={!isOwner ? <CartButton /> : undefined}
+        />
+        {/* A product with data this page can't show leaves the header and navigation in place. */}
+        {/* A new boundary (and content) for another product; a variant's items share one. */}
+        <LocalBoundary
+          key={variant ? `group\n${variant.group}` : `product\n${catalogueId}\n${productId}`}
+          label={`The product ${productId}`}
+          fallback={
+            <EmptyState
+              icon={<SearchOffOutlinedIcon />}
+              title="This product couldn't be shown"
+              description="Its listing has data this app can't read."
+              actionLabel="Go to the shop"
+              onAction={() => navigate(shopPath)}
+            />
+          }
+        >
+          {content}
+        </LocalBoundary>
+      </Box>
       <AddedToCartSnackbar notice={added} onClose={() => setAdded(null)} />
     </Page>
   );
