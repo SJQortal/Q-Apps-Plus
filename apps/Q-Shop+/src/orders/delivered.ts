@@ -13,12 +13,16 @@
  * - a shop's list: one search for every buyer's of the shop, matched to each
  *   order by its buyer, and the shop compared exactly (`my-shop-` also
  *   finds `my-shop-2`'s);
- * - one order: an exact identifier under the buyer's name.
+ * - one order: an exact identifier under the buyer's name;
+ * - may a name review a shop (canReviewShop): an order of theirs at the shop
+ *   that they marked delivered (Simon, 2026-10-24: "reviews should require
+ *   delivered/received order").
  * The original never reads them, and the seller's status is untouched.
  */
 import { invalidateQdnSearches, searchQdn, searchQdnAll, type QdnResourceSummary } from "../qdn/search";
 import {
   DELIVERED_BASE,
+  shopOrdersPrefix,
   deliveredIdentifierForOrder,
   orderIdForDelivered,
   shopDeliveredPrefix,
@@ -116,4 +120,40 @@ export async function markDelivered(store: OrderStore, order: Order, now = Date.
     if (isHubTimeout(error)) return "timeout";
     return "failed";
   }
+}
+
+/** Pages of 20 read at most per check (a short shop id's prefix also finds longer ids' rows). */
+const REVIEW_CHECK_PAGES = 5;
+
+async function idsAtShop(service: string, prefix: string, name: string, shortStoreId: string, toOrderId: (identifier: string) => string, fresh: boolean): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (let page = 0; page < REVIEW_CHECK_PAGES; page++) {
+    const rows = await searchQdn(
+      { service, identifier: prefix, prefix: true, name, exactmatchnames: true, includemetadata: false, limit: 20, offset: page * 20 },
+      { fresh }
+    );
+    for (const row of rows) {
+      const orderId = toOrderId(row.identifier);
+      if (sameName(row.name, name) && shortStoreIdOfOrder(orderId) === shortStoreId) out.add(orderId);
+    }
+    if (rows.length < 20) break;
+  }
+  return out;
+}
+
+/**
+ * May `name` review the shop: "yes" with an order of theirs there that they
+ * marked delivered (or received), "order" with orders but none marked yet,
+ * "no" without an order. Two searches (their orders at the shop, their
+ * confirmations for it).
+ */
+export async function canReviewShop(shortStoreId: string, name: string, options: { fresh?: boolean } = {}): Promise<"yes" | "order" | "no"> {
+  if (!shortStoreId || !name) return "no";
+  const fresh = !!options.fresh;
+  const [orders, delivered] = await Promise.all([
+    idsAtShop("DOCUMENT_PRIVATE", shopOrdersPrefix(shortStoreId), name, shortStoreId, (id) => id, fresh),
+    idsAtShop("DOCUMENT", shopDeliveredPrefix(shortStoreId), name, shortStoreId, orderIdForDelivered, fresh),
+  ]);
+  if (orders.size === 0) return "no";
+  return [...delivered].some((id) => orders.has(id)) ? "yes" : "order";
 }

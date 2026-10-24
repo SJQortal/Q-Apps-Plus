@@ -13,7 +13,9 @@ import { useSelector } from "react-redux";
 import type { RootState } from "../../../state/store";
 import { EmptyState } from "../../../components/common/EmptyState";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
-import { fetchReviewersWithOrders, hasOrderAtShop, REVIEWS_PAGE, REVIEW_SEARCH_CAP, roundToHalf, type ReviewSummary } from "../reviewsData";
+import { Link as RouterLink } from "react-router-dom";
+import { canReviewShop } from "../../../orders/delivered";
+import { fetchReviewersWithOrders, REVIEWS_PAGE, REVIEW_SEARCH_CAP, roundToHalf, type ReviewSummary } from "../reviewsData";
 import { useShopReviews } from "../useShopData";
 import { StoreReviewCard } from "./StoreReviewCard";
 import { AddReview } from "./AddReview/AddReview";
@@ -84,7 +86,7 @@ function Summary({ summary, fallback }: { summary: ReviewSummary; fallback?: num
   );
 }
 
-type ReviewRight = { name: string; state: "checking" | "yes" | "no" | "error" };
+type ReviewRight = { name: string; state: "checking" | "yes" | "order" | "no" | "error" };
 
 export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRating, onClose }: StoreReviewsProps) {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -107,13 +109,14 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
   const shown = reviews.slice(0, pages * REVIEWS_PAGE);
   const mine = !!name && reviews.some((review) => review.name === name);
 
-  // May the signed-in name review? The original's rule: an order at the shop.
+  // May the signed-in name review? An order at the shop that they marked delivered (orders/delivered.ts);
+  // the original asked for an order only.
   useEffect(() => {
     if (!name || isOwner || !shortStoreId) return;
     let alive = true;
-    hasOrderAtShop(shortStoreId, name, { fresh: rightNonce > 0 }).then(
-      (yes) => {
-        if (alive) setRight({ name, state: yes ? "yes" : "no" });
+    canReviewShop(shortStoreId, name, { fresh: rightNonce > 0 }).then(
+      (state) => {
+        if (alive) setRight({ name, state });
       },
       () => {
         if (alive) setRight({ name, state: "error" });
@@ -173,10 +176,21 @@ export function StoreReviews({ storeId, storeTitle, storeOwner, averageStoreRati
           )}
         </Box>
       );
+    } else if (canReview === "order") {
+      writeArea = (
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ flex: "1 1 220px" }}>
+            Once your order arrives, mark it delivered (or received) in My orders, then review the shop.
+          </Typography>
+          <Button component={RouterLink} to="/my-orders" variant="outlined" color="inherit" sx={{ minHeight: 44 }}>
+            My orders
+          </Button>
+        </Box>
+      );
     } else if (canReview === "no") {
       writeArea = (
         <Typography variant="body2" color="text.secondary">
-          Only buyers with an order from this shop can review it.
+          Only buyers who received an order from this shop can review it.
         </Typography>
       );
     } else {

@@ -37,6 +37,11 @@ function worldWithReviews(): World {
   );
   world.orders.push({ identifier: "q-store-order-my-shop-ORDERxxxx1", buyer: "Reviewer 1", created: 1, json: {} });
   world.orders.push({ identifier: "q-store-order-my-shop-2-ORDERxxxx2", buyer: "Reviewer 2", created: 2, json: {} });
+  // Both marked their order delivered (orders/delivered.ts): reviews need that now.
+  world.delivered = [
+    { identifier: "q-store-delivered-my-shop-ORDERxxxx1", buyer: "Reviewer 1", created: 3 },
+    { identifier: "q-store-delivered-my-shop-2-ORDERxxxx2", buyer: "Reviewer 2", created: 4 },
+  ];
   return world;
 }
 
@@ -166,9 +171,25 @@ describe("reviews panel", { timeout: 20_000 }, () => {
     expect(screen.getByText("Your latest review replaces your earlier one.")).toBeInTheDocument();
   });
 
+  it("asks a buyer whose order isn't marked delivered to mark it first, and leads to My orders", async () => {
+    const world = worldWithReviews();
+    world.delivered = [];
+    renderPanel(world, "Reviewer 1");
+    expect(await screen.findByText("Once your order arrives, mark it delivered (or received) in My orders, then review the shop.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "My orders" })).toHaveAttribute("href", "/my-orders");
+    expect(screen.queryByRole("button", { name: /Write a/ })).toBeNull();
+  });
+
+  it("doesn't count a Delivered without the name's own order at the shop", async () => {
+    const world = worldWithReviews();
+    world.delivered = [{ identifier: "q-store-delivered-my-shop-NOORDERxx9", buyer: "Reviewer 3", created: 5 }];
+    renderPanel(world, "Reviewer 3");
+    expect(await screen.findByText("Only buyers who received an order from this shop can review it.")).toBeInTheDocument();
+  });
+
   it("refuses a name whose only order is at another shop with a similar id", async () => {
     const { node } = renderPanel(worldWithReviews(), "Reviewer 2");
-    expect(await screen.findByText("Only buyers with an order from this shop can review it.")).toBeInTheDocument();
+    expect(await screen.findByText("Only buyers who received an order from this shop can review it.")).toBeInTheDocument();
     const check = node.fetchCalls.find((u) => u.includes("service=DOCUMENT_PRIVATE") && new URLSearchParams(u.split("?")[1]).getAll("name").length === 1)!;
     const params = new URLSearchParams(check.split("?")[1]);
     expect(params.get("name")).toBe("Reviewer 2");
