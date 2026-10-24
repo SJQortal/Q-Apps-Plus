@@ -119,7 +119,7 @@ const DELIVERY = {
   'shop-1': { v: 1, storeId: 'q-store-general-shop-1', currency: 'QORT', general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5 }] }, profiles: [], updated: now - DAY },
 };
 // Favourites (favorites/model.ts): [name, shop index, product or null]. The signed-in seller keeps two shops and
-// two products; other names keep some shops, for Most favourited and the cards' hearts.
+// two products; other names keep some shops, for Most loved and the cards' hearts.
 const FAVORITES = [
   [ME, 1, null], [ME, 3, null], [ME, 1, 3], [ME, 3, 0],
   ['Ann Buyer', 3, null], ['bob+builder', 3, null], ['Ann Buyer', 2, null], ['Zoë Ålund', 1, null],

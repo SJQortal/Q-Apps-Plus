@@ -237,7 +237,7 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     };
   }, [loadRatingsNow, ratingsRun]);
 
-  // Most favourited waits for the counts; the other views load them with the ratings, for the cards' hearts.
+  // Most loved waits for the counts; the other views load them with the ratings, for the cards' hearts.
   const needFavorites = sort === "favorites";
   const [favorites, setFavorites] = useState<SideIndex<FavoriteCounts>>(() => ({ data: peekFavoriteCounts(), error: false }));
   const [favoritesRun, setFavoritesRun] = useState({ n: 0, fresh: false });

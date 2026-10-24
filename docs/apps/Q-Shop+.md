@@ -633,7 +633,7 @@ Simon: *"here I would like to add more options like hide shop, or add to favouri
 - **Favourites** (`src/favorites/`): a heart on each shop page and product page ("Add to favourites" / "In your favourites"), and Add to favourites / Remove from favourites in a shop card's ⋮ menu. A tap changes it at once; Hub asks to confirm a small publish (one DOCUMENT per favourite, under the buyer's name: Data contract), and a decline or a failure puts the heart back. A change the node's search doesn't list yet is kept on the device for 30 minutes, so a reload doesn't undo it.
 - **Why public:** "sort by buyers favorites" needs everyone's favourites, so they are on QDN like Qortal's likes (others can see who keeps what; the Favourites page says so). One paged search of every favourite's row (metadata included, nothing fetched) counts them, cached for the session.
 - **A heart beside the name** in the header opens **Favourites** (`/favorites`): Shops (their cards) and Products (rows with picture, price and shop) on two tabs. Signed out it asks to sign in; without a name, to register one.
-- **Most favourited** sorts Shops (the cards show the count beside the stars) and Products; equal counts fall back to newest first.
+- **Most loved** (first named Most favourited; Simon picked the name, 2026-10-24) sorts Shops (the cards show the count beside the stars) and Products; equal counts fall back to newest first.
 - **Hide shop** (⋮ menu, other names' shops): left out of Shops and Products on this device (`discovery/hiddenShops.ts`, local only); its page still opens from a link and offers Show it again; Settings → Shopping lists the hidden shops with Show again.
 - **Calls:** Home makes one more search, the favourites' (as the ratings', after the shop index), 4 in all. A shop page, signed in, makes one more, the buyer's own favourites for its heart (5); a product page, signed in, that one search (it made none). The card menu reads the buyer's favourites only once it opens. A shop page doesn't show its own count, which would cost another search.
 - **Tests:** 952 → 963 (the model's shapes and counts; the card menu with a decline; Most favourited; the shop page's heart; the Favourites page; Hide shop and Show again; the header heart); the first-load call counts updated with the reasons.
@@ -669,7 +669,7 @@ Simon: *"when hovering over the Shops or Products when over the picutres, I woul
 
 **Round 5, 2026-10-24: questions for Simon on favourites (51–54)**
 
-51. **Favourites are public** (needed to sort by them) and each is a small publish Hub asks to confirm. OK, or keep them private on the device (free, instant) and drop Most favourited?
+51. **Favourites are public** (needed to sort by them) and each is a small publish Hub asks to confirm. OK, or keep them private on the device (free, instant) and drop Most loved?
 52. **Hidden shops** stay on this device. Also keep them in Settings → Sync (one more field in the settings document)?
 53. **Shop pages** don't show their favourite count (one more search per visit). Show it?
 54. **Counting:** one per name, the owner's own left out, as with reviews. Anyone can register names, so it's a soft signal. Good enough?

@@ -17,7 +17,7 @@ export const SHOP_SORTS: { value: ShopSort; label: string }[] = [
   { value: "products", label: "Most products" },
   { value: "rated", label: "Top rated" },
   // How many buyers keep the shop as a favourite (favorites/counts.ts).
-  { value: "favorites", label: "Most favourited" },
+  { value: "favorites", label: "Most loved" },
   { value: "az", label: "A–Z" },
 ];
 

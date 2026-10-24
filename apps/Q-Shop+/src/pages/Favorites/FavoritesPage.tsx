@@ -139,7 +139,7 @@ export function FavoritesPage() {
   const loading = status === "loading" || status === "idle";
   return (
     <Page width="grid">
-      <PageHeader title="Favourites" subtitle="The shops and products you keep. Others can see them too: they count towards Most favourited." />
+      <PageHeader title="Favourites" subtitle="The shops and products you keep. Others can see them too: they count towards Most loved." />
       <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
         <Tabs
           value={tab}

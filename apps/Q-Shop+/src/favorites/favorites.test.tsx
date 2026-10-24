@@ -1,6 +1,6 @@
 /**
  * Favourites and hidden shops against the mocked Hub and node: the card
- * menu, the shop page's heart, the Favourites page, Most favourited, and
+ * menu, the shop page's heart, the Favourites page, Most loved, and
  * Hide shop with Settings' Show again. Nothing reaches a real node.
  */
 import { describe, expect, it } from "vitest";
@@ -75,7 +75,7 @@ describe("favourites", () => {
     expect(await screen.findByRole("menuitem", { name: "Add to favourites" })).toBeInTheDocument();
   });
 
-  it("Most favourited lists the shops most names keep first, the owner's own not counted, and the cards show it", async () => {
+  it("Most loved lists the shops most names keep first, the owner's own not counted, and the cards show it", async () => {
     const world = makeWorld();
     const five = favoriteShop("Seller 5", "q-store-general-shop-5")!;
     const three = favoriteShop("Seller 3", "q-store-general-shop-3")!;

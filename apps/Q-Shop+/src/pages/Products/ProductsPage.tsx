@@ -93,7 +93,7 @@ import { bundleRows, type VariantGroup } from "../../variants/model";
 
 /** The Products page's sorts: the shops' ones, and how many buyers keep each product (favorites/counts.ts). */
 type ListSort = ProductSort | "favorites";
-const FAVORITES_SORT: { value: ListSort; label: string } = { value: "favorites", label: "Most favourited" };
+const FAVORITES_SORT: { value: ListSort; label: string } = { value: "favorites", label: "Most loved" };
 
 function parseProductSort(value: string | null): ListSort | null {
   return [...PRODUCT_SORTS, AUCTION_SORT, FAVORITES_SORT].some((s) => s.value === value) ? (value as ListSort) : null;
