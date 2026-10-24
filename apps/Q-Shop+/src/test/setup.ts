@@ -14,6 +14,9 @@ import { resetDeletedShops } from '../qdn/deleted';
 import { resetProductView } from '../utils/productView';
 import { resetListWrite } from '../seller/listWrite';
 import { resetSentCollections } from '../seller/useCollections';
+import { resetFavoritesMemory } from '../favorites/myFavorites';
+import { resetFavoriteCountsMemory } from '../favorites/counts';
+import { resetHiddenShopsMemory } from '../discovery/hiddenShops';
 
 // waitFor/findBy wait up to 3 s (1 s by default): the whole suite runs ~90 files at once, and on a
 // busy machine a page's first render can take longer than 1 s. Passing tests don't wait longer.
@@ -113,6 +116,9 @@ beforeEach(() => {
   resetDeletedShops();
   resetProductView();
   resetListWrite();
+  resetFavoritesMemory();
+  resetFavoriteCountsMemory();
+  resetHiddenShopsMemory();
   resetSentCollections();
 });
 

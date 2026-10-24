@@ -1,15 +1,23 @@
 /**
- * The one menu behind every shop card's "More" button: Open shop and Copy
+ * The one menu behind every shop card's "More" button: Open shop, Copy
  * link (the original's right-click "Copy Link", which now copies a
  * `qortal://APP/Q-Shop+/…` link with the owner encoded; docs/apps/Q-Shop+.md
- * → Bugs 9). A menu on desktop, a bottom sheet on phones; one for the whole
- * grid, mounted only while open.
+ * → Bugs 9), and for another name's shop Add to favourites (favorites/) and
+ * Hide shop (discovery/hiddenShops.ts). A menu on desktop, a bottom sheet on
+ * phones; one for the whole grid, mounted only while open.
  */
 import { useState } from "react";
 import { List, ListItemButton, ListItemIcon, ListItemText, Menu, MenuItem } from "@mui/material";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState } from "../state/store";
+import { useFavorites } from "../favorites/useFavorites";
+import { favoriteShop } from "../favorites/model";
+import { hideShop } from "./hiddenShops";
 import { BottomSheet } from "../components/common/mobile/BottomSheet";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
 import { storeLink } from "../qdn/links";
@@ -59,6 +67,23 @@ export function ShopMenu({
 
   const dialog = <ManualCopyDialog open={manualLink !== null} onClose={() => setManualLink(null)} link={manualLink ?? ""} />;
 
+  // Favourites and hiding are for other names' shops.
+  const userName = useSelector((state: RootState) => state.auth.user?.name);
+  const favorites = useFavorites(Boolean(target));
+  const fav = shop && shop.owner !== userName ? favoriteShop(shop.owner, shop.id) : null;
+  const favorite = !!fav && favorites.isFavorite(fav.identifier);
+  const toggleFavorite = () => {
+    onClose();
+    if (fav) void favorites.toggle(fav);
+  };
+  const hide = () => {
+    if (!shop) return;
+    onClose();
+    hideShop({ owner: shop.owner, shortStoreId: shop.shortStoreId, title: shop.title });
+    dispatch(setNotification({ msg: `${shop.title || "The shop"} is hidden. Settings shows it again.`, alertType: "info" }));
+  };
+  const favoriteText = favorite ? "Remove from favourites" : "Add to favourites";
+
   if (phone) {
     return (
       <>
@@ -77,6 +102,20 @@ export function ShopMenu({
               </ListItemIcon>
               <ListItemText primary="Copy link" />
             </ListItemButton>
+            {fav && (
+              <>
+                <ListItemButton onClick={toggleFavorite} sx={{ minHeight: 48, borderRadius: 1 }}>
+                  <ListItemIcon>{favorite ? <FavoriteIcon sx={{ color: "error.main" }} /> : <FavoriteBorderIcon />}</ListItemIcon>
+                  <ListItemText primary={favoriteText} />
+                </ListItemButton>
+                <ListItemButton onClick={hide} sx={{ minHeight: 48, borderRadius: 1 }}>
+                  <ListItemIcon>
+                    <VisibilityOffOutlinedIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Hide shop" secondary="On this device; Settings shows it again" />
+                </ListItemButton>
+              </>
+            )}
           </List>
         </BottomSheet>
         {dialog}
@@ -95,7 +134,8 @@ export function ShopMenu({
           onClose={onClose}
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
           transformOrigin={{ vertical: "top", horizontal: "right" }}
-          slotProps={{ list: { "aria-label": `${shop?.title ?? "Shop"}: more` }, paper: { sx: dropdownPaperSx } }}
+          // The panel is a labelled dialog, as the account menu's: a landmark for its items (axe "region").
+          slotProps={{ list: { "aria-label": `${shop?.title ?? "Shop"}: more` }, paper: { sx: dropdownPaperSx, role: "dialog", "aria-label": `${shop?.title ?? "Shop"}: more` } as never }}
         >
           <MenuItem onClick={open}>
             <ListItemIcon>
@@ -109,6 +149,20 @@ export function ShopMenu({
             </ListItemIcon>
             <ListItemText primary="Copy link" />
           </MenuItem>
+          {fav && (
+            <MenuItem onClick={toggleFavorite}>
+              <ListItemIcon>{favorite ? <FavoriteIcon fontSize="small" sx={{ color: "error.main" }} /> : <FavoriteBorderIcon fontSize="small" />}</ListItemIcon>
+              <ListItemText primary={favoriteText} />
+            </MenuItem>
+          )}
+          {fav && (
+            <MenuItem onClick={hide}>
+              <ListItemIcon>
+                <VisibilityOffOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary="Hide shop" />
+            </MenuItem>
+          )}
         </Menu>
       )}
       {dialog}

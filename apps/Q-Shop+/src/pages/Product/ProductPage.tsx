@@ -43,6 +43,8 @@ import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
+import { FavoriteButton } from "../../favorites/FavoriteButton";
+import { favoriteProduct } from "../../favorites/model";
 import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../Store/CartBits";
 import { visuallyHiddenSx } from "../Store/a11y";
 import { LocalBoundary } from "../Store/LocalBoundary";
@@ -343,6 +345,9 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             </Box>
           ) : null}
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            {!isOwner && (
+              <FavoriteButton fav={favoriteProduct(owner, storeId, productId, catalogueId)} label={productTitle || "this product"} variant="button" />
+            )}
             <CopyLinkButton link={productLink(owner, storeId, productId, catalogueId)} label="Share" />
             <Button component={RouterLink} to={shopPath} variant="outlined" color="inherit" startIcon={<StorefrontOutlinedIcon />} sx={{ minHeight: 44 }}>
               Visit shop

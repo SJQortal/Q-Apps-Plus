@@ -77,12 +77,14 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(mail).toHaveAttribute("href", "qortal://APP/Q-Mail/to/Seller%20Name");
 
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
-    // No unlimited search: the reviews, and the order count's two (the shop's orders, and whether
-    // another name has a shop with this id); no shop search, no limit-0 container search.
+    // No unlimited search: the reviews, the order count's two (the shop's orders, and whether
+    // another name has a shop with this id), and the buyer's own favourites for the heart; no
+    // shop search, no limit-0 container search.
     expect(await screen.findByText("No orders yet")).toBeInTheDocument();
     const searches = searchUrls(node);
     expect(searches.every((u) => /[?&]limit=[1-9]/.test(u))).toBe(true);
-    expect(searches).toHaveLength(3);
+    await waitFor(() => expect(searchUrls(node)).toHaveLength(4));
+    expect(searchUrls(node).filter((u) => u.includes("identifier=q-store-fav&"))).toHaveLength(1);
     expect(searches.filter((u) => u.includes("identifier=q-store-review-my-shop-"))).toHaveLength(1);
     expect(searches.filter((u) => u.includes("service=DOCUMENT_PRIVATE") && u.includes("identifier=q-store-order-my-shop-"))).toHaveLength(1);
     expect(searches.filter((u) => u.includes("service=STORE") && u.includes("identifier=q-store-general-my-shop&"))).toHaveLength(1);

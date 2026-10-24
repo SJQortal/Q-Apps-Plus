@@ -61,7 +61,7 @@ function renderProduct(
 }
 
 describe("product page", { timeout: 20_000 }, () => {
-  it("opens from a deep link: the catalogue, the shop JSON and its product list, no search", async () => {
+  it("opens from a deep link: the catalogue, the shop JSON and its product list, and only the favourites search", async () => {
     const { node } = renderProduct(makeWorld(), pathOf(P11));
     expect(await screen.findByRole("heading", { level: 1, name: "Product 11" })).toBeInTheDocument();
     expect(screen.getByText("12.00")).toBeInTheDocument();
@@ -70,7 +70,9 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(screen.getByText("In stock")).toBeInTheDocument();
     expect(screen.getByText("Description of product 11")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("link", { name: "Seller's Shop" })).toHaveAttribute("href", `/Seller%20Name/${STORE_ID}`));
-    expect(node.fetchCalls.filter((u) => u.includes("resources/search"))).toEqual([]);
+    // One search: the buyer's own favourites, for the product's heart (2026-10-23).
+    await waitFor(() => expect(node.fetchCalls.filter((u) => u.includes("resources/search"))).toHaveLength(1));
+    expect(node.fetchCalls.filter((u) => u.includes("resources/search"))[0]).toContain("identifier=q-store-fav&");
     expect(node.fetchCalls.filter((u) => u.includes(CAT1))).toHaveLength(1);
     // The product list, for its collections pointer; a shop without collections reads nothing more.
     await waitFor(() => expect(node.fetchCalls.filter((u) => u.endsWith("-datacontainer"))).toHaveLength(1));

@@ -50,6 +50,7 @@ import {
 } from "../pages/Store/shopData";
 import { loadActivity, type ActivityIndex } from "./activity";
 import { loadShopIndex, type ShopEntry } from "./shopIndex";
+import type { FavoriteCounts } from "../favorites/model";
 
 /** Product indexes asked for at a time while paging newest first. */
 export const INDEX_BATCH = 8;
@@ -160,7 +161,9 @@ export interface AllProductsQuery {
   /** A price range in QORT (pages/Store/shopData inPriceRange). */
   minQort?: number | null;
   maxQort?: number | null;
-  sort: ProductSort;
+  /** "favorites": how many buyers keep each product (favorites/counts.ts), the Products page's own sort. */
+  sort: ProductSort | "favorites";
+  favorites?: FavoriteCounts | null;
 }
 
 /** The products a shop page would list (pages/Store/shopData isListed), in stock when asked. */
@@ -183,7 +186,12 @@ export function isOpenAuctionRow(row: AllProductRow, catalogues: AllCatalogues, 
 /** Listed products, the filters, then the sort; equal ones by key, so the order never shifts as shops arrive. */
 export function filterAndSortAll(rows: AllProductRow[], query: AllProductsQuery, catalogues: AllCatalogues, now = Date.now()): AllProductRow[] {
   const categories = new Set(query.categories);
-  const compare = compareRows(query.sort, [], now, (row) => auctionTimesOfRow(row as AllProductRow, catalogues));
+  const favorites = query.favorites;
+  const byNewest = compareRows("newest");
+  const compare =
+    query.sort === "favorites"
+      ? (a: AllProductRow, b: AllProductRow) => (favorites ? favorites.product(b.owner, b.productId) - favorites.product(a.owner, a.productId) : 0) || byNewest(a, b)
+      : compareRows(query.sort, [], now, (row) => auctionTimesOfRow(row as AllProductRow, catalogues));
   return listedRows(rows, query.inStockOnly, catalogues, now)
     .filter((row) => categories.size === 0 || categories.has(categoryKey(row.category)))
     .filter((row) => !query.auctionsOnly || isOpenAuctionRow(row, catalogues, now))

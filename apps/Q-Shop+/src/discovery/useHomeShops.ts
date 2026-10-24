@@ -11,6 +11,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { loadActivity, peekActivity, type ActivityIndex } from "./activity";
 import { loadRatings, peekRatings, type RatingsIndex } from "./ratings";
+import { loadFavoriteCounts, peekFavoriteCounts } from "../favorites/counts";
+import type { FavoriteCounts } from "../favorites/model";
+import { useHiddenShops } from "./hiddenShops";
 import { checkShopDetails, forgetFailedShopDetails, getShopDetails, isOutdated, useShopDetailsSnapshot } from "./shopDetails";
 import { loadShopIndex, peekShopIndex, searchShopsPage, type ShopEntry, type ShopIndex } from "./shopIndex";
 import {
@@ -95,6 +98,8 @@ export interface HomeShops {
   pageError: boolean;
   activity: ActivityIndex | null;
   ratings: RatingsIndex | null;
+  /** How many buyers keep each shop as a favourite, once read (with the ratings). */
+  favorites: FavoriteCounts | null;
   /** The sort's index failed: the list stays newest first, with a Retry. */
   sortFailed: boolean;
   loadMore: () => void;
@@ -232,8 +237,35 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     };
   }, [loadRatingsNow, ratingsRun]);
 
-  const sortLoading = (needActivity && !activity.data && !activity.error) || (needRatings && !ratings.data && !ratings.error);
-  const sortFailed = (needActivity && !activity.data && activity.error) || (needRatings && !ratings.data && ratings.error);
+  // Most favourited waits for the counts; the other views load them with the ratings, for the cards' hearts.
+  const needFavorites = sort === "favorites";
+  const [favorites, setFavorites] = useState<SideIndex<FavoriteCounts>>(() => ({ data: peekFavoriteCounts(), error: false }));
+  const [favoritesRun, setFavoritesRun] = useState({ n: 0, fresh: false });
+  const loadFavoritesNow = needFavorites || index.status === "ready";
+  useEffect(() => {
+    if (!loadFavoritesNow) return;
+    let alive = true;
+    loadFavoriteCounts({ fresh: favoritesRun.fresh }).then(
+      (data) => {
+        if (alive) setFavorites({ data, error: false });
+      },
+      () => {
+        if (alive) setFavorites((prev) => ({ data: prev.data, error: true }));
+      }
+    );
+    return () => {
+      alive = false;
+    };
+  }, [loadFavoritesNow, favoritesRun]);
+
+  const sortLoading =
+    (needActivity && !activity.data && !activity.error) ||
+    (needRatings && !ratings.data && !ratings.error) ||
+    (needFavorites && !favorites.data && !favorites.error);
+  const sortFailed =
+    (needActivity && !activity.data && activity.error) ||
+    (needRatings && !ratings.data && ratings.error) ||
+    (needFavorites && !favorites.data && favorites.error);
 
   // ---- filter, sort, cut
   const details = useShopDetailsSnapshot();
@@ -245,10 +277,17 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
       ? index.data.shops
       : EMPTY;
   const filters = useMemo(() => ({ pay, mine: mineKeys }), [pay, mineKeys]);
-  const filtered = useMemo(() => filterShops(base, filters, details.get), [base, filters, details]);
+  // Shops hidden on this device (discovery/hiddenShops.ts) aren't listed.
+  const { list: hiddenList } = useHiddenShops();
+  const listed = useMemo(() => {
+    if (hiddenList.length === 0) return base;
+    const hidden = new Set(hiddenList.map((h) => `${h.owner}\n${h.shortStoreId}`));
+    return base.filter((shop) => !hidden.has(`${shop.owner}\n${shop.shortStoreId}`));
+  }, [base, hiddenList]);
+  const filtered = useMemo(() => filterShops(listed, filters, details.get), [listed, filters, details]);
   const sorted = useMemo(
-    () => sortShops(filtered.shops, sort, { activity: activity.data, ratings: ratings.data }),
-    [filtered, sort, activity.data, ratings.data]
+    () => sortShops(filtered.shops, sort, { activity: activity.data, ratings: ratings.data, favorites: favorites.data }),
+    [filtered, sort, activity.data, ratings.data, favorites.data]
   );
 
   const [shown, setShown] = useState(() => ({
@@ -313,7 +352,11 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
       setRatings((prev) => ({ data: prev.data, error: false }));
       setRatingsRun((run) => ({ n: run.n + 1, fresh: true }));
     }
-  }, [needActivity, needRatings]);
+    if (needFavorites) {
+      setFavorites((prev) => ({ data: prev.data, error: false }));
+      setFavoritesRun((run) => ({ n: run.n + 1, fresh: true }));
+    }
+  }, [needActivity, needRatings, needFavorites]);
 
   // Pull to refresh: ask the node again for what the list is showing. The
   // fresh index carries each shop's latest `updated`, so the cards (and the
@@ -387,6 +430,7 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     pageError: Boolean(results?.pageError),
     activity: activity.data,
     ratings: ratings.data,
+    favorites: favorites.data,
     sortFailed,
     loadMore,
     retryPage: loadMoreResults,

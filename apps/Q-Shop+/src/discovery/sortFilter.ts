@@ -7,14 +7,17 @@ import type { ActivityIndex } from "./activity";
 import { weightedRating, type RatingsIndex } from "./ratings";
 import type { ShopDetails } from "./shopDetails";
 import type { ShopEntry } from "./shopIndex";
+import type { FavoriteCounts } from "../favorites/model";
 
-export type ShopSort = "newest" | "active" | "products" | "rated" | "az";
+export type ShopSort = "newest" | "active" | "products" | "rated" | "favorites" | "az";
 
 export const SHOP_SORTS: { value: ShopSort; label: string }[] = [
   { value: "newest", label: "Newest" },
   { value: "active", label: "Recently active" },
   { value: "products", label: "Most products" },
   { value: "rated", label: "Top rated" },
+  // How many buyers keep the shop as a favourite (favorites/counts.ts).
+  { value: "favorites", label: "Most favourited" },
   { value: "az", label: "A–Z" },
 ];
 
@@ -114,6 +117,7 @@ export function filterShops(
 export interface SortContext {
   activity?: ActivityIndex | null;
   ratings?: RatingsIndex | null;
+  favorites?: FavoriteCounts | null;
 }
 
 const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
@@ -159,6 +163,12 @@ export function sortShops(shops: ShopEntry[], sort: ShopSort, context: SortConte
         }
         return newestFirst(a, b);
       });
+    }
+    case "favorites": {
+      const favorites = context.favorites;
+      if (!favorites) return list.sort(newestFirst);
+      const count = (s: ShopEntry) => favorites.shop(s.owner, s.shortStoreId);
+      return list.sort((a, b) => count(b) - count(a) || newestFirst(a, b));
     }
     case "az":
       return list.sort((a, b) => collator.compare(a.title, b.title) || collator.compare(a.owner, b.owner));

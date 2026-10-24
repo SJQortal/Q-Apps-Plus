@@ -70,6 +70,7 @@ Every shape below is what the original app writes; the + app writes the same, an
 | THUMBNAIL | `q-store-thumb-<uid10>` (**+ app only**, round 5, 2026-10-23) | seller | W (R: shows) | a description video's thumbnail, a WebP at most 960 px wide, `filename: "thumbnail.webp"`, metadata `title` "<video> (thumbnail)"; with an uploaded video it goes in the same PUBLISH_MULTIPLE; the video's embed names it in `data-thumb-name` / `data-thumb-identifier` | qortalSources.test, ProductDescription.test, DescriptionEditor.test |
 | DOCUMENT | `q-store-delivery-<shortStoreId>` (**+ app only**, round 5, 2026-10-23) | seller | R/W | JSON `{v: 1, storeId, currency: "QORT" or the shop's pricing currency, general: {zones}, profiles: [{id, name (≤60), products: [productId…], zones}], updated}`; a zone `{id, name? (≤60), countries: [ISO code…], states?: [US state code…] (with "US"), first, extra?, freeOver?}` in `currency`; at most 20 profiles and 30 zones each; `filename: "delivery.json"`, metadata `title: "Delivery prices"`. Read with an exact-match search first (one cached search for a shop without it, never a fetch of a missing resource), then the JSON, checked field by field | delivery/model.test, checkoutDelivery.test, seller/delivery.test |
 | (inside an order) | `details["q-store-delivery"]` (**+ app only**, round 5, 2026-10-23; additive) | buyer | W (R: shows) | the delivery fee as one more order line in the original's line shape: `{product: {id: "q-store-delivery", title: "Delivery to <country>[ (<state>)][: <profiles>]", type: "delivery", price: [{currency: "qort", value}, {currency: "ARRR", value}?], delivery: {currency, value, qort?, parts: [{profile, zone, items, fee}]}}, catalogueId: "", quantity: 1, pricePerUnit, totalProductPrice}`; priced by checkout's unchanged money code, so it's in `totalPrice` and the payment; the original lists it as a line ("Product Id: q-store-delivery"); the + app shows it as the order's Delivery row, outside the items | Cart.pin.test (delivery tests), CartPage.test, orders/deliveryLine.test |
+| DOCUMENT | `q-store-favs-<shortStoreId>` (a shop) and `q-store-favp-<shortStoreId>-<productUid>` (a product: its id with `q-store-product` → `q-store-favp`) (**+ app only**, round 5, 2026-10-23) | **buyer** | R/W | a favourite, public so shops and products can be sorted by them: JSON `{v: 1, kind: "shop"/"product", storeId, owner, productId?, catalogueId?, created}`, `filename: "favorite.json"`, metadata title "Favourite shop" / "Favourite product", description `fav:<owner, URI-encoded>` (a product's adds `;cat:<catalogueId>`), so a search row says everything (nothing is fetched to list or count them); removed by republishing it as a tombstone titled and tagged "deleted"; counted once per name, for the owner it names, never the owner's own | favorites/model.test, favorites.test |
 | FILE + DOCUMENT | `qshare_file_<slug>_<uid6>` and `qshare_file_<slug>_<uid6>_metadata` (**Q-Share's**, round 5) | seller | W (R: previews) | a PDF uploaded in the description editor, published as a Q-Share share in Q-Share's own shapes (docs/apps/Q-Share+.md → Data contract): category `6` (Document), subcategory `601` (PDF), `subcategory2: ""` | qortalSources.test |
 | DOCUMENT, VIDEO, FILE | Q-Tube `qtube_vid_…` pages and their `videoReference`; Q-Share shares and their `files` | any name | R | read when a description links them, only what the link's own name published | qortalSources.test, ProductDescription.test |
 | THUMBNAIL | `qortal_avatar` | any name | R | avatar image | |
@@ -625,6 +626,17 @@ Simon: *"add these kinds of cool features like clicking on product price status 
 - On phones the columns aren't shown; the Sort menu in Category and sort has every way.
 - `seller/productList.ts` (SORT_COLUMNS, sortForColumn, shopOrderPlaces), `seller/ProductsTab.tsx` (SortHeader). Tests 948 → 952.
 
+### Round 5, 2026-10-24: favourites, hiding a shop, Most favourited
+
+Simon: *"here I would like to add more options like hide shop, or add to favourites, and I would like a new icon to hte right of the name with the favorite shops or products, nicely segregated, and on each shop or product page also add icon to add to favorites, and add to sorting to also sort by buyers favorites"*:
+- **Favourites** (`src/favorites/`): a heart on each shop page and product page ("Add to favourites" / "In your favourites"), and Add to favourites / Remove from favourites in a shop card's ⋮ menu. A tap changes it at once; Hub asks to confirm a small publish (one DOCUMENT per favourite, under the buyer's name: Data contract), and a decline or a failure puts the heart back. A change the node's search doesn't list yet is kept on the device for 30 minutes, so a reload doesn't undo it.
+- **Why public:** "sort by buyers favorites" needs everyone's favourites, so they are on QDN like Qortal's likes (others can see who keeps what; the Favourites page says so). One paged search of every favourite's row (metadata included, nothing fetched) counts them, cached for the session.
+- **A heart beside the name** in the header opens **Favourites** (`/favorites`): Shops (their cards) and Products (rows with picture, price and shop) on two tabs. Signed out it asks to sign in; without a name, to register one.
+- **Most favourited** sorts Shops (the cards show the count beside the stars) and Products; equal counts fall back to newest first.
+- **Hide shop** (⋮ menu, other names' shops): left out of Shops and Products on this device (`discovery/hiddenShops.ts`, local only); its page still opens from a link and offers Show it again; Settings → Shopping lists the hidden shops with Show again.
+- **Calls:** Home makes one more search, the favourites' (as the ratings', after the shop index), 4 in all. A shop page, signed in, makes one more, the buyer's own favourites for its heart (5); a product page, signed in, that one search (it made none). The card menu reads the buyer's favourites only once it opens. A shop page doesn't show its own count, which would cost another search.
+- **Tests:** 952 → 963 (the model's shapes and counts; the card menu with a decline; Most favourited; the shop page's heart; the Favourites page; Hide shop and Show again; the header heart); the first-load call counts updated with the reasons.
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
@@ -632,6 +644,13 @@ Simon: *"add these kinds of cool features like clicking on product price status 
 - **2026-10-22, Counter Economy:** as a shopper, see how many orders a merchant has received. **Built** (the shop header's order count), with the limits in Round 5, second batch: no count for a shop id another name shares.
 
 ## Follow-ups
+
+**Round 5, 2026-10-24: questions for Simon on favourites (51–54)**
+
+51. **Favourites are public** (needed to sort by them) and each is a small publish Hub asks to confirm. OK, or keep them private on the device (free, instant) and drop Most favourited?
+52. **Hidden shops** stay on this device. Also keep them in Settings → Sync (one more field in the settings document)?
+53. **Shop pages** don't show their favourite count (one more search per visit). Show it?
+54. **Counting:** one per name, the owner's own left out, as with reviews. Anyone can register names, so it's a soft signal. Good enough?
 
 **Round 5, 2026-10-23: questions for Simon on delivery prices (45–50)**
 

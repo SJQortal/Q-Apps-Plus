@@ -106,9 +106,10 @@ describe("first load", () => {
     const s = report("home (buyer)", node);
     expect(s.unlimitedSearches).toBe(0);
     // The own-shops search, the shop index, and once the index is in, the
-    // reviews index for the cards' stars (Simon, 2026-10-22); no product-index search.
-    expect(total(s.searches)).toBeLessThanOrEqual(3);
-    expect(s.searches).toEqual({ STORE: 2, DOCUMENT: 1 });
+    // reviews index for the cards' stars (Simon, 2026-10-22) and the
+    // favourites' for their hearts (2026-10-23); no product-index search.
+    expect(total(s.searches)).toBeLessThanOrEqual(4);
+    expect(s.searches).toEqual({ STORE: 2, DOCUMENT: 2 });
     // Shop JSONs (logos) only for the cards on screen.
     expect(s.resources.STORE ?? 0).toBeGreaterThan(0);
     expect(s.resources.STORE ?? 0).toBeLessThanOrEqual(CARDS_IN_VIEW);
@@ -122,8 +123,8 @@ describe("first load", () => {
     const node = await loadHome(world);
     const s = report("home (owner)", node);
     expect(s.unlimitedSearches).toBe(0);
-    expect(total(s.searches)).toBeLessThanOrEqual(3);
-    expect(s.searches).toEqual({ STORE: 2, DOCUMENT: 1 });
+    expect(total(s.searches)).toBeLessThanOrEqual(4);
+    expect(s.searches).toEqual({ STORE: 2, DOCUMENT: 2 });
     // The cards on screen, plus the owner's own shop (and its product index) for the seller pages.
     expect(s.resources.STORE ?? 0).toBeLessThanOrEqual(CARDS_IN_VIEW + 1);
     expect(s.resources["data container"] ?? 0).toBeLessThanOrEqual(1);
@@ -136,7 +137,8 @@ describe("first load", () => {
     const s = report("shop (buyer)", node);
     expect(s.unlimitedSearches).toBe(0);
     const searches = Object.values(s.searches).reduce((a, b) => a + b, 0);
-    expect(searches).toBeLessThanOrEqual(4);
+    // Was 4; the buyer's own favourites, for the shop's heart (2026-10-23), makes 5.
+    expect(searches).toBeLessThanOrEqual(5);
     // The shop and its product index once each, and one fetch per catalogue on screen (12 products: 2).
     expect(s.resources.STORE).toBe(1);
     expect(s.resources["data container"]).toBe(1);

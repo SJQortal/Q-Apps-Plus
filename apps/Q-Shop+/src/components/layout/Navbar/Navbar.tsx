@@ -15,6 +15,8 @@ import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
 import AddBusinessOutlinedIcon from "@mui/icons-material/AddBusinessOutlined";
 import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import FavoriteIcon from "@mui/icons-material/Favorite";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { RootState } from "../../../state/store";
 import { APP_NAME } from "../../../constants/plus";
@@ -184,6 +186,19 @@ const NavBar: React.FC = () => {
               <NavbarName>{userName}</NavbarName>
               {!phone && <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />}
             </AvatarContainer>
+          )}
+          {signedIn && (
+            // The name's favourite shops and products (pages/Favorites), right of the name (Simon, 2026-10-23).
+            <Tooltip title="Favourites">
+              <IconButton
+                aria-label="Favourites"
+                aria-current={section === "favorites" ? "page" : undefined}
+                onClick={() => navigate("/favorites")}
+                sx={{ ...ICON_BUTTON_SX, color: section === "favorites" ? "error.main" : "text.primary" }}
+              >
+                {section === "favorites" ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+              </IconButton>
+            </Tooltip>
           )}
 
           {menuLoaded && signedIn && (

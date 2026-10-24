@@ -232,6 +232,26 @@ describe("AppShell on desktop", () => {
   });
 });
 
+describe("the Favourites heart", () => {
+  it("sits right of the name when signed in and opens Favourites", () => {
+    restore = mockViewport(DESKTOP);
+    renderShell({ store: sellerStore() });
+    const banner = within(screen.getByRole("banner"));
+    const heart = banner.getByRole("button", { name: "Favourites" });
+    const account = banner.getByRole("button", { name: "Account menu for Seller Name" });
+    // Right of the name: after it in the header.
+    expect(account.compareDocumentPosition(heart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(heart);
+    expect(where()).toBe("/favorites");
+  });
+
+  it("isn't there when signed out", () => {
+    restore = mockViewport(DESKTOP);
+    renderShell();
+    expect(within(screen.getByRole("banner")).queryByRole("button", { name: "Favourites" })).toBeNull();
+  });
+});
+
 describe("Manage Shop or Create Shop", () => {
   function newSellerStore(status: "none" | "loading") {
     const store = createAppStore();

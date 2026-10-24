@@ -3,7 +3,7 @@
  * received (pages/Store/orderCount.ts), where it is and ships to, the coins it takes, and what you can do (message the seller, share, see
  * the details; the owner also edits the shop or opens Manage Shop).
  */
-import { Box, Button, Rating, Skeleton, Typography } from "@mui/material";
+import { Alert, Box, Button, Rating, Skeleton, Typography } from "@mui/material";
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
@@ -23,6 +23,10 @@ import type { ShopReviews } from "./useShopData";
 import { orderCountLabel, type OrderCount } from "./orderCount";
 import { ShippingCountriesButton } from "./ShippingCountries";
 import { useLoadedPictures } from "../../components/common/useLoadedPictures";
+import { FavoriteButton } from "../../favorites/FavoriteButton";
+import { favoriteShop } from "../../favorites/model";
+import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
+import { shortStoreIdOf } from "../../qdn/identifiers";
 
 const panelSx = {
   border: 1,
@@ -116,8 +120,23 @@ export function ShopHeader({
   const orders = orderCount ? orderCountLabel(orderCount) : null;
   const title = shop.title || "Shop";
   const pictures = useLoadedPictures();
+  const { isHidden } = useHiddenShops();
+  const hidden = !isOwner && isHidden(owner, shortStoreIdOf(storeId));
   return (
     <Box component="section" aria-label="About this shop" sx={panelSx}>
+      {hidden && (
+        <Alert
+          severity="info"
+          sx={{ mb: 2 }}
+          action={
+            <Button color="inherit" onClick={() => showShop(owner, shortStoreIdOf(storeId))} sx={{ minHeight: 44 }}>
+              Show it again
+            </Button>
+          }
+        >
+          You hid this shop: it isn&apos;t listed in Shops or Products on this device.
+        </Alert>
+      )}
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
         {shop.logo ? (
           <Box
@@ -191,6 +210,7 @@ export function ShopHeader({
                   {orders}
                 </Typography>
               )}
+
             </Box>
           </Box>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, minWidth: 0 }}>
@@ -271,6 +291,7 @@ export function ShopHeader({
             Message seller
           </Button>
         )}
+        {!isOwner && <FavoriteButton fav={favoriteShop(owner, storeId)} label={title} variant="button" />}
         <CopyLinkButton link={storeLink(owner, storeId)} label="Share" />
         <Button variant="outlined" color="inherit" startIcon={<InfoOutlinedIcon />} onClick={onOpenDetails} sx={{ minHeight: 44 }}>
           Details

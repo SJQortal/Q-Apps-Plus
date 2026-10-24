@@ -86,9 +86,16 @@ import {
   type CategoryOption,
 } from "../../discovery/allProducts";
 import { selectMenuProps } from "../../components/common/menuStyle";
+import { useHiddenShops } from "../../discovery/hiddenShops";
+import { useFavoriteCounts } from "../../favorites/counts";
+import { shortStoreIdOf } from "../../qdn/identifiers";
 
-function parseProductSort(value: string | null): ProductSort | null {
-  return [...PRODUCT_SORTS, AUCTION_SORT].some((s) => s.value === value) ? (value as ProductSort) : null;
+/** The Products page's sorts: the shops' ones, and how many buyers keep each product (favorites/counts.ts). */
+type ListSort = ProductSort | "favorites";
+const FAVORITES_SORT: { value: ListSort; label: string } = { value: "favorites", label: "Most favourited" };
+
+function parseProductSort(value: string | null): ListSort | null {
+  return [...PRODUCT_SORTS, AUCTION_SORT, FAVORITES_SORT].some((s) => s.value === value) ? (value as ListSort) : null;
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -109,7 +116,7 @@ export function resetProductsMemory(): void {
 
 interface ListQuery {
   q: string;
-  sort: ProductSort;
+  sort: ListSort;
   /** categoryKey()s */
   categories: string[];
   inStockOnly: boolean;
@@ -121,7 +128,7 @@ interface ListQuery {
 }
 
 /** The sort a list has without a `sort` in its URL. */
-const defaultSort = (auctionsOnly: boolean): ProductSort => (auctionsOnly ? "ending" : "newest");
+const defaultSort = (auctionsOnly: boolean): ListSort => (auctionsOnly ? "ending" : "newest");
 
 /** The list's state in the URL: `?q=&sort=&category=…&stock=1&auctions=1&min=&max=`, changed in place so Back leaves the page. */
 function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => void } {
@@ -311,13 +318,21 @@ export function ProductsPage() {
     if (needAll && phase === "ready") readAll();
   }, [needAll, phase, readAll]);
 
-  const listed = useMemo(() => listedRows(all.rows, inStockOnly, catalogues, now), [all.rows, inStockOnly, catalogues, now]);
+  // Shops hidden on this device (discovery/hiddenShops.ts) list none of their products.
+  const { list: hiddenShops } = useHiddenShops();
+  const rows = useMemo(() => {
+    if (hiddenShops.length === 0) return all.rows;
+    const hidden = new Set(hiddenShops.map((h) => `${h.owner}\n${h.shortStoreId}`));
+    return all.rows.filter((row) => !hidden.has(`${row.owner}\n${shortStoreIdOf(row.storeId)}`));
+  }, [all.rows, hiddenShops]);
+  const favoriteCounts = useFavoriteCounts(sort === "favorites");
+  const listed = useMemo(() => listedRows(rows, inStockOnly, catalogues, now), [rows, inStockOnly, catalogues, now]);
   const auctions = useMemo(() => listed.filter((row) => isOpenAuctionRow(row, catalogues, now)).length, [listed, catalogues, now]);
   const options = useMemo(() => categoryOptions(listed), [listed]);
   const labels = useMemo(() => new Map(options.map((option) => [option.key, option.label])), [options]);
   const filtered = useMemo(
-    () => filterAndSortAll(all.rows, { categories, inStockOnly, auctionsOnly, minQort, maxQort, sort }, catalogues, now),
-    [all.rows, categories, inStockOnly, auctionsOnly, minQort, maxQort, sort, catalogues, now]
+    () => filterAndSortAll(rows, { categories, inStockOnly, auctionsOnly, minQort, maxQort, sort, favorites: favoriteCounts }, catalogues, now),
+    [rows, categories, inStockOnly, auctionsOnly, minQort, maxQort, sort, favoriteCounts, catalogues, now]
   );
   // Newest first shows what is in its final place; anything else waits for every shop.
   const frontier = all.frontier;
@@ -444,11 +459,11 @@ export function ProductsPage() {
       size="small"
       label="Sort"
       value={sort}
-      onChange={(event) => update({ sort: event.target.value as ProductSort })}
+      onChange={(event) => update({ sort: event.target.value as ListSort })}
       slotProps={{ select: { MenuProps: selectMenuProps } }}
       sx={{ minWidth: 170, flex: { xs: "1 1 150px", sm: "0 0 auto" }, "& .MuiInputBase-root": { minHeight: 44 } }}
     >
-      {(auctions > 0 || sort === "ending" ? [...PRODUCT_SORTS, AUCTION_SORT] : PRODUCT_SORTS).map((option) => (
+      {[...PRODUCT_SORTS, ...(auctions > 0 || sort === "ending" ? [AUCTION_SORT] : []), FAVORITES_SORT].map((option) => (
         <MenuItem key={option.value} value={option.value}>
           {option.label}
         </MenuItem>

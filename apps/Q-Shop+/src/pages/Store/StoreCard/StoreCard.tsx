@@ -26,6 +26,7 @@ import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA } from "../../../hooks/usePhoneLayou
 import { isOutdated, requestShopDetails, useShopDetails, type ShopDetails, type ShopJson } from "../../../discovery/shopDetails";
 import type { ShopEntry } from "../../../discovery/shopIndex";
 import { formatRating, type ShopRating } from "../../../discovery/ratings";
+import FavoriteIcon from "@mui/icons-material/Favorite";
 import { CARD_ART_HEIGHT } from "../../../discovery/ShopGrid";
 import { visuallyHidden } from "../../../discovery/a11y";
 import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
@@ -40,6 +41,8 @@ export interface StoreCardProps {
   mine: boolean;
   /** undefined while the ratings aren't loaded; null when nobody but the owner has reviewed it. */
   rating?: ShopRating | null;
+  /** How many buyers keep it as a favourite (favorites/counts.ts), once read. */
+  favorites?: number;
   /** A plain click on the card (before the router navigates). */
   onOpen: (shop: ShopEntry) => void;
   onMenu: (shop: ShopEntry, anchor: HTMLElement) => void;
@@ -159,7 +162,7 @@ function CardArt({ shop, details, onLogoLoad }: { shop: ShopEntry; details: Shop
   );
 }
 
-function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
+function StoreCardView({ shop, mine, rating, favorites = 0, onOpen, onMenu }: StoreCardProps) {
   const dispatch = useDispatch();
   const titleId = useId();
   const descriptionId = useId();
@@ -205,6 +208,7 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
   const summary = [
     `By ${shop.owner}.`,
     rating ? `Rated ${formatRating(rating.average)} out of 5 from ${rating.count} ${rating.count === 1 ? "review" : "reviews"}.` : "",
+    favorites > 0 ? `${favorites === 1 ? "1 buyer keeps it" : `${favorites} buyers keep it`} as a favourite.` : "",
     `Pays in ${labels.join(", ")}.`,
     mine ? "Your shop." : "",
   ]
@@ -273,6 +277,14 @@ function StoreCardView({ shop, mine, rating, onOpen, onMenu }: StoreCardProps) {
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   ({rating.count})
+                </Typography>
+              </Box>
+            )}
+            {favorites > 0 && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}>
+                <FavoriteIcon sx={{ fontSize: 16, color: "error.main" }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {favorites}
                 </Typography>
               </Box>
             )}

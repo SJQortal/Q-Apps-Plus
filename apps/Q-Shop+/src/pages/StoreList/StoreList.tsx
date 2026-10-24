@@ -236,6 +236,7 @@ export const StoreList = () => {
         shop={shop}
         mine={shop.owner === userName}
         rating={home.ratings ? home.ratings.get(shop.owner, shop.shortStoreId) : undefined}
+        favorites={home.favorites ? home.favorites.shop(shop.owner, shop.shortStoreId) : undefined}
         onOpen={prepareOpen}
         onMenu={onMenu}
       />

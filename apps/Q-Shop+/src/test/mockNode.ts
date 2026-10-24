@@ -61,6 +61,8 @@ export interface World {
   orders: { identifier: string; buyer: string; created: number; json: any }[];
   statuses: { identifier: string; seller: string; created: number; json: any }[];
   arrrRate: string;
+  /** Favourites (favorites/model.ts): the rows their publishes make, metadata included. */
+  favorites?: { name: string; identifier: string; title: string; description: string; created: number }[];
 }
 
 const LOGO = "data:image/webp;base64,TE9HTw==";
@@ -239,6 +241,9 @@ function allRows(world: World): Row[] {
   }
   for (const o of world.orders) {
     rows.push({ name: o.buyer, service: "DOCUMENT_PRIVATE", identifier: o.identifier, created: o.created, updated: o.created, size: 900 });
+  }
+  for (const f of world.favorites ?? []) {
+    rows.push({ name: f.name, service: "DOCUMENT", identifier: f.identifier, created: f.created, updated: f.created, size: 200, metadata: { title: f.title, description: f.description } });
   }
   for (const st of world.statuses) {
     rows.push({ name: st.seller, service: "DOCUMENT_PRIVATE", identifier: st.identifier, created: st.created, updated: st.created, size: 300 });

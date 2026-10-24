@@ -101,10 +101,10 @@ describe("home page", () => {
     expect(cardTitles()[0]).toBe("Shop number 23");
     expect(screen.getByText("24 shops")).toBeInTheDocument();
     // The cards paint from the one shop-index search; the reviews index (for
-    // their stars) follows once it is in, and still no shop JSON is read.
-    await waitFor(() => expect(node.summary().searches).toEqual({ STORE: 1, DOCUMENT: 1 }));
+    // their stars) and the favourites' (their hearts) follow once it is in, and still no shop JSON is read.
+    await waitFor(() => expect(node.summary().searches).toEqual({ STORE: 1, DOCUMENT: 2 }));
     const s = node.summary();
-    expect(searchParams(node.fetchCalls).find((p) => p.get("service") === "DOCUMENT")?.get("identifier")).toBe("q-store-review-");
+    expect(searchParams(node.fetchCalls).filter((p) => p.get("service") === "DOCUMENT").map((p) => p.get("identifier")).sort()).toEqual(["q-store-fav", "q-store-review-"]);
     expect(s.unlimitedSearches).toBe(0);
     expect(s.resources).toEqual({});
     // Titles and descriptions come from the metadata, without the coins marker.

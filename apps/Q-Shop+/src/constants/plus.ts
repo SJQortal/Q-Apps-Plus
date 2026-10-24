@@ -78,6 +78,12 @@ export const DELETED_SHOPS_STORAGE_KEY = `${STORAGE_PREFIX}deleted-shops`;
 /** Product deletes whose catalogues didn't all land (seller/pendingDeletes.ts). */
 export const PENDING_DELETES_STORAGE_KEY = `${STORAGE_PREFIX}pending-deletes`;
 
+/** Favourites this browser changed that the node's search may not show yet (favorites/myFavorites.ts). */
+export const PENDING_FAVORITES_STORAGE_KEY = `${STORAGE_PREFIX}pending-favorites`;
+
+/** Shops hidden from the lists on this device (discovery/hiddenShops.ts). */
+export const HIDDEN_SHOPS_STORAGE_KEY = `${STORAGE_PREFIX}hidden-shops`;
+
 /** Settings → Sync: a DOCUMENT under the user's name (additive data). */
 export const SETTINGS_SYNC_IDENTIFIER = "qshopplus_settings";
 

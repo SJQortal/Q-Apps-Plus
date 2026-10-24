@@ -107,6 +107,12 @@ const DELIVERY = {
   },
   'shop-1': { v: 1, storeId: 'q-store-general-shop-1', currency: 'QORT', general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5 }] }, profiles: [], updated: now - DAY },
 };
+// Favourites (favorites/model.ts): [name, shop index, product or null]. The signed-in seller keeps two shops and
+// two products; other names keep some shops, for Most favourited and the cards' hearts.
+const FAVORITES = [
+  [ME, 1, null], [ME, 3, null], [ME, 1, 3], [ME, 3, 0],
+  ['Ann Buyer', 3, null], ['bob+builder', 3, null], ['Ann Buyer', 2, null], ['Zoë Ålund', 1, null],
+];
 const AUCTIONS = {
   'shop-1': {
     4: { v: 1, start: now - DAY, end: now + DAY + 5 * HOUR, startingBid: 12, reserve: 30, buyNow: 80, extendMinutes: 5 },
@@ -257,6 +263,13 @@ function rows() {
   for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
   statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
   out.push({ name: 'Gold Issuer', service: 'IMAGE', identifier: 'asset81_Gold Bar_aavatar', created: now - DAY, updated: now - DAY, size: 2000 });
+  FAVORITES.forEach(([name, i, p], n) => {
+    const s = shops[i];
+    const owner = `fav:${encodeURIComponent(s.owner)}`;
+    const created = now - n * HOUR;
+    if (p === null) out.push({ name, service: 'DOCUMENT', identifier: `q-store-favs-${s.short}`, created, updated: created, size: 150, metadata: { title: 'Favourite shop', description: owner } });
+    else out.push({ name, service: 'DOCUMENT', identifier: `q-store-favp-${s.short}-P${String(p).padStart(9, '0')}`, created, updated: created, size: 200, metadata: { title: 'Favourite product', description: `${owner};cat:${encodeURIComponent(catalogueId(s, 0))}` } });
+  });
   BIDS.forEach(([short, p, name, amount, created], i) => {
     const seller = shops.find((x) => x.short === short).owner;
     out.push({ name, service: 'DOCUMENT', identifier: `q-store-bid-${short}-P${String(p).padStart(9, '0')}-BID${String(i).padStart(3, '0')}`, created, updated: created, size: 150, metadata: { title: 'Bid', description: `bid:${amount};to:${encodeURIComponent(seller)}` } });
@@ -328,6 +341,8 @@ export default {
     `try {
       if (!sessionStorage.getItem('qsp-seeded')) {
         sessionStorage.setItem('qsp-seeded', '1');
+        // A shop hidden on this device (discovery/hiddenShops.ts), for Settings' list.
+        localStorage.setItem('qshopplus-hidden-shops', JSON.stringify([{ owner: 'Seller 13', shortStoreId: 'shop-13', title: 'Knitting Club', at: ${now} }]));
         localStorage.setItem('qshopplus-cart', JSON.stringify(${JSON.stringify({
           'q-store-general-shop-1': { orders: { [productId(shops[1], 1)]: { productId: productId(shops[1], 1), catalogueId: catalogueId(shops[1], 0), quantity: 2 }, [productId(shops[1], 3)]: { productId: productId(shops[1], 3), catalogueId: catalogueId(shops[1], 0), quantity: 1 } }, lastUpdated: now, storeId: 'q-store-general-shop-1', storeOwner: 'Shop+Plus' },
           'q-store-general-shop-3': { orders: { [productId(shops[3], 2)]: { productId: productId(shops[3], 2), catalogueId: catalogueId(shops[3], 0), quantity: 1 } }, lastUpdated: now - 1000, storeId: 'q-store-general-shop-3', storeOwner: 'Seller 3' },
@@ -419,6 +434,11 @@ export default {
   // overlay: a sheet, dialog or menu is open, so capture the viewport, not the full page.
   screens: [
     { key: 'home', path: '/', after: async (page) => page.waitForSelector('a[href*="q-store-general-"]', { timeout: 8000 }).catch(() => {}) },
+    { key: 'favorites', path: '/favorites', after: async (page) => { await page.getByRole('list', { name: 'Favourite shops' }).getByRole('heading').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    { key: 'favorites-products', path: '/favorites?tab=products', after: async (page) => { await page.getByRole('list', { name: 'Favourite products' }).getByRole('link').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    { key: 'home-favorites', path: '/?sort=favorites', after: async (page) => page.waitForTimeout(1200) },
+    { key: 'shop-card-menu', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: 'More for Plus Gadgets' }).click({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'product-favorite', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 3)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('button', { name: /from favourites$/ }).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'home-search', path: '/?q=shop', after: async (page) => page.waitForTimeout(800) },
     { key: 'home-filters', path: '/', mobileOnly: true, overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /filter|sort/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'products', path: '/products', after: async (page) => page.waitForTimeout(900) },

@@ -41,6 +41,7 @@ import { collectSettingsSnapshot, fetchSettingsFromQdn, publishSettingsToQdn } f
 import { isProductView, setProductView, useProductView } from "../../utils/productView";
 import { selectMenuProps } from "../../components/common/menuStyle";
 import { saveDelivery, savedDelivery } from "../Cart/delivery";
+import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
 
 /** The coins a buyer can prefer, in the order the shops offer them. */
 export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR"];
@@ -124,6 +125,7 @@ export function SettingsPage() {
   const { uiTheme, setUiTheme } = useHubTheme();
   const switchName = useSwitchActiveName();
   const [blockedOpen, setBlockedOpen] = useState(false);
+  const { list: hiddenShops } = useHiddenShops();
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [syncBusy, setSyncBusy] = useState<"save" | "restore" | null>(null);
@@ -384,6 +386,29 @@ export function SettingsPage() {
             </Button>
           </Buttons>
         </Row>
+        {hiddenShops.length > 0 && (
+          // Shops hidden from the lists on this device (discovery/hiddenShops.ts).
+          <Row>
+            <RowLabel title="Hidden shops">
+              {hiddenShops.length === 1 ? "1 shop isn't" : `${hiddenShops.length} shops aren't`} listed in Shops or Products on this device.
+            </RowLabel>
+            <Box component="ul" aria-label="Hidden shops" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1, width: "100%" }}>
+              {hiddenShops.map((shop) => (
+                <Box component="li" key={`${shop.owner}\n${shop.shortStoreId}`} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                  <Typography sx={{ flex: "1 1 160px", minWidth: 0, overflowWrap: "anywhere" }}>
+                    {shop.title || shop.shortStoreId}{" "}
+                    <Box component="span" sx={{ color: "text.secondary" }}>
+                      by {shop.owner}
+                    </Box>
+                  </Typography>
+                  <Button variant="outlined" onClick={() => showShop(shop.owner, shop.shortStoreId)} aria-label={`Show again: ${shop.title || shop.shortStoreId}`} sx={{ minHeight: 44 }}>
+                    Show again
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+          </Row>
+        )}
       </Section>
 
       <Section title="Sync">
