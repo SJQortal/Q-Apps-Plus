@@ -136,6 +136,8 @@ const DELIVERY = {
 const FAVORITES = [
   [ME, 1, null], [ME, 3, null], [ME, 1, 3], [ME, 3, 0],
   ['Ann Buyer', 3, null], ['bob+builder', 3, null], ['Ann Buyer', 2, null], ['Zoë Ålund', 1, null],
+  // The signed-in seller's shop and a product of it, kept by others: the Overview's Recent activity.
+  ['Ann Buyer', 0, null], ['Zoë Ålund', 0, 2],
 ];
 const AUCTIONS = {
   'shop-1': {
@@ -526,6 +528,16 @@ export default {
       await page.waitForTimeout(400);
     } },
     { key: 'shop-own', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
+    // Opened from far down the shop page: the product page starts at its top.
+    { key: 'product-from-list', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => {
+      await page.waitForTimeout(900);
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await page.waitForTimeout(300);
+      const card = page.locator('ul li a[href*="q-store-product-"]').last();
+      await card.click({ timeout: 8000 });
+      await page.getByRole('heading', { level: 1 }).waitFor({ timeout: 8000 });
+      await page.waitForTimeout(800);
+    } },
     { key: 'product', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, after: async (page) => page.waitForTimeout(900) },
     { key: 'product-pdf', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.waitForTimeout(1000); } },
     { key: 'product-pdf-smart', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.getByRole('button', { name: 'Smart' }).click({ timeout: 4000 }); await page.waitForTimeout(1200); } },
@@ -574,6 +586,14 @@ export default {
       await page.waitForTimeout(400);
     } },
     { key: 'seller', path: `/product-manager/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'seller-activity', path: `/product-manager/q-store-general-my-shop`, after: async (page) => { await page.getByRole('list', { name: 'Recent activity' }).waitFor({ timeout: 8000 }); await page.getByRole('heading', { name: 'Recent activity' }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(700); } },
+    { key: 'seller-order-review', path: `/product-manager/q-store-general-my-shop?tab=orders`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^All · / }).click({ timeout: 8000 });
+      await page.getByRole('list', { name: 'Orders received' }).getByRole('button', { name: /bob\+builder/ }).first().click({ timeout: 8000 });
+      await page.getByRole('dialog').getByRole('button', { name: 'View review' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
     { key: 'seller-orders', path: `/product-manager/q-store-general-my-shop`, optional: true, after: async (page) => { await page.waitForTimeout(600); await page.getByRole('tab', { name: /orders/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(700); } },
     { key: 'seller-products', path: `/product-manager/q-store-general-my-shop`, optional: true, after: async (page) => { await page.waitForTimeout(600); await page.getByRole('tab', { name: /products/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(700); } },
     { key: 'seller-select', path: `/product-manager/q-store-general-my-shop?tab=products`, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Select', exact: true }).click({ timeout: 2500 }); await page.getByRole('checkbox').first().click({ timeout: 2500 }); await page.waitForTimeout(300); } },
