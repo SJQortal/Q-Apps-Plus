@@ -2,6 +2,7 @@ import { Box, Chip, Skeleton } from "@mui/material";
 import { alpha, type Theme } from "@mui/material/styles";
 import HourglassEmptyOutlinedIcon from "@mui/icons-material/HourglassEmptyOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import ReplayOutlinedIcon from "@mui/icons-material/ReplayOutlined";
 import HelpOutlineOutlinedIcon from "@mui/icons-material/HelpOutlineOutlined";
 import type { OrderStatusInfo } from "../../state/features/orderSlice";
@@ -10,13 +11,14 @@ import { normalizeStatus, statusColor, statusLabel } from "../status";
 const ICONS = {
   Received: <HourglassEmptyOutlinedIcon />,
   Shipped: <LocalShippingOutlinedIcon />,
+  Delivered: <CheckCircleOutlinedIcon />,
   Refunded: <ReplayOutlinedIcon />,
 };
 
 /**
  * A status as a chip: the label in the text colour (4.5:1 in every theme),
- * the status shown by an icon and a tint in the theme's warning, success or
- * error colour. The original painted a yellow card with white text, and
+ * the status shown by an icon and a tint in the theme's warning, primary
+ * (Shipped), success (Delivered) or error colour. The original painted a yellow card with white text, and
  * never showed Refunded in red (it compared with " Refunded": Bugs 10).
  */
 export function OrderStatusChip({

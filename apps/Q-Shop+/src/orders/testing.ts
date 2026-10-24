@@ -101,4 +101,13 @@ export function addStatus(
   });
 }
 
+/** Adds a buyer's "it arrived" for an order (orders/delivered.ts). */
+export function addDelivered(world: World, uid: string, opts: { buyer?: string; short?: string; created?: number } = {}) {
+  (world.delivered ??= []).push({
+    identifier: `q-store-delivered-${opts.short ?? SHORT_STORE_ID}-${uid}`,
+    buyer: opts.buyer ?? BUYER,
+    created: opts.created ?? 1763000000000,
+  });
+}
+
 export { poster };

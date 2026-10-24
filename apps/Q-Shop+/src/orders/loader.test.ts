@@ -59,7 +59,8 @@ describe("the buyer's orders", () => {
     expect(state.buyer).toMatchObject({ offset: 20, hasMore: true, phase: "ready" });
 
     const s = node.summary();
-    expect(s.searches).toEqual({ DOCUMENT_PRIVATE: 2 });
+    // Orders and statuses, and the buyer's "Delivered" (orders/delivered.ts): one search for the whole list.
+    expect(s.searches).toEqual({ DOCUMENT_PRIVATE: 2, DOCUMENT: 1 });
     expect(s.unlimitedSearches).toBe(0);
     expect(s.hub["FETCH q-store-order"]).toBe(20);
     // Only the statuses that exist are fetched; the buyer's key is looked up once.
@@ -83,7 +84,7 @@ describe("the buyer's orders", () => {
     node.reset();
     expect(await loadOrders(store, BUYER_LIST, "refresh")).toBe(true);
     const s = node.summary();
-    expect(s.searches).toEqual({ DOCUMENT_PRIVATE: 2 });
+    expect(s.searches).toEqual({ DOCUMENT_PRIVATE: 2, DOCUMENT: 1 });
     expect(s.hub["FETCH q-store-order"]).toBeUndefined();
     expect(s.hub["FETCH q-store-status"]).toBeUndefined();
     expect(store.getState().order.myOrders).toHaveLength(20);
@@ -187,10 +188,15 @@ describe("the seller's orders", () => {
     expect(state.statuses[orderId("S3")].status).toBe("Received");
 
     const urls = searchUrls(node);
-    expect(urls).toHaveLength(2);
+    expect(urls).toHaveLength(3);
     const statusSearch = new URLSearchParams(urls.find((u) => u.includes("status"))!.split("?")[1]);
     expect(statusSearch.get("identifier")).toBe("q-store-status-order-my-shop-");
     expect(statusSearch.getAll("name")).toEqual([SELLER]);
+    // Every buyer's "Delivered" for the shop (orders/delivered.ts): by prefix, any name.
+    const deliveredSearch = new URLSearchParams(urls.find((u) => u.includes("delivered"))!.split("?")[1]);
+    expect(deliveredSearch.get("identifier")).toBe("q-store-delivered-my-shop-");
+    expect(deliveredSearch.get("service")).toBe("DOCUMENT");
+    expect(deliveredSearch.getAll("name")).toEqual([]);
     const s = node.summary();
     expect(s.hub["FETCH q-store-status"]).toBe(2);
     expect(s.unlimitedSearches).toBe(0);

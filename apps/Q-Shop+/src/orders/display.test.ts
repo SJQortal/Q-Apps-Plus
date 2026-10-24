@@ -21,7 +21,8 @@ describe("statuses", () => {
     expect(normalizeStatus("shipped")).toBe("Shipped");
     expect(normalizeStatus("Lost")).toBeNull();
     expect(statusColor(" Refunded")).toBe("error");
-    expect(statusColor("Shipped")).toBe("success");
+    expect(statusColor("Shipped")).toBe("primary");
+    expect(statusColor("Delivered")).toBe("success");
     expect(statusColor("Received")).toBe("warning");
     expect(statusLabel("Received", "seller")).toBe("To handle");
     expect(statusLabel("Received", "buyer")).toBe("Received");
@@ -34,7 +35,7 @@ describe("statuses", () => {
       b: known("Received"),
       c: { ...known(""), state: "error" },
     });
-    expect(counts).toEqual({ Received: 1, Shipped: 1, Refunded: 0, unknown: 2 });
+    expect(counts).toEqual({ Received: 1, Shipped: 1, Delivered: 0, Refunded: 0, unknown: 2 });
     expect(countLabel(3, true)).toBe("3+");
     expect(countLabel(3, false)).toBe("3");
   });
@@ -275,7 +276,7 @@ describe("list filters", () => {
     const { main, others } = splitSellerItems(rows, SELLER);
     expect(others.map((i) => i.row.id)).toEqual(["foreign", "nameless", "unreadable", "unavailable"]);
     expect(sellerStatusCounts(main, SELLER)).toEqual({
-      counts: { Received: 2, Shipped: 1, Refunded: 1, unknown: 1 },
+      counts: { Received: 2, Shipped: 1, Delivered: 0, Refunded: 1, unknown: 1 },
       loading: true,
     });
     expect(visibleItems(main, { filter: "Received", role: "seller", seller: SELLER }).map((i) => i.row.id)).toEqual([
@@ -288,7 +289,7 @@ describe("list filters", () => {
     // Once the last pending order opens, nothing is left undecided.
     const settled = main.map((i) => (i.row.id === "pending-received" ? opened("pending-received", "Received") : i));
     expect(sellerStatusCounts(settled, SELLER)).toEqual({
-      counts: { Received: 3, Shipped: 1, Refunded: 1, unknown: 0 },
+      counts: { Received: 3, Shipped: 1, Delivered: 0, Refunded: 1, unknown: 0 },
       loading: false,
     });
   });

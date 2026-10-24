@@ -9,13 +9,16 @@
  *    stops the others (docs/apps/Q-Shop+.md → Bugs 4);
  * 3. the statuses: the seller's from one search over the shop's statuses
  *    (made with page one, reused by later pages), the buyer's from one
- *    search per page over the page's sellers.
+ *    search per page over the page's sellers;
+ * 4. the buyers' "Delivered" (orders/delivered.ts): one search per list,
+ *    made with page one and reused by later pages.
  *
  * Loads of the same list share one promise; a refresh or another owner
  * (another name, another shop) makes the answers of older loads stale.
  */
-import type { Order, OrderListKind, OrderStatusInfo } from "../state/features/orderSlice";
+import type { DeliveredInfo, Order, OrderListKind, OrderStatusInfo } from "../state/features/orderSlice";
 import {
+  deliveredLoaded,
   listFailed,
   listLoading,
   listPage,
@@ -43,6 +46,7 @@ import {
 } from "./reads";
 import { invalidateQdnSearches, mapWithConcurrency } from "../qdn/search";
 import { NO_STATUS_DOCUMENT } from "./status";
+import { buyerDeliveredIndex, deliveredFrom, findDelivered, shopDeliveredIndex, type DeliveredIndex } from "./delivered";
 import { settledByStatus } from "./listView";
 
 /** The parts of the Redux store the loader needs (the app's store, or a test's). */
@@ -63,6 +67,7 @@ export type LoadMode = "first" | "more" | "refresh";
 
 const inflight = new WeakMap<OrderStore, Map<string, Promise<boolean>>>();
 const sellerIndexes = new WeakMap<OrderStore, Map<string, { generation: number; index: Promise<StatusIndex | null> }>>();
+const deliveredIndexes = new WeakMap<OrderStore, Map<string, { generation: number; index: Promise<DeliveredIndex | null> }>>();
 
 function inflightFor(store: OrderStore): Map<string, Promise<boolean>> {
   let map = inflight.get(store);
@@ -147,6 +152,11 @@ async function runPage(store: OrderStore, owner: ListOwner, mode: LoadMode, opti
   );
 
   const live = () => isCurrent(store, kind, key, generation);
+  const delivered = deliveredIndexFor(store, owner, generation, first, fresh).then((index) => {
+    if (!live() || !index) return;
+    const known = page.rows.map((row) => ({ orderId: row.id, info: deliveredFrom(index, row) })).filter((d) => d.info !== undefined);
+    if (known.length > 0) store.dispatch(deliveredLoaded(known as { orderId: string; info: DeliveredInfo | null }[]));
+  });
   if (owner.kind === "seller") {
     const index = sellerStatusIndex(store, owner, generation, first, fresh);
     const limit = first && options.openLimit !== undefined ? Math.max(0, options.openLimit) : page.rows.length;
@@ -188,7 +198,47 @@ async function runPage(store: OrderStore, owner: ListOwner, mode: LoadMode, opti
     }
     await resolveStatuses(targets, index, statusSink(store, live), fresh);
   }
+  await delivered;
   return true;
+}
+
+/** The list's delivery confirmations for this generation: searched with page one, reused by later pages. */
+function deliveredIndexFor(store: OrderStore, owner: ListOwner, generation: number, first: boolean, fresh: boolean): Promise<DeliveredIndex | null> {
+  let byList = deliveredIndexes.get(store);
+  if (!byList) {
+    byList = new Map();
+    deliveredIndexes.set(store, byList);
+  }
+  const key = `${owner.kind}:${ownerKey(owner)}`;
+  const cached = byList.get(key);
+  if (cached && cached.generation === generation && !first) return cached.index;
+  const index = (owner.kind === "buyer" ? buyerDeliveredIndex(owner.name, fresh) : shopDeliveredIndex(owner.shortStoreId, fresh)).catch(() => null);
+  byList.set(key, { generation, index });
+  return index;
+}
+
+const deliveredChecks = new WeakMap<OrderStore, Map<string, Promise<void>>>();
+
+/** One order's delivery confirmation on its own (the order dialog, when its list hasn't read it). */
+export function ensureDelivered(store: OrderStore, order: Order): Promise<void> {
+  if (store.getState().order.delivered[order.id] !== undefined) return Promise.resolve();
+  let checks = deliveredChecks.get(store);
+  if (!checks) {
+    checks = new Map();
+    deliveredChecks.set(store, checks);
+  }
+  const running = checks.get(order.id);
+  if (running) return running;
+  const task = findDelivered(order)
+    .then((info) => {
+      store.dispatch(deliveredLoaded([{ orderId: order.id, info }]));
+    })
+    .catch(() => {})
+    .finally(() => {
+      if (checks.get(order.id) === task) checks.delete(order.id);
+    });
+  checks.set(order.id, task);
+  return task;
 }
 
 function statusSink(store: OrderStore, live: () => boolean) {

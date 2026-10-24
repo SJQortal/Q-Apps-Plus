@@ -65,6 +65,8 @@ export interface World {
   arrrRate: string;
   /** Favourites (favorites/model.ts): the rows their publishes make, metadata included. */
   favorites?: { name: string; identifier: string; title: string; description: string; created: number }[];
+  /** Buyers' "it arrived" (orders/delivered.ts): public DOCUMENTs under the buyer's name. */
+  delivered?: { buyer: string; identifier: string; created: number }[];
 }
 
 const LOGO = "data:image/webp;base64,TE9HTw==";
@@ -249,6 +251,9 @@ function allRows(world: World): Row[] {
   }
   for (const f of world.favorites ?? []) {
     rows.push({ name: f.name, service: "DOCUMENT", identifier: f.identifier, created: f.created, updated: f.created, size: 200, metadata: { title: f.title, description: f.description } });
+  }
+  for (const d of world.delivered ?? []) {
+    rows.push({ name: d.buyer, service: "DOCUMENT", identifier: d.identifier, created: d.created, updated: d.created, size: 60, metadata: { title: "Delivered" } });
   }
   for (const st of world.statuses) {
     rows.push({ name: st.seller, service: "DOCUMENT_PRIVATE", identifier: st.identifier, created: st.created, updated: st.created, size: 300 });

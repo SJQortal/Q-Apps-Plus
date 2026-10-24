@@ -1,7 +1,7 @@
 import type { OrderStatusInfo } from "../state/features/orderSlice";
 import type { OrderListItem } from "./selectors";
 import { sameName } from "./reads";
-import { normalizeStatus, type OrderStatus, type StatusCounts, type StatusFilter } from "./status";
+import { normalizeStatus, type ShownStatus, type StatusCounts, type StatusFilter } from "./status";
 
 /**
  * Where a row of a seller's list stands. A shop's order search finds every
@@ -39,9 +39,10 @@ export function splitSellerItems(items: OrderListItem[], seller: string): { main
 /**
  * The status a seller's row counts as, or null (not counted, or not yet):
  * "Received" (To handle) only for an opened order that names this seller;
- * Shipped and Refunded as the seller's own status document says.
+ * Shipped and Refunded as the seller's own status document says, Delivered
+ * as the buyer's confirmation does (orders/status.ts shownStatus).
  */
-export function sellerCountedStatus(item: OrderListItem, seller: string): OrderStatus | null {
+export function sellerCountedStatus(item: OrderListItem, seller: string): ShownStatus | null {
   const kind = sellerRowKind(item, seller);
   if (kind === "other" || item.status?.state !== "known") return null;
   const normal = normalizeStatus(item.status.status);
@@ -55,7 +56,7 @@ export function sellerCountedStatus(item: OrderListItem, seller: string): OrderS
  * too low until then.
  */
 export function sellerStatusCounts(items: OrderListItem[], seller: string): { counts: StatusCounts; loading: boolean } {
-  const counts: StatusCounts = { Received: 0, Shipped: 0, Refunded: 0, unknown: 0 };
+  const counts: StatusCounts = { Received: 0, Shipped: 0, Delivered: 0, Refunded: 0, unknown: 0 };
   let loading = false;
   for (const item of items) {
     const kind = sellerRowKind(item, seller);

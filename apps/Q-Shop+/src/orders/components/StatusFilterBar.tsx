@@ -29,6 +29,7 @@ export function StatusFilterBar({
     { value: "all", label: "All", count: total },
     { value: "Received", label: statusLabel("Received", role), count: statusesLoading ? null : counts.Received },
     { value: "Shipped", label: "Shipped", count: statusesLoading ? null : counts.Shipped },
+    { value: "Delivered", label: "Delivered", count: statusesLoading ? null : counts.Delivered },
     { value: "Refunded", label: "Refunded", count: statusesLoading ? null : counts.Refunded },
   ];
   return (

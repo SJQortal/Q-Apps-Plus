@@ -10,6 +10,7 @@ import { useSelector } from "react-redux";
 import { Box, Button, ButtonBase, Skeleton, Typography } from "@mui/material";
 import HourglassEmptyOutlinedIcon from "@mui/icons-material/HourglassEmptyOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import ReplayOutlinedIcon from "@mui/icons-material/ReplayOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ChevronRightOutlinedIcon from "@mui/icons-material/ChevronRightOutlined";
@@ -119,7 +120,7 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
         <Typography id="seller-overview-numbers" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
           At a glance
         </Typography>
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(4, 1fr)" }, gap: 1.5 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(3, 1fr)", md: "repeat(5, 1fr)" }, gap: 1.5 }}>
           <Tile
             label="To handle"
             value={countLabel(counts.Received, more)}
@@ -132,6 +133,14 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
             label="Shipped"
             value={countLabel(counts.Shipped, more)}
             icon={<LocalShippingOutlinedIcon />}
+            tone="primary"
+            loading={ordersLoading || statusesLoading}
+            onClick={openOrders}
+          />
+          <Tile
+            label="Delivered"
+            value={countLabel(counts.Delivered, more)}
+            icon={<CheckCircleOutlinedIcon />}
             tone="success"
             loading={ordersLoading || statusesLoading}
             onClick={openOrders}

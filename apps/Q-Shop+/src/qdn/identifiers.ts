@@ -30,6 +30,27 @@ export function deliveryIdentifier(shortStoreId: string): string {
 }
 /** + app, additive (round 5): a bid on an auction (auctions/bids.ts), published by the bidder. */
 export const BID_BASE = "q-store-bid";
+/** + app, additive (round 5): the buyer's "it arrived" for an order (orders/delivered.ts), published by the buyer. */
+export const DELIVERED_BASE = "q-store-delivered";
+
+/**
+ * The buyer's delivery confirmation of an order: the order id with
+ * `q-store-order` turned into `q-store-delivered`, so
+ * `q-store-delivered-<shortStoreId>-<uid10>` (at most 54 characters).
+ */
+export function deliveredIdentifierForOrder(orderId: string): string {
+  return orderId.replace(/^q-store-order-/, `${DELIVERED_BASE}-`);
+}
+
+/** The order a delivery confirmation is for (the reverse of the above). */
+export function orderIdForDelivered(identifier: string): string {
+  return identifier.replace(/^q-store-delivered-/, `${ORDER_BASE}-`);
+}
+
+/** The prefix of every delivery confirmation of one shop's orders (any buyer). */
+export function shopDeliveredPrefix(shortStoreId: string): string {
+  return `${DELIVERED_BASE}-${shortStoreId}-`;
+}
 
 /** A shop's id from its short id: `q-store-general-<shortStoreId>`. */
 export function storeIdentifier(shortStoreId: string): string {

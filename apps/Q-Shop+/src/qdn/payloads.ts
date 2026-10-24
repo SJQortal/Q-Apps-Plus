@@ -7,6 +7,7 @@
 import {
   CATALOGUE_BASE,
   dataContainerIdentifier,
+  deliveredIdentifierForOrder,
   shortStoreIdOf,
   statusIdentifierForOrder,
   storeIdentifier,
@@ -684,6 +685,25 @@ export function buildReviewPublish(args: {
       title: args.title.slice(0, 60),
       description: args.description.slice(0, 150),
     },
+  };
+}
+
+// ---------------------------------------------------------------- delivered (+ app)
+
+/**
+ * The buyer's "it arrived" for an order (+ app, additive; orders/delivered.ts):
+ * a small public DOCUMENT under the buyer's name. Its being there is what
+ * counts; the original never reads it.
+ */
+export function buildDeliveredPublish(args: { orderId: string; buyer: string; at: number }) {
+  return {
+    action: "PUBLISH_QDN_RESOURCE" as const,
+    name: args.buyer,
+    service: "DOCUMENT",
+    identifier: deliveredIdentifierForOrder(args.orderId),
+    filename: "delivered.json",
+    title: "Delivered",
+    data64: jsonToBase64({ orderId: args.orderId, deliveredAt: args.at }),
   };
 }
 

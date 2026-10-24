@@ -13,6 +13,9 @@
  *   no document means "Received", as in the original. It is separate from
  *   the order, so a status can land before its order and a refresh can't
  *   wipe a status the seller just sent (see `sentAt`).
+ * - `delivered` holds the buyer's "it arrived" (orders/delivered.ts), by
+ *   order id: null once read and there is none. Lists show "Delivered" from
+ *   it (orders/status.ts shownStatus); the seller's own status stays as is.
  */
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Product } from "./storeSlice";
@@ -98,6 +101,14 @@ export interface OrderStatusInfo {
   sending?: boolean;
 }
 
+/** The buyer confirmed the order arrived (orders/delivered.ts). */
+export interface DeliveredInfo {
+  /** When the buyer published it (its row's `created`, or the send time while sending). */
+  at: number;
+  /** Being published. */
+  sending?: boolean;
+}
+
 /** Why an order isn't open: still coming from peers, not on the node, or it can't be decrypted or read. */
 export type OrderOpenState = "peers" | "unavailable" | "unreadable";
 
@@ -126,6 +137,7 @@ interface OrderState {
   hashMapOrders: Record<string, Order>;
   openState: Record<string, OrderOpenState>;
   statuses: Record<string, OrderStatusInfo>;
+  delivered: Record<string, DeliveredInfo | null>;
   /** The seller's received orders (rows), newest first. */
   orders: Order[];
   /** The buyer's orders (rows), newest first. */
@@ -152,6 +164,7 @@ const initialState: OrderState = {
   hashMapOrders: {},
   openState: {},
   statuses: {},
+  delivered: {},
   orders: [],
   myOrders: [],
   seller: emptyMeta(),
@@ -320,6 +333,27 @@ export const orderSlice = createSlice({
       else delete state.statuses[orderId];
     },
 
+    /** Delivery confirmations read (null: none). One being sent isn't replaced. */
+    deliveredLoaded: (state, action: PayloadAction<{ orderId: string; info: DeliveredInfo | null }[]>) => {
+      for (const { orderId, info } of action.payload) {
+        const current = state.delivered[orderId];
+        if (current?.sending || (current && !info)) continue;
+        state.delivered[orderId] = info;
+      }
+    },
+    deliveredSending: (state, action: PayloadAction<{ orderId: string; at: number }>) => {
+      state.delivered[action.payload.orderId] = { at: action.payload.at, sending: true };
+    },
+    deliveredSent: (state, action: PayloadAction<{ orderId: string }>) => {
+      const current = state.delivered[action.payload.orderId];
+      if (current) current.sending = false;
+    },
+    deliveredRestored: (state, action: PayloadAction<{ orderId: string; previous: DeliveredInfo | null | undefined }>) => {
+      const { orderId, previous } = action.payload;
+      if (previous === undefined) delete state.delivered[orderId];
+      else state.delivered[orderId] = previous;
+    },
+
     // ---------------------------------------------------- the original's actions
 
     /** The seller's list rows (kept for code that still uses it). */
@@ -356,6 +390,10 @@ export const {
   statusSending,
   statusSent,
   statusRestored,
+  deliveredLoaded,
+  deliveredSending,
+  deliveredSent,
+  deliveredRestored,
   upsertOrders,
   addToHashMap,
   resetOrders,

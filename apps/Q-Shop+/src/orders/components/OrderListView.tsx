@@ -14,6 +14,7 @@ import { LoadMore } from "./LoadMore";
 function noneText(filter: StatusFilter, role: OrderRole): string {
   if (filter === "Received") return role === "seller" ? "Nothing to handle" : "No orders waiting to ship";
   if (filter === "Shipped") return "No shipped orders";
+  if (filter === "Delivered") return "No delivered orders";
   if (filter === "Refunded") return "No refunded orders";
   return "No orders";
 }
