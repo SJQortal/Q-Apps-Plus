@@ -64,7 +64,7 @@ export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews;
     <Button
       onClick={onOpen}
       color="inherit"
-      aria-label={average === null ? "Reviews: none yet" : `Rated ${average.toFixed(1)} out of 5 from ${summary.count} review${summary.count === 1 ? "" : "s"}. Open reviews`}
+      aria-label={average === null ? "No reviews yet: open reviews" : `Rated ${average.toFixed(1)} out of 5 from ${summary.count} review${summary.count === 1 ? "" : "s"}. Open reviews`}
       sx={{ minHeight: 44, px: 1, ml: -1, gap: 1, fontWeight: 600, textTransform: "none", justifyContent: "flex-start" }}
     >
       {average !== null && <Rating value={roundToHalf(average)} precision={0.5} readOnly size="small" aria-hidden />}
