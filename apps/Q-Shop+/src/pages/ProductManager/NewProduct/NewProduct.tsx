@@ -23,6 +23,8 @@ import { fiatPricingOf } from "../../../money/fiatPricing";
 import { needsMorePictures } from "../../../qdn/productPictures";
 import { auctionTermsOf } from "../../../auctions/rules";
 import { useMorePictures } from "../../../hooks/useMorePictures";
+import { variantDrafts, variantFormProblem } from "../../../variants/drafts";
+import { variantOf } from "../../../variants/model";
 import {
   editedProductDraft,
   formValuesFor,
@@ -113,10 +115,24 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
     const now = Date.now();
     const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product) });
     if (invalid) return setError(invalid);
-    const trimmed = { ...values, title: values.title.trim(), category: values.category.trim() };
-    const draft = product
+    const { variants, variantDisplay, ...form } = values;
+    const trimmed = { ...form, title: values.title.trim(), category: values.category.trim() };
+    // A new product in variants: one draft each (variants/drafts.ts).
+    if (!product && variants && values.sale !== "auction") {
+      const problem = variantFormProblem(variants, trimmed, pricing);
+      if (problem) return setError(problem);
+      for (const draft of variantDrafts({ values: trimmed, form: variants, coins, storeId: currentStore.id, name, uid: () => uid(), now, pricing })) {
+        dispatch(setProductsToSave(draft));
+      }
+      onClose();
+      return;
+    }
+    let draft: Record<string, unknown> & { id: string } = product
       ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing, picturesKept: picturesPending, now })
       : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now, pricing });
+    // An existing variant keeps its group, with the lists' choice as now set.
+    const variant = product ? variantOf(product) : null;
+    if (variant && variantDisplay && variantDisplay !== variant.display) draft = { ...draft, variant: { ...(product!.variant as object), display: variantDisplay } };
     dispatch(setProductsToSave(draft));
     onClose();
   };

@@ -51,6 +51,9 @@ import {
 } from "../../../seller/productDraft";
 import { AuctionFields } from "../../../seller/AuctionFields";
 import { auctionTermsOf } from "../../../auctions/rules";
+import { VariantsEditor } from "../../../variants/VariantsEditor";
+import { variantPriceUnit } from "../../../variants/drafts";
+import { variantLabel, variantOf, type VariantDisplay } from "../../../variants/model";
 
 interface ProductFormProps {
   values: ProductFormValues;
@@ -158,6 +161,7 @@ export const ProductForm = ({
       prices: { ...prev.prices, [coin]: wholeOnly.includes(coin) ? text.replace(/\D/g, "") : sanitizeAmountInput(text) },
     }));
   const title = values.title.trim() || "Product";
+  const savedVariant = saved ? variantOf(saved) : null;
   const fiat = typedFiat(values, pricing);
   // A price in the shop's currency gives the QORT and ARRR prices; only asset prices are typed then.
   const otherCoins = coins.filter((c) => c !== "QORT" && !(fiat !== null && c === "ARRR"));
@@ -495,6 +499,42 @@ export const ProductForm = ({
           </Typography>
         </Box>
       </Box>
+      {/* A new product at a price can come in variants; an existing variant says which it is. */}
+      {!saved && values.sale !== "auction" && (
+        <Box component="section" aria-label="Variants" sx={[panelSx, { gridColumn: "1 / -1" }]}>
+          <SectionTitle>Variants</SectionTitle>
+          <VariantsEditor
+            value={values.variants ?? null}
+            onChange={(variants) => onChange((prev) => ({ ...prev, variants }))}
+            images={values.images}
+            unit={variantPriceUnit(values, pricing)}
+            basePrice={variantPriceUnit(values, pricing) === "QORT" ? (values.prices.QORT ?? "") : (values.fiat ?? "")}
+          />
+        </Box>
+      )}
+      {savedVariant && (
+        <Box component="section" aria-label="Variant" sx={[panelSx, { gridColumn: "1 / -1" }]}>
+          <SectionTitle>Variant</SectionTitle>
+          <Typography>
+            One variant of <strong>{savedVariant.title}</strong>: {variantLabel(savedVariant.options, savedVariant.values)}.
+          </Typography>
+          <Box>
+            <Typography id="variant-display-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              In the shop&apos;s lists, its variants show as
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              value={values.variantDisplay ?? savedVariant.display}
+              onChange={(_, display: VariantDisplay | null) => display && onChange((prev) => ({ ...prev, variantDisplay: display }))}
+              aria-labelledby="variant-display-label"
+              sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
+            >
+              <ToggleButton value="bundle">One listing, buyers choose</ToggleButton>
+              <ToggleButton value="separate">Each variant on its own</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 };

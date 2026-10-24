@@ -18,6 +18,8 @@ import { normalizeQuillHtml } from "../richtext/quillHtml";
 import { DEFAULT_EXTEND_MINUTES, auctionTermsOf, auctionTermsProblem, roundQort, type AuctionTerms } from "../auctions/rules";
 import { isListedCategory } from "../constants/categories";
 import { fiatPriceOf, fiatToText, parseFiat, priceDecimals, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
+import type { VariantFormValues } from "../variants/drafts";
+import type { VariantDisplay } from "../variants/model";
 
 export interface PriceEntry {
   currency: string;
@@ -62,6 +64,10 @@ export interface ProductFormValues {
   sale?: "fixed" | "auction";
   /** The auction's terms as typed, when it sells by auction. */
   auction?: AuctionFormValues;
+  /** A new product's variants as typed (variants/drafts.ts); null or absent: none. Not stored as such. */
+  variants?: VariantFormValues | null;
+  /** An existing variant: how lists show its group (variants/model.ts). */
+  variantDisplay?: VariantDisplay;
 }
 
 /** An auction's terms as the form holds them (times as `datetime-local` text, in the seller's time). */
