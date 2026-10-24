@@ -55,6 +55,8 @@ const cardSx = (layout: ProductCardLayout) =>
     overflow: "hidden",
     transition: "border-color 150ms ease",
     "&:hover": { borderColor: "action.disabled" },
+    // The picture comes a little closer under the pointer (Simon, 2026-10-24: "zoom in slightly, subtle").
+    "@media (hover: hover) and (prefers-reduced-motion: no-preference)": { "&:hover .qp-card-picture img": { transform: "scale(1.05)" } },
     "@media (prefers-reduced-motion: reduce)": { transition: "none" },
   }) as const;
 
@@ -63,8 +65,10 @@ const pictureSx = (layout: ProductCardLayout) =>
     position: "relative",
     display: "block",
     aspectRatio: "1 / 1",
+    overflow: "hidden",
     bgcolor: "action.hover",
     color: "text.secondary",
+    "& img": { transition: "transform 300ms ease" },
     ...(layout === "row" && { width: 104, height: 104, alignSelf: "start", m: 1, mr: 0, borderRadius: 1.5, overflow: "hidden" }),
   }) as const;
 
@@ -169,7 +173,7 @@ export function ProductCard({
     <ContextMenuResource link={productLink(owner, storeId, productId, catalogueId)}>
       <Box component="article" sx={cardSx(layout)}>
         {/* Once the picture is in, no backdrop: a transparent background shows the card. */}
-        <Link component={RouterLink} to={path} tabIndex={-1} aria-hidden sx={[pictureSx(layout), pictures.isLoaded(image) && { bgcolor: "transparent" }]}>
+        <Link component={RouterLink} to={path} tabIndex={-1} aria-hidden className="qp-card-picture" sx={[pictureSx(layout), pictures.isLoaded(image) && { bgcolor: "transparent" }]}>
           {image ? (
             <ProductImage src={image} alt={title} loading="lazy" onLoad={pictures.onLoad(image)} />
           ) : (

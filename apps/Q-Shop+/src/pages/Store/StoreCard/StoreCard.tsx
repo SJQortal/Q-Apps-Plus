@@ -69,6 +69,10 @@ const CardBox = styled("div")(({ theme }) => ({
   "@media (hover: hover)": {
     "&:hover": { borderColor: theme.palette.primary.main, boxShadow: theme.shadows[3] },
   },
+  // The logo comes a little closer under the pointer (Simon, 2026-10-24: "zoom in slightly, subtle").
+  "@media (hover: hover) and (prefers-reduced-motion: no-preference)": {
+    "&:hover img[data-logo]": { transform: "scale(1.04)" },
+  },
   "&:has(a.card-link:focus-visible)": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
   "& a.card-link": { color: "inherit", textDecoration: "none", outline: "none" },
@@ -86,6 +90,7 @@ const Art = styled("div")(({ theme }) => ({
   gap: 8,
   padding: "0 12px",
   textAlign: "center",
+  overflow: "hidden",
   backgroundColor: accentWash(theme, 0.08),
   borderBottom: `1px solid ${theme.palette.divider}`,
   [theme.breakpoints.up("sm")]: { height: CARD_ART_HEIGHT.wide },
@@ -104,6 +109,7 @@ const Logo = styled("img")({
   padding: 12,
   boxSizing: "border-box",
   display: "block",
+  transition: "transform 300ms ease",
 });
 
 const Initial = styled("span")(({ theme }) => ({
@@ -143,7 +149,7 @@ function coinsOf(shop: ShopEntry, json: ShopJson | null): { coins: CoinId[]; lab
 
 function CardArt({ shop, details, onLogoLoad }: { shop: ShopEntry; details: ShopDetails | undefined; onLogoLoad: () => void }) {
   const logo = logoOf(details);
-  if (logo) return <Logo src={logo} alt={shop.title} decoding="async" onLoad={onLogoLoad} />;
+  if (logo) return <Logo data-logo src={logo} alt={shop.title} decoding="async" onLoad={onLogoLoad} />;
   const caption =
     details?.status === "retrying"
       ? "Fetching from peers…"
