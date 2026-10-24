@@ -1,7 +1,8 @@
 /**
  * Variants for buyers against the mocked node: a group listed as one card
  * on the shop page, each variant on its own when the seller chose that, and
- * the product page's choices, which open the variant they lead to.
+ * the product page's choices, which open the variant they lead to, and its
+ * gallery of the whole group's pictures, which choose their item.
  */
 import { describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -102,5 +103,42 @@ describe("variants for buyers", () => {
     // Square keeps the value when it has it: Pale.
     fireEvent.click(within(within(await screen.findByRole("region", { name: "Variants" })).getByRole("group", { name: "Variant: Round" })).getByRole("button", { name: "Square" }));
     await waitFor(() => expect(screen.getByTestId("where").textContent).toContain(shop.products[3].id));
+  });
+
+  it("the gallery has every item's picture and the product's; a picture chooses its item, a choice its picture", async () => {
+    const w = world("bundle");
+    const shop = w.shops[1];
+    const pic = (name: string) => `data:image/png;base64,${btoa(name)}`;
+    // The lead (Round / Pale) carries its own picture, then the product's; Round / Red has Round / Orange's.
+    shop.products[0].images = [pic("pale"), pic("product-1"), pic("product-2")];
+    shop.products[1].images = [pic("orange")];
+    shop.products[2].images = [pic("orange")];
+    shop.products[3].images = [pic("square")];
+    const cat = `q-store-catalogue-${shop.shortStoreId}-CAT0000000`;
+    render(productPath(shop.owner, "q-store-general-shop-1", shop.products[1].id, cat), w);
+    const gallery = await screen.findByRole("region", { name: "Glasses: pictures" });
+    const thumbs = within(gallery).getByRole("group", { name: "Pictures" });
+    await waitFor(() =>
+      expect(within(thumbs).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Show picture 1 of 5: Round / Pale",
+        "Show picture 2 of 5: Round / Orange, Red",
+        "Show picture 3 of 5: Square / Pale",
+        "Show picture 4 of 5",
+        "Show picture 5 of 5",
+      ])
+    );
+    // It opens on the item's own picture.
+    expect(within(thumbs).getByRole("button", { name: /^Show picture 2 of 5/ })).toHaveAttribute("aria-current", "true");
+    // Square's picture opens Square / Pale, in place.
+    fireEvent.click(within(thumbs).getByRole("button", { name: /^Show picture 3 of 5/ }));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toContain(shop.products[3].id));
+    expect(within(screen.getByRole("region", { name: "Glasses: pictures" })).getByRole("button", { name: /^Show picture 3 of 5/ })).toHaveAttribute("aria-current", "true");
+    // One of the product's pictures leaves the item as it is.
+    fireEvent.click(within(screen.getByRole("group", { name: "Pictures" })).getByRole("button", { name: "Show picture 4 of 5" }));
+    expect(screen.getByTestId("where").textContent).toContain(shop.products[3].id);
+    // Choosing Round goes to Round / Pale (Square's value) and its picture.
+    fireEvent.click(within(await screen.findByRole("region", { name: "Variants" })).getByRole("button", { name: "Round" }));
+    await waitFor(() => expect(screen.getByTestId("where").textContent).toContain(shop.products[0].id));
+    await waitFor(() => expect(within(screen.getByRole("group", { name: "Pictures" })).getByRole("button", { name: /^Show picture 1 of 5/ })).toHaveAttribute("aria-current", "true"));
   });
 });

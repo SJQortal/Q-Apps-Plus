@@ -3,6 +3,9 @@
  * arrows and thumbnails, swipe on touch screens, ← and → keys, and a full
  * screen viewer (full-screen on phones) with the same controls and Esc, where
  * pictures zoom (ZoomableImage).
+ * A variant's page passes the index (`index`, `onIndexChange`): its group's
+ * pictures choose its item (variants/gallery.ts), and each says what it is
+ * of (`captions`).
  * Replaces the original's TabImageList, whose thumbnails were clickable
  * images with no keyboard access.
  */
@@ -65,27 +68,54 @@ function useSwipe(onSwipe: (direction: 1 | -1) => void) {
   };
 }
 
-export function ImageGallery({ images, title, initialIndex = 0 }: { images: string[] | undefined; title: string; initialIndex?: number }) {
-  const list = (images ?? []).filter((src) => typeof src === "string" && src).slice(0, MAX_GALLERY_IMAGES);
+export function ImageGallery({
+  images,
+  title,
+  initialIndex = 0,
+  index: shownIndex,
+  onIndexChange,
+  captions,
+  max = MAX_GALLERY_IMAGES,
+}: {
+  images: string[] | undefined;
+  title: string;
+  initialIndex?: number;
+  /** The picture shown, when the page decides it: every change goes to onIndexChange. */
+  index?: number;
+  onIndexChange?: (index: number) => void;
+  /** What each picture is of ("Round / Pale"), when they differ. */
+  captions?: (string | undefined)[];
+  max?: number;
+}) {
+  const list = (images ?? []).filter((src) => typeof src === "string" && src).slice(0, max);
   const count = list.length;
-  const [index, setIndex] = useState(() => (initialIndex >= 0 && initialIndex < count ? initialIndex : 0));
+  const [ownIndex, setOwnIndex] = useState(() => (initialIndex >= 0 && initialIndex < count ? initialIndex : 0));
+  const index = shownIndex ?? ownIndex;
   const [viewerOpen, setViewerOpen] = useState(false);
   // A zoomed picture is dragged, not swiped to the next one.
   const [viewerZoomed, setViewerZoomed] = useState(false);
   // Once a picture is in, no backdrop behind it: a transparent background shows the page.
   const pictures = useLoadedPictures();
-  const at = count ? Math.min(index, count - 1) : 0;
+  const at = count ? Math.min(Math.max(index, 0), count - 1) : 0;
+  const show = (i: number) => {
+    if (shownIndex === undefined) setOwnIndex(i);
+    onIndexChange?.(i);
+  };
   const go = (delta: number) => {
-    if (count > 1) setIndex((i) => (Math.min(i, count - 1) + delta + count) % count);
+    if (count > 1) show((at + delta + count) % count);
   };
   const swipe = useSwipe(go);
+  const latestGo = useRef(go);
+  useEffect(() => {
+    latestGo.current = go;
+  });
 
   // ← and → in the viewer, wherever focus is inside it.
   useEffect(() => {
     if (!viewerOpen || count < 2) return;
     const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "ArrowLeft") setIndex((i) => (Math.min(i, count - 1) - 1 + count) % count);
-      if (event.key === "ArrowRight") setIndex((i) => (Math.min(i, count - 1) + 1) % count);
+      if (event.key === "ArrowLeft") latestGo.current(-1);
+      if (event.key === "ArrowRight") latestGo.current(1);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -124,7 +154,8 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
     );
   }
 
-  const label = (i: number) => `${title}, picture ${i + 1} of ${count}`;
+  const caption = (i: number) => captions?.[i];
+  const label = (i: number) => (caption(i) ? `${title}, ${caption(i)}, picture ${i + 1} of ${count}` : `${title}, picture ${i + 1} of ${count}`);
 
   return (
     <Box
@@ -168,8 +199,8 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
           {list.map((src, i) => (
             <ButtonBase
               key={i}
-              onClick={() => setIndex(i)}
-              aria-label={`Show picture ${i + 1} of ${count}`}
+              onClick={() => show(i)}
+              aria-label={caption(i) ? `Show picture ${i + 1} of ${count}: ${caption(i)}` : `Show picture ${i + 1} of ${count}`}
               aria-current={i === at ? "true" : undefined}
               sx={{
                 width: 64,
@@ -190,7 +221,12 @@ export function ImageGallery({ images, title, initialIndex = 0 }: { images: stri
         </Box>
       )}
       {viewerOpen && (
-        <ResponsiveDialog open onClose={() => setViewerOpen(false)} title={count > 1 ? `${title} (${at + 1} of ${count})` : title} maxWidth="lg">
+        <ResponsiveDialog
+          open
+          onClose={() => setViewerOpen(false)}
+          title={count > 1 ? `${caption(at) ? `${title}, ${caption(at)}` : title} (${at + 1} of ${count})` : title}
+          maxWidth="lg"
+        >
           <Box {...(viewerZoomed ? {} : swipe)} sx={{ position: "relative", display: "flex", justifyContent: "center" }}>
             <ZoomableImage key={list[at]} src={list[at]} alt={label(at)} onZoomedChange={setViewerZoomed} />
             {count > 1 && (

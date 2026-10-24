@@ -13,8 +13,12 @@
  * list (cached from the shop page) says whether it has collections, and only
  * then, once the product has loaded, is its collections document read (once
  * per session; it holds a picture per collection).
+ *
+ * A variant's items are one page: switching item (its picker, or one of its
+ * pictures) swaps the product in place, so the gallery, its full-screen
+ * viewer and the video under it stay as they are (variants/gallery.ts).
  */
-import { lazy, Suspense, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, Divider, IconButton, InputBase, Link, Skeleton, Typography } from "@mui/material";
@@ -36,7 +40,7 @@ import { PriceTag } from "../../components/money/PriceTag";
 import { useShopCoin } from "../../money/useShopCoin";
 import { collectionPath, decodeParam, productLink, productPath, storePath } from "../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
-import { useCatalogue, useViewedShop } from "../Store/useShopData";
+import { useCatalogue, useCatalogueLoader, useViewedShop } from "../Store/useShopData";
 import { useMorePictures } from "../../hooks/useMorePictures";
 import { ProductDescription, ProductMedia, useDescriptionParts } from "../../richtext/ProductDescription";
 import { ShippingCountriesButton } from "../Store/ShippingCountries";
@@ -50,7 +54,8 @@ import { visuallyHiddenSx } from "../Store/a11y";
 import { LocalBoundary } from "../Store/LocalBoundary";
 import { CategoryIcon } from "../../components/CategoryIcon";
 import { auctionTermsOf } from "../../auctions/rules";
-import { variantOf, variantSiblings } from "../../variants/model";
+import { valuesKey, variantOf, variantSiblings, type VariantSibling } from "../../variants/model";
+import { MAX_GROUP_PICTURES, groupPictures, itemForPicture, pictureCaption, shownPicture, type GroupMember } from "../../variants/gallery";
 import { VariantPicker } from "../../variants/VariantPicker";
 
 // Only auction products need it (bids, countdown, the winner's checkout).
@@ -181,17 +186,61 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const shopCoin = useShopCoin(shop);
   const [quantityText, setQuantityText] = useState("1");
   const [added, setAdded] = useState<AddedNotice | null>(null);
+  // Another product on the same page (ProductPage keys it by shop): its quantity starts at one.
+  const [shownProduct, setShownProduct] = useState(productId);
+  if (shownProduct !== productId) {
+    setShownProduct(productId);
+    setQuantityText("1");
+  }
   const product = catalogue?.products?.[productId];
   const auctionTerms = useMemo(() => auctionTermsOf(product), [product]);
-  // Pictures past the third, from their own document (qdn/productPictures.ts), after the catalogue's.
-  const morePictures = useMorePictures(owner, product ? { id: productId, morePictures: (product as { morePictures?: unknown }).morePictures } : null);
-  // A variant (variants/model.ts): its group's choices, and the lead variant's pictures after its own.
+  // A variant (variants/model.ts): its group's choices, and its pictures (variants/gallery.ts),
+  // from every item's catalogue, read once the product's own is in.
   const variant = useMemo(() => variantOf(product), [product]);
   const siblings = useMemo(() => (variant ? variantSiblings(index, variant.group) : []), [index, variant]);
-  const leadEntry = variant && variant.lead !== productId ? siblings.find((s) => s.productId === variant.lead) : undefined;
-  const lead = useCatalogue(owner, leadEntry?.catalogueId ?? "");
-  const leadProduct = leadEntry ? lead.catalogue?.products?.[leadEntry.productId] : undefined;
-  const leadMore = useMorePictures(owner, leadProduct && leadEntry ? { id: leadEntry.productId, morePictures: (leadProduct as { morePictures?: unknown }).morePictures } : null);
+  const groupLoader = useCatalogueLoader(owner);
+  const loadGroup = groupLoader.load;
+  const groupCatalogues = status === "ready" ? [...new Set(siblings.map((s) => s.catalogueId))].join("|") : "";
+  useEffect(() => {
+    if (groupCatalogues) loadGroup(groupCatalogues.split("|"));
+  }, [groupCatalogues, loadGroup]);
+  const productOf = (s: VariantSibling) => (s.productId === productId ? product : groupLoader.catalogues[s.catalogueId]?.products?.[s.productId]);
+  const leadEntry = variant ? siblings.find((s) => s.productId === variant.lead) : undefined;
+  const leadProduct = leadEntry ? productOf(leadEntry) : undefined;
+  // Pictures past the third, from their own document (qdn/productPictures.ts), after the catalogue's;
+  // a variant's are its lead's, the product's.
+  const morePictures = useMorePictures(
+    owner,
+    variant && leadEntry
+      ? leadProduct
+        ? { id: leadEntry.productId, morePictures: (leadProduct as { morePictures?: unknown }).morePictures }
+        : null
+      : product
+        ? { id: productId, morePictures: (product as { morePictures?: unknown }).morePictures }
+        : null
+  );
+  const members: GroupMember[] = [];
+  if (variant) {
+    for (const s of siblings) {
+      const p = productOf(s);
+      if (p) members.push({ values: s.values, images: p.images, lead: s.productId === variant.lead });
+    }
+    // Before the shop's list is in: the item itself.
+    if (product && !siblings.some((s) => s.productId === productId)) members.push({ values: variant.values, images: product.images, lead: variant.lead === productId });
+  }
+  const gallery = variant ? groupPictures(variant.options, members, morePictures.images) : null;
+  // The picture the buyer chose; the gallery shows it while it fits the item shown.
+  const [chosenPicture, setChosenPicture] = useState<string | null>(null);
+  const openItem = (next: VariantSibling) => navigate(productPath(owner, storeId, next.productId, next.catalogueId), { replace: true });
+  const pickPicture = (i: number) => {
+    const picture = gallery?.[i];
+    if (!picture || !variant) return;
+    setChosenPicture(picture.src);
+    const item = itemForPicture(picture, variant.values);
+    const next = item && siblings.find((s) => valuesKey(s.values) === valuesKey(item));
+    // Each item is its own page (and link); Back still leaves for the list.
+    if (next) openItem(next);
+  };
   // Its description's text, and its videos and attachments (shown under the pictures).
   const descriptionParts = useDescriptionParts((product ?? {}) as { description?: unknown; htmlDescription?: unknown });
   const shopPath = storePath(owner, storeId);
@@ -255,11 +304,18 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
     content = (
       <Box data-product-layout sx={productLayoutSx}>
         <Box sx={{ gridArea: "gallery", display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
-          <ImageGallery
-            images={[...new Set([...(product.images ?? []), ...morePictures.images, ...(leadProduct?.images ?? []), ...leadMore.images])]}
-            title={name}
-            initialIndex={mainIndex}
-          />
+          {gallery && variant ? (
+            <ImageGallery
+              images={gallery.map((p) => p.src)}
+              captions={gallery.map((p) => pictureCaption(p, variant.options))}
+              title={variant.title}
+              max={MAX_GROUP_PICTURES}
+              index={shownPicture(gallery, chosenPicture, variant.values)}
+              onIndexChange={pickPicture}
+            />
+          ) : (
+            <ImageGallery images={[...new Set([...(product.images ?? []), ...morePictures.images])]} title={name} initialIndex={mainIndex} />
+          )}
           {morePictures.status === "failed" && (
             <Box
               role="status"
@@ -284,6 +340,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
           {auctionTerms ? (
             <Suspense fallback={<Skeleton variant="rounded" height={220} aria-label="Loading the auction" />}>
               <AuctionPanel
+                key={productId}
                 terms={auctionTerms}
                 product={product as unknown as Record<string, unknown>}
                 productId={productId}
@@ -308,8 +365,10 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               options={variant.options}
               values={variant.values}
               siblings={siblings}
-              // Each variant is its own page (and link); Back still leaves for the list.
-              onPick={(next) => navigate(productPath(owner, storeId, next.productId, next.catalogueId), { replace: true })}
+              onPick={(next) => {
+                setChosenPicture(null);
+                openItem(next);
+              }}
             />
           )}
           {inCollections.length > 0 && (
@@ -410,7 +469,9 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
         actions={!isOwner ? <CartButton /> : undefined}
       />
       {/* A product with data this page can't show leaves the header and navigation in place. */}
+      {/* A new boundary (and content) for another product; a variant's items share one. */}
       <LocalBoundary
+        key={variant ? `group\n${variant.group}` : `product\n${catalogueId}\n${productId}`}
         label={`The product ${productId}`}
         fallback={
           <EmptyState
@@ -435,7 +496,7 @@ export const ProductPage = () => {
   const storeId = decodeParam(params.store);
   const productId = decodeParam(params.product);
   const catalogueId = decodeParam(params.catalogue);
-  return <ProductView key={[owner, storeId, productId, catalogueId].join("\n")} owner={owner} storeId={storeId} productId={productId} catalogueId={catalogueId} />;
+  return <ProductView key={[owner, storeId].join("\n")} owner={owner} storeId={storeId} productId={productId} catalogueId={catalogueId} />;
 };
 
 export default ProductPage;
