@@ -41,7 +41,7 @@ export const CHANGELOG: Release[] = [
       "A safer checkout: review, delivery and confirm steps with the amount fixed before you pay, and a payment that went through is never lost: if the order can't be recorded, it is kept so you can finish it without paying again.",
       "Sellers get a clear order mail in Q-Mail: who ordered, the items with prices and the total, the payment, and where to ship it.",
       "Your cart survives a reload, keeps every shop's items apart, shows each item on one row where there's room, and the cart button counts them.",
-      "Orders: My orders with status filters and counts; for sellers, an overview, orders to handle, status updates and payment checks against the chain.",
+      "Orders: My orders with status filters and counts; once an order has shipped, mark it delivered and review the shop. For sellers, an overview, orders to handle, status updates and payment checks against the chain.",
       "Selling: Create Shop until you have one, then Manage Shop (Manage on phones) opens a seller page with products, collections, orders (opening on the ones to handle), reviews, delivery and shop settings, product prices per coin and asset, new products physical unless you pick digital, and big catalogues published in batches.",
       "Delete products, one or several at once, or close your shop for good: they leave your shop here and in Q-Shop, and orders keep their own copy. A deleted shop's id can be used again.",
       "Trusted reviews: one per reviewer, the shop owner's own left out, and an \"Ordered here\" badge.",

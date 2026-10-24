@@ -276,6 +276,12 @@ const statuses = [
   [`q-store-status-order-shop-1-ORDERBUY01`, 'Shop+Plus', { status: 'Shipped', note: 'Tracking number 123 456' }],
   [`q-store-status-order-my-shop-ORDERSEL02`, ME, { status: 'Shipped', note: '' }],
   [`q-store-status-order-my-shop-ORDERSEL03`, ME, { status: 'Refunded', note: 'Out of stock, refunded' }],
+  [`q-store-status-order-shop-2-ORDERBUY02`, 'Zoë Ålund', { status: 'Shipped', note: 'Posted with tracking' }],
+];
+// Buyers' "it arrived" (orders/delivered.ts): [identifier, buyer (publisher), created].
+const delivered = [
+  [`q-store-delivered-shop-2-ORDERBUY02`, ME, now - 2 * DAY],
+  [`q-store-delivered-my-shop-ORDERSEL02`, 'bob+builder', now - DAY],
 ];
 
 function rows() {
@@ -289,6 +295,7 @@ function rows() {
   reviews.forEach((r, i) => out.push({ name: r.name, service: 'DOCUMENT', identifier: `q-store-review-${r.short}-${r.uid}-${r.rating * 10}`, created: now - i * DAY, updated: now - i * DAY, size: 200, metadata: { title: r.title, description: r.description } }));
   for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
   statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
+  for (const [identifier, name, created] of delivered) out.push({ name, service: 'DOCUMENT', identifier, created, updated: created, size: 60, metadata: { title: 'Delivered' } });
   out.push({ name: 'Gold Issuer', service: 'IMAGE', identifier: 'asset81_Gold Bar_aavatar', created: now - DAY, updated: now - DAY, size: 2000 });
   FAVORITES.forEach(([name, i, p], n) => {
     const s = shops[i];
@@ -540,6 +547,16 @@ export default {
     { key: 'seller-auction-edit', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.mouse.wheel(0, 700); await page.waitForTimeout(900); await page.getByRole('button', { name: /^Edit Ebook 9\b/ }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('checkbox', { name: /^Void: Troll Account/ }).scrollIntoViewIfNeeded({ timeout: 10000 }); await page.waitForTimeout(400); } },
     { key: 'seller-product-auction', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit Lamp 11\b/ }).click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('button', { name: 'Auction', exact: true }).click({ timeout: 10000 }); await d.getByRole('textbox', { name: /^Starting bid/ }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'orders', path: '/my-orders', after: async (page) => page.waitForTimeout(900) },
+    { key: 'order-mark-delivered', path: '/my-orders', overlay: true, after: async (page) => {
+      await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Arrived\?/ }).click({ timeout: 8000 });
+      await page.getByRole('dialog').getByRole('button', { name: 'Mark as delivered' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'order-delivered-review', path: '/my-orders', overlay: true, after: async (page) => {
+      await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Ålund Ceramics/ }).click({ timeout: 8000 });
+      await page.getByRole('dialog').getByRole('button', { name: 'Write a review' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
     { key: 'seller', path: `/product-manager/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-orders', path: `/product-manager/q-store-general-my-shop`, optional: true, after: async (page) => { await page.waitForTimeout(600); await page.getByRole('tab', { name: /orders/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(700); } },
     { key: 'seller-products', path: `/product-manager/q-store-general-my-shop`, optional: true, after: async (page) => { await page.waitForTimeout(600); await page.getByRole('tab', { name: /products/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(700); } },
