@@ -80,7 +80,9 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
 import { ArrangeShop } from "./ArrangeShop";
-import { productOrderOf } from "../qdn/productOrder";
+import { featuredOrder, productOrderOf } from "../qdn/productOrder";
+import { useShopCollections } from "../pages/Store/useShopCollections";
+import { SectionDivider } from "../pages/Store/ProductList";
 import { selectMenuProps } from "../components/common/menuStyle";
 
 export const PRODUCTS_PAGE = 24;
@@ -151,8 +153,11 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   const categories = useSelector((state: RootState) => state.global.listProducts.categories);
   const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
-  // The seller's own order (Arrange): the list opens on it once there is one, and goes to it when one is published.
-  const order = useMemo(() => productOrderOf(dataContainer), [dataContainer]);
+  // The order buyers see as Featured: the published collections' products first, collection by collection,
+  // then the rest in the seller's own order (Arrange). The list opens on it once there is one.
+  const shopCollections = useShopCollections(owner ?? "", storeId, dataContainer).collections;
+  const featured = useMemo(() => featuredOrder(shopCollections, productOrderOf(dataContainer)), [shopCollections, dataContainer]);
+  const order = featured.order;
   const { request, retry, refresh, statusOf: loadOf, productOf } = useCatalogueLoader(owner);
 
   const [filters, setFilters] = useState<SellerFilters>(DEFAULT_FILTERS);
@@ -510,24 +515,37 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                 <span />
               </Box>
               <Box component="ul" aria-label="Products" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-                {visible.map((row) => (
-                  <ProductRow
-                    key={row.productId}
-                    row={row}
-                    place={places ? (places.get(row.productId) ?? null) : undefined}
-                    details={detailsOf(row)}
-                    load={loadOf(row.catalogueId)}
-                    edited={!!productsToSave[row.productId]}
-                    opening={opening === row.productId}
-                    onVisible={request}
-                    onRetry={retry}
-                    onMissing={refresh}
-                    onEdit={edit}
-                    selecting={selecting}
-                    selected={selected.has(row.productId)}
-                    onToggle={toggle}
-                  />
-                ))}
+                {visible.map((row, i) => {
+                  // Shop order, first to last: a line with the collection's title where its products start.
+                  const section = sort === "featured" && featured.sectionOf.size > 0 ? (featured.sectionOf.get(row.productId) ?? -1) : null;
+                  const previous = section !== null && i > 0 ? (featured.sectionOf.get(visible[i - 1].productId) ?? -1) : null;
+                  const starts = section !== null && section !== previous && (section >= 0 || i > 0);
+                  return [
+                    starts && (
+                      <SectionDivider
+                        key={`section-${row.productId}`}
+                        title={section !== null && section >= 0 ? shopCollections[section]?.title || "Collection" : "Not in a collection"}
+                        first={i === 0}
+                      />
+                    ),
+                    <ProductRow
+                      key={row.productId}
+                      row={row}
+                      place={places ? (places.get(row.productId) ?? null) : undefined}
+                      details={detailsOf(row)}
+                      load={loadOf(row.catalogueId)}
+                      edited={!!productsToSave[row.productId]}
+                      opening={opening === row.productId}
+                      onVisible={request}
+                      onRetry={retry}
+                      onMissing={refresh}
+                      onEdit={edit}
+                      selecting={selecting}
+                      selected={selected.has(row.productId)}
+                      onToggle={toggle}
+                    />,
+                  ];
+                })}
               </Box>
               {filtered.length > shown && (
                 <Button variant="outlined" onClick={() => setShown((n) => n + PRODUCTS_PAGE)} sx={{ alignSelf: "center", minHeight: 44 }}>

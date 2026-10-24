@@ -4,7 +4,8 @@
  * the category chips and the Auctions toggle.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Box, Chip, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Box, Chip, Link, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Link as RouterLink } from "react-router-dom";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import { CategoryIcon } from "../../components/CategoryIcon";
@@ -193,6 +194,28 @@ export function ProductGrid({ children, layout, ...rest }: { children: ReactNode
       }}
     >
       {children}
+    </Box>
+  );
+}
+
+/**
+ * A titled line across a product grid: where one collection's products start
+ * in Featured (qdn/productOrder.ts featuredOrder). The title opens the
+ * collection when there is one.
+ */
+export function SectionDivider({ title, to, first = false }: { title: string; to?: string; first?: boolean }) {
+  return (
+    <Box component="li" data-section sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 1.5, pt: first ? 0 : 1.5 }}>
+      <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: "anywhere" }}>
+        {to ? (
+          <Link component={RouterLink} to={to} color="inherit" underline="hover">
+            {title}
+          </Link>
+        ) : (
+          title
+        )}
+      </Typography>
+      <Box aria-hidden sx={{ flex: "1 1 24px", borderTop: 1, borderColor: "divider" }} />
     </Box>
   );
 }

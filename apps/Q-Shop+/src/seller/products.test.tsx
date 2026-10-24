@@ -811,6 +811,17 @@ describe("sorting the products by their columns", () => {
     expect(names(list)).toEqual(["Poster", "Mug", "Chair"]);
     expect(selectValue(selectField("Sort"))).toBe("featured-desc");
   });
+
+  it("puts the published collections' products first in the shop order, each under a line with its collection", async () => {
+    const collectionsId = `q-store-collections-${SHORT_STORE_ID}`;
+    stubNode({ served: new Map([[collectionsId, { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id] }] }]]) });
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer({ ...dataContainer, collectionsId, productOrder: [chair.id, mug.id] }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem").map((li) => li.querySelector("h3")?.textContent ?? within(li).queryByText(/^(Mug|Poster|Chair)$/)?.textContent)).toEqual(["Mugs", "Mug", "Not in a collection", "Chair", "Poster"]));
+    expect(selectValue(selectField("Sort"))).toBe("featured");
+    expect(within(list).getAllByText(/in shop order/).map((el) => el.parentElement?.textContent)).toEqual(["1 in shop order", "2 in shop order", "3 in shop order"]);
+  });
 });
 
 

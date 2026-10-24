@@ -5,12 +5,18 @@
  * the product list, with products added since at the end, newest first;
  * "Newest first" drops the order again. Retired products aren't listed (one
  * put back on sale later goes at the end).
+ *
+ * A shop with collections lists their products first in Featured, collection
+ * by collection (qdn/productOrder.ts featuredOrder): Arrange then orders the
+ * products in no collection, which come after them. The order it publishes
+ * keeps the collections' products where they were, after those.
  */
 import { useMemo } from "react";
 import { useSelector } from "react-redux";
 import { Alert } from "@mui/material";
 import type { RootState } from "../state/store";
 import { arrangeProducts, productOrderOf } from "../qdn/productOrder";
+import { useShopCollections } from "../pages/Store/useShopCollections";
 import { ArrangeDialog } from "./ArrangeDialog";
 import { FormError } from "./FormError";
 import { PublishProductsDialog } from "./PublishProductsDialog";
@@ -21,13 +27,19 @@ export function ArrangeShop({ onClose, onPublished }: { onClose: () => void; /**
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
+  const owner = useSelector((state: RootState) => state.global.currentStore?.owner || state.auth.user?.name || "");
+  const storeId = useSelector((state: RootState) => state.global.currentStore?.id ?? "");
+  const collections = useShopCollections(owner, storeId, dataContainer).collections;
   const o = useProductOrder();
 
-  const { listed, newest, current } = useMemo(() => {
-    const listed = rows.filter((row) => row.status !== "RETIRED");
+  const { inCollections, listed, newest, current } = useMemo(() => {
+    const inCollections = new Set(collections.flatMap((c) => c.products));
+    const listed = rows.filter((row) => row.status !== "RETIRED" && !inCollections.has(row.productId));
     const newest = [...listed].sort((a, b) => b.created - a.created).map((row) => row.productId);
-    return { listed, newest, current: productOrderOf(dataContainer) };
-  }, [rows, dataContainer]);
+    return { inCollections, listed, newest, current: productOrderOf(dataContainer) };
+  }, [rows, dataContainer, collections]);
+  // The collections' products keep their places in the saved order, after the ones arranged here.
+  const withCollections = (order: string[]) => [...order, ...current.filter((id) => inCollections.has(id))];
   const startRows = useMemo(() => {
     const byId = new Map(listed.map((row) => [row.productId, row]));
     return arrangeProducts(current, newest).map((id) => byId.get(id) as SellerRow);
@@ -40,10 +52,16 @@ export function ArrangeShop({ onClose, onPublished }: { onClose: () => void; /**
       <ArrangeDialog
         key={startKey}
         title="Arrange your shop"
-        intro="Buyers see your products in this order: it's the Featured sort, the first on your shop page, and they can still sort by newest or price. Products you add later go at the end until you move them."
+        intro={
+          inCollections.size > 0 && listed.length === 0
+            ? "Every product you list is in a collection. Buyers see them collection by collection: change that order in your Collections tab, and a collection's own order in its editor."
+            : inCollections.size > 0
+            ? "Your collections' products come first on your shop page, collection by collection in the order of your Collections tab. Arrange the rest here: they follow, in this order. It's the Featured sort; buyers can still sort by newest or price. Products you add later go at the end until you move them."
+            : "Buyers see your products in this order: it's the Featured sort, the first on your shop page, and they can still sort by newest or price. Products you add later go at the end until you move them."
+        }
         rows={startRows}
         doneLabel="Publish order"
-        onDone={(order, reset) => void o.prepare(reset ? [] : order)}
+        onDone={(order, reset) => void o.prepare(reset ? [] : withCollections(order))}
         onClose={onClose}
         onReset={current.length > 0 ? () => newest : undefined}
         resetLabel="Newest first"

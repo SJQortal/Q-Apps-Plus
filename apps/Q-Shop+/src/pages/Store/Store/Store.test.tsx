@@ -59,7 +59,12 @@ function renderShop(world: World, path = SHOP_PATH, me: { name: string } | null 
 const searchUrls = (node: ReturnType<typeof installMockNode>) => node.fetchCalls.filter((u) => u.startsWith("/arbitrary/resources/search"));
 const catalogueFetches = (node: ReturnType<typeof installMockNode>) =>
   node.fetchCalls.filter((u) => u.startsWith("/arbitrary/DOCUMENT/") && u.includes("q-store-catalogue-"));
-const cardTitles = () => screen.getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+// Product cards' titles (h3), without Featured's collection lines.
+const cardTitles = () =>
+  screen
+    .getAllByRole("heading", { level: 3 })
+    .filter((h) => !h.closest("[data-section]"))
+    .map((h) => h.textContent);
 
 describe("shop page", { timeout: 20_000 }, () => {
   it("shows the shop: title as the page heading, owner, rating from the shared review search, coins", async () => {
@@ -294,6 +299,35 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(exists[0]).toContain("identifier=q-store-general-nothing");
   });
 
+  it("Featured lists the collections' products first, collection by collection, each under a line with its title", async () => {
+    const world = makeWorld();
+    const ids = world.shops[0].products.map((p) => p.id);
+    world.shops[0].collections = [
+      { id: "GIFTSxxxx1", title: "Gifts", products: [ids[3], ids[1]] },
+      // A product already in Gifts shows there only.
+      { id: "KITCHENx2", title: "Kitchen", products: [ids[1], ids[5]] },
+    ];
+    renderShop(world);
+    await waitFor(() => expect(cardTitles().slice(0, 3)).toEqual(["Product 3", "Product 1", "Product 5"]));
+    expect(selectValue(selectField("Sort"))).toBe("featured");
+    const grid = screen.getByRole("heading", { level: 3, name: "Gifts" }).closest("ul") as HTMLElement;
+    expect([...grid.querySelectorAll("[data-section]")].map((li) => li.textContent)).toEqual(["Gifts", "Kitchen", "More products"]);
+    // Each line comes right before its first product.
+    expect([...grid.children].slice(0, 6).map((li) => li.querySelector("h3")?.textContent)).toEqual([
+      "Gifts",
+      "Product 3",
+      "Product 1",
+      "Kitchen",
+      "Product 5",
+      "More products",
+    ]);
+    expect(within(grid).getByRole("link", { name: "Kitchen" })).toHaveAttribute("href", "/Seller%20Name/q-store-general-my-shop?collection=KITCHENx2");
+    expect(cardTitles()).toHaveLength(12);
+    // Another sort has no lines.
+    chooseOption(selectField("Sort"), "Newest");
+    await waitFor(() => expect(screen.queryByRole("heading", { level: 3, name: "Gifts" })).toBeNull());
+  });
+
   it("shows the shop's collections; one opens on its products, with its description and a share link", async () => {
     const world = makeWorld();
     const ids = world.shops[0].products.map((p) => p.id);
@@ -302,8 +336,8 @@ describe("shop page", { timeout: 20_000 }, () => {
       { id: "GONExxxxx2", title: "Empty one", products: ["q-store-product-my-shop-NOPExxxxx9"] },
     ];
     const { node } = renderShop(world);
-    expect(await screen.findByRole("region", { name: "Collections" })).toBeInTheDocument();
-    const gifts = await screen.findByRole("link", { name: /Gifts/ });
+    const region = await screen.findByRole("region", { name: "Collections" });
+    const gifts = await within(region).findByRole("link", { name: /Gifts/ });
     expect(gifts).toHaveAttribute("href", "/Seller%20Name/q-store-general-my-shop?collection=GIFTSxxxx1");
     expect(within(gifts).getByText("2 products")).toBeInTheDocument();
     // A collection with none of the shop's products isn't offered.

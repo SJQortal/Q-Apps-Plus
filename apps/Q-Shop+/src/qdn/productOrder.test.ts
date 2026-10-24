@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PRODUCT_ORDER, arrangeProducts, buildProductOrderPublish, productOrderOf } from "./productOrder";
+import { MAX_PRODUCT_ORDER, arrangeProducts, buildProductOrderPublish, featuredOrder, productOrderOf } from "./productOrder";
 import { base64ToJson, type DataContainerDoc } from "./payloads";
 import { DATA_CONTAINER_ID, SELLER, STORE_ID, chair, dataContainer, mug, poster } from "../test/fixtures/shop";
 
@@ -29,5 +29,28 @@ describe("the seller's product order", () => {
     // Back to newest first: an empty order, so an older copy can't bring the old one back.
     const cleared = buildProductOrderPublish({ name: SELLER, storeId: STORE_ID, dataContainer: { ...dc, productOrder: [poster.id] }, order: [] });
     expect(base64ToJson(cleared.resources[0].data64).productOrder).toEqual([]);
+  });
+});
+
+describe("featuredOrder", () => {
+  it("puts each collection's products first, in collection order, once each, then the shop's order", () => {
+    const { order, sectionOf } = featuredOrder(
+      [
+        { products: ["b", "a"] },
+        { products: ["a", "c"] },
+        { products: [] },
+      ],
+      ["d", "c", "e"]
+    );
+    expect(order).toEqual(["b", "a", "c", "d", "e"]);
+    expect([...sectionOf]).toEqual([
+      ["b", 0],
+      ["a", 0],
+      ["c", 1],
+    ]);
+  });
+
+  it("without collections is the shop's order", () => {
+    expect(featuredOrder([], ["x", "y"])).toEqual({ order: ["x", "y"], sectionOf: new Map() });
   });
 });

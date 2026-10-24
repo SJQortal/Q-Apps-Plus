@@ -21,7 +21,9 @@
  *
  * "Featured" is the seller's order: the shop's (qdn/productOrder.ts) or,
  * in a collection, the collection's. It is the default sort wherever there
- * is one; buyers can still pick another.
+ * is one; buyers can still pick another. A shop with collections lists them
+ * first in Featured, the first collection's products, then the next's, then
+ * the rest, each group under a line with its collection's title.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
@@ -52,7 +54,7 @@ import { EmptyState } from "../../../components/common/EmptyState";
 import { BottomSheet, ResponsiveDialog } from "../../../components/common/mobile";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { useShopCoin } from "../../../money/useShopCoin";
-import { decodeParam, storePath } from "../../../qdn/links";
+import { collectionPath, decodeParam, storePath } from "../../../qdn/links";
 import {
   categoriesOf,
   catalogueIdsOf,
@@ -76,10 +78,10 @@ import {
   type ProductRow,
   type ShopSort,
 } from "../shopData";
-import { productOrderOf } from "../../../qdn/productOrder";
+import { featuredOrder, productOrderOf } from "../../../qdn/productOrder";
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
 import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
-import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../ProductList";
+import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, SectionDivider, useDebounced } from "../ProductList";
 import { useNow } from "../../../hooks/useNow";
 import { prefersReducedMotion, useSmoothSwap } from "../../../hooks/useSmoothSwap";
 import { productLayout, useProductView } from "../../../utils/productView";
@@ -180,9 +182,10 @@ function ShopProducts({
     const members = new Set(collection.products);
     return allRows.filter((row) => members.has(row.productId));
   }, [allRows, collection]);
-  // The seller's order here: the collection's, or the shop's.
+  // The seller's order here: the collection's, or the shop's with its collections first.
   const shopOrder = useMemo(() => productOrderOf(index), [index]);
-  const order = collection ? collection.products : shopOrder;
+  const featured = useMemo(() => featuredOrder(collections.collections, shopOrder), [collections.collections, shopOrder]);
+  const order = collection ? collection.products : featured.order;
   // Auctions only: by when they end, unless the buyer picked a sort.
   const sort = filters.auctionsOnly && !pickedSort ? "ending" : effectiveSort(pickedSort, order.length > 0);
   const query = useMemo<ProductQuery>(
@@ -208,6 +211,7 @@ function ShopProducts({
   const variantGroups = useMemo(() => variantGroupsOf(index), [index]);
   const listed = useMemo(() => bundleRows(results, variantGroups), [results, variantGroups]);
   const shown = listed.slice(0, pages * PRODUCTS_PAGE);
+  const grouped = sort === "featured" && !collection && !searching && featured.sectionOf.size > 0;
   const hasMore = shown.length < listed.length;
   const more = useCallback(
     () => setPaging((prev) => ({ key: listKey, pages: (prev.key === listKey ? prev.pages : 1) + 1 })),
@@ -353,10 +357,23 @@ function ShopProducts({
     body = (
       <>
         <ProductGrid layout={layout}>
-          {shown.map((row) => {
+          {shown.map((row, i) => {
             const product = productOf(row, catalogues);
             const state = statuses[row.catalogueId];
-            return (
+            // Featured across the whole shop: a line with the collection's title where its products start.
+            const section = grouped ? (featured.sectionOf.get(row.productId) ?? -1) : null;
+            const previous = grouped && i > 0 ? (featured.sectionOf.get(shown[i - 1].productId) ?? -1) : null;
+            const sectionStarts = section !== null && section !== previous && (section >= 0 || i > 0);
+            const sectionCollection = section !== null && section >= 0 ? collections.collections[section] : null;
+            return [
+              sectionStarts && (
+                <SectionDivider
+                  key={`section-${row.productId}`}
+                  title={sectionCollection ? sectionCollection.title || "Collection" : "More products"}
+                  to={sectionCollection ? collectionPath(owner, storeId, sectionCollection.id) : undefined}
+                  first={i === 0}
+                />
+              ),
               <li key={row.productId}>
                 {product ? (
                   <LocalBoundary
@@ -389,8 +406,8 @@ function ShopProducts({
                     layout={layout}
                   />
                 )}
-              </li>
-            );
+              </li>,
+            ];
           })}
         </ProductGrid>
         {hasMore && (

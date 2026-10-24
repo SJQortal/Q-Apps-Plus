@@ -44,6 +44,32 @@ export function arrangeProducts(order: string[], rest: string[]): string[] {
 }
 
 /**
+ * Featured with collections (Simon, 2026-10-24: "the products list should be
+ * ordered according how the user has collections ordered"): each
+ * collection's products in the collection's own order, the collections in
+ * the order the seller gave them, each product once (at its first
+ * collection); then the rest in the shop's arranged order. `sectionOf` says
+ * which collection placed a product (its index); products it doesn't name
+ * belong to none. Reading only: nothing new is published.
+ */
+export function featuredOrder(
+  collections: readonly { products: readonly string[] }[],
+  shopOrder: readonly string[]
+): { order: string[]; sectionOf: Map<string, number> } {
+  const sectionOf = new Map<string, number>();
+  const order: string[] = [];
+  collections.forEach((collection, i) => {
+    for (const id of collection.products) {
+      if (typeof id !== "string" || !id || sectionOf.has(id)) continue;
+      sectionOf.set(id, i);
+      order.push(id);
+    }
+  });
+  for (const id of shopOrder) if (!sectionOf.has(id)) order.push(id);
+  return { order: [...new Set(order)], sectionOf };
+}
+
+/**
  * Save the order: the product index with `productOrder`, its original shape
  * otherwise unchanged. Going back to newest first saves an empty order rather
  * than none, so a copy loaded before can't bring the old order back
