@@ -12,9 +12,10 @@
  * seller's name, then FETCH + DECRYPT_DATA as the original
  * (orders/loader.ts ensureOrderStatus).
  *
- * Once the seller has shipped it, the buyer can mark it delivered
- * (orders/delivered.ts: a small publish of their own), and is then asked
- * for a review of the shop. Both sides see "Delivered" from then on, unless
+ * Once the seller has shipped it, the buyer can mark it delivered (a
+ * digital order: received, at once; Simon, 2026-10-24), with a small
+ * publish of their own (orders/delivered.ts), and is then asked for a
+ * review of the shop, which needs it. Both sides see "Delivered" from then on, unless
  * the seller refunds it.
  */
 import { useEffect, useState, type ReactNode } from "react";
@@ -183,7 +184,9 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const refunded = status?.state === "known" && normalizeStatus(status.status) === "Refunded";
   // The buyer's own order, shipped and not marked yet: it can be marked delivered.
   const mine = role === "buyer" && sameName(order.user, me?.name);
-  const canMarkDelivered = mine && delivered === null && status?.state === "known" && normalizeStatus(status.status) === "Shipped";
+  const sellerStatus = status?.state === "known" ? normalizeStatus(status.status) : null;
+  // A digital order has nothing to ship: it can be marked received as soon as it is placed.
+  const canMarkDelivered = mine && delivered === null && (sellerStatus === "Shipped" || (digital && sellerStatus === "Received"));
   const markAsDelivered = async () => {
     const result = await markDelivered(store, order);
     if (result === "sent") dispatch(setNotification({ alertType: "success", msg: "Marked as delivered" }));
@@ -289,6 +292,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
               who={mine ? null : order.user}
               at={delivered.at}
               sending={!!delivered.sending}
+              digital={digital}
               onReview={mine && storeId && !delivered.sending ? () => setReviewing(true) : undefined}
               shop={order.storeName || order.sellerName || "the shop"}
             />
@@ -296,13 +300,13 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
           {canMarkDelivered && (
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, border: 1, borderColor: "divider" }}>
               <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 700 }}>Has it arrived?</Typography>
+                <Typography sx={{ fontWeight: 700 }}>{digital ? "Got it?" : "Has it arrived?"}</Typography>
                 <Typography variant="body2" color="text.secondary">
                   Let {order.sellerName || "the seller"} know, then review the shop. Hub asks you to confirm a small publish under your name.
                 </Typography>
               </Box>
               <Button variant="contained" startIcon={<CheckCircleOutlinedIcon />} onClick={() => void markAsDelivered()} sx={{ minHeight: 44 }}>
-                Mark as delivered
+                {digital ? "Mark as received" : "Mark as delivered"}
               </Button>
             </Box>
           )}
@@ -439,6 +443,7 @@ function DeliveredNote({
   who,
   at,
   sending,
+  digital,
   shop,
   onReview,
 }: {
@@ -446,6 +451,8 @@ function DeliveredNote({
   who: string | null;
   at: number;
   sending: boolean;
+  /** A digital order is received, not delivered. */
+  digital: boolean;
   shop: string;
   onReview?: () => void;
 }) {
@@ -458,7 +465,17 @@ function DeliveredNote({
       <CheckCircleOutlinedIcon color="success" aria-hidden />
       <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
         <Typography sx={{ fontWeight: 700 }}>
-          {sending ? "Marking it delivered…" : who ? `${who} says it arrived` : "You marked it delivered"}
+          {sending
+            ? digital
+              ? "Marking it received…"
+              : "Marking it delivered…"
+            : who
+              ? digital
+                ? `${who} says they received it`
+                : `${who} says it arrived`
+              : digital
+                ? "You marked it received"
+                : "You marked it delivered"}
         </Typography>
         {!sending && (
           <Typography variant="body2" color="text.secondary">

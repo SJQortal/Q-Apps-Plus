@@ -371,7 +371,7 @@ describe("delivered", () => {
     store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
     store.dispatch(statusesLoaded([{ orderId: ID, info: { state: "known", status: "Shipped", note: "", updated: 5 } }]));
     store.dispatch(deliveredLoaded([{ orderId: ID, info: { at: 1762000000000 } }]));
-    const order = { ...orderJson(), user: BUYER, id: ID, created: 1761000000000, updated: 2, isValid: true };
+    const order = { ...orderJson({ physical: true }), user: BUYER, id: ID, created: 1761000000000, updated: 2, isValid: true };
     renderWithProviders(<ShowOrder open onClose={() => {}} order={order as never} role="seller" />, { store });
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText(`${BUYER} says it arrived`)).toBeInTheDocument();

@@ -259,7 +259,8 @@ describe("My orders", () => {
   });
 
   it("a shipped order can be marked delivered, then the shop reviewed; the filters count it as Delivered", async () => {
-    const w = world(1);
+    const w = makeWorld({ shops: 2, me: { name: BUYER, address: BUYER_ADDRESS, publicKey: "BuyerPK" } });
+    addOrder(w, "O00", 1000, { physical: true });
     addStatus(w, "O00", "Shipped", "Tracking 42");
     const node = installMockNode(w);
     node.q.on("PUBLISH_QDN_RESOURCE", async () => true);
@@ -285,8 +286,9 @@ describe("My orders", () => {
     expect(await screen.findByRole("dialog", { name: "Review Seller's Shop" })).toBeInTheDocument();
   });
 
-  it("offers nothing to mark before the seller ships, nor for an order another name confirmed", async () => {
-    const w = world(1);
+  it("offers nothing to mark before the seller ships a physical order", async () => {
+    const w = makeWorld({ shops: 2, me: { name: BUYER, address: BUYER_ADDRESS, publicKey: "BuyerPK" } });
+    addOrder(w, "O00", 1000, { physical: true });
     installMockNode(w);
     renderPage();
     const list = await screen.findByRole("list", { name: "Your orders" });
@@ -296,5 +298,21 @@ describe("My orders", () => {
     const dialog = await screen.findByRole("dialog");
     expect(await within(dialog).findByText("The seller hasn't updated this order yet.")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Mark as delivered" })).toBeNull();
+  });
+
+  it("a digital order can be marked received as soon as it is placed", async () => {
+    const w = world(1);
+    const node = installMockNode(w);
+    node.q.on("PUBLISH_QDN_RESOURCE", async () => true);
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Your orders" });
+    expect(await within(list).findByText("Got it? Open it to mark it received.")).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Got it?")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Mark as received" }));
+    await waitFor(() => expect(node.q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    expect(await within(dialog).findByText("You marked it received")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Write a review" })).toBeInTheDocument();
   });
 });

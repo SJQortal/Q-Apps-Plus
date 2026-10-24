@@ -4,7 +4,7 @@ import type { Order } from "../../state/features/orderSlice";
 import { NameAvatar } from "../../components/common/NameAvatar";
 import { AmountTag } from "../../components/money/PriceTag";
 import type { OrderListItem } from "../selectors";
-import { formatOrderDate, itemCount, itemSummary, orderItems, orderTotal } from "../format";
+import { formatOrderDate, isDigitalOrder, itemCount, itemSummary, orderItems, orderTotal } from "../format";
 import { useOrderCoinView } from "../useOrderCoin";
 import { OrderStatusChip } from "./OrderStatusChip";
 import { normalizeStatus } from "../status";
@@ -122,6 +122,7 @@ export function OrderCard({
   }
 
   const items = orderItems(order);
+  const digital = isDigitalOrder(order);
   const who = counterpart(item, role);
   const count = itemCount(items);
   return (
@@ -163,10 +164,10 @@ export function OrderCard({
         <Box component="span" sx={{ mt: 0.5 }}>
           <AmountTag value={orderTotal(order)} coin={coin.coin} shop={coin.settings} size="small" />
         </Box>
-        {/* Shipped and not marked yet: the order's dialog has Mark as delivered (orders/delivered.ts). */}
-        {role === "buyer" && item.delivered === null && status?.state === "known" && normalizeStatus(status.status) === "Shipped" && (
+        {/* Shipped (a digital order: placed) and not marked yet: the order's dialog has Mark as delivered (orders/delivered.ts). */}
+        {role === "buyer" && item.delivered === null && status?.state === "known" && (normalizeStatus(status.status) === "Shipped" || (digital && normalizeStatus(status.status) === "Received")) && (
           <Typography component="span" variant="body2" sx={{ mt: 0.5, fontWeight: 600, color: "primary.main" }}>
-            Arrived? Open it to mark it delivered.
+            {digital ? "Got it? Open it to mark it received." : "Arrived? Open it to mark it delivered."}
           </Typography>
         )}
       </Box>
