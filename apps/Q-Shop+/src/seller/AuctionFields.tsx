@@ -3,7 +3,8 @@
  * starts and ends (quick picks for the end), an optional reserve and buy-now
  * price, and how much a late bid extends it. All in QORT.
  */
-import { Alert, Box, Button, InputAdornment, MenuItem, TextField, Typography } from "@mui/material";
+import { useState } from "react";
+import { Alert, Box, Button, InputAdornment, MenuItem, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { CoinIcon } from "../components/money/CoinIcon";
 import { selectMenuProps } from "../components/common/menuStyle";
 import { useNow } from "../hooks/useNow";
@@ -58,13 +59,24 @@ export function AuctionFields({
   const ended = !!saved && now >= saved.end;
   const set = <K extends keyof AuctionFormValues>(key: K, next: AuctionFormValues[K]) => onChange({ ...value, [key]: next });
   const endIn = (days: number) => set("end", endAfter(value.start, days));
+  // Starts now (an empty start: when it is published) or at a date (Simon, 2026-10-24: "select starts now").
+  const [startsLater, setStartsLater] = useState(() => !!value.start.trim());
+  const startNow = () => {
+    setStartsLater(false);
+    set("start", "");
+  };
+  const startLater = () => {
+    setStartsLater(true);
+    // The next full hour, to change from.
+    if (!value.start.trim()) set("start", toLocalInput(Math.ceil((Date.now() + 1) / 3_600_000) * 3_600_000));
+  };
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {running && <Alert severity="info">Bidding has started, so its terms stay as bidders saw them: only the end can move, to later.</Alert>}
       {ended && (
         <Alert severity="info">
-          This auction has ended. Leave its terms as they are to keep its result, or run it again: clear Starts (or set a new start) and set a new end; earlier
-          bids then no longer count.
+          This auction has ended. Leave its terms as they are to keep its result, or run it again: choose Starts now (or a new date) and set a new end;
+          earlier bids then no longer count.
         </Alert>
       )}
       <TextField
@@ -77,17 +89,40 @@ export function AuctionFields({
         helperText="The lowest first bid. Each bid after it must beat the last by a small step."
         slotProps={qortSlot}
       />
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) minmax(0, 1fr)" } }}>
-        <TextField
-          label="Starts"
-          type="datetime-local"
-          value={value.start}
-          onChange={(e) => set("start", e.target.value)}
-          fullWidth
+      <Box>
+        <Typography id="auction-starts-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+          Starts
+        </Typography>
+        <ToggleButtonGroup
+          exclusive
+          value={startsLater ? "later" : "now"}
+          onChange={(_, next: "now" | "later" | null) => (next === "now" ? startNow() : next === "later" ? startLater() : undefined)}
+          aria-labelledby="auction-starts-label"
           disabled={running}
-          helperText="Empty: as soon as you publish it."
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
+          sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
+        >
+          <ToggleButton value="now">Now</ToggleButton>
+          <ToggleButton value="later">At a date</ToggleButton>
+        </ToggleButtonGroup>
+        {!startsLater && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            Bidding opens as soon as you publish it.
+          </Typography>
+        )}
+      </Box>
+      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) minmax(0, 1fr)" } }}>
+        {startsLater && (
+          <TextField
+            label="Starts at"
+            type="datetime-local"
+            value={value.start}
+            onChange={(e) => set("start", e.target.value)}
+            required
+            fullWidth
+            disabled={running}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+        )}
         <TextField
           label="Ends"
           type="datetime-local"
