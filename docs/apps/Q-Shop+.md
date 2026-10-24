@@ -708,6 +708,14 @@ Simon: *"also make sure for the variants the price in Q-asset that was selected 
 - **Screens:** the seller's test shop now also takes Gold Bar; seller-add-variants and seller-edit-variants (Hub 3.0 and White) and seller-product-form-wide (Hub 3.0), five sizes: clean.
 - **Tests:** 1009 → 1013.
 
+### Round 5, 2026-10-24: an auction's start, and its times in Products
+
+Simon: *"for the auction, add ability for the user to select starts now, and also if user set the date make sure to show when it starts and finnishes on the products list in user shop when he manages shop products"*:
+- **Starts:** the auction form asks **Now** or **At a date**. Now (the default for a new auction) says "Bidding opens as soon as you publish it." and leaves the start empty, as before; At a date shows "Starts at", set to the next full hour to change from. An auction already set to start later opens on At a date. The ended-auction note says to choose Starts now (or a new date) to run it again. No data change.
+- **Products tab:** an auction's row says when it starts and ends ("Starts 25 Oct, 14:00 · Ends 28 Oct, 14:00", "Started … · Ended …" once passed), from its product-list row (no extra reads), with a gavel, at every width.
+- **Screens:** seller-product-auction, seller-auction-edit and seller-products (Hub 3.0 and White, five sizes): clean. Three older screens' row selectors were fixed on the way (a row's name starts with its shop-order place at 1280; Lamp 11 is searched for first, its catalogue being past the fold at 844×390).
+- **Tests:** 1013 → 1016.
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
