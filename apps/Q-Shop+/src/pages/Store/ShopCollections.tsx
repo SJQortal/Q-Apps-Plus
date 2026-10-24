@@ -128,6 +128,9 @@ function Picture({ src, size }: { src?: string; size?: number }) {
                         borderColor: selected ? "primary.main" : "divider",
                         bgcolor: selected ? "action.selected" : "background.paper",
                         "@media (hover: hover)": { "&:hover": { bgcolor: "action.hover" } },
+                        // The picture comes a little closer under the pointer, as on product cards (Simon, 2026-10-24).
+                        "& img": { transition: "transform 300ms ease" },
+                        "@media (hover: hover) and (prefers-reduced-motion: no-preference)": { "&:hover img": { transform: "scale(1.05)" } },
                         "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 2 },
                       }}
                     >

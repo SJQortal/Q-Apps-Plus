@@ -45,6 +45,9 @@ const Tile = styled(RouterLink)(({ theme }) => ({
   overflow: "hidden",
   transition: "border-color 160ms ease",
   "@media (hover: hover)": { "&:hover": { borderColor: theme.palette.primary.main } },
+  // The picture comes a little closer under the pointer, as on product cards.
+  "& img": { transition: "transform 300ms ease" },
+  "@media (hover: hover) and (prefers-reduced-motion: no-preference)": { "&:hover img": { transform: "scale(1.05)" } },
   "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
 }));
