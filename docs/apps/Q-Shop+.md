@@ -716,6 +716,13 @@ Simon: *"for the auction, add ability for the user to select starts now, and als
 - **Screens:** seller-product-auction, seller-auction-edit and seller-products (Hub 3.0 and White, five sizes): clean. Three older screens' row selectors were fixed on the way (a row's name starts with its shop-order place at 1280; Lamp 11 is searched for first, its catalogue being past the fold at 844×390).
 - **Tests:** 1013 → 1016.
 
+### Round 5, 2026-10-24: tall cut-out pictures; zoom on collections
+
+Simon (a Hub screenshot of New products): *"I would like this slight zoom when hovering over collections images as well. also I noticed that product images are stretched when the images are transparent vertical ones, make sure the field for product images is the same hight, and that they fit correctly"*:
+- **The stretch:** a cut-out picture (transparent around the product) is fitted whole in its square, so its own height counted, and a square made with CSS aspect-ratio grows to fit its content: a tall cut-out made its tile 3.7 times as tall. The New products tiles' squares didn't clip (the product cards' did). Now the picture never sizes its frame (`ProductImage`: `contain: size`), wherever it is shown, and the New products square clips like the cards. Measured in Chromium with a tall transparent picture put into a tile: 683 px before, 182 px after (the others' height), 578 → 154 on a phone.
+- **Zoom:** a collection's picture and a New products tile's picture come a little closer under the pointer (5 %, 300 ms), as product cards' do; not on touch screens or with reduced motion.
+- **Screens:** home, shop, shop-collection, products, cart, product, favorites-products and seller-products (Hub 3.0, five sizes): clean, pictures at their frames' sizes.
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
