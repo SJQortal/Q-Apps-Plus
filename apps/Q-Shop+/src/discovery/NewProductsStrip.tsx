@@ -64,7 +64,7 @@ function ProductTile({ item }: { item: NewProduct }) {
         aria-describedby={detailId}
       >
         {/* Once the picture is in, no backdrop: a transparent background shows the tile. */}
-        <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", bgcolor: pictures.isLoaded(item.image) ? "transparent" : accentWash(theme, 0.08) })}>
+        <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", bgcolor: pictures.isLoaded(item.image) ? "transparent" : accentWash(theme, 0.08) })}>
           {/* The title is the next text in the link, so the picture adds nothing to its name. */}
           <ProductImage src={item.image} alt="" onLoad={pictures.onLoad(item.image)} />
           {(outOfStock || auction) && (

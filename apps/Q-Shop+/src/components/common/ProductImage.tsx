@@ -7,6 +7,11 @@
  * has loaded: its edge pixels are read from a small copy of it (product
  * pictures are data URLs, so the canvas may read them), once per picture per
  * session.
+ *
+ * The picture never sizes its frame (`contain: size`): fitted whole, a tall
+ * cut-out's own height would otherwise stretch a square frame made with
+ * aspect-ratio (Simon, 2026-10-24: "product images are stretched when the
+ * images are transparent vertical ones"). The frame sets its size.
  */
 import { useState, type SyntheticEvent } from "react";
 import { Box, type SxProps, type Theme } from "@mui/material";
@@ -80,6 +85,7 @@ export function ProductImage({
           height: "100%",
           display: "block",
           boxSizing: "border-box",
+          contain: "size",
           objectFit: known ? "contain" : "cover",
           // A cut-out keeps a margin inside its frame.
           p: known ? "7%" : 0,
