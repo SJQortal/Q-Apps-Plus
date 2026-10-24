@@ -81,6 +81,18 @@ interface ProductFormProps {
   shopTitle?: string;
 }
 
+/** One part of the form: a panel of its own on wider screens, plain on phones. */
+const panelSx = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  minWidth: 0,
+  p: { xs: 0, md: 2 },
+  border: { xs: 0, md: 1 },
+  borderColor: "divider",
+  borderRadius: 2,
+} as const;
+
 const SectionTitle = ({ children }: { children: string }) => (
   <Typography component="h3" sx={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "text.secondary" }}>
     {children}
@@ -158,8 +170,9 @@ export const ProductForm = ({
     });
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <Box component="section" aria-label="Images" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+    // Wide windows: pictures on the left, what it is and its price on the right, the description under both (Simon, 2026-10-24: "wider … nicely and simply arranged").
+    <Box sx={{ display: "grid", gap: { xs: 3, md: 2.5 }, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 5fr) minmax(0, 7fr)" }, alignItems: "start" }}>
+      <Box component="section" aria-label="Images" sx={[panelSx, { gap: 1.5, gridRow: { md: "span 2" } }]}>
         <SectionTitle>Images</SectionTitle>
         {values.images.length > 0 && (
           <Box
@@ -242,11 +255,11 @@ export const ProductForm = ({
           />
         )}
         <Typography variant="body2" color="text.secondary">
-          Up to {MAX_PRODUCT_IMAGES} images. The first is the one buyers see in lists; Q-Shop, the original app, shows the first 3.
+          The first picture is the cover in lists (star another to make it the cover). Q-Shop, the original app, shows the first 3.
         </Typography>
       </Box>
 
-      <Box component="section" aria-label="Details" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box component="section" aria-label="Details" sx={panelSx}>
         <SectionTitle>Details</SectionTitle>
         <TextField
           label="Title"
@@ -257,26 +270,6 @@ export const ProductForm = ({
           slotProps={{ htmlInput: { maxLength: MAX_TITLE_LENGTH } }}
           helperText={`${values.title.length}/${MAX_TITLE_LENGTH}`}
         />
-        <Box>
-          <Typography id={descriptionLabel} variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-            Description
-          </Typography>
-          <Suspense fallback={<Skeleton variant="rounded" height={208} aria-label="Loading the editor" />}>
-            <DescriptionEditor
-              value={values.description}
-              onChange={(html) => set("description", html)}
-              name={publisher}
-              productTitle={values.title.trim()}
-              shopTitle={shopTitle}
-              labelId={descriptionLabel}
-              placeholder="What it is, what's included, sizes, care…"
-            />
-          </Suspense>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-            Format it with the toolbar, or paste formatted text. To link to Qortal, select text and use the link button with a qortal:// address. The last two
-            buttons add a video or a PDF; a Q-Tube or Q-Share link on a line of its own shows its video or files too.
-          </Typography>
-        </Box>
         <Box>
           <Typography id="product-type-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
             Type
@@ -358,7 +351,7 @@ export const ProductForm = ({
         )}
       </Box>
 
-      <Box component="section" aria-label="Price" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Box component="section" aria-label="Price" sx={panelSx}>
         <SectionTitle>Price</SectionTitle>
         <Box>
           <Typography id="product-sale-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
@@ -478,6 +471,27 @@ export const ProductForm = ({
             })}
           </>
         )}
+      </Box>
+      <Box component="section" aria-labelledby={descriptionLabel} sx={[panelSx, { gridColumn: "1 / -1" }]}>
+        <Box>
+          <Typography id={descriptionLabel} component="h3" sx={{ fontWeight: 700, fontSize: 13, letterSpacing: 0.6, textTransform: "uppercase", color: "text.secondary", mb: 1 }}>
+            Description
+          </Typography>
+          <Suspense fallback={<Skeleton variant="rounded" height={208} aria-label="Loading the editor" />}>
+            <DescriptionEditor
+              value={values.description}
+              onChange={(html) => set("description", html)}
+              name={publisher}
+              productTitle={values.title.trim()}
+              shopTitle={shopTitle}
+              labelId={descriptionLabel}
+              placeholder="What it is, what's included, sizes, care…"
+            />
+          </Suspense>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            Format it with the toolbar, or paste formatted text. The link button takes a qortal:// address; the last two add a video or a PDF.
+          </Typography>
+        </Box>
       </Box>
     </Box>
   );

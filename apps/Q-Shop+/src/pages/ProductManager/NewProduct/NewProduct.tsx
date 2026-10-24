@@ -127,7 +127,7 @@ export function ProductDialog({ open, onClose, product, onDelete }: ProductDialo
         open={open}
         onClose={requestClose}
         title={product ? "Edit product" : "Add product"}
-        maxWidth="sm"
+        maxWidth="md"
         dismissible={false}
         actions={
           <>
