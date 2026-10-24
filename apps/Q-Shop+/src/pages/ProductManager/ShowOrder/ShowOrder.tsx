@@ -11,6 +11,11 @@
  * its own), the dialog reads it: a search for the status document under the
  * seller's name, then FETCH + DECRYPT_DATA as the original
  * (orders/loader.ts ensureOrderStatus).
+ *
+ * Once the seller has shipped it, the buyer can mark it delivered
+ * (orders/delivered.ts: a small publish of their own), and is then asked
+ * for a review of the shop. Both sides see "Delivered" from then on, unless
+ * the seller refunds it.
  */
 import { useEffect, useState, type ReactNode } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
@@ -19,6 +24,8 @@ import { Alert, Box, Button, Divider, Link, Skeleton, Typography } from "@mui/ma
 import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import RateReviewOutlinedIcon from "@mui/icons-material/RateReviewOutlined";
 import type { RootState } from "../../../state/store";
 import type { Order, OrderStatusInfo } from "../../../state/features/orderSlice";
 import { setNotification } from "../../../state/features/notificationsSlice";
@@ -26,15 +33,18 @@ import { ResponsiveDialog } from "../../../components/common/mobile";
 import { NameAvatar } from "../../../components/common/NameAvatar";
 import { AmountTag } from "../../../components/money/PriceTag";
 import { mailToLink, productPath, storePath } from "../../../qdn/links";
-import { ensureOrderStatus, type OrderStore } from "../../../orders/loader";
+import { ensureDelivered, ensureOrderStatus, type OrderStore } from "../../../orders/loader";
+import { markDelivered } from "../../../orders/delivered";
+import { sameName } from "../../../orders/reads";
 import { sendOrderStatus } from "../../../orders/statusUpdate";
-import { normalizeStatus } from "../../../orders/status";
+import { normalizeStatus, shownStatus } from "../../../orders/status";
 import { deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
 import { useOrderCoinView } from "../../../orders/useOrderCoin";
 import type { ShopCoinSettings } from "../../../money/coins";
 import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
 import { PaymentDetails } from "./PaymentDetails";
 import { StatusEditor, type StatusDraft } from "./StatusEditor";
+import { AddReview } from "../../Store/StoreReviews/AddReview/AddReview";
 
 export interface ShowOrderProps {
   open: boolean;
@@ -130,6 +140,9 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const store: OrderStore = useStore<RootState>();
   const me = useSelector((state: RootState) => state.auth.user);
   const status = useSelector((state: RootState) => (order ? state.order.statuses[order.id] ?? null : null));
+  // The buyer's "it arrived" (orders/delivered.ts): null when there is none, undefined while not read.
+  const delivered = useSelector((state: RootState) => (order ? state.order.delivered[order.id] : undefined));
+  const [reviewing, setReviewing] = useState(false);
   // The seller's view never names the coin from the buyer's own text (orders/useOrderCoin.ts).
   const coinView = useOrderCoinView(order, role);
   const sellerName = role === "seller" ? me?.name || order?.sellerName || "" : order?.sellerName || "";
@@ -138,6 +151,9 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   useEffect(() => {
     if (open && order && sellerName) void ensureOrderStatus(store, order, sellerName);
   }, [open, order, sellerName, store]);
+  useEffect(() => {
+    if (open && order) void ensureDelivered(store, order);
+  }, [open, order, store]);
 
   // The seller's draft starts from the status as read, and again whenever it is read anew. A status
   // that couldn't be read pre-selects nothing: "Received" there would put a real Shipped or Refunded
@@ -163,6 +179,18 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   const other = role === "seller" ? order.user : order.sellerName || "";
   const storeId = items.find((i) => i.product?.storeId)?.product?.storeId as string | undefined;
   const sending = !!status?.sending;
+  const shown = shownStatus(status, delivered);
+  const refunded = status?.state === "known" && normalizeStatus(status.status) === "Refunded";
+  // The buyer's own order, shipped and not marked yet: it can be marked delivered.
+  const mine = role === "buyer" && sameName(order.user, me?.name);
+  const canMarkDelivered = mine && delivered === null && status?.state === "known" && normalizeStatus(status.status) === "Shipped";
+  const markAsDelivered = async () => {
+    const result = await markDelivered(store, order);
+    if (result === "sent") dispatch(setNotification({ alertType: "success", msg: "Marked as delivered" }));
+    else if (result === "timeout") {
+      dispatch(setNotification({ alertType: "info", msg: "Hub didn't answer in time. If you accepted, it shows as delivered after a refresh." }));
+    } else if (result === "failed") dispatch(setNotification({ alertType: "error", msg: "Couldn't mark it delivered. Try again." }));
+  };
 
   const update = async () => {
     if (sending || !me?.name || !me.publicKey || normalizeStatus(draft.status) === null) return;
@@ -227,7 +255,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
               {role === "buyer" && order.sellerName && order.storeName ? ` · by ${order.sellerName}` : ""}
             </Typography>
           </Box>
-          <OrderStatusChip status={status} role={role} size="medium" />
+          <OrderStatusChip status={shown} role={role} size="medium" />
         </Box>
         <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
           {other && (
@@ -256,6 +284,28 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         </Box>
 
         <Section title="Status">
+          {delivered && !refunded && (
+            <DeliveredNote
+              who={mine ? null : order.user}
+              at={delivered.at}
+              sending={!!delivered.sending}
+              onReview={mine && storeId && !delivered.sending ? () => setReviewing(true) : undefined}
+              shop={order.storeName || order.sellerName || "the shop"}
+            />
+          )}
+          {canMarkDelivered && (
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, border: 1, borderColor: "divider" }}>
+              <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700 }}>Has it arrived?</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Let {order.sellerName || "the seller"} know, then review the shop. Hub asks you to confirm a small publish under your name.
+                </Typography>
+              </Box>
+              <Button variant="contained" startIcon={<CheckCircleOutlinedIcon />} onClick={() => void markAsDelivered()} sx={{ minHeight: 44 }}>
+                Mark as delivered
+              </Button>
+            </Box>
+          )}
           {role === "seller" ? (
             status ? (
               <>
@@ -374,6 +424,53 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
           Order {order.id}
         </Typography>
       </Box>
+      {reviewing && storeId && (
+        <AddReview open storeId={storeId} storeTitle={order.storeName || ""} onClose={() => setReviewing(false)} />
+      )}
     </ResponsiveDialog>
+  );
+}
+
+/**
+ * "Delivered": the buyer's own (with Write a review), or the buyer's for the
+ * seller to see. While it is being published, it says so.
+ */
+function DeliveredNote({
+  who,
+  at,
+  sending,
+  shop,
+  onReview,
+}: {
+  /** The buyer's name for the seller; null for the buyer themself. */
+  who: string | null;
+  at: number;
+  sending: boolean;
+  shop: string;
+  onReview?: () => void;
+}) {
+  const date = at ? formatOrderDate(at) : "";
+  return (
+    <Box
+      role="status"
+      sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}
+    >
+      <CheckCircleOutlinedIcon color="success" aria-hidden />
+      <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700 }}>
+          {sending ? "Marking it delivered…" : who ? `${who} says it arrived` : "You marked it delivered"}
+        </Typography>
+        {!sending && (
+          <Typography variant="body2" color="text.secondary">
+            {who ? (date ? `On ${date}.` : "") : `${date ? `On ${date}. ` : ""}How was ${shop}? A review helps other buyers.`}
+          </Typography>
+        )}
+      </Box>
+      {onReview && (
+        <Button variant="contained" startIcon={<RateReviewOutlinedIcon />} onClick={onReview} sx={{ minHeight: 44 }}>
+          Write a review
+        </Button>
+      )}
+    </Box>
   );
 }

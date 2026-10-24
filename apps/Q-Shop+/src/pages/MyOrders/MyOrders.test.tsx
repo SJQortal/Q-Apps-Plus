@@ -257,4 +257,44 @@ describe("My orders", () => {
     await waitFor(() => expect(within(list).getAllByRole("button", { name: /Seller's Shop|Shop number 1/ })).toHaveLength(2));
     expect(within(list).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
+
+  it("a shipped order can be marked delivered, then the shop reviewed; the filters count it as Delivered", async () => {
+    const w = world(1);
+    addStatus(w, "O00", "Shipped", "Tracking 42");
+    const node = installMockNode(w);
+    node.q.on("PUBLISH_QDN_RESOURCE", async () => true);
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Your orders" });
+    // The card says what to do once it arrives.
+    expect(await within(list).findByText("Arrived? Open it to mark it delivered.")).toBeInTheDocument();
+    fireEvent.click(within(list).getByRole("button"));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Has it arrived?")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Mark as delivered" }));
+    await waitFor(() => expect(node.q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    expect(node.q.callsFor("PUBLISH_QDN_RESOURCE")[0]).toMatchObject({ name: BUYER, service: "DOCUMENT", identifier: "q-store-delivered-my-shop-O00", title: "Delivered" });
+    expect(await within(dialog).findByText("You marked it delivered")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Mark as delivered" })).toBeNull();
+    // The seller's note stays.
+    expect(within(dialog).getByText("Tracking 42")).toBeInTheDocument();
+    // Behind the dialog (hidden from it while it is open), the filters count it.
+    expect(screen.getByRole("button", { name: "Delivered · 1", hidden: true })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Shipped · 0", hidden: true })).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Write a review" }));
+    expect(await screen.findByRole("dialog", { name: "Review Seller's Shop" })).toBeInTheDocument();
+  });
+
+  it("offers nothing to mark before the seller ships, nor for an order another name confirmed", async () => {
+    const w = world(1);
+    installMockNode(w);
+    renderPage();
+    const list = await screen.findByRole("list", { name: "Your orders" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Received · 1" })).toBeInTheDocument());
+    expect(within(list).queryByText("Arrived? Open it to mark it delivered.")).toBeNull();
+    fireEvent.click(within(list).getByRole("button"));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("The seller hasn't updated this order yet.")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Mark as delivered" })).toBeNull();
+  });
 });

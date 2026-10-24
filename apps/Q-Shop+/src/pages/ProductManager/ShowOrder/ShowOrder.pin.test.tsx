@@ -128,7 +128,11 @@ describe("order status (pinned)", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       `/arbitrary/resources/search?mode=ALL&service=DOCUMENT_PRIVATE&identifier=${STATUS_ID}&name=Seller+Name&limit=1&offset=0&includemetadata=false&reverse=true&exactmatchnames=true`
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // The status's one search; the other is the buyer's own "Delivered" (orders/delivered.ts, + app).
+    expect(fetchMock.mock.calls.filter(([url]) => url.includes("service=DOCUMENT_PRIVATE"))).toHaveLength(1);
+    expect(fetchMock.mock.calls.map(([url]) => url).filter((url) => !url.includes("service=DOCUMENT_PRIVATE"))).toEqual([
+      `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=q-store-delivered-${ORDER_ID.slice("q-store-order-".length)}&name=${encodeURIComponent(BUYER)}&limit=1&offset=0&includemetadata=false&reverse=true&exactmatchnames=true`,
+    ]);
     expect(q.calls).toEqual([
       { action: "FETCH_QDN_RESOURCE", name: SELLER, service: "DOCUMENT_PRIVATE", identifier: STATUS_ID, encoding: "base64" },
       { action: "GET_NAME_DATA", name: BUYER },

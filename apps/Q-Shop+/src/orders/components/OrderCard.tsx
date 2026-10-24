@@ -7,6 +7,7 @@ import type { OrderListItem } from "../selectors";
 import { formatOrderDate, itemCount, itemSummary, orderItems, orderTotal } from "../format";
 import { useOrderCoinView } from "../useOrderCoin";
 import { OrderStatusChip } from "./OrderStatusChip";
+import { normalizeStatus } from "../status";
 
 export type OrderRole = "buyer" | "seller";
 
@@ -162,6 +163,12 @@ export function OrderCard({
         <Box component="span" sx={{ mt: 0.5 }}>
           <AmountTag value={orderTotal(order)} coin={coin.coin} shop={coin.settings} size="small" />
         </Box>
+        {/* Shipped and not marked yet: the order's dialog has Mark as delivered (orders/delivered.ts). */}
+        {role === "buyer" && item.delivered === null && status?.state === "known" && normalizeStatus(status.status) === "Shipped" && (
+          <Typography component="span" variant="body2" sx={{ mt: 0.5, fontWeight: 600, color: "primary.main" }}>
+            Arrived? Open it to mark it delivered.
+          </Typography>
+        )}
       </Box>
     </ButtonBase>
   );

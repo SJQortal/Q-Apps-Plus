@@ -11,7 +11,7 @@ import { installMockNode, makeWorld } from "../../../test/mockNode";
 import { createAppStore } from "../../../state/store";
 import { addUser } from "../../../state/features/authSlice";
 import { setCurrentStore } from "../../../state/features/globalSlice";
-import { statusesLoaded } from "../../../state/features/orderSlice";
+import { deliveredLoaded, statusesLoaded } from "../../../state/features/orderSlice";
 import { resetAssetCache } from "../../../qdn/assets";
 import { resetAssetNamesFromNode } from "../../../orders/useOrderCoin";
 import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, poster } from "../../../test/fixtures/shop";
@@ -360,5 +360,35 @@ describe("the rest of the order", () => {
       "aria-pressed",
       "true"
     );
+  });
+});
+
+describe("delivered", () => {
+  it("the seller sees that the buyer says it arrived, and their status form stays the three", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+    installQortalMock({ GET_NAME_DATA: async () => ({ owner: BUYER_ADDRESS }) });
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(statusesLoaded([{ orderId: ID, info: { state: "known", status: "Shipped", note: "", updated: 5 } }]));
+    store.dispatch(deliveredLoaded([{ orderId: ID, info: { at: 1762000000000 } }]));
+    const order = { ...orderJson(), user: BUYER, id: ID, created: 1761000000000, updated: 2, isValid: true };
+    renderWithProviders(<ShowOrder open onClose={() => {}} order={order as never} role="seller" />, { store });
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText(`${BUYER} says it arrived`)).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Write a review" })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Mark as delivered" })).toBeNull();
+    // The chip shows Delivered; the form still holds the seller's own status.
+    expect(within(dialog).getAllByText("Delivered").length).toBeGreaterThan(0);
+    expect(within(within(dialog).getByRole("group", { name: "Order status" })).getByRole("button", { name: "Shipped" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("a refund wins over the buyer's word", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+    installQortalMock({});
+    const { store } = setup("buyer", orderJson(), { status: "Refunded", note: "Sorry" });
+    store.dispatch(deliveredLoaded([{ orderId: ID, info: { at: 1762000000000 } }]));
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() => expect(within(dialog).queryByText("You marked it delivered")).toBeNull());
+    expect(within(dialog).getByText("Refunded")).toBeInTheDocument();
   });
 });
