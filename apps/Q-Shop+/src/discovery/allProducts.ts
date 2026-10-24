@@ -51,6 +51,7 @@ import {
 import { loadActivity, type ActivityIndex } from "./activity";
 import { loadShopIndex, type ShopEntry } from "./shopIndex";
 import type { FavoriteCounts } from "../favorites/model";
+import { variantGroupsOf, type VariantGroup } from "../variants/model";
 
 /** Product indexes asked for at a time while paging newest first. */
 export const INDEX_BATCH = 8;
@@ -74,6 +75,8 @@ export interface AllProductRow extends ProductRow {
   storeId: string;
   /** The shop's title, from the shop index. */
   shopTitle: string;
+  /** A variant's group as its shop's index holds it (variants/model.ts), for bundling. */
+  variantGroup?: VariantGroup;
 }
 
 function byKey(a: { key: string }, b: { key: string }): number {
@@ -103,12 +106,14 @@ export function shopSources(shops: ShopEntry[], activity: ActivityIndex): ShopSo
 /** A shop's products, from its index (malformed entries are skipped). */
 export function rowsOfShop(source: ShopSource, index: unknown): AllProductRow[] {
   const container = index && typeof index === "object" && !Array.isArray(index) ? (index as { products?: unknown }) : null;
+  const groups = variantGroupsOf(container);
   return productRowsFromContainer(container).map((row) => ({
     ...row,
     key: `${source.owner}\u0000${source.storeId}\u0000${row.productId}`,
     owner: source.owner,
     storeId: source.storeId,
     shopTitle: source.title,
+    ...(row.variant && groups[row.variant.group] && { variantGroup: groups[row.variant.group] }),
   }));
 }
 

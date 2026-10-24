@@ -90,6 +90,7 @@ import { useShopCollections, type ShopCollections } from "../useShopCollections"
 import { CollectionCards, CollectionHeader } from "../ShopCollections";
 import { useOrderCount } from "../orderCount";
 import { selectMenuProps } from "../../../components/common/menuStyle";
+import { bundleRows, variantGroupsOf } from "../../../variants/model";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -194,8 +195,11 @@ function ShopProducts({
   const listKey = JSON.stringify([query, terms, collection?.id ?? null]);
   const [paging, setPaging] = useState({ key: listKey, pages: 1 });
   const pages = paging.key === listKey ? paging.pages : 1;
-  const shown = results.slice(0, pages * PRODUCTS_PAGE);
-  const hasMore = shown.length < results.length;
+  // A group of variants listed as one shows as one card (variants/model.ts).
+  const variantGroups = useMemo(() => variantGroupsOf(index), [index]);
+  const listed = useMemo(() => bundleRows(results, variantGroups), [results, variantGroups]);
+  const shown = listed.slice(0, pages * PRODUCTS_PAGE);
+  const hasMore = shown.length < listed.length;
   const more = useCallback(
     () => setPaging((prev) => ({ key: listKey, pages: (prev.key === listKey ? prev.pages : 1) + 1 })),
     [listKey]
@@ -367,6 +371,7 @@ function ShopProducts({
                       stacked={phone}
                       auction={auctionTimesOf(row, catalogues)}
                       now={now}
+                      bundle={row.bundle}
                     />
                   </LocalBoundary>
                 ) : (

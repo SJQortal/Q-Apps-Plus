@@ -14,7 +14,8 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { Link as RouterLink } from "react-router-dom";
 import type { Product } from "../../../state/features/storeSlice";
 import type { ShopCoinSettings } from "../../../money/coins";
-import { PriceTag } from "../../../components/money/PriceTag";
+import { AmountTag, PriceTag } from "../../../components/money/PriceTag";
+import type { Bundle } from "../../../variants/model";
 import { productLink, productPath, storePath } from "../../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../../constants/product-status";
 import ContextMenuResource from "../../../components/common/ContextMenu/ContextMenuResource";
@@ -127,6 +128,7 @@ export function ProductCard({
   shopName,
   auction = null,
   now = 0,
+  bundle = null,
 }: {
   product: Product;
   productId: string;
@@ -150,8 +152,10 @@ export function ProductCard({
   /** When it sells by auction: when it runs (the list's `now` says where it stands). */
   auction?: AuctionRow | null;
   now?: number;
+  /** A group of variants listed as one (variants/model.ts): its title, how many, and its lowest price. */
+  bundle?: Bundle | null;
 }) {
-  const title = product.title?.trim() || "Untitled product";
+  const title = (bundle ? bundle.title : product.title?.trim()) || "Untitled product";
   const image = mainImageOf(product);
   const path = productPath(owner, storeId, productId, catalogueId);
   const available = status === AVAILABLE;
@@ -246,9 +250,19 @@ export function ProductCard({
               </Box>
             ) : (
               <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
-                <PriceTag product={product} coin={coin} rate={rate} shop={shop} />
-                {status === OUT_OF_STOCK && <Chip size="small" label="Out of stock" variant="outlined" />}
-                {status === RETIRED && <Chip size="small" label="Retired" variant="outlined" />}
+                {bundle && bundle.minQort < bundle.maxQort ? (
+                  <Box sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.5 }}>
+                    <Typography component="span" variant="body2" color="text.secondary">
+                      From
+                    </Typography>
+                    <AmountTag value={bundle.minQort} coin="QORT" />
+                  </Box>
+                ) : (
+                  <PriceTag product={product} coin={coin} rate={rate} shop={shop} />
+                )}
+                {bundle && <Chip size="small" label={`${bundle.count} options`} variant="outlined" />}
+                {!bundle && status === OUT_OF_STOCK && <Chip size="small" label="Out of stock" variant="outlined" />}
+                {!bundle && status === RETIRED && <Chip size="small" label="Retired" variant="outlined" />}
               </Box>
             )}
           </Box>
@@ -263,6 +277,11 @@ export function ProductCard({
               sx={buttonSx}
             >
               {auctionLine.phase === "live" ? "Bid" : auctionLine.phase === "upcoming" ? "View auction" : "See result"}
+            </Button>
+          ) : bundle && !isOwnProduct ? (
+            // A bundle's variant is chosen on its page.
+            <Button component={RouterLink} to={path} variant="contained" aria-label={`Choose options: ${title}${shopLabel}`} sx={buttonSx}>
+              Choose options
             </Button>
           ) : (
             <Button

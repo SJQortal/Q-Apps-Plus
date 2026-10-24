@@ -89,6 +89,7 @@ import { selectMenuProps } from "../../components/common/menuStyle";
 import { useHiddenShops } from "../../discovery/hiddenShops";
 import { useFavoriteCounts } from "../../favorites/counts";
 import { shortStoreIdOf } from "../../qdn/identifiers";
+import { bundleRows, type VariantGroup } from "../../variants/model";
 
 /** The Products page's sorts: the shops' ones, and how many buyers keep each product (favorites/counts.ts). */
 type ListSort = ProductSort | "favorites";
@@ -350,9 +351,16 @@ export function ProductsPage() {
   const [paging, setPaging] = useState(() => ({ key: listKey, pages: back?.pages ?? 1 }));
   const pages = paging.key === listKey ? paging.pages : 1;
   const wanted = pages * PRODUCTS_PAGE;
-  const shown = useMemo(() => (waitingForAll ? [] : results.slice(0, wanted)), [waitingForAll, results, wanted]);
+  // Each shop's groups of variants listed as one (variants/model.ts) show as one card.
+  const bundled = useMemo(() => {
+    const groups: Record<string, VariantGroup> = {};
+    const keyOf = (row: AllProductRow) => (row.variant ? `${row.owner}\n${row.storeId}\n${row.variant.group}` : "");
+    for (const row of results) if (row.variant && row.variantGroup) groups[keyOf(row)] = row.variantGroup;
+    return bundleRows(results, groups, (row) => (row.variant ? { group: keyOf(row), values: row.variant.values } : null));
+  }, [results]);
+  const shown = useMemo(() => (waitingForAll ? [] : bundled.slice(0, wanted)), [waitingForAll, bundled, wanted]);
   const reading = !needAll && !all.complete;
-  const hasMore = !waitingForAll && (shown.length < results.length || reading);
+  const hasMore = !waitingForAll && (shown.length < bundled.length || reading);
   const more = useCallback(
     () => setPaging((prev) => ({ key: listKey, pages: (prev.key === listKey ? prev.pages : 1) + 1 })),
     [listKey]
@@ -542,6 +550,7 @@ export function ProductsPage() {
                         shopName={row.shopTitle}
                         auction={auctionTimesOfRow(row, catalogues)}
                         now={now}
+                        bundle={row.bundle}
                       />
                     </LocalBoundary>
                   ) : (

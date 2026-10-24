@@ -15,6 +15,7 @@ import type { Product } from "../../state/features/storeSlice";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
 import { auctionRowOf, type AuctionRow } from "../../auctions/catalog";
 import { auctionTermsOf } from "../../auctions/rules";
+import { variantRowOf, type VariantRow } from "../../variants/model";
 
 /** Products per page on the shop page; catalogues are fetched for these only. */
 export const PRODUCTS_PAGE = 20;
@@ -59,6 +60,8 @@ export interface ProductRow {
   status?: string;
   /** When it runs, when it sells by auction (auctions/catalog.ts); the catalogue's terms, once loaded, win. */
   auction?: AuctionRow;
+  /** Its group and option values, when it is a variant (variants/model.ts). */
+  variant?: VariantRow;
 }
 
 export interface ProductQuery {
@@ -84,6 +87,11 @@ function auctionField(entry: unknown): { auction?: AuctionRow } {
   return auction ? { auction } : {};
 }
 
+function variantField(entry: unknown): { variant?: VariantRow } {
+  const variant = variantRowOf(entry);
+  return variant ? { variant } : {};
+}
+
 /** The index's products as rows, newest first. Malformed entries are skipped. */
 export function productRowsFromContainer(container: { products?: unknown } | null | undefined): ProductRow[] {
   const products = container?.products;
@@ -101,6 +109,7 @@ export function productRowsFromContainer(container: { products?: unknown } | nul
       category: typeof entry.category === "string" && entry.category ? entry.category : undefined,
       status: typeof entry.status === "string" && entry.status ? entry.status : undefined,
       ...auctionField(entry),
+      ...variantField(entry),
     });
   }
   return rows.sort((a, b) => b.created - a.created);

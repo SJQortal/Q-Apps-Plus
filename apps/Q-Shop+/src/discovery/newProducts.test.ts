@@ -35,6 +35,28 @@ describe("new products", () => {
     expect(shortStoreIdOfCatalogue("q-store-review-x-UID-40")).toBeNull();
   });
 
+  it("shows a group of variants listed as one once, by the group's title; variants listed apart each", () => {
+    const options = [{ name: "Size", values: ["S", "M"] }];
+    const v = (values: string[], display: string, group = "G1") => ({ variant: { group, title: "T-shirt", options, values, display, lead: "p1" } });
+    const items = newProductsFrom(
+      [
+        {
+          row: row("Seller", "q-store-catalogue-shop-CAT0000001"),
+          json: {
+            products: {
+              p1: product("1", 30, { title: "T-shirt — S", ...v(["S"], "bundle") }),
+              p2: product("2", 30, { title: "T-shirt — M", ...v(["M"], "bundle") }),
+              p3: product("3", 20, { title: "Mug — S", ...v(["S"], "separate", "G2") }),
+              p4: product("4", 20, { title: "Mug — M", ...v(["M"], "separate", "G2") }),
+            },
+          },
+        },
+      ],
+      listedAll
+    );
+    expect(items.map((i) => i.product.title)).toEqual(["T-shirt", "Mug — S", "Mug — M"]);
+  });
+
   it("keeps valid, unretired products with an image, newest first, and links them to the publisher's shop", () => {
     const items = newProductsFrom(
       [

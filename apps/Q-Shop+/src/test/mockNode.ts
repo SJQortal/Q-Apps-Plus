@@ -38,6 +38,8 @@ export interface WorldShop {
   collections?: { id: string; title: string; description?: string; image?: string; products: string[]; created?: number; updated?: number }[];
   /** The seller's order of its products (qdn/productOrder.ts), in the product index. */
   productOrder?: string[];
+  /** Its groups of variants (variants/model.ts), in the product index. */
+  variantGroups?: Record<string, unknown>;
   /** Its delivery prices (delivery/model.ts), DOCUMENT q-store-delivery-<short>, when it has some. */
   delivery?: unknown;
 }
@@ -163,6 +165,8 @@ export function dataContainerOf(shop: WorldShop) {
       status: p.status,
       // An auction's row says when it runs, as Q-Shop+ writes it (auctions/catalog.ts).
       ...(p.auction && { auction: { start: p.auction.start, end: p.auction.end } }),
+      // A variant's row says its group and values (variants/model.ts).
+      ...(p.variant && { variant: { group: p.variant.group, values: p.variant.values } }),
     };
     catalogues[Math.floor(idx / 10)].products[p.id] = true;
   });
@@ -175,6 +179,7 @@ export function dataContainerOf(shop: WorldShop) {
     id: `${storeId}-datacontainer`,
     ...(shop.collections && { collectionsId: `q-store-collections-${shop.shortStoreId}` }),
     ...(shop.productOrder && { productOrder: shop.productOrder }),
+    ...(shop.variantGroups && { variantGroups: shop.variantGroups }),
   };
 }
 

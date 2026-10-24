@@ -14,6 +14,7 @@
 import { CATALOGUE_BASE, storeIdentifier } from "../qdn/identifiers";
 import { mapWithConcurrency, QDN_SEARCH_TTL_MS, searchQdn, type QdnResourceSummary } from "../qdn/search";
 import { HIDDEN_TEST_SHOP_OWNER } from "./shopIndex";
+import { variantOf } from "../variants/model";
 
 export const NEW_CATALOGUES = 4;
 export const NEW_PRODUCTS_MAX = 12;
@@ -96,13 +97,15 @@ function stripProduct(productId: string, value: unknown): CatalogueProduct | nul
 /**
  * The products worth showing from fetched catalogues, newest first: valid
  * products (stripProduct), not retired, with an image, from listed shops
- * only.
+ * only. A group of variants listed as one (variants/model.ts) shows once,
+ * by the group's title.
  */
 export function newProductsFrom(
   catalogues: { row: QdnResourceSummary; json: unknown }[],
   isListedShop: (owner: string, storeId: string) => boolean
 ): NewProduct[] {
   const items: NewProduct[] = [];
+  const bundled = new Set<string>();
   for (const { row, json } of catalogues) {
     const short = shortStoreIdOfCatalogue(row.identifier);
     if (!short || row.name === HIDDEN_TEST_SHOP_OWNER) continue;
@@ -111,10 +114,17 @@ export function newProductsFrom(
     const products = (json as { products?: Record<string, unknown> } | null)?.products;
     if (!products || typeof products !== "object") continue;
     for (const [productId, value] of Object.entries(products)) {
-      const product = stripProduct(productId, value);
-      if (!product || product.status === "RETIRED") continue;
-      const image = mainImage(product);
+      const stripped = stripProduct(productId, value);
+      if (!stripped || stripped.status === "RETIRED") continue;
+      const image = mainImage(stripped);
       if (!image) continue;
+      const variant = variantOf(value);
+      if (variant?.display === "bundle") {
+        const group = `${row.name}\u0000${storeId}\u0000${variant.group}`;
+        if (bundled.has(group)) continue;
+        bundled.add(group);
+      }
+      const product = variant?.display === "bundle" ? { ...stripped, title: variant.title } : stripped;
       items.push({
         key: `${row.name}\u0000${row.identifier}\u0000${productId}`,
         owner: row.name,
