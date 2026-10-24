@@ -85,6 +85,7 @@ function product(s, p) {
     // The product page's product: a formatted description with a video, a PDF and a Q-Tube link, and 7 pictures.
     ...(s.short === 'shop-3' && p === 0 && RICH),
     ...(variantOfFixture(s, p) && { title: `Hand-thrown mug — ${VARIANT_COMBOS[p].join(' / ')}`, type: 'physical', price: [{ currency: 'qort', value: 18 + p * 2 }], status: p === 3 ? 'OUT_OF_STOCK' : 'AVAILABLE', variant: variantOfFixture(s, p) }),
+    ...(apronOf(s, p) && { title: `Linen apron — ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
     ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
   };
@@ -99,6 +100,18 @@ const VARIANT_COMBOS = [['250 ml', 'Celadon'], ['250 ml', 'Tenmoku'], ['350 ml',
 const variantOfFixture = (s, p) =>
   s.short === 'shop-2' && p < 4
     ? { group: 'MUGGROUP01', title: 'Hand-thrown mug', options: VARIANT_OPTIONS, values: VARIANT_COMBOS[p], display: 'bundle', lead: productId(s, 0) }
+    : null;
+// The seller's own group, each item listed on its own: products 4 (the lead), 8 and 10, in two catalogues.
+const APRON_OPTIONS = [
+  { name: 'Small', values: [{ name: 'Natural', color: '#d8cbb3' }, { name: 'Indigo', color: '#3b4a7a' }] },
+  { name: 'Large', values: [{ name: 'Natural', color: '#d8cbb3' }] },
+];
+const APRON_ITEMS = { 4: ['Small', 'Natural'], 8: ['Small', 'Indigo'], 10: ['Large', 'Natural'] };
+// Read when served, after setup() makes the pictures: the lead's own and the product's, the others' own.
+const apronPictures = (p) => ({ 4: [IMG2, IMG, CUTOUT], 8: [CUTOUT], 10: [IMG] })[p];
+const apronOf = (s, p) =>
+  s.short === 'my-shop' && APRON_ITEMS[p]
+    ? { group: 'APRONGRP01', title: 'Linen apron', options: APRON_OPTIONS, values: APRON_ITEMS[p], display: 'separate', lead: productId(s, 4) }
     : null;
 // Delivery prices (delivery/model.ts): the seller's own in USD, with a profile for heavy items; Plus Gadgets' in QORT.
 const DELIVERY = {
@@ -201,6 +214,7 @@ function dataContainer(s) {
     ...(collectionsOf(s) && { collectionsId: `q-store-collections-${s.short}` }),
     ...(s.short === 'shop-1' && { productOrder: [productId(s, 3), productId(s, 0), productId(s, 7)] }),
     ...(s.short === 'shop-2' && { variantGroups: { MUGGROUP01: { title: 'Hand-thrown mug', options: VARIANT_OPTIONS, display: 'bundle', lead: productId(s, 0) } } }),
+    ...(s.short === 'my-shop' && { variantGroups: { APRONGRP01: { title: 'Linen apron', options: APRON_OPTIONS, display: 'separate', lead: productId(s, 4) } } }),
     ...(s.short === 'my-shop' && { fiatPricing: { currency: 'USD', rates: { QORT: 0.18, ARRR: 0.25 }, updated: now - DAY } }),
     // The seller arranged a few: the Products tab shows each one's place in the shop order.
     ...(s.short === 'my-shop' && { productOrder: [productId(s, 7), productId(s, 2), productId(s, 10)] }),
@@ -464,6 +478,22 @@ export default {
       await sizes.fill('Pale');
       await sizes.press('Enter');
       await d.getByRole('list', { name: 'Items' }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-edit-variants', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.getByRole('searchbox', { name: 'Search your products' }).fill('apron', { timeout: 8000 });
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron — Small \/ Indigo\b/ }).click({ timeout: 10000 });
+      const d = page.getByRole('dialog', { name: 'Edit product' });
+      await d.getByRole('list', { name: 'Items' }).scrollIntoViewIfNeeded({ timeout: 10000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-edit-variants-removed', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.getByRole('searchbox', { name: 'Search your products' }).fill('apron', { timeout: 8000 });
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron — Large \/ Natural\b/ }).click({ timeout: 10000 });
+      const d = page.getByRole('dialog', { name: 'Edit product' });
+      await d.getByRole('button', { name: 'Remove Indigo' }).click({ timeout: 10000 });
+      await d.getByRole('switch', { name: 'In stock: Large / Natural' }).click();
+      await d.getByText(/^Taken out:/).scrollIntoViewIfNeeded({ timeout: 4000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-product-form-wide', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Add product' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
