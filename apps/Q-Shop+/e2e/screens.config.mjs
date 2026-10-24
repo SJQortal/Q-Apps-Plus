@@ -230,6 +230,8 @@ const storeJson = (s) => ({
   logo: s.short === 'shop-1' ? LOGO_WIDE : IMG,
   foreignCoins: s.arrr ? { ARRR: 'zs1arrrpayoutaddressxxxxxxxxxxxxxxxxxxxxxxxx' } : { ARRR: '' },
   supportedCoins: s.arrr ? ['QORT', 'ARRR'] : ['QORT'],
+  // The seller's shop also takes a Q-Asset: its products, and each variant, can have a price in it.
+  ...(s.short === 'my-shop' && { acceptedAssets: [{ id: 81, name: 'Gold Bar' }] }),
 });
 
 const reviews = [

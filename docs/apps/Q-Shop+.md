@@ -699,6 +699,15 @@ Simon: *"make digital orders as Received, public note ok, reviews should require
 - **Screens:** orders, order-mark-delivered (now the digital order: Mark as received) and shop-reviews-buyer (new: the reviews asking to mark the order first), Hub 3.0, five sizes: clean.
 - **Tests:** 1006 → 1009.
 
+### Round 5, 2026-10-24: variant prices in the shop's Q-Assets
+
+Simon: *"also make sure for the variants the price in Q-asset that was selected for the shop can also be added if the price of different variants is different"*:
+- Each item in Variants now has a price field for each Q-Asset the shop takes (and for ARRR when the shop doesn't price in a currency, where ARRR follows the rates). Empty is the product's price in that coin (shown as its placeholder); an asset that can't be split takes whole units. The checks name the item ("Check the Gold Bar price of Round / Pale."). Each item's product gets the price list with its own asset price, in the original's shape (`{currency: "ASSET:<id>", value}`), so buyers can pay each item in the asset at its own price.
+- Editing a group starts each item from its own asset price where it differs from the product's, and keeps it.
+- The "Add a picture" button in an item lost its tooltip (its label says it): opened by focus on a phone, the tooltip sat outside the page's landmarks, the axe "region" seen once before on this screen.
+- **Screens:** the seller's test shop now also takes Gold Bar; seller-add-variants and seller-edit-variants (Hub 3.0 and White) and seller-product-form-wide (Hub 3.0), five sizes: clean.
+- **Tests:** 1009 → 1013.
+
 ## Community feedback
 
 - **2026-10-22, Counter Economy (a merchant, via Simon):** set every price in a chosen currency (USD) and type the exchange rates for QORT and ARRR by hand (not fetched from web2), so one rate change updates every product instead of editing each with a calculator. **Built** (Round 5, second batch: Shop tab → Prices); not checked in Hub yet.
