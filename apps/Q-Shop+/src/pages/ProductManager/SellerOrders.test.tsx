@@ -10,6 +10,8 @@ import { fetchRetry, resetOrderReadCaches } from "../../orders/reads";
 import { addOrder, addStatus } from "../../orders/testing";
 import { OrdersTab } from "./OrdersTab";
 import { SellerOverview } from "./SellerOverview";
+import { buildFavoritePublish, favoriteProduct, favoriteShop, type Favorite } from "../../favorites/model";
+import { resetQdnCaches } from "../../qdn/search";
 
 const STORE_ID = "q-store-general-my-shop";
 
@@ -108,6 +110,18 @@ describe("the seller's Orders tab", () => {
     expect(screen.getByRole("button", { name: "Shipped · 2" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refunded · 1" })).toBeInTheDocument();
     expect(within(list).getAllByText("To handle")).toHaveLength(3);
+  });
+
+  it("shows the stars of a buyer's review of the shop on their orders", async () => {
+    resetQdnCaches();
+    const w = world();
+    w.reviews.push({ name: "Alice", shortStoreId: "my-shop", uid: "REVIEWALIC", rating: 4, title: "Nice", description: "Good.", created: 1700000600000 });
+    installMockNode(w);
+    renderWithProviders(<OrdersTab />, { store: sellerStore() });
+    const list = await screen.findByRole("list", { name: "Orders received" });
+    const alice = await within(list).findByRole("button", { name: /Alice/ });
+    await waitFor(() => expect(within(alice).getByText(/Reviewed/)).toHaveTextContent("Reviewed 4 out of 5 stars"));
+    expect(within(within(list).getByRole("button", { name: /Bob/ })).queryByText(/Reviewed/)).toBeNull();
   });
 
   it("survives an order written to break the list, and opens it", async () => {
@@ -265,6 +279,42 @@ describe("the seller overview", () => {
     expect(onOpenTab).toHaveBeenLastCalledWith("orders");
     // No links at its foot: the tab bar above leads to the rest (Simon, 2026-10-23).
     expect(screen.queryByRole("navigation", { name: "Manage your shop" })).not.toBeInTheDocument();
+  });
+
+  it("shows recent activity: favourites, reviews and orders, newest first, and opens a review", async () => {
+    resetQdnCaches();
+    const w = world();
+    const fav = (name: string, f: Favorite, created: number) => {
+      const pub = buildFavoritePublish({ name, fav: f, now: created });
+      return { name, identifier: pub.identifier, title: pub.title, description: pub.description, created };
+    };
+    const product = "q-store-product-my-shop-PRODxxxxx1";
+    w.favorites = [
+      fav("Fan", favoriteShop(SELLER, STORE_ID)!, 1700000900000),
+      fav("Fan Two", favoriteProduct(SELLER, STORE_ID, product, "q-store-catalogue-my-shop-CATxxxxxx1")!, 1700000800000),
+      // The owner's own, and another owner's shop with the same id, aren't activity.
+      fav(SELLER, favoriteShop(SELLER, STORE_ID)!, 1700000950000),
+      fav("Someone", favoriteShop("Other Owner", STORE_ID)!, 1700000960000),
+    ];
+    installMockNode(w);
+    renderWithProviders(<SellerOverview storeId={STORE_ID} onOpenTab={vi.fn()} />, { store: sellerStore() });
+    const feed = await screen.findByRole("list", { name: "Recent activity" });
+    await waitFor(() =>
+      expect(within(feed).getAllByRole("listitem").slice(0, 3).map((li) => li.textContent)).toEqual([
+        expect.stringContaining("Fan added your shop to their favourites"),
+        expect.stringContaining("Fan Two added a product to their favourites"),
+        expect.stringContaining("Reviewer 5 reviewed your shop"),
+      ])
+    );
+    expect(within(feed).queryByText(/Someone/)).toBeNull();
+    expect(within(feed).getAllByRole("listitem")).toHaveLength(8);
+    fireEvent.click(screen.getByRole("button", { name: /Show more/ }));
+    // 6 reviews, 2 favourites, 6 orders.
+    await waitFor(() => expect(within(feed).getAllByRole("listitem")).toHaveLength(14));
+    expect(within(feed).getByText("Frank placed an order")).toBeInTheDocument();
+    fireEvent.click(within(feed).getByText("Reviewer 5 reviewed your shop"));
+    const dialog = await screen.findByRole("dialog", { name: "Reviewer 5's review" });
+    expect(within(dialog).getByText("Review 5")).toBeInTheDocument();
   });
 
   it("opens only the latest orders and the ones it needs to count, and Orders opens the rest", async () => {

@@ -4,8 +4,10 @@
  * so far, "+" while more pages exist), the products in the shop, and the
  * five latest orders. The tiles and All orders open their tabs; the tab bar
  * above is the way to the rest (Simon, 2026-10-23: no links at the foot).
+ * Between them, Recent activity (seller/activity.ts): orders, deliveries,
+ * reviews and favourites, newest first.
  */
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, ButtonBase, Skeleton, Typography } from "@mui/material";
 import HourglassEmptyOutlinedIcon from "@mui/icons-material/HourglassEmptyOutlined";
@@ -24,6 +26,10 @@ import { sellerStatusCounts, splitSellerItems } from "../../orders/listView";
 import { OrderCard } from "../../orders/components/OrderCard";
 import { OrderListSkeleton } from "../../orders/components/OrderListView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
+import { RecentActivity } from "./RecentActivity";
+import { buildActivity, useShopFavorites } from "../../seller/activity";
+import { useShopReviews } from "../Store/useShopData";
+import { shortStoreIdOf } from "../../qdn/identifiers";
 import type { SellerTab } from "./sellerTabs";
 
 
@@ -112,6 +118,17 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
     open(latest.map((item) => item.row));
   }, [open, latest]);
   const opened: Order | null = list.items.find((i) => i.row.id === openId)?.order ?? null;
+  const shopReviews = useShopReviews(storeId, list.seller || null);
+  const favorites = useShopFavorites(list.seller, shortStoreIdOf(storeId));
+  const activity = useMemo(
+    () => buildActivity({ orders: main, reviews: shopReviews.reviews, favorites: favorites.favorites }),
+    [main, shopReviews.reviews, favorites.favorites]
+  );
+  const activityLoading = ordersLoading || shopReviews.status === "loading" || favorites.status === "loading";
+  const openOrder = useCallback((order: Order) => {
+    setOpenId(order.id);
+    setDialogOpen(true);
+  }, []);
   const openOrders = onOpenTab ? () => onOpenTab("orders") : undefined;
 
   return (
@@ -174,6 +191,13 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
               : `${others.length} orders under your shop's id couldn't be opened or name another seller. They aren't counted.`}
           </Typography>
         )}
+      </Box>
+
+      <Box component="section" aria-labelledby="seller-overview-activity" sx={{ display: "flex", flexDirection: "column" }}>
+        <Typography id="seller-overview-activity" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
+          Recent activity
+        </Typography>
+        <RecentActivity items={activity} loading={activityLoading} owner={list.seller} storeId={storeId} onOpenOrder={openOrder} />
       </Box>
 
       <Box component="section" aria-labelledby="seller-overview-latest">
