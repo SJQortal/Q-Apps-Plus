@@ -5,7 +5,8 @@
  */
 import { useId, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Box, Button, Dialog, DialogTitle, IconButton, TextField, Tooltip, Typography, MenuItem } from "@mui/material";
+import { Box, Button, Dialog, DialogTitle, IconButton, Switch, TextField, Tooltip, Typography, MenuItem } from "@mui/material";
+import { setShowNames, useShowNames } from "../../utils/namesSetting";
 import { styled } from "@mui/material/styles";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
@@ -133,6 +134,8 @@ export function SettingsPage() {
   const [copyFailed, setCopyFailed] = useState<string | null>(null);
   const coinFieldId = useId();
   const viewFieldId = useId();
+  const namesFieldId = useId();
+  const showNames = useShowNames();
 
   const name = user?.name || "";
   const names = (user?.names ?? []).map((n) => n.name).filter(Boolean);
@@ -153,7 +156,7 @@ export function SettingsPage() {
     if (!name) return;
     setSyncBusy("save");
     try {
-      await publishSettingsToQdn(name, collectSettingsSnapshot(uiTheme, preferredCoin, productView));
+      await publishSettingsToQdn(name, collectSettingsSnapshot(uiTheme, preferredCoin, productView, showNames));
       setSyncNote(`Saved to QDN under ${name}.`);
       dispatch(setNotification({ msg: "Settings saved to QDN", alertType: "success" }));
     } catch (error) {
@@ -186,7 +189,7 @@ export function SettingsPage() {
         setSyncNote("Couldn't reach your node. Try again in a moment.");
         return;
       }
-      const { theme, preferredCoin: coin, productView: view } = result.snapshot;
+      const { theme, preferredCoin: coin, productView: view, showNames: names } = result.snapshot;
       if (!theme && !coin && !view) {
         setSyncNote("The saved settings are from a newer version; nothing here changed.");
         return;
@@ -194,6 +197,7 @@ export function SettingsPage() {
       if (theme) setUiTheme(theme);
       if (coin) dispatch(setPreferredCoin(coin));
       if (view) setProductView(view);
+      if (typeof names === "boolean") setShowNames(names);
       const restored = [theme && "theme", coin && "preferred coin", view && "product view"].filter(Boolean) as string[];
       const list = restored.length > 1 ? `${restored.slice(0, -1).join(", ")} and ${restored.at(-1)}` : restored[0];
       setSyncNote(`Restored your ${list} from QDN.`);
@@ -352,6 +356,16 @@ export function SettingsPage() {
               </MenuItem>
             ))}
           </TextField>
+        </Row>
+        <Row>
+          <RowLabel title="Names for sale" id={`${namesFieldId}-title`}>
+            The Names tab, where Qortal names are bought, sold and auctioned. Off hides it.
+          </RowLabel>
+          <Switch
+            checked={showNames}
+            onChange={(_, on) => setShowNames(on)}
+            slotProps={{ input: { "aria-labelledby": `${namesFieldId}-title` } }}
+          />
         </Row>
         {savedAddress && (
           <Row>

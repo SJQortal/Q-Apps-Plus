@@ -21,7 +21,7 @@ export const SETTINGS_FILENAME = "settings.json";
 export const SETTINGS_TITLE = `${APP_NAME} settings`;
 export const SETTINGS_SNAPSHOT_VERSION = 1;
 
-/** What is stored: `{version: 1, theme, preferredCoin, productView?}`. */
+/** What is stored: `{version: 1, theme, preferredCoin, productView?, showNames?}`. */
 export interface SettingsSnapshot {
   version: number;
   /** null when the stored theme is unknown to this build. */
@@ -30,6 +30,8 @@ export interface SettingsSnapshot {
   preferredCoin: string | null;
   /** Round 5, additive: how shops show products (utils/productView.ts); absent in older saves. */
   productView?: ProductView | null;
+  /** 2026-10-25, additive: Names for sale shown (utils/namesSetting.ts); absent in older saves. */
+  showNames?: boolean;
 }
 
 /** A type, not an interface, so it fits qortalRequest's open options type. */
@@ -43,12 +45,13 @@ export type SettingsPublishRequest = {
   filename: string;
 };
 
-export function collectSettingsSnapshot(theme: unknown, preferredCoin: unknown, productView?: unknown): SettingsSnapshot {
+export function collectSettingsSnapshot(theme: unknown, preferredCoin: unknown, productView?: unknown, showNames?: unknown): SettingsSnapshot {
   return {
     version: SETTINGS_SNAPSHOT_VERSION,
     theme: isUiThemeId(theme) ? theme : null,
     preferredCoin: isPreferredCoin(preferredCoin) ? preferredCoin : null,
     ...(productView !== undefined && { productView: isProductView(productView) ? productView : null }),
+    ...(typeof showNames === "boolean" && { showNames }),
   };
 }
 
@@ -96,7 +99,7 @@ export function normalizeSettingsSnapshot(value: unknown): SettingsSnapshot | nu
   if (nested) candidates.push(nested);
   const payload = candidates.find(looksLikeSettings);
   if (!payload) return null;
-  return collectSettingsSnapshot(payload.theme, payload.preferredCoin, payload.productView);
+  return collectSettingsSnapshot(payload.theme, payload.preferredCoin, payload.productView, payload.showNames);
 }
 
 /** The publish request; Hub asks the user to confirm it. Pinned by settingsQdn.test.ts. */

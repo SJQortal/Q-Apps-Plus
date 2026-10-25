@@ -193,7 +193,7 @@ describe("SettingsPage", () => {
         filename: "settings.json",
       });
       // Round 5: the product view is saved too (additive).
-      expect(base64ToJson(String(calls[0].data64))).toEqual({ version: 1, theme: "white", preferredCoin: "ARRR", productView: "auto" });
+      expect(base64ToJson(String(calls[0].data64))).toEqual({ version: 1, theme: "white", preferredCoin: "ARRR", productView: "auto", showNames: true });
       expect(q.calls.map((c) => c.action)).toEqual(["PUBLISH_QDN_RESOURCE"]);
     });
 
