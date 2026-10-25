@@ -64,7 +64,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         intro: "From cart to doorstep, you see where things stand.",
         points: [
           ["One cart", "for every shop: check out one shop, or all of them at once."],
-          ["Delivery", "priced for your country on product pages; pick Standard, Express or a pickup at checkout when the shop offers them."],
+          ["Delivery", "priced for your country on product pages and in your cart, with how much more for free delivery; right after your country, checkout lists every way it can come, a pickup point too."],
           ["Before you pay", "the shop's dispatch time and returns. Your order is encrypted to you and the seller."],
           ["My orders", "the seller's status, notes and tracking number. Mark it delivered when it arrives, then review the shop."],
         ],
@@ -75,7 +75,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         title: "Auctions and names",
         intro: "Some things sell to the highest bidder.",
         points: [
-          ["Auctions", "bid on a product's page; a late bid extends the auction, and the winner pays through the usual checkout."],
+          ["Auctions", "bid on a product's page and your bid shows at once, with every bidder's name; a late bid extends the auction, and the winner pays through the usual checkout."],
           ["Names", "buy and sell Qortal names with everything published under them, at a price or by auction."],
         ],
       },
@@ -86,7 +86,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         intro: "Open a shop in minutes, and reach every Qortal user.",
         points: [
           ["Products", "a category from one shared list, 10 pictures, videos and PDFs, variants, stock counts, sale prices, or an auction."],
-          ["Delivery", "prices by country with options like Express or Local pickup; your dispatch time and returns."],
+          ["Delivery", "prices by country under names buyers see (Postbox, DHL Express…), options like Express, pickup points; your dispatch time and returns."],
           ["Prices", "in QORT, or in your currency (USD…) with QORT that follows your rates; take ARRR and Q-Assets too."],
           ["Orders", "arrive by Q-Mail and in Manage Shop, where you update their status for the buyer."],
         ],
@@ -124,10 +124,11 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         id: "publish",
         icon: <PublishOutlinedIcon />,
         title: "2. Publish",
-        intro: "What you add or change waits in Ready to publish.",
+        intro: "What you add or change waits on this device, and an orange Publish changes button shows at the bottom.",
         points: [
-          ["Publish together", "all your changes go out at once; Hub asks you to confirm and shows the small fee."],
-          ["Edit any time", "changes wait as drafts until you publish them."],
+          ["Publish changes", "sends what waits; Hub asks you to confirm and shows the small fee."],
+          ["View changes", "says what changed, kind by kind, before it goes out; Discard drops it all."],
+          ["Leaving Manage Shop", "with changes asks: publish them, keep them as drafts, or discard them."],
         ],
       },
       {
@@ -137,8 +138,9 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         intro: "Buyers see what delivery costs before they pay.",
         points: [
           ["Where you ship", "Shop Settings → Edit shop: tick regions and countries (and US states)."],
-          ["Delivery prices", "the Delivery tab: zones by country, a price for the first item and each extra one, free from an amount; profiles for heavy items."],
-          ["Options", "add Express, Local pickup or Tracked, and price each in the zones that offer it."],
+          ["Delivery prices", "the Delivery tab: zones by country, a price for the first item and each extra one, free from an amount (buyers see how much more they need)."],
+          ["Shipping profiles", "give products their own prices under the name buyers choose at checkout (Postbox, DHL Express…); a product can be in several, one for each region."],
+          ["Options and pickup", "add Express or Tracked, priced in the zones that offer it, and pickup points with their address, days and hours."],
           ["Policies", "your dispatch time, returns, terms and the languages you answer in, in Edit shop: buyers see them before they pay. Away for a while? Say until when."],
         ],
       },
@@ -170,8 +172,8 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         intro: "Help buyers find more.",
         points: [
           ["Collections", "group products (Gifts, Kitchen…); they show first on your shop page."],
-          ["Arrange", "set the order buyers see under Collections, and each collection's own."],
-          ["Sales and codes", "a price before the sale shows crossed out; discount codes (Shop Settings) take a percentage or delivery off, for some products, some days or one buyer."],
+          ["Arrange", "set the order buyers see under Collections; each collection's own from its line in Products, where collections also fold away."],
+          ["Sales and codes", "a price before the sale shows crossed out; discount codes (Shop Settings) take a percentage or delivery off, for some products, some days, some Qortal names or a Q-Chat group's members."],
           ["Share", "copy your shop's or a product's link anywhere on Qortal."],
         ],
       },

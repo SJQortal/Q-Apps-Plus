@@ -18,7 +18,7 @@ export const HELP: { title: string; items: [string, string][] }[] = [
       ],
       [
         "What does delivery cost?",
-        "Choose your country on a product page (or in your cart) to see it, with each option the shop offers (Standard, Express, Local pickup…). You pick one at checkout. Shops without delivery prices include it, or agree it with you.",
+        "Choose your country on a product page (or in your cart) to see it, with each way the shop delivers (by the names it gives them, Express, a pickup point…) and how much more you need for free delivery. Checkout lists them right after your country, and you pick one. Shops without delivery prices include it, or agree it with you.",
       ],
       [
         "I have a discount code",
@@ -41,6 +41,10 @@ export const HELP: { title: string; items: [string, string][] }[] = [
         "Qortal names for sale. A name is an identity on Qortal: buying one moves it, with everything published under it (its website, videos, Q-App…), to your account. Names sell at a price or by auction; Hub asks you to confirm the purchase.",
       ],
       [
+        "What's the amount beside my name?",
+        "Your QORT balance; tap it for ARRR (Hub asks first) and the Q-Assets the shops you've opened take. Settings → Balance in the header hides it, say while sharing your screen.",
+      ],
+      [
         "I paid but the order isn't there",
         "If Hub showed the payment as sent, don't pay again: the cart keeps the paid order under Orders to finish, and finishing it records the order without paying.",
       ],
@@ -55,7 +59,7 @@ export const HELP: { title: string; items: [string, string][] }[] = [
       ],
       [
         "Why does Hub ask me to confirm so often?",
-        "Everything you publish (products, prices, order updates) is yours on Qortal, under your name, and each publish has a small fee. Changes wait in Ready to publish, so you publish many at once.",
+        "Everything you publish (products, prices, order updates) is yours on Qortal, under your name, and each publish has a small fee. Changes wait on your device, and the orange Publish changes button sends them together; View changes says what changed first, and Discard drops it all.",
       ],
       [
         "How do I get paid?",
@@ -63,7 +67,11 @@ export const HELP: { title: string; items: [string, string][] }[] = [
       ],
       [
         "How do discount codes work?",
-        "Shop Settings → Discount codes: a percentage off, free delivery, or both, for chosen products, some days, orders over an amount or one Qortal name. Codes stay secret on Qortal (only their fingerprints are published), and each order's discount is checked against yours.",
+        "Shop Settings → Discount codes: a percentage off, free delivery, or both, for chosen products (by collection, or all), some days, orders over an amount, or some Qortal names (suggested as you type, or a Q-Chat group's members). Codes stay secret on Qortal (only their fingerprints are published), and each order's discount is checked against yours.",
+      ],
+      [
+        "How do delivery prices work?",
+        "The Delivery tab. Zones price delivery by country: the first item, each extra one, and free from an amount. Shipping profiles give some products their own zones, under the name buyers choose at checkout (Postbox, DHL Express…); a product can be in several, and buyers get the first that reaches them. Add options like Express, and pickup points where buyers collect for free.",
       ],
       [
         "My shop is from the original Q-Shop",
