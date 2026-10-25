@@ -42,7 +42,7 @@ import { sendOrderStatus } from "../../../orders/statusUpdate";
 import { normalizeStatus, shownStatus } from "../../../orders/status";
 import type { Tracking } from "../../../orders/tracking";
 import { copyText } from "../../../utils/clipboard";
-import { deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
+import { addressLabelText, deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
 import { useOrderCoinView } from "../../../orders/useOrderCoin";
 import type { ShopCoinSettings } from "../../../money/coins";
 import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
@@ -144,6 +144,21 @@ function sameDraft(draft: StatusDraft, status: OrderStatusInfo | null): boolean 
     normalizeStatus(draft.status) !== "Shipped" ||
     (draft.trackingNumber.trim() === (status.tracking?.number ?? "") && draft.carrier.trim() === (status.tracking?.carrier ?? ""));
   return normalizeStatus(draft.status) === normalizeStatus(status.status) && draft.note === status.note && sameTracking;
+}
+
+function CopyAddressButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="outlined"
+      color="inherit"
+      startIcon={copied ? <CheckCircleOutlinedIcon /> : <ContentCopyOutlinedIcon />}
+      onClick={async () => setCopied(await copyText(text))}
+      sx={{ mt: 1, minHeight: 44 }}
+    >
+      {copied ? "Address copied" : "Copy address"}
+    </Button>
+  );
 }
 
 /** A shipped order's carrier and tracking number, with Copy (orders/tracking.ts). */
@@ -450,21 +465,25 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
               Digital order: nothing to ship.
             </Typography>
           ) : address.length > 0 ? (
-            <Box component="dl" sx={{ m: 0 }}>
-              {address.map((line) => (
-                <Box
-                  key={line.label}
-                  sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "140px 1fr" }, gap: { xs: 0, sm: 2 }, py: 0.5 }}
-                >
-                  <Typography component="dt" variant="body2" color="text.secondary">
-                    {line.label}
-                  </Typography>
-                  <Typography component="dd" sx={{ m: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
-                    {line.value}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
+            <>
+              <Box component="dl" sx={{ m: 0 }}>
+                {address.map((line) => (
+                  <Box
+                    key={line.label}
+                    sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "140px 1fr" }, gap: { xs: 0, sm: 2 }, py: 0.5 }}
+                  >
+                    <Typography component="dt" variant="body2" color="text.secondary">
+                      {line.label}
+                    </Typography>
+                    <Typography component="dd" sx={{ m: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                      {line.value}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+              {/* For the seller's shipping label: the address in one go. */}
+              {role === "seller" && <CopyAddressButton text={addressLabelText(address)} />}
+            </>
           ) : (
             <Typography variant="body2" color="text.secondary">
               No delivery address in this order.

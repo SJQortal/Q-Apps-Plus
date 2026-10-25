@@ -144,6 +144,13 @@ export interface AddressLine {
 }
 
 /** The delivery address as labelled lines (state for the United States, region elsewhere). */
+/** The address as a label wants it: name, street, "city, region postcode", country (no delivery note). */
+export function addressLabelText(lines: readonly AddressLine[]): string {
+  const of = (label: string) => lines.find((l) => l.label === label)?.value ?? "";
+  const town = [of("City"), [of("State") || of("Region"), of("Postcode")].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  return [of("Name"), of("Street address"), town, of("Country")].filter(Boolean).join("\n");
+}
+
 export function deliveryLines(order: Order | null | undefined): AddressLine[] {
   const delivery = order?.delivery;
   if (!delivery) return [];

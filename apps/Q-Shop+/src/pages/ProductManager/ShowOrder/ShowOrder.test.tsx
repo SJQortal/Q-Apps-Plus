@@ -20,6 +20,9 @@ import { addStatus, orderId, orderJson } from "../../../orders/testing";
 import { SENDER_NOTE } from "../../../orders/payment";
 import { resetQdnCaches } from "../../../qdn/search";
 import { ShowOrder } from "./ShowOrder";
+import { copyText } from "../../../utils/clipboard";
+
+vi.mock("../../../utils/clipboard", () => ({ copyText: vi.fn(async () => true) }));
 
 const ID = orderId("ORDERxxxx1");
 
@@ -296,6 +299,18 @@ describe("the rest of the order", () => {
     // The seller's form starts from the current status.
     expect(screen.getByRole("button", { name: "Shipped" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
+  });
+
+  it("copies a physical order's address for the seller's shipping label", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+    setup("seller", orderJson({ physical: true }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy address" }));
+    await waitFor(() => expect(copyText).toHaveBeenCalled());
+    const text = vi.mocked(copyText).mock.calls[0][0];
+    // Name, street, "city, region postcode", country: the delivery note stays out.
+    expect(text.split("\n")[0]).toBe("Ana Silva");
+    expect(text.split("\n").length).toBeGreaterThanOrEqual(3);
+    expect(await screen.findByRole("button", { name: "Address copied" })).toBeInTheDocument();
   });
 
   it("shows Refunded with the theme's error colour (the original never did: Bugs 10)", () => {
