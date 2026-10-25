@@ -6,7 +6,7 @@
  * shops, which a cached search says), cached for the session; a shop
  * without them says where it ships, as before.
  */
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
@@ -16,7 +16,7 @@ import { formatPrice } from "../money/pricing";
 import { AmountTag } from "../components/money/PriceTag";
 import { ShippingCountriesButton } from "../pages/Store/ShippingCountries";
 import { placeNotShipped } from "../constants/shipping";
-import { loadShopDelivery, type ShopDelivery } from "./checkoutDelivery";
+import { useShopDelivery } from "./useShopDelivery";
 import { deliveryEstimate, type EstimateChoice } from "./estimate";
 import { placeLabel, useBuyerPlace } from "./buyerPlace";
 
@@ -52,21 +52,10 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
   const buyer = useSelector((state: RootState) => state.auth.user?.name);
   const place = useBuyerPlace(buyer);
   const [picking, setPicking] = useState(false);
-  const key = `${owner}\n${storeId}`;
-  const [loaded, setLoaded] = useState<{ key: string; delivery?: ShopDelivery; failed?: true } | null>(null);
-  useEffect(() => {
-    let live = true;
-    loadShopDelivery(owner, storeId).then(
-      (delivery) => live && setLoaded({ key, delivery }),
-      () => live && setLoaded({ key, failed: true })
-    );
-    return () => {
-      live = false;
-    };
-  }, [owner, storeId, key]);
-  const current = loaded?.key === key ? loaded : null;
+  const load = useShopDelivery(owner, storeId);
+  const delivery = load.status === "ready" ? load.delivery : undefined;
   const shipsTo = typeof shop?.shipsTo === "string" ? shop.shipsTo.trim() : "";
-  const hasPrices = !!current?.delivery?.doc;
+  const hasPrices = !!delivery?.doc;
 
   // Where it comes from (the shop's own words), and where the shop ships.
   const from = typeof shop?.location === "string" ? shop.location.trim() : "";
@@ -83,7 +72,7 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
     ) : null;
 
   // No delivery prices: where it ships, as before, and whether that's the buyer's country.
-  if (current && !hasPrices && !current.failed) {
+  if (load.status === "ready" && !hasPrices) {
     if (!shipsToLine) return null;
     const notShipped = place ? placeNotShipped(shop, place.country, place.state) : null;
     return (
@@ -101,13 +90,13 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
     );
   }
 
-  const estimate = current?.delivery && place ? deliveryEstimate({ shop: shop ?? {}, delivery: current.delivery, lines: [line], place }) : null;
+  const estimate = delivery && place ? deliveryEstimate({ shop: shop ?? {}, delivery, lines: [line], place }) : null;
   const heading = place ? `Delivery to ${placeLabel(place)}` : "Delivery";
   const options = estimate?.kind === "ok" && estimate.choices.some((c) => c.name);
   let body: ReactNode;
-  if (!current) {
+  if (load.status === "loading") {
     body = <Skeleton width="60%" aria-label="Reading delivery prices" />;
-  } else if (current.failed) {
+  } else if (load.status === "failed") {
     body = (
       <Typography variant="body2" color="text.secondary">
         Delivery prices couldn't be read from your node right now; checkout works them out.
@@ -116,7 +105,7 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
   } else if (!place) {
     body = (
       <Typography variant="body2" color="text.secondary">
-        Choose your country to see what delivery costs{current.delivery?.doc?.options?.length ? ", and the options the shop offers" : ""}.
+        Choose your country to see what delivery costs{delivery?.doc?.options?.length ? ", and the options the shop offers" : ""}.
       </Typography>
     );
   } else if (estimate?.kind === "not-shipped") {
@@ -182,7 +171,7 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
             </Box>
           )}
         </Typography>
-        {current && !current.failed && (
+        {load.status === "ready" && (
           <Button size="small" onClick={() => setPicking(true)} aria-haspopup="dialog" sx={{ minHeight: 44 }}>
             {place ? "Change" : "Choose your country"}
           </Button>

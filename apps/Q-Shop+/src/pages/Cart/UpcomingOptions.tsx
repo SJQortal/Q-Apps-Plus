@@ -4,24 +4,15 @@
  * the address. Its delivery prices are read now (cached), which checkout's
  * Continue reads anyway.
  */
-import { useEffect, useState } from "react";
 import { Typography } from "@mui/material";
-import { loadShopDelivery } from "../../delivery/checkoutDelivery";
+import { useShopDelivery } from "../../delivery/useShopDelivery";
 import { deliveryOptionsOf } from "../../delivery/model";
 
 export function UpcomingOptions({ owner, storeId }: { owner: string; storeId: string }) {
-  const [names, setNames] = useState<string[] | null>(null);
-  useEffect(() => {
-    let live = true;
-    loadShopDelivery(owner, storeId).then(
-      ({ doc }) => live && setNames(doc?.options?.length ? deliveryOptionsOf(doc).map((o) => o.name) : []),
-      () => live && setNames([])
-    );
-    return () => {
-      live = false;
-    };
-  }, [owner, storeId]);
-  if (!names || names.length < 2) return null;
+  const load = useShopDelivery(owner, storeId);
+  const doc = load.status === "ready" ? load.delivery.doc : null;
+  const names = doc?.options?.length ? deliveryOptionsOf(doc).map((o) => o.name) : [];
+  if (names.length < 2) return null;
   const list = `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
   return (
     <Typography variant="body2" color="text.secondary">

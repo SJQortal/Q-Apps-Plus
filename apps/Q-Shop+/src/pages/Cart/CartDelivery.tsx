@@ -5,7 +5,7 @@
  * added at checkout, with a way to see it. Nothing for a shop without
  * delivery prices, or a cart of digital products.
  */
-import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
@@ -13,7 +13,7 @@ import type { RootState } from "../../state/store";
 import type { CartLine } from "../../money/order";
 import { formatPrice } from "../../money/pricing";
 import { AmountTag } from "../../components/money/PriceTag";
-import { loadShopDelivery, type ShopDelivery } from "../../delivery/checkoutDelivery";
+import { useShopDelivery } from "../../delivery/useShopDelivery";
 import { deliveryEstimate } from "../../delivery/estimate";
 import type { DeliveryShop } from "../../delivery/ProductDelivery";
 import { placeLabel, useBuyerPlace } from "../../delivery/buyerPlace";
@@ -24,22 +24,10 @@ export function CartDelivery({ owner, storeId, shop, lines }: { owner: string; s
   const buyer = useSelector((state: RootState) => state.auth.user?.name);
   const place = useBuyerPlace(buyer);
   const [picking, setPicking] = useState(false);
-  const key = `${owner}\n${storeId}`;
-  const [loaded, setLoaded] = useState<{ key: string; delivery?: ShopDelivery } | null>(null);
   const physical = lines.some((l) => l.product && l.product.type !== "digital");
-  useEffect(() => {
-    if (!physical) return;
-    let live = true;
-    // A node that can't serve them now: checkout works them out (and says so).
-    loadShopDelivery(owner, storeId).then(
-      (delivery) => live && setLoaded({ key, delivery }),
-      () => live && setLoaded({ key })
-    );
-    return () => {
-      live = false;
-    };
-  }, [owner, storeId, key, physical]);
-  const delivery = loaded?.key === key ? loaded.delivery : undefined;
+  // A node that can't serve them now: checkout works them out (and says so).
+  const load = useShopDelivery(owner, storeId, physical);
+  const delivery = load.status === "ready" ? load.delivery : undefined;
   if (!physical || !delivery?.doc) return null;
 
   const row = (children: ReactNode, tone?: "warning") => (
