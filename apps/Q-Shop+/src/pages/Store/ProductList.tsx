@@ -269,7 +269,9 @@ export function SectionDivider({
           {collapse.count === 1 ? "1 product" : `${collapse.count} products`}
         </Typography>
       )}
-      <Box aria-hidden sx={{ flex: "1 1 24px", borderTop: 1, borderColor: "divider" }} />
+      {/* With the seller's count and buttons, phones give the title the line's room. */}
+      <Box aria-hidden sx={{ flex: "1 1 24px", borderTop: 1, borderColor: "divider", display: collapse ? { xs: "none", sm: "block" } : undefined }} />
+      {collapse && <Box sx={{ flex: "1 1 0", display: { xs: "block", sm: "none" } }} />}
       {action}
     </Box>
   );

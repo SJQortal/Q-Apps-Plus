@@ -40,6 +40,7 @@ import {
   InputAdornment,
   MenuItem,
   Skeleton,
+  Tooltip,
   Snackbar,
   TextField,
   Typography,
@@ -645,15 +646,28 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                         heading="h2"
                         collapse={collapsible ? { open: !isClosed(section), onToggle: () => toggleSection(section.key), count: section.rows.length } : undefined}
                         action={
-                          <Button
-                            size="small"
-                            startIcon={<SwapVertIcon />}
-                            aria-label={section.collection ? `Arrange ${title}` : "Arrange the products not in a collection"}
-                            onClick={() => (section.collection ? setArrangingCollection(section.collection.id) : setArranging(true))}
-                            sx={{ minHeight: 44, flexShrink: 0 }}
-                          >
-                            Arrange
-                          </Button>
+                          phone ? (
+                            <Tooltip title="Arrange">
+                              <IconButton
+                                color="primary"
+                                aria-label={section.collection ? `Arrange ${title}` : "Arrange the products not in a collection"}
+                                onClick={() => (section.collection ? setArrangingCollection(section.collection.id) : setArranging(true))}
+                                sx={{ width: 44, height: 44, flexShrink: 0 }}
+                              >
+                                <SwapVertIcon />
+                              </IconButton>
+                            </Tooltip>
+                          ) : (
+                            <Button
+                              size="small"
+                              startIcon={<SwapVertIcon />}
+                              aria-label={section.collection ? `Arrange ${title}` : "Arrange the products not in a collection"}
+                              onClick={() => (section.collection ? setArrangingCollection(section.collection.id) : setArranging(true))}
+                              sx={{ minHeight: 44, flexShrink: 0 }}
+                            >
+                              Arrange
+                            </Button>
+                          )
                         }
                       />
                     );
