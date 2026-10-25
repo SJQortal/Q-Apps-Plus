@@ -84,6 +84,7 @@ import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
 import { BulkStatusDialog } from "./BulkStatusDialog";
+import { rowSaleOf, saleOf } from "../sale/compareAt";
 import { ArrangeShop } from "./ArrangeShop";
 import { featuredOrder, productOrderOf } from "../qdn/productOrder";
 import { useShopCollections } from "../pages/Store/useShopCollections";
@@ -716,6 +717,7 @@ const ProductRow = memo(function ProductRow({
   }, [inView, missing, row.catalogueId, onMissing]);
 
   const title = typeof details?.title === "string" && details.title ? details.title : null;
+  const sale = details ? saleOf(details as Parameters<typeof saleOf>[0])?.percent : rowSaleOf(row as { sale?: unknown });
   const images: unknown[] = Array.isArray(details?.images) ? details.images : [];
   const mainIndex = typeof details?.mainImageIndex === "number" ? details.mainImageIndex : 0;
   const image = (images[mainIndex] ?? images[0]) as string | undefined;
@@ -809,6 +811,8 @@ const ProductRow = memo(function ProductRow({
               </Box>
             )}
             <AuctionTimes row={row} />
+            {/* On sale (sale/compareAt.ts): what buyers save, from the product or its row. */}
+            {sale && <Chip size="small" color="error" label={`${sale}% off`} sx={{ fontWeight: 700 }} />}
             {edited && (
               <Chip size="small" variant="outlined" label="Edited, not published" sx={{ color: "text.primary", borderColor: "info.main" }} />
             )}
