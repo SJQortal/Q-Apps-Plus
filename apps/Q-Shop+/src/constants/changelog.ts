@@ -15,7 +15,7 @@ export interface Release {
 export const CHANGELOG: Release[] = [
   {
     version: "1.0.0",
-    date: "2026-10-23",
+    date: "2026-10-25",
     title: "Q-Shop+ 1.0",
     notes: [
       "Same QDN data as Q-Shop: your shops, products, orders and reviews show here, and what you publish here still opens in the original.",
@@ -45,6 +45,13 @@ export const CHANGELOG: Release[] = [
       "Selling: Create Shop until you have one, then Manage Shop (Manage on phones) opens a seller page with products, collections, orders (opening on the ones to handle), reviews, delivery and shop settings, product prices per coin and asset, new products physical unless you pick digital, and big catalogues published in batches.",
       "Delete products, one or several at once, or close your shop for good: they leave your shop here and in Q-Shop, and orders keep their own copy. A deleted shop's id can be used again.",
       "Trusted reviews: one per reviewer, the shop owner's own left out, and an \"Ordered here\" badge.",
+      "Delivery options: sellers add Express, Local pickup, Tracked or their own, each priced in the zones that offer it, and buyers pick one at checkout. Product pages show what delivery costs to your country, with each option, before anything goes in the cart; Shops can list only the shops that ship to your country.",
+      "Shop policies: how soon an order is dispatched, whether the shop takes returns and within how long, and its terms, shown on the shop, its products and at checkout. Shipped orders can carry the carrier and tracking number, which the buyer copies from the order.",
+      "Sale prices: a product's price before the sale, crossed out with what buyers save, and On sale on the Products page.",
+      "Prices in every coin a shop takes on its product pages (two or three side by side, more in a list), and stock counts: count a product's stock, or each variant's, and it sells out by itself.",
+      "Names: buy and sell Qortal names with everything published under them, at a price or by auction, alongside the Names app's own marketplace (Settings can hide them).",
+      "For sellers, the Overview shows recent activity (orders, reviews, favourites, deliveries) and a checkup that brings an older shop up to date: categories from the list, the countries it ships to, delivery prices, policies, and products once used to charge delivery.",
+      "A walkthrough of what's new when you first open Q-Shop+, and a seller guide the first time you open your shop; both again from Settings.",
       "Built for phones and GO: a bottom bar with Shops, Products, Cart, Orders and Manage, a header that hides as you scroll, and dialogs that fill the screen.",
       "Four themes (Hub 3.0, Q-Shop Classic, Black and White) that follow Hub's light and dark mode, all readable at 4.5:1 contrast.",
       "Settings: a name switcher, your preferred coin, how shops show products (grid or list), blocked names, and Sync to save and restore your settings on QDN.",

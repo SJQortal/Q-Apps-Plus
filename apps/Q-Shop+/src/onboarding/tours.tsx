@@ -42,7 +42,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         points: [
           ["Pay the seller directly", "in QORT, Pirate Chain (ARRR) or Qortal assets (Q-Assets). Q-Shop+ never holds your money."],
           ["Same shops as Q-Shop", "everything lives on Qortal, so every shop, order and review from Q-Shop is here too."],
-          ["New", "delivery prices and options, stock counts, auctions, names for sale, favourites, and a lot more."],
+          ["New", "delivery prices and options, shop policies, tracking numbers, sales, stock counts, auctions, names for sale, favourites, and more."],
         ],
       },
       {
@@ -51,8 +51,8 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         title: "Find what you want",
         intro: "Look across every shop at once, or browse one.",
         points: [
-          ["Products", "every shop's products together: search, categories, a price range, In stock only and Auctions."],
-          ["Shops", "sort by newest, top rated or most loved, and filter by the coin they take."],
+          ["Products", "every shop's products together: search, categories, a price range, In stock only, On sale and Auctions."],
+          ["Shops", "sort by newest, top rated or most loved; filter by the coin they take and the country they ship to."],
           ["Favourites", "tap the heart to keep a shop or a product; they wait for you behind the heart at the top."],
           ["Product pages", "up to 10 pictures, videos and PDFs, and the price in every coin the shop takes."],
         ],
@@ -64,9 +64,9 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         intro: "From cart to doorstep, you see where things stand.",
         points: [
           ["One cart", "for every shop: check out one shop, or all of them at once."],
-          ["Delivery", "priced for your address before you pay; pick Standard, Express or a pickup when the shop offers them."],
-          ["Your order", "is encrypted to you and the seller; Hub asks you to confirm each payment."],
-          ["My orders", "shows the seller's status and notes. Mark it delivered when it arrives, then review the shop."],
+          ["Delivery", "priced for your country on product pages; pick Standard, Express or a pickup at checkout when the shop offers them."],
+          ["Before you pay", "the shop's dispatch time and returns. Your order is encrypted to you and the seller."],
+          ["My orders", "the seller's status, notes and tracking number. Mark it delivered when it arrives, then review the shop."],
         ],
       },
       {
@@ -85,8 +85,8 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         title: "Sell on Q-Shop+",
         intro: "Open a shop in minutes, and reach every Qortal user.",
         points: [
-          ["Products", "a category from one shared list, 10 pictures, videos and PDFs, variants with colours, stock counts, or an auction."],
-          ["Delivery", "prices by country with options like Express or Local pickup; shipping profiles for heavy items."],
+          ["Products", "a category from one shared list, 10 pictures, videos and PDFs, variants, stock counts, sale prices, or an auction."],
+          ["Delivery", "prices by country with options like Express or Local pickup; your dispatch time and returns."],
           ["Prices", "in QORT, or in your currency (USD…) with QORT that follows your rates; take ARRR and Q-Assets too."],
           ["Orders", "arrive by Q-Mail and in Manage Shop, where you update their status for the buyer."],
         ],
@@ -100,6 +100,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
           ["Manage Shop", "opens with a checkup of what to update, each in a few taps."],
           ["Categories", "pick them from the shared list: each product's is suggested from its title."],
           ["Shipping", "turn your Ships to text into countries, set delivery prices, and retire products you used to charge delivery."],
+          ["Policies", "say how soon you dispatch and whether you take returns."],
         ],
       },
     ],
@@ -116,7 +117,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
           ["Title and category", "type what it is and a category is suggested from the shared list."],
           ["Pictures and description", "up to 10 pictures; add a video or a PDF to the description."],
           ["Price", "in QORT, or in your shop's currency (USD…) once you set rates under Shop Settings → Prices."],
-          ["Options", "variants (sizes, colours), Count stock so it sells out by itself, or an auction."],
+          ["Options", "variants (sizes, colours), Count stock so it sells out by itself, a price before a sale, or an auction."],
         ],
       },
       {
@@ -136,9 +137,9 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         intro: "Buyers see what delivery costs before they pay.",
         points: [
           ["Where you ship", "Shop Settings → Edit shop: tick regions and countries (and US states)."],
-          ["Delivery prices", "the Delivery tab: zones by country with a price for the first item, each extra item, and free delivery from an amount."],
+          ["Delivery prices", "the Delivery tab: zones by country, a price for the first item and each extra one, free from an amount; profiles for heavy items."],
           ["Options", "add Express, Local pickup or Tracked, and price each in the zones that offer it."],
-          ["Profiles", "give heavy or fragile products their own prices."],
+          ["Policies", "your dispatch time, returns and terms, in Edit shop: buyers see them before they pay."],
         ],
       },
       {
@@ -157,7 +158,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         title: "5. Handle orders",
         intro: "Keep the buyer posted.",
         points: [
-          ["Status", "Received, then Shipped (with a note, a tracking number say), or Refunded."],
+          ["Status", "Received, then Shipped with the carrier and tracking number (the buyer copies it), or Refunded."],
           ["Delivered", "the buyer marks it when it arrives, and can then review your shop."],
           ["Overview", "orders to handle, and recent activity: reviews, favourites, deliveries."],
         ],
