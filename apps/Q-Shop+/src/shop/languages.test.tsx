@@ -34,4 +34,15 @@ describe("the languages with the shop's policies", () => {
     renderWithProviders(<PolicyLines shop={{ languages: ["pt", "en"] }} />);
     expect(screen.getByText("Answers in Português and English")).toBeInTheDocument();
   });
+
+  it("are in the policies' dialog too, with the rest of how the shop works", async () => {
+    const { renderWithProviders } = await import("../test/renderWithProviders");
+    const { PolicyLines } = await import("./PolicyLines");
+    const { screen, within, fireEvent } = await import("@testing-library/react");
+    renderWithProviders(<PolicyLines shop={{ title: "Plus Gadgets", languages: ["pt", "en"], policies: { dispatchDays: 2, returns: "Unused items only." } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Returns and refunds" }));
+    const dialog = screen.getByRole("dialog", { name: "Plus Gadgets's policies" });
+    expect(within(dialog).getByText("Answers in Português and English")).toBeInTheDocument();
+    expect(within(dialog).getByText("Dispatched within 2 working days")).toBeInTheDocument();
+  });
 });

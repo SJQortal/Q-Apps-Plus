@@ -87,8 +87,9 @@ export function PolicyLines({
             </Box>
             <ResponsiveDialog open={open} onClose={() => setOpen(false)} title={`${shop?.title || "The shop"}'s policies`} maxWidth="sm">
               <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                {(dispatch || returns) && (
+                {(languages.length > 0 || dispatch || returns) && (
                   <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
+                    {languages.length > 0 && <li>Answers in {languagesText(languages)}</li>}
                     {dispatch && <li>{dispatch}</li>}
                     {returns && <li>{returns}</li>}
                   </Box>
