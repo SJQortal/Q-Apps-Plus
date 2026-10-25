@@ -150,7 +150,7 @@ describe("the Delivery tab", () => {
     fireEvent.change(within(options).getByLabelText("Note (optional)", { selector: "input[placeholder='5–10 days']" }), { target: { value: "5–10 days" } });
     fireEvent.click(within(options).getByRole("button", { name: "Express" }));
     fireEvent.change(within(options).getAllByLabelText("Note (optional)")[1], { target: { value: "1–3 days" } });
-    fireEvent.click(within(options).getByRole("button", { name: "Local pickup" }));
+    fireEvent.click(within(options).getByRole("button", { name: "Tracked" }));
     const general = await card("General");
     fireEvent.click(within(general).getByRole("button", { name: "Add a zone" }));
     const d = await dialog();
@@ -176,12 +176,13 @@ describe("the Delivery tab", () => {
     expect(doc.general.zones[0]).toMatchObject({ countries: ["US"], first: 3, rates: { [doc.options[0].id]: { first: 12 } } });
   });
 
-  it("adds a pickup point with its country, address, days and hours: collected by the buyer, no address at checkout", async () => {
+  it("adds a pickup point with its country, address, days and hours, with no shipping option needed", async () => {
     const { q } = setup();
-    const options = await screen.findByRole("region", { name: "Delivery options" });
-    fireEvent.click(within(options).getByRole("button", { name: "Add a pickup point" }));
-    expect(within(options).getByRole("checkbox", { name: /Buyers collect it.*\(Pick up\)/ })).toBeChecked();
-    const point = within(options).getByRole("group", { name: "Pickup point: Pick up" });
+    const points = await screen.findByRole("region", { name: "Pickup points" });
+    fireEvent.click(within(points).getByRole("button", { name: "Add a pickup point" }));
+    // It's a pickup point, not a delivery option.
+    expect(within(screen.getByRole("region", { name: "Delivery options" })).queryByLabelText("Option 2")).toBeNull();
+    const point = within(points).getByRole("group", { name: "Pickup point: Pick up" });
     // Weekdays 10–18 to start with; Saturday added, Monday taken off.
     expect(within(point).getByRole("button", { name: "Mon" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(within(point).getByRole("button", { name: "Sat" }));
