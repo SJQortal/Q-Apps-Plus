@@ -23,11 +23,14 @@ import {
   chair,
   dataContainer,
   decodeData64,
+  mug,
+  poster,
   viewedStore,
 } from "../test/fixtures/shop";
 import { ProductManager } from "../pages/ProductManager/ProductManager";
 import { deliveryIdentifier } from "../qdn/identifiers";
 import { EU_COUNTRIES } from "../constants/shipping";
+import { collectionDrafts, collectionsDraftKey } from "./useCollections";
 
 const DELIVERY_ID = deliveryIdentifier(SHORT_STORE_ID);
 
@@ -142,6 +145,33 @@ describe("the Delivery tab", () => {
     expect(await within(general).findByText("Everywhere")).toBeInTheDocument();
     expect(within(general).getByText(/France, Portugal and Spain|Portugal, Spain and France|3 countries/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "One price everywhere you ship" })).toBeNull();
+  });
+
+  it("chooses a profile's products by collection, or all of them", async () => {
+    collectionDrafts.set(collectionsDraftKey(SELLER, STORE_ID), [{ id: "MUGSxxxxx1", title: "Mugs", description: "", products: [mug.id, poster.id], created: 1, updated: 1 }]);
+    setup();
+    fireEvent.click(await screen.findByRole("button", { name: "Add a shipping profile" }));
+    let d = await dialog();
+    fireEvent.change(within(d).getByLabelText("Profile name"), { target: { value: "Heavy items" } });
+    fireEvent.click(within(d).getByRole("button", { name: "Save name" }));
+    fireEvent.click(within(await card("Heavy items")).getByRole("button", { name: "Choose products" }));
+    d = await dialog();
+    const list = within(d).getByRole("list", { name: "Products to choose from" });
+    // Grouped: the collection's products under it, the rest under "Not in a collection".
+    const mugs = await within(list).findByRole("checkbox", { name: /^Mugs/ });
+    expect(within(list).getByRole("checkbox", { name: /^Not in a collection/ })).toBeInTheDocument();
+    fireEvent.click(mugs);
+    expect(within(d).getByRole("button", { name: "Use 2 products" })).toBeInTheDocument();
+    expect(within(list).getByRole("checkbox", { name: /^Not in a collection/ })).not.toBeChecked();
+    fireEvent.click(within(d).getByRole("button", { name: "Select all" }));
+    expect(within(d).getByRole("button", { name: "Use 3 products" })).toBeInTheDocument();
+    expect(within(d).getByRole("button", { name: "Select none" })).toBeInTheDocument();
+    // A collection's tick drops all of it again.
+    fireEvent.click(mugs);
+    expect(within(d).getByRole("button", { name: "Use 1 product" })).toBeInTheDocument();
+    fireEvent.click(within(d).getByRole("button", { name: "Select all" }));
+    fireEvent.click(within(d).getByRole("button", { name: "Select none" }));
+    expect(within(d).getByRole("button", { name: "Use 0 products" })).toBeInTheDocument();
   });
 
   it("adds delivery options buyers pick from, each priced in the zones that offer it", async () => {
