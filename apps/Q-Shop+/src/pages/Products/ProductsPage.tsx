@@ -16,6 +16,7 @@
  * The URL keeps the search, sort, categories and stock filter, and Back from
  * a product comes back to the same place in the list.
  */
+import { RecentlyViewedStrip } from "../../discovery/RecentlyViewedStrip";
 import { ProductsNamesSwitch } from "../../names/NamesPage";
 import { useStockLeft } from "../../stock/notes";
 import { withStockLeft } from "../Store/shopData";
@@ -726,6 +727,9 @@ export function ProductsPage() {
           )}
         </Box>
       )}
+
+      {/* What the buyer opened lately (discovery/recentlyViewed.ts), while nothing narrows the list. */}
+      {!searching && activeFilters === 0 && <RecentlyViewedStrip />}
 
       {body}
 

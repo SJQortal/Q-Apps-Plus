@@ -52,6 +52,7 @@ import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { ProductDelivery, type DeliveryShop } from "../../delivery/ProductDelivery";
 import { PolicyLines } from "../../shop/PolicyLines";
 import { MoreFromShop } from "./MoreFromShop";
+import { rememberViewed } from "../../discovery/recentlyViewed";
 import { AwayNotice } from "../../shop/AwayNotice";
 import type { CartLine } from "../../money/order";
 import { useShopCollections } from "../Store/useShopCollections";
@@ -286,6 +287,12 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const descriptionParts = useDescriptionParts((product ?? {}) as { description?: unknown; htmlDescription?: unknown });
   const shopPath = storePath(owner, storeId);
   const shopName = shop?.title || "the shop";
+
+  // Recently viewed (discovery/recentlyViewed.ts): a product someone else sells, once it shows.
+  const shownToBuyer = !!product && !isOwner && status === "ready";
+  useEffect(() => {
+    if (shownToBuyer) rememberViewed({ owner, storeId, productId, catalogueId });
+  }, [shownToBuyer, owner, storeId, productId, catalogueId]);
 
   // Catalogues are JSON any seller writes: only text is shown as a title.
   const productTitle = typeof product?.title === "string" ? product.title.trim() : "";

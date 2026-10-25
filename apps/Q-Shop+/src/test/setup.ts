@@ -18,6 +18,7 @@ import { resetFavoritesMemory } from '../favorites/myFavorites';
 import { resetFavoriteCountsMemory } from '../favorites/counts';
 import { resetHiddenShopsMemory } from '../discovery/hiddenShops';
 import { suppressFirstRunForTests } from '../onboarding/Walkthrough';
+import { resetRecentlyViewed } from '../discovery/recentlyViewed';
 
 // The first-run walkthrough doesn't open by itself in tests (onboarding tests turn it on).
 suppressFirstRunForTests(true);
@@ -118,6 +119,7 @@ beforeEach(() => {
   resetSentCatalogues();
   resetPendingDeletes();
   resetDeletedShops();
+  resetRecentlyViewed();
   resetProductView();
   resetListWrite();
   resetFavoritesMemory();
