@@ -19,7 +19,8 @@ import { ProductImage } from "../components/common/ProductImage";
 
 const TILE_WIDTH = { phone: 156, wide: 184 } as const;
 
-const Row = styled("ul")(({ theme }) => ({
+/** A row of product tiles that scrolls sideways on its own (the page never does). */
+export const Row = styled("ul")(({ theme }) => ({
   listStyle: "none",
   margin: 0,
   padding: "2px 2px 8px",
@@ -52,7 +53,7 @@ const Tile = styled(RouterLink)(({ theme }) => ({
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
 }));
 
-function ProductTile({ item }: { item: NewProduct }) {
+export function ProductTile({ item }: { item: NewProduct }) {
   const titleId = useId();
   const detailId = useId();
   const { product } = item;

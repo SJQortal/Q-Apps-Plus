@@ -51,6 +51,7 @@ import { ProductDescription, ProductMedia, useDescriptionParts } from "../../ric
 import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { ProductDelivery, type DeliveryShop } from "../../delivery/ProductDelivery";
 import { PolicyLines } from "../../shop/PolicyLines";
+import { MoreFromShop } from "./MoreFromShop";
 import { AwayNotice } from "../../shop/AwayNotice";
 import type { CartLine } from "../../money/order";
 import { useShopCollections } from "../Store/useShopCollections";
@@ -498,6 +499,13 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
           </Box>
         )}
       </Box>
+    );
+    // The shop's other products under it (MoreFromShop.tsx), read once they near the screen.
+    content = (
+      <>
+        {content}
+        <MoreFromShop owner={owner} storeId={storeId} shopTitle={shop?.title || owner} index={index} productId={productId} group={variant?.group} />
+      </>
     );
   }
 
