@@ -25,7 +25,7 @@ const doc = (over: Partial<DeliveryDoc> = {}): DeliveryDoc => ({
 });
 const shop = { supportedCoins: ["QORT", "ARRR"], shippingCountries: [...EUROPE, "US"] };
 const estimate = (d: DeliveryDoc | null, l: CartLine, country: string, state = "", s: object = shop) =>
-  deliveryEstimate({ shop: s, delivery: { doc: d, pricing }, line: l, place: { country, state } });
+  deliveryEstimate({ shop: s, delivery: { doc: d, pricing }, lines: [l], place: { country, state } });
 
 describe("delivery before checkout", () => {
   it("prices the zone's own delivery for the product, with free over", () => {
@@ -60,7 +60,7 @@ describe("delivery before checkout", () => {
 
   it("has nothing to say without delivery prices, or when their currency has no rate any more", () => {
     expect(estimate(null, line("mug", 1, 10), "Portugal")).toEqual({ kind: "none" });
-    expect(deliveryEstimate({ shop, delivery: { doc: doc(), pricing: null }, line: line("mug", 1, 10), place: { country: "Portugal", state: "" } })).toEqual({ kind: "no-rates" });
+    expect(deliveryEstimate({ shop, delivery: { doc: doc(), pricing: null }, lines: [line("mug", 1, 10)], place: { country: "Portugal", state: "" } })).toEqual({ kind: "no-rates" });
   });
 });
 

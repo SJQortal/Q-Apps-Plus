@@ -1,4 +1,5 @@
 import { useId } from "react";
+import { CartDelivery } from "./CartDelivery";
 import { Link as RouterLink } from "react-router-dom";
 import { Alert, Box, Button, Link, Paper, Skeleton, Typography } from "@mui/material";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
@@ -175,6 +176,8 @@ export function ShopCart({
         >
           <Box sx={{ display: "grid", gap: 1, minWidth: 0 }}>
             {shop && <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />}
+            {/* What delivery adds, before checkout (Cart/CartDelivery.tsx). */}
+            {shop && owner && <CartDelivery owner={owner} storeId={storeId} shop={shop} lines={lines} />}
             {!priced.ok && priced.reason === "price" && priced.missing.length > 0 && (
               <Typography variant="body2" color="text.secondary">
                 {priced.missing.join(", ")} {priced.missing.length === 1 ? "has" : "have"} no price in {coinLabel(coin, shop)}.

@@ -92,7 +92,7 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
     );
   }
 
-  const estimate = current?.delivery && place ? deliveryEstimate({ shop: shop ?? {}, delivery: current.delivery, line, place }) : null;
+  const estimate = current?.delivery && place ? deliveryEstimate({ shop: shop ?? {}, delivery: current.delivery, lines: [line], place }) : null;
   const heading = place ? `Delivery to ${placeLabel(place)}` : "Delivery";
   const options = estimate?.kind === "ok" && estimate.choices.some((c) => c.name);
   let body: ReactNode;

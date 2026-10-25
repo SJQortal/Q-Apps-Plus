@@ -40,7 +40,8 @@ export type DeliveryEstimate =
 export function deliveryEstimate(args: {
   shop: { supportedCoins?: unknown; shippingCountries?: unknown; shippingStates?: unknown };
   delivery: ShopDelivery;
-  line: CartLine;
+  /** A product page's one line, or a cart's lines from one shop. */
+  lines: readonly CartLine[];
   place: BuyerPlace;
 }): DeliveryEstimate {
   const { doc, pricing } = args.delivery;
@@ -54,7 +55,7 @@ export function deliveryEstimate(args: {
   const choices: EstimateChoice[] = [];
   const options = doc.options?.length ? deliveryOptionsOf(doc) : [{ id: "", name: "" }];
   for (const option of options) {
-    const quote = quoteDelivery({ doc, lines: [args.line], country, state, pricing, takesArrr, option: option.id });
+    const quote = quoteDelivery({ doc, lines: args.lines, country, state, pricing, takesArrr, option: option.id });
     if (quote.kind === "no-rates") return { kind: "no-rates" };
     // Zones don't depend on the option: none here means none for any.
     if (quote.kind === "unavailable") return { kind: "unavailable", place };
@@ -70,9 +71,11 @@ export function deliveryEstimate(args: {
       ...(quote.currency !== "QORT" && { fiat: { value: quote.fee, currency: quote.currency } }),
     });
   }
-  // Free over, from the zone's own prices for this product.
-  const profile = profileFor(doc, args.line.productId);
-  const zone = code ? zoneFor(profile ? profile.zones : doc.general.zones, code, code === US ? stateCode(state) : null) : null;
+  // Free over, from the zone's own prices, when the lines share one profile.
+  const physical = args.lines.filter((l) => l.product && l.product.type !== "digital");
+  const profiles = new Set(physical.map((l) => profileFor(doc, l.productId)));
+  const profile = profiles.size === 1 ? [...profiles][0] : undefined;
+  const zone = code && profile !== undefined ? zoneFor(profile ? profile.zones : doc.general.zones, code, code === US ? stateCode(state) : null) : null;
   const freeOver = zone?.freeOver !== undefined ? { value: zone.freeOver, currency: doc.currency } : undefined;
   return { kind: "ok", choices, ...(freeOver && { freeOver }) };
 }
