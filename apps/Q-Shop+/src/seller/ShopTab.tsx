@@ -22,6 +22,7 @@ import { PricingDialog } from "./PricingDialog";
 import { fiatPricingOf, rateToText } from "../money/fiatPricing";
 import { DeleteShopDialog } from "./DeleteShopDialog";
 import { DiscountsCard } from "./DiscountsCard";
+import type { PublishAsk } from "./usePendingChanges";
 
 /** `zs1abcd…wxyz`: enough to recognise an address without a line of its own. */
 export function shortAddress(address: string): string {
@@ -48,7 +49,7 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </Box>
 );
 
-export function ShopTab({ publishAsk = 0 }: { publishAsk?: number }) {
+export function ShopTab({ publishAsk = null }: { publishAsk?: PublishAsk | null }) {
   const store = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const listReady = !!store && !!dataContainer && dataContainer.storeId === store.id;

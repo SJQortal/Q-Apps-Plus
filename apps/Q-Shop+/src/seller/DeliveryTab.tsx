@@ -22,7 +22,7 @@ import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } 
 import { BASE_OPTION_NAME, MAX_OPTIONS, MAX_PROFILES, MAX_ZONES, deliveryMoney as money, type DeliveryDoc, type DeliveryOption, type DeliveryProfile, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import { fetchDeliveryDoc } from "../delivery/deliveryDoc";
 import { deliveryDraftProblem, deliveryDrafts, publishDeliveryDraft } from "./sellerDrafts";
-import { usePublishAsk } from "./usePendingChanges";
+import { usePublishAsk, type PublishAsk } from "./usePendingChanges";
 import { draftKey } from "./deviceDrafts";
 import { DeliveryZoneDialog } from "./DeliveryZoneDialog";
 import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
@@ -324,7 +324,7 @@ function ZoneRows({
   );
 }
 
-export function DeliveryTab({ ready, publishAsk = 0 }: { ready: boolean; publishAsk?: number }) {
+export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publishAsk?: PublishAsk | null }) {
   const dispatch = useDispatch();
   const store = useSelector((state: RootState) => state.global.currentStore);
   const name = useSelector((state: RootState) => state.auth.user?.name);

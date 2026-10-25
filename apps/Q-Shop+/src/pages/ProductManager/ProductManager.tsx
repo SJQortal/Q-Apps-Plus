@@ -11,7 +11,7 @@
  * or Delete in a product's form): seller/DeleteProductsDialog.tsx asks, then
  * sends the same way. Nothing is ever published without the seller asking.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Box, Button, IconButton, Skeleton, Tab, Tabs, Tooltip } from "@mui/material";
@@ -43,7 +43,7 @@ import { FinishDeletesCard } from "../../seller/FinishDeletesCard";
 import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteProductsDialog";
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
-import { usePendingChanges } from "../../seller/usePendingChanges";
+import { usePendingChanges, type ChangeArea, type PublishAsk } from "../../seller/usePendingChanges";
 import { PUBLISH_BAR_SPACE, PublishBar } from "../../seller/PublishBar";
 import { useRestoreProductDrafts } from "../../seller/productDraftsDevice";
 import { DeliveryTab } from "../../seller/DeliveryTab";
@@ -75,7 +75,11 @@ export const ProductManager = () => {
   // Unpublished changes of every kind, kept on this device (seller/usePendingChanges.ts), and the bar's Publish.
   useRestoreProductDrafts();
   const changes = usePendingChanges();
-  const [publishAsks, setPublishAsks] = useState({ collections: 0, delivery: 0, discounts: 0 });
+  // The bar's Publish for a kind that publishes from its tab, until that tab takes it.
+  const [publishAsk, setPublishAsk] = useState<{ area: ChangeArea; id: number } | null>(null);
+  const asks = useRef(0);
+  const askFor = (area: ChangeArea): PublishAsk | null =>
+    publishAsk?.area === area ? { id: publishAsk.id, done: () => setPublishAsk((now) => (now?.id === publishAsk.id ? null : now)) } : null;
 
   const isCurrent = !!currentStore && currentStore.id === storeId;
   const routedShop = myStores.find((s) => s.id === storeId);
@@ -314,15 +318,15 @@ export const ProductManager = () => {
             <CollectionsTab
               ready={ready}
               loading={ownShopStatus === "idle" || ownShopStatus === "loading" || ownShopStatus === "ready"}
-              publishAsk={publishAsks.collections}
+              publishAsk={askFor("collections")}
             />
           )}
           {tab === "orders" && <OrdersTab />}
           {tab === "reviews" && (
             <ReviewsPanel storeId={currentStore.id} storeTitle={currentStore.title} storeImage={currentStore.logo || ""} />
           )}
-          {tab === "delivery" && <DeliveryTab ready={ready} publishAsk={publishAsks.delivery} />}
-          {tab === "shop" && <ShopTab publishAsk={publishAsks.discounts} />}
+          {tab === "delivery" && <DeliveryTab ready={ready} publishAsk={askFor("delivery")} />}
+          {tab === "shop" && <ShopTab publishAsk={askFor("discounts")} />}
         </Box>
         {/* Room for the Publish changes bar, so it never covers the page's last lines. */}
         {changes.length > 0 && <Box aria-hidden sx={{ height: PUBLISH_BAR_SPACE }} />}
@@ -335,7 +339,8 @@ export const ProductManager = () => {
           if (area === "products") return void publish.prepare();
           // The other kinds publish from their tab (its own checks and dialogs).
           setTab(area === "discounts" ? "shop" : area);
-          setPublishAsks((asks) => ({ ...asks, [area]: asks[area] + 1 }));
+          asks.current += 1;
+          setPublishAsk({ area, id: asks.current });
         }}
       />
 

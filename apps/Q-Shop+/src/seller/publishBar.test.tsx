@@ -61,7 +61,7 @@ describe("unpublished changes on the seller page", () => {
     const { store } = setup();
     store.dispatch(setProductsToSave({ ...chair, storeId: STORE_ID, title: "Chair, new price" }));
     expect(within(await bar()).getByText("1 product · Delivery prices")).toBeInTheDocument();
-    fireEvent.click(within(await bar()).getByRole("button", { name: "Publish changes" }));
+    fireEvent.click(within(await bar()).getByRole("button", { name: /^Publish changes/ }));
     const list = within(await screen.findByRole("dialog", { name: "Publish changes" })).getByRole("list", { name: "Unpublished changes" });
     const delivery = within(list).getByText("Delivery prices").closest("li") as HTMLElement;
     fireEvent.click(within(delivery).getByRole("button", { name: "Discard" }));
@@ -74,10 +74,25 @@ describe("unpublished changes on the seller page", () => {
   it("publishes delivery prices from another tab: the bar opens the Delivery tab, which publishes them", async () => {
     deliveryDrafts.set(KEY, deliveryDraft);
     const { q } = setup("overview");
-    fireEvent.click(within(await bar()).getByRole("button", { name: "Publish changes" }));
+    fireEvent.click(within(await bar()).getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     expect(decodeData64(String((q.callsFor("PUBLISH_QDN_RESOURCE")[0] as Record<string, unknown>).data64))).toMatchObject({ general: deliveryDraft.general });
     await waitFor(() => expect(screen.queryByRole("region", { name: "Unpublished changes" })).toBeNull());
+  });
+
+  it("takes a press once: coming back to the tab later doesn't publish again", async () => {
+    deliveryDrafts.set(KEY, deliveryDraft);
+    const { q } = setup("overview");
+    fireEvent.click(within(await bar()).getByRole("button", { name: /^Publish changes/ }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Unpublished changes" })).toBeNull());
+    // A new change, then the Overview and back: it waits for its own press.
+    deliveryDrafts.set(KEY, { ...deliveryDraft, general: { zones: [{ id: "all", countries: ["PT"], first: 3 }] } });
+    fireEvent.click(screen.getByRole("tab", { name: "Overview" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Delivery" }));
+    await bar();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1);
   });
 
   it("asks before leaving with changes: keeping them as drafts leaves, and they wait on this device", async () => {

@@ -20,7 +20,7 @@ import { draftLabel, draftSummary, draftsOf, type DiscountDraft } from "../disco
 import { decryptDiscountSecret, fetchDiscountsDoc, localDiscountSecret } from "../discounts/discountsDoc";
 import { discountDrafts, publishDiscountDrafts } from "./sellerDrafts";
 import { draftKey } from "./deviceDrafts";
-import { usePublishAsk } from "./usePendingChanges";
+import { usePublishAsk, type PublishAsk } from "./usePendingChanges";
 import { DiscountDialog } from "./DiscountDialog";
 
 type Load = { key: string; status: "loading" } | { key: string; status: "failed" } | { key: string; status: "ready"; doc: DiscountsDoc | null; published: DiscountDraft[] };
@@ -35,7 +35,7 @@ function StatusChip({ draft, now }: { draft: DiscountDraft; now: number }) {
   return <Chip size="small" variant="outlined" label={label} sx={{ fontWeight: 600, ...(status === "active" && { borderColor: "success.main" }) }} />;
 }
 
-export function DiscountsCard({ publishAsk = 0 }: { publishAsk?: number }) {
+export function DiscountsCard({ publishAsk = null }: { publishAsk?: PublishAsk | null }) {
   const dispatch = useDispatch();
   const store = useSelector((state: RootState) => state.global.currentStore);
   const user = useSelector((state: RootState) => state.auth.user);

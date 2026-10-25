@@ -76,18 +76,28 @@ export function forgetShopDrafts(name: string, owner: string, storeId: string): 
   collectionDrafts.set(collectionsDraftKey(name, storeId), null);
 }
 
+/** The bar's Publish waiting for a tab: a new `id` each press, and `done` to take it (once). */
+export interface PublishAsk {
+  id: number;
+  done: () => void;
+}
+
 /**
- * A tab's answer to the bar's Publish: `ask` goes up by one each time it's
- * pressed for this tab, and `run` starts the tab's own publish once the tab
- * has what it needs (`ready`), once per press.
+ * A tab's answer to the bar's Publish: `run` starts the tab's own publish
+ * once the tab has what it needs (`ready`), once per press. The press is
+ * taken (`done`) as it runs, so opening the tab again later doesn't publish
+ * again (Simon, from Hub: the collections publish was "asked too many times").
  */
-export function usePublishAsk(ask: number, ready: boolean, run: () => void): void {
+export function usePublishAsk(ask: PublishAsk | null | undefined, ready: boolean, run: () => void): void {
   const handled = useRef(0);
   const go = useEffectEvent(run);
+  const take = useEffectEvent(() => ask?.done());
+  const id = ask?.id ?? 0;
   useEffect(() => {
-    if (ask > handled.current && ready) {
-      handled.current = ask;
+    if (id > handled.current && ready) {
+      handled.current = id;
+      take();
       go();
     }
-  }, [ask, ready]);
+  }, [id, ready]);
 }

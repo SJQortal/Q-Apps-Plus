@@ -37,7 +37,7 @@ import type { SellerRow } from "./productList";
 import { CollectionEditor } from "./CollectionEditor";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import { FormError } from "./FormError";
-import { usePublishAsk } from "./usePendingChanges";
+import { usePublishAsk, type PublishAsk } from "./usePendingChanges";
 import { useCollections } from "./useCollections";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
 
@@ -48,7 +48,7 @@ function isShown(row: SellerRow | undefined): boolean {
 
 type Control = "up" | "down" | "edit" | "remove";
 
-export function CollectionsTab({ ready, loading = false, publishAsk = 0 }: { ready: boolean; loading?: boolean; publishAsk?: number }) {
+export function CollectionsTab({ ready, loading = false, publishAsk = null }: { ready: boolean; loading?: boolean; publishAsk?: PublishAsk | null }) {
   const c = useCollections();
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];

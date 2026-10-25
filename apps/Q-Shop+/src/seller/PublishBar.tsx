@@ -1,10 +1,11 @@
 /**
  * The seller page's unpublished changes (seller/usePendingChanges.ts):
  *
- * - a bar in the warning colour, fixed at the bottom of the screen (above
- *   the phone's bottom bar) whenever anything waits: what does, and Publish
- *   changes (one kind: its publish starts; several: a list to publish or
- *   discard each);
+ * - a Publish changes button in the warning colour, at the bottom right of
+ *   the screen (above the phone's bottom bar) whenever anything waits, with
+ *   what does under it (one kind: its publish starts; several: a list to
+ *   publish or discard each). Simon: "only make the button orange, not the
+ *   whole panel … to the right side";
  * - leaving the seller page with changes asks first: publish them, keep
  *   them as drafts (they're kept on this device), or discard them.
  */
@@ -16,7 +17,7 @@ import { ResponsiveDialog } from "../components/common/mobile";
 import { useBottomChromeHeight } from "../components/layout/BottomNav/BottomNav";
 import { takeLeaveWithoutAsking, type ChangeArea, type PendingChange } from "./usePendingChanges";
 
-export const PUBLISH_BAR_SPACE = 76;
+export const PUBLISH_BAR_SPACE = 84;
 
 function ChangeList({ changes, onPublish, busy }: { changes: PendingChange[]; onPublish: (area: ChangeArea) => void; busy: boolean }) {
   return (
@@ -56,33 +57,28 @@ export function PublishBar({ changes, onPublish, busy = false }: { changes: Pend
           aria-label="Unpublished changes"
           sx={{
             position: "fixed",
-            left: 0,
-            right: 0,
-            bottom: `${bottom}px`,
+            right: { xs: 16, sm: 24 },
+            bottom: `${bottom + 16}px`,
             zIndex: (theme) => theme.zIndex.appBar - 1,
-            bgcolor: "warning.main",
-            color: "warning.contrastText",
-            boxShadow: 6,
-            px: 2,
-            py: 1.25,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 1.5,
-            flexWrap: "wrap",
+            maxWidth: "calc(100% - 32px)",
           }}
         >
-          <Typography sx={{ fontWeight: 700, minWidth: 0, overflowWrap: "anywhere" }}>
-            Not published yet: <Box component="span" sx={{ fontWeight: 400 }}>{summary}</Box>
-          </Typography>
           <Button
             variant="contained"
+            color="warning"
             startIcon={<CloudUploadOutlinedIcon />}
             onClick={publishChanges}
             disabled={busy}
-            sx={{ minHeight: 44, bgcolor: "background.paper", color: "text.primary", "&:hover": { bgcolor: "background.default" } }}
+            sx={{ minHeight: 52, px: 2.5, borderRadius: 3, boxShadow: 6, textTransform: "none", justifyContent: "flex-start", textAlign: "left" }}
           >
-            Publish changes
+            <Box component="span" sx={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
+              <Box component="span" sx={{ fontWeight: 700 }}>
+                Publish changes
+              </Box>
+              <Box component="span" sx={{ fontSize: 12, fontWeight: 500, overflowWrap: "anywhere" }}>
+                {summary}
+              </Box>
+            </Box>
           </Button>
         </Box>
       )}
