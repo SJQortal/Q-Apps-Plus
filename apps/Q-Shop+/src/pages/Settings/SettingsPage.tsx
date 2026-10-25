@@ -28,8 +28,9 @@ import { useShellActions } from "../../components/layout/shellState";
 import { APP_VERSION } from "../../constants/changelog";
 import { openWalkthrough } from "../../onboarding/Walkthrough";
 
-// Opened now and then: loaded the first time (onboarding/HelpDialog.tsx).
+// Opened now and then: loaded the first time (onboarding/HelpDialog.tsx, delivery/PlacePickerDialog.tsx).
 const HelpDialog = lazy(() => import("../../onboarding/HelpDialog").then((m) => ({ default: m.HelpDialog })));
+const PlacePickerDialog = lazy(() => import("../../delivery/PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
 import {
   APP_NAME,
   ORIGINAL_APP_LINK,
@@ -46,6 +47,7 @@ import { collectSettingsSnapshot, fetchSettingsFromQdn, publishSettingsToQdn } f
 import { isProductView, setProductView, useProductView } from "../../utils/productView";
 import { selectMenuProps } from "../../components/common/menuStyle";
 import { saveDelivery, savedDelivery } from "../Cart/delivery";
+import { pickedBuyerPlace, placeLabel, setBuyerPlace, useBuyerPlace } from "../../delivery/buyerPlace";
 import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
 
 /** The coins a buyer can prefer, in the order the shops offer them. */
@@ -133,6 +135,10 @@ export function SettingsPage() {
   const { list: hiddenShops } = useHiddenShops();
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // The buyer's country for delivery prices before checkout (delivery/buyerPlace.ts).
+  const buyerPlace = useBuyerPlace(user?.name || undefined);
+  const pickedPlace = buyerPlace ? pickedBuyerPlace() : null;
+  const [pickingPlace, setPickingPlace] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [syncBusy, setSyncBusy] = useState<"save" | "restore" | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
@@ -372,6 +378,28 @@ export function SettingsPage() {
             slotProps={{ input: { "aria-labelledby": `${namesFieldId}-title` } }}
           />
         </Row>
+        <Row>
+          <RowLabel title="Country for delivery prices">
+            {buyerPlace
+              ? `${placeLabel(buyerPlace)}${pickedPlace ? "" : " (your saved address's)"}: product pages and your cart show what delivery costs there. Kept in this browser only.`
+              : "Choose it to see what delivery costs on product pages and in your cart, before checkout."}
+          </RowLabel>
+          <Buttons>
+            <Button variant="outlined" onClick={() => setPickingPlace(true)}>
+              {buyerPlace ? "Change" : "Choose country"}
+            </Button>
+            {pickedPlace && (
+              <Button variant="outlined" onClick={() => setBuyerPlace(null)}>
+                Forget it
+              </Button>
+            )}
+          </Buttons>
+        </Row>
+        {pickingPlace && (
+          <Suspense fallback={null}>
+            <PlacePickerDialog place={buyerPlace} onClose={() => setPickingPlace(false)} />
+          </Suspense>
+        )}
         {savedAddress && (
           <Row>
             <RowLabel title="Saved delivery address">

@@ -28,6 +28,11 @@ export function cleanPlace(raw: { country?: unknown; state?: unknown } | null | 
   return { country: countryName(code), state: state ? stateName(state) : "" };
 }
 
+/** The place picked on this device (not the kept address's), or null. */
+export function pickedBuyerPlace(): BuyerPlace | null {
+  return cleanPlace(readStoredSettings().deliverTo);
+}
+
 /** The place picked on this device, else the address `buyerName` kept at checkout, else null. */
 export function buyerPlace(buyerName: string | undefined): BuyerPlace | null {
   return cleanPlace(readStoredSettings().deliverTo) ?? (buyerName ? cleanPlace(savedDelivery(buyerName)) : null);

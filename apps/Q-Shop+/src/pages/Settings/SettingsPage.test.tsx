@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { setBuyerPlace } from "../../delivery/buyerPlace";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { installQortalMock } from "../../test/qortalMock";
@@ -79,6 +80,14 @@ describe("SettingsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Forget it" }));
     expect(localStorage.getItem(SAVED_DELIVERY_STORAGE_KEY)).toBeNull();
     expect(screen.queryByText("Saved delivery address")).toBeNull();
+  });
+
+  it("shows the country delivery prices are worked out for, and forgets it", () => {
+    act(() => setBuyerPlace({ country: "Portugal", state: "" }));
+    renderSettings();
+    expect(screen.getByText(/^Portugal: product pages and your cart show what delivery costs there/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Forget it" }));
+    expect(screen.getByRole("button", { name: "Choose country" })).toBeInTheDocument();
   });
 
   it("opens the changelog dialog", () => {
