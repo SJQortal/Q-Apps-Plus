@@ -17,6 +17,7 @@ import {
   type DiscountsDoc,
 } from "./model";
 import { discountForCode, discountForName, discountLine, discountProblem, discountedLines, productsSubtotal } from "./apply";
+import { checkOrderDiscount } from "./verify";
 import {
   buildDiscountsPublish,
   decryptDiscountSecret,
@@ -221,5 +222,46 @@ describe("reading and publishing discount codes", () => {
     expect(await decryptDiscountSecret(d, "PK")).toEqual({ codes: {}, names: {} });
     keepDiscountSecret(STORE, secret);
     expect(localDiscountSecret(STORE)).toEqual(secret);
+  });
+});
+
+describe("the seller's check of an order's discount", () => {
+  const item = (productId: string, total: number, extra: Record<string, unknown> = {}) => ({
+    productId,
+    title: productId,
+    quantity: 1,
+    pricePerUnit: total,
+    totalProductPrice: total,
+    catalogueId: "c",
+    image: undefined,
+    product: { price: [{ currency: "qort", value: total }], ...extra },
+  });
+  const items = [item("mug", 20), item("lamp", 10)];
+  const check = async (claim: Parameters<typeof checkOrderDiscount>[0]["claim"], discount: Discount, over: Partial<Parameters<typeof checkOrderDiscount>[0]> = {}) =>
+    checkOrderDiscount({ claim, doc: doc([discount]), storeId: STORE, buyer: "Ann", items, deliveryFee: 3, at: 1000, pricing: null, ...over });
+
+  it("matches the seller's code: its fingerprint, percentage, products, dates, name and minimum", async () => {
+    const code = await codeHash(STORE, "SPRING10");
+    const spring: Discount = { id: "a", code, percent: 10 };
+    const claim = { title: "Discount SPRING10: 10% off", amount: 3, code: "SPRING10", id: "a", percent: 10 };
+    expect(await check(claim, spring)).toEqual({ ok: true });
+    expect(await check({ ...claim, code: "SPRING11" }, spring)).toEqual({ ok: false, message: "The code in this order isn't your code." });
+    expect(await check({ ...claim, id: "b" }, spring)).toMatchObject({ ok: false, message: expect.stringMatching(/isn't one of your codes now/) });
+    expect(await check({ ...claim, percent: 20, amount: 6 }, spring)).toEqual({ ok: false, message: "It takes off more than your code gives." });
+    expect(await check({ ...claim, amount: 3.5 }, spring)).toEqual({ ok: false, message: "It takes off more than your code gives." });
+    // Only the mug: 10 % of 20.
+    expect(await check({ ...claim, amount: 2 }, { ...spring, products: ["mug"] })).toEqual({ ok: true });
+    expect(await check(claim, { ...spring, products: ["mug"] })).toEqual({ ok: false, message: "It takes off more than your code gives." });
+    expect(await check(claim, { ...spring, ends: 500 })).toEqual({ ok: false, message: "It was used outside your code's dates." });
+    expect(await check(claim, { ...spring, minTotal: 40 })).toEqual({ ok: false, message: "The order is under your code's minimum." });
+    expect(await check(claim, { ...spring, forName: await nameHash(STORE, "Bob") })).toEqual({ ok: false, message: "This discount is for another Qortal name than the buyer's." });
+    expect(await check(claim, spring, { doc: null })).toMatchObject({ ok: false });
+  });
+
+  it("lets free delivery take the delivery fee off, only when the code gives it", async () => {
+    const vip: Discount = { id: "v", forName: await nameHash(STORE, "Ann"), percent: 0, freeDelivery: true };
+    const claim = { title: "Your discount: free delivery", amount: 3, id: "v", percent: 0, freeDelivery: true };
+    expect(await check(claim, vip)).toEqual({ ok: true });
+    expect(await check(claim, { ...vip, freeDelivery: undefined, percent: 10 })).toEqual({ ok: false, message: "It takes off more than your code gives." });
   });
 });

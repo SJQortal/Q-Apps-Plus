@@ -24,6 +24,9 @@ import { Link as RouterLink } from "react-router-dom";
 import { Alert, Box, Button, Divider, Link, Rating, Skeleton, Typography } from "@mui/material";
 import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
+import { useOrderDiscountCheck } from "../../../discounts/verify";
+import { statusText } from "../../../theme/statusText";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import RateReviewOutlinedIcon from "@mui/icons-material/RateReviewOutlined";
@@ -45,7 +48,7 @@ import { copyText } from "../../../utils/clipboard";
 import { requestShopDetails, useShopDetails } from "../../../discovery/shopDetails";
 import { shopKey } from "../../../discovery/shopIndex";
 import { PolicyLines } from "../../../shop/PolicyLines";
-import { addressLabelText, deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
+import { addressLabelText, deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderDiscount, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
 import { useOrderCoinView } from "../../../orders/useOrderCoin";
 import type { ShopCoinSettings } from "../../../money/coins";
 import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
@@ -241,12 +244,15 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
   // The seller sees the buyer's review of the shop, from the shop's shared review search.
   const sellerShopId = role === "seller" && order ? ((orderItems(order).find((i) => i.product?.storeId)?.product?.storeId as string | undefined) ?? "") : "";
   const shopReviews = useShopReviews(sellerShopId, sellerName || null);
+  // The seller's check of the order's discount against the shop's codes (discounts/verify.ts).
+  const discountCheck = useOrderDiscountCheck(role === "seller" ? order : null, sellerName, sellerShopId);
   const buyerReview = sellerShopId && order ? (shopReviews.reviews.find((r) => sameName(r.name, order.user)) ?? null) : null;
 
   if (!order) return null;
 
   const items = orderItems(order);
   const deliveryFee = orderDelivery(order);
+  const discount = orderDiscount(order);
   const { coin, settings: coinSettings } = coinView;
   const digital = isDigitalOrder(order);
   const address = deliveryLines(order);
@@ -464,6 +470,28 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
                 <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 600, overflowWrap: "anywhere" }}>{deliveryFee.title}</Typography>
                 <Box sx={{ flexShrink: 0, textAlign: "right" }}>
                   <AmountTag value={deliveryFee.total} coin={coin} shop={coinSettings} size="small" />
+                </Box>
+              </Box>
+            )}
+            {discount && (
+              // A discount code's line (discounts/apply.ts): it takes off the total, not a product.
+              <Box component="li" sx={{ display: "flex", gap: 1.5, alignItems: "center", minWidth: 0 }}>
+                <Box aria-hidden sx={{ width: 56, height: 56, borderRadius: 1.5, flexShrink: 0, bgcolor: "action.hover", display: "grid", placeItems: "center" }}>
+                  <LocalOfferOutlinedIcon sx={{ color: "text.secondary" }} />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{discount.title}</Typography>
+                  {role === "seller" && discountCheck && (
+                    <Typography variant="body2" sx={{ color: (theme) => (discountCheck.ok ? theme.palette.text.secondary : statusText(theme, "warning")), fontWeight: discountCheck.ok ? 400 : 600 }}>
+                      {discountCheck.ok ? "Matches one of your codes." : discountCheck.message}
+                    </Typography>
+                  )}
+                </Box>
+                <Box sx={{ flexShrink: 0, display: "flex", alignItems: "baseline", gap: 0.25 }}>
+                  <Typography component="span" sx={{ fontWeight: 600 }}>
+                    −
+                  </Typography>
+                  <AmountTag value={discount.amount} coin={coin} shop={coinSettings} size="small" />
                 </Box>
               </Box>
             )}

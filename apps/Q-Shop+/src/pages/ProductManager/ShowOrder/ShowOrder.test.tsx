@@ -14,11 +14,12 @@ import { setCurrentStore } from "../../../state/features/globalSlice";
 import { deliveredLoaded, statusesLoaded } from "../../../state/features/orderSlice";
 import { resetAssetCache } from "../../../qdn/assets";
 import { resetAssetNamesFromNode } from "../../../orders/useOrderCoin";
-import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, SHORT_STORE_ID, STORE_TITLE, poster } from "../../../test/fixtures/shop";
+import { BUYER, BUYER_ADDRESS, SELLER, SELLER_ADDRESS, SELLER_PK, SHORT_STORE_ID, STORE_ID, STORE_TITLE, poster } from "../../../test/fixtures/shop";
 import { fetchRetry, resetOrderReadCaches } from "../../../orders/reads";
 import { addStatus, orderId, orderJson } from "../../../orders/testing";
 import { SENDER_NOTE } from "../../../orders/payment";
-import { resetQdnCaches } from "../../../qdn/search";
+import { resetQdnCaches, resourcePath } from "../../../qdn/search";
+import { codeHash } from "../../../discounts/model";
 import { ShowOrder } from "./ShowOrder";
 import { copyText } from "../../../utils/clipboard";
 
@@ -518,5 +519,47 @@ describe("delivered", () => {
     const view = screen.getByRole("dialog", { name: `${BUYER}'s review` });
     expect(within(view).getByText("Fast.")).toBeInTheDocument();
     expect(within(view).queryByRole("button", { name: "Write a new review" })).toBeNull();
+  });
+});
+
+describe("a discount in the order", () => {
+  const withDiscount = () => {
+    const json = orderJson();
+    json.details["q-store-discount"] = {
+      product: { id: "q-store-discount", title: "Discount SPRING10: 10% off", type: "digital", price: [{ currency: "qort", value: -0.3 }], discount: { id: "spr", code: "SPRING10", percent: 10, value: 0.3, coin: "QORT" } },
+      catalogueId: "",
+      quantity: 1,
+      pricePerUnit: -0.3,
+      totalProductPrice: -0.3,
+    };
+    json.details.totalPrice = "2.70000000";
+    return json;
+  };
+  const serveCodes = (doc: unknown) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        const json = (body: unknown) => ({ ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) });
+        if (u.startsWith("/arbitrary/resources/search") && u.includes(`q-store-discounts-${SHORT_STORE_ID}`)) return json([{ name: SELLER, service: "DOCUMENT", identifier: `q-store-discounts-${SHORT_STORE_ID}` }]);
+        if (u === resourcePath("DOCUMENT", SELLER, `q-store-discounts-${SHORT_STORE_ID}`)) return json(doc);
+        return json([]);
+      })
+    );
+
+  beforeEach(() => resetQdnCaches());
+
+  it("shows the seller the discount as a line of the order, checked against the shop's codes (+ app)", async () => {
+    serveCodes({ v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts: [{ id: "spr", code: await codeHash(STORE_ID, "SPRING10"), percent: 10 }] });
+    setup("seller", withDiscount());
+    expect(screen.getByText("Discount SPRING10: 10% off")).toBeInTheDocument();
+    expect(screen.getByText("Items (1)")).toBeInTheDocument();
+    expect(await screen.findByText("Matches one of your codes.")).toBeInTheDocument();
+  });
+
+  it("warns the seller when the order's code isn't theirs", async () => {
+    serveCodes({ v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts: [{ id: "spr", code: await codeHash(STORE_ID, "AUTUMN10"), percent: 10 }] });
+    setup("seller", withDiscount());
+    expect(await screen.findByText("The code in this order isn't your code.")).toBeInTheDocument();
   });
 });
