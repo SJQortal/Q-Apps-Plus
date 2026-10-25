@@ -2,7 +2,7 @@
  * Beside Manage Shop: the seller's QORT rate, when their shop prices in a
  * currency (money/fiatPricing.ts), "1 QORT = 0.18 USD", and a tap away from
  * changing it (seller/QuickRateDialog.tsx, loaded when first opened). It
- * narrows with the header: the rate alone, then the icon alone.
+ * narrows with the header (useHeaderFit.ts): the rate alone, then the icon alone.
  */
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
@@ -36,18 +36,16 @@ export function QuickRateButton({ phone }: { phone: boolean }) {
             flexShrink: 0,
             minHeight: phone ? 44 : 40,
             minWidth: 44,
-            px: 1.25,
+            px: phone ? 1 : 1.25,
             borderRadius: 999,
             borderColor: "divider",
             textTransform: "none",
             fontWeight: 600,
             whiteSpace: "nowrap",
             "& .MuiButton-startIcon": { mr: 0.75 },
-            // Narrower headers: the rate without "1 QORT =", then the icon alone (the name stays whole for screen readers).
-            "& .qp-rate-prefix": { display: { xs: "none", lg: "inline" } },
-            ...(!phone && {
-              "@media (max-width: 1099.95px)": { "& .qp-rate-text": { display: "none" }, "& .MuiButton-startIcon": { m: 0 }, px: 1 },
-            }),
+            // Phones show the rate without "1 QORT ="; desktop headers drop that, then the rate, as they need (useHeaderFit.ts).
+            // The name stays whole for screen readers.
+            ...(phone && { "& .qp-rate-prefix": { display: "none" } }),
           }}
         >
           <Box component="span" className="qp-rate-text">

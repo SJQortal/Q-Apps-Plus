@@ -67,8 +67,18 @@ export const HeaderInner = styled("div")(({ theme }) => ({
   padding: theme.spacing(0, 2),
   boxSizing: "border-box",
   [theme.breakpoints.up("sm")]: { padding: theme.spacing(0, 3) },
-  // A seller's QORT rate beside Manage Shop (QuickRateButton) needs room below 1000 px: the navigation keeps its names, not its icons.
-  "@media (max-width: 999.95px)": { "&:has(.qp-quick-rate) nav .MuiSvgIcon-root": { display: "none" } },
+  // What the header drops to stay on one line, then the navigation's own row (useHeaderFit.ts measures and sets data-fit).
+  '&[data-fit~="icons"] nav .MuiSvgIcon-root': { display: "none" },
+  '&[data-fit~="name"] .qp-account-name': { display: "none" },
+  '&[data-fit~="prefix"] .qp-rate-prefix': { display: "none" },
+  '&[data-fit~="rate"] .qp-rate-text': { display: "none" },
+  '&[data-fit~="rate"] .qp-quick-rate': { paddingLeft: theme.spacing(1), paddingRight: theme.spacing(1) },
+  '&[data-fit~="rate"] .qp-quick-rate .MuiButton-startIcon': { margin: 0 },
+  '&[data-fit~="title"] .qp-app-title': { display: "none" },
+  '&[data-fit~="rows"]': { flexWrap: "wrap", rowGap: 0, paddingTop: theme.spacing(0.5), paddingBottom: theme.spacing(0.5) },
+  '&[data-fit~="rows"] nav': { order: 1, flexBasis: "100%", marginLeft: 0, overflowX: "auto", scrollbarWidth: "none" },
+  '&[data-fit~="rows"] .qp-quick-rate': { marginLeft: "auto" },
+  '&[data-fit~="rows"]:has(.qp-quick-rate) .qp-header-actions': { marginLeft: 0 },
   // Last, so a landscape phone wider than 600 px gets the phone edge too.
   [`@media ${PHONE_MEDIA}`]: { padding: theme.spacing(0, 1) },
 }));
@@ -103,10 +113,6 @@ export const AppTitle = styled("span")(({ theme }) => ({
   lineHeight: 1,
   whiteSpace: "nowrap",
   color: theme.palette.text.primary,
-  // 600–760 px (a narrow Hub pane): the navigation needs the room; the mark
-  // stays and the button keeps its name. Phones have no navigation up here.
-  "@media (max-width: 759.95px)": { display: "none" },
-  [`@media ${PHONE_MEDIA}`]: { display: "inline" },
 }));
 
 /** Shops, Orders and Manage Shop on desktop. */
@@ -191,10 +197,7 @@ export const NavbarName = styled(Typography)(({ theme }) => ({
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
-  // Below 900 px (narrow Hub panes) the header needs the room for its navigation; the avatar stays.
-  [theme.breakpoints.down("md")]: {
-    display: "none",
-  },
+  // Narrower desktop headers drop it as they need (useHeaderFit.ts); phones keep the avatar.
   [`@media ${PHONE_MEDIA}`]: {
     display: "none",
   },

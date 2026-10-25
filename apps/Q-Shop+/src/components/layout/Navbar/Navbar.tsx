@@ -40,6 +40,7 @@ import {
 } from "./Navbar-styles";
 import { LogoMark } from "./LogoMark";
 import { QuickRateButton } from "./QuickRateButton";
+import { useHeaderFit } from "./useHeaderFit";
 import { useHideOnScroll, usePublishHeaderOffset } from "./useHideOnScroll";
 
 // Both open now and then: loaded the first time they open, so the name
@@ -59,6 +60,9 @@ const NavBar: React.FC = () => {
   // The pages' sticky sub-headers stack under the header using this (Navbar-styles stickyBelowHeader).
   const headerRef = useRef<HTMLElement>(null);
   usePublishHeaderOffset(headerRef, hidden);
+  // One line, whatever the name, the rate and the tabs (useHeaderFit.ts); on desktop the tabs may take a second.
+  const innerRef = useRef<HTMLDivElement>(null);
+  useHeaderFit(innerRef, !phone);
 
   const { signIn, authenticating } = useShellActions();
   const user = useSelector((state: RootState) => state.auth.user);
@@ -94,10 +98,10 @@ const NavBar: React.FC = () => {
 
   return (
     <CustomAppBar ref={headerRef} position="sticky" elevation={0} collapsed={hidden} onFocus={reveal}>
-      <HeaderInner>
+      <HeaderInner ref={innerRef}>
         <LogoButton type="button" onClick={() => navigate("/")} aria-label={`${APP_NAME} home`}>
           <LogoMark size={phone ? 28 : 30} />
-          <AppTitle>{APP_NAME}</AppTitle>
+          <AppTitle className="qp-app-title">{APP_NAME}</AppTitle>
         </LogoButton>
 
         {!phone && (
@@ -153,7 +157,7 @@ const NavBar: React.FC = () => {
         )}
         {!phone && <QuickRateButton phone={false} />}
 
-        <HeaderActions>
+        <HeaderActions className="qp-header-actions">
           {phone && <QuickRateButton phone />}
           {!phone && (
             <Tooltip title="Cart">
@@ -198,7 +202,7 @@ const NavBar: React.FC = () => {
               onClick={openMenu}
             >
               <NameAvatar name={userName} size={phone ? 32 : 28} eager />
-              <NavbarName>{userName}</NavbarName>
+              <NavbarName className="qp-account-name">{userName}</NavbarName>
               {!phone && <ExpandMoreIcon fontSize="small" sx={{ color: "text.secondary" }} />}
             </AvatarContainer>
           )}
