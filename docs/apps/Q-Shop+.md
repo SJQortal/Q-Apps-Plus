@@ -782,7 +782,9 @@ Simon, going to sleep: *"do a deep dive into our q-shop in general, investigate 
 - **More from <shop>** under a product: up to 8 of its other products in the shop's order, a variant group as one tile, read once the strip nears the screen (`3982d14f`; `pages/Product/MoreFromShop.tsx`).
 - **Recently viewed** at the top of Products (while no search or filter narrows it): up to 12 products opened, on this device, with Clear (`905a0b9e`; `discovery/recentlyViewed.ts`).
 - The walkthrough keeps its own type scale (Classic's 23 px body text outgrew its titles, `be39548f`).
-- **Tests:** 1122 → 1137.
+- **For sellers:** the checkup's first step for a new shop is **Add your first product** (`5400e187`); **Running low** on the Overview lists counted products with 3 or fewer left, each a tap from its editor (`d9537445`); the Delivery tab starts a first zone in one step, **one price everywhere you ship** (`eb5fdc78`); orders to handle say **Dispatch by Tue 27 Oct** (or that it was due) from the shop's dispatch time (`62339eff`); **Copy address** in an order, for a shipping label (`a489704f`).
+- **For buyers:** **Order placed** says what happens next in the shop's terms (`e3c6d0dd`, and after checking out several shops, `e89c8e4b`); checkout's address step says an option is picked next when the shop has them (`ee29fefa`); order cards show the tracking number (`2b70540c`); product pages say where a product **ships from** (`7980f5fe`); **On sale** on shop pages too (`1abdfd8c`); shop cards say **Away** (`254644dc`); **Help** in Settings answers paying, delivery, safety, problems and selling (`27928fab`).
+- **Tests:** 1122 → 1153.
 
 **Script for the Hub check** (Tester accounts; every payment and publish is Simon's to confirm):
 1. A browser profile without `qshopplus-walkthrough`: the notice, then Welcome. Skip; Settings → About → Show the walkthrough and Seller guide.
