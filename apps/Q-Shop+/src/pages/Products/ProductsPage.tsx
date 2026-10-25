@@ -16,6 +16,11 @@
  * The URL keeps the search, sort, categories and stock filter, and Back from
  * a product comes back to the same place in the list.
  */
+import { ShipsToChips, ShipsToSelect } from "../../delivery/ShipsToControls";
+import { useBuyerPlace } from "../../delivery/buyerPlace";
+import { parseShips, shipsMatch } from "../../discovery/sortFilter";
+import { checkShopDetails, useShopDetailsSnapshot } from "../../discovery/shopDetails";
+import { shopKey } from "../../discovery/shopIndex";
 import { RecentlyViewedStrip } from "../../discovery/RecentlyViewedStrip";
 import { ProductsNamesSwitch } from "../../names/NamesPage";
 import { useStockLeft } from "../../stock/notes";
@@ -130,6 +135,8 @@ interface ListQuery {
   auctionsOnly: boolean;
   /** Only products on sale (sale/compareAt.ts). */
   saleOnly: boolean;
+  /** Only products whose shop ships to this country (sortFilter parseShips); "" anywhere. */
+  ships: string;
   /** A price range in QORT, as typed ("" for none). */
   min: string;
   max: string;
@@ -138,12 +145,13 @@ interface ListQuery {
 /** The sort a list has without a `sort` in its URL. */
 const defaultSort = (auctionsOnly: boolean): ListSort => (auctionsOnly ? "ending" : "newest");
 
-/** The list's state in the URL: `?q=&sort=&category=…&stock=1&auctions=1&sale=1&min=&max=`, changed in place so Back leaves the page. */
+/** The list's state in the URL: `?q=&sort=&category=…&stock=1&auctions=1&sale=1&ships=PT&min=&max=`, changed in place so Back leaves the page. */
 function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => void } {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
   const auctionsOnly = params.get("auctions") === "1";
   const saleOnly = params.get("sale") === "1";
+  const ships = parseShips(params.get("ships"));
   const min = params.get("min") ?? "";
   const max = params.get("max") ?? "";
   const sort = parseProductSort(params.get("sort")) ?? defaultSort(auctionsOnly);
@@ -176,6 +184,10 @@ function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => vo
             if (patch.saleOnly) next.set("sale", "1");
             else next.delete("sale");
           }
+          if (patch.ships !== undefined) {
+            if (patch.ships) next.set("ships", patch.ships);
+            else next.delete("ships");
+          }
           if (patch.sort !== undefined) {
             if (patch.sort !== defaultSort(next.get("auctions") === "1")) next.set("sort", patch.sort);
             else next.delete("sort");
@@ -195,7 +207,7 @@ function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => vo
     },
     [setParams]
   );
-  return { q, sort, categories, inStockOnly, auctionsOnly, saleOnly, min, max, update };
+  return { q, sort, categories, inStockOnly, auctionsOnly, saleOnly, ships, min, max, update };
 }
 
 /**
@@ -307,7 +319,8 @@ export function ProductsPage() {
   const phone = usePhoneLayout();
   const layout = productLayout(useProductView(), phone);
   const userName = useSelector((state: RootState) => state.auth.user?.name ?? "");
-  const { q, sort, categories, inStockOnly, auctionsOnly, saleOnly, min, max, update } = useListQuery();
+  const { q, sort, categories, inStockOnly, auctionsOnly, saleOnly, ships, min, max, update } = useListQuery();
+  const place = useBuyerPlace(userName || undefined);
   const minQort = priceBound(min);
   const maxQort = priceBound(max);
   const priced = minQort !== null || maxQort !== null;
@@ -325,7 +338,7 @@ export function ProductsPage() {
 
   // Another sort, categories (to list them, or to filter by them) and a search need every shop's list.
   const pickingCategories = filtersOpen || categoryAnchor !== null;
-  const needAll = sort !== "newest" || categories.length > 0 || searching || pickingCategories || auctionsOnly || saleOnly || priced;
+  const needAll = sort !== "newest" || categories.length > 0 || searching || pickingCategories || auctionsOnly || saleOnly || !!ships || priced;
   const { phase, readAll, readMore } = all;
   useEffect(() => {
     if (needAll && phase === "ready") readAll();
@@ -351,9 +364,31 @@ export function ProductsPage() {
   const onSale = useMemo(() => listed.filter((row) => isOnSaleRow(row, catalogues)).length, [listed, catalogues]);
   const options = useMemo(() => categoryOptions(listed), [listed]);
   const labels = useMemo(() => new Map(options.map((option) => [option.key, option.label])), [options]);
-  const filtered = useMemo(
+  const filteredAll = useMemo(
     () => filterAndSortAll(rows, { categories, inStockOnly, auctionsOnly, saleOnly, minQort, maxQort, sort, favorites: favoriteCounts }, catalogues, now),
     [rows, categories, inStockOnly, auctionsOnly, saleOnly, minQort, maxQort, sort, favoriteCounts, catalogues, now]
+  );
+  // Ships to (discovery/sortFilter.ts shipsMatch): each product's shop's JSON, read for the shops listed, five at a time.
+  const shopDetails = useShopDetailsSnapshot();
+  const shopsToCheck = useMemo(() => {
+    if (!ships) return [];
+    const seen = new Map<string, { owner: string; id: string }>();
+    for (const row of filteredAll) seen.set(shopKey(row.owner, row.storeId), { owner: row.owner, id: row.storeId });
+    return [...seen.entries()].filter(([key]) => shipsMatch(ships, shopDetails.get(key)) === "unknown").map(([, shop]) => shop);
+  }, [ships, filteredAll, shopDetails]);
+  const checkKey = shopsToCheck.map((shop) => shopKey(shop.owner, shop.id)).join("|");
+  useEffect(() => {
+    if (!checkKey) return;
+    void checkShopDetails(
+      checkKey.split("|").map((key) => {
+        const [owner, id] = key.split("\u0000");
+        return { owner, id } as Parameters<typeof checkShopDetails>[0][number];
+      })
+    );
+  }, [checkKey]);
+  const filtered = useMemo(
+    () => (ships ? filteredAll.filter((row) => shipsMatch(ships, shopDetails.get(shopKey(row.owner, row.storeId))) === "yes") : filteredAll),
+    [ships, filteredAll, shopDetails]
   );
   // Newest first shows what is in its final place; anything else waits for every shop.
   const frontier = all.frontier;
@@ -366,7 +401,7 @@ export function ProductsPage() {
   );
 
   // Paging restarts whenever the list's meaning changes; Back restores it.
-  const listKey = JSON.stringify([sort, categories, inStockOnly, auctionsOnly, saleOnly, minQort, maxQort, terms]);
+  const listKey = JSON.stringify([sort, categories, inStockOnly, auctionsOnly, saleOnly, ships, minQort, maxQort, terms]);
   const [back] = useState(() => (memory.listKey === listKey ? memory : null));
   const [paging, setPaging] = useState(() => ({ key: listKey, pages: back?.pages ?? 1 }));
   const pages = paging.key === listKey ? paging.pages : 1;
@@ -437,7 +472,7 @@ export function ProductsPage() {
 
   const toggleCategory = (key: string) =>
     update({ categories: categories.includes(key) ? categories.filter((c) => c !== key) : [...categories, key] });
-  const clearFilters = () => update({ categories: [], inStockOnly: false, auctionsOnly: false, saleOnly: false, min: "", max: "" });
+  const clearFilters = () => update({ categories: [], inStockOnly: false, auctionsOnly: false, saleOnly: false, ships: "", min: "", max: "" });
   const priceFields = <PriceRangeFields min={min} max={max} onChange={(range) => update(range)} titled={!phone} />;
   const addToCart = (row: AllProductRow) => {
     const product = productOfRow(row, catalogues);
@@ -448,7 +483,7 @@ export function ProductsPage() {
 
   const readingAll = `Reading every shop's products… ${all.read} of ${all.total} shops`;
   const categoryProgress = phase !== "ready" || !all.complete ? (phase === "ready" ? readingAll : "Reading the shops…") : null;
-  const activeFilters = categories.length + (inStockOnly ? 1 : 0) + (auctionsOnly ? 1 : 0) + (saleOnly ? 1 : 0) + (priced ? 1 : 0);
+  const activeFilters = categories.length + (inStockOnly ? 1 : 0) + (auctionsOnly ? 1 : 0) + (saleOnly ? 1 : 0) + (ships ? 1 : 0) + (priced ? 1 : 0);
   const failedCatalogues = Object.values(statuses).filter((s) => s === "failed").length;
   const searchPending = scope ? scope.keys.filter((key) => !catalogues[key] && statuses[key] !== "failed").length : 0;
   const searchScope = useMemo(() => {
@@ -469,6 +504,9 @@ export function ProductsPage() {
   } else if (searching && searchPending > 0) {
     status = `Searching… ${searchScope.read} of ${searchScope.total} products read`;
     spoken = "Searching…";
+  } else if (ships && shopsToCheck.length > 0) {
+    status = `Checking where ${plural(shopsToCheck.length, "shop ships", "shops ship")}…`;
+    spoken = "Checking where the shops ship…";
   } else if (searching) status = `${plural(results.length, "result", "results")} for “${terms.join(" ")}”`;
   else if (all.complete) status = plural(filtered.length, "product", "products");
   else status = "Newest first";
@@ -670,6 +708,7 @@ export function ProductsPage() {
                 </Button>
                 {priceFields}
                 {stockSwitch}
+                <ShipsToSelect value={ships} place={place} onChange={(code) => update({ ships: code })} sx={{ "& .MuiInputBase-root": { minHeight: 44 } }} />
               </>
             )}
           </Box>
@@ -772,6 +811,7 @@ export function ProductsPage() {
               {priceFields}
             </Box>
             {stockSwitch}
+            <ShipsToChips value={ships} place={place} onChange={(code) => update({ ships: code })} chipSx={{ minHeight: 44, fontSize: 14 }} headingId="products-ships-label" />
             <Box sx={{ display: "flex", gap: 1 }}>
               <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
                 Clear

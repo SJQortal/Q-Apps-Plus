@@ -120,6 +120,19 @@ describe("Products", () => {
     expect(within(cards()[0]).getByText("50% off")).toBeInTheDocument();
   });
 
+  it("Ships to lists the products of the shops that deliver to a country, reading those shops", async () => {
+    const world = makeWorld();
+    world.shops.forEach((shop) => (shop.shipsTo = "Domestic"));
+    world.shops[23].shippingCountries = ["PT", "ES"];
+    world.shops[21].shipsTo = "Worldwide";
+    renderProducts({ world, path: "/products?ships=PT" });
+    await waitFor(() => expect(cards().length).toBeGreaterThan(0), { timeout: 8000 });
+    const shopOf = (card: HTMLElement) =>
+      ["Shop number 21", "Shop number 23"].find((title) => within(card).queryByRole("link", { name: shopLink(title) })) ?? "another shop";
+    await waitFor(() => expect([...new Set(cards().map(shopOf))].sort()).toEqual(["Shop number 21", "Shop number 23"]), { timeout: 8000 });
+    expect(screen.getByRole("combobox", { name: "Ships to" })).toHaveTextContent("Portugal");
+  });
+
   it("puts a heading between the page's and the cards' (axe heading-order)", async () => {
     renderProducts({ world: makeWorld({ shops: 2, productsPerShop: 2 }) });
     await waitFor(() => expect(cards()).toHaveLength(4));
