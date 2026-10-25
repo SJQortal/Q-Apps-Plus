@@ -28,6 +28,13 @@ export const DELIVERY_BASE = "q-store-delivery";
 export function deliveryIdentifier(shortStoreId: string): string {
   return `${DELIVERY_BASE}-${shortStoreId}`;
 }
+/** + app, additive (2026-10-25): a shop's discount codes (discounts/model.ts). The original never reads it. */
+export const DISCOUNTS_BASE = "q-store-discounts";
+
+/** A shop's discount codes: `q-store-discounts-<shortStoreId>`, under the shop's owner. */
+export function discountsIdentifier(shortStoreId: string): string {
+  return `${DISCOUNTS_BASE}-${shortStoreId}`;
+}
 /** + app, additive (round 5): a bid on an auction (auctions/bids.ts), published by the bidder. */
 export const BID_BASE = "q-store-bid";
 /** + app, additive (round 5): the buyer's "it arrived" for an order (orders/delivered.ts), published by the buyer. */
