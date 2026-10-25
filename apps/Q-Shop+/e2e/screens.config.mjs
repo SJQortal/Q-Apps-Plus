@@ -88,9 +88,31 @@ function product(s, p) {
     ...(apronOf(s, p) && { title: `Linen apron — ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
     ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
+    // Counted stock (stock/model.ts): Shop+Plus has 4 of Notebook 7 left, and none of Ebook 9.
+    ...(s.short === 'shop-1' && p === 7 && { stock: { v: 1, quantity: 4, since: now - 2 * DAY } }),
+    ...(s.short === 'shop-1' && p === 9 && { stock: { v: 1, quantity: 0, since: now - DAY } }),
   };
 }
 const HOUR = 3_600_000;
+
+// Names for sale on chain (names/market.ts), one name auction (names/auctions.ts) and what each name published.
+const NAME_SELLER_ADDRESS = 'QNameSeLLerAddressxxxxxxxxxx4a1b2c';
+const NAMES_FOR_SALE = [
+  { name: 'bitcoin-maxi', price: 250, at: now - 2 * HOUR, registered: now - 400 * DAY },
+  { name: 'Coffee House', price: 45.5, at: now - 5 * HOUR, registered: now - 90 * DAY },
+  { name: 'qortal-art', price: 1200, at: now - 2 * DAY },
+  { name: 'Zoë-Studio', price: 9.99, at: now - 6 * DAY },
+  { name: 'A very long name for sale that has to wrap on small phones', price: 3, at: now - 9 * DAY },
+  { name: 'gm', price: 5000, at: now - 20 * DAY },
+];
+const NAME_AUCTION = { name: 'Sunrise Media', uid: 'AUCTION01', start: now - DAY, end: now + 2 * DAY + 3 * HOUR, startingBid: 50, extendMinutes: 5 };
+const NAME_CONTENT = {
+  'bitcoin-maxi': [['WEBSITE', 1], ['VIDEO', 4], ['IMAGE', 2]],
+  'Coffee House': [['APP', 1], ['DOCUMENT', 12]],
+  'qortal-art': [['IMAGE', 30], ['WEBSITE', 1], ['MAIL_PRIVATE', 3]],
+  'Sunrise Media': [['VIDEO', 8], ['AUDIO', 2], ['PLAYLIST', 1]],
+};
+const NAME_BIDS = [['Ann Buyer', 60, now - 20 * HOUR], ['bob+builder', 75, now - 3 * HOUR]];
 // Variants (variants/model.ts): Ålund Ceramics' products 0–3 are one mug in four items (a variant's own glazes), bundled, the first the lead.
 const VARIANT_OPTIONS = [
   { name: '250 ml', values: [{ name: 'Celadon', color: '#9fc5a8' }, { name: 'Tenmoku', color: '#5b3a29' }] },
@@ -202,6 +224,7 @@ function dataContainer(s) {
       status: pr.status,
       ...(pr.auction && { auction: { start: pr.auction.start, end: pr.auction.end } }),
       ...(pr.variant && { variant: { group: pr.variant.group, values: pr.variant.values } }),
+      ...(pr.stock && { stock: pr.stock }),
     };
     if (!catalogues[c]) catalogues[c] = { id: catalogueId(s, c), products: {} };
     catalogues[c].products[pr.id] = true;
@@ -303,6 +326,12 @@ function rows() {
   statuses.forEach(([identifier, name], i) => out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created: now - i * 3600_000, updated: now - i * 3600_000, size: 300 }));
   for (const [identifier, name, created] of delivered) out.push({ name, service: 'DOCUMENT', identifier, created, updated: created, size: 60, metadata: { title: 'Delivered' } });
   out.push({ name: 'Gold Issuer', service: 'IMAGE', identifier: 'asset81_Gold Bar_aavatar', created: now - DAY, updated: now - DAY, size: 2000 });
+  for (const [name, kinds] of Object.entries(NAME_CONTENT)) {
+    for (const [service, count] of kinds) for (let i = 0; i < count; i++) out.push({ name, service, identifier: `${service.toLowerCase()}_${i}`, created: now - (i + 2) * DAY, updated: now - (i + 2) * DAY, size: 1000 });
+  }
+  const a = NAME_AUCTION;
+  out.push({ name: a.name, service: 'DOCUMENT', identifier: 'q-store-nameauction', created: a.start, updated: a.start, size: 300, metadata: { title: 'Name auction', description: `nameauc:${a.uid};s:${a.start};e:${a.end};b:${a.startingBid};x:${a.extendMinutes};o:${NAME_SELLER_ADDRESS}` } });
+  NAME_BIDS.forEach(([name, amount, created], i) => out.push({ name, service: 'DOCUMENT', identifier: `q-store-namebid-${a.uid}-NBID0${i}`, created, updated: created, size: 150, metadata: { title: 'Bid', description: `bid:${amount};to:${encodeURIComponent(a.name)}` } }));
   FAVORITES.forEach(([name, i, p], n) => {
     const s = shops[i];
     const owner = `fav:${encodeURIComponent(s.owner)}`;
@@ -429,9 +458,21 @@ export default {
     const sp = url.searchParams;
     if (p.endsWith('/arbitrary/resources/search')) return json(route, search(sp)).then(() => true);
     if (p === '/names/primary/QOwner') return json(route, { name: 'Gold Issuer', owner: 'QOwner' }).then(() => true);
-    // A name's address (the auction's chain check, auctions/confirm.ts): as GET_NAME_DATA answers below.
+    if (p === `/names/primary/${NAME_SELLER_ADDRESS}`) return json(route, { name: 'Name Trader', owner: NAME_SELLER_ADDRESS }).then(() => true);
+    if (p === `/names/primary/${ME_ADDRESS}`) return json(route, { name: ME, owner: ME_ADDRESS }).then(() => true);
+    if (p === '/names/forsale') {
+      const all = NAMES_FOR_SALE.map((n) => ({ name: n.name, owner: NAME_SELLER_ADDRESS, isForSale: true, salePrice: n.price.toFixed(8), ...(n.registered && { registered: n.registered }) }));
+      const offset = Number(sp.get('offset') || 0);
+      return json(route, all.slice(offset, offset + Number(sp.get('limit') || 100))).then(() => true);
+    }
+    if (p === '/transactions/search' && sp.get('txType') === 'SELL_NAME') return json(route, NAMES_FOR_SALE.map((n) => ({ type: 'SELL_NAME', name: n.name, timestamp: n.at }))).then(() => true);
+    // A name's address (the auction's chain check, auctions/confirm.ts): as GET_NAME_DATA answers below; names for sale are the trader's.
     const named = p.match(/^\/names\/([^/]+)$/);
-    if (named) return json(route, { name: named[1], owner: 'Q' + named[1].replace(/[^A-Za-z0-9]/g, '') + 'Address' }).then(() => true);
+    if (named) {
+      const listed = NAMES_FOR_SALE.find((n) => n.name === named[1]);
+      if (listed || named[1] === NAME_AUCTION.name) return json(route, { name: named[1], owner: NAME_SELLER_ADDRESS, isForSale: !!listed, ...(listed && { salePrice: listed.price.toFixed(8) }) }).then(() => true);
+      return json(route, { name: named[1], owner: 'Q' + named[1].replace(/[^A-Za-z0-9]/g, '') + 'Address' }).then(() => true);
+    }
     if (p.startsWith('/crosschain/price/')) return route.fulfill({ status: 200, contentType: 'text/plain', body: '25000000' }).then(() => true);
     if (p.startsWith('/transactions/')) return json(route, []).then(() => true);
     if (p.startsWith('/assets')) return json(route, p.includes('/info') ? { assetId: 81, name: 'Gold Bar', owner: 'QOwner', quantity: 1000, isDivisible: true, isUnspendable: false } : [{ assetId: 0, name: 'QORT', description: 'QORTAL coin', isDivisible: true }, { assetId: 81, name: 'Gold Bar', description: 'A test asset', isDivisible: true }, { assetId: 82, name: 'Silver', description: '', isDivisible: true }, { assetId: 83, name: 'Gold Seats', description: 'Whole seats only', isDivisible: false }, { assetId: 84, name: 'Golden Locked', description: '', isDivisible: true, isUnspendable: true }]).then(() => true);
@@ -626,6 +667,26 @@ export default {
     { key: 'seller-edit-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const box = page.getByRole('dialog', { name: 'Edit shop' }).getByRole('textbox', { name: /^Meta description/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('Hand-thrown mugs and plates from Lisbon.'); await page.waitForTimeout(400); } },
     { key: 'seller-ships-to-us', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit shop' }); await d.getByRole('button', { name: 'USA: the United States, every state' }).click({ timeout: 6000 }); const us = d.getByRole('region', { name: 'Within the United States' }); await us.getByRole('button', { name: 'Lower 48 and DC' }).click(); await us.getByRole('button', { name: 'Choose states' }).click(); await us.getByRole('checkbox', { name: 'Texas' }).click(); await us.evaluate((el) => el.scrollIntoView({ block: 'start' })); await page.waitForTimeout(400); } },
     { key: 'settings', path: '/settings' },
+    { key: 'product-stock', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 7)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/In stock · 4 left/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
+    { key: 'names', path: '/names', after: async (page) => { await page.getByRole('list', { name: 'Names for sale' }).waitFor({ timeout: 8000 }); await page.getByText(/^Comes with/).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    { key: 'names-buy', path: '/names', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Buy: bitcoin-maxi' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'bitcoin-maxi' });
+      await d.getByRole('button', { name: 'Buy for 250.00 QORT' }).click({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'names-auction', path: '/names', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Bid: Sunrise Media' }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: 'Sunrise Media' }).getByRole('textbox', { name: 'Your bid' }).waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
+    { key: 'names-sell', path: '/names', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Sell a name' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Sell a name' });
+      await d.getByRole('button', { name: 'Auction' }).click({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
+    { key: 'names-mine', path: '/names?tab=mine', after: async (page) => { await page.getByRole('list', { name: 'My names' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'account-menu', path: '/', overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /account/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'not-found', path: `/${encodeURIComponent('Nobody')}/q-store-general-missing`, after: async (page) => page.waitForTimeout(900), expectErrors: /404|Failed to load resource/ },
   ],
