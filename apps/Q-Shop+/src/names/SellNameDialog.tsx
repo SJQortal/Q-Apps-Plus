@@ -6,8 +6,9 @@
  * can't be sold while the account has other names, and selling an account's
  * only name warns about private groups' keys.
  */
-import { useState } from "react";
-import { Alert, Box, Button, FormControlLabel, InputAdornment, MenuItem, Radio, RadioGroup, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Autocomplete, Box, Button, FormControlLabel, InputAdornment, MenuItem, Radio, RadioGroup, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { autocompletePaperProps } from "../components/common/menuStyle";
 import ShortUniqueId from "short-unique-id";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { NameAvatar } from "../components/common/NameAvatar";
@@ -21,6 +22,8 @@ import { sellName } from "./actions";
 import { DateTimeField, dayKey } from "../components/common/DateTimeFields";
 
 const auctionUid = new ShortUniqueId({ length: 8 });
+/** Up to this many names are radio buttons; more are a list to search (an account had 92: Simon, from Hub). */
+const RADIO_NAMES = 5;
 export type NameSaleStatus = "free" | "forSale" | "auction" | "pending";
 
 const STATUS_TEXT: Record<Exclude<NameSaleStatus, "free">, string> = {
@@ -57,14 +60,27 @@ export function SellNameDialog({
   const [auction, setAuction] = useState<AuctionFormValues>(() => defaultAuctionValues(Date.now()));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // A price that isn't one is said at the field itself, and the field takes the focus.
+  const [priceProblem, setPriceProblem] = useState<string | null>(null);
+  const priceRef = useRef<HTMLInputElement>(null);
+  const problemRef = useRef<HTMLDivElement>(null);
+  // Whatever went wrong comes into view, however long the dialog.
+  useEffect(() => {
+    if (problem) problemRef.current?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+  }, [problem]);
   const onlyName = picked === primary && names.length === 1;
+  const whyNot = (name: string) => (blockedPrimary(name) ? "your primary name: sell your other names first" : statusOf(name) !== "free" ? STATUS_TEXT[statusOf(name) as Exclude<NameSaleStatus, "free">] : null);
 
   const submit = async () => {
     if (busy || !picked) return;
     setProblem(null);
     if (how === "price") {
       const price = parseAmount(priceText);
-      if (!(price > 0)) return setProblem("Type the price in QORT.");
+      if (!(price > 0)) {
+        setPriceProblem("Type the price in QORT.");
+        priceRef.current?.focus();
+        return;
+      }
       setBusy(true);
       const result = await sellName(picked, price);
       setBusy(false);
@@ -112,34 +128,72 @@ export function SellNameDialog({
           <Typography id="sell-name-which" sx={{ fontWeight: 700, mb: 1 }}>
             Which name
           </Typography>
-          <RadioGroup value={picked} onChange={(e) => setPicked(e.target.value)} aria-labelledby="sell-name-which">
-            {names.map((name) => {
-              const status = statusOf(name);
-              const why = blockedPrimary(name) ? "your primary name: sell your other names first" : status !== "free" ? STATUS_TEXT[status] : null;
-              return (
-                <FormControlLabel
-                  key={name}
-                  value={name}
-                  disabled={!!why}
-                  control={<Radio />}
-                  label={
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0, py: 0.5 }}>
-                      <NameAvatar name={name} size={32} />
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{name}</Typography>
-                        {(why || name === primary) && (
-                          <Typography variant="body2" color="text.secondary">
-                            {why ?? "your primary name"}
-                          </Typography>
-                        )}
-                      </Box>
+          {names.length > RADIO_NAMES ? (
+            <Autocomplete<string, false, true>
+              disablePortal
+              disableClearable
+              autoHighlight
+              options={names}
+              value={picked || undefined}
+              onChange={(_, value) => value && setPicked(value)}
+              getOptionDisabled={(name) => !!whyNot(name)}
+              slotProps={{ paper: autocompletePaperProps }}
+              renderOption={(props, name) => {
+                const { key, ...rest } = props as typeof props & { key: string };
+                const why = whyNot(name) ?? (name === primary ? "your primary name" : null);
+                return (
+                  <Box component="li" key={key} {...rest} sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
+                    <NameAvatar name={name} size={28} />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{name}</Typography>
+                      {why && (
+                        <Typography variant="body2" color="text.secondary">
+                          {why}
+                        </Typography>
+                      )}
                     </Box>
-                  }
-                  sx={{ m: 0, minHeight: 48 }}
+                  </Box>
+                );
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label={`Name (${names.length})`}
+                  placeholder="Type to find it"
+                  slotProps={{ ...params.slotProps, inputLabel: { ...params.slotProps.inputLabel, shrink: true } }}
                 />
-              );
-            })}
-          </RadioGroup>
+              )}
+            />
+          ) : (
+            <RadioGroup value={picked} onChange={(e) => setPicked(e.target.value)} aria-labelledby="sell-name-which">
+              {names.map((name) => {
+                const status = statusOf(name);
+                const why = blockedPrimary(name) ? "your primary name: sell your other names first" : status !== "free" ? STATUS_TEXT[status] : null;
+                return (
+                  <FormControlLabel
+                    key={name}
+                    value={name}
+                    disabled={!!why}
+                    control={<Radio />}
+                    label={
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0, py: 0.5 }}>
+                        <NameAvatar name={name} size={32} />
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{name}</Typography>
+                          {(why || name === primary) && (
+                            <Typography variant="body2" color="text.secondary">
+                              {why ?? "your primary name"}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    }
+                    sx={{ m: 0, minHeight: 48 }}
+                  />
+                );
+              })}
+            </RadioGroup>
+          )}
           {!picked && (
             <Typography variant="body2" color="text.secondary">
               None of your names can be sold right now.
@@ -178,8 +232,14 @@ export function SellNameDialog({
               <TextField
                 label="Price"
                 value={priceText}
-                onChange={(e) => setPriceText(sanitizeAmountInput(e.target.value))}
-                helperText="Listed on chain, as the Names app lists names: anyone can buy it at this price until you take it off sale. Hub shows the fee."
+                inputRef={priceRef}
+                autoFocus={!!initial}
+                onChange={(e) => {
+                  setPriceText(sanitizeAmountInput(e.target.value));
+                  setPriceProblem(null);
+                }}
+                error={!!priceProblem}
+                helperText={priceProblem ?? "Listed on chain, as the Names app lists names: anyone can buy it at this price until you take it off sale. Hub shows the fee."}
                 slotProps={{ htmlInput: { inputMode: "decimal", autoComplete: "off" }, input: { endAdornment: <InputAdornment position="end">QORT</InputAdornment> } }}
                 fullWidth
               />
@@ -231,7 +291,7 @@ export function SellNameDialog({
           </>
         )}
         {problem && (
-          <Alert severity="error" role="alert">
+          <Alert ref={problemRef} severity="error" role="alert">
             {problem}
           </Alert>
         )}

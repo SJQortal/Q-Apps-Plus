@@ -160,6 +160,26 @@ describe("Names", () => {
     expect(await screen.findByText(/spare2 is for sale at 7\.00 QORT once the next block confirms it/)).toBeInTheDocument();
   });
 
+  it("sells one of many names from its card: the name chosen in a list to search, a missing price said at the field", async () => {
+    const many = ["Buyer", ...Array.from({ length: 8 }, (_, i) => `name${i + 1}`)];
+    q.on("GET_ACCOUNT_NAMES", async () => many.map((name) => ({ name })));
+    renderNames();
+    fireEvent.click(await screen.findByRole("button", { name: "My names" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Sell name3" }));
+    const dialog = await screen.findByRole("dialog", { name: "Sell a name" });
+    // Not nine radio buttons: one field, with the card's name in it.
+    expect(within(dialog).queryAllByRole("radio")).toHaveLength(0);
+    expect(within(dialog).getByRole("combobox", { name: /^Name/ })).toHaveValue("name3");
+    fireEvent.click(within(dialog).getByRole("button", { name: "List it for sale" }));
+    const price = within(dialog).getByRole("textbox", { name: "Price" });
+    expect(await within(dialog).findByText("Type the price in QORT.")).toBeInTheDocument();
+    expect(price).toHaveFocus();
+    expect(q.callsFor("SELL_NAME")).toHaveLength(0);
+    fireEvent.change(price, { target: { value: "15" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "List it for sale" }));
+    await waitFor(() => expect(q.callsFor("SELL_NAME")).toEqual([{ action: "SELL_NAME", nameForSale: "name3", salePrice: 15 }]));
+  });
+
   it("starts an auction of a name, published under the name itself", async () => {
     renderNames();
     fireEvent.click(await screen.findByRole("button", { name: "Sell a name" }));
