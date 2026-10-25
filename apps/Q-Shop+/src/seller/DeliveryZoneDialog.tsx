@@ -11,7 +11,7 @@ import { Box, Button, FormControlLabel, InputAdornment, Switch, TextField, Typog
 import { ResponsiveDialog } from "../components/common/mobile";
 import { priceDecimals, sanitizeFiatInput } from "../money/fiatPricing";
 import { deliveryMoney } from "../delivery/model";
-import { shippingSummaryWithStates, US } from "../constants/shipping";
+import { US } from "../constants/shipping";
 import { BASE_OPTION_NAME, type DeliveryOption, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import { sanitizeAmountInput } from "./productDraft";
 import { ShipsToPicker } from "./ShipsToPicker";
@@ -41,8 +41,8 @@ export function DeliveryZoneDialog({
 }: {
   /** The zone to edit, or null for a new one. */
   zone: DeliveryZone | null;
-  /** A new zone's starting name and places (everywhere the shop ships, say). */
-  start?: Pick<DeliveryZone, "name" | "countries" | "states">;
+  /** A new zone's starting places (everywhere the shop ships, say). */
+  start?: Pick<DeliveryZone, "countries" | "states">;
   currency: string;
   newId: () => string;
   onSave: (zone: DeliveryZone) => void;
@@ -52,7 +52,6 @@ export function DeliveryZoneDialog({
   /** The zones' own prices' name, when the shop has options. */
   baseName?: string;
 }) {
-  const [name, setName] = useState(zone?.name ?? start?.name ?? "");
   const [countries, setCountries] = useState<string[]>(zone?.countries ?? start?.countries ?? []);
   const [states, setStates] = useState<string[] | null>(zone?.states ?? start?.states ?? null);
   const [first, setFirst] = useState(asText(zone?.first));
@@ -108,7 +107,6 @@ export function DeliveryZoneDialog({
     }
     onSave({
       id: zone?.id ?? newId(),
-      ...(name.trim() && { name: name.trim().slice(0, 60) }),
       countries,
       ...(countries.includes(US) && states && { states }),
       first: firstValue,
@@ -136,14 +134,6 @@ export function DeliveryZoneDialog({
       }
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        <TextField
-          label="Zone name (optional)"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={countries.length ? shippingSummaryWithStates(countries, states) : "Europe, Domestic…"}
-          fullWidth
-          slotProps={{ htmlInput: { maxLength: 60 } }}
-        />
         <ShipsToPicker
           value={countries}
           onChange={(next) => {

@@ -280,8 +280,13 @@ function ProfileNameDialog({ name: initial, onSave, onClose }: { name: string; o
         </>
       }
     >
+      {/* Simon: "explain that it is what the customer will see". */}
+      <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+        Buyers see this name at checkout when they choose how it&apos;s delivered, with its price, and on their order. Call it what it is to them: the
+        service, or the kind of delivery.
+      </Typography>
       <TextField
-        label="Profile name"
+        label="Name buyers see"
         value={name}
         onChange={(e) => setName(e.target.value)}
         onKeyDown={(e) => {
@@ -289,9 +294,9 @@ function ProfileNameDialog({ name: initial, onSave, onClose }: { name: string; o
         }}
         autoFocus
         fullWidth
-        helperText="Heavy items, Fragile, Furniture…"
+        helperText="Postbox, Tracked post, DHL Express, Courier…"
         slotProps={{ htmlInput: { maxLength: 60 } }}
-        sx={{ mt: 1 }}
+        sx={{ mt: 2 }}
       />
     </ResponsiveDialog>
   );
@@ -326,17 +331,12 @@ function ZoneRows({
     <Box component="ul" sx={{ m: 0, p: 0, listStyle: "none" }}>
       {zones.map((zone, i) => {
         const where = shippingSummaryWithStates(zone.countries, zone.states ?? null);
-        // An unnamed zone is called by where it goes ("The United States: Oregon"); a named one says where under its name.
-        const title = zone.name || where.charAt(0).toUpperCase() + where.slice(1);
+        // A zone is called by where it goes ("The United States: Oregon"): zones have no names of their own (Simon, 2026-10-25).
+        const title = where.charAt(0).toUpperCase() + where.slice(1);
         return (
           <Box component="li" key={zone.id} sx={{ display: "flex", alignItems: "center", gap: 1, py: 1, borderTop: i === 0 ? 0 : 1, borderColor: "divider" }}>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{title}</Typography>
-              {zone.name && (
-                <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
-                  {where}
-                </Typography>
-              )}
               <Typography variant="body2">
                 {options.length > 0 ? `${baseName || BASE_OPTION_NAME}: ` : ""}
                 {zonePrice(zone, currency)}
@@ -525,7 +525,8 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
           currency={doc.currency}
           disabled={busy}
           options={doc.options?.filter((o) => !o.place)}
-          baseName={doc.base?.name}
+          // What buyers see for these prices: the profile's name, or the first option's for the General ones.
+          baseName={profile ? profile.name : doc.base?.name}
           onEdit={(zone) => setEditing({ profile: id, zone })}
           onRemove={(zone) => removeZone(id, zone)}
         />
@@ -534,7 +535,7 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
           {zones.length === 0 && everywhere && (
             <Button
               variant="contained"
-              onClick={() => setEditing({ profile: id, zone: null, start: { name: "Everywhere", countries: everywhere, ...(everywhereStates && { states: everywhereStates }) } })}
+              onClick={() => setEditing({ profile: id, zone: null, start: { countries: everywhere, ...(everywhereStates && { states: everywhereStates }) } })}
               disabled={busy}
               sx={{ minHeight: 44 }}
             >
@@ -584,7 +585,7 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
         Add a shipping profile
       </Button>
       <Typography variant="body2" color="text.secondary">
-        A shipping profile gives some products their own prices: heavy or fragile ones, say.
+        A shipping profile gives some products their own prices, under the name buyers choose at checkout: Postbox or DHL Express, say.
       </Typography>
       {error && <Alert severity="error">{error}</Alert>}
       {/* Publishing and discarding are the Publish changes button's (seller/PublishBar.tsx). */}
@@ -601,7 +602,7 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
           start={editing.start}
           // A pickup point isn't priced by zone: it's free in its own country.
           options={(doc.options ?? []).filter((o) => !o.place)}
-          baseName={doc.base?.name}
+          baseName={(editing.profile && doc.profiles.find((p) => p.id === editing.profile)?.name) || doc.base?.name}
           currency={doc.currency}
           newId={newId}
           onSave={(zone) => saveZone(editing.profile, zone)}

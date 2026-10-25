@@ -92,7 +92,7 @@ describe("the Delivery tab", () => {
     // A profile for the chair, delivered to the EU at 10 QORT.
     fireEvent.click(screen.getByRole("button", { name: "Add a shipping profile" }));
     d = await dialog();
-    fireEvent.change(within(d).getByLabelText("Profile name"), { target: { value: "Heavy items" } });
+    fireEvent.change(within(d).getByLabelText("Name buyers see"), { target: { value: "Heavy items" } });
     fireEvent.click(within(d).getByRole("button", { name: "Save name" }));
     const heavy = await card("Heavy items");
     fireEvent.click(within(heavy).getByRole("button", { name: "Choose products" }));
@@ -138,12 +138,12 @@ describe("the Delivery tab", () => {
     setup({ shop: { shippingCountries: ["PT", "ES", "FR"] } });
     fireEvent.click(await screen.findByRole("button", { name: "One price everywhere you ship" }));
     const dialog = await screen.findByRole("dialog", { name: "New delivery zone" });
-    expect(within(dialog).getByRole("textbox", { name: /^Zone name/ })).toHaveValue("Everywhere");
+    // Zones have no names: they're called by where they go.
+    expect(within(dialog).queryByRole("textbox", { name: /^Zone name/ })).toBeNull();
     fireEvent.change(within(dialog).getByRole("textbox", { name: /^First item/ }), { target: { value: "4" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save zone" }));
     const general = await screen.findByRole("region", { name: "Shipping profile: General" });
-    expect(await within(general).findByText("Everywhere")).toBeInTheDocument();
-    expect(within(general).getByText(/France, Portugal and Spain|Portugal, Spain and France|3 countries/)).toBeInTheDocument();
+    expect(await within(general).findByText(/France, Portugal and Spain|Portugal, Spain and France|3 countries/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "One price everywhere you ship" })).toBeNull();
   });
 
@@ -152,7 +152,7 @@ describe("the Delivery tab", () => {
     setup();
     fireEvent.click(await screen.findByRole("button", { name: "Add a shipping profile" }));
     let d = await dialog();
-    fireEvent.change(within(d).getByLabelText("Profile name"), { target: { value: "Heavy items" } });
+    fireEvent.change(within(d).getByLabelText("Name buyers see"), { target: { value: "Heavy items" } });
     fireEvent.click(within(d).getByRole("button", { name: "Save name" }));
     fireEvent.click(within(await card("Heavy items")).getByRole("button", { name: "Choose products" }));
     d = await dialog();
@@ -254,7 +254,9 @@ describe("the Delivery tab", () => {
     const index = { ...dataContainer, fiatPricing: { currency: "USD", rates: { QORT: 0.2 }, updated: 1 } };
     setup({ delivery, index });
     const general = await card("General");
-    expect(within(general).getByText("Europe")).toBeInTheDocument();
+    // A zone named by an earlier build shows by where it goes.
+    expect(within(general).queryByText("Europe")).toBeNull();
+    expect(within(general).getByText(/Germany and Poland|Poland and Germany|2 countries/)).toBeInTheDocument();
     expect(within(general).getByText("3.00 QORT · free from 50.00 QORT")).toBeInTheDocument();
     const warning = screen.getByText(/These prices are in QORT, but the shop now prices in USD/);
     expect(warning).toBeInTheDocument();

@@ -39,8 +39,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 // ------------------------------------------------------------------ delivery
 
+/** A zone, by where it goes (zones have no names of their own). */
 function zoneTitle(zone: DeliveryZone): string {
-  if (zone.name) return zone.name;
   const where = shippingSummaryWithStates(zone.countries, zone.states ?? null);
   return where.charAt(0).toUpperCase() + where.slice(1);
 }
@@ -67,8 +67,7 @@ function zoneChanges(where: string, before: readonly DeliveryZone[], after: read
   for (const z of removed(before, after)) out.push(`${where}: removed zone ${zoneTitle(z)}`);
   for (const [b, a] of kept(before, after)) {
     const at = `${where} › ${zoneTitle(a)}`;
-    if (zoneTitle(b) !== zoneTitle(a) && b.name !== a.name) out.push(`${where}: zone ${zoneTitle(b)} renamed ${zoneTitle(a)}`);
-    if (!same(b.countries, a.countries) || !same(b.states ?? [], a.states ?? [])) out.push(`${at}: now ${shippingSummaryWithStates(a.countries, a.states ?? null)}`);
+    if (!same(b.countries, a.countries) || !same(b.states ?? [], a.states ?? [])) out.push(`${where} › ${zoneTitle(b)}: now ${zoneTitle(a)}`);
     const prices = rateChanges(b, a, currency);
     if (prices.length) out.push(`${at}: ${prices.join(", ")}`);
     const ids = new Set([...Object.keys(b.rates ?? {}), ...Object.keys(a.rates ?? {})]);
