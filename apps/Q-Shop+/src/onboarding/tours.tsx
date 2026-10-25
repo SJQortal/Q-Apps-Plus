@@ -100,7 +100,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
           ["Manage Shop", "opens with a checkup of what to update, each in a few taps."],
           ["Categories", "pick them from the shared list: each product's is suggested from its title."],
           ["Shipping", "turn your Ships to text into countries, set delivery prices, and retire products you used to charge delivery."],
-          ["Policies", "say how soon you dispatch and whether you take returns."],
+          ["Policies", "say how soon you dispatch, whether you take returns, and the languages you answer in."],
         ],
       },
     ],
@@ -139,7 +139,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
           ["Where you ship", "Shop Settings → Edit shop: tick regions and countries (and US states)."],
           ["Delivery prices", "the Delivery tab: zones by country, a price for the first item and each extra one, free from an amount; profiles for heavy items."],
           ["Options", "add Express, Local pickup or Tracked, and price each in the zones that offer it."],
-          ["Policies", "your dispatch time, returns and terms, in Edit shop: buyers see them before they pay."],
+          ["Policies", "your dispatch time, returns, terms and the languages you answer in, in Edit shop: buyers see them before they pay. Away for a while? Say until when."],
         ],
       },
       {
