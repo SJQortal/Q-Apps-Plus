@@ -546,6 +546,15 @@ export default {
       return json(route, all.slice(offset, offset + Number(sp.get('limit') || 100))).then(() => true);
     }
     if (p === '/transactions/search' && sp.get('txType') === 'SELL_NAME') return json(route, NAMES_FOR_SALE.map((n) => ({ type: 'SELL_NAME', name: n.name, timestamp: n.at }))).then(() => true);
+    // Names and Q-Chat groups for a discount (discounts/people.ts).
+    if (p === '/names/search') {
+      const q = (sp.get('query') || '').toLowerCase();
+      return json(route, ['Iron', 'Ironwood', 'Irene', 'Iron Forge Studio', 'Irish Moss Co', 'Ann', 'Annika'].filter((n) => n.toLowerCase().startsWith(q)).map((name) => ({ name, owner: 'Q' + name.replace(/\W/g, '') + 'Address' }))).then(() => true);
+    }
+    const GROUPS = [{ groupId: 12, groupName: 'Biohackers Iceland', memberCount: 48 }, { groupId: 3, groupName: 'Qortal General', memberCount: 912 }, { groupId: 40, groupName: 'Reykjavik Market', memberCount: 27 }];
+    if (p === `/groups/member/${ME_ADDRESS}`) return json(route, GROUPS.slice(0, 2)).then(() => true);
+    if (p === '/groups') return json(route, Number(sp.get('offset') || 0) === 0 ? GROUPS : []).then(() => true);
+    if (/^\/groups\/members\/\d+$/.test(p)) return json(route, { memberCount: 3, members: [{ member: 'Q1', primaryName: 'Iron' }, { member: 'Q2', primaryName: 'Annika' }, { member: 'Q3' }] }).then(() => true);
     // A name's address (the auction's chain check, auctions/confirm.ts): as GET_NAME_DATA answers below; names for sale are the trader's.
     const named = p.match(/^\/names\/([^/]+)$/);
     if (named) {
@@ -920,6 +929,25 @@ export default {
       const d = page.getByRole('dialog', { name: 'Add a discount code' });
       await d.getByLabel('Code', { exact: true }).fill('SPRING10');
       await d.getByRole('radio', { name: 'Only some products' }).click();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-discount-names', path: '/product-manager/q-store-general-my-shop?tab=shop', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add a discount code' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Add a discount code' });
+      const names = d.getByRole('combobox', { name: /Only for these Qortal names/ });
+      await names.scrollIntoViewIfNeeded();
+      await names.fill('Ann');
+      await d.getByRole('option', { name: 'Ann', exact: true }).click({ timeout: 4000 });
+      await names.fill('Ir');
+      await d.getByRole('option', { name: 'Iron', exact: true }).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-discount-group', path: '/product-manager/q-store-general-my-shop?tab=shop', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add a discount code' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Add a discount code' });
+      await d.getByRole('button', { name: "Add a Q-Chat group's members" }).click({ timeout: 4000 });
+      const g = page.getByRole('dialog', { name: "Add a group's members" });
+      await g.getByRole('option', { name: /Biohackers Iceland/ }).waitFor({ timeout: 4000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-choose-products', path: '/product-manager/q-store-general-my-shop?tab=shop', overlay: true, after: async (page) => {
