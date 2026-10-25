@@ -19,6 +19,8 @@
  * Anyone can publish JSON under their name: only well-formed parts are read.
  */
 
+import { sha256 } from "./sha256";
+
 export const MAX_DISCOUNTS = 50;
 export const MAX_PERCENT = 99;
 export const MAX_DISCOUNT_PRODUCTS = 300;
@@ -73,8 +75,10 @@ export function normalizeCode(text: string): string {
 }
 
 async function fingerprint(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)]
+  const bytes = new TextEncoder().encode(text);
+  // WebCrypto needs a secure context; without it (a node over plain http) the same digest in plain JavaScript.
+  const digest = globalThis.crypto?.subtle ? new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)) : sha256(bytes);
+  return [...digest]
     .slice(0, 16)
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

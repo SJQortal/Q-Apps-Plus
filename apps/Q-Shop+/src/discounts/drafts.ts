@@ -61,9 +61,12 @@ export function draftLabel(draft: DiscountDraft): string {
 // No 0/O or 1/I: easy to read out and type.
 const CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-/** A code nobody would guess: 8 letters and digits. */
+/**
+ * A code nobody would guess: 14 letters and digits (about 70 bits, as its
+ * fingerprint is public and guesses can be tried offline).
+ */
 export function randomCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  const bytes = crypto.getRandomValues(new Uint8Array(14));
   return [...bytes].map((b) => CODE_LETTERS[b % CODE_LETTERS.length]).join("");
 }
 

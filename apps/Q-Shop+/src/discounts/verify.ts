@@ -4,7 +4,8 @@
  * until it matches one of the seller's codes: the code's fingerprint, at
  * most its percentage (and free delivery only when it gives it), what it
  * can take off the products it covers, the minimum, the name, and its dates
- * (the payment's time on chain when the order names one, else the order's).
+ * (by the time of the block holding the payment: a transaction's own
+ * timestamp is the buyer's to set).
  * As the payment checks do, it only tells the seller; nothing is changed.
  */
 import { useEffect, useState } from "react";
@@ -17,6 +18,17 @@ import { productsSubtotal } from "./apply";
 import { loadShopDiscounts } from "./discountsDoc";
 import { codeHash, nameHash, type DiscountsDoc } from "./model";
 
+/** The time of the block at a height (ms), null when the node can't say. */
+async function blockTime(height: number): Promise<number | null> {
+  try {
+    const response = await fetch(`/blocks/byheight/${height}`);
+    const block = (await response.json()) as { timestamp?: unknown };
+    return response.ok && typeof block?.timestamp === "number" ? block.timestamp : null;
+  } catch {
+    return null;
+  }
+}
+
 export type DiscountCheck = { ok: true } | { ok: false; message: string };
 
 export async function checkOrderDiscount(args: {
@@ -28,8 +40,8 @@ export async function checkOrderDiscount(args: {
   items: readonly OrderItem[];
   /** The order's delivery fee, in the coin paid. */
   deliveryFee: number | undefined;
-  /** When it was paid (ms). */
-  at: number;
+  /** When it was paid (ms): the payment's block time; null when that can't be known (dates then aren't checked here). */
+  at: number | null;
   pricing: FiatPricing | null;
 }): Promise<DiscountCheck> {
   const { claim, doc } = args;
@@ -42,8 +54,11 @@ export async function checkOrderDiscount(args: {
   if (discount.forName && (await nameHash(args.storeId, args.buyer)) !== discount.forName) {
     return { ok: false, message: "This discount is for another Qortal name than the buyer's." };
   }
-  if ((discount.starts !== undefined && args.at < discount.starts) || (discount.ends !== undefined && args.at > discount.ends)) {
-    return { ok: false, message: "It was used outside your code's dates." };
+  if (discount.starts !== undefined || discount.ends !== undefined) {
+    if (args.at === null) return { ok: false, message: "Its dates can't be checked here: the payment isn't in a block on your node (or was in a coin without one)." };
+    if ((discount.starts !== undefined && args.at < discount.starts) || (discount.ends !== undefined && args.at > discount.ends)) {
+      return { ok: false, message: "It was used outside your code's dates." };
+    }
   }
   const covered = args.items.filter((i) => !i.product?.auctionWin && (!discount.products || discount.products.includes(i.productId)));
   const most = (covered.reduce((sum, i) => sum + (i.totalProductPrice ?? 0), 0) * discount.percent) / 100 + (discount.freeDelivery ? (args.deliveryFee ?? 0) : 0);
@@ -68,7 +83,11 @@ export function useOrderDiscountCheck(order: Order | null, owner: string, storeI
     if (!claim) return;
     let alive = true;
     void (async () => {
-      const shop = await loadShopDiscounts(owner, storeId).catch(() => ({ doc: null, pricing: null }));
+      const shop = await loadShopDiscounts(owner, storeId).catch(() => null);
+      if (!shop) {
+        if (alive) setResult({ id: order.id ?? "", check: { ok: false, message: "Your discount codes couldn't be read to check this discount right now." } });
+        return;
+      }
       const signature = typeof order.payment?.transactionSignature === "string" ? order.payment.transactionSignature : "";
       const paid = signature ? await fetchPaymentTransaction(signature).catch(() => null) : null;
       const check = await checkOrderDiscount({
@@ -78,7 +97,7 @@ export function useOrderDiscountCheck(order: Order | null, owner: string, storeI
         buyer: order.user ?? "",
         items: orderItems(order),
         deliveryFee: orderDelivery(order)?.total,
-        at: paid?.timestamp ?? order.created ?? 0,
+        at: paid?.blockHeight ? await blockTime(paid.blockHeight) : null,
         pricing: shop.pricing,
       });
       if (alive) setResult({ id: order.id ?? "", check });

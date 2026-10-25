@@ -47,6 +47,8 @@ export function DiscountDialog({
   const [checking, setChecking] = useState(false);
   // A code set on another device whose list couldn't be read here: kept unless a new one is typed.
   const hiddenCode = !!draft?.code && !draft.codeText;
+  // The same for a name limit set elsewhere: it stays unless a name is typed.
+  const hiddenName = !!draft?.forName && !draft.nameText;
 
   const save = async () => {
     setProblem(null);
@@ -57,7 +59,7 @@ export function DiscountDialog({
     if (typed && !CODE_PATTERN.test(typed)) return setProblem("A code is 3 to 24 letters or digits (and - or _).");
     if (typed && takenCodes.includes(typed)) return setProblem("You have this code already.");
     const forName = name.trim();
-    if (!typed && !hiddenCode && !forName) return setProblem("Give it a code, or the Qortal name it's for.");
+    if (!typed && !hiddenCode && !forName && !hiddenName) return setProblem("Give it a code, or the Qortal name it's for.");
     if (some && products.length === 0) return setProblem("Choose the products, or pick Every product.");
     const startTime = starts ? dayToTime(starts, false) : undefined;
     const endTime = ends ? dayToTime(ends, true) : undefined;
@@ -84,7 +86,11 @@ export function DiscountDialog({
       ...(draft?.paused && { paused: true as const }),
       // A new code replaces the old; none typed keeps a code set elsewhere.
       ...(typed ? { codeText: typed } : hiddenCode && draft?.code ? { code: draft.code } : {}),
-      ...(forName ? { nameText: forName, ...(forName === draft?.nameText && draft.forName && { forName: draft.forName }) } : {}),
+      ...(forName
+        ? { nameText: forName, ...(forName === draft?.nameText && draft.forName && { forName: draft.forName }) }
+        : hiddenName && draft?.forName
+          ? { forName: draft.forName }
+          : {}),
     };
     onSave(next);
   };
@@ -182,7 +188,12 @@ export function DiscountDialog({
             label="Only for this Qortal name (optional)"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            helperText="Leave the code empty and that buyer's checkout applies it by itself."
+            placeholder={hiddenName ? "Kept as it is" : undefined}
+            helperText={
+              hiddenName
+                ? "Set on another device for one Qortal name: type a name to change it, or leave it empty to keep it."
+                : "Leave the code empty and that buyer's checkout applies it by itself."
+            }
             slotProps={{ htmlInput: { maxLength: 40, autoComplete: "off", spellCheck: false } }}
           />
           {problem && (

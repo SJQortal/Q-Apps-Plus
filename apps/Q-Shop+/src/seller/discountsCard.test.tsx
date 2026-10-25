@@ -121,3 +121,22 @@ describe("discount codes in Shop Settings", () => {
     expect(screen.getByRole("button", { name: "Publish discount codes" })).toBeInTheDocument();
   });
 });
+
+describe("discount codes set on another device", () => {
+  it("keep their name limit and the seller's encrypted list when changed here (review)", async () => {
+    // This device can't read the list (DECRYPT_DATA gives nothing back).
+    const forName = await nameHash(STORE_ID, "Ann");
+    const code = await codeHash(STORE_ID, "VIP30");
+    const { q } = setup({ published: { v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts: [{ id: "vip", code, forName, percent: 30 }], secret: "unreadable" } });
+    const list = await screen.findByRole("list", { name: "Discount codes" });
+    fireEvent.click(within(list).getByRole("button", { name: "Change A code set on another device" }));
+    const d = await screen.findByRole("dialog", { name: "Change discount" });
+    fireEvent.change(within(d).getByLabelText("Percent off"), { target: { value: "35" } });
+    fireEvent.click(within(d).getByRole("button", { name: "Save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish discount codes" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    const doc = published(q);
+    expect(doc.discounts).toEqual([{ id: "vip", percent: 35, code, forName }]);
+    expect(doc.secret).toBe("unreadable");
+  });
+});

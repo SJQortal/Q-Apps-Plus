@@ -46,9 +46,8 @@ export function DiscountsCard() {
   const store = useSelector((state: RootState) => state.global.currentStore);
   const user = useSelector((state: RootState) => state.auth.user);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
-  const pricing = store && dataContainer && dataContainer.storeId === store.id ? fiatPricingOf(dataContainer) : null;
-  // A minimum order is in the shop's pricing currency, else QORT.
-  const currency = pricing?.currency ?? "QORT";
+  const listReady = !!store && !!dataContainer && dataContainer.storeId === store.id;
+  const pricing = listReady ? fiatPricingOf(dataContainer) : null;
   const owner = store?.owner || user?.name || "";
   const storeId = store?.id ?? "";
   const key = `${owner}\n${storeId}`;
@@ -99,6 +98,8 @@ export function DiscountsCard() {
   }
 
   const list = drafts ?? current.published;
+  // A minimum order is in the shop's pricing currency, else QORT; until the product list is in, the published codes'.
+  const currency = listReady ? (pricing?.currency ?? "QORT") : (current.doc?.currency ?? "QORT");
   const changed = drafts !== null && JSON.stringify(drafts) !== JSON.stringify(current.published);
   const change = (next: DiscountDraft[]) => {
     setError(null);
@@ -112,7 +113,14 @@ export function DiscountsCard() {
     setPublishing(true);
     const { doc, secret } = await docFromDrafts({ storeId, currency, drafts: list, now: clock() });
     // The seller's own list, encrypted to them; when Hub can't, this device's copy still has it.
-    const encrypted = Object.keys(secret.codes).length || Object.keys(secret.names).length ? await encryptDiscountSecret(secret, user.publicKey) : null;
+    // Codes or names this device can't read (set elsewhere): the published list keeps them for the devices that can.
+    const hidden = list.some((d) => (d.code && !d.codeText) || (d.forName && !d.nameText));
+    const encrypted =
+      hidden && current.doc?.secret
+        ? current.doc.secret
+        : Object.keys(secret.codes).length || Object.keys(secret.names).length
+          ? await encryptDiscountSecret(secret, user.publicKey)
+          : null;
     const next: DiscountsDoc = { ...doc, ...(encrypted && { secret: encrypted }) };
     const request = buildDiscountsPublish({ name: owner, doc: next });
     const outcome = await publishMedia(request, { service: "DOCUMENT", name: owner, identifier: request.identifier });

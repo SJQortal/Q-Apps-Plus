@@ -253,6 +253,9 @@ describe("the seller's check of an order's discount", () => {
     expect(await check({ ...claim, amount: 2 }, { ...spring, products: ["mug"] })).toEqual({ ok: true });
     expect(await check(claim, { ...spring, products: ["mug"] })).toEqual({ ok: false, message: "It takes off more than your code gives." });
     expect(await check(claim, { ...spring, ends: 500 })).toEqual({ ok: false, message: "It was used outside your code's dates." });
+    // Dates go by the payment's block: without one they can't be checked (a mismatch is never claimed).
+    expect(await check(claim, { ...spring, ends: 500 }, { at: null })).toMatchObject({ ok: false, message: expect.stringMatching(/^Its dates can't be checked here/) });
+    expect(await check(claim, spring, { at: null })).toEqual({ ok: true });
     expect(await check(claim, { ...spring, minTotal: 40 })).toEqual({ ok: false, message: "The order is under your code's minimum." });
     expect(await check(claim, { ...spring, forName: await nameHash(STORE, "Bob") })).toEqual({ ok: false, message: "This discount is for another Qortal name than the buyer's." });
     expect(await check(claim, spring, { doc: null })).toMatchObject({ ok: false });
@@ -263,5 +266,15 @@ describe("the seller's check of an order's discount", () => {
     const claim = { title: "Your discount: free delivery", amount: 3, id: "v", percent: 0, freeDelivery: true };
     expect(await check(claim, vip)).toEqual({ ok: true });
     expect(await check(claim, { ...vip, freeDelivery: undefined, percent: 10 })).toEqual({ ok: false, message: "It takes off more than your code gives." });
+  });
+});
+
+describe("fingerprints without WebCrypto", () => {
+  it("give the same SHA-256 digest in plain JavaScript", async () => {
+    const { sha256 } = await import("./sha256");
+    for (const text of ["", "abc", "x".repeat(55), "y".repeat(56), "z".repeat(119), "q-store-general-my-shop\ncode:SPRING10"]) {
+      const bytes = new TextEncoder().encode(text);
+      expect([...sha256(bytes)]).toEqual([...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]);
+    }
   });
 });
