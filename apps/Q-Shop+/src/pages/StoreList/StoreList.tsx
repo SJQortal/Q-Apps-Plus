@@ -33,7 +33,9 @@ import { NewProductsStrip } from "../../discovery/NewProductsStrip";
 import { ShopSearchField, SortFilterRow, SortFilterSheet, type SortFilterProps } from "../../discovery/HomeControls";
 import { HOME_PAGE_SIZE, useHomeShops, type HomeShops } from "../../discovery/useHomeShops";
 import { SHOP_INDEX_LIMIT, shopKey, type ShopEntry } from "../../discovery/shopIndex";
-import { parsePay, parseSort, payLabel, payNeedsDetails, SHOP_SORTS, type PayFilter, type ShopSort } from "../../discovery/sortFilter";
+import { parsePay, parseShips, parseSort, payLabel, payNeedsDetails, SHOP_SORTS, type PayFilter, type ShopSort } from "../../discovery/sortFilter";
+import { countryName } from "../../constants/shipping";
+import { useBuyerPlace } from "../../delivery/buyerPlace";
 
 /** Shop cards before the new-products strip: two rows on a wide screen. */
 const STRIP_AFTER = 8;
@@ -64,6 +66,7 @@ export const StoreList = () => {
   const q = (params.get("q") ?? "").trim();
   const sort = parseSort(params.get("sort"));
   const pay = parsePay(params.get("pay"));
+  const ships = parseShips(params.get("ships"));
   const userName = useSelector((state: RootState) => state.auth.user?.name ?? "");
   const myStores = useSelector((state: RootState) => state.store.myStores);
   const ownShopStatus = useSelector((state: RootState) => state.global.ownShopStatus);
@@ -73,7 +76,8 @@ export const StoreList = () => {
     () => (mine ? new Set(myStores.map((shop) => shopKey(shop.owner, shop.id))) : null),
     [mine, myStores]
   );
-  const query = useMemo(() => ({ q, sort, pay, mine }), [q, sort, pay, mine]);
+  const query = useMemo(() => ({ q, sort, pay, ships, mine }), [q, sort, pay, ships, mine]);
+  const place = useBuyerPlace(userName || undefined);
   const home = useHomeShops(query, mineKeys);
   const { remember, restoreScrollY, phase } = home;
   const [menu, setMenu] = useState<ShopMenuTarget | null>(null);
@@ -99,8 +103,9 @@ export const StoreList = () => {
   const onSearch = useCallback((text: string) => updateParams({ q: text }), [updateParams]);
   const onSort = useCallback((next: ShopSort) => updateParams({ sort: next === "newest" ? "" : next }), [updateParams]);
   const onPay = useCallback((next: PayFilter) => updateParams({ pay: next }), [updateParams]);
+  const onShips = useCallback((next: string) => updateParams({ ships: next }), [updateParams]);
   const onMine = useCallback((next: boolean) => updateParams({ mine: next ? "1" : "" }), [updateParams]);
-  const resetFilters = useCallback(() => updateParams({ sort: "", pay: "", mine: "" }), [updateParams]);
+  const resetFilters = useCallback(() => updateParams({ sort: "", pay: "", ships: "", mine: "" }), [updateParams]);
   const openCreateShop = useCallback(() => dispatch(toggleCreateStoreModal(true)), [dispatch]);
 
   // Leaving for a shop: clear the last shop's products if it was another one
@@ -151,15 +156,18 @@ export const StoreList = () => {
   const controls: SortFilterProps = {
     sort,
     pay,
+    ships,
+    place,
     mine,
     canFilterMine,
     onSort,
     onPay,
+    onShips,
     onMine,
     onReset: resetFilters,
     status: statusText(home, q),
   };
-  const filtersOn = Boolean(pay || mine);
+  const filtersOn = Boolean(pay || ships || mine);
   const noShop = Boolean(userName) && ownShopStatus === "none";
 
   const empty: ComponentProps<typeof EmptyState> =
@@ -174,9 +182,10 @@ export const StoreList = () => {
       : filtersOn
         ? {
             title: "No shops match these filters",
-            description: pay
-              ? `None of ${mine ? "your shops" : q ? "the shops found" : "the shops listed"} take ${payLabel(pay)}.`
-              : q
+            description:
+              pay || ships
+                ? `None of ${mine ? "your shops" : q ? "the shops found" : "the shops listed"} ${[pay && `take ${payLabel(pay)}`, ships && `ship to ${countryName(ships)}`].filter(Boolean).join(" and ")}.`
+                : q
                 ? "None of your shops match this search."
                 : "None of your shops match.",
             actionLabel: "Reset filters",

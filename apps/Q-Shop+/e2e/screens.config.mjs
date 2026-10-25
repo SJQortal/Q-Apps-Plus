@@ -570,6 +570,7 @@ export default {
     { key: 'shop-card-menu', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: 'More for Plus Gadgets' }).click({ timeout: 8000 }); await page.waitForTimeout(500); } },
     { key: 'product-favorite', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 3)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('button', { name: 'In your favourites' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'home-search', path: '/?q=shop', after: async (page) => page.waitForTimeout(800) },
+    { key: 'home-ships', path: '/?ships=PT', after: async (page) => { await page.waitForSelector('a[href*="q-store-general-"]', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(1200); } },
     { key: 'home-filters', path: '/', mobileOnly: true, overlay: true, optional: true, after: async (page) => { await page.getByRole('button', { name: /filter|sort/i }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'products', path: '/products', after: async (page) => page.waitForTimeout(900) },
     { key: 'products-categories', path: '/products', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^(Categories|Filters)/ }).first().click({ timeout: 2500 }); await page.getByRole('checkbox').first().waitFor({ timeout: 4000 }); await page.waitForTimeout(600); } },

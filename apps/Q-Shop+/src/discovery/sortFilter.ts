@@ -8,6 +8,8 @@ import { weightedRating, type RatingsIndex } from "./ratings";
 import type { ShopDetails } from "./shopDetails";
 import type { ShopEntry } from "./shopIndex";
 import type { FavoriteCounts } from "../favorites/model";
+import { ALL_COUNTRY_CODES, shippingCountriesOf } from "../constants/shipping";
+import { suggestShippingCountries } from "../constants/shippingText";
 
 export type ShopSort = "newest" | "active" | "products" | "rated" | "favorites" | "az";
 
@@ -72,19 +74,51 @@ export function payMatch(shop: ShopEntry, pay: PayFilter, details: ShopDetails |
   return "unknown";
 }
 
+/** "Ships to" (Simon, 2026-10-25: a marketplace for anyone, anywhere): a country's code, or "" for anywhere. */
+export function parseShips(value: string | null | undefined): string {
+  const code = (value ?? "").toUpperCase();
+  return ALL_COUNTRY_CODES.includes(code) ? code : "";
+}
+
+/**
+ * Does the shop ship to the country: its list of countries says so, or, for
+ * a shop from before the list, its typed "Ships to" names it, a region it's
+ * in, or the world ("Worldwide", "Europe", "USA (50 States)").
+ */
+export function shopShipsTo(shop: { shippingCountries?: unknown; shipsTo?: unknown }, code: string): boolean {
+  const list = shippingCountriesOf(shop);
+  if (list) return list.includes(code);
+  return typeof shop.shipsTo === "string" && suggestShippingCountries(shop.shipsTo).codes.includes(code);
+}
+
+/** Does the shop ship there: yes, no, or unknown until its JSON is read. */
+export function shipsMatch(ships: string, details: ShopDetails | undefined): "yes" | "no" | "unknown" {
+  if (!ships) return "yes";
+  if (details?.status === "ready") return details.valid && shopShipsTo(details.shop as Parameters<typeof shopShipsTo>[0], ships) ? "yes" : "no";
+  if (details?.status === "failed") return "no";
+  return "unknown";
+}
+
 export interface ShopFilters {
   pay: PayFilter;
+  /** Only shops that ship to this country (parseShips); "" = anywhere. */
+  ships?: string;
   /** Only these shops (the signed-in name's), by shopKey; null = everyone's. */
   mine: Set<string> | null;
 }
 
+/** Filters that can only be answered from each shop's JSON. */
+export function filtersNeedDetails(filters: Pick<ShopFilters, "pay" | "ships">): boolean {
+  return payNeedsDetails(filters.pay) || !!filters.ships;
+}
+
 export interface FilteredShops {
   shops: ShopEntry[];
-  /** Shops the "Pays in" filter can't answer until their JSON is read. */
+  /** Shops the "Pays in" or "Ships to" filter can't answer until their JSON is read. */
   unknown: ShopEntry[];
-  /** Shops whose JSON couldn't be read for the "Pays in" check. */
+  /** Shops whose JSON couldn't be read for those checks. */
   unreadable: number;
-  /** Shops the "Pays in" filter looked at: the ones My shops (if on) kept, valid as far as known. */
+  /** Shops the filters looked at: the ones My shops (if on) kept, valid as far as known. */
   considered: number;
 }
 
@@ -109,10 +143,12 @@ export function filterShops(
     const state = details(shop.key);
     if (state?.status === "ready" && !state.valid && !(typeof state.updated === "number" && state.updated < shop.updated)) continue;
     considered += 1;
-    const match = payMatch(shop, filters.pay, state);
+    const pay = payMatch(shop, filters.pay, state);
+    const ships = shipsMatch(filters.ships ?? "", state);
+    const match = pay === "no" || ships === "no" ? "no" : pay === "unknown" || ships === "unknown" ? "unknown" : "yes";
     if (match === "yes") kept.push(shop);
     else if (match === "unknown") unknown.push(shop);
-    else if (state?.status === "failed" && payNeedsDetails(filters.pay)) unreadable += 1;
+    else if (state?.status === "failed" && filtersNeedDetails(filters)) unreadable += 1;
   }
   return { shops: kept, unknown, unreadable, considered };
 }

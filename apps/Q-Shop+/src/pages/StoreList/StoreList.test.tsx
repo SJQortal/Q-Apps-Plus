@@ -318,6 +318,19 @@ describe("home page", () => {
       expect(node.summary().resources.STORE).toBe(24);
     });
 
+    it("Ships to reads the shops' JSON to find the ones that ship to the country, typed or listed", async () => {
+      const world = makeWorld();
+      // The fake shops ship to "Europe"; these don't, or not to Portugal.
+      world.shops.forEach((shop) => (shop.shipsTo = "Domestic"));
+      world.shops[3].shippingCountries = ["PT", "ES"];
+      world.shops[5].shipsTo = "Worldwide";
+      world.shops[6].shippingCountries = ["ES"];
+      world.shops[6].shipsTo = "Worldwide";
+      renderHome({ world, path: "/?ships=PT", allInView: true });
+      await waitFor(() => expect(cardTitles().sort()).toEqual(["Shop number 3", "Shop number 5"]), { timeout: 8000 });
+      expect(screen.getByRole("combobox", { name: "Ships to" })).toHaveTextContent("Portugal");
+    });
+
     it("an old link to Pays in BTC shows every shop: Q-Shop+ takes QORT, ARRR and assets only", async () => {
       const { node } = renderHome({ path: "/?pay=BTC" });
       await waitFor(() => expect(cards()).toHaveLength(20));

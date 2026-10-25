@@ -12,7 +12,7 @@ import { cleanPlace, setBuyerPlace, type BuyerPlace } from "./buyerPlace";
 
 const byName = (a: string, b: string) => a.localeCompare(b);
 
-export function PlacePickerDialog({ place, onClose }: { place: BuyerPlace | null; onClose: () => void }) {
+export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPlace | null; onClose: () => void; onPicked?: (place: BuyerPlace) => void }) {
   const countries = useMemo(() => ALL_COUNTRY_CODES.map(countryName).sort(byName), []);
   const states = useMemo(() => ALL_STATE_CODES.map(stateName).sort(byName), []);
   const [country, setCountry] = useState<string | null>(place?.country ?? null);
@@ -22,6 +22,7 @@ export function PlacePickerDialog({ place, onClose }: { place: BuyerPlace | null
     const next = cleanPlace({ country, state: inUs ? state : "" });
     if (!next) return;
     setBuyerPlace(next);
+    onPicked?.(next);
     onClose();
   };
   return (

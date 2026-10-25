@@ -3,7 +3,7 @@
  * a "Sort & filter" button and a bottom sheet on phones (docs/DESIGN.md →
  * Mobile: menus and filters open as sheets).
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Box,
   Button,
@@ -25,8 +25,12 @@ import SearchIcon from "@mui/icons-material/Search";
 import TuneIcon from "@mui/icons-material/Tune";
 import { BottomSheet } from "../components/common/mobile/BottomSheet";
 import { PHONE_MEDIA } from "../hooks/usePhoneLayout";
-import { PAY_FILTERS, SHOP_SORTS, parsePay, parseSort, type PayFilter, type ShopSort } from "./sortFilter";
+import { PAY_FILTERS, SHOP_SORTS, parsePay, parseShips, parseSort, type PayFilter, type ShopSort } from "./sortFilter";
 import { selectMenuProps } from "../components/common/menuStyle";
+import { countryCode, countryName } from "../constants/shipping";
+import type { BuyerPlace } from "../delivery/buyerPlace";
+
+const PlacePickerDialog = lazy(() => import("../delivery/PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
 
 export const SEARCH_DEBOUNCE_MS = 300;
 /** The search text is capped like Hub caps a name search; Core matches substrings. */
@@ -115,11 +119,16 @@ export function ShopSearchField({ q, onSearch }: { q: string; onSearch: (text: s
 export interface SortFilterProps {
   sort: ShopSort;
   pay: PayFilter;
+  /** "Ships to": a country code, or "" for anywhere. */
+  ships: string;
+  /** Where the buyer gets things delivered (delivery/buyerPlace.ts), offered first. */
+  place: BuyerPlace | null;
   mine: boolean;
   /** Show "My shops" (signed in, with a shop). */
   canFilterMine: boolean;
   onSort: (sort: ShopSort) => void;
   onPay: (pay: PayFilter) => void;
+  onShips: (ships: string) => void;
   onMine: (mine: boolean) => void;
   onReset: () => void;
   /** The count line, e.g. "24 shops". */
@@ -127,9 +136,27 @@ export interface SortFilterProps {
 }
 
 const ANY = "any";
+const PICK = "pick";
+
+/** The countries "Ships to" offers: the buyer's, and the one picked if another. */
+function shipsChoices(ships: string, place: BuyerPlace | null): string[] {
+  const mine = place ? countryCode(place.country) : null;
+  return [...new Set([mine, ships].filter((c): c is string => !!c))];
+}
+
+/** Picking another country: the buyer's place for product pages too, and the filter. */
+function ShipsPicker({ place, open, onClose, onShips }: { place: BuyerPlace | null; open: boolean; onClose: () => void; onShips: (ships: string) => void }) {
+  if (!open) return null;
+  return (
+    <Suspense fallback={null}>
+      <PlacePickerDialog place={place} onClose={onClose} onPicked={(next) => onShips(parseShips(countryCode(next.country)))} />
+    </Suspense>
+  );
+}
 
 /** Desktop and wide Hub panes: one row of controls. */
-export function SortFilterRow({ sort, pay, mine, canFilterMine, onSort, onPay, onMine, status }: SortFilterProps) {
+export function SortFilterRow({ sort, pay, ships, place, mine, canFilterMine, onSort, onPay, onShips, onMine, status }: SortFilterProps) {
+  const [picking, setPicking] = useState(false);
   return (
     <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
       <TextField
@@ -162,6 +189,24 @@ export function SortFilterRow({ sort, pay, mine, canFilterMine, onSort, onPay, o
           </MenuItem>
         ))}
       </TextField>
+      <TextField
+        select
+        size="small"
+        label="Ships to"
+        value={ships || ANY}
+        onChange={(event) => (event.target.value === PICK ? setPicking(true) : onShips(parseShips(event.target.value === ANY ? "" : event.target.value)))}
+        slotProps={{ select: { MenuProps: selectMenuProps } }}
+        sx={{ minWidth: 190, maxWidth: 260 }}
+      >
+        <MenuItem value={ANY}>Anywhere</MenuItem>
+        {shipsChoices(ships, place).map((code) => (
+          <MenuItem key={code} value={code}>
+            {countryName(code)}
+          </MenuItem>
+        ))}
+        <MenuItem value={PICK}>Choose a country…</MenuItem>
+      </TextField>
+      <ShipsPicker place={place} open={picking} onClose={() => setPicking(false)} onShips={onShips} />
       {canFilterMine && (
         <Chip
           label="My shops"
@@ -182,9 +227,10 @@ export function SortFilterRow({ sort, pay, mine, canFilterMine, onSort, onPay, o
 
 /** Phones: a button that opens the sheet, and the filters that are on as chips that turn them off. */
 export function SortFilterSheet(props: SortFilterProps) {
-  const { sort, pay, mine, canFilterMine, onSort, onPay, onMine, onReset, status } = props;
+  const { sort, pay, ships, place, mine, canFilterMine, onSort, onPay, onShips, onMine, onReset, status } = props;
   const [open, setOpen] = useState(false);
-  const active = (sort !== "newest" ? 1 : 0) + (pay ? 1 : 0) + (mine ? 1 : 0);
+  const [picking, setPicking] = useState(false);
+  const active = (sort !== "newest" ? 1 : 0) + (pay ? 1 : 0) + (ships ? 1 : 0) + (mine ? 1 : 0);
   const chip = { minHeight: 44, fontSize: 14 } as const;
 
   return (
@@ -209,6 +255,7 @@ export function SortFilterSheet(props: SortFilterProps) {
             <RemovableChip label={SHOP_SORTS.find((s) => s.value === sort)?.label ?? ""} onRemove={() => onSort("newest")} />
           )}
           {pay && <RemovableChip label={`Pays in ${pay === "assets" ? "Q-Assets" : pay}`} onRemove={() => onPay("")} />}
+          {ships && <RemovableChip label={`Ships to ${countryName(ships)}`} onRemove={() => onShips("")} />}
           {mine && <RemovableChip label="My shops" onRemove={() => onMine(false)} />}
         </Box>
       )}
@@ -250,6 +297,27 @@ export function SortFilterSheet(props: SortFilterProps) {
                 />
               ))}
             </Box>
+          </Box>
+          <Box role="group" aria-labelledby="home-ships-label">
+            <Typography id="home-ships-label" sx={{ fontWeight: 700, mb: 1 }}>
+              Ships to
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {["", ...shipsChoices(ships, place)].map((code) => (
+                <Chip
+                  key={code || ANY}
+                  label={code ? countryName(code) : "Anywhere"}
+                  clickable
+                  onClick={() => onShips(code)}
+                  color={ships === code ? "primary" : "default"}
+                  variant={ships === code ? "filled" : "outlined"}
+                  aria-pressed={ships === code}
+                  sx={chip}
+                />
+              ))}
+              <Chip label="Choose a country…" clickable variant="outlined" onClick={() => setPicking(true)} aria-haspopup="dialog" sx={chip} />
+            </Box>
+            <ShipsPicker place={place} open={picking} onClose={() => setPicking(false)} onShips={onShips} />
           </Box>
           {canFilterMine && (
             <FormControlLabel

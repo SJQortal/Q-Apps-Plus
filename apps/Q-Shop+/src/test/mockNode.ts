@@ -26,6 +26,9 @@ export interface WorldShop {
   foreignCoins: Record<string, string>;
   /** The Q-Assets it takes (the + app's additive list), when any. */
   acceptedAssets?: { id: number; name: string }[];
+  /** The typed "Ships to" (default "Europe") and Q-Shop+'s list of countries. */
+  shipsTo?: string;
+  shippingCountries?: string[];
   products: any[];
   logo?: string;
   /**
@@ -142,7 +145,8 @@ export function storeJsonOf(shop: WorldShop) {
     title: shop.title,
     description: shop.description,
     location: "Lisbon",
-    shipsTo: "Europe",
+    shipsTo: shop.shipsTo ?? "Europe",
+    ...(shop.shippingCountries ? { shippingCountries: shop.shippingCountries } : {}),
     created: shop.created,
     shortStoreId: shop.shortStoreId,
     logo: shop.logo ?? LOGO,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterShops, lastActive, parsePay, parseSort, payMatch, sortShops, PAY_FILTERS, payLabel } from "./sortFilter";
+import { filterShops, lastActive, parsePay, parseShips, parseSort, payMatch, shipsMatch, shopShipsTo, sortShops, PAY_FILTERS, payLabel } from "./sortFilter";
 import { buildRatingsIndex } from "./ratings";
 import { buildActivityIndex } from "./activity";
 import { shopKey, type ShopEntry } from "./shopIndex";
@@ -152,6 +152,44 @@ describe("filtering shops", () => {
     const result = filterShops([arrr, plain, other], { pay: "", mine: new Set([plain.key]) }, () => undefined);
     expect(result.shops).toEqual([plain]);
     expect(result.considered).toBe(1);
+  });
+});
+
+describe("the Ships to filter", () => {
+  const listed = shop("A", "listed", 3);
+  const typed = shop("B", "typed", 2);
+  const silent = shop("C", "silent", 1);
+
+  it("reads a country code from the URL, any case", () => {
+    expect(parseShips("pt")).toBe("PT");
+    expect(parseShips("XX")).toBe("");
+    expect(parseShips(null)).toBe("");
+  });
+
+  it("goes by the shop's list of countries, else the words of its typed Ships to", () => {
+    expect(shopShipsTo({ shippingCountries: ["PT", "ES"] }, "PT")).toBe(true);
+    // The list wins over the typed words.
+    expect(shopShipsTo({ shippingCountries: ["ES"], shipsTo: "Worldwide" }, "PT")).toBe(false);
+    expect(shopShipsTo({ shipsTo: "Worldwide" }, "JP")).toBe(true);
+    expect(shopShipsTo({ shipsTo: "Europe" }, "PT")).toBe(true);
+    expect(shopShipsTo({ shipsTo: "USA (50 States)" }, "PT")).toBe(false);
+    expect(shopShipsTo({ shipsTo: "Domestic" }, "PT")).toBe(false);
+    expect(shopShipsTo({}, "PT")).toBe(false);
+  });
+
+  it("is unknown until the shop's JSON is read, and combines with Pays in", () => {
+    expect(shipsMatch("PT", undefined)).toBe("unknown");
+    expect(shipsMatch("", undefined)).toBe("yes");
+    expect(shipsMatch("PT", { status: "failed", final: true })).toBe("no");
+    const details: Record<string, ShopDetails> = {
+      [listed.key]: ready({ shippingCountries: ["PT"], acceptedAssets: [{ id: 7, name: "Gold" }] }),
+      [typed.key]: ready({ shipsTo: "Worldwide" }),
+    };
+    const ships = filterShops([listed, typed, silent], { pay: "", ships: "PT", mine: null }, (key) => details[key]);
+    expect(ships.shops).toEqual([listed, typed]);
+    expect(ships.unknown).toEqual([silent]);
+    const both = filterShops([listed, typed, silent], { pay: "assets", ships: "PT", mine: null }, (key) => details[key]);
+    expect(both.shops).toEqual([listed]);
   });
 });
 

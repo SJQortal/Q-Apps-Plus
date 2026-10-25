@@ -12,7 +12,7 @@
  * single states and territories. The summary in words is what the shop's
  * "Ships to" says (constants/shipping.ts).
  */
-import { suggestShippingCountries } from "./checkup";
+import { suggestShippingCountries } from "../constants/shippingText";
 import { useId, useMemo, useState } from "react";
 import { Box, Button, Checkbox, Collapse, FormControlLabel, IconButton, InputAdornment, TextField, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";

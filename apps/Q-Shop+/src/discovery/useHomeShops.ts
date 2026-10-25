@@ -4,8 +4,8 @@
  * - text: Core's search, a page of 20 at a time;
  * - a sort that needs the shops' product indexes or the reviews loads that
  *   one search on demand, once per session (cached);
- * - a "Pays in" filter for a coin only the shop's JSON knows reads the JSON of
- *   20 more shops each time the end of the list comes into view.
+ * - a "Pays in" filter for a coin only the shop's JSON knows, or "Ships to",
+ *   reads the JSON of 20 more shops each time the end of the list comes into view.
  * Back to the home page shows the same list, as far down as it was.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -18,7 +18,7 @@ import { checkShopDetails, forgetFailedShopDetails, getShopDetails, isOutdated, 
 import { loadShopIndex, peekShopIndex, searchShopsPage, type ShopEntry, type ShopIndex } from "./shopIndex";
 import {
   filterShops,
-  payNeedsDetails,
+  filtersNeedDetails,
   sortNeedsActivity,
   sortShops,
   type FilteredShops,
@@ -34,6 +34,8 @@ export interface HomeQuery {
   q: string;
   sort: ShopSort;
   pay: PayFilter;
+  /** "Ships to": a country code, or "" for anywhere (sortFilter parseShips). */
+  ships?: string;
   mine: boolean;
 }
 
@@ -61,7 +63,7 @@ export type MoreKind = "reveal" | "check" | "search" | null;
 let memory = { listKey: "", count: HOME_PAGE_SIZE, scrollY: 0 };
 
 export function homeListKey(query: HomeQuery): string {
-  return [query.q, query.sort, query.pay, query.mine ? "mine" : ""].join("\u0000");
+  return [query.q, query.sort, query.pay, query.mine ? "mine" : "", query.ships ?? ""].join("\u0000");
 }
 
 const EMPTY: ShopEntry[] = [];
@@ -116,6 +118,7 @@ export interface HomeShops {
 
 export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): HomeShops {
   const { q, sort, pay } = query;
+  const ships = query.ships ?? "";
   const listKey = homeListKey(query);
 
   // ---- the shop index
@@ -276,7 +279,7 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
     : index.status === "ready"
       ? index.data.shops
       : EMPTY;
-  const filters = useMemo(() => ({ pay, mine: mineKeys }), [pay, mineKeys]);
+  const filters = useMemo(() => ({ pay, ships, mine: mineKeys }), [pay, ships, mineKeys]);
   // Shops hidden on this device (discovery/hiddenShops.ts) aren't listed.
   const { list: hiddenList } = useHiddenShops();
   const listed = useMemo(() => {
@@ -298,7 +301,7 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
   const visible = useMemo(() => sorted.slice(0, count), [sorted, count]);
 
   const [checking, setChecking] = useState(false);
-  const needsDetails = payNeedsDetails(pay);
+  const needsDetails = filtersNeedDetails({ pay, ships });
 
   // A "Pays in" filter answers from each shop's JSON as it was read. When the
   // index (or a search) shows that a shop changed since (pull to refresh, or
