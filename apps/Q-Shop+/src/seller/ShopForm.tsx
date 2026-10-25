@@ -218,7 +218,9 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
               <TextField
                 label="Note for buyers (optional)"
                 value={values.awayNote}
-                onChange={(e) => set("awayNote", e.target.value)}
+                onChange={(e) => set("awayNote", e.target.value.replace(/\s*\n\s*/g, " "))}
+                multiline
+                maxRows={3}
                 slotProps={{ htmlInput: { maxLength: MAX_AWAY_NOTE } }}
                 helperText={`${values.awayNote.length}/${MAX_AWAY_NOTE}`}
                 placeholder="At a craft fair; messages answered in the evenings."
