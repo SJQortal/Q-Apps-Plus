@@ -672,6 +672,16 @@ export default {
     { key: 'seller-product-form-wide', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Add product' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'favorites', path: '/favorites', after: async (page) => { await page.getByRole('list', { name: 'Favourite shops' }).getByRole('heading').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'favorites-products', path: '/favorites?tab=products', after: async (page) => { await page.getByRole('list', { name: 'Favourite products' }).getByRole('link').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    // A name with no shop: Shops asks "Have something to sell?", with an X to stop asking.
+    { key: 'home-no-shop', path: '/', after: async (page) => {
+      await page.route(/\/arbitrary\/resources\/search\?.*service=STORE.*exactmatchnames=true/, (route) => {
+        const url = new URL(route.request().url());
+        return url.searchParams.getAll('name').includes(ME) ? route.fulfill({ json: [] }) : route.fallback();
+      });
+      await page.reload();
+      await page.getByText('Have something to sell?').waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
     { key: 'home-favorites', path: '/?sort=favorites', after: async (page) => page.waitForTimeout(1200) },
     { key: 'shop-card-menu', path: '/', overlay: true, after: async (page) => { await page.getByRole('button', { name: 'More for Plus Gadgets' }).click({ timeout: 8000 }); await page.waitForTimeout(500); } },
     { key: 'product-favorite', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 3)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('button', { name: 'In your favourites' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
