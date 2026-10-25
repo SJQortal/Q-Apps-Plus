@@ -9,7 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
-import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { visuallyHiddenSx } from "../pages/Store/a11y";
 import { Alert, Box, Button, Chip, InputAdornment, MenuItem, Paper, Skeleton, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
@@ -77,21 +78,19 @@ export function filterAndSortNames(items: MarketItem[], query: { text: string; k
 export function ProductsNamesSwitch({ current }: { current: "products" | "names" }) {
   const phone = usePhoneLayout();
   const show = useShowNames();
+  const navigate = useNavigate();
   if (!phone || !show) return null;
   return (
     <ToggleButtonGroup
       exclusive
       value={current}
+      onChange={(_, next: "products" | "names" | null) => next && next !== current && navigate(`/${next}`)}
       aria-label="Products or names"
       fullWidth
       sx={{ mb: 2, "& .MuiToggleButton-root": { minHeight: 44, textTransform: "none", fontWeight: 600 } }}
     >
-      <ToggleButton value="products" component={RouterLink} to="/products">
-        Products
-      </ToggleButton>
-      <ToggleButton value="names" component={RouterLink} to="/names">
-        Names
-      </ToggleButton>
+      <ToggleButton value="products">Products</ToggleButton>
+      <ToggleButton value="names">Names</ToggleButton>
     </ToggleButtonGroup>
   );
 }
@@ -175,6 +174,10 @@ function NamesMarketPage() {
   } else {
     body = (
       <>
+        {/* The cards' names are h3: a heading of the list's own comes first. */}
+        <Typography component="h2" sx={visuallyHiddenSx}>
+          Names for sale
+        </Typography>
         <Box component="ul" aria-label="Names for sale" sx={{ ...gridSx, listStyle: "none", m: 0, p: 0 }}>
           {shown.map((item) => (
             <Box component="li" key={item.name} sx={{ minWidth: 0 }}>
@@ -407,11 +410,16 @@ function MyNames({
   if (mine.loading && mine.names.length === 0) return <Skeleton variant="rounded" height={160} />;
   if (mine.names.length === 0) return <EmptyState icon={<BadgeOutlinedIcon />} title="Your account has no names yet" description="Register a name in Hub (or the Names app), or buy one here." />;
   return (
-    <Box component="ul" aria-label="My names" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
-      {mine.names.map((name) => (
-        <MyNameRow key={name} name={name} primary={name === mine.primary} others={mine.names.length > 1} item={items.find((i) => i.name === name) ?? null} pending={pending.get(name)} onSell={onSell} onOpen={onOpen} onSent={onSent} />
-      ))}
-    </Box>
+    <>
+      <Typography component="h2" sx={visuallyHiddenSx}>
+        My names
+      </Typography>
+      <Box component="ul" aria-label="My names" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
+        {mine.names.map((name) => (
+          <MyNameRow key={name} name={name} primary={name === mine.primary} others={mine.names.length > 1} item={items.find((i) => i.name === name) ?? null} pending={pending.get(name)} onSell={onSell} onOpen={onOpen} onSent={onSent} />
+        ))}
+      </Box>
+    </>
   );
 }
 

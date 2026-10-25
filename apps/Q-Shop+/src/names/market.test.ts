@@ -81,6 +81,7 @@ describe("what a name comes with", () => {
       { name: "alpha", service: "VIDEO", identifier: "v2" },
       { name: "alpha", service: "WEBSITE", identifier: "default" },
       { name: "alpha", service: "THUMBNAIL", identifier: "qortal_avatar" },
+      { name: "alpha", service: "DOCUMENT", identifier: "q-store-nameauction" },
       { name: "alpha", service: "MAIL_PRIVATE", identifier: "m" },
       { name: "alphabet", service: "VIDEO", identifier: "x" },
     ];

@@ -40,7 +40,7 @@ export function SellerLine({ owner, enabled = true }: { owner: string; enabled?:
 
 /** "Comes with 1 website · 3 videos" (the most first, `max` of them), or what's known so far. */
 export function ContentLine({ content, max = 3 }: { content: NameContent | null | "failed"; max?: number }) {
-  if (content === null) return <Skeleton width="70%" aria-label="Reading what it published" />;
+  if (content === null) return <Skeleton width="70%" aria-hidden />;
   if (content === "failed") return <Typography variant="body2" color="text.secondary">Couldn&apos;t read what it published.</Typography>;
   if (content.total === 0) return <Typography variant="body2" color="text.secondary">Nothing published under it yet.</Typography>;
   const shown = content.services.slice(0, max).map((s) => serviceLabel(s.service, s.count));

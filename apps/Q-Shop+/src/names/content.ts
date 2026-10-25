@@ -5,11 +5,12 @@
  * cards on screen, three names at a time, once a session.
  *
  * Its avatar (THUMBNAIL `qortal_avatar`) shows on the card itself and isn't
- * counted. Private services (`…_PRIVATE`: mail, orders…) are encrypted to
+ * counted, nor its auction's listing. Private services (`…_PRIVATE`: mail, orders…) are encrypted to
  * their recipients: they go with the name but its new owner can't read them,
  * so they are counted apart.
  */
 import { useEffect, useState } from "react";
+import { NAME_AUCTION_ID } from "./auctions";
 
 export const CONTENT_PAGE = 100;
 export const CONTENT_MAX_PAGES = 3;
@@ -41,6 +42,8 @@ export function summarizeContent(rows: readonly unknown[], name: string, capped:
     const r = row as { name?: unknown; service?: unknown; identifier?: unknown } | null;
     if (!r || r.name !== name || typeof r.service !== "string") continue;
     if (r.service === "THUMBNAIL" && r.identifier === "qortal_avatar") continue;
+    // Its auction's own listing (names/auctions.ts) is the sale, not something that comes with it.
+    if (r.service === "DOCUMENT" && r.identifier === NAME_AUCTION_ID) continue;
     total++;
     if (r.service.endsWith("_PRIVATE")) privateCount++;
     else counts.set(r.service, (counts.get(r.service) ?? 0) + 1);
