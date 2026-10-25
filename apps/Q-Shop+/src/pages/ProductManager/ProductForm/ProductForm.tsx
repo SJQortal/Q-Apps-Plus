@@ -4,6 +4,7 @@
  * other coin the shop takes, type, category and (when editing) status. It is
  * controlled: NewProduct.tsx holds the values and turns them into a draft.
  */
+import { percentOff } from "../../../sale/compareAt";
 import { StockFields } from "../../../stock/StockFields";
 import { useStockLeft } from "../../../stock/notes";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
@@ -110,6 +111,16 @@ const SectionTitle = ({ children }: { children: string }) => (
 
 function coinName(coin: string, shop: ShopCoinSettings | null | undefined): string {
   return isCoinTicker(coin) ? COINS[coin].label : coinLabel(coin, shop);
+}
+
+/** What the price before a sale does, or what's wrong with it. */
+function saleHint(typed: string | undefined, now: number, currency: string): string {
+  const was = Number((typed ?? "").trim());
+  if (!(typed ?? "").trim()) return "Putting it on sale? Its old price shows crossed out, with what buyers save.";
+  if (!(was > 0)) return "Type the price it had before.";
+  if (!(now > 0)) return "Set its price first.";
+  if (was <= now) return `Higher than its price (${now} ${currency}), or buyers see no sale.`;
+  return `Buyers see ${percentOff(was, now)}% off.`;
 }
 
 export const ProductForm = ({
@@ -469,6 +480,25 @@ export const ProductForm = ({
             },
           }}
         />
+        )}
+        {values.sale !== "auction" && (
+          // Shown crossed out to buyers, with what they save (sale/compareAt.ts).
+          <TextField
+            label="Price before the sale (optional)"
+            value={values.compareAt ?? ""}
+            onChange={(e) =>
+              onChange((prev) => ({
+                ...prev,
+                compareAt: fiat !== null && pricing ? sanitizeFiatInput(e.target.value, priceDecimals(pricing.currency)) : sanitizeAmountInput(e.target.value),
+              }))
+            }
+            fullWidth
+            helperText={saleHint(values.compareAt, fiat !== null ? fiat : Number(values.prices.QORT || NaN), fiat !== null && pricing ? pricing.currency : "QORT")}
+            slotProps={{
+              htmlInput: { inputMode: "decimal", autoComplete: "off" },
+              input: { endAdornment: <InputAdornment position="end">{fiat !== null && pricing ? pricing.currency : "QORT"}</InputAdornment> },
+            }}
+          />
         )}
         {values.sale !== "auction" && otherCoins.length > 0 && (
           <>

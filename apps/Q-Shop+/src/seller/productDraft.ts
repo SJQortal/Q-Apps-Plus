@@ -11,6 +11,7 @@
  * converted QORT price instead.
  */
 import { stockFormOf, stockFormProblem, withFormStock, type StockFormValues } from "../stock/catalog";
+import { compareAtOf, withCompareAt } from "../sale/compareAt";
 import { assetIdOf, priceCurrencyKey } from "../money/coins";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { MAX_PRODUCT_PICTURES, withPicturesRef } from "../qdn/productPictures";
@@ -68,6 +69,8 @@ export interface ProductFormValues {
   variants?: VariantFormValues | null;
   /** Its stock count (stock/catalog.ts); absent: the product's stays as it is. */
   stock?: StockFormValues;
+  /** The price before a sale (sale/compareAt.ts), in the currency the price is typed in; absent: the product's stays as it is. */
+  compareAt?: string;
 }
 
 /** An auction's terms as the form holds them (times as `datetime-local` text, in the seller's time). */
@@ -397,7 +400,12 @@ export function newProductDraft(args: {
     user: name,
   };
   if (values.sale === "auction") return withPicturesRef(withSale(draft, values, now, null));
-  return withPicturesRef(withFormStock(withFormFiat(draft, values, coins, args.pricing), values.stock, now));
+  return withPicturesRef(withFormStock(withFormCompareAt(withFormFiat(draft, values, coins, args.pricing), values, args.pricing), values.stock, now));
+}
+
+/** The draft with the form's price before a sale (sale/compareAt.ts), in the currency its price is typed in. */
+function withFormCompareAt<T extends Record<string, unknown>>(draft: T, values: ProductFormValues, pricing: FiatPricing | null | undefined): T {
+  return withCompareAt(draft, values.compareAt, pricing && typedFiat(values, pricing) !== null ? pricing.currency : "QORT");
 }
 
 /**
@@ -451,12 +459,14 @@ export function editedProductDraft(args: {
   if (values.sale === "auction" || "auction" in base) {
     const edited = editedWithoutFiat(base, values, coins, name);
     const sold = withSale(edited, values, now, auctionTermsOf(base));
-    if (values.sale === "auction" || !args.pricing) return pictures(sold);
-    return pictures(withFormFiat(sold, values, coins, args.pricing));
+    // An auction has no price before a sale.
+    if (values.sale === "auction") return pictures(withCompareAt(sold, "", "QORT"));
+    if (!args.pricing) return pictures(withFormCompareAt(sold, values, null));
+    return pictures(withFormCompareAt(withFormFiat(sold, values, coins, args.pricing), values, args.pricing));
   }
   // Without the shop's pricing the form shows no price in a currency: the product keeps what it has.
-  if (!args.pricing) return pictures(editedWithoutFiat(base, values, coins, name));
-  return pictures(withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing));
+  if (!args.pricing) return pictures(withFormCompareAt(editedWithoutFiat(base, values, coins, name), values, null));
+  return pictures(withFormCompareAt(withFormFiat(editedWithoutFiat(base, values, coins, name), values, coins, args.pricing), values, args.pricing));
 }
 
 function editedWithoutFiat(base: Record<string, any> & { id: string }, values: ProductFormValues, coins: string[], name: string) {
@@ -552,9 +562,11 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
       prices: initialPriceText(null, coins),
       ...(pricing && { fiat: "" }),
       stock: { tracked: false, quantity: "" },
+      compareAt: "",
     };
   }
   const fiat = pricing ? fiatPriceOf(product, pricing.currency) : null;
+  const was = compareAtOf(product);
   return {
     ...(pricing && { fiat: fiat ? fiatToText(fiat.value, pricing.currency) : "" }),
     title: typeof product.title === "string" ? product.title : "",
@@ -567,6 +579,7 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
     status: (PRODUCT_STATUSES as readonly string[]).includes(product.status) ? product.status : "AVAILABLE",
     prices: initialPriceText(product as { price?: { currency: string; value: number }[] }, coins),
     stock: stockFormOf(product),
+    compareAt: was ? (was.currency === "QORT" ? amountToText(was.value) : fiatToText(was.value, was.currency)) : "",
     ...auctionValuesOf(product),
   };
 }

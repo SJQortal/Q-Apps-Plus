@@ -10,6 +10,7 @@
  * sorted prices by `price[0]`, which isn't always the QORT price; these sort
  * by the index's QORT price and fall back to newest first.
  */
+import { rowSaleOf } from "../../sale/compareAt";
 import type { Catalogue } from "../../state/features/globalSlice";
 import type { Product } from "../../state/features/storeSlice";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
@@ -69,6 +70,8 @@ export interface ProductRow {
   stockLeft?: number;
   /** Counted, and none left: it shows (and filters) as out of stock, labelled Sold out. */
   soldOut?: boolean;
+  /** Percent off, when it's on sale (sale/compareAt.ts). */
+  sale?: number;
 }
 
 export interface ProductQuery {
@@ -132,6 +135,7 @@ export function productRowsFromContainer(container: { products?: unknown } | nul
       ...auctionField(entry),
       ...variantField(entry),
       ...stockField(entry),
+      ...(rowSaleOf(entry) && { sale: rowSaleOf(entry) }),
     });
   }
   return rows.sort((a, b) => b.created - a.created);

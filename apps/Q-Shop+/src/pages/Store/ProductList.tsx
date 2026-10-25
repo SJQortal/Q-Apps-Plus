@@ -11,6 +11,7 @@ import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
 import { CategoryIcon } from "../../components/CategoryIcon";
 import CheckIcon from "@mui/icons-material/Check";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
+import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { setProductView } from "../../utils/productView";
 import { primarySoft } from "../../hub-theme";
@@ -56,6 +57,27 @@ export function FilterChip({ label, on, onClick, category }: { label: string; on
  * Auctions only, at a tap (sorted by when they end unless the buyer picked
  * a sort): shown while the list has auctions still open, or while it's on.
  */
+/** "On sale (3)": only products on sale (sale/compareAt.ts); shown when there are some. */
+export function SaleToggle({ count, on, onChange, exact = true }: { count: number; on: boolean; onChange: (on: boolean) => void; exact?: boolean }) {
+  if (count === 0 && !on) return null;
+  return (
+    <Chip
+      icon={on ? <CheckIcon /> : <LocalOfferOutlinedIcon />}
+      label={exact ? `On sale (${count})` : "On sale"}
+      onClick={() => onChange(!on)}
+      variant={on ? "filled" : "outlined"}
+      aria-pressed={on}
+      sx={{
+        minHeight: 44,
+        borderRadius: 22,
+        px: 0.5,
+        fontWeight: on ? 700 : 500,
+        ...(on && { bgcolor: "action.selected", "&:hover": { bgcolor: "action.focus" } }),
+      }}
+    />
+  );
+}
+
 export function AuctionsToggle({
   count,
   on,

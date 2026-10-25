@@ -25,6 +25,7 @@
  *   (`frontier`). Other sorts, a category or a search read every index
  *   (`readAll`): one small read per shop.
  */
+import { saleOf } from "../sale/compareAt";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Catalogue } from "../state/features/globalSlice";
 import type { Product } from "../state/features/storeSlice";
@@ -163,6 +164,8 @@ export interface AllProductsQuery {
   inStockOnly: boolean;
   /** Only auctions still open (pages/Store/shopData isOpenAuction). */
   auctionsOnly?: boolean;
+  /** Only products on sale (sale/compareAt.ts). */
+  saleOnly?: boolean;
   /** A price range in QORT (pages/Store/shopData inPriceRange). */
   minQort?: number | null;
   maxQort?: number | null;
@@ -188,6 +191,12 @@ export function isOpenAuctionRow(row: AllProductRow, catalogues: AllCatalogues, 
   return isOpenAuction(row, ownCatalogue(row, catalogues), now);
 }
 
+/** Whether the row is on sale: its catalogue's product once loaded, else its row's percent off (sale/compareAt.ts). */
+export function isOnSaleRow(row: AllProductRow, catalogues: AllCatalogues): boolean {
+  const product = productOfRow(row, catalogues);
+  return product ? saleOf(product as Parameters<typeof saleOf>[0]) !== null : !!row.sale;
+}
+
 /** Listed products, the filters, then the sort; equal ones by key, so the order never shifts as shops arrive. */
 export function filterAndSortAll(rows: AllProductRow[], query: AllProductsQuery, catalogues: AllCatalogues, now = Date.now()): AllProductRow[] {
   const categories = new Set(query.categories);
@@ -200,6 +209,7 @@ export function filterAndSortAll(rows: AllProductRow[], query: AllProductsQuery,
   return listedRows(rows, query.inStockOnly, catalogues, now)
     .filter((row) => categories.size === 0 || categories.has(categoryKey(row.category)))
     .filter((row) => !query.auctionsOnly || isOpenAuctionRow(row, catalogues, now))
+    .filter((row) => !query.saleOnly || isOnSaleRow(row, catalogues))
     .filter((row) => inPriceRange(row, query.minQort, query.maxQort))
     .sort((a, b) => compare(a, b) || byKey(a, b));
 }

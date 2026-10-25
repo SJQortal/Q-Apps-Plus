@@ -15,6 +15,7 @@ import { Link as RouterLink } from "react-router-dom";
 import type { Product } from "../../../state/features/storeSlice";
 import type { ShopCoinSettings } from "../../../money/coins";
 import { AmountTag, PriceTag } from "../../../components/money/PriceTag";
+import { saleOf } from "../../../sale/compareAt";
 import type { Bundle } from "../../../variants/model";
 import { productLink, productPath, storePath } from "../../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../../constants/product-status";
@@ -163,6 +164,7 @@ export function ProductCard({
   const path = productPath(owner, storeId, productId, catalogueId);
   const available = status === AVAILABLE;
   const outLabel = soldOut ? "Sold out" : "Out of stock";
+  const sale = saleOf(product as Parameters<typeof saleOf>[0]);
   const label = isOwnProduct ? "Your product" : status === OUT_OF_STOCK ? outLabel : status === RETIRED ? "Retired" : "Add to cart";
   const pictures = useLoadedPictures();
   // An auction is stored out of stock, for the original app: its card says where the auction stands instead.
@@ -264,6 +266,8 @@ export function ProductCard({
                 ) : (
                   <PriceTag product={product} coin={coin} rate={rate} shop={shop} />
                 )}
+                {/* On sale (sale/compareAt.ts): what buyers save. */}
+                {!bundle && sale && <Chip size="small" color="error" label={`${sale.percent}% off`} sx={{ fontWeight: 700 }} />}
                 {bundle && <Chip size="small" label={`${bundle.count} options`} variant="outlined" />}
                 {bundle?.soldOut && <Chip size="small" label="Sold out" variant="outlined" />}
                 {!bundle && status === OUT_OF_STOCK && <Chip size="small" label={outLabel} variant="outlined" />}

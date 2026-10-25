@@ -9,13 +9,14 @@
  * from QORT uses the node's rate (money/rates.ts) and shows "—" until it is in.
  */
 import { useEffect, useState } from "react";
-import { Box, Button, Popover, Typography } from "@mui/material";
+import { Box, Button, Chip, Popover, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { AmountTag } from "./PriceTag";
 import { isForeignTicker, shopCoins, type ShopCoinSettings } from "../../money/coins";
 import { formatPrice, ownPrice, unitPrice, type PricedProduct } from "../../money/pricing";
 import { cachedRate, getRate } from "../../money/rates";
 import { dropdownPaperSx } from "../common/menuStyle";
+import { saleOf } from "../../sale/compareAt";
 
 /** Prices shown side by side; the rest go in the menu. */
 export const INLINE_PRICES = 3;
@@ -80,8 +81,21 @@ export function ShopPrices({ product, shop, preferred }: { product: PricedProduc
     });
 
   if (!first) return null;
+  // On sale (sale/compareAt.ts): its price before, crossed out, and what buyers save.
+  const sale = saleOf(product as Parameters<typeof saleOf>[0]);
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
+      {sale && (
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+          <Chip size="small" color="error" label={`${sale.percent}% off`} sx={{ fontWeight: 700 }} />
+          <Typography variant="body2" color="text.secondary">
+            Was{" "}
+            <Box component="s" sx={{ fontVariantNumeric: "tabular-nums" }}>
+              {formatPrice(sale.was.value)} {sale.was.currency === "QORT" ? "QORT" : sale.was.currency}
+            </Box>
+          </Typography>
+        </Box>
+      )}
       <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 2.5, rowGap: 1 }}>
         <AmountTag value={first.value} coin={first.coin} shop={shop} size="large" />
         {inline.length > 0 && (

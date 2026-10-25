@@ -107,6 +107,19 @@ describe("Products", () => {
     expect(location()).toBe("/products?category=art");
   });
 
+  it("On sale lists the products with a price before, and their cards say what buyers save", async () => {
+    const world = makeWorld();
+    const shop = world.shops[23];
+    const product = shop.products[11] as (typeof shop.products)[number] & { compareAt?: unknown };
+    product.compareAt = { currency: "QORT", value: product.price[0].value * 2 };
+    renderProducts({ world });
+    const toggle = await screen.findByRole("button", { name: /^On sale/ });
+    fireEvent.click(toggle);
+    await waitFor(() => expect(titles()).toEqual(["Product 11"]));
+    expect(location()).toContain("sale=1");
+    expect(within(cards()[0]).getByText("50% off")).toBeInTheDocument();
+  });
+
   it("puts a heading between the page's and the cards' (axe heading-order)", async () => {
     renderProducts({ world: makeWorld({ shops: 2, productsPerShop: 2 }) });
     await waitFor(() => expect(cards()).toHaveLength(4));

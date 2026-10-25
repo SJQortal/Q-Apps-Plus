@@ -88,6 +88,9 @@ function product(s, p) {
     ...(apronOf(s, p) && { title: `Linen apron — ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
     ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
+    // On sale (sale/compareAt.ts): the mug was 2.00 QORT, and Lamp 11 was 18.00.
+    ...(s.short === 'shop-1' && p === 0 && { compareAt: { currency: 'QORT', value: 2 } }),
+    ...(s.short === 'shop-1' && p === 11 && { compareAt: { currency: 'QORT', value: 18 } }),
     // Counted stock (stock/model.ts): Shop+Plus has 4 of Notebook 7 left, and none of Ebook 9.
     ...(s.short === 'shop-1' && p === 7 && { stock: { v: 1, quantity: 4, since: now - 2 * DAY } }),
     ...(s.short === 'shop-1' && p === 9 && { stock: { v: 1, quantity: 0, since: now - DAY } }),
@@ -235,6 +238,7 @@ function dataContainer(s) {
       ...(pr.auction && { auction: { start: pr.auction.start, end: pr.auction.end } }),
       ...(pr.variant && { variant: { group: pr.variant.group, values: pr.variant.values } }),
       ...(pr.stock && { stock: pr.stock }),
+      ...(pr.compareAt && { sale: Math.floor((1 - pr.price[0].value / pr.compareAt.value) * 100 + 1e-9) }),
     };
     if (!catalogues[c]) catalogues[c] = { id: catalogueId(s, c), products: {} };
     catalogues[c].products[pr.id] = true;
@@ -774,6 +778,17 @@ export default {
       await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
       const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
       await d.getByRole('combobox', { name: 'Country' }).fill('United');
+      await page.waitForTimeout(400);
+    } },
+    { key: 'products-on-sale', path: '/products?sale=1', after: async (page) => { await page.getByText('% off').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    { key: 'seller-product-sale', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Add product' });
+      await d.getByRole('textbox', { name: /^Title/ }).fill('Linen tea towel');
+      await d.getByRole('textbox', { name: /^Price in USD/ }).fill('8');
+      const was = d.getByRole('textbox', { name: 'Price before the sale (optional)' });
+      await was.fill('10');
+      await was.scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
     } },
     { key: 'product-stock', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 7)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/In stock · 4 left/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },

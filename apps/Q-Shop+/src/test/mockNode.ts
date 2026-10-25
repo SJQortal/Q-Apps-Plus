@@ -175,6 +175,8 @@ export function dataContainerOf(shop: WorldShop) {
       ...(p.variant && { variant: { group: p.variant.group, values: p.variant.values } }),
       // A counted product's row carries its count (stock/catalog.ts).
       ...((p as { stock?: unknown }).stock ? { stock: (p as { stock?: unknown }).stock } : {}),
+      // A product on sale's row carries its percent off (sale/compareAt.ts).
+      ...((p as { compareAt?: unknown }).compareAt ? { sale: Math.floor((1 - p.price[0].value / (p as unknown as { compareAt: { value: number } }).compareAt.value) * 100 + 1e-9) } : {}),
     };
     catalogues[Math.floor(idx / 10)].products[p.id] = true;
   });

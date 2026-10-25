@@ -66,7 +66,7 @@ import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { productLayout, useProductView } from "../../utils/productView";
 import { AUCTION_SORT, PRODUCT_SORTS, PRODUCTS_PAGE, priceBound, searchTerms, type ProductSort } from "../Store/shopData";
 import { ProductCard, ProductCardSkeleton } from "../Store/ProductCard/ProductCard";
-import { AuctionsToggle, FETCHING_NOTE, FilterChip, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, useDebounced } from "../Store/ProductList";
+import { AuctionsToggle, FETCHING_NOTE, FilterChip, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, SaleToggle, useDebounced } from "../Store/ProductList";
 import { useNow } from "../../hooks/useNow";
 import { AddedToCartSnackbar, type AddedNotice } from "../Store/CartBits";
 import { LocalBoundary, UnavailableCard } from "../Store/LocalBoundary";
@@ -78,6 +78,7 @@ import {
   auctionTimesOfRow,
   filterAndSortAll,
   isOpenAuctionRow,
+  isOnSaleRow,
   listedRows,
   productOfRow,
   searchAll,
@@ -126,6 +127,8 @@ interface ListQuery {
   inStockOnly: boolean;
   /** Only auctions still open; then by when they end, unless another sort is picked. */
   auctionsOnly: boolean;
+  /** Only products on sale (sale/compareAt.ts). */
+  saleOnly: boolean;
   /** A price range in QORT, as typed ("" for none). */
   min: string;
   max: string;
@@ -134,11 +137,12 @@ interface ListQuery {
 /** The sort a list has without a `sort` in its URL. */
 const defaultSort = (auctionsOnly: boolean): ListSort => (auctionsOnly ? "ending" : "newest");
 
-/** The list's state in the URL: `?q=&sort=&category=…&stock=1&auctions=1&min=&max=`, changed in place so Back leaves the page. */
+/** The list's state in the URL: `?q=&sort=&category=…&stock=1&auctions=1&sale=1&min=&max=`, changed in place so Back leaves the page. */
 function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => void } {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
   const auctionsOnly = params.get("auctions") === "1";
+  const saleOnly = params.get("sale") === "1";
   const min = params.get("min") ?? "";
   const max = params.get("max") ?? "";
   const sort = parseProductSort(params.get("sort")) ?? defaultSort(auctionsOnly);
@@ -167,6 +171,10 @@ function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => vo
             if (patch.auctionsOnly) next.set("auctions", "1");
             else next.delete("auctions");
           }
+          if (patch.saleOnly !== undefined) {
+            if (patch.saleOnly) next.set("sale", "1");
+            else next.delete("sale");
+          }
           if (patch.sort !== undefined) {
             if (patch.sort !== defaultSort(next.get("auctions") === "1")) next.set("sort", patch.sort);
             else next.delete("sort");
@@ -186,7 +194,7 @@ function useListQuery(): ListQuery & { update: (patch: Partial<ListQuery>) => vo
     },
     [setParams]
   );
-  return { q, sort, categories, inStockOnly, auctionsOnly, min, max, update };
+  return { q, sort, categories, inStockOnly, auctionsOnly, saleOnly, min, max, update };
 }
 
 /**
@@ -298,7 +306,7 @@ export function ProductsPage() {
   const phone = usePhoneLayout();
   const layout = productLayout(useProductView(), phone);
   const userName = useSelector((state: RootState) => state.auth.user?.name ?? "");
-  const { q, sort, categories, inStockOnly, auctionsOnly, min, max, update } = useListQuery();
+  const { q, sort, categories, inStockOnly, auctionsOnly, saleOnly, min, max, update } = useListQuery();
   const minQort = priceBound(min);
   const maxQort = priceBound(max);
   const priced = minQort !== null || maxQort !== null;
@@ -316,7 +324,7 @@ export function ProductsPage() {
 
   // Another sort, categories (to list them, or to filter by them) and a search need every shop's list.
   const pickingCategories = filtersOpen || categoryAnchor !== null;
-  const needAll = sort !== "newest" || categories.length > 0 || searching || pickingCategories || auctionsOnly || priced;
+  const needAll = sort !== "newest" || categories.length > 0 || searching || pickingCategories || auctionsOnly || saleOnly || priced;
   const { phase, readAll, readMore } = all;
   useEffect(() => {
     if (needAll && phase === "ready") readAll();
@@ -339,11 +347,12 @@ export function ProductsPage() {
   const favoriteCounts = useFavoriteCounts(sort === "favorites");
   const listed = useMemo(() => listedRows(rows, inStockOnly, catalogues, now), [rows, inStockOnly, catalogues, now]);
   const auctions = useMemo(() => listed.filter((row) => isOpenAuctionRow(row, catalogues, now)).length, [listed, catalogues, now]);
+  const onSale = useMemo(() => listed.filter((row) => isOnSaleRow(row, catalogues)).length, [listed, catalogues]);
   const options = useMemo(() => categoryOptions(listed), [listed]);
   const labels = useMemo(() => new Map(options.map((option) => [option.key, option.label])), [options]);
   const filtered = useMemo(
-    () => filterAndSortAll(rows, { categories, inStockOnly, auctionsOnly, minQort, maxQort, sort, favorites: favoriteCounts }, catalogues, now),
-    [rows, categories, inStockOnly, auctionsOnly, minQort, maxQort, sort, favoriteCounts, catalogues, now]
+    () => filterAndSortAll(rows, { categories, inStockOnly, auctionsOnly, saleOnly, minQort, maxQort, sort, favorites: favoriteCounts }, catalogues, now),
+    [rows, categories, inStockOnly, auctionsOnly, saleOnly, minQort, maxQort, sort, favoriteCounts, catalogues, now]
   );
   // Newest first shows what is in its final place; anything else waits for every shop.
   const frontier = all.frontier;
@@ -356,7 +365,7 @@ export function ProductsPage() {
   );
 
   // Paging restarts whenever the list's meaning changes; Back restores it.
-  const listKey = JSON.stringify([sort, categories, inStockOnly, auctionsOnly, minQort, maxQort, terms]);
+  const listKey = JSON.stringify([sort, categories, inStockOnly, auctionsOnly, saleOnly, minQort, maxQort, terms]);
   const [back] = useState(() => (memory.listKey === listKey ? memory : null));
   const [paging, setPaging] = useState(() => ({ key: listKey, pages: back?.pages ?? 1 }));
   const pages = paging.key === listKey ? paging.pages : 1;
@@ -427,7 +436,7 @@ export function ProductsPage() {
 
   const toggleCategory = (key: string) =>
     update({ categories: categories.includes(key) ? categories.filter((c) => c !== key) : [...categories, key] });
-  const clearFilters = () => update({ categories: [], inStockOnly: false, auctionsOnly: false, min: "", max: "" });
+  const clearFilters = () => update({ categories: [], inStockOnly: false, auctionsOnly: false, saleOnly: false, min: "", max: "" });
   const priceFields = <PriceRangeFields min={min} max={max} onChange={(range) => update(range)} titled={!phone} />;
   const addToCart = (row: AllProductRow) => {
     const product = productOfRow(row, catalogues);
@@ -438,7 +447,7 @@ export function ProductsPage() {
 
   const readingAll = `Reading every shop's products… ${all.read} of ${all.total} shops`;
   const categoryProgress = phase !== "ready" || !all.complete ? (phase === "ready" ? readingAll : "Reading the shops…") : null;
-  const activeFilters = categories.length + (inStockOnly ? 1 : 0) + (auctionsOnly ? 1 : 0) + (priced ? 1 : 0);
+  const activeFilters = categories.length + (inStockOnly ? 1 : 0) + (auctionsOnly ? 1 : 0) + (saleOnly ? 1 : 0) + (priced ? 1 : 0);
   const failedCatalogues = Object.values(statuses).filter((s) => s === "failed").length;
   const searchPending = scope ? scope.keys.filter((key) => !catalogues[key] && statuses[key] !== "failed").length : 0;
   const searchScope = useMemo(() => {
@@ -634,6 +643,7 @@ export function ProductsPage() {
             />
             {sortSelect}
             <AuctionsToggle count={auctions} on={auctionsOnly} onChange={(on) => update({ auctionsOnly: on })} exact={all.complete} />
+            <SaleToggle count={onSale} on={saleOnly} onChange={(on) => update({ saleOnly: on })} exact={all.complete} />
             {phone ? (
               <Button
                 variant={activeFilters ? "contained" : "outlined"}
