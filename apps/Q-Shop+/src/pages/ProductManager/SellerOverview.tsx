@@ -28,6 +28,7 @@ import { OrderListSkeleton } from "../../orders/components/OrderListView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
 import { RecentActivity } from "./RecentActivity";
 import { ShopCheckup } from "../../seller/ShopCheckup";
+import { LowStock } from "../../seller/LowStock";
 import { buildActivity, useShopFavorites } from "../../seller/activity";
 import { useShopReviews } from "../Store/useShopData";
 import { shortStoreIdOf } from "../../qdn/identifiers";
@@ -103,10 +104,13 @@ export function SellerOverview({
   storeId,
   onOpenTab,
   onAddProduct,
+  onEditProduct,
 }: {
   storeId: string;
   onOpenTab?: (tab: SellerTab, extra?: Record<string, string>) => void;
   onAddProduct?: () => void;
+  /** Opens a product's editor (Running low). */
+  onEditProduct?: (product: Record<string, any> & { id: string }) => void;
 }) {
   // Only the latest few orders are opened up front, plus the ones the counts need (orders/loader.ts).
   const list = useShopOrders(storeId, { openLimit: LATEST });
@@ -204,6 +208,9 @@ export function SellerOverview({
           </Typography>
         )}
       </Box>
+
+      {/* Counted products with 3 or fewer left (seller/LowStock.tsx). */}
+      <LowStock storeId={storeId} onEdit={onEditProduct} />
 
       <Box component="section" aria-labelledby="seller-overview-activity" sx={{ display: "flex", flexDirection: "column" }}>
         <Typography id="seller-overview-activity" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>

@@ -250,7 +250,7 @@ export const ProductManager = () => {
       </Button>
     </>
   );
-  const overviewProps = { storeId: currentStore.id, onOpenTab: setTab, onAddProduct: openAdd };
+  const overviewProps = { storeId: currentStore.id, onOpenTab: setTab, onAddProduct: openAdd, onEditProduct: openEdit };
 
   return (
     <Page width="grid">
