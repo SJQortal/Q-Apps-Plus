@@ -51,6 +51,8 @@ export interface CartShop extends CheckoutShop {
   policies?: unknown;
   /** Away until a day (shop/away.ts reads it safely). */
   away?: unknown;
+  /** The languages its seller answers in (shop/languages.ts reads them safely). */
+  languages?: unknown;
 }
 
 /** Only products the seller marks AVAILABLE can be bought, as in the original's product card. */
@@ -170,6 +172,7 @@ export function cartShopFrom(storeId: string, owner: string, store: any): CartSh
     ...(typeof store?.shipsTo === "string" && { shipsTo: store.shipsTo }),
     ...(store?.policies && typeof store.policies === "object" && { policies: store.policies }),
     ...(store?.away && typeof store.away === "object" && { away: store.away }),
+    ...(Array.isArray(store?.languages) && { languages: store.languages }),
   };
 }
 

@@ -10,6 +10,8 @@ import AssignmentReturnOutlinedIcon from "@mui/icons-material/AssignmentReturnOu
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { dispatchText, policiesOf, returnsText, type ShopPolicies } from "./policies";
+import { languagesOf, languagesText } from "./languages";
+import TranslateOutlinedIcon from "@mui/icons-material/TranslateOutlined";
 
 const lineSx = { display: "flex", alignItems: "flex-start", gap: 0.75, minWidth: 0 } as const;
 
@@ -37,20 +39,27 @@ export function PolicyLines({
   digital = false,
   full = false,
 }: {
-  shop: { policies?: unknown; title?: string } | null | undefined;
+  shop: { policies?: unknown; languages?: unknown; title?: string } | null | undefined;
   /** Nothing is dispatched: dispatch time doesn't apply. */
   digital?: boolean;
   full?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const policies = policiesOf(shop);
-  if (!policies) return null;
+  const policies = policiesOf(shop) ?? {};
   const dispatch = digital ? null : dispatchText(policies);
   const returns = returnsText(policies);
   const words = !!(policies.returns || policies.terms);
-  if (!dispatch && !returns && !words) return null;
+  // The languages its seller answers in (shop/languages.ts), with the rest of how the shop works.
+  const languages = languagesOf(shop);
+  if (!dispatch && !returns && !words && languages.length === 0) return null;
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, minWidth: 0 }}>
+      {languages.length > 0 && (
+        <Typography variant="body2" color="text.secondary" sx={lineSx}>
+          <TranslateOutlinedIcon fontSize="small" aria-hidden />
+          <span>Answers in {languagesText(languages)}</span>
+        </Typography>
+      )}
       {dispatch && (
         <Typography variant="body2" color="text.secondary" sx={lineSx}>
           <ScheduleOutlinedIcon fontSize="small" aria-hidden />

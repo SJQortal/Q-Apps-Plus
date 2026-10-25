@@ -25,3 +25,13 @@ describe("the languages a seller answers in", () => {
     expect("languages" in none.storeObj).toBe(false);
   });
 });
+
+describe("the languages with the shop's policies", () => {
+  it("show on a shop that states only them", async () => {
+    const { renderWithProviders } = await import("../test/renderWithProviders");
+    const { PolicyLines } = await import("./PolicyLines");
+    const { screen } = await import("@testing-library/react");
+    renderWithProviders(<PolicyLines shop={{ languages: ["pt", "en"] }} />);
+    expect(screen.getByText("Answers in Português and English")).toBeInTheDocument();
+  });
+});
