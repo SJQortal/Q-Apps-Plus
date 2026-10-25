@@ -47,6 +47,8 @@ export interface WorldShop {
   variantGroups?: Record<string, unknown>;
   /** Its delivery prices (delivery/model.ts), DOCUMENT q-store-delivery-<short>, when it has some. */
   delivery?: unknown;
+  /** Its discount codes (discounts/model.ts), DOCUMENT q-store-discounts-<short>, when it has some. */
+  discounts?: unknown;
 }
 
 export interface WorldReview {
@@ -245,6 +247,9 @@ function allRows(world: World): Row[] {
     if (s.delivery) {
       rows.push({ name: s.owner, service: "DOCUMENT", identifier: `q-store-delivery-${s.shortStoreId}`, created: s.created, updated: s.updated, size: 400 });
     }
+    if (s.discounts) {
+      rows.push({ name: s.owner, service: "DOCUMENT", identifier: `q-store-discounts-${s.shortStoreId}`, created: s.created, updated: s.updated, size: 300 });
+    }
   }
   for (const r of world.reviews) {
     rows.push({
@@ -365,6 +370,10 @@ export function installMockNode(world: World): MockNode {
       if (service === "DOCUMENT" && id.startsWith("q-store-delivery-")) {
         const shop = world.shops.find((s) => s.owner === name && `q-store-delivery-${s.shortStoreId}` === id && s.delivery);
         return shop ? json(shop.delivery) : json({ error: 1401 }, 404);
+      }
+      if (service === "DOCUMENT" && id.startsWith("q-store-discounts-")) {
+        const shop = world.shops.find((s) => s.owner === name && `q-store-discounts-${s.shortStoreId}` === id && s.discounts);
+        return shop ? json(shop.discounts) : json({ error: 1401 }, 404);
       }
       if (service === "DOCUMENT" && id.startsWith("q-store-review-")) {
         const r = world.reviews.find((x) => x.name === name && id.startsWith(`q-store-review-${x.shortStoreId}-${x.uid}`));

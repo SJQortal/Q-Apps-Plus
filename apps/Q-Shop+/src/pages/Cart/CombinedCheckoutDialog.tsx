@@ -6,7 +6,8 @@
  *
  * Each shop is paid in the coin its cart shows, with its delivery fee for
  * the address when it prices delivery (delivery/checkoutDelivery.ts). A shop
- * that doesn't ship or deliver there is left out (it stays in the cart). Declining a payment, or one
+ * that doesn't ship or deliver there is left out (it stays in the cart). Each shop takes its own
+ * discount code (discounts/), and a discount for the buyer's name applies by itself. Declining a payment, or one
  * failing, stops there: the shops before it are paid and ordered, the ones
  * after it stay in the cart. Nothing here can pay twice: Pay all runs once,
  * and the results only ever say what happened.
@@ -24,9 +25,9 @@ import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutlineOutl
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { ResponsiveDialog } from "../../components/common/mobile";
 import { AmountTag } from "../../components/money/PriceTag";
-import { coinLabel, isForeignTicker } from "../../money/coins";
+import { assetIdOf, coinLabel, isForeignTicker } from "../../money/coins";
 import { getRate } from "../../money/rates";
-import { unitPrice } from "../../money/pricing";
+import { formatPrice, unitPrice } from "../../money/pricing";
 import { paymentRequest, startCheckout, type CheckoutBuyer, type CheckoutStep } from "../../money/checkout";
 import { isDigitalOnly, missingDeliveryFields, type CartLine, type DeliveryInput, type OrderDetails } from "../../money/order";
 import { errorMessage } from "../../qdn/hubErrors";
@@ -38,8 +39,19 @@ import { itemCount, priceLines, type CartShop } from "./cartLines";
 import { deliveryCharge, deliveryChoices, loadShopDelivery, withOptionNote, type DeliveryChoice, type DeliveryCharge } from "../../delivery/checkoutDelivery";
 import { DeliveryOptionsPicker } from "./DeliveryOptionsPicker";
 import type { ShopPricing } from "./useCartPricing";
+import { DiscountCodeField } from "./DiscountCodeField";
+import { CODE_PATTERN, codeHash, discountTitle, nameHash, normalizeCode, type Discount } from "../../discounts/model";
+import { discountForCode, discountForName, discountLine, discountProblem } from "../../discounts/apply";
+import { loadShopDiscounts, type ShopDiscounts } from "../../discounts/discountsDoc";
+import { assetInfo } from "../../qdn/assets";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
+
+/** A discount the buyer applied at a shop (a code), or their name's own (no code). */
+interface AppliedDiscount {
+  discount: Discount;
+  code?: string;
+}
 
 /** One shop's part, fixed when the buyer reaches Confirm. */
 interface Payment {
@@ -62,6 +74,21 @@ interface Payment {
   /** The shop's delivery options for this order and address, and the one picked. */
   choices: DeliveryChoice[];
   option?: { id: string; name: string };
+  /** Its discount's line (in `lines` too) and what it takes off. */
+  discount: { applied: AppliedDiscount; amount: number } | null;
+  /** Paid in an asset that can't be split: a discount rounds down to whole units. */
+  wholeUnits: boolean;
+}
+
+/** A shop's part priced again with a delivery line and its discount (discounts/apply.ts); null when it can't be priced. */
+function reprice(p: Payment, delivery: CartLine | null, applied: AppliedDiscount | null): Pick<Payment, "lines" | "amount" | "details" | "discount"> | null {
+  const off = applied
+    ? discountLine({ discount: applied.discount, code: applied.code, lines: p.baseLines, deliveryLine: delivery, coin: p.coin, rate: p.rate, digital: p.digital, wholeUnits: p.wholeUnits })
+    : null;
+  const lines = [...p.baseLines, ...(delivery ? [delivery] : []), ...(off ? [off.line] : [])];
+  const priced = priceLines(lines, p.coin, p.rate, false, isForeignTicker(p.coin) && p.rate === null);
+  if (!priced.ok) return null;
+  return { lines, amount: priced.amount, details: priced.details, discount: off && applied ? { applied, amount: off.amount } : null };
 }
 
 type RunState = "waiting" | CheckoutStep | "done" | "declined" | "failed" | "pending" | "skipped";
@@ -141,18 +168,66 @@ export function CombinedCheckoutDialog({
   const [payments, setPayments] = useState<Payment[]>([]);
   // Each shop's delivery option picked at Confirm, by its key (kept through Back and Continue).
   const [optionOf, setOptionOf] = useState<Record<string, string>>({});
+  // Each shop's discount codes (discounts/), read at Confirm, and the discount applied there.
+  const [discountsOf, setDiscountsOf] = useState<Record<string, ShopDiscounts>>({});
+  const [appliedOf, setAppliedOf] = useState<Record<string, AppliedDiscount>>({});
+  // Shops where the buyer took their name's own discount off: it isn't applied again.
+  const ownRemoved = useRef(new Set<string>());
   const pickOption = (key: string, choice: DeliveryChoice) => {
     setOptionOf((prev) => ({ ...prev, [key]: choice.id }));
     setPayments((prev) =>
       prev.map((p) => {
         if (p.key !== key) return p;
-        const lines = choice.line ? [...p.baseLines, choice.line] : p.baseLines;
-        const priced = priceLines(lines, p.coin, p.rate, false, isForeignTicker(p.coin) && p.rate === null);
+        // The discount follows: a free-delivery code takes the new option's fee off.
+        const priced = reprice(p, choice.line, p.discount?.applied ?? null);
         // A price that can't be worked out keeps the option before (the buyer sees nothing change).
-        if (!priced.ok) return p;
-        return { ...p, lines, amount: priced.amount, details: priced.details, delivery: choice.line, deliveryFree: choice.free, option: { id: choice.id, name: choice.name } };
+        if (!priced) return p;
+        return { ...p, ...priced, delivery: choice.line, deliveryFree: choice.free, option: { id: choice.id, name: choice.name } };
       })
     );
+  };
+  const setDiscount = (key: string, applied: AppliedDiscount | null) => {
+    setAppliedOf((prev) => {
+      const next = { ...prev };
+      if (applied) next[key] = applied;
+      else delete next[key];
+      return next;
+    });
+    setPayments((prev) =>
+      prev.map((p) => {
+        if (p.key !== key) return p;
+        const priced = reprice(p, p.delivery, applied);
+        return priced ? { ...p, ...priced } : p;
+      })
+    );
+  };
+  const applyCode = async (p: Payment, typed: string): Promise<string | null> => {
+    const code = normalizeCode(typed);
+    if (!CODE_PATTERN.test(code)) return "A code is 3 to 24 letters or digits.";
+    let found = discountsOf[p.key];
+    if (!found) {
+      try {
+        found = await loadShopDiscounts(p.shop.owner, p.shop.id);
+      } catch {
+        return "The shop's codes couldn't be read from your node right now. Try again.";
+      }
+      setDiscountsOf((prev) => ({ ...prev, [p.key]: found }));
+    }
+    if (!found.doc) return `${p.title} has no discount codes.`;
+    const discount = discountForCode(found.doc, await codeHash(p.shop.id, code));
+    if (!discount) return `${code} isn't a code at ${p.title}.`;
+    const buyerHash = buyer.name ? await nameHash(p.shop.id, buyer.name) : null;
+    const problem = discountProblem({ discount, doc: found.doc, lines: p.baseLines, buyerNameHash: buyerHash, now: clock(), pricing: found.pricing, hasDeliveryFee: !!p.delivery });
+    if (problem) return problem;
+    if (!discountLine({ discount, code, lines: p.baseLines, deliveryLine: p.delivery, coin: p.coin, rate: p.rate, digital: p.digital, wholeUnits: p.wholeUnits })) {
+      return `${code} takes less than one whole ${coinLabel(p.coin, p.shop)} off this order.`;
+    }
+    setDiscount(p.key, { discount, code });
+    return null;
+  };
+  const removeDiscount = (p: Payment) => {
+    if (appliedOf[p.key] && !appliedOf[p.key].code) ownRemoved.current.add(p.key);
+    setDiscount(p.key, null);
   };
   const [runs, setRuns] = useState<Record<string, Run>>({});
   const [gettingRates, setGettingRates] = useState(false);
@@ -191,10 +266,32 @@ export function CombinedCheckoutDialog({
     for (const coin of new Set(included.map((s) => s.coin).filter(isForeignTicker))) {
       rates.set(coin, await getRate(coin).catch(() => null));
     }
-    // Each shop that ships prices its delivery for the address, all read at once.
+    // Each shop that ships prices its delivery for the address, all read at once; every shop's discount codes too.
     const shipped = included.filter((s) => s.shop && !isDigitalOnly(s.lines));
-    const prices = await Promise.all(shipped.map((s) => loadShopDelivery(s.shop!.owner, s.shop!.id).then((d) => d, () => null)));
+    const withShop = included.filter((s) => s.shop);
+    const [prices, codes, wholes] = await Promise.all([
+      Promise.all(shipped.map((s) => loadShopDelivery(s.shop!.owner, s.shop!.id).then((d) => d, () => null))),
+      Promise.all(withShop.map((s) => discountsOf[s.view.key] ?? loadShopDiscounts(s.shop!.owner, s.shop!.id).catch(() => ({ doc: null, pricing: null }) as ShopDiscounts))),
+      Promise.all(
+        withShop.map((s) => {
+          const id = assetIdOf(s.coin);
+          return id === null ? false : assetInfo({ id }).then((info) => info?.isDivisible === false, () => false);
+        })
+      ),
+    ]);
     const deliveryOf = new Map(shipped.map((s, i) => [s.view.key, prices[i]]));
+    const codesOf: Record<string, ShopDiscounts> = Object.fromEntries(withShop.map((s, i) => [s.view.key, codes[i]]));
+    const wholeOf = new Map(withShop.map((s, i) => [s.view.key, wholes[i]]));
+    // A discount for the buyer's own name at a shop, unless they took it off there.
+    const ownOf: Record<string, AppliedDiscount> = {};
+    if (buyer.name) {
+      for (const s of withShop) {
+        const doc = codesOf[s.view.key]?.doc;
+        if (!doc || appliedOf[s.view.key] || ownRemoved.current.has(s.view.key)) continue;
+        const own = discountForName(doc, await nameHash(s.shop!.id, buyer.name), clock());
+        if (own) ownOf[s.view.key] = { discount: own };
+      }
+    }
     setGettingRates(false);
     if (edits !== addressEdits.current) return;
     const next: Payment[] = [];
@@ -224,21 +321,15 @@ export function CombinedCheckoutDialog({
         notDelivered.push({ key: s.view.key, message: charge.message });
         continue;
       }
-      const lines = charge.line ? [...s.lines, charge.line] : s.lines;
-      const priced = priceLines(lines, s.coin, rate, false, isForeignTicker(s.coin) && rate === null);
-      if (!priced.ok) {
-        missing.push(s.title);
-        continue;
-      }
-      next.push({
+      const part: Payment = {
         key: s.view.key,
         title: s.title,
         shop: s.shop,
-        lines,
+        lines: [],
         coin: s.coin,
         rate,
-        amount: priced.amount,
-        details: priced.details,
+        amount: "",
+        details: { totalPrice: "" } as OrderDetails,
         digital,
         items: itemCount(s.lines),
         delivery: charge.line,
@@ -246,8 +337,26 @@ export function CombinedCheckoutDialog({
         baseLines: s.lines,
         choices: offered,
         ...(charge.option && { option: charge.option }),
-      });
+        discount: null,
+        wholeUnits: wholeOf.get(s.view.key) ?? false,
+      };
+      // The discount applied before (Back, then Continue), or the buyer's name's own when it applies to this order.
+      let applied: AppliedDiscount | null = appliedOf[s.view.key] ?? null;
+      const own = ownOf[s.view.key];
+      const shopCodes = codesOf[s.view.key];
+      if (!applied && own && shopCodes?.doc && buyer.name) {
+        const hash = await nameHash(s.shop.id, buyer.name);
+        if (!discountProblem({ discount: own.discount, doc: shopCodes.doc, lines: s.lines, buyerNameHash: hash, now: clock(), pricing: shopCodes.pricing, hasDeliveryFee: !!charge.line })) applied = own;
+      }
+      const priced = reprice(part, charge.line, applied);
+      if (!priced) {
+        missing.push(s.title);
+        continue;
+      }
+      next.push({ ...part, ...priced });
     }
+    setDiscountsOf(codesOf);
+    setAppliedOf(Object.fromEntries(next.filter((p) => p.discount).map((p) => [p.key, p.discount!.applied])));
     setPayments(next);
     setUnpriced(missing);
     setUndelivered(notDelivered);
@@ -453,6 +562,11 @@ export function CombinedCheckoutDialog({
                         <AmountTag value={unitPrice(p.delivery.product, p.coin, p.rate)} coin={p.coin} shop={p.shop} size="small" />
                       </Typography>
                     )}
+                    {p.discount && (
+                      <Typography variant="body2" color="text.secondary">
+                        {`${discountTitle(p.discount.applied.discount, p.discount.applied.code)}: −${formatPrice(p.discount.amount)} ${coinLabel(p.coin, p.shop)}`}
+                      </Typography>
+                    )}
                   </>
                 }
               >
@@ -471,6 +585,14 @@ export function CombinedCheckoutDialog({
                   />
                 </Box>
               )}
+              <Box sx={{ pb: 1 }}>
+                <DiscountCodeField
+                  applied={appliedOf[p.key] ? { label: appliedOf[p.key].code ? `Code ${appliedOf[p.key].code} at ${p.title}` : `Your discount from ${p.title}` } : null}
+                  idle={appliedOf[p.key] && !p.discount ? "It takes nothing off this order now." : null}
+                  onApply={(code) => applyCode(p, code)}
+                  onRemove={() => removeDiscount(p)}
+                />
+              </Box>
               {/* Its dispatch time and returns, and whether its seller is away (shop/). */}
               <Box sx={{ pb: 1.5, display: "flex", flexDirection: "column", gap: 1, "&:empty": { display: "none" } }}>
                 <PolicyLines shop={p.shop} digital={p.lines.every((l) => l.product?.type === "digital")} />

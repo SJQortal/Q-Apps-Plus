@@ -13,7 +13,7 @@ import { PolicyLines } from "../../shop/PolicyLines";
 import { AwayNotice } from "../../shop/AwayNotice";
 import { NextSteps } from "./NextSteps";
 import { UpcomingOptions } from "./UpcomingOptions";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
 import { Alert, Box, Button, CircularProgress, Divider, FormControlLabel, IconButton, Radio, RadioGroup, Stack, Typography } from "@mui/material";
@@ -46,9 +46,20 @@ import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines"
 import { placeNotShipped } from "../../constants/shipping";
 import { deliveryCharge, deliveryChoices, loadShopDelivery, pickupChoices, withOptionNote, type DeliveryChoice, type ShopDelivery } from "../../delivery/checkoutDelivery";
 import { DeliveryOptionsPicker } from "./DeliveryOptionsPicker";
+import { DiscountCodeField } from "./DiscountCodeField";
+import { CODE_PATTERN, codeHash, discountTitle, nameHash, normalizeCode, type Discount } from "../../discounts/model";
+import { discountForCode, discountForName, discountLine, discountProblem } from "../../discounts/apply";
+import { loadShopDiscounts, type ShopDiscounts } from "../../discounts/discountsDoc";
+import { assetInfo } from "../../qdn/assets";
 import { deliveryMoney, deliveryOptionsOf } from "../../delivery/model";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
+
+/** A discount the buyer applied (a code), or their name's own (no code). */
+interface AppliedDiscount {
+  discount: Discount;
+  code?: string;
+}
 
 /** What Confirm shows and Pay pays: fixed when the buyer reaches Confirm. */
 interface Snapshot {
@@ -59,6 +70,8 @@ interface Snapshot {
   /** The lines Pay pays: the cart's, and the delivery fee's when there is one. */
   lines: CartLine[];
   delivery: { line: CartLine | null; free: boolean; option?: { id: string; name: string }; collect?: boolean };
+  /** The discount's line in `lines` and what it takes off; null without one (or when it takes nothing off now). */
+  discount: { applied: AppliedDiscount; amount: number } | null;
 }
 
 type Outcome = CheckoutResult & { unexpected?: boolean };
@@ -140,6 +153,13 @@ export function CheckoutDialog({
   // Collecting it (a pickup option, delivery/model.ts): who, the place and how to reach them, no address.
   const [collect, setCollect] = useState(false);
   const [contact, setContact] = useState(() => (buyer.name ? `Q-Mail: ${buyer.name}` : ""));
+  // Discount codes (discounts/): the shop's codes, read at Confirm, and the one applied.
+  const [discounts, setDiscounts] = useState<ShopDiscounts | null>(null);
+  const [applied, setApplied] = useState<AppliedDiscount | null>(null);
+  // The buyer took their name's own discount off: it isn't applied again.
+  const personalRemoved = useRef(false);
+  // Paying in an asset that can't be split: a discount rounds down to whole units.
+  const [assetWhole, setAssetWhole] = useState<{ coin: string; whole: boolean } | null>(null);
   // The shop's delivery options for this order and address (delivery/model.ts), and the buyer's pick.
   const [choices, setChoices] = useState<DeliveryChoice[]>([]);
   const [optionId, setOptionId] = useState("");
@@ -171,6 +191,20 @@ export function CheckoutDialog({
     };
   }, [isDigital, shop.owner, shop.id]);
 
+  useEffect(() => {
+    const id = assetIdOf(coin);
+    if (id === null) return;
+    let alive = true;
+    assetInfo({ id }).then(
+      (info) => alive && setAssetWhole({ coin, whole: info?.isDivisible === false }),
+      () => {}
+    );
+    return () => {
+      alive = false;
+    };
+  }, [coin]);
+  const wholeUnits = assetWhole?.coin === coin && assetWhole.whole;
+
   const priced = priceLines(lines, coin, rate, rateLoading, rateError);
   const label = coinLabel(coin, shop);
   const running = step === "running";
@@ -181,14 +215,19 @@ export function CheckoutDialog({
     if (!paying.current && !recordingNow) onClose();
   };
 
-  const toConfirm = (delivery: Snapshot["delivery"] = { line: null, free: false }) => {
-    const paid = delivery.line ? [...lines, delivery.line] : lines;
+  const toConfirm = (delivery: Snapshot["delivery"] = { line: null, free: false }, discountNow: AppliedDiscount | null = applied) => {
+    const withDelivery = delivery.line ? [...lines, delivery.line] : lines;
+    // The discount's line (discounts/apply.ts) after the delivery fee, which a free-delivery code takes off too.
+    const off = discountNow
+      ? discountLine({ discount: discountNow.discount, code: discountNow.code, lines, deliveryLine: delivery.line, coin, rate, digital: isDigital, wholeUnits })
+      : null;
+    const paid = off ? [...withDelivery, off.line] : withDelivery;
     const now = priceLines(paid, coin, rate, rateLoading, rateError);
     if (!now.ok) {
       setStep("review");
       return;
     }
-    setSnapshot({ coin, rate, amount: now.amount, details: now.details, lines: paid, delivery });
+    setSnapshot({ coin, rate, amount: now.amount, details: now.details, lines: paid, delivery, discount: off && discountNow ? { applied: discountNow, amount: off.amount } : null });
     setNotice(null);
     setStep("confirm");
   };
@@ -261,6 +300,69 @@ export function CheckoutDialog({
   const pickOption = (choice: DeliveryChoice) => {
     setOptionId(choice.id);
     toConfirm({ line: choice.line, free: choice.free, option: { id: choice.id, name: choice.name }, collect: snapshot?.delivery.collect });
+  };
+
+  // The shop's codes, read when the buyer reaches Confirm; a discount for the buyer's own name applies by itself.
+  const applyOwnDiscount = useEffectEvent((discount: Discount, hash: string, shopDiscounts: ShopDiscounts) => {
+    if (step !== "confirm" || !snapshot || !shopDiscounts.doc || applied || personalRemoved.current) return;
+    const problem = discountProblem({ discount, doc: shopDiscounts.doc, lines, buyerNameHash: hash, now: Date.now(), pricing: shopDiscounts.pricing, hasDeliveryFee: !!snapshot.delivery.line });
+    if (problem) return;
+    const next = { discount };
+    setApplied(next);
+    toConfirm(snapshot.delivery, next);
+  });
+  useEffect(() => {
+    if (step !== "confirm" || discounts) return;
+    let alive = true;
+    loadShopDiscounts(shop.owner, shop.id).then(
+      async (d) => {
+        if (!alive) return;
+        setDiscounts(d);
+        if (!d.doc || !buyer.name) return;
+        const hash = await nameHash(shop.id, buyer.name);
+        const own = discountForName(d.doc, hash, Date.now());
+        if (alive && own) applyOwnDiscount(own, hash, d);
+      },
+      () => alive && setDiscounts({ doc: null, pricing: null })
+    );
+    return () => {
+      alive = false;
+    };
+  }, [step, discounts, shop.owner, shop.id, buyer.name]);
+
+  const applyCode = async (typed: string): Promise<string | null> => {
+    if (!snapshot) return "Try again.";
+    const code = normalizeCode(typed);
+    if (!CODE_PATTERN.test(code)) return "A code is 3 to 24 letters or digits.";
+    let found = discounts;
+    if (!found) {
+      try {
+        found = await loadShopDiscounts(shop.owner, shop.id);
+      } catch {
+        return "The shop's codes couldn't be read from your node right now. Try again.";
+      }
+      setDiscounts(found);
+    }
+    const name = shop.title || shop.owner;
+    if (!found.doc) return `${name} has no discount codes.`;
+    const discount = discountForCode(found.doc, await codeHash(shop.id, code));
+    if (!discount) return `${code} isn't a code at ${name}.`;
+    const buyerHash = buyer.name ? await nameHash(shop.id, buyer.name) : null;
+    const problem = discountProblem({ discount, doc: found.doc, lines, buyerNameHash: buyerHash, now: Date.now(), pricing: found.pricing, hasDeliveryFee: !!snapshot.delivery.line });
+    if (problem) return problem;
+    if (!discountLine({ discount, code, lines, deliveryLine: snapshot.delivery.line, coin: snapshot.coin, rate: snapshot.rate, digital: isDigital, wholeUnits })) {
+      return `${code} takes less than one whole ${coinLabel(snapshot.coin, shop)} off this order.`;
+    }
+    const next = { discount, code };
+    setApplied(next);
+    toConfirm(snapshot.delivery, next);
+    return null;
+  };
+
+  const removeDiscount = () => {
+    if (applied && !applied.code) personalRemoved.current = true;
+    setApplied(null);
+    if (snapshot) toConfirm(snapshot.delivery, null);
   };
 
   const pay = async () => {
@@ -541,6 +643,17 @@ export function CheckoutDialog({
             </Row>
           )
         )}
+        {snapshot.discount && (
+          <Row label={<Typography variant="body2">{discountTitle(snapshot.discount.applied.discount, snapshot.discount.applied.code)}</Typography>}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{`−${formatPrice(snapshot.discount.amount)} ${snapshotLabel}`}</Typography>
+          </Row>
+        )}
+        <DiscountCodeField
+          applied={applied ? { label: applied.code ? `Code ${applied.code}` : `Your discount from ${shop.title || shop.owner}` } : null}
+          idle={applied && !snapshot.discount ? "It takes nothing off this order now." : null}
+          onApply={applyCode}
+          onRemove={removeDiscount}
+        />
         <Box>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
             <Typography variant="body2">{isDigital ? "Digital order: nothing is shipped." : snapshot.delivery.collect ? "Collected by" : "Deliver to"}</Typography>

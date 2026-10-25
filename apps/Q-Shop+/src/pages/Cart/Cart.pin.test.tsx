@@ -42,7 +42,8 @@ import {
 } from "../../test/fixtures/shop";
 import { CartPage } from "./CartPage";
 import { resourcePath } from "../../qdn/search";
-import { dataContainerIdentifier, deliveryIdentifier } from "../../qdn/identifiers";
+import { dataContainerIdentifier, deliveryIdentifier, discountsIdentifier } from "../../qdn/identifiers";
+import { codeHash, nameHash } from "../../discounts/model";
 
 vi.mock("short-unique-id", () => ({
   default: class {
@@ -54,6 +55,7 @@ vi.mock("short-unique-id", () => ({
 
 const NOW = 1761000000000;
 const DELIVERY_ID = deliveryIdentifier(SHORT_STORE_ID);
+const DISCOUNTS_ID = discountsIdentifier(SHORT_STORE_ID);
 
 function setup(opts: {
   coin?: "QORT" | "ARRR";
@@ -64,6 +66,8 @@ function setup(opts: {
   delivery?: { doc: unknown; productList?: unknown };
   /** Holds the delivery prices' search until it resolves. */
   deliveryGate?: Promise<void>;
+  /** The shop's discount codes (discounts/model.ts): none unless the test gives some. */
+  discounts?: { doc: unknown };
 }) {
   const store = createAppStore();
   store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
@@ -95,6 +99,10 @@ function setup(opts: {
         return json(opts.delivery ? [{ name: SELLER, service: "DOCUMENT", identifier: DELIVERY_ID }] : []);
       }
       if (opts.delivery && url === resourcePath("DOCUMENT", SELLER, DELIVERY_ID)) return json(opts.delivery.doc);
+      if (String(url).startsWith("/arbitrary/resources/search?") && String(url).includes(`identifier=${DISCOUNTS_ID}`)) {
+        return json(opts.discounts ? [{ name: SELLER, service: "DOCUMENT", identifier: DISCOUNTS_ID }] : []);
+      }
+      if (opts.discounts && url === resourcePath("DOCUMENT", SELLER, DISCOUNTS_ID)) return json(opts.discounts.doc);
       if (opts.delivery?.productList && url === resourcePath("DOCUMENT", SELLER, dataContainerIdentifier(STORE_ID))) {
         return json(opts.delivery.productList);
       }
@@ -461,6 +469,100 @@ describe("checkout (pinned)", () => {
       shippingAddress: { streetAddress: "", city: "", state: "Oregon", country: "United States", zipCode: "", deliveryNote: `Delivery: Local pickup. Contact: Q-Mail: ${BUYER}.` },
     });
     expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
+  });
+
+  const discountsDoc = (discounts: unknown[]) => ({ v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts });
+
+  /** At Confirm: "Have a discount code?", the code, Apply. */
+  async function enterCode(code: string) {
+    const dialog = await screen.findByRole("dialog");
+    if (!within(dialog).queryByLabelText(/Discount code/)) await press("Have a discount code?");
+    fireEvent.change(within(dialog).getByLabelText(/Discount code/), { target: { value: code } });
+    await press("Apply");
+    return dialog;
+  }
+
+  it("takes a discount code's percentage off at Confirm, as one more line of the order (+ app)", async () => {
+    const doc = discountsDoc([{ id: "spr", code: await codeHash(STORE_ID, "SPRING10"), percent: 10 }]);
+    const { q } = setup({ items: [{ product: mug, qty: 2 }, { product: poster, qty: 1 }], discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await enterCode("spring10");
+    expect(await within(dialog).findByText("Discount SPRING10: 10% off")).toBeInTheDocument();
+    expect(within(dialog).getByText("−0.31 QORT")).toBeInTheDocument();
+    expect(within(dialog).getByText("Code SPRING10")).toBeInTheDocument();
+    await press(/^Pay 2\.79 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ amount: "2.79000000" });
+    const [orderRes, mailRes] = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    const order = decodeData64(orderRes.data64);
+    expect(order.details.totalPrice).toBe("2.79000000");
+    // Priced like a product, so the original shows it as a line of the total; "digital" in an all-digital order.
+    expect(order.details["q-store-discount"]).toEqual({
+      product: {
+        id: "q-store-discount",
+        title: "Discount SPRING10: 10% off",
+        type: "digital",
+        price: [{ currency: "qort", value: -0.31 }],
+        discount: { id: "spr", code: "SPRING10", percent: 10, value: 0.31, coin: "QORT" },
+      },
+      catalogueId: "",
+      quantity: 1,
+      pricePerUnit: -0.31,
+      totalProductPrice: -0.31,
+    });
+    const html = decodeData64(mailRes.data64).htmlContent;
+    expect(html).toContain("<strong>Discount SPRING10: 10% off</strong>");
+    expect(html).toContain("ordered 3 items");
+  });
+
+  it("says why a code doesn't apply: not this shop's, ended, or for other products", async () => {
+    const doc = discountsDoc([
+      { id: "old", code: await codeHash(STORE_ID, "SUMMER"), percent: 20, ends: NOW - 86_400_000 },
+      { id: "chairs", code: await codeHash(STORE_ID, "CHAIRS"), percent: 20, products: [chair.id] },
+    ]);
+    setup({ items: [{ product: mug, qty: 1 }], discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await enterCode("nope10");
+    expect(await within(dialog).findByText(`NOPE10 isn't a code at ${STORE_TITLE}.`)).toBeInTheDocument();
+    await enterCode("summer");
+    expect(await within(dialog).findByText(/^This code ended on /)).toBeInTheDocument();
+    await enterCode("chairs");
+    expect(await within(dialog).findByText("This code is for other products of this shop.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /^Pay 1\.50 QORT$/ })).toBeInTheDocument();
+  });
+
+  it("applies a discount for the buyer's own name by itself, and Remove takes it off (+ app)", async () => {
+    const doc = discountsDoc([{ id: "vip", forName: await nameHash(STORE_ID, BUYER), percent: 15 }]);
+    setup({ items: [{ product: mug, qty: 2 }], discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Your discount: 15% off")).toBeInTheDocument();
+    expect(within(dialog).getByText(`Your discount from ${STORE_TITLE}`)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /^Pay 2\.55 QORT$/ })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    expect(await within(dialog).findByRole("button", { name: /^Pay 3\.00 QORT$/ })).toBeInTheDocument();
+    expect(within(dialog).queryByText("Your discount: 15% off")).toBeNull();
+  });
+
+  it("a free-delivery code takes the delivery fee off (+ app)", async () => {
+    const delivery = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({})] }, profiles: [], updated: 1 };
+    const doc = discountsDoc([{ id: "ship", code: await codeHash(STORE_ID, "FREESHIP"), percent: 0, freeDelivery: true }]);
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc: delivery }, discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    const dialog = await enterCode("FREESHIP");
+    expect(await within(dialog).findByText("Discount FREESHIP: free delivery")).toBeInTheDocument();
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id, "q-store-delivery", "q-store-discount"]);
+    expect(order.details["q-store-discount"]).toMatchObject({ totalProductPrice: -3, product: { type: "discount" } });
+    expect(order.details.totalPrice).toBe("12.00000000");
   });
 
   it("prices a delivery fee set in USD in QORT from the shop's rates", async () => {

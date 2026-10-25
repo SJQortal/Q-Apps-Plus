@@ -7,6 +7,7 @@ import type { Order } from "../state/features/orderSlice";
 import { assetIdOf, type ShopCoinSettings } from "../money/coins";
 import { isDigitalOnly, type CartLine } from "../money/order";
 import { isDeliveryLine } from "../delivery/model";
+import { isDiscountLine } from "../discounts/model";
 
 const asText = (value: unknown): string | undefined => (typeof value === "string" ? value : undefined);
 
@@ -55,11 +56,11 @@ function num(value: unknown): number | undefined {
   return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
-/** The order's product lines, in the order they were written (its delivery fee isn't one: orderDelivery). */
+/** The order's product lines, in the order they were written (its delivery fee and discount aren't: orderDelivery, orderDiscount). */
 export function orderItems(order: Order | null | undefined): OrderItem[] {
   const details = (order?.details ?? {}) as Record<string, any>;
   return Object.keys(details)
-    .filter((key) => key !== "totalPrice" && details[key] && typeof details[key] === "object" && !isDeliveryLine(key, details[key]))
+    .filter((key) => key !== "totalPrice" && details[key] && typeof details[key] === "object" && !isDeliveryLine(key, details[key]) && !isDiscountLine(key, details[key]))
     .map((key) => {
       const line = details[key];
       const product = line.product ?? {};
@@ -85,6 +86,30 @@ export function orderDelivery(order: Order | null | undefined): { title: string;
   if (!key) return null;
   const title: unknown = details[key].product?.title;
   return { title: typeof title === "string" && title ? title : "Delivery", total: num(details[key].totalProductPrice) };
+}
+
+/**
+ * The order's discount line (discounts/apply.ts), when it has one: "Discount
+ * SPRING10: 10% off", what it took off (a positive number), and the code and
+ * discount it names, for the seller's check (discounts/verify.ts).
+ */
+export function orderDiscount(
+  order: Order | null | undefined
+): { title: string; amount: number | undefined; code?: string; id?: string; percent?: number; freeDelivery?: boolean } | null {
+  const details = (order?.details ?? {}) as Record<string, any>;
+  const key = Object.keys(details).find((k) => k !== "totalPrice" && details[k] && typeof details[k] === "object" && isDiscountLine(k, details[k]));
+  if (!key) return null;
+  const product = details[key].product ?? {};
+  const info = (product.discount ?? {}) as Record<string, unknown>;
+  const total = num(details[key].totalProductPrice);
+  return {
+    title: typeof product.title === "string" && product.title ? product.title : "Discount",
+    amount: total === undefined ? undefined : Math.abs(total),
+    ...(typeof info.code === "string" && info.code && { code: info.code }),
+    ...(typeof info.id === "string" && info.id && { id: info.id }),
+    ...(typeof info.percent === "number" && { percent: info.percent }),
+    ...(info.freeDelivery === true && { freeDelivery: true }),
+  };
 }
 
 /** "Mug × 2, Poster", or "Mug × 2 and 3 more". */

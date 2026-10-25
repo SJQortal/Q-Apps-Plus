@@ -34,6 +34,7 @@ import {
 import { listPendingOrders } from "../../money/pendingOrders";
 import { noteDeletedShop, resetDeletedShops } from "../../qdn/deleted";
 import { CartPage } from "./CartPage";
+import { codeHash } from "../../discounts/model";
 import { SAVED_DELIVERY_STORAGE_KEY } from "./delivery";
 
 vi.mock("short-unique-id", () => ({
@@ -445,6 +446,41 @@ describe("cart page", () => {
     ]);
     expect(node.q.callsFor("GET_NAME_DATA").map((c) => c.name)).toEqual([second.owner, first.owner]);
     expect(Object.keys(store.getState().cart.carts)).toEqual([]);
+  });
+
+  it("takes a discount code at one shop of several, and that shop's payment only (+ app)", async () => {
+    const world = makeWorld({ shops: 2 });
+    const [first, second] = world.shops;
+    const firstId = `q-store-general-${first.shortStoreId}`;
+    first.discounts = { v: 1, storeId: firstId, currency: "QORT", updated: 1, discounts: [{ id: "half", code: await codeHash(firstId, "HALF"), percent: 50 }] };
+    const node = installMockNode(world);
+    node.q.on("SEND_COIN", async () => ({ signature: "PAYSIG" }));
+    node.q.on("PUBLISH_MULTIPLE_QDN_RESOURCES", async () => true);
+    const store = newStore();
+    for (const shop of [first, second]) {
+      store.dispatch(
+        setProductToCart({
+          productId: shop.products[1].id,
+          catalogueId: `q-store-catalogue-${shop.shortStoreId}-CAT0000000`,
+          storeId: `q-store-general-${shop.shortStoreId}`,
+          storeOwner: shop.owner,
+          quantity: 2,
+        })
+      );
+    }
+    renderCart(store);
+    fireEvent.click(await within(await screen.findByRole("region", { name: "Summary" })).findByRole("button", { name: "Check out all 2 shops" }));
+    await press("Continue");
+    const payments = await screen.findByRole("list", { name: "Payments" });
+    const firstPart = within(payments).getByText(new RegExp(`\\d\\. ${first.title}$`)).closest("li") as HTMLElement;
+    fireEvent.click(within(firstPart).getByRole("button", { name: "Have a discount code?" }));
+    fireEvent.change(within(firstPart).getByLabelText(/Discount code/), { target: { value: "half" } });
+    fireEvent.click(within(firstPart).getByRole("button", { name: "Apply" }));
+    expect(await within(firstPart).findByText("Discount HALF: 50% off: −2.00 QORT")).toBeInTheDocument();
+    await press("Pay 2 shops");
+    await waitFor(() => expect(node.q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
+    // 2 × 2 QORT each: the first shop's half off, the second's as priced (the newest cart first).
+    expect(node.q.callsFor("SEND_COIN").map((c) => c.amount)).toEqual(["4.00000000", "2.00000000"]);
   });
 
   it("adds each shop's delivery fee for the address to its payment, and leaves out a shop that doesn't deliver there", async () => {

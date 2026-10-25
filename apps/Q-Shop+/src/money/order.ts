@@ -13,6 +13,7 @@ import { APP_NAME } from "../constants/plus";
 import { jsonToBase64 } from "../qdn/payloads";
 import { amountText, formatPrice, unitPrice, type PricedProduct } from "./pricing";
 import { isDeliveryLine } from "../delivery/model";
+import { isDiscountLine } from "../discounts/model";
 
 export interface CartLine {
   productId: string;
@@ -240,10 +241,16 @@ export function buildOrderMailHtml(args: {
   const unit = escapeHtml(currencyLabel);
   const shop = escapeHtml(storeTitle || "your shop");
   const lines = orderLines(details);
-  // The delivery fee is a line of its own (delivery/model.ts): in the table, not in the item count.
-  const items = lines.filter(([key, line]) => !isDeliveryLine(key, line)).reduce((sum, [, line]) => sum + (Number(line.quantity) || 0), 0);
+  // The delivery fee and a discount are lines of their own (delivery/model.ts, discounts/apply.ts): in the table, not in the item count.
+  const items = lines.filter(([key, line]) => !isDeliveryLine(key, line) && !isDiscountLine(key, line)).reduce((sum, [, line]) => sum + (Number(line.quantity) || 0), 0);
   const rows = lines
     .map(([key, line]) => {
+      if (isDiscountLine(key, line)) {
+        return `<tr>
+          <td style="${TD}" colspan="3"><strong>${escapeHtml(line.product?.title || "Discount")}</strong></td>
+          <td style="${TD} ${NUM}">−${amount(Math.abs(Number(line.totalProductPrice) || 0), unit)}</td>
+        </tr>`;
+      }
       if (isDeliveryLine(key, line)) {
         return `<tr>
           <td style="${TD}" colspan="3"><strong>${escapeHtml(line.product?.title || "Delivery")}</strong></td>
