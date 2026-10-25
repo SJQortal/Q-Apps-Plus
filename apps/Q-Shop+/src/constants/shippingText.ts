@@ -17,7 +17,8 @@ const word = (source: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${source})(?!
 /** Words sellers typed for the whole world, a region, or a country under another name. */
 const PHRASES: [RegExp, () => readonly string[]][] = [
   [word("world ?wide|world-wide|world|anywhere|everywhere|earth|global(?:ly)?|international(?:ly)?|all countries|any country|every country|most countries|planet|milky way"), () => INHABITED],
-  [word("u\\.?s\\.?a\\.?|united states|america|stateside|50 states|lower 48|conus"), () => [US]],
+  // "America" alone is the United States; South, Latin and Central America aren't (their regions match below).
+  [word("u\\.?s\\.?a\\.?|united states|(?<!(?:south|latin|central|north)\\s)america|stateside|50 states|lower 48|conus"), () => [US]],
   // "US" and "U.S." in capitals only: "us" is also "ship to us".
   [new RegExp("(?<![\\p{L}\\p{N}])U\\.?S\\.?(?![\\p{L}\\p{N}])", "u"), () => [US]],
   [word("european union|eu"), () => EU_COUNTRIES],
@@ -25,6 +26,7 @@ const PHRASES: [RegExp, () => readonly string[]][] = [
   [word("north america"), () => regionCodes("north-america")],
   [word("south america"), () => regionCodes("south-america")],
   [word("central america|caribbean"), () => regionCodes("central-america")],
+  [word("latin america"), () => [...regionCodes("south-america"), ...regionCodes("central-america")]],
   [word("asia"), () => regionCodes("asia")],
   [word("middle east"), () => regionCodes("middle-east")],
   [word("africa"), () => regionCodes("africa")],
@@ -34,7 +36,8 @@ const PHRASES: [RegExp, () => readonly string[]][] = [
   [word("deutschland|germany"), () => ["DE"]],
   [word("österreich|osterreich|austria"), () => ["AT"]],
   [word("schweiz|suisse|switzerland"), () => ["CH"]],
-  [word("ísland|island|iceland"), () => ["IS"]],
+  // Not "island": "any island", "Rhode Island".
+  [word("ísland|iceland"), () => ["IS"]],
   [word("polska|poland"), () => ["PL"]],
   [word("canada"), () => ["CA"]],
   // Countries in their own words.
@@ -70,7 +73,9 @@ const PHRASES: [RegExp, () => readonly string[]][] = [
 
 const COUNTRY_NAMES = (COUNTRY_LIST as { text: string; value: string }[]).filter((c) => c.text.length > 3);
 /** A US state named on its own ("Northern Colorado", "Texas only") means the United States. */
-const STATE_WORDS = word((STATE_LIST as { text: string }[]).map((st) => st.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"));
+const STATE_SOURCE = (STATE_LIST as { text: string }[]).map((st) => st.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+const STATE_WORDS = word(STATE_SOURCE);
+const STATE_WORDS_ALL = new RegExp(`(?<![\\p{L}\\p{N}])(?:${STATE_SOURCE})(?![\\p{L}\\p{N}])`, "giu");
 
 /**
  * The countries a shop's old typed "Ships to" names, as far as plain words
@@ -98,10 +103,12 @@ function suggest(text: string): { codes: string[]; words: string[] } {
     words.push(match[0]);
     for (const code of codes()) found.add(code);
   }
+  // Country names, outside US state names ("New Jersey" isn't Jersey).
+  const outsideStates = text.replace(STATE_WORDS_ALL, " ");
   for (const country of COUNTRY_NAMES) {
     if (found.has(country.value)) continue;
     const pattern = word(country.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    if (pattern.test(text)) {
+    if (pattern.test(outsideStates)) {
       words.push(country.text);
       found.add(country.value);
     }
