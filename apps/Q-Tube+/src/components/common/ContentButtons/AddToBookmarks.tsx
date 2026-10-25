@@ -303,8 +303,8 @@ export const AddToBookmarks = ({ metadataReference, type = 'video' }) => {
         <Box
           ref={ref}
           tabIndex={-1}
-          bgcolor={theme.palette.background.paper}
           sx={{
+            bgcolor: theme.palette.background.paper,
             position: 'fixed',
             left: '50%',
             top: '50%',
@@ -316,9 +316,8 @@ export const AddToBookmarks = ({ metadataReference, type = 'video' }) => {
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
-            zIndex: 501,
-          }}
-        >
+            zIndex: 501
+          }}>
           {mode === 1 && (
             <>
               <ButtonBase

@@ -116,7 +116,7 @@ export const VideoTitleInput: React.FC<{
       variant="filled"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      inputProps={{ maxLength: 180 }}
+      slotProps={{ htmlInput: { maxLength: 180 } }}
       required
     />
   );

@@ -79,7 +79,8 @@
     "subscriptions": "Подписки",
     "watched_videos": "Просмотренные Видео",
     "bookmarks": "Закладки",
-    "your_channel": "Ваш Канал"
+    "your_channel": "Ваш Канал",
+    "settings": "Settings"
   },
   "filters": {
     "most_recent": "самые новые",
@@ -153,5 +154,30 @@
     "publish_failed": "не удалось опубликовать описание канала",
     "description_deleted": "описание канала удалено",
     "delete_failed": "не удалось удалить описание канала"
+  },
+  "settings": {
+    "account": "Account",
+    "appearance": "Appearance",
+    "privacy": "Privacy",
+    "about": "About",
+    "no_name": "No Qortal name yet",
+    "not_signed_in": "Not signed in",
+    "names_count": "{{count}} registered names",
+    "switch_name": "Switch name",
+    "address": "Address",
+    "copy_address": "Copy address",
+    "copied": "Copied",
+    "blocked_names": "Blocked names",
+    "blocked_names_hint": "Videos and comments from these names are hidden",
+    "changelog": "What's new in this version",
+    "upstream": "The original Q-Tube",
+    "source": "Q-Tube+ source code",
+    "about_blurb": "Q-Tube+ is a faster, redesigned Q-Tube. It reads and writes the same videos, playlists, comments and super likes on QDN, so both apps show the same content.",
+    "whats_new": "What's new in Q-Tube+",
+    "you_are_on": "You are on Q-Tube+ {{version}}",
+    "latest": "Latest",
+    "show_less": "Show less",
+    "show_all_changes": "Show all changes",
+    "close": "Close"
   }
 }

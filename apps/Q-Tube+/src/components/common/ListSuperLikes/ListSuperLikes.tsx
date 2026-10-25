@@ -112,12 +112,11 @@ export default function ListSuperLikes({ superlikes }) {
               >
                 <Box
                   sx={{
+                    alignItems: "flex-start",
+                    gap: 1,
                     padding: '0px',
-                    display: 'flex',
-                  }}
-                  alignItems="flex-start"
-                  gap={1}
-                >
+                    display: 'flex'
+                  }}>
                   <Avatar
                     alt="Remy Sharp"
                     src={`/arbitrary/THUMBNAIL/${encodeURIComponent(superlike?.name)}/qortal_avatar`}
@@ -152,19 +151,18 @@ export default function ListSuperLikes({ superlikes }) {
                 <Spacer height="10px" />
                 {message && (
                   <Typography
+                    component="span"
+                    variant="body2"
                     sx={{
+                      color: "text.primary",
                       wordBreak: 'break-word',
                       fontSize: '15px',
                       display: '-webkit-box',
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: 'vertical',
                       overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                    component="span"
-                    variant="body2"
-                    color="text.primary"
-                  >
+                      textOverflow: 'ellipsis'
+                    }}>
                     {message}
                   </Typography>
                 )}

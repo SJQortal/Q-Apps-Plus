@@ -601,7 +601,7 @@ export const EditVideo = () => {
                   const formattedValue = value.replace(titleFormatter, '');
                   setTitle(formattedValue);
                 }}
-                inputProps={{ maxLength: 180 }}
+                slotProps={{ htmlInput: { maxLength: 180 } }}
                 required
               />
               {/* Show filename when EditVideo opens or when file is updated */}

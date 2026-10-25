@@ -177,16 +177,15 @@ export const PlaylistContent = () => {
                 )}
                 {!hasStarted && videoDuration && videoDuration > minDuration && (
                   <Box
-                    position="absolute"
-                    right={5}
-                    bottom={5}
-                    zIndex={999}
-                    bgcolor="background.paper2"
                     sx={{
+                      position: "absolute",
+                      right: 5,
+                      bottom: 5,
+                      zIndex: 999,
+                      bgcolor: "background.paper2",
                       padding: '5px',
-                      borderRadius: '5px',
-                    }}
-                  >
+                      borderRadius: '5px'
+                    }}>
                     <Typography variant="body2">
                       {formatTime(videoDuration)}
                     </Typography>

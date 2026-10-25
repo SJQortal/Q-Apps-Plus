@@ -211,14 +211,13 @@ export const Bookmarks = () => {
             <Spacer height="20px" />
           </Box>
           <Box
-            display="flex"
-            alignItems="center"
-            justifyContent="space-between"
-            gap={2}
             sx={{
-              width: '100%',
-            }}
-          >
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 2,
+              width: '100%'
+            }}>
             {(folderView !== null || selectedList !== 0) && (
               <Button
                 onClick={() => {

@@ -12,7 +12,6 @@ import {
   useTheme,
 } from '@mui/material';
 import localForage from 'localforage';
-import moment from 'moment';
 import { useAuth } from 'qapp-core';
 import React, {
   useCallback,
@@ -121,7 +120,7 @@ export const Notifications = () => {
 
       const timestamp = await generalLocal.getItem('notification-timestamp');
 
-      const after = timestamp || moment().subtract(5, 'days').valueOf();
+      const after = timestamp || Date.now() - 5 * 24 * 60 * 60 * 1000;
 
       const url = `/arbitrary/resources/search?mode=ALL&service=BLOG_COMMENT&identifier=${SUPER_LIKE_BASE}&limit=20&includemetadata=true&reverse=true&excludeblocked=true&offset=0&description=${FOR}:${username}_${FOR_SUPER_LIKE}&after=${after}`;
       const response = await fetch(url, {

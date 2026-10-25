@@ -463,16 +463,15 @@ export const VideoListItem = ({
           />
           {Boolean(video?.duration) && video?.duration > minDuration && (
             <Box
-              position="absolute"
-              right={5}
-              bottom={5}
-              zIndex={999}
-              bgcolor="background.paper2"
               sx={{
+                position: "absolute",
+                right: 5,
+                bottom: 5,
+                zIndex: 999,
+                bgcolor: "background.paper2",
                 padding: '5px',
-                borderRadius: '5px',
-              }}
-            >
+                borderRadius: '5px'
+              }}>
               <Typography variant="body2">
                 {formatTime(video.duration)}
               </Typography>

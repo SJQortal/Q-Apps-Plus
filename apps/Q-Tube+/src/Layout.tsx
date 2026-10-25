@@ -65,7 +65,13 @@ const Layout = () => {
   }, []);
 
   return (
-    <Box display="flex" flexDirection="column" height="100vh" overflow="hidden">
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        overflow: "hidden"
+      }}>
       <AnimatePresence>
         <motion.div
           animate={
@@ -99,10 +105,11 @@ const Layout = () => {
           ref={scrollRef}
           id="main-box"
           component="main"
-          flex={1}
-          p={isMobile ? 0 : 2}
           sx={{
+            flex: 1,
+            p: isMobile ? 0 : 2,
             overflowY: 'scroll',
+
             '::-webkit-scrollbar-track': {
               backgroundColor: 'transparent',
             },
@@ -120,11 +127,11 @@ const Layout = () => {
               border: '4px solid transparent',
               transition: '0.3s background-color',
             },
+
             '::-webkit-scrollbar-thumb:hover': {
               backgroundColor: 'rgba(63, 67, 80, 0.50)',
-            },
-          }}
-        >
+            }
+          }}>
           <Outlet />
         </Box>
       </Box>

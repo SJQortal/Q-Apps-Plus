@@ -202,11 +202,10 @@ export const Comment = ({
                 )}
 
                 <Typography
-                  color="primary.dark"
                   sx={{
-                    fontSize: isSmall ? '14px' : 'unset',
-                  }}
-                >
+                    color: "primary.dark",
+                    fontSize: isSmall ? '14px' : 'unset'
+                  }}>
                   {isOpenReplies
                     ? ` ${t('core:comments.hide_replies', {
                         postProcess: 'capitalizeFirstChar',

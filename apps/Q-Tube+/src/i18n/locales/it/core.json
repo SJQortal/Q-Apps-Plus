@@ -79,7 +79,8 @@
     "subscriptions": "Iscrizioni",
     "watched_videos": "Video Visti",
     "bookmarks": "Segnalibri",
-    "your_channel": "Il Tuo Canale"
+    "your_channel": "Il Tuo Canale",
+    "settings": "Settings"
   },
   "filters": {
     "most_recent": "più recenti",
@@ -153,5 +154,30 @@
     "publish_failed": "errore nella pubblicazione della descrizione del canale",
     "description_deleted": "descrizione del canale eliminata",
     "delete_failed": "errore nell'eliminazione della descrizione del canale"
+  },
+  "settings": {
+    "account": "Account",
+    "appearance": "Appearance",
+    "privacy": "Privacy",
+    "about": "About",
+    "no_name": "No Qortal name yet",
+    "not_signed_in": "Not signed in",
+    "names_count": "{{count}} registered names",
+    "switch_name": "Switch name",
+    "address": "Address",
+    "copy_address": "Copy address",
+    "copied": "Copied",
+    "blocked_names": "Blocked names",
+    "blocked_names_hint": "Videos and comments from these names are hidden",
+    "changelog": "What's new in this version",
+    "upstream": "The original Q-Tube",
+    "source": "Q-Tube+ source code",
+    "about_blurb": "Q-Tube+ is a faster, redesigned Q-Tube. It reads and writes the same videos, playlists, comments and super likes on QDN, so both apps show the same content.",
+    "whats_new": "What's new in Q-Tube+",
+    "you_are_on": "You are on Q-Tube+ {{version}}",
+    "latest": "Latest",
+    "show_less": "Show less",
+    "show_all_changes": "Show all changes",
+    "close": "Close"
   }
 }

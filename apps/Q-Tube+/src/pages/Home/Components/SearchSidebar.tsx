@@ -216,7 +216,7 @@ export const SearchSidebar = () => {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setFilterType('videos');
               }}
-              inputProps={{ 'aria-label': 'controlled' }}
+              slotProps={{ input: { 'aria-label': 'controlled' } }}
             />
           </FiltersRow>
           <FiltersRow>
@@ -226,7 +226,7 @@ export const SearchSidebar = () => {
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                 setFilterType('playlists');
               }}
-              inputProps={{ 'aria-label': 'controlled' }}
+              slotProps={{ input: { 'aria-label': 'controlled' } }}
             />
           </FiltersRow>
         </FiltersSubContainer>

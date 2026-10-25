@@ -339,12 +339,14 @@ export const SuperDislike = ({
                 maxRows={8}
                 variant="filled"
                 value={comment}
-                InputLabelProps={{
-                  style: { fontSize: fontSizeMedium, color: 'white' },
-                }}
-                inputProps={{
-                  maxLength: 500,
-                  style: { fontSize: fontSizeLarge },
+                slotProps={{
+                  inputLabel: {
+                    style: { fontSize: fontSizeMedium, color: 'white' },
+                  },
+                  htmlInput: {
+                    maxLength: 500,
+                    style: { fontSize: fontSizeLarge },
+                  },
                 }}
                 onChange={(e) => setComment(e.target.value)}
                 sx={{ border: `1px solid ${theme.palette.primary.main}` }}

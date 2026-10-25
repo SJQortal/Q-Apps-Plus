@@ -577,7 +577,7 @@ export const PublishAndEditPlaylist = () => {
                   );
                   setTitle(formattedValue);
                 }}
-                inputProps={{ maxLength: 180 }}
+                slotProps={{ htmlInput: { maxLength: 180 } }}
                 required
               />
               {/* <CustomInputField
