@@ -6,6 +6,7 @@
  */
 import { ALL_COUNTRY_CODES, EU_COUNTRIES, SHIPPING_REGIONS, US, countryCode } from "./shipping";
 import COUNTRY_LIST from "./countries.json";
+import STATE_LIST from "./states.json";
 
 const INHABITED = SHIPPING_REGIONS.filter((r) => r.id !== "remote").flatMap((r) => r.codes);
 const regionCodes = (id: string) => SHIPPING_REGIONS.find((r) => r.id === id)?.codes ?? [];
@@ -15,8 +16,10 @@ const word = (source: string) => new RegExp(`(?<![\\p{L}\\p{N}])(?:${source})(?!
 
 /** Words sellers typed for the whole world, a region, or a country under another name. */
 const PHRASES: [RegExp, () => readonly string[]][] = [
-  [word("world ?wide|world-wide|anywhere|everywhere|earth|global(?:ly)?|international(?:ly)?|all countries|most countries|planet|milky way"), () => INHABITED],
-  [word("u\\.?s\\.?a\\.?|united states|america|stateside|50 states|lower 48"), () => [US]],
+  [word("world ?wide|world-wide|world|anywhere|everywhere|earth|global(?:ly)?|international(?:ly)?|all countries|any country|every country|most countries|planet|milky way"), () => INHABITED],
+  [word("u\\.?s\\.?a\\.?|united states|america|stateside|50 states|lower 48|conus"), () => [US]],
+  // "US" and "U.S." in capitals only: "us" is also "ship to us".
+  [new RegExp("(?<![\\p{L}\\p{N}])U\\.?S\\.?(?![\\p{L}\\p{N}])", "u"), () => [US]],
   [word("european union|eu"), () => EU_COUNTRIES],
   [word("europe"), () => regionCodes("europe")],
   [word("north america"), () => regionCodes("north-america")],
@@ -34,6 +37,24 @@ const PHRASES: [RegExp, () => readonly string[]][] = [
   [word("ísland|island|iceland"), () => ["IS"]],
   [word("polska|poland"), () => ["PL"]],
   [word("canada"), () => ["CA"]],
+  // Countries in their own words.
+  [word("españa"), () => ["ES"]],
+  [word("italia"), () => ["IT"]],
+  [word("brasil"), () => ["BR"]],
+  [word("méxico"), () => ["MX"]],
+  [word("nederland"), () => ["NL"]],
+  [word("belgique|belgië"), () => ["BE"]],
+  [word("sverige"), () => ["SE"]],
+  [word("norge"), () => ["NO"]],
+  [word("danmark"), () => ["DK"]],
+  [word("suomi"), () => ["FI"]],
+  [word("česko|česká republika"), () => ["CZ"]],
+  [word("magyarország"), () => ["HU"]],
+  [word("ελλάδα"), () => ["GR"]],
+  [word("україна"), () => ["UA"]],
+  [word("россия"), () => ["RU"]],
+  [word("日本"), () => ["JP"]],
+  [word("中国"), () => ["CN"]],
   // The delivery form's list names some countries formally ("Russian Federation", "Viet Nam").
   [word("russia"), () => ["RU"]],
   [word("vietnam"), () => ["VN"]],
@@ -48,6 +69,8 @@ const PHRASES: [RegExp, () => readonly string[]][] = [
 ];
 
 const COUNTRY_NAMES = (COUNTRY_LIST as { text: string; value: string }[]).filter((c) => c.text.length > 3);
+/** A US state named on its own ("Northern Colorado", "Texas only") means the United States. */
+const STATE_WORDS = word((STATE_LIST as { text: string }[]).map((st) => st.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"));
 
 /**
  * The countries a shop's old typed "Ships to" names, as far as plain words
@@ -82,6 +105,11 @@ function suggest(text: string): { codes: string[]; words: string[] } {
       words.push(country.text);
       found.add(country.value);
     }
+  }
+  const state = STATE_WORDS.exec(text);
+  if (state && !found.has(US)) {
+    words.push(state[0]);
+    found.add(US);
   }
   const code = countryCode(text.trim());
   if (code) found.add(code);
