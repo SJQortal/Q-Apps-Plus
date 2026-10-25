@@ -96,12 +96,19 @@ export { suggestShippingCountries } from "../constants/shippingText";
  * product list), where it ships and its policies. The page then points to
  * the full checkup in Manage Shop.
  */
-export function openShopSteps(shop: CheckupShop, rows: readonly { category?: string; status?: string }[]): number {
+export function openShopSteps(
+  shop: CheckupShop,
+  rows: readonly { category?: string; status?: string }[],
+  /** Something it sells is physical, as far as the caller can tell (the shop page: from the catalogues read so far). */
+  ships: boolean
+): number {
   const listed = rows.filter((row) => row.status !== "RETIRED");
   let open = 0;
   if (listed.some((row) => !isListedCategory(row.category))) open++;
   if (!shop.logo || !shop.description?.trim() || !shop.location?.trim()) open++;
-  if (listed.length > 0 && !shippingCountriesOf(shop)) open++;
-  if (policiesOf(shop)?.returnDays === undefined) open++;
+  if (ships && !shippingCountriesOf(shop)) open++;
+  // Returns, and for a shop that ships its dispatch time, as shopCheckup asks.
+  const policies = policiesOf(shop);
+  if (policies?.returnDays === undefined || (ships && policies.dispatchDays === undefined)) open++;
   return open;
 }

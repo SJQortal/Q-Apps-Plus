@@ -89,7 +89,9 @@ describe("the shop checkup", () => {
 
   it("counts the steps an owner's shop page can tell, without reading more", () => {
     const rows = [{ category: "Paper" }, { category: "Home & Garden" }];
-    expect(openShopSteps({ logo: "x", description: "d", location: "l" }, rows)).toBe(3);
-    expect(openShopSteps({ logo: "x", description: "d", location: "l", shippingCountries: ["PT"], policies: { returnDays: 14 } }, [{ category: "Home & Garden" }])).toBe(0);
+    expect(openShopSteps({ logo: "x", description: "d", location: "l" }, rows, true)).toBe(3);
+    expect(openShopSteps({ logo: "x", description: "d", location: "l", shippingCountries: ["PT"], policies: { returnDays: 14, dispatchDays: 2 } }, [{ category: "Home & Garden" }], true)).toBe(0);
+    // A shop of digital products isn't asked where it ships, or when it dispatches: as the checkup.
+    expect(openShopSteps({ logo: "x", description: "d", location: "l", policies: { returnDays: 0 } }, [{ category: "Services" }], false)).toBe(0);
   });
 });

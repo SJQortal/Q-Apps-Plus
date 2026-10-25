@@ -607,8 +607,17 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
   const dispatch = useDispatch();
   const currentStoreId = useSelector((state: RootState) => state.global.currentStore?.id);
   const { shop, shopStatus, index, productsStatus, isOwner, retry } = useViewedShop(owner, storeId);
-  // The owner's open checkup steps this page can tell (seller/checkup.ts openShopSteps).
-  const openSteps = useMemo(() => (isOwner && shop && index ? openShopSteps(shop, productRowsFromContainer(index)) : 0), [isOwner, shop, index]);
+  // The owner's open checkup steps this page can tell (seller/checkup.ts openShopSteps): whether it
+  // ships comes from the catalogues read so far, so a shop of digital products isn't asked where it ships.
+  const catalogueMap = useSelector((state: RootState) => state.global.catalogueHashMap);
+  const openSteps = useMemo(() => {
+    if (!isOwner || !shop || !index) return 0;
+    const rows = productRowsFromContainer(index).filter((row) => row.status !== "RETIRED");
+    const loaded = rows.map((row) => catalogueMap[row.catalogueId]?.products?.[row.productId] as { type?: unknown } | undefined).filter((p) => p !== undefined);
+    // Until a product is read, it isn't known to ship: the step waits rather than flash on a digital shop.
+    const ships = loaded.some((p) => p?.type !== "digital");
+    return openShopSteps(shop, rows, ships);
+  }, [isOwner, shop, index, catalogueMap]);
   const shopCollections = useShopCollections(owner, storeId, index);
   const [searchParams] = useSearchParams();
   const collectionId = searchParams.get("collection");
