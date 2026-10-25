@@ -422,6 +422,36 @@ describe("checkout (pinned)", () => {
     expect(order.delivery.shippingAddress.deliveryNote).toBe("Delivery: Express.");
   });
 
+  it("lists every delivery option for the buyer's place before the address is done, each priced, and keeps the pick", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({ rates: { exp: { first: 9 }, trk: { first: 5 } } })] },
+      profiles: [],
+      updated: 1,
+      options: [
+        { id: "exp", name: "Express", note: "1–3 days" },
+        { id: "trk", name: "Tracked" },
+      ],
+    };
+    setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    const ways = await screen.findByRole("radiogroup", { name: "How it comes" });
+    expect(within(ways).getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([
+      expect.stringMatching(/^Standard.*3\.00/),
+      expect.stringMatching(/^Express1–3 days.*9\.00/),
+      expect.stringMatching(/^Tracked.*5\.00/),
+    ]);
+    fireEvent.click(within(ways).getByRole("radio", { name: /Express/ }));
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    expect(within(await within(dialog).findByRole("radiogroup", { name: "Delivery" })).getByRole("radio", { name: /Express/ })).toBeChecked();
+    expect(within(dialog).getByText("Delivery to United States (Oregon), Express")).toBeInTheDocument();
+  });
+
   it("a free delivery option adds no line, and the seller still reads it in the order's note (+ app)", async () => {
     const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ rates: { pick: { first: 0 } } })] }, profiles: [], updated: 1, options: [{ id: "pick", name: "Local pickup" }] };
     const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
@@ -457,7 +487,10 @@ describe("checkout (pinned)", () => {
     fireEvent.click(await screen.findByRole("option", { name: "United States" }));
     fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Oregon" } });
     fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
-    fireEvent.click(await screen.findByRole("radio", { name: /Collect it: Local pickup/ }));
+    // Every way it comes there is listed, priced, before the address: the delivery, and the pickup.
+    const ways = await screen.findByRole("radiogroup", { name: "How it comes" });
+    expect(within(ways).getAllByRole("radio")).toHaveLength(2);
+    fireEvent.click(within(ways).getByRole("radio", { name: /Local pickup/ }));
     expect(screen.queryByLabelText(/Street address/i)).toBeNull();
     // How the seller reaches the buyer starts as their Q-Mail name.
     expect(screen.getByLabelText(/How the seller can reach you/)).toHaveValue(`Q-Mail: ${BUYER}`);

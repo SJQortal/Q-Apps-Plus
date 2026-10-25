@@ -263,6 +263,16 @@ export function CheckoutDialog({
   })();
   const onlyPickup = pickups.length > 0 && !delivers;
   const collecting = pickups.length > 0 && (collect || onlyPickup);
+  // Every way it can come to the buyer's country, priced, to pick from before the address (Simon, 2026-10-25:
+  // "if products have more than one delivery option, please list them at checkout"): the shop's delivery
+  // options that reach there, then its pickup points there. Picking a pickup asks who collects it instead.
+  const sendChoices = (() => {
+    if (isDigital || !prices?.doc || !delivery.country || onlyPickup) return [];
+    const options = deliveryChoices({ shop, delivery: prices, lines, address: delivery, coin, rate });
+    return options.ok ? options.choices.filter((c) => !c.pickup) : [];
+  })();
+  const ways = [...sendChoices, ...pickups];
+  const chosenWay = ways.find((c) => c.id === optionId && !!c.pickup === collecting) ?? (collecting ? pickups[0] : sendChoices[0]);
   // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here, unless the buyer collects.
   // ... and in the United States, its states when it ships to some only.
   const noShipping = !isDigital && !collecting && delivery.country ? placeNotShipped(shop, delivery.country, delivery.state) : null;
@@ -568,7 +578,21 @@ export function CheckoutDialog({
           contact={contact}
           onContactChange={setContact}
           pickupSlot={
-            pickups.length === 0 ? undefined : onlyPickup ? (
+            ways.length > 1 && !onlyPickup ? (
+              <DeliveryOptionsPicker
+                label="How it comes"
+                choices={ways}
+                value={chosenWay?.id ?? ""}
+                onChange={(choice) => {
+                  setOptionId(choice.id);
+                  setCollect(!!choice.pickup);
+                  setDeliveryProblem(null);
+                }}
+                coin={coin}
+                rate={rate}
+                shop={shop}
+              />
+            ) : pickups.length === 0 ? undefined : onlyPickup ? (
               <Alert severity="info" icon={false}>
                 {`${shop.title || shop.owner} doesn't deliver: you collect it (${pickups[0].name}${pickups[0].note ? `: ${pickups[0].note}` : ""}).`}
               </Alert>
@@ -597,7 +621,8 @@ export function CheckoutDialog({
           }
         />
         {!collecting && <RememberAddress checked={remember} onChange={setRemember} />}
-        <UpcomingOptions owner={shop.owner} storeId={shop.id} />
+        {/* Before the country is in, it says the choice is coming; then the choice itself shows. */}
+        {ways.length <= 1 && <UpcomingOptions owner={shop.owner} storeId={shop.id} />}
         {noShipping && (
           <Alert severity="warning" role="alert">
             {shop.title || shop.owner} doesn&apos;t ship to {noShipping}
