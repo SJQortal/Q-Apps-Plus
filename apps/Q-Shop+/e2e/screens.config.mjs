@@ -14,6 +14,8 @@
  * auctions (live with bids, upcoming, and one "Seller Name" won). Categories
  * are the fixed list's, plus one from before it ("Paper").
  */
+import { createHash } from 'node:crypto';
+
 const ME = 'Seller Name';
 const ME_ADDRESS = 'QSeLLeRNameAddressxxxxxxxxxxxx9f3c2a';
 const now = Date.now();
@@ -166,6 +168,8 @@ const DELIVERY = {
         { id: 'west', countries: ['US'], states: ['CA', 'OR', 'WA'], first: 4 },
       ],
     },
+    // A pickup point at the workshop (delivery/model.ts PickupPlace).
+    options: [{ id: 'pick', name: 'Pick up', pickup: true, place: { country: 'PT', address: 'Rua das Flores 7, Porto', days: [2, 3, 4, 5, 6], from: '09:30', to: '17:00' } }],
     profiles: [{ id: 'heavy', name: 'Heavy items', products: [productId({ short: 'my-shop' }, 3), productId({ short: 'my-shop' }, 6)], zones: [{ id: 'world', name: 'Worldwide', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT', 'JP', 'AU'], first: 25 }] }],
     updated: now - DAY,
   },
@@ -175,12 +179,43 @@ const DELIVERY = {
     currency: 'QORT',
     // Delivery options (delivery/model.ts): Express and a pickup, priced in the zone.
     base: { name: 'Standard', note: '5–10 days' },
-    options: [{ id: 'exp', name: 'Express', note: '1–3 days, tracked' }, { id: 'pick', name: 'Local pickup', note: 'Lisbon shop, weekdays 10–18' }],
+    // Local pickup is collected (delivery/model.ts `pickup`): checkout asks for no address with it.
+    options: [{ id: 'exp', name: 'Express', note: '1–3 days, tracked' }, { id: 'pick', name: 'Local pickup', note: 'Ring at the side door', pickup: true, place: { country: 'PT', address: 'Rua Augusta 10, Lisbon', days: [1, 2, 3, 4, 5], from: '10:00', to: '18:00' } }],
     general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5, rates: { exp: { first: 6, extra: 1 }, pick: { first: 0 } } }] },
     profiles: [],
     updated: now - DAY,
   },
 };
+// Discount codes (discounts/model.ts): codes and names as fingerprints, as the app makes them (SHA-256 of the shop id
+// and the code or name, 32 hex characters).
+const fingerprint = (storeId, text) => createHash('sha256').update(`${storeId}\n${text}`).digest('hex').slice(0, 32);
+const DISCOUNTS = {
+  'shop-1': {
+    v: 1,
+    storeId: 'q-store-general-shop-1',
+    currency: 'QORT',
+    updated: now - DAY,
+    discounts: [
+      { id: 'spring', code: fingerprint('q-store-general-shop-1', 'code:SPRING10'), percent: 10 },
+      { id: 'ship', code: fingerprint('q-store-general-shop-1', 'code:FREESHIP'), percent: 0, freeDelivery: true },
+    ],
+  },
+  'my-shop': {
+    v: 1,
+    storeId: 'q-store-general-my-shop',
+    currency: 'USD',
+    updated: now - DAY,
+    discounts: [
+      { id: 'spring', code: fingerprint('q-store-general-my-shop', 'code:SPRING10'), percent: 10, ends: now + 30 * DAY },
+      { id: 'mugs', code: fingerprint('q-store-general-my-shop', 'code:MUGS20'), percent: 20, products: [productId({ short: 'my-shop' }, 0), productId({ short: 'my-shop' }, 3)], minTotal: 25 },
+      { id: 'vip', forName: fingerprint('q-store-general-my-shop', 'name:ann buyer'), percent: 15, freeDelivery: true },
+      { id: 'xmas', code: fingerprint('q-store-general-my-shop', 'code:XMAS25'), percent: 25, starts: now + 40 * DAY, ends: now + 50 * DAY },
+      { id: 'old', code: fingerprint('q-store-general-my-shop', 'code:SUMMER'), percent: 30, paused: true },
+    ],
+  },
+};
+// The seller's own list of them, as this device keeps it (discounts/discountsDoc.ts).
+const MY_DISCOUNT_LIST = { codes: { spring: 'SPRING10', mugs: 'MUGS20', xmas: 'XMAS25', old: 'SUMMER' }, names: { vip: 'Ann Buyer' } };
 // Favourites (favorites/model.ts): [name, shop index, product or null]. The signed-in seller keeps two shops and
 // two products; other names keep some shops, for Most loved and the cards' hearts.
 const FAVORITES = [
@@ -356,6 +391,7 @@ function rows() {
     out.push({ name: s.owner, service: 'DOCUMENT', identifier: `${s.id}-datacontainer`, created: s.created, updated: s.updated + 1000, size: 150 + 120 * s.products });
     for (let c = 0; c * 10 < s.products; c++) out.push({ name: s.owner, service: 'DOCUMENT', identifier: catalogueId(s, c), created: s.created, updated: s.updated, size: 40000 });
     if (DELIVERY[s.short]) out.push({ name: s.owner, service: 'DOCUMENT', identifier: `q-store-delivery-${s.short}`, created: now - DAY, updated: now - DAY, size: 600 });
+    if (DISCOUNTS[s.short]) out.push({ name: s.owner, service: 'DOCUMENT', identifier: `q-store-discounts-${s.short}`, created: now - DAY, updated: now - DAY, size: 500 });
   }
   reviews.forEach((r, i) => out.push({ name: r.name, service: 'DOCUMENT', identifier: `q-store-review-${r.short}-${r.uid}-${r.rating * 10}`, created: now - i * DAY, updated: now - i * DAY, size: 200, metadata: { title: r.title, description: r.description } }));
   for (const [identifier, name, , created] of orders) out.push({ name, service: 'DOCUMENT_PRIVATE', identifier, created, updated: created, size: 900 });
@@ -530,6 +566,10 @@ export default {
       if (service === 'DOCUMENT' && name === 'Video Maker' && id === 'qtube_vid_kiln_xyz') return json(route, { title: 'Inside the kiln', videoReference: { name: 'Video Maker', identifier: 'qtube_vid_kiln_xyz_v', service: 'VIDEO' } }).then(() => true);
       if (service === 'THUMBNAIL') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
       if (service === 'IMAGE' && id === 'asset81_Gold Bar_aavatar' && name === 'Gold Issuer') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
+      if (service === 'DOCUMENT' && id.startsWith('q-store-discounts-')) {
+        const owned = shops.find((s) => s.owner === name && id === `q-store-discounts-${s.short}`);
+        if (owned && DISCOUNTS[owned.short]) return json(route, DISCOUNTS[owned.short]).then(() => true);
+      }
       if (service === 'DOCUMENT' && id.startsWith('q-store-delivery-')) {
         const owned = shops.find((s) => s.owner === name && id === `q-store-delivery-${s.short}`);
         if (owned && DELIVERY[owned.short]) return json(route, DELIVERY[owned.short]).then(() => true);
@@ -830,6 +870,51 @@ export default {
       await d.getByRole('radio', { name: /Express/ }).click();
       await page.waitForTimeout(500);
     } },
+    { key: 'checkout-discount', path: '/cart', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Check out Plus Gadgets' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Continue' }).click({ timeout: 8000 });
+      await d.getByRole('combobox', { name: /Country/ }).fill('Portugal', { timeout: 8000 });
+      await page.getByRole('option', { name: 'Portugal' }).click({ timeout: 4000 });
+      await d.getByLabel(/^Customer name/).fill('Ana Silva');
+      await d.getByLabel(/^Street address/).fill('Rua Augusta 10');
+      await d.getByLabel(/^City/).fill('Lisbon');
+      await d.getByLabel(/^Zip code/).fill('1100-053');
+      await d.getByLabel(/^Region/).fill('Lisboa');
+      await d.getByRole('button', { name: 'Continue' }).click();
+      await d.getByRole('button', { name: 'Have a discount code?' }).click({ timeout: 8000 });
+      await d.getByLabel(/Discount code/).fill('SPRING10');
+      await d.getByRole('button', { name: 'Apply' }).click();
+      const line = d.getByText('Discount SPRING10: 10% off');
+      await line.waitFor({ timeout: 8000 });
+      await line.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'checkout-pickup', path: '/cart', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Check out Plus Gadgets' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Continue' }).click({ timeout: 8000 });
+      await d.getByRole('combobox', { name: /Country/ }).fill('Portugal', { timeout: 8000 });
+      await page.getByRole('option', { name: 'Portugal' }).click({ timeout: 4000 });
+      await d.getByRole('radio', { name: /Collect it: Local pickup/ }).click({ timeout: 8000 });
+      await d.getByLabel(/^How the seller can reach you/).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-discounts', path: '/product-manager/q-store-general-my-shop?tab=shop', after: async (page) => {
+      await page.evaluate((list) => localStorage.setItem('qshopplus-discount-codes-q-store-general-my-shop', JSON.stringify(list)), MY_DISCOUNT_LIST);
+      await page.reload();
+      const list = page.getByRole('list', { name: 'Discount codes' });
+      await list.waitFor({ timeout: 8000 });
+      await list.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
+    } },
+    { key: 'seller-discount-dialog', path: '/product-manager/q-store-general-my-shop?tab=shop', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add a discount code' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Add a discount code' });
+      await d.getByLabel('Code', { exact: true }).fill('SPRING10');
+      await d.getByRole('radio', { name: 'Only some products' }).click();
+      await page.waitForTimeout(400);
+    } },
     { key: 'seller-delivery-options', path: '/product-manager/q-store-general-my-shop?tab=delivery', after: async (page) => { await page.getByRole('region', { name: 'Delivery options' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'product-delivery', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
       // The cart-delivery screen may have kept a country on this device already.
@@ -860,7 +945,7 @@ export default {
       await page.waitForTimeout(400);
     } },
     { key: 'product-stock', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 7)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/In stock · 4 left/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
-    { key: 'names', path: '/names', after: async (page) => { await page.getByRole('list', { name: 'Names for sale' }).waitFor({ timeout: 8000 }); await page.getByText(/^Comes with/).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    { key: 'names', path: '/names', after: async (page) => { await page.getByRole('list', { name: 'Names for sale' }).waitFor({ timeout: 8000 }); await page.getByText(/^by /).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'names-buy', path: '/names', overlay: true, after: async (page) => {
       await page.getByRole('button', { name: 'Buy: bitcoin-maxi' }).click({ timeout: 8000 });
       const d = page.getByRole('dialog', { name: 'bitcoin-maxi' });
