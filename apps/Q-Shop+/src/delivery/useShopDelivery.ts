@@ -1,7 +1,8 @@
 /**
  * A shop's delivery prices for what buyers see before checkout (product
- * pages, the cart, checkout's address step): read once per shop (a cached
- * search, then the document only for shops that have one).
+ * pages, the cart, checkout's address step): a cached search, then the
+ * document only for shops that have one; read from the node again when the
+ * session's copy is over a minute old.
  */
 import { useEffect, useState } from "react";
 import { loadShopDelivery, type ShopDelivery } from "./checkoutDelivery";
@@ -14,7 +15,7 @@ export function useShopDelivery(owner: string, storeId: string, enabled = true):
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    loadShopDelivery(owner, storeId).then(
+    loadShopDelivery(owner, storeId, { maxAgeMs: 60_000 }).then(
       (delivery) => live && setLoaded({ key, load: { status: "ready", delivery } }),
       () => live && setLoaded({ key, load: { status: "failed" } })
     );

@@ -73,6 +73,29 @@ describe("reading the delivery prices", () => {
     await expect(fetchDeliveryDoc(OWNER, STORE, { fresh: true })).rejects.toThrow();
   });
 
+  it("reads them again from the node once the session's copy is too old (checkout: always), so a seller's change counts", async () => {
+    let first = 2;
+    const reads = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.startsWith("/arbitrary/resources/search?")) return json([{ name: OWNER, service: "DOCUMENT", identifier: id }]);
+        if (url.startsWith(resourcePath("DOCUMENT", OWNER, id))) {
+          reads();
+          return json(doc([{ id: "eu", countries: ["PL"], first }]));
+        }
+        throw new Error(`unexpected fetch ${url}`);
+      })
+    );
+    expect((await loadShopDelivery(OWNER, STORE)).doc?.general.zones[0].first).toBe(2);
+    first = 5;
+    // The session's copy, for a page that doesn't mind a minute.
+    expect((await loadShopDelivery(OWNER, STORE, { maxAgeMs: 60_000 })).doc?.general.zones[0].first).toBe(2);
+    // Checkout reads it from the node.
+    expect((await loadShopDelivery(OWNER, STORE, { maxAgeMs: 0 })).doc?.general.zones[0].first).toBe(5);
+    expect(reads).toHaveBeenCalledTimes(2);
+  });
+
   it("publishes them as one DOCUMENT of the seller's", () => {
     const d = doc([{ id: "eu", countries: ["PL"], first: 2 }]);
     const built = buildDeliveryPublish({ name: OWNER, doc: d });

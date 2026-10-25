@@ -182,11 +182,12 @@ export function CheckoutDialog({
     stepStart.current?.focus();
   }, [step]);
 
-  // A physical order reads the shop's delivery prices early (cached), so Continue at the address is quick.
+  // A physical order reads the shop's delivery prices as checkout opens, from the node (a seller's latest change
+  // counts), so Continue at the address is quick.
   useEffect(() => {
     if (isDigital) return;
     let alive = true;
-    loadShopDelivery(shop.owner, shop.id).then(
+    loadShopDelivery(shop.owner, shop.id, { maxAgeMs: 0 }).then(
       (d) => {
         if (!alive) return;
         setHasDeliveryPrices(!!d.doc);
@@ -622,7 +623,7 @@ export function CheckoutDialog({
         />
         {!collecting && <RememberAddress checked={remember} onChange={setRemember} />}
         {/* Before the country is in, it says the choice is coming; then the choice itself shows. */}
-        {ways.length <= 1 && <UpcomingOptions owner={shop.owner} storeId={shop.id} />}
+        {ways.length <= 1 && pickups.length === 0 && <UpcomingOptions owner={shop.owner} storeId={shop.id} />}
         {noShipping && (
           <Alert
             severity="warning"

@@ -21,11 +21,28 @@ export interface ShopDelivery {
 }
 
 /** The shop's delivery prices (null when it has none). Rejects when the node can't serve them now. */
-export async function loadShopDelivery(owner: string, storeId: string): Promise<ShopDelivery> {
-  const doc = await fetchDeliveryDoc(owner, storeId);
+/** When each shop's delivery prices were last read from the node itself (not the session's copy). */
+const readAt = new Map<string, number>();
+
+/**
+ * A shop's delivery prices and the rates they're paid at. Kept for the
+ * session, but read from the node again once the copy is older than
+ * `maxAgeMs` (checkout passes 0): a seller's change shows up without a
+ * reload (Simon, from Hub: a change made a minute before wasn't at checkout).
+ */
+export async function loadShopDelivery(owner: string, storeId: string, options: { maxAgeMs?: number } = {}): Promise<ShopDelivery> {
+  const key = `${owner}\n${storeId}`;
+  const fresh = options.maxAgeMs !== undefined && Date.now() - (readAt.get(key) ?? 0) >= options.maxAgeMs;
+  if (fresh || !readAt.has(key)) readAt.set(key, Date.now());
+  const doc = await fetchDeliveryDoc(owner, storeId, { fresh });
   if (!doc || doc.currency === "QORT") return { doc, pricing: null };
-  const index = await fetchQdnJson("DOCUMENT", owner, dataContainerIdentifier(storeId));
+  const index = await fetchQdnJson("DOCUMENT", owner, dataContainerIdentifier(storeId), { fresh });
   return { doc, pricing: fiatPricingOf(index) };
+}
+
+/** For tests. */
+export function resetDeliveryReads(): void {
+  readAt.clear();
 }
 
 export type DeliveryCharge =
