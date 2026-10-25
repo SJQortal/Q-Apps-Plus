@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { priceCheckout } from "../money/checkout";
 import type { CartLine } from "../money/order";
 import { SHIPPING_REGIONS } from "../constants/shipping";
-import { DELIVERY_LINE_ID, deliveryDocOf, isDeliveryLine, quoteDelivery, type DeliveryDoc } from "./model";
+import { DELIVERY_LINE_ID, deliveryDocOf, deliveryOptionsOf, isDeliveryLine, quoteDelivery, type DeliveryDoc } from "./model";
 
 const STORE = "q-store-general-my-shop";
 const EUROPE = [...SHIPPING_REGIONS[0].codes];
@@ -121,5 +121,15 @@ describe("delivery prices", () => {
       STORE
     );
     expect(parsed?.options?.map((o) => o.id)).toEqual(["a", "c", "d", "e"]);
+  });
+
+  it("keep which options the buyer collects, the zones' own included (only a true pickup flag counts)", () => {
+    const parsed = deliveryDocOf(
+      { ...doc(), base: { name: "Farm pickup", pickup: true }, options: [{ id: "a", name: "Local pickup", pickup: true }, { id: "b", name: "Express", pickup: "yes" }] },
+      STORE
+    );
+    expect(parsed?.base).toEqual({ name: "Farm pickup", pickup: true });
+    expect(parsed?.options).toEqual([{ id: "a", name: "Local pickup", pickup: true }, { id: "b", name: "Express" }]);
+    expect(deliveryOptionsOf(parsed as DeliveryDoc).map((o) => !!o.pickup)).toEqual([true, true, false]);
   });
 });

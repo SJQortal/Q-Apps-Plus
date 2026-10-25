@@ -78,6 +78,8 @@ export interface DeliveryOption {
   name: string;
   /** "1–3 days", "Collect at the farm, Saturdays". */
   note?: string;
+  /** The buyer collects it: checkout asks who and how to reach them, no address (Simon, 2026-10-25). */
+  pickup?: true;
 }
 
 export interface DeliveryProfile {
@@ -95,8 +97,8 @@ export interface DeliveryDoc {
   general: { zones: DeliveryZone[] };
   profiles: DeliveryProfile[];
   updated: number;
-  /** The zones' own prices as an option: its name ("Standard" when absent) and note. */
-  base?: { name: string; note?: string };
+  /** The zones' own prices as an option: its name ("Standard" when absent), note, and whether the buyer collects it. */
+  base?: { name: string; note?: string; pickup?: true };
   /** Other options, at most four; a zone offers one by pricing it (`rates`). */
   options?: DeliveryOption[];
 }
@@ -177,12 +179,13 @@ export function deliveryDocOf(raw: unknown, storeId: string): DeliveryDoc | null
     const name = textOf(raw?.name, 40);
     if (!id || !name || options.some((x) => x.id === id)) continue;
     const note = textOf(raw?.note, 80);
-    options.push({ id, name, ...(note && { note }) });
+    options.push({ id, name, ...(note && { note }), ...(raw?.pickup === true && { pickup: true as const }) });
     if (options.length >= MAX_OPTIONS) break;
   }
-  const baseRaw = d.base as { name?: unknown; note?: unknown } | undefined;
+  const baseRaw = d.base as { name?: unknown; note?: unknown; pickup?: unknown } | undefined;
   const baseName = textOf(baseRaw?.name, 40);
   const baseNote = textOf(baseRaw?.note, 80);
+  const basePickup = baseRaw?.pickup === true;
   return {
     v: 1,
     storeId,
@@ -190,7 +193,7 @@ export function deliveryDocOf(raw: unknown, storeId: string): DeliveryDoc | null
     general: { zones: zonesOf((d.general as { zones?: unknown } | undefined)?.zones) },
     profiles,
     updated: typeof d.updated === "number" ? d.updated : 0,
-    ...((baseName || baseNote) && { base: { name: baseName ?? BASE_OPTION_NAME, ...(baseNote && { note: baseNote }) } }),
+    ...((baseName || baseNote || basePickup) && { base: { name: baseName ?? BASE_OPTION_NAME, ...(baseNote && { note: baseNote }), ...(basePickup && { pickup: true as const }) } }),
     ...(options.length > 0 && { options }),
   };
 }
@@ -200,11 +203,13 @@ export interface DeliveryChoiceInfo {
   id: string;
   name: string;
   note?: string;
+  /** The buyer collects it (no address). */
+  pickup?: true;
 }
 
 /** Every option the doc names, the zones' own prices first. */
 export function deliveryOptionsOf(doc: DeliveryDoc): DeliveryChoiceInfo[] {
-  return [{ id: "", name: doc.base?.name ?? BASE_OPTION_NAME, ...(doc.base?.note && { note: doc.base.note }) }, ...(doc.options ?? [])];
+  return [{ id: "", name: doc.base?.name ?? BASE_OPTION_NAME, ...(doc.base?.note && { note: doc.base.note }), ...(doc.base?.pickup && { pickup: true as const }) }, ...(doc.options ?? [])];
 }
 
 /** The profile a product is delivered with: the first custom one naming it, else the general one (null). */

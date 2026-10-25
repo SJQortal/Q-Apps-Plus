@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ShortUniqueId from "short-unique-id";
-import { Alert, Box, Button, CircularProgress, IconButton, Paper, Skeleton, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, IconButton, Paper, Skeleton, TextField, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
@@ -26,6 +26,7 @@ import { DeliveryZoneDialog } from "./DeliveryZoneDialog";
 import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
 import { ResponsiveDialog } from "../components/common/mobile";
 import type { SellerRow } from "./productList";
+import { visuallyHiddenSx } from "../pages/Store/a11y";
 
 const uid = new ShortUniqueId({ length: 8 });
 const newId = () => uid();
@@ -40,6 +41,26 @@ export function zonePrice(zone: DeliveryRate, currency: string): string {
 
 /** Ideas for a new option's name, the most asked for first. */
 const OPTION_IDEAS = ["Express", "Local pickup", "Tracked", "Economy"];
+/** A name that sounds like the buyer collects it: a new option starts ticked as one. */
+const PICKUP_NAME = /\b(pick ?up|collect(ion)?|click (and|&) collect)\b/i;
+
+/** "Buyers collect it": checkout then asks who collects and how to reach them, no address. */
+function PickupTick({ checked, onChange, disabled, name }: { checked: boolean; onChange: (checked: boolean) => void; disabled: boolean; name: string }) {
+  return (
+    <FormControlLabel
+      control={<Checkbox checked={checked} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />}
+      label={
+        <Typography variant="body2" component="span">
+          Buyers collect it: checkout asks how to reach them, no address
+          {/* Which option, for screen readers (each row's tick reads the same). */}
+          <Box component="span" sx={visuallyHiddenSx}>{` (${name || "this option"})`}</Box>
+        </Typography>
+      }
+      slotProps={{ typography: { component: "span" } }}
+      sx={{ gridColumn: "1 / -1", m: 0, mt: -1, minHeight: 44 }}
+    />
+  );
+}
 
 /**
  * The delivery options buyers pick from at checkout (delivery/model.ts): the
@@ -48,17 +69,32 @@ const OPTION_IDEAS = ["Express", "Local pickup", "Tracked", "Economy"];
  */
 function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: (doc: DeliveryDoc) => void; disabled: boolean }) {
   const options = doc.options ?? [];
-  const setBase = (patch: Partial<{ name: string; note: string }>) => {
-    const base = { name: doc.base?.name ?? "", note: doc.base?.note ?? "", ...patch };
+  const setBase = (patch: Partial<{ name: string; note: string; pickup: boolean }>) => {
+    const base = { name: doc.base?.name ?? "", note: doc.base?.note ?? "", pickup: !!doc.base?.pickup, ...patch };
     const name = base.name.slice(0, 40);
     const note = base.note.slice(0, 80);
     const rest = { ...doc };
     delete rest.base;
-    onChange(name.trim() || note.trim() ? { ...rest, base: { name: name || BASE_OPTION_NAME, ...(note && { note }) } } : rest);
+    onChange(
+      name.trim() || note.trim() || base.pickup
+        ? { ...rest, base: { name: name || BASE_OPTION_NAME, ...(note && { note }), ...(base.pickup && { pickup: true as const }) } }
+        : rest
+    );
   };
-  const setOption = (id: string, patch: Partial<DeliveryOption>) =>
-    onChange({ ...doc, options: options.map((o) => (o.id === id ? { ...o, ...patch, name: (patch.name ?? o.name).slice(0, 40), ...(patch.note !== undefined && { note: patch.note.slice(0, 80) }) } : o)) });
-  const addOption = (name: string) => onChange({ ...doc, options: [...options, { id: newId(), name }].slice(0, MAX_OPTIONS) });
+  const setOption = (id: string, patch: Partial<Omit<DeliveryOption, "pickup">> & { pickup?: boolean }) =>
+    onChange({
+      ...doc,
+      options: options.map((o) => {
+        if (o.id !== id) return o;
+        const { pickup, ...rest } = patch;
+        const next: DeliveryOption = { ...o, ...rest, name: (rest.name ?? o.name).slice(0, 40), ...(rest.note !== undefined && { note: rest.note.slice(0, 80) }) };
+        if (pickup === true) next.pickup = true;
+        if (pickup === false) delete next.pickup;
+        return next;
+      }),
+    });
+  const addOption = (name: string) =>
+    onChange({ ...doc, options: [...options, { id: newId(), name, ...(PICKUP_NAME.test(name) && { pickup: true as const }) }].slice(0, MAX_OPTIONS) });
   const removeOption = (id: string) => {
     // Its prices go from every zone too.
     const strip = (zones: DeliveryZone[]) =>
@@ -106,6 +142,7 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
           slotProps={{ htmlInput: { maxLength: 80 }, inputLabel: { shrink: true } }}
         />
         <Box />
+        <PickupTick checked={!!doc.base?.pickup} onChange={(pickup) => setBase({ pickup })} disabled={disabled} name={doc.base?.name || BASE_OPTION_NAME} />
         {options.map((o, i) => (
           <Box key={o.id} sx={{ display: "contents" }}>
             <TextField
@@ -128,6 +165,7 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
             <IconButton aria-label={`Remove the option ${o.name || i + 2}`} onClick={() => removeOption(o.id)} disabled={disabled} sx={{ width: 44, height: 44, mt: 0.5 }}>
               <DeleteOutlineOutlinedIcon />
             </IconButton>
+            <PickupTick checked={!!o.pickup} onChange={(pickup) => setOption(o.id, { pickup })} disabled={disabled} name={o.name} />
           </Box>
         ))}
       </Box>

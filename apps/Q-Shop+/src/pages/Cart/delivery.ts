@@ -3,7 +3,7 @@
  * apart from the form itself so the form (and its country lists) loads only
  * when a physical order needs it.
  */
-import { missingDeliveryFields, type DeliveryInput } from "../../money/order";
+import { US, missingDeliveryFields, type DeliveryInput } from "../../money/order";
 import { STORAGE_PREFIX } from "../../constants/plus";
 
 /**
@@ -66,14 +66,37 @@ export function emptyDelivery(buyerName: string): DeliveryInput {
   };
 }
 
+/** A field of the delivery step: the address's, or a pickup's contact. */
+export type DeliveryField = keyof DeliveryInput | "contact";
+
+/** What a pickup order needs (the buyer collects it): who, the place (it decides the price) and how the seller reaches them. */
+export function missingPickupFields(input: DeliveryInput, contact: string): DeliveryField[] {
+  const missing: DeliveryField[] = [];
+  if (!input.country) missing.push("country");
+  if (input.country === US && !input.state) missing.push("state");
+  if (!input.customerName.trim()) missing.push("customerName");
+  if (!contact.trim()) missing.push("contact");
+  return missing;
+}
+
+/**
+ * A pickup order's delivery block: the name and place, no address, and how
+ * to reach the buyer in front of their note. A digital order sends an empty
+ * address too, so the original app reads it.
+ */
+export function pickupDelivery(input: DeliveryInput, contact: string): DeliveryInput {
+  const note = input.deliveryNote.trim();
+  return { ...input, streetAddress: "", city: "", region: "", zipCode: "", deliveryNote: `Contact: ${contact.trim()}.${note ? ` ${note}` : ""}` };
+}
+
 /** The id of a field's input, so a failed Continue can move focus to the first one to fix. */
-export function deliveryFieldId(prefix: string, field: keyof DeliveryInput): string {
+export function deliveryFieldId(prefix: string, field: DeliveryField): string {
   return `${prefix}-${field}`;
 }
 
-/** Focuses the first field missing from `value`; true when there was one. */
-export function focusFirstMissing(prefix: string, value: DeliveryInput): boolean {
-  const first = missingDeliveryFields(value)[0];
+/** Focuses the first field missing from `value` (a pickup's when `pickupContact` is given); true when there was one. */
+export function focusFirstMissing(prefix: string, value: DeliveryInput, pickupContact?: string): boolean {
+  const first = pickupContact !== undefined ? missingPickupFields(value, pickupContact)[0] : missingDeliveryFields(value)[0];
   if (!first) return false;
   document.getElementById(deliveryFieldId(prefix, first))?.focus();
   return true;

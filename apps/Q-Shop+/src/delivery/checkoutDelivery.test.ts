@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CartLine } from "../money/order";
 import { deliveryIdentifier } from "../qdn/identifiers";
 import { resourcePath } from "../qdn/search";
-import { deliveryCharge, deliveryChoices, loadShopDelivery, withOptionNote } from "./checkoutDelivery";
+import { deliveryCharge, deliveryChoices, loadShopDelivery, pickupChoices, withOptionNote } from "./checkoutDelivery";
 import { buildDeliveryPublish, fetchDeliveryDoc } from "./deliveryDoc";
 import { DELIVERY_LINE_ID, type DeliveryDoc } from "./model";
 
@@ -101,6 +101,18 @@ describe("reading the delivery prices", () => {
     // No options: none to pick from.
     const plain = deliveryChoices({ shop, delivery: { doc: doc([{ id: "eu", countries: ["PL"], first: 2 }]), pricing: null }, lines: [chair], address: poland, coin: "QORT", rate: null });
     expect(plain).toEqual({ ok: true, choices: [] });
+  });
+
+  it("works out the pickups from the place alone, before any street (only where a zone prices them)", () => {
+    const withPickup: DeliveryDoc = {
+      ...doc([{ id: "pl", countries: ["PL"], first: 2, rates: { pick: { first: 0 } } }, { id: "de", countries: ["DE"], first: 5 }]),
+      options: [{ id: "pick", name: "Local pickup", note: "Kraków, Saturdays", pickup: true }],
+    };
+    const at = (address: { country: string; state: string }) => pickupChoices({ shop, delivery: { doc: withPickup, pricing: null }, lines: [chair], address, coin: "QORT", rate: null });
+    expect(at(poland)).toEqual([{ id: "pick", name: "Local pickup", note: "Kraków, Saturdays", pickup: true, line: null, free: true }]);
+    expect(at({ country: "Germany", state: "" })).toEqual([]);
+    expect(at({ country: "", state: "" })).toEqual([]);
+    expect(pickupChoices({ shop, delivery: { doc: null, pricing: null }, lines: [chair], address: poland, coin: "QORT", rate: null })).toEqual([]);
   });
 
   it("puts the picked option in front of the buyer's note", () => {

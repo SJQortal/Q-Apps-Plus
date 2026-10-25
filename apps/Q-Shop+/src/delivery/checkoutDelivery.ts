@@ -108,6 +108,24 @@ export function deliveryChoices(args: Omit<Parameters<typeof deliveryCharge>[0],
   return { ok: true, choices };
 }
 
+/**
+ * The options this order can have in the buyer's country (and US state) that
+ * the buyer collects (model.ts `pickup`): checkout then asks who collects and
+ * how to reach them instead of an address. Worked out from the place alone,
+ * before any street is typed.
+ */
+export function pickupChoices(args: Omit<Parameters<typeof deliveryCharge>[0], "option">): DeliveryChoice[] {
+  const doc = args.delivery.doc;
+  if (!doc || !args.address.country) return [];
+  const out: DeliveryChoice[] = [];
+  for (const info of deliveryOptionsOf(doc)) {
+    if (!info.pickup) continue;
+    const charge = deliveryCharge({ ...args, ...(info.id && { option: info.id }) });
+    if (charge.ok) out.push({ ...info, line: charge.line, free: charge.free });
+  }
+  return out;
+}
+
 /** The order's delivery note with the option the buyer picked in front (the seller reads it in either app). */
 export function withOptionNote<T extends { deliveryNote: string }>(delivery: T, option: { name: string } | null | undefined): T {
   if (!option) return delivery;

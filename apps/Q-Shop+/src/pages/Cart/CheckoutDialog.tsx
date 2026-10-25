@@ -16,7 +16,7 @@ import { UpcomingOptions } from "./UpcomingOptions";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
-import { Alert, Box, Button, CircularProgress, Divider, IconButton, Stack, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Divider, FormControlLabel, IconButton, Radio, RadioGroup, Stack, Typography } from "@mui/material";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutlined";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
@@ -38,15 +38,15 @@ import { errorMessage } from "../../qdn/hubErrors";
 import { copyText } from "../../utils/clipboard";
 import { CoinPicker } from "./CoinPicker";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
-import { emptyDelivery, focusFirstMissing, saveDelivery, savedDelivery } from "./delivery";
+import { emptyDelivery, focusFirstMissing, missingPickupFields, pickupDelivery, saveDelivery, savedDelivery } from "./delivery";
 import { RememberAddress } from "./RememberAddress";
 import { PendingOrderCard } from "./PendingOrders";
 import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
 import { placeNotShipped } from "../../constants/shipping";
-import { deliveryCharge, deliveryChoices, loadShopDelivery, withOptionNote, type DeliveryChoice } from "../../delivery/checkoutDelivery";
+import { deliveryCharge, deliveryChoices, loadShopDelivery, pickupChoices, withOptionNote, type DeliveryChoice, type ShopDelivery } from "../../delivery/checkoutDelivery";
 import { DeliveryOptionsPicker } from "./DeliveryOptionsPicker";
-import { deliveryMoney } from "../../delivery/model";
+import { deliveryMoney, deliveryOptionsOf } from "../../delivery/model";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
 
@@ -58,7 +58,7 @@ interface Snapshot {
   details: OrderDetails;
   /** The lines Pay pays: the cart's, and the delivery fee's when there is one. */
   lines: CartLine[];
-  delivery: { line: CartLine | null; free: boolean; option?: { id: string; name: string } };
+  delivery: { line: CartLine | null; free: boolean; option?: { id: string; name: string }; collect?: boolean };
 }
 
 type Outcome = CheckoutResult & { unexpected?: boolean };
@@ -136,6 +136,10 @@ export function CheckoutDialog({
   const [quoting, setQuoting] = useState(false);
   const [deliveryProblem, setDeliveryProblem] = useState<string | null>(null);
   const [hasDeliveryPrices, setHasDeliveryPrices] = useState(false);
+  const [prices, setPrices] = useState<ShopDelivery | null>(null);
+  // Collecting it (a pickup option, delivery/model.ts): who, the place and how to reach them, no address.
+  const [collect, setCollect] = useState(false);
+  const [contact, setContact] = useState(() => (buyer.name ? `Q-Mail: ${buyer.name}` : ""));
   // The shop's delivery options for this order and address (delivery/model.ts), and the buyer's pick.
   const [choices, setChoices] = useState<DeliveryChoice[]>([]);
   const [optionId, setOptionId] = useState("");
@@ -155,7 +159,11 @@ export function CheckoutDialog({
     if (isDigital) return;
     let alive = true;
     loadShopDelivery(shop.owner, shop.id).then(
-      (d) => alive && setHasDeliveryPrices(!!d.doc),
+      (d) => {
+        if (!alive) return;
+        setHasDeliveryPrices(!!d.doc);
+        setPrices(d);
+      },
       () => {}
     );
     return () => {
@@ -199,12 +207,17 @@ export function CheckoutDialog({
   // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here.
   // ... and in the United States, its states when it ships to some only.
   const noShipping = !isDigital && delivery.country ? placeNotShipped(shop, delivery.country, delivery.state) : null;
+  // The pickups the shop offers in the buyer's country, worked out before any street is typed.
+  const pickups = !isDigital && prices ? pickupChoices({ shop, delivery: prices, lines, address: delivery, coin, rate }) : [];
+  // A shop whose every option is collected has no delivery to an address.
+  const onlyPickup = !!prices?.doc && deliveryOptionsOf(prices.doc).every((o) => o.pickup);
+  const collecting = pickups.length > 0 && (collect || onlyPickup);
 
   const fromDelivery = async () => {
     if (quoting) return;
-    if (missingDeliveryFields(delivery).length > 0) {
+    if (collecting ? missingPickupFields(delivery, contact).length > 0 : missingDeliveryFields(delivery).length > 0) {
       setShowErrors(true);
-      focusFirstMissing(DELIVERY_PREFIX, delivery);
+      focusFirstMissing(DELIVERY_PREFIX, delivery, collecting ? contact : undefined);
       return;
     }
     if (noShipping) return;
@@ -216,7 +229,12 @@ export function CheckoutDialog({
     try {
       const prices = await loadShopDelivery(shop.owner, shop.id);
       const options = deliveryChoices({ shop, delivery: prices, lines, address: delivery, coin, rate });
-      offered = options.ok ? options.choices : [];
+      // Collecting: the pickups only; delivered: every other option.
+      offered = !options.ok
+        ? []
+        : collecting
+          ? pickupChoices({ shop, delivery: prices, lines, address: delivery, coin, rate })
+          : options.choices.filter((c) => !c.pickup);
       // The option picked before (Back to the address, then Continue) while it's still offered, else the first.
       const picked = offered.find((c) => c.id === optionId) ?? offered[0];
       charge = !options.ok
@@ -235,13 +253,14 @@ export function CheckoutDialog({
     }
     setChoices(offered);
     if (charge.option) setOptionId(charge.option.id);
-    saveDelivery(buyer.name, remember ? delivery : null);
-    toConfirm({ line: charge.line, free: charge.free, ...(charge.option && { option: charge.option }) });
+    // A pickup has no address to keep: the one kept before stays as it was.
+    if (!collecting) saveDelivery(buyer.name, remember ? delivery : null);
+    toConfirm({ line: charge.line, free: charge.free, ...(charge.option && { option: charge.option }), collect: collecting });
   };
 
   const pickOption = (choice: DeliveryChoice) => {
     setOptionId(choice.id);
-    toConfirm({ line: choice.line, free: choice.free, option: { id: choice.id, name: choice.name } });
+    toConfirm({ line: choice.line, free: choice.free, option: { id: choice.id, name: choice.name }, collect: snapshot?.delivery.collect });
   };
 
   const pay = async () => {
@@ -266,8 +285,9 @@ export function CheckoutDialog({
         coin: snapshot.coin,
         rate: snapshot.rate,
         isDigital,
-        // The delivery option picked goes in front of the buyer's note, so the seller sees it in either app.
-        delivery: isDigital ? null : withOptionNote(delivery, snapshot.delivery.option),
+        // The delivery option picked goes in front of the buyer's note, so the seller sees it in either app;
+        // a pickup sends no address, and how to reach the buyer.
+        delivery: isDigital ? null : withOptionNote(snapshot.delivery.collect ? pickupDelivery(delivery, contact) : delivery, snapshot.delivery.option),
         orderUid: new ShortUniqueId({ length: 10 })(),
         mailUid: new ShortUniqueId()(),
         now: Date.now(),
@@ -307,7 +327,9 @@ export function CheckoutDialog({
     step === "review"
       ? "Review your order"
       : step === "delivery"
-        ? "Delivery address"
+        ? pickups.length > 0
+          ? "Delivery or pickup"
+          : "Delivery address"
         : step === "confirm"
           ? "Confirm and pay"
           : step === "running"
@@ -392,8 +414,44 @@ export function CheckoutDialog({
   } else if (step === "delivery") {
     body = (
       <Stack sx={{ gap: 2 }}>
-        <LazyDeliveryForm value={delivery} onChange={changeDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
-        <RememberAddress checked={remember} onChange={setRemember} />
+        <LazyDeliveryForm
+          value={delivery}
+          onChange={changeDelivery}
+          showErrors={showErrors}
+          idPrefix={DELIVERY_PREFIX}
+          collect={collecting}
+          contact={contact}
+          onContactChange={setContact}
+          pickupSlot={
+            pickups.length === 0 ? undefined : onlyPickup ? (
+              <Alert severity="info" icon={false}>
+                {`${shop.title || shop.owner} doesn't deliver: you collect it (${pickups[0].name}${pickups[0].note ? `: ${pickups[0].note}` : ""}).`}
+              </Alert>
+            ) : (
+              <RadioGroup aria-label="Delivered or collected" value={collecting ? "collect" : "deliver"} onChange={(e) => setCollect(e.target.value === "collect")}>
+                <FormControlLabel value="deliver" control={<Radio />} label="Deliver it to me" sx={{ m: 0, minHeight: 44 }} />
+                <FormControlLabel
+                  value="collect"
+                  control={<Radio />}
+                  sx={{ m: 0, alignItems: "flex-start", "& .MuiFormControlLabel-label": { py: 1.1, minWidth: 0 } }}
+                  label={
+                    <Box>
+                      <Typography component="span" sx={{ display: "block" }}>
+                        {pickups.length === 1 ? `Collect it: ${pickups[0].name}` : `Collect it (${pickups.length} places, picked next)`}
+                      </Typography>
+                      {pickups.length === 1 && pickups[0].note && (
+                        <Typography component="span" variant="body2" color="text.secondary" sx={{ display: "block", overflowWrap: "anywhere" }}>
+                          {pickups[0].note}
+                        </Typography>
+                      )}
+                    </Box>
+                  }
+                />
+              </RadioGroup>
+            )
+          }
+        />
+        {!collecting && <RememberAddress checked={remember} onChange={setRemember} />}
         <UpcomingOptions owner={shop.owner} storeId={shop.id} />
         {noShipping && (
           <Alert severity="warning" role="alert">
@@ -485,7 +543,7 @@ export function CheckoutDialog({
         )}
         <Box>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
-            <Typography variant="body2">{isDigital ? "Digital order: nothing is shipped." : "Deliver to"}</Typography>
+            <Typography variant="body2">{isDigital ? "Digital order: nothing is shipped." : snapshot.delivery.collect ? "Collected by" : "Deliver to"}</Typography>
             {!isDigital && (
               <Button size="small" onClick={() => setStep("delivery")} sx={{ minHeight: 44 }}>
                 Edit
@@ -493,7 +551,7 @@ export function CheckoutDialog({
             )}
           </Box>
           {!isDigital &&
-            deliverySummary(delivery).map((text, i) => (
+            (snapshot.delivery.collect ? [delivery.customerName, `Contact: ${contact.trim()}`, delivery.country] : deliverySummary(delivery)).map((text, i) => (
               <Typography key={i} variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
                 {text}
               </Typography>

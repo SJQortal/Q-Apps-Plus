@@ -426,6 +426,43 @@ describe("checkout (pinned)", () => {
     expect(order.delivery.shippingAddress.deliveryNote).toBe("Delivery: Local pickup.");
   });
 
+  it("a pickup asks who collects it and how to reach them, no address, and the order says so (+ app)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({ rates: { pick: { first: 0 } } })] },
+      profiles: [],
+      updated: 1,
+      options: [{ id: "pick", name: "Local pickup", note: "Portland, Saturdays", pickup: true }],
+    };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    // The country first: it decides whether the shop offers a pickup there.
+    fireEvent.change(await screen.findByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Oregon" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
+    fireEvent.click(await screen.findByRole("radio", { name: /Collect it: Local pickup/ }));
+    expect(screen.queryByLabelText(/Street address/i)).toBeNull();
+    // How the seller reaches the buyer starts as their Q-Mail name.
+    expect(screen.getByLabelText(/How the seller can reach you/)).toHaveValue(`Q-Mail: ${BUYER}`);
+    fireEvent.change(screen.getByLabelText(/Who collects it/), { target: { value: "Ann Buyer" } });
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Collected by")).toBeInTheDocument();
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    // No address (a digital order's empty one, which the original reads), and how to reach the buyer.
+    expect(order.delivery).toEqual({
+      customerName: "Ann Buyer",
+      shippingAddress: { streetAddress: "", city: "", state: "Oregon", country: "United States", zipCode: "", deliveryNote: `Delivery: Local pickup. Contact: Q-Mail: ${BUYER}.` },
+    });
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
+  });
+
   it("prices a delivery fee set in USD in QORT from the shop's rates", async () => {
     const doc = { v: 1, storeId: STORE_ID, currency: "USD", general: { zones: [zone({ first: 7 })] }, profiles: [], updated: 1 };
     const productList = { storeId: STORE_ID, products: {}, fiatPricing: { currency: "USD", rates: { QORT: 0.18 }, updated: 1 } };

@@ -502,7 +502,8 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
                 ))}
               </Box>
               {/* For the seller's shipping label: the address in one go. */}
-              {role === "seller" && <CopyAddressButton text={addressLabelText(address)} />}
+              {/* A pickup (delivery.ts pickupDelivery) has no street: nothing for a label. */}
+              {role === "seller" && address.some((l) => l.label === "Street address") && <CopyAddressButton text={addressLabelText(address)} />}
             </>
           ) : (
             <Typography variant="body2" color="text.secondary">
