@@ -31,6 +31,8 @@ import { shortStoreIdOf } from "../../qdn/identifiers";
 import { PolicyLines } from "../../shop/PolicyLines";
 import { AwayNotice } from "../../shop/AwayNotice";
 import { ShipsToYou } from "../../delivery/ShipsToYou";
+import { languagesOf, languagesText } from "../../shop/languages";
+import TranslateOutlinedIcon from "@mui/icons-material/TranslateOutlined";
 
 const panelSx = {
   border: 1,
@@ -269,6 +271,12 @@ export function ShopHeader({
             ) : null}
             <ShipsToYou shop={shop} />
             <PolicyLines shop={shop} />
+            {languagesOf(shop).length > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                <TranslateOutlinedIcon fontSize="small" aria-hidden />
+                <span>Answers in {languagesText(languagesOf(shop))}</span>
+              </Typography>
+            )}
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
               <Typography variant="body2" color="text.secondary" component="span">
                 Accepts

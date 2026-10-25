@@ -85,6 +85,8 @@ export interface StoreFields {
   policies?: ShopPolicies | null;
   /** + app, additive: the seller is away until a day, with a note (shop/away.ts); null takes it out; left out, an edit keeps the shop's own. */
   away?: Away | null;
+  /** + app, additive: the languages the seller answers in (shop/languages.ts codes); null takes them out; left out, an edit keeps the shop's own. */
+  languages?: string[] | null;
 }
 
 /**
@@ -123,6 +125,15 @@ function withMetaDescription<T extends Record<string, any>>(obj: T, metaDescript
   if (metaDescription.trim()) return { ...obj, metaDescription: metaDescription.trim() };
   const rest = { ...obj };
   delete rest.metaDescription;
+  return rest;
+}
+
+/** The shop object with `languages` set, or without them (null); unchanged when not given. */
+function withLanguages<T extends Record<string, any>>(obj: T, languages: string[] | null | undefined): T {
+  if (languages === undefined) return obj;
+  if (languages && languages.length > 0) return { ...obj, languages: [...languages] };
+  const rest = { ...obj };
+  delete rest.languages;
   return rest;
 }
 
@@ -165,7 +176,7 @@ export function buildCreateStorePublish(args: {
 }) {
   const { name, shortStoreId, fields, created } = args;
   const identifier = storeIdentifier(shortStoreId);
-  const storeObj = withAway(withPolicies(withShippingStates(
+  const storeObj = withLanguages(withAway(withPolicies(withShippingStates(
     withShippingCountries(
     withMetaDescription(
       withAssets(
@@ -187,7 +198,7 @@ export function buildCreateStorePublish(args: {
     fields.shippingCountries
     ),
     fields.shippingStates
-  ), fields.policies), fields.away);
+  ), fields.policies), fields.away), fields.languages);
   const dataContainer = emptyDataContainer(identifier, shortStoreId, name);
   const resourceStore: PublishResource = {
     action: "PUBLISH_QDN_RESOURCE",
@@ -249,12 +260,15 @@ export function buildEditStorePublish(args: {
       storeObj = rest;
     }
   }
-  storeObj = withAway(
-    withPolicies(
-      withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates),
-      fields.policies
+  storeObj = withLanguages(
+    withAway(
+      withPolicies(
+        withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates),
+        fields.policies
+      ),
+      fields.away
     ),
-    fields.away
+    fields.languages
   );
   return {
     storeObj,

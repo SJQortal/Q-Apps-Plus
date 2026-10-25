@@ -30,6 +30,8 @@ export interface CurrentStore {
   policies?: ShopPolicies;
   /** + app, additive: away until a day, with a note (shop/away.ts; read safely there). */
   away?: unknown;
+  /** + app, additive: the languages the seller answers in (shop/languages.ts reads them safely). */
+  languages?: unknown;
   id: string;
   title: string;
   description: string;

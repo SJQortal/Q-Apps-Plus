@@ -11,6 +11,7 @@ import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } 
 import type { StoreFields } from "../qdn/payloads";
 import { MAX_RETURNS_TEXT, MAX_TERMS_TEXT, policiesForPublish, policiesOf } from "../shop/policies";
 import { awayForPublish, awayOf, dayToInput } from "../shop/away";
+import { languagesOf } from "../shop/languages";
 
 export interface ShopFormValues {
   logo: string | null;
@@ -39,6 +40,8 @@ export interface ShopFormValues {
   away: boolean;
   awayUntil: string;
   awayNote: string;
+  /** The languages the seller answers in (shop/languages.ts codes). */
+  languages: string[];
 }
 
 /** The original's limit for a shop title. */
@@ -73,6 +76,7 @@ export function shopFormValues(store?: {
   acceptedAssets?: ShopAsset[];
   policies?: unknown;
   away?: unknown;
+  languages?: unknown;
 } | null): ShopFormValues {
   const supported = Array.isArray(store?.supportedCoins) ? store.supportedCoins : [];
   const policies = policiesOf(store);
@@ -99,6 +103,7 @@ export function shopFormValues(store?: {
     away: !!away,
     awayUntil: dayToInput(away?.until),
     awayNote: away?.note ?? "",
+    languages: languagesOf(store),
   };
 }
 
@@ -121,6 +126,7 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
     acceptedAssets: values.assets.map((a) => ({ id: a.id, name: a.name })),
     policies: policiesForPublish(values) ?? null,
     away: awayForPublish(values),
+    languages: values.languages.length > 0 ? [...values.languages] : null,
   };
 }
 

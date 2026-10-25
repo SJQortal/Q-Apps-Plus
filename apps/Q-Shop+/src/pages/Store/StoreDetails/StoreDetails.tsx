@@ -14,6 +14,7 @@ import { mailToLink } from "../../../qdn/links";
 import { useLoadedPictures } from "../../../components/common/useLoadedPictures";
 import { PolicyLines } from "../../../shop/PolicyLines";
 import { policiesOf } from "../../../shop/policies";
+import { languagesOf, languagesText } from "../../../shop/languages";
 
 export interface ShopDetails extends ShopCoinSettings {
   title?: string;
@@ -23,6 +24,7 @@ export interface ShopDetails extends ShopCoinSettings {
   shipsTo?: string;
   created?: number | string;
   policies?: unknown;
+  languages?: unknown;
 }
 
 export function formatShopDate(created: number | string | undefined): string {
@@ -110,6 +112,7 @@ export function StoreDetails({
         {opened ? <Row label="Opened">{opened}</Row> : null}
         {shop.location ? <Row label="Location">{shop.location}</Row> : null}
         {shop.shipsTo ? <Row label="Ships to">{shop.shipsTo}</Row> : null}
+        {languagesOf(shop).length > 0 ? <Row label="Answers in">{languagesText(languagesOf(shop))}</Row> : null}
         {policiesOf(shop) ? (
           <Row label="Policies">
             <PolicyLines shop={shop} full />

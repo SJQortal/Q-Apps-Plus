@@ -8,6 +8,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   CircularProgress,
@@ -27,9 +28,10 @@ import { isHubDecline } from "../qdn/hubErrors";
 import { AssetPicker } from "./AssetPicker";
 import { MAX_META_DESCRIPTION, MAX_SHOP_TITLE, SHOP_CARD_TEXT_WIDTH, addressWarning, type ShopFormValues } from "./shopFields";
 import { ShipsToPicker } from "./ShipsToPicker";
-import { selectMenuProps } from "../components/common/menuStyle";
+import { autocompletePaperProps, selectMenuProps } from "../components/common/menuStyle";
 import { DISPATCH_DAY_CHOICES, MAX_RETURNS_TEXT, MAX_TERMS_TEXT, RETURN_DAY_CHOICES } from "../shop/policies";
 import { MAX_AWAY_NOTE } from "../shop/away";
+import { LANGUAGES, MAX_LANGUAGES, languageName } from "../shop/languages";
 
 const NOT_SAID = "none";
 
@@ -195,6 +197,17 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           placeholder="Made to order; customs duties are the buyer's; message me before ordering more than 10."
           slotProps={{ htmlInput: { maxLength: MAX_TERMS_TEXT } }}
           helperText={`${values.terms.length}/${MAX_TERMS_TEXT}`}
+        />
+        <Autocomplete
+          multiple
+          disablePortal
+          slotProps={{ paper: autocompletePaperProps }}
+          options={LANGUAGES.map((l) => l.code)}
+          getOptionLabel={(code) => languageName(code)}
+          value={values.languages}
+          onChange={(_, codes) => set("languages", codes.slice(0, MAX_LANGUAGES))}
+          filterSelectedOptions
+          renderInput={(params) => <TextField {...params} label="Languages you answer in" helperText="Buyers abroad see whether they can write to you." />}
         />
         <Box sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}>
           <FormControlLabel
