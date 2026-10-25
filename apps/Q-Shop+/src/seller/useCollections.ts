@@ -43,6 +43,7 @@ import { errorMessage } from "../qdn/hubErrors";
 import { indexKey, notePublishedIndex } from "./productIndex";
 import { INDEX_CHANGED_TEXT, INDEX_UNREADABLE_TEXT, PrepareError, indexOnQdn, useShowNewerIndex } from "./freshIndex";
 import { LIST_BUSY_TEXT, LIST_CHANGED_TEXT, releaseListWrite, takeListWrite, useListWriteOwner } from "./listWrite";
+import { sameContent } from "./sameContent";
 
 export type CollectionsLoad = "loading" | "ready" | "unavailable";
 
@@ -171,11 +172,13 @@ export function useCollections() {
   const edit = useCallback(
     (next: (list: ShopCollection[]) => ShopCollection[]) => {
       if (busy) return;
-      setDraftFor(draftKey, next(collections));
+      // Back to what's published: no draft left.
+      const list = next(collections);
+      setDraftFor(draftKey, status === "ready" && sameContent(list, published) ? null : list);
       setError(null);
       setNotice(null);
     },
-    [busy, collections, draftKey]
+    [busy, collections, draftKey, status, published]
   );
 
   const save = useCallback(

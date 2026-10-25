@@ -173,6 +173,15 @@ describe("the Delivery tab", () => {
     expect(within(d).getByRole("button", { name: "Use 0 products" })).toBeInTheDocument();
   });
 
+  it("a change put back as it was leaves nothing to publish", async () => {
+    setup();
+    const options = await screen.findByRole("region", { name: "Delivery options" });
+    fireEvent.click(within(options).getByRole("button", { name: "Express" }));
+    expect(await screen.findByRole("region", { name: "Unpublished changes" })).toBeInTheDocument();
+    fireEvent.click(within(options).getByRole("button", { name: "Remove the option Express" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Unpublished changes" })).toBeNull());
+  });
+
   it("adds delivery options buyers pick from, each priced in the zones that offer it", async () => {
     const { q } = setup();
     const options = await screen.findByRole("region", { name: "Delivery options" });

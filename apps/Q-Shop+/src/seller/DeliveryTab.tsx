@@ -29,6 +29,7 @@ import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
 import { ResponsiveDialog } from "../components/common/mobile";
 import type { SellerRow } from "./productList";
 import { NEW_PICKUP_PLACE, PickupPlaceFields } from "./PickupPlaceFields";
+import { sameDelivery } from "./sameContent";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 
 const uid = new ShortUniqueId({ length: 8 });
@@ -401,7 +402,7 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
   const draft = deliveryDrafts.useDraft(dKey);
   const doc = draft ?? saved ?? empty;
   // Back to what's published: no draft left.
-  const change = (next: DeliveryDoc) => deliveryDrafts.set(dKey, JSON.stringify(next) === JSON.stringify(saved ?? empty) ? null : next);
+  const change = (next: DeliveryDoc) => deliveryDrafts.set(dKey, sameDelivery(next, saved ?? empty) ? null : next);
   /** The products in the other profiles than this one, with those profiles' names. */
   const elsewhere = (profileId: string) => {
     const map = new Map<string, string>();

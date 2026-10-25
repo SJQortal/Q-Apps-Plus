@@ -33,6 +33,7 @@ import { useMorePictures } from "../../../hooks/useMorePictures";
 import { groupEditDrafts, groupFormValues, removedMembers, variantDrafts, variantFormProblem } from "../../../variants/drafts";
 import { variantLabel, variantOf, type ProductVariant } from "../../../variants/model";
 import { useVariantGroup } from "../../../variants/useVariantGroup";
+import { sameContent } from "../../../seller/sameContent";
 import {
   editedProductDraft,
   formValuesFor,
@@ -78,6 +79,12 @@ type Base = Record<string, any> & { id: string };
 interface EditedGroup {
   variant: ProductVariant;
   members: Base[];
+}
+
+/** A product without what saving stamps on it (when, who, that it's an edit). */
+function withoutStamps(product: Record<string, unknown>): Record<string, unknown> {
+  const { updated: _u, created: _c, isUpdate: _i, user: _w, ...rest } = product;
+  return rest;
 }
 
 function sameValues(a: ProductFormValues, b: ProductFormValues): boolean {
@@ -131,6 +138,7 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
   const name = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
+  const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
 
   const coins = useMemo(() => shopCoins(currentStore) as string[], [currentStore]);
   // Prices in a currency at the seller's rates (Shop tab → Prices), when the shop uses them.
@@ -242,6 +250,8 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
     const draft = product
       ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing, picturesKept: picturesPending, now })
       : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now, pricing });
+    // A published product saved as it is (changed and put back, say): no draft, so nothing waits to be published.
+    if (product && !productsToSave[product.id] && sameContent(withoutStamps(draft), withoutStamps(product))) return onClose();
     dispatch(setProductsToSave(draft));
     onClose();
   };

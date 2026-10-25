@@ -21,6 +21,7 @@ import { decryptDiscountSecret, fetchDiscountsDoc, localDiscountSecret } from ".
 import { discountDrafts, publishDiscountDrafts } from "./sellerDrafts";
 import { draftKey } from "./deviceDrafts";
 import { usePublishAsk, type PublishAsk } from "./usePendingChanges";
+import { sameContent } from "./sameContent";
 import { DiscountDialog } from "./DiscountDialog";
 
 type Load = { key: string; status: "loading" } | { key: string; status: "failed" } | { key: string; status: "ready"; doc: DiscountsDoc | null; published: DiscountDraft[] };
@@ -88,7 +89,7 @@ export function DiscountsCard({ publishAsk = null }: { publishAsk?: PublishAsk |
   const currency = listReady ? (pricing?.currency ?? "QORT") : (base?.currency ?? "QORT");
   const change = (next: DiscountDraft[]) => {
     setError(null);
-    discountDrafts.set(dKey, JSON.stringify(next) === JSON.stringify(published) ? null : { drafts: next, base });
+    discountDrafts.set(dKey, sameContent(next, published) ? null : { drafts: next, base });
   };
   const takenCodes = (except?: string) => list.filter((d) => d.id !== except && d.codeText).map((d) => d.codeText as string);
 

@@ -478,9 +478,10 @@ describe("the products tab", () => {
     // The fixture's "Art" isn't one of the list: it is offered as the product's own, and selected.
     expect(categoryInput(dialog)).toHaveValue("Art");
     expect(within(dialog).getByText(/“Art” isn't one of the categories every shop uses/)).toBeInTheDocument();
+    // Saved as it is: it keeps "Art", and with nothing changed no draft waits to be published.
     fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
-    await waitFor(() => expect(store.getState().global.productsToSave[poster.id]).toBeDefined());
-    expect(store.getState().global.productsToSave[poster.id].category).toBe("Art");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit product" })).toBeNull());
+    expect(store.getState().global.productsToSave[poster.id]).toBeUndefined();
     // Picking one of the list replaces it.
     fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
     const again = await screen.findByRole("dialog", { name: "Edit product" });
