@@ -88,6 +88,8 @@ function product(s, p) {
     ...(s.short === 'my-shop' && USD_PRICED.includes(p) && { fiatPrice: { currency: 'USD', value: Math.round((1.5 + p) * 18) / 100, qort: 1.5 + p } }),
     // The product page's product: a formatted description with a video, a PDF and a Q-Tube link, and 7 pictures.
     ...(s.short === 'shop-3' && p === 0 && RICH),
+    // The seller's own product with a video and a PDF (the product form shows them under its pictures).
+    ...(s.short === 'my-shop' && p === 2 && MY_MEDIA),
     ...(variantOfFixture(s, p) && { title: `Hand-thrown mug — ${VARIANT_COMBOS[p].join(' / ')}`, type: 'physical', price: [{ currency: 'qort', value: 18 + p * 2 }], status: p === 3 ? 'OUT_OF_STOCK' : 'AVAILABLE', variant: variantOfFixture(s, p) }),
     ...(apronOf(s, p) && { title: `Linen apron — ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
@@ -255,6 +257,14 @@ const RICH = {
     '<div class="qshop-embed" data-kind="file" data-name="Seller 3" data-identifier="qshare_file_care_abc123" data-title="Mug care guide" data-filename="mug-care.pdf" data-mimetype="application/pdf" data-size="48211" data-link="qortal://APP/Q-Share/share/Seller%203/qshare_file_care_def456_metadata">PDF: Mug care guide</div>' +
     '<p><a href="qortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz">qortal://APP/Q-Tube/video/Video%20Maker/qtube_vid_kiln_xyz</a></p>',
   morePictures: { id: 'q-store-pictures-shop-3-P000000000', count: 4, sig: '4-a-b' },
+};
+const MY_MEDIA = {
+  // The plain description is the formatted one's text, as Q-Shop+ writes it (richtext/plainText.ts).
+  description: 'Video: How it drapes (qortal://VIDEO/Seller%20Name/q-store-video-SCARFVID01)\nPDF: Size guide (qortal://FILE/Seller%20Name/qshare_file_size_abc123)\nSoft and warm. Matching hats at qortal://APP/Q-Shop+/Seller%20Name/q-store-general-my-shop.',
+  htmlDescription:
+    '<div class="qshop-embed" data-kind="video" data-name="Seller Name" data-identifier="q-store-video-SCARFVID01" data-title="How it drapes">Video: How it drapes</div>' +
+    '<div class="qshop-embed" data-kind="file" data-name="Seller Name" data-identifier="qshare_file_size_abc123" data-title="Size guide" data-filename="size-guide.pdf" data-mimetype="application/pdf" data-size="31200">PDF: Size guide</div>' +
+    '<p>Soft and warm. Matching hats at qortal://APP/Q-Shop+/Seller%20Name/q-store-general-my-shop.</p>',
 };
 const USD_PRICED = [1, 3, 7, 11];
 function catalogue(s, c) {
@@ -645,6 +655,19 @@ export default {
       await d.getByRole('switch', { name: 'In stock: Large / Natural' }).click();
       await d.getByText(/^Taken out:/).scrollIntoViewIfNeeded({ timeout: 4000 });
       await page.waitForTimeout(400);
+    } },
+    { key: 'seller-product-media', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: /^Edit\b.*Scarf 2\b/ }).click({ timeout: 10000 });
+      const d = page.getByRole('dialog', { name: 'Edit product' });
+      await d.getByRole('button', { name: 'Add a video' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await d.getByRole('list', { name: 'Videos' }).scrollIntoViewIfNeeded({ timeout: 4000 }).catch(() => {});
+      await page.waitForTimeout(700);
+    } },
+    { key: 'seller-product-pdf', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: /^Edit\b.*Scarf 2\b/ }).click({ timeout: 10000 });
+      const d = page.getByRole('dialog', { name: 'Edit product' });
+      await d.getByRole('list', { name: 'Attachments' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.waitForTimeout(500);
     } },
     { key: 'seller-product-form-wide', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Add product' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'favorites', path: '/favorites', after: async (page) => { await page.getByRole('list', { name: 'Favourite shops' }).getByRole('heading').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
