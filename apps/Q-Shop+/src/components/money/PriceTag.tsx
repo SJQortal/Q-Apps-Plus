@@ -56,10 +56,11 @@ export function AmountTag({
     <Typography
       component="span"
       variant={variant ?? (size === "large" ? "h5" : size === "small" ? "body2" : "body1")}
-      sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 700, fontVariantNumeric: "tabular-nums", ...((sx as object) ?? {}) }}
+      sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, maxWidth: "100%", fontWeight: 700, fontVariantNumeric: "tabular-nums", ...((sx as object) ?? {}) }}
     >
       <CoinIcon coin={coin} size={icon} label={label} />
-      <Box component="span">
+      {/* A very long amount wraps inside its box instead of running under what's beside it. */}
+      <Box component="span" sx={{ minWidth: 0, overflowWrap: "anywhere" }}>
         {text}
         {text !== "—" && (
           <Box component="span" sx={{ fontWeight: 500, color: "text.secondary", ml: 0.5, fontSize: "0.85em" }}>

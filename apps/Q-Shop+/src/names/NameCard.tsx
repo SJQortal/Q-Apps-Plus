@@ -61,7 +61,7 @@ export function NameCard({
       <ContentLine content={content} />
       <Box sx={{ mt: "auto", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         {auction ? (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0, flex: "1 1 140px" }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0, flex: "1 1 auto" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
               <Chip size="small" variant="outlined" icon={<GavelOutlinedIcon />} label="Auction" />
               <AmountTag value={glance?.high?.amount ?? auction.terms.startingBid} coin="QORT" size="small" />
@@ -71,7 +71,8 @@ export function NameCard({
             </Typography>
           </Box>
         ) : (
-          <Box sx={{ flex: "1 1 120px", minWidth: 0 }}>
+          // As wide as the price, so a long one sends the button to the next line.
+          <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
             <AmountTag value={item.price} coin="QORT" />
           </Box>
         )}
@@ -80,7 +81,7 @@ export function NameCard({
           color={mine || pending ? "inherit" : "primary"}
           onClick={() => onOpen(item)}
           aria-label={`${label}: ${item.name}`}
-          sx={{ minHeight: 44, flexShrink: 0 }}
+          sx={{ minHeight: 44, flexShrink: 0, ml: "auto" }}
         >
           {label}
         </Button>
