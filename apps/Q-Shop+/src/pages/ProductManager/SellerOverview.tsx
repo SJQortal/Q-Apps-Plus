@@ -209,72 +209,80 @@ export function SellerOverview({
         )}
       </Box>
 
-      {/* Counted products with 3 or fewer left (seller/LowStock.tsx). */}
-      <LowStock storeId={storeId} onEdit={onEditProduct} />
-
-      <Box component="section" aria-labelledby="seller-overview-activity" sx={{ display: "flex", flexDirection: "column" }}>
-        <Typography id="seller-overview-activity" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
-          Recent activity
-        </Typography>
-        <RecentActivity items={activity} loading={activityLoading} owner={list.seller} storeId={storeId} onOpenOrder={openOrder} />
-      </Box>
-
-      <Box component="section" aria-labelledby="seller-overview-latest">
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
-          <Typography id="seller-overview-latest" component="h2" sx={{ flex: 1, fontSize: 18, fontWeight: 700 }}>
-            Latest orders
-          </Typography>
-          {onOpenTab && list.items.length > 0 && (
-            <Button onClick={() => onOpenTab("orders")} endIcon={<ChevronRightOutlinedIcon />} sx={{ minHeight: 44 }}>
-              All orders
-            </Button>
-          )}
-        </Box>
-        {list.meta.phase === "error" && list.items.length === 0 ? (
-          <EmptyState
-            title="Couldn't load your shop's orders"
-            description="The node didn't answer. Try again in a moment."
-            actionLabel="Retry"
-            onAction={() => void list.refresh()}
-          />
-        ) : ordersLoading && list.items.length === 0 ? (
-          <OrderListSkeleton rows={3} />
-        ) : latest.length === 0 && more ? (
-          <EmptyState
-            icon={<ReceiptLongOutlinedIcon />}
-            title="No orders found yet"
-            description={`None of the first ${list.meta.offset} results is an order of your shop. Open Orders to look further.`}
-            actionLabel={onOpenTab ? "Open orders" : undefined}
-            onAction={onOpenTab ? () => onOpenTab("orders") : undefined}
-          />
-        ) : latest.length === 0 ? (
-          <EmptyState
-            icon={<ReceiptLongOutlinedIcon />}
-            title="No orders yet"
-            description="When someone buys from your shop, the order shows here and you get a Q-Mail."
-          />
-        ) : (
-          <Box
-            component="ul"
-            aria-label="Latest orders"
-            sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}
-          >
-            {latest.map((item) => (
-              <Box component="li" key={item.row.id}>
-                <OrderCard
-                  item={item}
-                  role="seller"
-                  review={shopReviews.reviews.find((r) => sameName(r.name, item.row.user))}
-                  onOpen={(order) => {
-                    setOpenId(order.id);
-                    setDialogOpen(true);
-                  }}
-                  onRetry={(row) => void list.retry(row)}
-                />
-              </Box>
-            ))}
+      {/*
+        Two columns on wider screens (Simon: "could be more compact, no need to expand them across so much"):
+        what's running low and the recent activity, and beside them the latest orders.
+      */}
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: 3, alignItems: "start" }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+          {/* Counted products with 3 or fewer left (seller/LowStock.tsx). */}
+          <LowStock storeId={storeId} onEdit={onEditProduct} />
+          <Box component="section" aria-labelledby="seller-overview-activity" sx={{ display: "flex", flexDirection: "column" }}>
+            <Typography id="seller-overview-activity" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
+              Recent activity
+            </Typography>
+            <RecentActivity items={activity} loading={activityLoading} owner={list.seller} storeId={storeId} onOpenOrder={openOrder} />
           </Box>
-        )}
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Box component="section" aria-labelledby="seller-overview-latest">
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
+              <Typography id="seller-overview-latest" component="h2" sx={{ flex: 1, fontSize: 18, fontWeight: 700 }}>
+                Latest orders
+              </Typography>
+              {onOpenTab && list.items.length > 0 && (
+                <Button onClick={() => onOpenTab("orders")} endIcon={<ChevronRightOutlinedIcon />} sx={{ minHeight: 44 }}>
+                  All orders
+                </Button>
+              )}
+            </Box>
+            {list.meta.phase === "error" && list.items.length === 0 ? (
+              <EmptyState
+                title="Couldn't load your shop's orders"
+                description="The node didn't answer. Try again in a moment."
+                actionLabel="Retry"
+                onAction={() => void list.refresh()}
+              />
+            ) : ordersLoading && list.items.length === 0 ? (
+              <OrderListSkeleton rows={3} />
+            ) : latest.length === 0 && more ? (
+              <EmptyState
+                icon={<ReceiptLongOutlinedIcon />}
+                title="No orders found yet"
+                description={`None of the first ${list.meta.offset} results is an order of your shop. Open Orders to look further.`}
+                actionLabel={onOpenTab ? "Open orders" : undefined}
+                onAction={onOpenTab ? () => onOpenTab("orders") : undefined}
+              />
+            ) : latest.length === 0 ? (
+              <EmptyState
+                icon={<ReceiptLongOutlinedIcon />}
+                title="No orders yet"
+                description="When someone buys from your shop, the order shows here and you get a Q-Mail."
+              />
+            ) : (
+              <Box
+                component="ul"
+                aria-label="Latest orders"
+                sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}
+              >
+                {latest.map((item) => (
+                  <Box component="li" key={item.row.id}>
+                    <OrderCard
+                      item={item}
+                      role="seller"
+                      review={shopReviews.reviews.find((r) => sameName(r.name, item.row.user))}
+                      onOpen={(order) => {
+                        setOpenId(order.id);
+                        setDialogOpen(true);
+                      }}
+                      onRetry={(row) => void list.retry(row)}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        </Box>
       </Box>
 
       <ShowOrder open={dialogOpen && !!opened} onClose={() => setDialogOpen(false)} order={opened} role="seller" />
