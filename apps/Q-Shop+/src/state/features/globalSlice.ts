@@ -28,6 +28,8 @@ export interface CurrentStore {
   shippingStates?: string[];
   /** + app, additive: dispatch time, returns and terms (shop/policies.ts). */
   policies?: ShopPolicies;
+  /** + app, additive: away until a day, with a note (shop/away.ts; read safely there). */
+  away?: unknown;
   id: string;
   title: string;
   description: string;

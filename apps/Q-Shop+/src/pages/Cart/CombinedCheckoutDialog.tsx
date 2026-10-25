@@ -11,6 +11,8 @@
  * after it stay in the cart. Nothing here can pay twice: Pay all runs once,
  * and the results only ever say what happened.
  */
+import { PolicyLines } from "../../shop/PolicyLines";
+import { AwayNotice } from "../../shop/AwayNotice";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
@@ -469,6 +471,11 @@ export function CombinedCheckoutDialog({
                   />
                 </Box>
               )}
+              {/* Its dispatch time and returns, and whether its seller is away (shop/). */}
+              <Box sx={{ pb: 1.5, display: "flex", flexDirection: "column", gap: 1, "&:empty": { display: "none" } }}>
+                <PolicyLines shop={p.shop} digital={p.lines.every((l) => l.product?.type === "digital")} />
+                <AwayNotice shop={p.shop} />
+              </Box>
             </Box>
           ))}
         </Box>

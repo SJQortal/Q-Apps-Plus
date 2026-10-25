@@ -5,6 +5,7 @@
  * pinned by payloads.test.ts and the *.pin tests that run the components).
  */
 import type { ShopPolicies } from "../shop/policies";
+import type { Away } from "../shop/away";
 import { noteWithTracking, type Tracking } from "../orders/tracking";
 import {
   CATALOGUE_BASE,
@@ -82,6 +83,8 @@ export interface StoreFields {
    * null takes them out of the shop; left out, an edit keeps the shop's own.
    */
   policies?: ShopPolicies | null;
+  /** + app, additive: the seller is away until a day, with a note (shop/away.ts); null takes it out; left out, an edit keeps the shop's own. */
+  away?: Away | null;
 }
 
 /**
@@ -123,6 +126,15 @@ function withMetaDescription<T extends Record<string, any>>(obj: T, metaDescript
   return rest;
 }
 
+/** The shop object with `away` set, or without it (null); unchanged when not given. */
+function withAway<T extends Record<string, any>>(obj: T, away: Away | null | undefined): T {
+  if (away === undefined) return obj;
+  if (away) return { ...obj, away: { ...away } };
+  const rest = { ...obj };
+  delete rest.away;
+  return rest;
+}
+
 /** The shop object with `policies` set, or without them (null); unchanged when not given. */
 function withPolicies<T extends Record<string, any>>(obj: T, policies: ShopPolicies | null | undefined): T {
   if (policies === undefined) return obj;
@@ -153,7 +165,7 @@ export function buildCreateStorePublish(args: {
 }) {
   const { name, shortStoreId, fields, created } = args;
   const identifier = storeIdentifier(shortStoreId);
-  const storeObj = withPolicies(withShippingStates(
+  const storeObj = withAway(withPolicies(withShippingStates(
     withShippingCountries(
     withMetaDescription(
       withAssets(
@@ -175,7 +187,7 @@ export function buildCreateStorePublish(args: {
     fields.shippingCountries
     ),
     fields.shippingStates
-  ), fields.policies);
+  ), fields.policies), fields.away);
   const dataContainer = emptyDataContainer(identifier, shortStoreId, name);
   const resourceStore: PublishResource = {
     action: "PUBLISH_QDN_RESOURCE",
@@ -237,9 +249,12 @@ export function buildEditStorePublish(args: {
       storeObj = rest;
     }
   }
-  storeObj = withPolicies(
-    withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates),
-    fields.policies
+  storeObj = withAway(
+    withPolicies(
+      withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates),
+      fields.policies
+    ),
+    fields.away
   );
   return {
     storeObj,

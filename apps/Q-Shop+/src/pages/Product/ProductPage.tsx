@@ -51,6 +51,7 @@ import { ProductDescription, ProductMedia, useDescriptionParts } from "../../ric
 import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { ProductDelivery, type DeliveryShop } from "../../delivery/ProductDelivery";
 import { PolicyLines } from "../../shop/PolicyLines";
+import { AwayNotice } from "../../shop/AwayNotice";
 import type { CartLine } from "../../money/order";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
@@ -428,6 +429,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
           )}
           {/* An auction is stored out of stock for the original app; its panel says where it stands (a retired one says so). */}
           {(!auctionTerms || product.status === RETIRED) && stockLine(product.status, auctionTerms ? undefined : unitsLeft)}
+          {/* Away for a while (shop/away.ts): before adding it to the cart. */}
+          <AwayNotice shop={shop as { away?: unknown; title?: string } | null} />
           {auctionTerms ? null : isOwner ? (
             <Alert
               severity="info"

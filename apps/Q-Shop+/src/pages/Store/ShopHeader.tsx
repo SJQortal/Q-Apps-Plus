@@ -29,6 +29,7 @@ import { favoriteShop } from "../../favorites/model";
 import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
 import { shortStoreIdOf } from "../../qdn/identifiers";
 import { PolicyLines } from "../../shop/PolicyLines";
+import { AwayNotice } from "../../shop/AwayNotice";
 
 const panelSx = {
   border: 1,
@@ -298,6 +299,8 @@ export function ShopHeader({
         </Box>
       </Box>
       {shop.description ? <ShopDescription text={shop.description} /> : null}
+      {/* Away for a while (shop/away.ts): before anyone adds to the cart. */}
+      <AwayNotice shop={shop} sx={{ mt: 2 }} />
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2, "& > *": { flex: { xs: "1 1 auto", sm: "0 0 auto" } } }}>
         {isOwner ? (
           <>

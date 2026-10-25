@@ -29,6 +29,7 @@ import { MAX_META_DESCRIPTION, MAX_SHOP_TITLE, SHOP_CARD_TEXT_WIDTH, addressWarn
 import { ShipsToPicker } from "./ShipsToPicker";
 import { selectMenuProps } from "../components/common/menuStyle";
 import { DISPATCH_DAY_CHOICES, MAX_RETURNS_TEXT, MAX_TERMS_TEXT, RETURN_DAY_CHOICES } from "../shop/policies";
+import { MAX_AWAY_NOTE } from "../shop/away";
 
 const NOT_SAID = "none";
 
@@ -195,6 +196,36 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           slotProps={{ htmlInput: { maxLength: MAX_TERMS_TEXT } }}
           helperText={`${values.terms.length}/${MAX_TERMS_TEXT}`}
         />
+        <Box sx={{ borderTop: 1, borderColor: "divider", pt: 1 }}>
+          <FormControlLabel
+            control={<Switch checked={values.away} onChange={(e) => set("away", e.target.checked)} />}
+            label="I'm away for a while"
+            sx={{ minHeight: 44, mr: 0 }}
+          />
+          <Typography variant="body2" color="text.secondary">
+            Buyers see it, and when you&apos;re back, before they pay; orders still come in.
+          </Typography>
+          <Collapse in={values.away} unmountOnExit>
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) minmax(0, 2fr)" }, gap: 2, pt: 2 }}>
+              <TextField
+                type="date"
+                label="Back on (optional)"
+                value={values.awayUntil}
+                onChange={(e) => set("awayUntil", e.target.value)}
+                slotProps={{ inputLabel: { shrink: true } }}
+                helperText="It goes away by itself after that day"
+              />
+              <TextField
+                label="Note for buyers (optional)"
+                value={values.awayNote}
+                onChange={(e) => set("awayNote", e.target.value)}
+                slotProps={{ htmlInput: { maxLength: MAX_AWAY_NOTE } }}
+                helperText={`${values.awayNote.length}/${MAX_AWAY_NOTE}`}
+                placeholder="At a craft fair; messages answered in the evenings."
+              />
+            </Box>
+          </Collapse>
+        </Box>
       </Box>
 
       <Box component="section" aria-label="Payments" sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>

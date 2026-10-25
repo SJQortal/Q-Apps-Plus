@@ -10,6 +10,7 @@ import { FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/co
 import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } from "../constants/shipping";
 import type { StoreFields } from "../qdn/payloads";
 import { MAX_RETURNS_TEXT, MAX_TERMS_TEXT, policiesForPublish, policiesOf } from "../shop/policies";
+import { awayForPublish, awayOf, dayToInput } from "../shop/away";
 
 export interface ShopFormValues {
   logo: string | null;
@@ -34,6 +35,10 @@ export interface ShopFormValues {
   returnDays: number | null;
   returns: string;
   terms: string;
+  /** Away (shop/away.ts): on, the day back ("" for not said, a date field's value) and a note. */
+  away: boolean;
+  awayUntil: string;
+  awayNote: string;
 }
 
 /** The original's limit for a shop title. */
@@ -67,9 +72,11 @@ export function shopFormValues(store?: {
   foreignCoins?: Record<string, string>;
   acceptedAssets?: ShopAsset[];
   policies?: unknown;
+  away?: unknown;
 } | null): ShopFormValues {
   const supported = Array.isArray(store?.supportedCoins) ? store.supportedCoins : [];
   const policies = policiesOf(store);
+  const away = awayOf(store);
   return {
     logo: store?.logo || null,
     title: store?.title ?? "",
@@ -89,6 +96,9 @@ export function shopFormValues(store?: {
     returnDays: policies?.returnDays ?? null,
     returns: policies?.returns ?? "",
     terms: policies?.terms ?? "",
+    away: !!away,
+    awayUntil: dayToInput(away?.until),
+    awayNote: away?.note ?? "",
   };
 }
 
@@ -110,6 +120,7 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
     supportedCoins,
     acceptedAssets: values.assets.map((a) => ({ id: a.id, name: a.name })),
     policies: policiesForPublish(values) ?? null,
+    away: awayForPublish(values),
   };
 }
 

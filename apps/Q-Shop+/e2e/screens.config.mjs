@@ -271,6 +271,8 @@ const storeJson = (s) => ({
   supportedCoins: s.arrr ? ['QORT', 'ARRR'] : ['QORT'],
   // The seller's shop also takes a Q-Asset: its products, and each variant, can have a price in it.
   ...(s.short === 'my-shop' && { acceptedAssets: [{ id: 81, name: 'Gold Bar' }] }),
+  // Ålund Ceramics is away for a week (shop/away.ts).
+  ...(s.short === 'shop-2' && { away: { until: new Date(new Date(now).setHours(0, 0, 0, 0) + 7 * DAY).getTime(), note: 'At the Lisbon ceramics fair; messages answered in the evenings.' } }),
   // Shop 1 states its policies (shop/policies.ts): its page, products and checkout show them.
   ...(s.short === 'shop-1' && { policies: { dispatchDays: 2, returnDays: 14, returns: 'Unused items in their packaging, within 14 days of delivery. The buyer pays return postage; refunds go back in the coin paid.', terms: 'Made in small batches: colours vary a little from the pictures.' } }),
 });
@@ -713,6 +715,17 @@ export default {
       await policies.getByRole('combobox', { name: 'Returns' }).click();
       await page.getByRole('option', { name: 'Within 30 days' }).click();
       await policies.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(400);
+    } },
+    { key: 'shop-away', path: `/${encodeURIComponent('Zoë Ålund')}/q-store-general-shop-2`, after: async (page) => { await page.getByText(/is away\./).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'seller-edit-away', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 });
+      const d = page.getByRole('dialog', { name: 'Edit shop' });
+      await d.getByRole('switch', { name: "I'm away for a while" }).click({ timeout: 4000 });
+      await d.getByLabel('Back on (optional)').fill('2026-11-03');
+      await d.getByRole('textbox', { name: 'Note for buyers (optional)' }).fill('At a craft fair; messages answered in the evenings.');
+      await d.getByRole('textbox', { name: 'Note for buyers (optional)' }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
     } },
     { key: 'shop-policies', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, after: async (page) => {

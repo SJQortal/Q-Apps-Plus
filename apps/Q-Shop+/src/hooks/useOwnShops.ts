@@ -80,6 +80,7 @@ export function currentStoreFrom(storeId: string, owner: string, json: any, row?
     shippingCountries: Array.isArray(json?.shippingCountries) ? json.shippingCountries : undefined,
     shippingStates: Array.isArray(json?.shippingStates) ? json.shippingStates : undefined,
     policies: policiesOf(json) ?? undefined,
+    away: json?.away && typeof json.away === "object" && !Array.isArray(json.away) ? json.away : undefined,
     owner,
   } as unknown as CurrentStore;
 }
