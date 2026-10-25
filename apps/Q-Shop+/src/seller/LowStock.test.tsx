@@ -34,7 +34,7 @@ describe("running low", () => {
     renderWithProviders(<LowStock storeId={STORE} onEdit={onEdit} />, { store });
     const items = screen.getAllByRole("listitem").map((li) => li.textContent);
     expect(items).toEqual(["ScarfSold out", "Lamp2 left"]);
-    fireEvent.click(screen.getByRole("button", { name: "Lamp: 2 left. Edit it" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Lamp\s*2 left$/ }));
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: "p-low", title: "Lamp" }));
   });
 });

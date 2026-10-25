@@ -52,7 +52,6 @@ export function LowStock({ storeId, onEdit }: { storeId: string; onEdit?: (produ
               <ButtonBase
                 onClick={() => details && onEdit?.(productForEdit(row, details))}
                 disabled={!details || !onEdit}
-                aria-label={`${title ?? "Product"}: ${label}. Edit it`}
                 sx={{ width: "100%", minHeight: 52, px: 2, py: 1, display: "flex", alignItems: "center", gap: 1.5, justifyContent: "flex-start", textAlign: "left", "&:hover": { bgcolor: "action.hover" } }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>{title ? <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{title}</Typography> : <Skeleton width="50%" />}</Box>
