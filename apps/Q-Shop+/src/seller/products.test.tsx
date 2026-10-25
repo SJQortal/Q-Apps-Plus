@@ -186,6 +186,25 @@ describe("the products tab", () => {
     });
   });
 
+  it("Duplicate starts a new product from the one being edited, its title marked (copy)", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
+    const edit = await screen.findByRole("dialog", { name: "Edit product" });
+    fireEvent.click(within(edit).getByRole("button", { name: "Duplicate" }));
+    const add = await screen.findByRole("dialog", { name: "Add product" });
+    expect(within(add).getByRole("textbox", { name: /^Title/ })).toHaveValue(`${poster.title} (copy)`);
+    expect(within(add).getByRole("textbox", { name: /^Price in QORT/ })).toHaveValue("0.1");
+    fireEvent.click(within(add).getByRole("button", { name: "Add to drafts" }));
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(1));
+    const [copy] = Object.values(store.getState().global.productsToSave) as unknown as Record<string, unknown>[];
+    expect(copy.id).not.toBe(poster.id);
+    // Its old category ("Art") gives way to the list's, as a new product's must.
+    expect(copy).toMatchObject({ title: `${poster.title} (copy)`, status: "AVAILABLE", category: "Collectibles & Art" });
+    expect(copy.isUpdate).toBeUndefined();
+  });
+
   it("publishes a product's pictures past the third in a document of their own, first; the catalogue keeps 3", async () => {
     stubNode();
     const { q, store } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });

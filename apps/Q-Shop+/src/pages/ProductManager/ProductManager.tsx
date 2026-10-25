@@ -30,6 +30,7 @@ import { findOwnShops, loadOwnShop } from "../../hooks/useOwnShops";
 import { decodeParam, storeLink, storePath } from "../../qdn/links";
 import { copyText } from "../../utils/clipboard";
 import { ProductDialog } from "./NewProduct/NewProduct";
+import type { ProductFormValues } from "../../seller/productDraft";
 import { SellerOverview } from "./SellerOverview";
 import { OrdersTab } from "./OrdersTab";
 import { ReviewsPanel } from "../Store/StoreReviews/ReviewsPanel";
@@ -46,7 +47,7 @@ import { DeliveryTab } from "../../seller/DeliveryTab";
 import { CENTRED_TABS, CENTRED_WIDTH, SELLER_TABS, TAB_LABEL, isSellerTab, type SellerTab } from "./sellerTabs";
 import { useSellerGuideOnce } from "../../onboarding/Walkthrough";
 
-type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null } | null;
+type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null; copy?: ProductFormValues } | null;
 type DeleteRequest = { key: number; products: ProductToDelete[]; onDeleted?: () => void } | null;
 
 export const ProductManager = () => {
@@ -321,8 +322,10 @@ export const ProductManager = () => {
           key={productDialog.key}
           open
           product={productDialog.product}
+          initialValues={productDialog.copy}
           onClose={() => setProductDialog(null)}
           onDelete={askDeleteFromForm}
+          onDuplicate={(copy) => setProductDialog({ key: Date.now(), product: null, copy })}
         />
       )}
       {deleteRequest && (

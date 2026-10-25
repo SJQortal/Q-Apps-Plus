@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import ShortUniqueId from "short-unique-id";
 import type { RootState } from "../../../state/store";
 import { removeFromProductsToSave, setProductsToSave } from "../../../state/features/globalSlice";
@@ -24,6 +25,7 @@ import { assetInfo } from "../../../qdn/assets";
 import { ProductForm } from "../ProductForm/ProductForm";
 import { FormError } from "../../../seller/FormError";
 import { listedCategory, oldCategoryOf } from "../../../constants/categories";
+import { suggestCategory } from "../../../utils/categoryMatch";
 import { fiatPricingOf } from "../../../money/fiatPricing";
 import { needsMorePictures } from "../../../qdn/productPictures";
 import { auctionTermsOf } from "../../../auctions/rules";
@@ -51,6 +53,21 @@ export interface ProductDialogProps {
   product: (Record<string, any> & { id: string }) | null;
   /** Delete this (published) product, or a group's products; the form stays open until they are deleted. */
   onDelete?: (products: { id: string; catalogueId?: string; title?: string }[]) => void;
+  /** A new product's starting values: a copy of another's (Duplicate). */
+  initialValues?: ProductFormValues | null;
+  /** Duplicate: a new product starting from this form's values (sellers with many similar products). */
+  onDuplicate?: (values: ProductFormValues) => void;
+}
+
+/**
+ * A copy's values: "(copy)" after the title, at a fixed price, on its own (not
+ * in a variant group), for sale, and in a category from the list (a new
+ * product's must be: an old one gives way to the title's suggestion).
+ */
+export function copyValues(values: ProductFormValues): ProductFormValues {
+  const { auction: _auction, ...rest } = values;
+  const category = listedCategory(values.category) ?? suggestCategory(values.title) ?? "";
+  return { ...rest, title: `${values.title.trim()} (copy)`.slice(0, 180), category, sale: "fixed", variants: null, status: "AVAILABLE" };
 }
 
 type Base = Record<string, any> & { id: string };
@@ -107,7 +124,7 @@ function GroupDialog(props: ProductDialogProps & { product: Base; variant: Produ
   );
 }
 
-function ProductEditor({ open, onClose, product, onDelete, group = null }: ProductDialogProps & { group?: EditedGroup | null }) {
+function ProductEditor({ open, onClose, product, onDelete, initialValues = null, onDuplicate, group = null }: ProductDialogProps & { group?: EditedGroup | null }) {
   const dispatch = useDispatch();
   const name = useSelector((state: RootState) => state.auth.user?.name);
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
@@ -133,7 +150,7 @@ function ProductEditor({ open, onClose, product, onDelete, group = null }: Produ
   const [oldCategory] = useState(() => oldCategoryOf(product));
 
   const [initial, setInitial] = useState<ProductFormValues>(() => {
-    const start = formValuesFor(product, coins, pricing);
+    const start = !product && initialValues ? initialValues : formValuesFor(product, coins, pricing);
     // A listed category saved in another spelling shows as the list's; an old one trimmed, as oldCategoryOf
     // gives it (the original saved categories as typed, spaces and all).
     const values = { ...start, category: listedCategory(start.category) ?? start.category.trim() };
@@ -253,6 +270,11 @@ function ProductEditor({ open, onClose, product, onDelete, group = null }: Produ
                 sx={{ mr: "auto" }}
               >
                 {group && listedProducts.length > 1 ? `Delete all ${listedProducts.length}` : "Delete"}
+              </Button>
+            )}
+            {onDuplicate && product && !group && !picturesPending && (
+              <Button color="inherit" startIcon={<ContentCopyOutlinedIcon />} onClick={() => onDuplicate(copyValues(values))} sx={listedProducts.length > 0 && onDelete ? undefined : { mr: "auto" }}>
+                Duplicate
               </Button>
             )}
             <Button color="inherit" onClick={requestClose}>
