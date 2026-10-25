@@ -967,8 +967,8 @@ export default {
       // The cart-delivery screen may have kept a country on this device already.
       await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
       const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
-      await d.getByRole('combobox', { name: 'Country' }).fill('Portugal');
-      await page.getByRole('option', { name: 'Portugal', exact: true }).click({ timeout: 4000 });
+      await d.getByRole('searchbox', { name: 'Country' }).fill('Portugal');
+      await d.getByRole('option', { name: 'Portugal', exact: true }).click({ timeout: 4000 });
       await d.getByRole('button', { name: 'Show prices' }).click();
       await page.getByRole('list', { name: 'Delivery options' }).waitFor({ timeout: 8000 });
       await page.getByRole('list', { name: 'Delivery options' }).scrollIntoViewIfNeeded();
@@ -977,7 +977,7 @@ export default {
     { key: 'product-delivery-picker', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, overlay: true, after: async (page) => {
       await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
       const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
-      await d.getByRole('combobox', { name: 'Country' }).fill('United');
+      await d.getByRole('searchbox', { name: 'Country' }).fill('United');
       await page.waitForTimeout(400);
     } },
     { key: 'products-on-sale', path: '/products?sale=1', after: async (page) => { await page.getByText('% off').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
