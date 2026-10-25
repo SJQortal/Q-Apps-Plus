@@ -160,12 +160,15 @@ export function Walkthrough({ tour, onClose }: { tour: TourId; onClose: () => vo
             <Typography component="h2" sx={{ fontWeight: 700, fontSize: 20, lineHeight: 1.3 }}>
               {step.title}
             </Typography>
-            <Typography color="text.secondary">{step.intro}</Typography>
+            {/* Sizes of its own: Classic's 23 px body text would outgrow the step's title. */}
+            <Typography color="text.secondary" sx={{ fontSize: 16, lineHeight: 1.5 }}>
+              {step.intro}
+            </Typography>
           </Box>
         </Box>
         <Box component="ul" sx={{ m: 0, pl: 2.5, display: "flex", flexDirection: "column", gap: 1 }}>
           {step.points.map(([lead, rest]) => (
-            <Typography component="li" key={lead} sx={{ lineHeight: 1.5 }}>
+            <Typography component="li" key={lead} sx={{ fontSize: 16, lineHeight: 1.5 }}>
               <strong>{lead}</strong>: {rest}
             </Typography>
           ))}
