@@ -87,6 +87,17 @@ describe("the shop checkup", () => {
     expect(suggestShippingCountries("message us").codes).toEqual([]);
   });
 
+  it("doesn't read South or Latin America as the United States, an island as Iceland, or New Jersey as Jersey", () => {
+    expect(suggestShippingCountries("South America").codes).not.toContain("US");
+    expect(suggestShippingCountries("Latin America").codes).not.toContain("US");
+    expect(suggestShippingCountries("Latin America").codes).toContain("BR");
+    expect(suggestShippingCountries("Central America only").codes).not.toContain("US");
+    expect(suggestShippingCountries("America").codes).toEqual(["US"]);
+    expect(suggestShippingCountries("Rhode Island").codes).toEqual(["US"]);
+    expect(suggestShippingCountries("New Jersey").codes).toEqual(["US"]);
+    expect(suggestShippingCountries("Jersey and Guernsey").codes).toEqual(expect.arrayContaining(["JE", "GG"]));
+  });
+
   it("counts the steps an owner's shop page can tell, without reading more", () => {
     const rows = [{ category: "Paper" }, { category: "Home & Garden" }];
     expect(openShopSteps({ logo: "x", description: "d", location: "l" }, rows, true)).toBe(3);
