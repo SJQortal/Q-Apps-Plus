@@ -1,7 +1,8 @@
 /**
  * The products a shipping profile delivers (delivery/model.ts): picked from
  * the shop's products, searchable, with their pictures. A product in another
- * profile says so; picking it moves it here.
+ * profile says so; picking it moves it here. Discount codes pick their
+ * products with it too (seller/DiscountDialog.tsx).
  */
 import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
@@ -14,20 +15,26 @@ import type { SellerRow } from "./productList";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 
 const PAGE = 30;
+const NO_PROFILES = new Map<string, string>();
 
 const titleOf = (details: Record<string, unknown> | undefined) => (typeof details?.title === "string" ? details.title.trim() : "");
 
 export function DeliveryProductsDialog({
   profileName,
+  title,
+  intro,
   picked: initial,
-  elsewhere,
+  elsewhere = NO_PROFILES,
   onSave,
   onClose,
 }: {
   profileName: string;
+  /** The dialog's title and first line, when they aren't a shipping profile's. */
+  title?: string;
+  intro?: string;
   picked: string[];
   /** Products in other profiles: their profile's name. */
-  elsewhere: Map<string, string>;
+  elsewhere?: Map<string, string>;
   onSave: (products: string[]) => void;
   onClose: () => void;
 }) {
@@ -53,7 +60,7 @@ export function DeliveryProductsDialog({
     <ResponsiveDialog
       open
       onClose={onClose}
-      title={`Products in ${profileName}`}
+      title={title ?? `Products in ${profileName}`}
       maxWidth="sm"
       actions={
         <>
@@ -68,7 +75,7 @@ export function DeliveryProductsDialog({
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         <Typography variant="body2" color="text.secondary">
-          These products are delivered at this profile&apos;s prices; every other product at the General ones. Digital products are never delivered.
+          {intro ?? "These products are delivered at this profile's prices; every other product at the General ones. Digital products are never delivered."}
         </Typography>
         <TextField
           type="search"

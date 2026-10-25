@@ -2,8 +2,8 @@
  * The seller's Shop tab: the shop as buyers see its details, the coins and
  * assets it takes with their payout addresses, Edit shop (the same dialog as
  * on the shop page), Prices (prices in a currency at the seller's own
- * rates: seller/PricingDialog.tsx), and Advanced → Recreate shop data and
- * Delete shop.
+ * rates: seller/PricingDialog.tsx), Discount codes (seller/DiscountsCard.tsx),
+ * and Advanced → Recreate shop data and Delete shop.
  */
 import { useSearchParams } from "react-router-dom";
 import { useState, type ReactNode } from "react";
@@ -21,6 +21,7 @@ import { RecreateShopDataDialog } from "./RecreateShopDataDialog";
 import { PricingDialog } from "./PricingDialog";
 import { fiatPricingOf, rateToText } from "../money/fiatPricing";
 import { DeleteShopDialog } from "./DeleteShopDialog";
+import { DiscountsCard } from "./DiscountsCard";
 
 /** `zs1abcd…wxyz`: enough to recognise an address without a line of its own. */
 export function shortAddress(address: string): string {
@@ -165,6 +166,13 @@ export function ShopTab() {
               {pricing ? "Change rates and prices" : "Price in a currency"}
             </Button>
           </Box>
+        </Card>
+      </Box>
+
+      <Box>
+        <SectionTitle as="h2">Discount codes</SectionTitle>
+        <Card label="Discount codes">
+          <DiscountsCard />
         </Card>
       </Box>
 

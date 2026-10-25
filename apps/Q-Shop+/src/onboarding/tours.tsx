@@ -42,7 +42,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         points: [
           ["Pay the seller directly", "in QORT, Pirate Chain (ARRR) or Qortal assets (Q-Assets). Q-Shop+ never holds your money."],
           ["Same shops as Q-Shop", "everything lives on Qortal, so every shop, order and review from Q-Shop is here too."],
-          ["New", "delivery prices and options, shop policies, tracking numbers, sales, stock counts, auctions, names for sale, favourites, and more."],
+          ["New", "delivery prices and options, shop policies, tracking numbers, sales and discount codes, stock counts, auctions, names for sale, favourites, and more."],
         ],
       },
       {
@@ -171,7 +171,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         points: [
           ["Collections", "group products (Gifts, Kitchen…); they show first on your shop page."],
           ["Arrange", "set the order buyers see as Featured."],
-          ["Sales", "a price before the sale shows crossed out, with what buyers save."],
+          ["Sales and codes", "a price before the sale shows crossed out; discount codes (Shop Settings) take a percentage or delivery off, for some products, some days or one buyer."],
           ["Share", "copy your shop's or a product's link anywhere on Qortal."],
         ],
       },

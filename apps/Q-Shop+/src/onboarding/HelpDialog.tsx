@@ -21,6 +21,10 @@ export const HELP: { title: string; items: [string, string][] }[] = [
         "Choose your country on a product page (or in your cart) to see it, with each option the shop offers (Standard, Express, Local pickup…). You pick one at checkout. Shops without delivery prices include it, or agree it with you.",
       ],
       [
+        "I have a discount code",
+        "Type it at checkout's last step (Have a discount code?): what it takes off shows before you pay. A discount a shop gives your Qortal name applies by itself.",
+      ],
+      [
         "Is buying safe?",
         "There's no one in the middle: before buying, look at the shop's reviews and orders, its policies (dispatch time, returns) and how long it has been open, and message the seller if anything is unclear. Start small with a shop you don't know.",
       ],
@@ -56,6 +60,10 @@ export const HELP: { title: string; items: [string, string][] }[] = [
       [
         "How do I get paid?",
         "Buyers pay you directly: QORT to your Qortal address, ARRR to the address in Edit shop, Q-Assets to your Qortal address. Each order arrives by Q-Mail and in your Orders, with the payment checked against the chain.",
+      ],
+      [
+        "How do discount codes work?",
+        "Shop Settings → Discount codes: a percentage off, free delivery, or both, for chosen products, some days, orders over an amount or one Qortal name. Codes stay secret on Qortal (only their fingerprints are published), and each order's discount is checked against yours.",
       ],
       [
         "My shop is from the original Q-Shop",
