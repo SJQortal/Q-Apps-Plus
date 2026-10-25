@@ -21,6 +21,8 @@ describe("tracking", () => {
     expect(noteWithTracking("", t)).toBe("Tracking: CTT RR123456785PT");
     // A note that names the number already is left as it is.
     expect(noteWithTracking("CTT RR123456785PT, sent today", t)).toBe("CTT RR123456785PT, sent today");
+    // A short number that happens to be in the note still gets its line.
+    expect(noteWithTracking("Sent on 12 October, 2 parcels", { number: "2" })).toBe("Sent on 12 October, 2 parcels\nTracking: 2");
     expect(noteWithoutTracking("Sent today.\nTracking: CTT RR123456785PT", t)).toBe("Sent today.");
     expect(noteWithoutTracking("Tracking: CTT RR123456785PT", t)).toBe("");
     expect(noteWithoutTracking("Sent today.", null)).toBe("Sent today.");

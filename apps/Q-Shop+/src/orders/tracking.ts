@@ -55,10 +55,16 @@ export function trackingLine(tracking: Tracking): string {
   return `Tracking: ${tracking.carrier ? `${tracking.carrier} ` : ""}${tracking.number}`;
 }
 
-/** The note as published: with the tracking line at its end for the original app, unless it names the number already. */
+/**
+ * The note as published: with the tracking line at its end for the original
+ * app, unless the note already names the number (a whole word of 6 or more
+ * characters: "2" in "2 parcels" isn't it).
+ */
 export function noteWithTracking(note: string, tracking: Tracking | null | undefined): string {
   const text = note.trim();
-  if (!tracking || text.includes(tracking.number)) return text;
+  if (!tracking) return text;
+  const named = tracking.number.length >= 6 && new RegExp(`(?<![\\p{L}\\p{N}])${tracking.number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\p{L}\\p{N}])`, "u").test(text);
+  if (named) return text;
   return text ? `${text}\n${trackingLine(tracking)}` : trackingLine(tracking);
 }
 
