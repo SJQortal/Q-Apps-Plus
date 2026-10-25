@@ -333,6 +333,7 @@ export function ProductsPage() {
   const all = useAllProducts();
   const { catalogues, statuses, load, retryFailed: retryCatalogues } = useAllCatalogues();
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [recentShown, setRecentShown] = useState(false);
   const [categoryAnchor, setCategoryAnchor] = useState<HTMLElement | null>(null);
   const [added, setAdded] = useState<AddedNotice | null>(null);
 
@@ -574,10 +575,16 @@ export function ProductsPage() {
     const loadingMore = reading && shown.length < wanted;
     body = (
       <>
-        {/* The cards' titles are h3: a heading of their own between them and the page's h1. */}
-        <Typography component="h2" sx={visuallyHiddenSx}>
-          Every shop&apos;s products
-        </Typography>
+        {/* The cards' titles are h3: a heading of their own between them and the page's h1, shown when Recently viewed is above. */}
+        {recentShown ? (
+          <Typography component="h2" sx={{ fontSize: 18, fontWeight: 700, mt: { xs: 0.5, sm: 1 } }}>
+            All products
+          </Typography>
+        ) : (
+          <Typography component="h2" sx={visuallyHiddenSx}>
+            Every shop&apos;s products
+          </Typography>
+        )}
         <Box onClickCapture={remember}>
           <ProductGrid layout={layout}>
             {shown.map((row) => {
@@ -768,7 +775,7 @@ export function ProductsPage() {
       )}
 
       {/* What the buyer opened lately (discovery/recentlyViewed.ts), while nothing narrows the list. */}
-      {!searching && activeFilters === 0 && <RecentlyViewedStrip />}
+      {!searching && activeFilters === 0 && <RecentlyViewedStrip onShown={setRecentShown} />}
 
       {body}
 

@@ -3,10 +3,13 @@
  * products opened lately, as the New products strip's tiles. Their
  * catalogues are read when the strip shows (cached; most were just read on
  * their own pages), and one the node can't serve, or that its shop dropped,
- * is left out.
+ * is left out. It sits in a tinted panel of its own, and the page names the
+ * list under it ("All products", via `onShown`), so the two don't run
+ * together (Simon, 2026-10-25).
  */
 import { useEffect, useId, useState } from "react";
 import { Box, Button, Typography } from "@mui/material";
+import { accentWash } from "../hub-theme";
 import { fetchQdnJson } from "../qdn/search";
 import { ProductTile, Row } from "./NewProductsStrip";
 import { clearRecentlyViewed, useRecentlyViewed, type ViewedProduct } from "./recentlyViewed";
@@ -14,7 +17,7 @@ import type { NewProduct } from "./newProducts";
 
 type Catalogue = { products?: Record<string, Record<string, unknown>> } | null;
 
-export function RecentlyViewedStrip() {
+export function RecentlyViewedStrip({ onShown }: { onShown?: (shown: boolean) => void } = {}) {
   const headingId = useId();
   const viewed = useRecentlyViewed();
   const [catalogues, setCatalogues] = useState<Record<string, Catalogue>>({});
@@ -40,9 +43,31 @@ export function RecentlyViewedStrip() {
     const main = typeof product.mainImageIndex === "number" ? product.mainImageIndex : 0;
     return [{ key: `${v.owner}\n${v.catalogueId}\n${v.productId}`, owner: v.owner, storeId: v.storeId, catalogueId: v.catalogueId, product: { ...product, id: v.productId } as never, image: images[main] ?? images[0] ?? "" }];
   });
-  if (items.length === 0) return null;
+  const shown = items.length > 0;
+  useEffect(() => {
+    if (!onShown) return;
+    onShown(shown);
+    return () => onShown(false);
+  }, [shown, onShown]);
+  if (!shown) return null;
   return (
-    <Box component="section" aria-labelledby={headingId} sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+    <Box
+      component="section"
+      aria-labelledby={headingId}
+      sx={(theme) => ({
+        display: "flex",
+        flexDirection: "column",
+        gap: 1,
+        minWidth: 0,
+        px: { xs: 1.5, sm: 2 },
+        pt: 1,
+        pb: 0.5,
+        borderRadius: 2,
+        border: 1,
+        borderColor: "divider",
+        bgcolor: accentWash(theme, 0.06),
+      })}
+    >
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
         <Typography id={headingId} component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
           Recently viewed

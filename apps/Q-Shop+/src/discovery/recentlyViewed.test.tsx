@@ -39,4 +39,14 @@ describe("recently viewed", () => {
     act(() => screen.getByRole("button", { name: "Clear" }).click());
     expect(screen.queryByText("Recently viewed")).toBeNull();
   });
+
+  it("tells the page while it shows, so the list under it gets its own heading", async () => {
+    rememberViewed(item(1), 1);
+    const onShown = vi.fn();
+    renderWithProviders(<RecentlyViewedStrip onShown={onShown} />);
+    expect(await screen.findByText("Mug")).toBeInTheDocument();
+    expect(onShown).toHaveBeenLastCalledWith(true);
+    act(() => screen.getByRole("button", { name: "Clear" }).click());
+    expect(onShown).toHaveBeenLastCalledWith(false);
+  });
 });
