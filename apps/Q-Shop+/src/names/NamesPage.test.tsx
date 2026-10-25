@@ -160,6 +160,20 @@ describe("Names", () => {
     expect(await screen.findByText(/spare2 is for sale at 7\.00 QORT once the next block confirms it/)).toBeInTheDocument();
   });
 
+  it("lists my names compactly, the primary one without Sell, and searches them when there are over 20", async () => {
+    const many = ["Buyer", ...Array.from({ length: 24 }, (_, i) => `name${String(i + 1).padStart(2, "0")}`)];
+    q.on("GET_ACCOUNT_NAMES", async () => many.map((name) => ({ name })));
+    renderNames();
+    fireEvent.click(await screen.findByRole("button", { name: "My names" }));
+    const list = await screen.findByRole("list", { name: "My names" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(25));
+    expect(within(list).getByText("Sell your other names first")).toBeInTheDocument();
+    expect(within(list).queryByRole("button", { name: "Sell Buyer" })).toBeNull();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search your names" }), { target: { value: "name1" } });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(10);
+    expect(screen.getByText("10 names match")).toBeInTheDocument();
+  });
+
   it("sells one of many names from its card: the name chosen in a list to search, a missing price said at the field", async () => {
     const many = ["Buyer", ...Array.from({ length: 8 }, (_, i) => `name${i + 1}`)];
     q.on("GET_ACCOUNT_NAMES", async () => many.map((name) => ({ name })));

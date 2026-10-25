@@ -384,6 +384,9 @@ function SellDialogLoader(props: {
   );
 }
 
+/** More names than this get a search box. */
+const SEARCH_FROM = 20;
+
 function MyNames({
   address,
   knownNames,
@@ -404,6 +407,11 @@ function MyNames({
   onSent: (message: string) => void;
 }) {
   const mine = useMyNames(address, knownNames);
+  // Over 20 names, a search finds one (Simon, 2026-10-25).
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const searchable = mine.names.length > SEARCH_FROM;
+  const shown = searchable && needle ? mine.names.filter((n) => n.toLowerCase().includes(needle)) : mine.names;
   if (!address) return <EmptyState icon={<BadgeOutlinedIcon />} title="Sign in to see your names" actionLabel="Sign in" onAction={onSignIn} />;
   if (mine.loading && mine.names.length === 0) return <Skeleton variant="rounded" height={160} />;
   if (mine.names.length === 0) return <EmptyState icon={<BadgeOutlinedIcon />} title="Your account has no names yet" description="Register a name in Hub (or the Names app), or buy one here." />;
@@ -412,8 +420,41 @@ function MyNames({
       <Typography component="h2" sx={visuallyHiddenSx}>
         My names
       </Typography>
-      <Box component="ul" aria-label="My names" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
-        {mine.names.map((name) => (
+      {searchable && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", mb: 1.5 }}>
+          <TextField
+            type="search"
+            size="small"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Search your ${mine.names.length} names`}
+            slotProps={{
+              htmlInput: { "aria-label": "Search your names" },
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{ flex: "1 1 260px", maxWidth: 480, "& .MuiInputBase-root": { minHeight: 44 } }}
+          />
+          {needle && (
+            <Typography variant="body2" color="text.secondary" role="status">
+              {shown.length === 1 ? "1 name matches" : `${shown.length} names match`}
+            </Typography>
+          )}
+        </Box>
+      )}
+      {shown.length === 0 && <Typography color="text.secondary">None of your names has &ldquo;{query.trim()}&rdquo; in it.</Typography>}
+      {/* Compact cards, several a row where there's room (Simon: "can be more nicely compressed"). */}
+      <Box
+        component="ul"
+        aria-label="My names"
+        sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))", gap: 1 }}
+      >
+        {shown.map((name) => (
           <MyNameRow key={name} name={name} primary={name === mine.primary} others={mine.names.length > 1} item={items.find((i) => i.name === name) ?? null} pending={pending.get(name)} onSell={onSell} onOpen={onOpen} onSent={onSent} />
         ))}
       </Box>
@@ -452,16 +493,16 @@ function MyNameRow({
     else if (result.kind === "failed") setProblem(result.message);
   };
   return (
-    <Paper component="li" variant="outlined" sx={{ p: 2, borderRadius: 2, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
-      <NameAvatar name={name} size={48} />
-      <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-          <Typography component="h3" sx={{ fontWeight: 700, fontSize: 17, overflowWrap: "anywhere" }}>
+    <Paper component="li" variant="outlined" sx={{ px: 1.5, py: 1, borderRadius: 2, display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.25, rowGap: 0.5 }}>
+      <NameAvatar name={name} size={36} />
+      <Box sx={{ flex: "1 1 0", minWidth: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+          <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={name}>
             {name}
           </Typography>
-          {primary && <Chip size="small" variant="outlined" label="Primary" />}
+          {primary && <Chip size="small" variant="outlined" label="Primary" sx={{ height: 20, fontSize: 11, flexShrink: 0 }} />}
         </Box>
-        <Typography variant="body2" sx={{ mt: 0.25, display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+        <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", fontSize: 13 }}>
           {pending ? (
             "Waiting for the next block…"
           ) : item?.auction ? (
@@ -470,6 +511,9 @@ function MyNameRow({
             <>
               For sale at <AmountTag value={item.price} coin="QORT" size="small" />
             </>
+          ) : primary && others ? (
+            // Why it can't be sold, in the card's own line.
+            <span title="Your primary name is your identity in Qortal apps: it can't be sold while you have other names.">Sell your other names first</span>
           ) : (
             "Not for sale"
           )}
@@ -480,7 +524,7 @@ function MyNameRow({
           </Alert>
         )}
       </Box>
-      <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+      <Box sx={{ display: "flex", gap: 1, flexShrink: 0 }}>
         {item?.auction || (item && item.price !== null && pending) ? (
           <Button variant="outlined" color="inherit" onClick={() => onOpen(name)} sx={{ minHeight: 44 }}>
             Open
@@ -490,16 +534,14 @@ function MyNameRow({
             {busy ? "Sending…" : "Take off sale"}
           </Button>
         ) : (
-          <Button variant="contained" onClick={() => onSell(name)} disabled={!!pending || (primary && others)} sx={{ minHeight: 44 }} aria-label={`Sell ${name}`}>
-            Sell
-          </Button>
+          // The primary name can't be sold while there are others: no button, its line says why.
+          !(primary && others) && (
+            <Button variant="outlined" onClick={() => onSell(name)} disabled={!!pending} sx={{ minHeight: 44, minWidth: 64 }} aria-label={`Sell ${name}`}>
+              Sell
+            </Button>
+          )
         )}
       </Box>
-      {primary && others && !item && (
-        <Typography variant="body2" color="text.secondary" sx={{ flexBasis: "100%" }}>
-          Your primary name is your identity in Qortal apps: it can&apos;t be sold while you have other names.
-        </Typography>
-      )}
     </Paper>
   );
 }
