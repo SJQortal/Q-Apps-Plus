@@ -36,7 +36,7 @@ import { Page, PageHeader } from "../../components/layout/Page";
 import { EmptyState } from "../../components/common/EmptyState";
 import { GALLERY_LANDSCAPE_WIDTH, ImageGallery } from "../../components/common/TabImageList/ImageGallery";
 import { LANDSCAPE_PHONE_MEDIA } from "../../hooks/usePhoneLayout";
-import { PriceTag } from "../../components/money/PriceTag";
+import { ShopPrices } from "../../components/money/ShopPrices";
 import { useShopCoin } from "../../money/useShopCoin";
 import { collectionPath, decodeParam, productLink, productPath, storePath } from "../../qdn/links";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
@@ -46,7 +46,6 @@ import { useLandAtTop } from "../../hooks/useLandAtTop";
 import { ProductDescription, ProductMedia, useDescriptionParts } from "../../richtext/ProductDescription";
 import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { useShopCollections } from "../Store/useShopCollections";
-import { CoinPicker, RateNote } from "../Store/CoinPicker";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
 import { FavoriteButton } from "../../favorites/FavoriteButton";
 import { favoriteProduct } from "../../favorites/model";
@@ -362,11 +361,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             </Suspense>
           ) : (
             <>
-              <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
-                <PriceTag product={product} coin={shopCoin.coin} rate={shopCoin.rate} shop={shop} size="large" />
-                <CoinPicker shop={shop} shopCoin={shopCoin} id="product-coin" />
-              </Box>
-              <RateNote shopCoin={shopCoin} />
+              {/* Every coin the shop takes (the buyer's first); checkout's Pays in picks the coin. */}
+              <ShopPrices product={product} shop={shop} preferred={shopCoin.coin} />
             </>
           )}
           {variant && siblings.length > 1 && (
