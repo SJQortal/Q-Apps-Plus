@@ -131,8 +131,8 @@ describe("the Collections tab", () => {
 
     await waitFor(() => expect(titles()).toEqual(["Gifts"]));
     expect(screen.getByText("2 products")).toBeInTheDocument();
-    expect(screen.getByText(/Your changes aren't published yet/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    expect(within(screen.getByRole("region", { name: "Unpublished changes" })).getByText("Collections")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
 
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
@@ -157,14 +157,14 @@ describe("the Collections tab", () => {
     expect(decodeData64(sent[1].data64)).toEqual({ ...dataContainer, collectionsId: DOC_ID });
     await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe("Collections published"));
     expect((store.getState().global.dataContainer as any).collectionsId).toBe(DOC_ID);
-    expect(screen.queryByText(/Your changes aren't published yet/)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Unpublished changes" })).toBeNull();
   });
 
   it("edits, moves and removes only the working copy; Discard brings back what's published", async () => {
     stubNode({ pointer: true, docs: [{ storeId: STORE_ID, collections: [gifts, home] }] });
     const { q } = setup({ pointer: true });
     await waitFor(() => expect(titles()).toEqual(["Gifts", "Home"]));
-    expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Publish changes/ })).toBeNull();
     expect(screen.getByRole("button", { name: "Move up: Gifts" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Move up: Home" }));
     expect(titles()).toEqual(["Home", "Gifts"]);
@@ -185,10 +185,10 @@ describe("the Collections tab", () => {
     fireEvent.change(within(editor).getByRole("textbox", { name: /^Title/ }), { target: { value: "Home and garden" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Done" }));
     await waitFor(() => expect(titles()).toEqual(["Home and garden"]));
-    // Discard asks first.
-    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    // Discard (beside Publish changes) asks first.
+    fireEvent.click(within(screen.getByRole("region", { name: "Unpublished changes" })).getByRole("button", { name: "Discard" }));
     const ask = await screen.findByRole("dialog", { name: "Discard your changes?" });
-    fireEvent.click(within(ask).getByRole("button", { name: "Discard" }));
+    fireEvent.click(within(ask).getByRole("button", { name: "Discard all" }));
     await waitFor(() => expect(titles()).toEqual(["Gifts", "Home"]));
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
@@ -202,7 +202,7 @@ describe("the Collections tab", () => {
     const editor = await screen.findByRole("dialog", { name: "Edit collection" });
     fireEvent.change(within(editor).getByRole("textbox", { name: /^Description/ }), { target: { value: "For friends and family" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Done" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
     expect(sent.map((r: any) => r.identifier)).toEqual([DOC_ID]);
@@ -215,7 +215,7 @@ describe("the Collections tab", () => {
     const { q } = setup({ pointer: true }, { PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     await waitFor(() => expect(titles()).toEqual(["Gifts"]));
     fireEvent.click(screen.getByRole("button", { name: "Remove: Gifts" }));
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     expect(await screen.findByText(COLLECTIONS_CHANGED_TEXT)).toBeInTheDocument();
     expect(titles()).toEqual(["Gifts", "Made on my phone"]);
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
@@ -238,7 +238,7 @@ describe("the Collections tab", () => {
     await screen.findByRole("list", { name: "Products" });
     fireEvent.click(screen.getByRole("tab", { name: "Collections" }));
     await waitFor(() => expect(titles()).toEqual(["Home"]));
-    expect(screen.getByText(/Your changes aren't published yet/)).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Unpublished changes" })).getByText("Collections")).toBeInTheDocument();
   });
 
   it("never drops a product another device added: the product list is read fresh before anything is left out", async () => {
@@ -257,13 +257,13 @@ describe("the Collections tab", () => {
     const editor = await screen.findByRole("dialog", { name: "Edit collection" });
     fireEvent.change(within(editor).getByRole("textbox", { name: /^Description/ }), { target: { value: "New words" } });
     fireEvent.click(within(editor).getByRole("button", { name: "Done" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     // The page's list lacked the lamp: it's shown first, and nothing went out.
     expect(await screen.findByText(INDEX_CHANGED_TEXT)).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
     expect(Object.keys(store.getState().global.dataContainer!.products)).toContain(lamp);
     // Publishing again keeps the lamp in the collection.
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const sent = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
     expect(decodeData64(sent[0].data64).collections[0].products).toEqual([mug.id, lamp]);

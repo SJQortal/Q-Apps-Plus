@@ -380,7 +380,7 @@ describe("deleting products", () => {
     );
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     store.dispatch(setProductsToSave({ ...mug, id: "q-store-product-my-shop-NEWxxxxxx1", title: "New", isUpdate: false, storeId: STORE_ID }));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     const ask = await selectAndDelete(["Mug"]);
     expect(await within(ask).findByText(LIST_BUSY_TEXT)).toBeInTheDocument();
     answer!();

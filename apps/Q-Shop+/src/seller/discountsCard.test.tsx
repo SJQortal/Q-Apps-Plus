@@ -17,9 +17,32 @@ import { discountsIdentifier } from "../qdn/identifiers";
 import { resetQdnCaches } from "../qdn/search";
 import { codeHash, nameHash } from "../discounts/model";
 import { DiscountsCard } from "./DiscountsCard";
+import { useState } from "react";
+import { discountDrafts } from "./sellerDrafts";
+import { draftKey } from "./deviceDrafts";
 import { resetPeopleCaches } from "../discounts/people";
 
 const DISCOUNTS_ID = discountsIdentifier(SHORT_STORE_ID);
+
+/**
+ * The card as the seller page holds it: its changes publish from the page's
+ * Publish changes button (seller/PublishBar.tsx), here a stand-in that shows
+ * while the codes have unpublished changes.
+ */
+function Harness() {
+  const [ask, setAsk] = useState<{ id: number } | null>(null);
+  const draft = discountDrafts.useDraft(draftKey(SELLER, STORE_ID));
+  return (
+    <>
+      <DiscountsCard publishAsk={ask ? { id: ask.id, done: () => setAsk(null) } : null} />
+      {draft && (
+        <button type="button" onClick={() => setAsk((now) => ({ id: (now?.id ?? 0) + Date.now() }))}>
+          Publish discount codes
+        </button>
+      )}
+    </>
+  );
+}
 
 function setup(opts: { published?: unknown } = {}) {
   vi.stubGlobal(
@@ -51,7 +74,7 @@ function setup(opts: { published?: unknown } = {}) {
       throw new Error("Name not found");
     },
   });
-  renderWithProviders(<DiscountsCard />, { store });
+  renderWithProviders(<Harness />, { store });
   return { q };
 }
 

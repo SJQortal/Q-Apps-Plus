@@ -400,7 +400,6 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
   const dKey = draftKey(owner, storeId);
   const draft = deliveryDrafts.useDraft(dKey);
   const doc = draft ?? saved ?? empty;
-  const changed = !!draft && JSON.stringify(draft) !== JSON.stringify(saved ?? empty);
   // Back to what's published: no draft left.
   const change = (next: DeliveryDoc) => deliveryDrafts.set(dKey, JSON.stringify(next) === JSON.stringify(saved ?? empty) ? null : next);
   /** The products in the other profiles than this one, with those profiles' names. */
@@ -588,17 +587,11 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
         A shipping profile gives some products their own prices: heavy or fragile ones, say.
       </Typography>
       {error && <Alert severity="error">{error}</Alert>}
-      {(changed || publishing) && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-          <Button variant="contained" onClick={() => void publish()} disabled={busy || !name} startIcon={busy ? <CircularProgress size={18} color="inherit" /> : undefined} sx={{ minHeight: 48 }}>
-            {busy ? "Publishing…" : "Publish delivery prices"}
-          </Button>
-          <Button color="inherit" onClick={() => deliveryDrafts.set(dKey, null)} disabled={busy} sx={{ minHeight: 44 }}>
-            Discard changes
-          </Button>
-          <Typography variant="body2" color="text.secondary">
-            One small publish: Hub asks you to confirm.
-          </Typography>
+      {/* Publishing and discarding are the Publish changes button's (seller/PublishBar.tsx). */}
+      {busy && (
+        <Box role="status" sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <CircularProgress size={18} />
+          <Typography variant="body2">Publishing your delivery prices: Hub asks you to confirm.</Typography>
         </Box>
       )}
 

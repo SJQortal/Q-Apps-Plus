@@ -95,6 +95,22 @@ describe("unpublished changes on the seller page", () => {
     expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1);
   });
 
+  it("View changes lists each kind with its products, and Discard drops everything after asking", async () => {
+    deliveryDrafts.set(KEY, deliveryDraft);
+    const { store } = setup();
+    store.dispatch(setProductsToSave({ ...chair, storeId: STORE_ID, title: "Chair, new price" }));
+    fireEvent.click(within(await bar()).getByRole("button", { name: "View changes" }));
+    const view = await screen.findByRole("dialog", { name: "Your unpublished changes" });
+    expect(within(within(view).getByRole("region", { name: "1 product" })).getByText("Chair, new price")).toBeInTheDocument();
+    expect(within(within(view).getByRole("region", { name: "Delivery prices" })).getByRole("button", { name: "Open Delivery" })).toBeInTheDocument();
+    fireEvent.click(within(view).getByRole("button", { name: "Close" }));
+    fireEvent.click(within(await bar()).getByRole("button", { name: "Discard" }));
+    fireEvent.click(within(await screen.findByRole("dialog", { name: "Discard your changes?" })).getByRole("button", { name: "Discard all" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Unpublished changes" })).toBeNull());
+    expect(deliveryDrafts.get(KEY)).toBeNull();
+    expect(store.getState().global.productsToSave[chair.id]).toBeUndefined();
+  });
+
   it("asks before leaving with changes: keeping them as drafts leaves, and they wait on this device", async () => {
     deliveryDrafts.set(KEY, deliveryDraft);
     setup();

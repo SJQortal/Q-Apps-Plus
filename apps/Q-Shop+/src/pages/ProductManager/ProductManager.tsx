@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Box, Button, IconButton, Skeleton, Tab, Tabs, Tooltip } from "@mui/material";
+import { Alert, Box, Button, IconButton, Skeleton, Tab, Tabs, Tooltip } from "@mui/material";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import type { AppDispatch, RootState } from "../../state/store";
@@ -35,7 +35,7 @@ import { SellerOverview } from "./SellerOverview";
 import { OrdersTab } from "./OrdersTab";
 import { ReviewsPanel } from "../Store/StoreReviews/ReviewsPanel";
 import { ProductsTab } from "../../seller/ProductsTab";
-import { DraftsCard } from "../../seller/DraftsCard";
+import { ProductDrafts } from "../../seller/DraftsCard";
 import { ShopTab } from "../../seller/ShopTab";
 import { CollectionsTab } from "../../seller/CollectionsTab";
 import { ProductListStatus } from "../../seller/ProductListStatus";
@@ -268,13 +268,17 @@ export const ProductManager = () => {
       <PageHeader title={currentStore.title || "Your shop"} subtitle="Your shop" back backTo={shopUrl} actions={actions} />
       <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
         {!ready && <ProductListStatus status={ownShopStatus} onReload={onReload} />}
-        <DraftsCard
-          onEdit={openEdit}
-          onPublish={() => void publish.prepare()}
-          preparing={publish.preparing}
-          error={publish.error}
-          notice={publish.notice}
-        />
+        {/* Products publish from the Publish changes button; what it has to say shows here. */}
+        {publish.error && (
+          <Alert severity="error" role="alert">
+            {publish.error}
+          </Alert>
+        )}
+        {publish.notice && (
+          <Alert severity="info" role="status">
+            {publish.notice}
+          </Alert>
+        )}
         <FinishDeletesCard />
         <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
           <Tabs
@@ -335,6 +339,15 @@ export const ProductManager = () => {
       <PublishBar
         changes={changes}
         busy={publish.preparing}
+        onOpen={(area) => setTab(area === "discounts" ? "shop" : area)}
+        renderProducts={(close) => (
+          <ProductDrafts
+            onEdit={(product) => {
+              close();
+              openEdit(product);
+            }}
+          />
+        )}
         onPublish={(area) => {
           if (area === "products") return void publish.prepare();
           // The other kinds publish from their tab (its own checks and dialogs).

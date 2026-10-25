@@ -86,7 +86,6 @@ export function DiscountsCard({ publishAsk = null }: { publishAsk?: PublishAsk |
   const list = drafts ?? published;
   // A minimum order is in the shop's pricing currency, else QORT; until the product list is in, the published codes'.
   const currency = listReady ? (pricing?.currency ?? "QORT") : (base?.currency ?? "QORT");
-  const changed = drafts !== null && JSON.stringify(drafts) !== JSON.stringify(published);
   const change = (next: DiscountDraft[]) => {
     setError(null);
     discountDrafts.set(dKey, JSON.stringify(next) === JSON.stringify(published) ? null : { drafts: next, base });
@@ -172,20 +171,11 @@ export function DiscountsCard({ publishAsk = null }: { publishAsk?: PublishAsk |
         <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setEditing("new")} disabled={publishing || list.length >= MAX_DISCOUNTS} sx={{ minHeight: 44 }}>
           Add a discount code
         </Button>
-        {changed && (
-          <Button variant="contained" onClick={() => void publish()} disabled={publishing} sx={{ minHeight: 44 }}>
-            {publishing ? "Publishing…" : "Publish discount codes"}
-          </Button>
-        )}
-        {changed && !publishing && (
-          <Button color="inherit" onClick={() => discountDrafts.set(dKey, null)} sx={{ minHeight: 44 }}>
-            Undo changes
-          </Button>
-        )}
       </Box>
-      {changed && (
-        <Typography variant="body2" color="text.secondary">
-          Changes go to buyers once you publish them.
+      {/* Publishing and discarding are the Publish changes button's (seller/PublishBar.tsx). */}
+      {publishing && (
+        <Typography variant="body2" role="status">
+          Publishing your discount codes: Hub asks you to confirm.
         </Typography>
       )}
       {error && (

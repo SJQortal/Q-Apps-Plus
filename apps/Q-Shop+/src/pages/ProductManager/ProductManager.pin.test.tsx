@@ -95,7 +95,7 @@ describe("publishing products (pinned)", () => {
     const edited = { ...mug, title: "Big mug", price: [{ currency: "qort", value: 2 }], isUpdate: true, status: "OUT_OF_STOCK" };
     store.dispatch(setProductsToSave(edited));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
 
     // The last catalogue is read once (it has fewer than 10 products).
@@ -160,7 +160,7 @@ describe("publishing products (pinned)", () => {
     store.dispatch(setProductsToSave(newProduct(1)));
     store.dispatch(setProductsToSave(newProduct(2)));
 
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
     const newCatId = `q-store-catalogue-${SHORT_STORE_ID}-NEWCATxxx1`;

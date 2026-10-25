@@ -30,7 +30,6 @@ import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import CollectionsBookmarkOutlinedIcon from "@mui/icons-material/CollectionsBookmarkOutlined";
 import type { RootState } from "../state/store";
 import { EmptyState } from "../components/common/EmptyState";
-import { ResponsiveDialog } from "../components/common/mobile";
 import { useBottomChromeHeight } from "../components/layout/BottomNav/BottomNav";
 import { MAX_COLLECTIONS, type ShopCollection } from "../qdn/collections";
 import type { SellerRow } from "./productList";
@@ -56,7 +55,6 @@ export function CollectionsTab({ ready, loading = false, publishAsk = null }: { 
   const bottomChrome = useBottomChromeHeight();
   const [editing, setEditing] = useState<{ key: number; collection: ShopCollection | null } | null>(null);
   const [publishing, setPublishing] = useState(false);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [removed, setRemoved] = useState<{ collection: ShopCollection; at: number } | null>(null);
   const [announcement, setAnnouncement] = useState("");
   // After Move, Remove, Undo or the editor, focus goes back to a control of the same (or the next)
@@ -108,7 +106,8 @@ export function CollectionsTab({ ready, loading = false, publishAsk = null }: { 
 
   const shownCount = (col: ShopCollection) => col.products.filter((id) => isShown(byId.get(id))).length;
   const full = c.collections.length >= MAX_COLLECTIONS;
-  const pending = c.dirty || c.pointerMissing;
+  // Changes publish from the Publish changes button (seller/PublishBar.tsx); only a list the shop doesn't point at yet asks here.
+  const pending = !c.dirty && c.pointerMissing;
   const locked = c.busy;
   const ref = (id: string, control: Control) => (element: HTMLElement | null) => {
     controls.current.set(`${id}\n${control}`, element);
@@ -131,16 +130,7 @@ export function CollectionsTab({ ready, loading = false, publishAsk = null }: { 
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {pending && (
         <Paper variant="outlined" component="section" aria-label="Changes to publish" sx={{ p: 2, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1.5, borderColor: "info.main" }}>
-          <Typography sx={{ flex: "1 1 240px", minWidth: 0 }}>
-            {c.dirty
-              ? "Your changes aren't published yet: buyers see them once you publish."
-              : "Your shop doesn't show its collections yet. Publish them to show them."}
-          </Typography>
-          {c.dirty && (
-            <Button color="inherit" onClick={() => setConfirmDiscard(true)} disabled={locked} sx={{ minHeight: 44 }}>
-              Discard
-            </Button>
-          )}
+          <Typography sx={{ flex: "1 1 240px", minWidth: 0 }}>Your shop doesn&apos;t show its collections yet. Publish them to show them.</Typography>
           <Button
             variant="contained"
             onClick={() => void publish()}
@@ -330,31 +320,6 @@ export function CollectionsTab({ ready, loading = false, publishAsk = null }: { 
         }
       />
 
-      <ResponsiveDialog
-        open={confirmDiscard}
-        onClose={() => setConfirmDiscard(false)}
-        title="Discard your changes?"
-        maxWidth="xs"
-        actions={
-          <>
-            <Button color="inherit" onClick={() => setConfirmDiscard(false)}>
-              Keep them
-            </Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={() => {
-                setConfirmDiscard(false);
-                c.discard();
-              }}
-            >
-              Discard
-            </Button>
-          </>
-        }
-      >
-        <Typography>Every change to your collections since you last published them will be lost.</Typography>
-      </ResponsiveDialog>
 
       {editing && (
         <CollectionEditor

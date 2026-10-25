@@ -221,7 +221,7 @@ describe("the products tab", () => {
     const { q, store } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     const images = ["QQ==", "Qg==", "Qw==", "RA==", "RQ=="].map((b) => `data:image/webp;base64,${b}`);
     store.dispatch(setProductsToSave({ ...draft(1), images }));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     const picturesId = picturesIdentifier(draft(1).id);
@@ -323,7 +323,7 @@ describe("the products tab", () => {
       user: SELLER,
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     const cat = decodeData64(call.resources[0].data64);
@@ -379,7 +379,7 @@ describe("the products tab", () => {
       user: SELLER,
     });
     expect(added.id).toMatch(new RegExp(`^q-store-product-${SHORT_STORE_ID}-.{10}$`));
-    expect(screen.getByRole("heading", { name: "Ready to publish: 1 product" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Unpublished changes" })).getByText("1 product")).toBeInTheDocument();
   });
 
   it("counts stock when asked: off by default, its units required, and the count saved with the product", async () => {
@@ -559,7 +559,7 @@ describe("publishing on the product list as QDN has it now", () => {
     stubNode({ index: newer });
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true, ...catalogues });
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
 
     // Nothing is published yet: the page shows the newer list and says so.
     expect(await screen.findByText(/Your product list on QDN changed since this page loaded/)).toBeInTheDocument();
@@ -571,7 +571,7 @@ describe("publishing on the product list as QDN has it now", () => {
     expect(Object.keys(state.productsToSave)).toEqual([draft(1).id]);
 
     // Publish again: built on the newer list, which keeps the vase and the mug's status.
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     const dc = decodeData64(call.resources.at(-1).data64);
@@ -589,7 +589,7 @@ describe("publishing on the product list as QDN has it now", () => {
     stubNode({ index: null });
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     expect(await screen.findByText(/Couldn't read your product list from your node, so nothing was published/)).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
     expect(Object.keys(store.getState().global.productsToSave)).toEqual([draft(1).id]);
@@ -600,10 +600,10 @@ describe("publishing on the product list as QDN has it now", () => {
     stubNode();
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(store.getState().global.productsToSave).toEqual({}));
     store.dispatch(setProductsToSave(draft(2)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2));
     const second = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[])[1];
     const dc = decodeData64(second.resources.at(-1).data64);
@@ -644,7 +644,7 @@ describe("publishing on the product list as QDN has it now", () => {
     fireEvent.click(screen.getByRole("button", { name: "Recreate now" }));
     await waitFor(() => expect(store.getState().global.dataContainer?.products).toEqual({}));
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     expect(Object.keys(decodeData64(call.resources.at(-1).data64).products)).toEqual([draft(1).id]);
@@ -661,7 +661,7 @@ describe("publishing on the product list as QDN has it now", () => {
     );
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
   });
 });
@@ -671,7 +671,7 @@ describe("publishing", () => {
     stubNode();
     const { store, q } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(store.getState().global.productsToSave).toEqual({}));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     const dc = decodeData64(call.resources[1].data64);
@@ -679,7 +679,7 @@ describe("publishing", () => {
     expect(state.dataContainer).toEqual({ ...dc, id: DATA_CONTAINER_ID });
     expect(state.listProducts.products).toHaveLength(4);
     expect(state.catalogueHashMap[CATALOGUE_ID].products[draft(1).id]).toEqual({ ...draft(1), catalogueId: CATALOGUE_ID });
-    expect(screen.queryByRole("heading", { name: /Ready to publish/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Unpublished changes" })).toBeNull();
   });
 
   it("publishes only this shop's drafts; another shop's stay in the list, untouched", async () => {
@@ -688,8 +688,8 @@ describe("publishing", () => {
     const other = { ...draft(2), storeId: "q-store-general-my-shop-2", shortStoreId: "my-shop-2", id: "q-store-product-my-shop-2-OTHERxxxx1" };
     store.dispatch(setProductsToSave(draft(1)));
     store.dispatch(setProductsToSave(other));
-    expect(await screen.findByRole("heading", { name: "Ready to publish: 1 product" })).toBeInTheDocument();
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    expect(within(await screen.findByRole("region", { name: "Unpublished changes" })).getByText("1 product")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toEqual([other.id]));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     const cat = decodeData64(call.resources[0].data64);
@@ -714,7 +714,7 @@ describe("publishing", () => {
       return (globalThis as any).qortalRequest(params);
     };
     for (let n = 1; n <= 201; n++) store.dispatch(setProductsToSave(draft(n)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     const dialog = await screen.findByRole("dialog", { name: "Publish in 3 batches" });
     expect(await within(dialog).findByText(/22 publishes in 3 batches of up to 20, 0.22 QORT in fees/)).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
@@ -755,7 +755,7 @@ describe("publishing", () => {
       },
     });
     for (let n = 1; n <= 201; n++) store.dispatch(setProductsToSave(draft(n)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Start publishing" }));
     const retry = await screen.findByRole("button", { name: "Retry failed" }, { timeout: 4000 });
     let pubs = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
@@ -778,7 +778,7 @@ describe("publishing", () => {
       },
     });
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     expect(screen.queryByRole("alert")).toBeNull();
@@ -796,7 +796,7 @@ describe("publishing", () => {
       },
     });
     store.dispatch(setProductsToSave({ ...mug, title: "Big mug", isUpdate: true }));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(store.getState().global.productsToSave).toEqual({}));
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1);
   });
@@ -809,7 +809,7 @@ describe("publishing", () => {
       },
     });
     store.dispatch(setProductsToSave(draft(1)));
-    fireEvent.click(await screen.findByRole("button", { name: "Publish" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Publish changes/ }));
     const dialog = await screen.findByRole("dialog", { name: "Publish incomplete" });
     expect(within(dialog).getByText(/Hub may still be publishing them/)).toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Check again" })).toBeInTheDocument();
@@ -967,9 +967,9 @@ describe("adding a product in variants", () => {
       ["Glasses — Round / Pale", 10],
       ["Glasses — Square", 12],
     ]);
-    expect(screen.getByRole("heading", { name: "Ready to publish: 3 products" })).toBeInTheDocument();
+    expect(within(screen.getByRole("region", { name: "Unpublished changes" })).getByText("3 products")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const [call] = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES") as any[];
     const list_ = decodeData64(call.resources.at(-1).data64);

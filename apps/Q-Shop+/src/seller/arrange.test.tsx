@@ -217,7 +217,7 @@ describe("arranging a collection", () => {
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Arrange this collection" })).toBeNull());
     fireEvent.click(within(editor).getByRole("button", { name: "Done" }));
     // The working copy has the new order; Publish sends it.
-    expect(await screen.findByText(/Your changes aren't published yet/)).toBeInTheDocument();
+    expect(within(await screen.findByRole("region", { name: "Unpublished changes" })).getByText("Collections")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Edit: Home" }));
     const again = await screen.findByRole("dialog", { name: "Edit collection" });
     fireEvent.click(within(again).getByRole("button", { name: "Arrange" }));

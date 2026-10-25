@@ -111,7 +111,7 @@ describe("the Delivery tab", () => {
     fireEvent.click(within(d).getByRole("button", { name: "Save zone" }));
     await waitFor(() => expect(within(heavy).getByText("10.00 QORT")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     const publish = q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any;
     expect(publish).toMatchObject({ name: SELLER, service: "DOCUMENT", identifier: DELIVERY_ID, filename: "delivery.json" });
@@ -131,7 +131,7 @@ describe("the Delivery tab", () => {
       ],
       updated: expect.any(Number),
     });
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Publish delivery prices" })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Unpublished changes" })).not.toBeInTheDocument());
   });
 
   it("starts a first zone in one step: everywhere the shop ships, at the price typed", async () => {
@@ -194,10 +194,10 @@ describe("the Delivery tab", () => {
     expect(within(general).getByText("Express: 12.00 QORT")).toBeInTheDocument();
     // An option without a name can't be published.
     fireEvent.change(within(options).getByLabelText("Option 3"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     expect(await screen.findByText("Name each delivery option, or remove it.")).toBeInTheDocument();
     fireEvent.click(within(options).getByRole("button", { name: "Remove the option 3" }));
-    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     const doc = decodeData64((q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any).data64);
     expect(doc.base).toEqual({ name: "Standard", note: "5–10 days" });
@@ -229,12 +229,12 @@ describe("the Delivery tab", () => {
     fireEvent.change(within(d).getAllByLabelText(/^First item/)[0], { target: { value: "3" } });
     fireEvent.click(within(d).getByRole("button", { name: "Save zone" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     expect(await screen.findByText("Give each pickup point its country, address and the days it's open.")).toBeInTheDocument();
     fireEvent.change(within(point).getByRole("combobox", { name: /Country/ }), { target: { value: "Portugal" } });
     fireEvent.click(await screen.findByRole("option", { name: "Portugal" }));
     fireEvent.change(within(point).getByLabelText(/^Pickup address/), { target: { value: "Rua Augusta 10, Lisbon" } });
-    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Publish changes/ }));
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     const doc = decodeData64((q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any).data64);
     expect(doc.options).toEqual([
@@ -260,6 +260,6 @@ describe("the Delivery tab", () => {
     expect(warning).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use USD" }));
     expect(within(general).getByText("$3.00 · free from $50.00")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Publish delivery prices" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Publish changes/ })).toBeInTheDocument();
   });
 });

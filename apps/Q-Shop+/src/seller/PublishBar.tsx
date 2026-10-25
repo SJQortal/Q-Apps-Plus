@@ -9,10 +9,12 @@
  * - leaving the seller page with changes asks first: publish them, keep
  *   them as drafts (they're kept on this device), or discard them.
  */
-import { useContext, useState } from "react";
+import { useContext, useState, type ReactNode } from "react";
 import { UNSAFE_DataRouterContext, useBlocker } from "react-router-dom";
 import { Box, Button, Typography } from "@mui/material";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import UndoOutlinedIcon from "@mui/icons-material/UndoOutlined";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { useBottomChromeHeight } from "../components/layout/BottomNav/BottomNav";
 import { takeLeaveWithoutAsking, type ChangeArea, type PendingChange } from "./usePendingChanges";
@@ -37,9 +39,43 @@ function ChangeList({ changes, onPublish, busy }: { changes: PendingChange[]; on
   );
 }
 
-export function PublishBar({ changes, onPublish, busy = false }: { changes: PendingChange[]; onPublish: (area: ChangeArea) => void; busy?: boolean }) {
+/** The buttons beside Publish changes: on the page's surface, so they read over whatever is under them. */
+const sideButtonSx = {
+  minHeight: 52,
+  px: 2,
+  borderRadius: 3,
+  boxShadow: 6,
+  textTransform: "none",
+  fontWeight: 700,
+  bgcolor: "background.paper",
+  color: "text.primary",
+  border: 1,
+  borderColor: "divider",
+  "&:hover": { bgcolor: "background.default" },
+} as const;
+
+const AREA_TAB: Record<ChangeArea, string> = { products: "Products", collections: "Collections", delivery: "Delivery", discounts: "Shop Settings" };
+
+export function PublishBar({
+  changes,
+  onPublish,
+  onOpen,
+  renderProducts,
+  busy = false,
+}: {
+  changes: PendingChange[];
+  onPublish: (area: ChangeArea) => void;
+  /** Opens the tab where a kind of change is made. */
+  onOpen?: (area: ChangeArea) => void;
+  /** The products waiting, in View changes (`close` closes it, say before a product opens). */
+  renderProducts?: (close: () => void) => ReactNode;
+  busy?: boolean;
+}) {
   const bottom = useBottomChromeHeight();
   const [listOpen, setListOpen] = useState(false);
+  // Simon: "to the left of Publish Changes … discard and view the changes buttons (no need to have them somewhere else)".
+  const [viewOpen, setViewOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
   // Leaving needs the app's data router (main.tsx); a test may render the page under a plain one.
   const dataRouter = useContext(UNSAFE_DataRouterContext);
   const publish = (area: ChangeArea) => {
@@ -61,8 +97,19 @@ export function PublishBar({ changes, onPublish, busy = false }: { changes: Pend
             bottom: `${bottom + 16}px`,
             zIndex: (theme) => theme.zIndex.appBar - 1,
             maxWidth: "calc(100% - 32px)",
+            display: "flex",
+            alignItems: "stretch",
+            justifyContent: "flex-end",
+            flexWrap: "wrap",
+            gap: 1,
           }}
         >
+          <Button onClick={() => setViewOpen(true)} disabled={busy} startIcon={<VisibilityOutlinedIcon />} sx={sideButtonSx}>
+            View changes
+          </Button>
+          <Button onClick={() => setDiscardOpen(true)} disabled={busy} startIcon={<UndoOutlinedIcon />} sx={sideButtonSx}>
+            Discard
+          </Button>
           <Button
             variant="contained"
             color="warning"
@@ -90,6 +137,80 @@ export function PublishBar({ changes, onPublish, busy = false }: { changes: Pend
             </Typography>
             <ChangeList changes={changes} onPublish={publish} busy={busy} />
           </Box>
+        </ResponsiveDialog>
+      )}
+      {viewOpen && changes.length > 0 && (
+        <ResponsiveDialog open onClose={() => setViewOpen(false)} title="Your unpublished changes" maxWidth="sm">
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Buyers see these once you publish them. They&apos;re kept on this device until then.
+            </Typography>
+            {changes.map((c) => (
+              <Box key={c.area} component="section" aria-label={c.label} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                  <Typography component="h3" sx={{ flex: "1 1 160px", fontWeight: 700 }}>
+                    {c.label}
+                  </Typography>
+                  {onOpen && c.area !== "products" && (
+                    <Button
+                      color="inherit"
+                      onClick={() => {
+                        setViewOpen(false);
+                        onOpen(c.area);
+                      }}
+                      sx={{ minHeight: 44 }}
+                    >
+                      Open {AREA_TAB[c.area]}
+                    </Button>
+                  )}
+                  <Button color="inherit" onClick={c.discard} disabled={busy} sx={{ minHeight: 44 }}>
+                    Discard
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="warning"
+                    onClick={() => {
+                      setViewOpen(false);
+                      onPublish(c.area);
+                    }}
+                    disabled={busy}
+                    sx={{ minHeight: 44 }}
+                  >
+                    Publish
+                  </Button>
+                </Box>
+                {c.area === "products" && renderProducts?.(() => setViewOpen(false))}
+              </Box>
+            ))}
+          </Box>
+        </ResponsiveDialog>
+      )}
+      {discardOpen && changes.length > 0 && (
+        <ResponsiveDialog
+          open
+          onClose={() => setDiscardOpen(false)}
+          title="Discard your changes?"
+          maxWidth="xs"
+          actions={
+            <>
+              <Button color="inherit" onClick={() => setDiscardOpen(false)} sx={{ minHeight: 44 }}>
+                Keep them
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={() => {
+                  for (const c of changes) c.discard();
+                  setDiscardOpen(false);
+                }}
+                sx={{ minHeight: 44 }}
+              >
+                Discard all
+              </Button>
+            </>
+          }
+        >
+          <Typography>Everything not published goes: {summary}. What buyers see stays as it is.</Typography>
         </ResponsiveDialog>
       )}
       {dataRouter && <LeaveGuard changes={changes} summary={summary} onPublish={publishChanges} />}
