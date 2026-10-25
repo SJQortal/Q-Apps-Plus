@@ -8,6 +8,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { Box, Button, Dialog, DialogTitle, IconButton, Switch, TextField, Tooltip, Typography, MenuItem } from "@mui/material";
 import { setShowNames, useShowNames } from "../../utils/namesSetting";
 import { setShowBalance, useShowBalance } from "../../wallet/balances";
+import { setShowSellBanner, useShowSellBanner } from "../../utils/sellBannerSetting";
 import { styled } from "@mui/material/styles";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
@@ -149,6 +150,8 @@ export function SettingsPage() {
   const namesFieldId = useId();
   const showNames = useShowNames();
   const balanceFieldId = useId();
+  const showSellBanner = useShowSellBanner();
+  const sellBannerFieldId = useId();
   const showBalance = useShowBalance();
 
   const name = user?.name || "";
@@ -389,6 +392,16 @@ export function SettingsPage() {
             checked={showBalance}
             onChange={(_, on) => setShowBalance(on)}
             slotProps={{ input: { "aria-labelledby": `${balanceFieldId}-title` } }}
+          />
+        </Row>
+        <Row>
+          <RowLabel title="Open your own shop" id={`${sellBannerFieldId}-title`}>
+            &ldquo;Have something to sell?&rdquo; at the top of Shops, while your name has no shop. Its X turns it off (on this device).
+          </RowLabel>
+          <Switch
+            checked={showSellBanner}
+            onChange={(_, on) => setShowSellBanner(on)}
+            slotProps={{ input: { "aria-labelledby": `${sellBannerFieldId}-title` } }}
           />
         </Row>
         <Row>

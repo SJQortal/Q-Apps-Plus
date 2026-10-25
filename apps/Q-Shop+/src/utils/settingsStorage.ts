@@ -15,6 +15,8 @@ export interface StoredSettings {
   showNames?: boolean;
   /** Show the account's balance in the header (wallet/balances.ts); absent: shown. This device only. */
   showBalance?: boolean;
+  /** Ask "Have something to sell?" on the Shops page (utils/sellBannerSetting.ts); absent: asked. This device only. */
+  showSellBanner?: boolean;
   /** Where the buyer gets things delivered, for prices before checkout (delivery/buyerPlace.ts); this device only, not synced. */
   deliverTo?: { country?: unknown; state?: unknown };
 }

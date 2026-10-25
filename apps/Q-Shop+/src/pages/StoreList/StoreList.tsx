@@ -7,7 +7,8 @@
  * shop comes back to the same list.
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from "react";
-import { Box, Button, CircularProgress, LinearProgress, Typography } from "@mui/material";
+import { Box, Button, CircularProgress, IconButton, LinearProgress, Tooltip, Typography } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import ErrorOutlineIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import SearchOffIcon from "@mui/icons-material/SearchOff";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
@@ -36,6 +37,7 @@ import { SHOP_INDEX_LIMIT, shopKey, type ShopEntry } from "../../discovery/shopI
 import { parsePay, parseShips, parseSort, payLabel, payNeedsDetails, SHOP_SORTS, type PayFilter, type ShopSort } from "../../discovery/sortFilter";
 import { countryName } from "../../constants/shipping";
 import { useBuyerPlace } from "../../delivery/buyerPlace";
+import { setShowSellBanner, useShowSellBanner } from "../../utils/sellBannerSetting";
 
 /** Shop cards before the new-products strip: two rows on a wide screen. */
 const STRIP_AFTER = 8;
@@ -169,6 +171,7 @@ export const StoreList = () => {
   };
   const filtersOn = Boolean(pay || ships || mine);
   const noShop = Boolean(userName) && ownShopStatus === "none";
+  const showSellBanner = useShowSellBanner();
 
   const empty: ComponentProps<typeof EmptyState> =
     mine && myStores.length === 0
@@ -312,14 +315,17 @@ export const StoreList = () => {
       {(pull > 0 || refreshing) && <PullIndicator pull={pull} refreshing={refreshing} />}
       <PageHeader title="Shops" subtitle={`Welcome to ${APP_NAME}: what the Qortal community has for sale.`} />
       <Box sx={{ display: "flex", flexDirection: "column", gap: { xs: 1.5, sm: 2 } }}>
-        {noShop && (
+        {/* Closed with its X for good on this device; Settings brings it back. */}
+        {noShop && showSellBanner && (
           <Box
             sx={(theme) => ({
+              position: "relative",
               display: "flex",
               alignItems: "center",
               flexWrap: "wrap",
               gap: 1.5,
-              px: 2,
+              pl: 2,
+              pr: 7,
               py: 1.5,
               borderRadius: 2,
               border: 1,
@@ -336,6 +342,15 @@ export const StoreList = () => {
             >
               Open your own shop
             </Button>
+            <Tooltip title="Don't show this again">
+              <IconButton
+                aria-label="Don't show this again"
+                onClick={() => setShowSellBanner(false)}
+                sx={{ position: "absolute", top: 6, right: 6, width: 44, height: 44 }}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Tooltip>
           </Box>
         )}
         <ShopSearchField q={q} onSearch={onSearch} />

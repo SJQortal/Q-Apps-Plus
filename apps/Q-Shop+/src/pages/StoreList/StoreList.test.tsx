@@ -20,6 +20,7 @@ import { resetShopDetails } from "../../discovery/shopDetails";
 import { resetHomeMemory } from "../../discovery/useHomeShops";
 import { resetNewProductsCache } from "../../discovery/newProducts";
 import { invalidateQdnSearches } from "../../qdn/search";
+import { getShowSellBanner, resetShowSellBanner } from "../../utils/sellBannerSetting";
 
 function LocationProbe() {
   const location = useLocation();
@@ -393,6 +394,22 @@ describe("home page", () => {
     const { store } = renderHome({ user: "Buyer+One", ownShopStatus: "none" });
     fireEvent.click(await screen.findByRole("button", { name: "Open your own shop" }));
     expect(store.getState().global.isOpenCreateStoreModal).toBe(true);
+  });
+
+  it("lets a name without a shop close the offer for good on this device", async () => {
+    localStorage.clear();
+    resetShowSellBanner();
+    const first = renderHome({ user: "Buyer+One", ownShopStatus: "none" });
+    fireEvent.click(await screen.findByRole("button", { name: "Don't show this again" }));
+    expect(screen.queryByText("Have something to sell?")).not.toBeInTheDocument();
+    expect(getShowSellBanner()).toBe(false);
+    first.unmount();
+    resetShowSellBanner();
+    renderHome({ user: "Buyer+One", ownShopStatus: "none" });
+    await waitFor(() => expect(cards()).toHaveLength(20));
+    expect(screen.queryByText("Have something to sell?")).not.toBeInTheDocument();
+    localStorage.clear();
+    resetShowSellBanner();
   });
 
   it("doesn't offer it while signed out", async () => {
