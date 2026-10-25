@@ -3,6 +3,7 @@
  * received (pages/Store/orderCount.ts), where it is and ships to, the coins it takes, and what you can do (message the seller, share, see
  * the details; the owner also edits the shop or opens Manage Shop).
  */
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Rating, Skeleton, Typography } from "@mui/material";
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -79,13 +80,48 @@ export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews;
  * and bigger"), whole and across the header's width (Simon: "no read more
  * read less on the shop pages … the text can extend across the screen").
  */
+/**
+ * The shop's own words: a long one shows its first lines (four on phones, six
+ * wider) with Show more, so the products aren't a long scroll away.
+ */
 export function ShopDescription({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const [long, setLong] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || open) return;
+    const measure = () => setLong(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, open]);
   return (
-    <Typography
-      sx={{ mt: 2, fontSize: { xs: 16, sm: 17 }, lineHeight: 1.65, color: "text.primary", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
-    >
-      {text}
-    </Typography>
+    <>
+      <Typography
+        ref={ref}
+        id={id}
+        sx={{
+          mt: 2,
+          fontSize: { xs: 16, sm: 17 },
+          lineHeight: 1.65,
+          color: "text.primary",
+          whiteSpace: "pre-wrap",
+          overflowWrap: "anywhere",
+          ...(!open && { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: { xs: 4, sm: 6 }, overflow: "hidden" }),
+        }}
+      >
+        {text}
+      </Typography>
+      {(long || open) && (
+        <Button size="small" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={id} sx={{ mt: 0.5, ml: -1, minHeight: 44 }}>
+          {open ? "Show less" : "Show more"}
+        </Button>
+      )}
+    </>
   );
 }
 
