@@ -122,10 +122,17 @@ export interface Names {
 export interface NamesForSale {
   name: string;
   salePrice: number;
+  /** Present in Core's NameData; the original app ignores them. */
+  owner?: string;
+  registered?: number;
+  updated?: number;
 }
+export type ListStatus = 'idle' | 'loading' | 'ready' | 'error';
 export const namesAtom = atom<Names[]>([]);
 export const primaryNameAtom = atom('');
 export const forSaleAtom = atom<NamesForSale[]>([]);
+export const forSaleStatusAtom = atom<ListStatus>('idle');
+export const namesStatusAtom = atom<ListStatus>('idle');
 export const pendingTxsAtom = atom<PendingTxsState>({});
 
 export const sortedPendingTxsByCategoryAtom = (category: string) =>
