@@ -26,11 +26,22 @@ export interface CheckupItem {
   count?: number;
 }
 
-/** A product used to charge delivery, from before delivery prices: its title or category says so. */
+/** A product used to charge delivery, from before delivery prices: its category says so, or its title. */
 const FEE_WORDS = /\b(shipping|postage|porto|versand|delivery|frakt|env[ií]o|livraison|toimitus|saatmine|tarne|s&h|p&p)\b/i;
+/**
+ * A title that is a fee: it starts or ends with the word ("Shipping to the
+ * EU", "Postage", "EU delivery cost"), never one that offers it free ("Mug,
+ * free shipping") or merely names it ("Toy delivery van"). "Porto" only as a
+ * category: in a title it's a wine as often as postage.
+ */
+const FEE_TITLE_START = /^\W*(shipping|postage|versand|delivery|frakt|env[ií]o|livraison|toimitus|saatmine|tarne|s&h|p&p)\b/i;
+const FEE_TITLE_END = /\b(shipping|postage|versand|delivery|frakt|env[ií]o|livraison)(\s+(fee|cost|costs|charge|price))?\W*$/i;
 
 export function isFeeProduct(row: Pick<SellerRow, "category">, title: string | undefined): boolean {
-  return FEE_WORDS.test(row.category ?? "") || FEE_WORDS.test(title ?? "");
+  if (FEE_WORDS.test(row.category ?? "")) return true;
+  const t = (title ?? "").trim();
+  if (!t || /\bfree\b/i.test(t)) return false;
+  return FEE_TITLE_START.test(t) || FEE_TITLE_END.test(t);
 }
 
 export interface CheckupShop {
@@ -57,6 +68,8 @@ export function shopCheckup(args: {
   hasDelivery: boolean | null;
   /** The product list has been read (until then a new shop isn't told to add products). */
   listLoaded?: boolean;
+  /** The seller said the products found aren't delivery fees (kept on this device). */
+  feesKept?: boolean;
 }): CheckupItem[] {
   const listed = args.rows.filter((row) => row.status !== "RETIRED");
   const titleOf = (row: SellerRow) => {
@@ -83,7 +96,7 @@ export function shopCheckup(args: {
   // Dispatch time and returns (shop/policies.ts): buyers far away decide on them.
   const policies = policiesOf(args.shop);
   items.push({ key: "policies", done: policies?.returnDays !== undefined && (!ships || policies.dispatchDays !== undefined) });
-  if (fees.length > 0) items.push({ key: "feeProducts", done: false, count: fees.length });
+  if (fees.length > 0 && !args.feesKept) items.push({ key: "feeProducts", done: false, count: fees.length });
   return items;
 }
 

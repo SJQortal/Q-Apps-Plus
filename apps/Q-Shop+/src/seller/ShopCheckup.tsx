@@ -36,6 +36,26 @@ function hiddenFor(storeId: string): boolean {
   }
 }
 
+/** Shops whose seller said the products found aren't delivery fees (this device). */
+const FEES_KEPT_KEY = "qshopplus-checkup-fees-kept";
+
+function feesKeptFor(storeId: string): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(FEES_KEPT_KEY) ?? "[]") as string[]).includes(storeId);
+  } catch {
+    return false;
+  }
+}
+
+function keepFees(storeId: string): void {
+  try {
+    const list = JSON.parse(localStorage.getItem(FEES_KEPT_KEY) ?? "[]") as string[];
+    localStorage.setItem(FEES_KEPT_KEY, JSON.stringify([...new Set([...list, storeId])].slice(-50)));
+  } catch {
+    // Private windows: it asks again next time.
+  }
+}
+
 function hide(storeId: string): void {
   try {
     const list = JSON.parse(localStorage.getItem(HIDDEN_KEY) ?? "[]") as string[];
@@ -91,10 +111,11 @@ export function ShopCheckup({
   const [retiring, setRetiring] = useState(false);
   const [drafted, setDrafted] = useState<string | null>(null);
   const [hidden, setHidden] = useState(() => hiddenFor(storeId));
+  const [feesKept, setFeesKept] = useState(() => feesKeptFor(storeId));
 
   if (!store || store.id !== storeId) return null;
   const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId) as { title?: unknown; type?: unknown } | undefined;
-  const items = shopCheckup({ shop: store, rows, detailsOf, hasDelivery, listLoaded });
+  const items = shopCheckup({ shop: store, rows, detailsOf, hasDelivery, listLoaded, feesKept });
   const done = items.filter((i) => i.done).length;
   const all = done === items.length;
   const oldRows = listed.filter((r) => !isListedCategory(r.category));
@@ -197,9 +218,22 @@ export function ShopCheckup({
             Set delivery prices first.
           </Typography>
         ) : (
-          <Button variant="outlined" color="inherit" onClick={() => setRetiring(true)} sx={{ minHeight: 44 }}>
-            Retire them
-          </Button>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+            <Button variant="outlined" color="inherit" onClick={() => setRetiring(true)} sx={{ minHeight: 44 }}>
+              Retire them
+            </Button>
+            {/* Found by their words: the seller knows when they're real products. */}
+            <Button
+              color="inherit"
+              onClick={() => {
+                keepFees(storeId);
+                setFeesKept(true);
+              }}
+              sx={{ minHeight: 44 }}
+            >
+              They&apos;re not delivery fees
+            </Button>
+          </Box>
         ),
     },
   };

@@ -98,6 +98,23 @@ describe("the shop checkup", () => {
     expect(suggestShippingCountries("Jersey and Guernsey").codes).toEqual(expect.arrayContaining(["JE", "GG"]));
   });
 
+  it("finds delivery-fee products by their category or a title that is a fee, not one that merely names delivery", () => {
+    const fee = (title: string, category = "Home & Garden") => isFeeProduct({ category }, title);
+    expect(fee("Shipping to the EU")).toBe(true);
+    expect(fee("Postage")).toBe(true);
+    expect(fee("EU delivery cost")).toBe(true);
+    expect(fee("Anything", "Shipping")).toBe(true);
+    expect(fee("Ceramic mug – free shipping")).toBe(false);
+    expect(fee("Porto Tawny 10 years")).toBe(false);
+    expect(fee("Toy delivery van")).toBe(false);
+  });
+
+  it("leaves the delivery-fee step out once the seller says they aren't fees", () => {
+    const args = { shop: {}, rows: [row("c", "Postage")], detailsOf: () => ({ title: "Postage", type: "physical" }), hasDelivery: true };
+    expect(shopCheckup(args).some((i) => i.key === "feeProducts")).toBe(true);
+    expect(shopCheckup({ ...args, feesKept: true }).some((i) => i.key === "feeProducts")).toBe(false);
+  });
+
   it("counts the steps an owner's shop page can tell, without reading more", () => {
     const rows = [{ category: "Paper" }, { category: "Home & Garden" }];
     expect(openShopSteps({ logo: "x", description: "d", location: "l" }, rows, true)).toBe(3);
