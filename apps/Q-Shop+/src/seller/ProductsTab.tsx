@@ -14,6 +14,9 @@
  * Arrange opens seller/ArrangeShop.tsx: the order buyers see under "Collections".
  * Sorted by shop order, each collection's line has its own Arrange: the
  * collection's order, kept with the unpublished collections (seller/useCollections.ts).
+ * Its title closes and opens the collection's products (Collapse all and
+ * Expand all do every one), remembered on this device (seller/collapsedSections.ts);
+ * a search shows every match.
  *
  * Select turns the list into checkboxes: Select all (everything the filters
  * show), then Delete, which the seller page asks about first
@@ -90,6 +93,9 @@ import { rowSaleOf, saleOf } from "../sale/compareAt";
 import { ArrangeShop } from "./ArrangeShop";
 import { ArrangeDialog } from "./ArrangeDialog";
 import { collectionDrafts, collectionsDraftKey } from "./useCollections";
+import { REST_SECTION, useCollapsedSections } from "./collapsedSections";
+import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
+import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import type { ShopCollection } from "../qdn/collections";
 import { featuredOrder, productOrderOf } from "../qdn/productOrder";
 import { useShopCollections } from "../pages/Store/useShopCollections";
@@ -211,6 +217,40 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
     })
   );
   const filtered = filterSellerProducts(rows, view, detailsOf, order);
+
+  // Shop order, first to last, with collections: a line with each collection's title where its products
+  // start (the rest under "Not in a collection", unless they come first). Its title closes the section.
+  const sectioned = sort === "featured" && featured.sectionOf.size > 0;
+  const [collapsed, setCollapsed] = useCollapsedSections(storeId);
+  const sections: { key: string; collection?: ShopCollection; rows: SellerRow[]; line: boolean }[] = [];
+  for (const row of sectioned ? filtered : []) {
+    const at = featured.sectionOf.get(row.productId);
+    const collection = at === undefined ? undefined : shopCollections[at];
+    const key = collection ? collection.id : REST_SECTION;
+    const last = sections.at(-1);
+    if (last?.key === key) last.rows.push(row);
+    else sections.push({ key, collection, rows: [row], line: !!collection || sections.length > 0 });
+  }
+  // A search shows every match, in closed collections too.
+  const collapsible = sectioned && !filters.query.trim();
+  const isClosed = (section: (typeof sections)[number]) => collapsible && section.line && collapsed.has(section.key);
+  // What the list shows (closed collections' products aren't): Select all and Show more go by it.
+  const listed = sections.some(isClosed) ? sections.flatMap((s) => (isClosed(s) ? [] : s.rows)) : filtered;
+  const lines = sections.filter((s) => s.line);
+  const allClosed = lines.length > 0 && lines.every((s) => collapsed.has(s.key));
+  const toggleSection = (key: string) => {
+    const next = new Set(collapsed);
+    if (!next.delete(key)) next.add(key);
+    setCollapsed(next);
+  };
+  const setAllClosed = (close: boolean) => {
+    const next = new Set(collapsed);
+    for (const s of lines) {
+      if (close) next.add(s.key);
+      else next.delete(s.key);
+    }
+    setCollapsed(next);
+  };
   // With an order, each product's place in it is a column of its own.
   const places = useMemo(() => (order.length > 0 ? shopOrderPlaces(rows, order) : null), [rows, order]);
   const columns = rowColumns(!!places);
@@ -219,7 +259,23 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
     setShown(PRODUCTS_PAGE);
   };
   const counts = useMemo(() => statusCounts(rows), [rows]);
-  const visible = filtered.slice(0, shown);
+  // The page of the list: rows up to `shown`, with the lines of their sections; a closed section's line
+  // still shows while the page has room.
+  const items: ({ kind: "line"; section: (typeof sections)[number]; first: boolean } | { kind: "row"; row: SellerRow })[] = [];
+  if (sectioned) {
+    let room = shown;
+    for (const section of sections) {
+      const closed = isClosed(section);
+      if (room <= 0 && !closed) break;
+      if (section.line) items.push({ kind: "line", section, first: items.length === 0 });
+      if (closed) continue;
+      const take = section.rows.slice(0, room);
+      for (const row of take) items.push({ kind: "row", row });
+      room -= take.length;
+    }
+  } else {
+    for (const row of filtered.slice(0, shown)) items.push({ kind: "row", row });
+  }
   const sortedCategories = useMemo(() => [...categories].sort((a, b) => a.localeCompare(b)), [categories]);
 
   // A search (or a sort by title) needs every product's title: load the
@@ -295,9 +351,9 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   }, []);
   // Only products still listed count (a delete or a reload may have removed some).
   const chosen = rows.filter((row) => selected.has(row.productId));
-  const allChosen = filtered.length > 0 && filtered.every((row) => selected.has(row.productId));
-  // Chosen, then hidden by a search or a filter: they still go, so the bar says so.
-  const shownIds = new Set(filtered.map((row) => row.productId));
+  const allChosen = listed.length > 0 && listed.every((row) => selected.has(row.productId));
+  // Chosen, then hidden by a search, a filter or a closed collection: they still go, so the bar says so.
+  const shownIds = new Set(listed.map((row) => row.productId));
   const hiddenChosen = chosen.filter((row) => !shownIds.has(row.productId)).length;
   const startSelecting = () => {
     focusNext.current = "bar";
@@ -411,12 +467,12 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
             {chosen.length === 0
               ? "Select products to change or delete"
               : `${chosen.length === 1 ? "1 selected" : `${chosen.length} selected`}${
-                  hiddenChosen > 0 ? `, ${hiddenChosen} hidden by the search or filters` : ""
+                  hiddenChosen > 0 ? `, ${hiddenChosen} hidden by the ${listed === filtered ? "search or filters" : "search, filters or closed collections"}` : ""
                 }`}
           </Typography>
           <Button
             ref={selectAllButton}
-            onClick={() => setSelected(allChosen ? new Set() : new Set([...selected, ...filtered.map((row) => row.productId)]))}
+            onClick={() => setSelected(allChosen ? new Set() : new Set([...selected, ...listed.map((row) => row.productId)]))}
             disabled={filtered.length === 0}
             sx={{ minHeight: 44 }}
           >
@@ -566,34 +622,44 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                 <SortHeader column="added" sort={sort} onSort={sortBy} />
                 <span />
               </Box>
+              {collapsible && lines.length > 1 && (
+                <Button
+                  size="small"
+                  startIcon={allClosed ? <UnfoldMoreIcon /> : <UnfoldLessIcon />}
+                  onClick={() => setAllClosed(!allClosed)}
+                  sx={{ alignSelf: "flex-end", minHeight: 44 }}
+                >
+                  {allClosed ? "Expand all" : "Collapse all"}
+                </Button>
+              )}
               <Box component="ul" aria-label="Products" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1 }}>
-                {visible.map((row, i) => {
-                  // Shop order, first to last: a line with the collection's title where its products start.
-                  const section = sort === "featured" && featured.sectionOf.size > 0 ? (featured.sectionOf.get(row.productId) ?? -1) : null;
-                  const previous = section !== null && i > 0 ? (featured.sectionOf.get(visible[i - 1].productId) ?? -1) : null;
-                  const starts = section !== null && section !== previous && (section >= 0 || i > 0);
-                  const collection = section !== null && section >= 0 ? shopCollections[section] : undefined;
-                  const sectionTitle = collection ? collection.title || "Collection" : "Not in a collection";
-                  return [
-                    starts && (
+                {items.map((item) => {
+                  if (item.kind === "line") {
+                    const { section } = item;
+                    const title = section.collection ? section.collection.title || "Collection" : "Not in a collection";
+                    return (
                       <SectionDivider
-                        key={`section-${row.productId}`}
-                        title={sectionTitle}
-                        first={i === 0}
+                        key={`section-${section.key}`}
+                        title={title}
+                        first={item.first}
                         heading="h2"
+                        collapse={collapsible ? { open: !isClosed(section), onToggle: () => toggleSection(section.key), count: section.rows.length } : undefined}
                         action={
                           <Button
                             size="small"
                             startIcon={<SwapVertIcon />}
-                            aria-label={collection ? `Arrange ${sectionTitle}` : "Arrange the products not in a collection"}
-                            onClick={() => (collection ? setArrangingCollection(collection.id) : setArranging(true))}
+                            aria-label={section.collection ? `Arrange ${title}` : "Arrange the products not in a collection"}
+                            onClick={() => (section.collection ? setArrangingCollection(section.collection.id) : setArranging(true))}
                             sx={{ minHeight: 44, flexShrink: 0 }}
                           >
                             Arrange
                           </Button>
                         }
                       />
-                    ),
+                    );
+                  }
+                  const { row } = item;
+                  return (
                     <ProductRow
                       key={row.productId}
                       row={row}
@@ -610,13 +676,13 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                       selecting={selecting}
                       selected={selected.has(row.productId)}
                       onToggle={toggle}
-                    />,
-                  ];
+                    />
+                  );
                 })}
               </Box>
-              {filtered.length > shown && (
+              {listed.length > shown && (
                 <Button variant="outlined" onClick={() => setShown((n) => n + PRODUCTS_PAGE)} sx={{ alignSelf: "center", minHeight: 44 }}>
-                  Show more ({filtered.length - shown} more)
+                  Show more ({listed.length - shown} more)
                 </Button>
               )}
               {isFiltered(filters) && (

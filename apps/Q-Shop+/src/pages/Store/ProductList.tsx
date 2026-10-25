@@ -4,7 +4,8 @@
  * the category chips and the Auctions toggle.
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { Box, Chip, Link, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import { Box, ButtonBase, Chip, Link, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Link as RouterLink } from "react-router-dom";
 import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import ViewAgendaOutlinedIcon from "@mui/icons-material/ViewAgendaOutlined";
@@ -231,6 +232,7 @@ export function SectionDivider({
   first = false,
   heading = "h3",
   action,
+  collapse,
 }: {
   title: string;
   to?: string;
@@ -239,11 +241,22 @@ export function SectionDivider({
   heading?: "h2" | "h3";
   /** A button at the end of the line (the seller's Arrange). */
   action?: ReactNode;
+  /** The title closes and opens the section's products (the seller's Products tab); `count` says how many it holds. */
+  collapse?: { open: boolean; onToggle: () => void; count: number };
 }) {
   return (
     <Box component="li" data-section sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 1.5, pt: first ? 0 : 1.5 }}>
       <Typography component={heading} sx={{ fontWeight: 700, fontSize: 15, minWidth: 0, overflowWrap: "anywhere" }}>
-        {to ? (
+        {collapse ? (
+          <ButtonBase
+            aria-expanded={collapse.open}
+            onClick={collapse.onToggle}
+            sx={{ minHeight: 44, gap: 0.5, pr: 1, borderRadius: 1, font: "inherit", textAlign: "left", justifyContent: "flex-start" }}
+          >
+            <ExpandMoreIcon aria-hidden sx={{ color: "text.secondary", transition: "transform 150ms", transform: collapse.open ? "none" : "rotate(-90deg)" }} />
+            {title}
+          </ButtonBase>
+        ) : to ? (
           <Link component={RouterLink} to={to} color="inherit" underline="hover">
             {title}
           </Link>
@@ -251,6 +264,11 @@ export function SectionDivider({
           title
         )}
       </Typography>
+      {collapse && (
+        <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+          {collapse.count === 1 ? "1 product" : `${collapse.count} products`}
+        </Typography>
+      )}
       <Box aria-hidden sx={{ flex: "1 1 24px", borderTop: 1, borderColor: "divider" }} />
       {action}
     </Box>

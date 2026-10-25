@@ -898,6 +898,34 @@ describe("sorting the products by their columns", () => {
     fireEvent.click(within(list).getByRole("button", { name: "Arrange the products not in a collection" }));
     expect(await screen.findByRole("dialog", { name: "Arrange your shop" })).toBeInTheDocument();
   });
+
+  it("closes and opens a collection from its title, remembers it on this device, and a search still finds its products", async () => {
+    const collectionsId = `q-store-collections-${SHORT_STORE_ID}`;
+    stubNode({ served: new Map([[collectionsId, { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id, poster.id] }] }]]) });
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer({ ...dataContainer, collectionsId }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    const mugs = await within(list).findByRole("button", { name: "Mugs", expanded: true });
+    expect(within(list).getByText("2 products")).toBeInTheDocument();
+    fireEvent.click(mugs);
+    await waitFor(() => expect(names(list).filter(Boolean)).toEqual(["Chair"]));
+    expect(within(list).getByRole("button", { name: "Mugs", expanded: false })).toBeInTheDocument();
+    // Select all takes what the list shows.
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(screen.getByRole("button", { name: "Select all" }));
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(JSON.parse(localStorage.getItem("qshopplus-collapsed-sections") ?? "{}")).toEqual({ [STORE_ID]: ["MUGSxxxxx1"] });
+    // A search shows every match.
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search your products" }), { target: { value: "mug" } });
+    await waitFor(() => expect(names(list).filter(Boolean)).toEqual(["Mug"]));
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search your products" }), { target: { value: "" } });
+    // Collapse all, then Expand all.
+    fireEvent.click(await screen.findByRole("button", { name: "Collapse all" }));
+    await waitFor(() => expect(names(list).filter(Boolean)).toEqual([]));
+    fireEvent.click(screen.getByRole("button", { name: "Expand all" }));
+    await waitFor(() => expect(names(list).filter(Boolean)).toEqual(["Mug", "Poster", "Chair"]));
+  });
 });
 
 
