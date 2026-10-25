@@ -94,6 +94,8 @@ function product(s, p) {
     // Counted stock (stock/model.ts): Shop+Plus has 4 of Notebook 7 left, and none of Ebook 9.
     ...(s.short === 'shop-1' && p === 7 && { stock: { v: 1, quantity: 4, since: now - 2 * DAY } }),
     ...(s.short === 'shop-1' && p === 9 && { stock: { v: 1, quantity: 0, since: now - DAY } }),
+    // The seller counts Lamp 11's stock: 2 left, so the Overview's Running low lists it.
+    ...(s.short === 'my-shop' && p === 11 && { stock: { v: 1, quantity: 2, since: now - DAY } }),
   };
 }
 const HOUR = 3_600_000;
@@ -666,6 +668,7 @@ export default {
       await page.waitForTimeout(400);
     } },
     { key: 'seller', path: `/product-manager/q-store-general-my-shop`, after: async (page) => page.waitForTimeout(900) },
+    { key: 'seller-low-stock', path: `/product-manager/q-store-general-my-shop`, after: async (page) => { const low = page.getByRole('region', { name: 'Running low' }); await low.getByRole('listitem').first().waitFor({ timeout: 8000 }); await low.scrollIntoViewIfNeeded(); await page.waitForTimeout(500); } },
     { key: 'seller-activity', path: `/product-manager/q-store-general-my-shop`, after: async (page) => { await page.getByRole('list', { name: 'Recent activity' }).waitFor({ timeout: 8000 }); await page.getByRole('heading', { name: 'Recent activity' }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(700); } },
     { key: 'seller-order-review', path: `/product-manager/q-store-general-my-shop?tab=orders`, overlay: true, after: async (page) => {
       await page.waitForTimeout(700);
