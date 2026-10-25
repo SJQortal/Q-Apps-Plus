@@ -30,6 +30,7 @@ import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
 import { shortStoreIdOf } from "../../qdn/identifiers";
 import { PolicyLines } from "../../shop/PolicyLines";
 import { AwayNotice } from "../../shop/AwayNotice";
+import { ShipsToYou } from "../../delivery/ShipsToYou";
 
 const panelSx = {
   border: 1,
@@ -266,6 +267,7 @@ export function ShopHeader({
                 </span>
               </Typography>
             ) : null}
+            <ShipsToYou shop={shop} />
             <PolicyLines shop={shop} />
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
               <Typography variant="body2" color="text.secondary" component="span">
