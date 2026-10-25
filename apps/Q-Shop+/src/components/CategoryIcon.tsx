@@ -58,7 +58,21 @@ export const CATEGORY_ICONS: Record<ShopCategory, { icon: ComponentType<SvgIconP
 };
 
 /** The icon for a category (any spelling of a listed one), or a plain tag for one from before the list. */
-export function CategoryIcon({ category, size = 28 }: { category: string | null | undefined; size?: number }) {
+/**
+ * `round` for a chip: a circle sits inside the chip's rounded end. A chip
+ * passes its icon class (`className`), which places the icon in it.
+ */
+export function CategoryIcon({
+  category,
+  size = 28,
+  round = false,
+  className,
+}: {
+  category: string | null | undefined;
+  size?: number;
+  round?: boolean;
+  className?: string;
+}) {
   const listed = listedCategory(category);
   const entry = listed ? CATEGORY_ICONS[listed] : null;
   const Icon = entry?.icon ?? LabelOutlinedIcon;
@@ -66,13 +80,14 @@ export function CategoryIcon({ category, size = 28 }: { category: string | null 
     <Box
       component="span"
       aria-hidden
+      className={className}
       sx={(theme: Theme) => {
         const tone = entry ? theme.palette[entry.tone].main : theme.palette.text.secondary;
         return {
           width: size,
           height: size,
           flexShrink: 0,
-          borderRadius: `${Math.round(size * 0.3)}px`,
+          borderRadius: round ? "50%" : `${Math.round(size * 0.3)}px`,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
@@ -81,7 +96,8 @@ export function CategoryIcon({ category, size = 28 }: { category: string | null 
         };
       }}
     >
-      <Icon sx={{ fontSize: Math.round(size * 0.64) }} />
+      {/* Its own colour: a chip's icon class sets one on the circle. */}
+      <Icon sx={(theme: Theme) => ({ fontSize: Math.round(size * 0.64), color: entry ? theme.palette[entry.tone].main : theme.palette.text.secondary })} />
     </Box>
   );
 }

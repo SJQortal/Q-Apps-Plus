@@ -41,13 +41,15 @@ export function FilterChip({ label, on, onClick, category }: { label: string; on
       label={label}
       onClick={onClick}
       // A category's chip shows its icon (components/CategoryIcon.tsx); chosen, a check.
-      icon={on ? <CheckIcon /> : category ? <CategoryIcon category={category} size={22} /> : undefined}
+      icon={on ? <CheckIcon /> : category ? <CategoryIcon category={category} size={24} round /> : undefined}
       variant={on ? "filled" : "outlined"}
       aria-pressed={on}
       sx={{
         minHeight: 36,
         maxWidth: "100%",
         fontWeight: on ? 700 : 500,
+        // A category's circle sits 6px inside the chip's rounded end, all round.
+        ...(category && !on && { "& .MuiChip-icon": { ml: "6px", mr: "-4px" } }),
         ...(on && { bgcolor: "action.selected", "&:hover": { bgcolor: "action.focus" } }),
       }}
     />

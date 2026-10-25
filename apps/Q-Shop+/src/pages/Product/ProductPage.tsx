@@ -383,7 +383,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             {product.type && <Chip size="small" variant="outlined" label={product.type === "physical" ? "Physical" : "Digital"} />}
             {product.category && (
-              <Chip size="small" variant="outlined" label={product.category} icon={<CategoryIcon category={product.category} size={20} />} />
+              <Chip size="small" variant="outlined" label={product.category} icon={<CategoryIcon category={product.category} size={18} round />} sx={{ "& .MuiChip-icon": { ml: "3px", mr: "-2px" } }} />
             )}
           </Box>
           {auctionTerms ? (
