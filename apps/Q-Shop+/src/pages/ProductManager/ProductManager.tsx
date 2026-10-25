@@ -273,7 +273,8 @@ export const ProductManager = () => {
             // MUI's "auto" measured the bar as overflowing on some loads at 1280 px (arrows beside tabs that fit); phones scroll it by touch.
             scrollButtons={false}
             aria-label="Seller tools"
-            sx={{ "& .MuiTab-root": { minHeight: 48, minWidth: 0, px: { xs: 1.5, sm: 2 }, textTransform: "none", fontWeight: 600 } }}
+            // 12 px a side below 900 px: the seven tabs fit from about 680 px (a tablet, a narrow Hub window), none cut off.
+            sx={{ "& .MuiTab-root": { minHeight: 48, minWidth: 0, px: { xs: 1.5, md: 2 }, textTransform: "none", fontWeight: 600 } }}
           >
             {SELLER_TABS.map((t) => (
               <Tab
