@@ -25,11 +25,12 @@ import { parseAmount, sanitizeAmountInput } from "../seller/productDraft";
 import { usePendingOrders } from "../pages/Cart/usePendingOrders";
 import type { CheckoutBuyer } from "../money/checkout";
 import { useAuction } from "./useAuction";
+import { Bidder, BidList } from "./BidList";
 import { placeBid, TOO_MANY_BIDS } from "./placeBid";
 import { auctionCheckoutShop, wonLine } from "./auctionCheckout";
 import { isAuctionPaid, noteAuctionPaid } from "./paid";
 import { MAX_BID, timeLeft, type AuctionTerms, type Bid } from "./rules";
-import { agoText, whenText } from "./format";
+import { whenText } from "./format";
 
 const CheckoutDialog = lazy(() => import("../pages/Cart/CheckoutDialog").then((m) => ({ default: m.CheckoutDialog })));
 const bidUid = new ShortUniqueId({ length: 6 });
@@ -78,7 +79,9 @@ export function AuctionPanel({
   const myNames = useMemo(() => new Set([user?.name, ...(user?.names ?? []).map((n) => n.name)].filter((n): n is string => !!n)), [user]);
   const buyer: CheckoutBuyer | null =
     user?.name && user.address && user.publicKey ? { name: user.name, address: user.address, publicKey: user.publicKey } : null;
-  const high = state.high;
+  // What shows (the viewer's own bids on their way already in); the result and paying go by `state`.
+  const shown = auction.shown;
+  const high = shown.high;
   const winner = state.winner;
   const iLead = !!high && myNames.has(high.bidder);
   // Just ended, or its winner being checked against the chain: the result isn't final yet.
@@ -91,9 +94,9 @@ export function AuctionPanel({
   const live = state.phase === "live";
   const loading = auction.status === "loading";
 
-  const typed = amountText.trim() ? parseAmount(amountText) : state.minNext;
+  const typed = amountText.trim() ? parseAmount(amountText) : shown.minNext;
   // Buy now costs the buy-now price, or the least bid allowed when that is already more (a bid just under it leads).
-  const buyNowPrice = terms.buyNow !== undefined ? Math.max(terms.buyNow, state.minNext) : undefined;
+  const buyNowPrice = terms.buyNow !== undefined ? Math.max(terms.buyNow, shown.minNext) : undefined;
   // A bid at the buy-now price or above buys it at that price.
   const amount = buyNowPrice !== undefined && typed + EPSILON >= buyNowPrice ? buyNowPrice : typed;
   const canBuyNow = live && buyNowPrice !== undefined && (!high || high.amount + EPSILON < buyNowPrice);
@@ -110,8 +113,8 @@ export function AuctionPanel({
       setNotice({ severity: "error", text: "Type your bid in QORT." });
       return;
     }
-    if (value + EPSILON < state.minNext) {
-      setNotice({ severity: "error", text: `Bid at least ${qort(state.minNext)}.` });
+    if (value + EPSILON < shown.minNext) {
+      setNotice({ severity: "error", text: `Bid at least ${qort(shown.minNext)}.` });
       return;
     }
     if (value > MAX_BID) {
@@ -214,8 +217,8 @@ export function AuctionPanel({
             label="Your bid"
             value={amountText}
             onChange={(e) => setAmountText(sanitizeAmountInput(e.target.value))}
-            placeholder={String(state.minNext)}
-            helperText={`At least ${qort(state.minNext)}`}
+            placeholder={String(shown.minNext)}
+            helperText={`At least ${qort(shown.minNext)}`}
             disabled={busy || loading}
             sx={{ flex: "1 1 180px" }}
             slotProps={{
@@ -309,7 +312,6 @@ export function AuctionPanel({
     action = <Typography color="text.secondary">It ended without a sale{high ? ": the reserve wasn't reached" : ": there were no bids"}.</Typography>;
   }
 
-  const newestFirst = [...state.accepted].reverse();
 
   return (
     <Box
@@ -347,7 +349,7 @@ export function AuctionPanel({
         </Box>
         {!loading && auction.status === "ready" && (
           <Typography variant="body2" color="text.secondary" sx={{ pb: 0.5 }}>
-            {state.accepted.length === 0 ? "No bids yet" : state.accepted.length === 1 ? "1 bid" : `${state.accepted.length} bids`}
+            {shown.accepted.length === 0 ? "No bids yet" : shown.accepted.length === 1 ? "1 bid" : `${shown.accepted.length} bids`}
           </Typography>
         )}
       </Box>
@@ -356,7 +358,13 @@ export function AuctionPanel({
         <Box component="ul" sx={{ m: 0, pl: 2.5, display: "flex", flexDirection: "column", gap: 0.25 }}>
           {high && state.phase !== "ended" && (
             <Typography component="li" variant="body2" sx={{ fontWeight: iLead ? 700 : 400 }}>
-              {iLead ? "You're the highest bidder." : `Highest bidder: ${high.bidder}.`}
+              {iLead ? (
+                auction.pendingIds.has(high.id) ? "You're the highest bidder (your bid is on its way to your node)." : "You're the highest bidder."
+              ) : (
+                <>
+                  Highest bidder: <Bidder name={high.bidder} size={20} />
+                </>
+              )}
             </Typography>
           )}
           {terms.reserve !== undefined && (
@@ -407,7 +415,7 @@ export function AuctionPanel({
       )}
 
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-        {auction.status === "ready" && state.accepted.length > 0 && (
+        {auction.status === "ready" && shown.accepted.length > 0 && (
           <Button
             color="inherit"
             variant="text"
@@ -417,7 +425,7 @@ export function AuctionPanel({
             aria-controls="auction-bids"
             sx={{ minHeight: 44, textTransform: "none" }}
           >
-            {showBids ? "Hide bids" : `Show bids (${state.accepted.length})`}
+            {showBids ? "Hide bids" : `Show bids (${shown.accepted.length})`}
           </Button>
         )}
         <Button
@@ -432,28 +440,7 @@ export function AuctionPanel({
         </Button>
       </Box>
       <Collapse in={showBids} unmountOnExit>
-        <Box id="auction-bids" component="ol" aria-label="Bids, newest first" sx={{ m: 0, p: 0, listStyle: "none", display: "flex", flexDirection: "column" }}>
-          {newestFirst.map((bid, i) => (
-            <Box
-              component="li"
-              key={bid.id}
-              sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 1.5, py: 0.75, borderTop: i === 0 ? 0 : 1, borderColor: "divider" }}
-            >
-              <Typography variant="body2" sx={{ minWidth: 0, overflowWrap: "anywhere", fontWeight: myNames.has(bid.bidder) ? 700 : 400 }}>
-                {bid.bidder}
-                {myNames.has(bid.bidder) && " (you)"}
-              </Typography>
-              <Box sx={{ textAlign: "right", flexShrink: 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-                  {qort(bid.amount)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {agoText(bid.created, now)}
-                </Typography>
-              </Box>
-            </Box>
-          ))}
-        </Box>
+        <BidList id="auction-bids" bids={shown.accepted} now={now} mine={myNames} pending={auction.pendingIds} />
         {ignored > 0 && (
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
             {ignored === 1 ? "1 more bid doesn't count" : `${ignored} more bids don't count`}: too low when placed, outside the auction&apos;s times, the seller&apos;s

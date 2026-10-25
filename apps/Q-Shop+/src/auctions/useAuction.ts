@@ -40,6 +40,14 @@ interface Loaded {
 
 export interface Auction {
   state: AuctionState;
+  /**
+   * What the page shows: `state` with this viewer's own bids that the node
+   * doesn't list yet already in (Simon: "bids to show optimistically for the
+   * buyer"). The result, a winner and paying go by `state` alone.
+   */
+  shown: AuctionState;
+  /** Ids of the bids in `shown` still on their way. */
+  pendingIds: ReadonlySet<string>;
   now: number;
   status: LoadStatus;
   /** It ended under 3 minutes ago: late bids may still be listed. */
@@ -182,8 +190,13 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
 
   const notePlaced = useCallback((bid: Bid) => setPlaced((prev) => [...prev.filter((b) => b.id !== bid.id), bid]), []);
 
+  const onTheirWay = placed.filter((p) => !current.bids.some((b) => b.id === p.id));
+  const pendingIds = new Set(onTheirWay.map((b) => b.id));
+  const shown = onTheirWay.length > 0 && state.phase === "live" ? auctionState(checked, [...current.bids, ...onTheirWay], now, seller) : state;
   return {
     state,
+    shown,
+    pendingIds,
     now,
     status: current.status,
     settling,
@@ -192,7 +205,7 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
     incomplete: !current.complete,
     stale: current.stale,
     read: current.bids.length,
-    placed: placed.filter((p) => !current.bids.some((b) => b.id === p.id)),
+    placed: onTheirWay,
     refresh,
     notePlaced,
   };

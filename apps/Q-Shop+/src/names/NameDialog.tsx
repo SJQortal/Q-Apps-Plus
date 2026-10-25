@@ -10,7 +10,8 @@
  * bid, the winner buys it.
  */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Alert, Box, Button, Chip, InputAdornment, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, Collapse, InputAdornment, Stack, TextField, Typography } from "@mui/material";
+import { Bidder, BidList } from "../auctions/BidList";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import ShortUniqueId from "short-unique-id";
 import { ResponsiveDialog } from "../components/common/mobile";
@@ -227,15 +228,18 @@ function NameAuctionBox({
   const reader = useCallback((options: { fresh?: boolean }) => fetchNameBids(auction, options), [auction]);
   const a = useAuction(`nameauc:${auction.uid}`, auction.terms, auction.name, reader);
   const { state, now } = a;
+  // What shows: the viewer's own bids on their way already in; the result goes by `state`.
+  const shown = a.shown;
   const [amountText, setAmountText] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const high = state.high;
+  const [showBids, setShowBids] = useState(false);
+  const high = shown.high;
   const winner = a.settling || a.confirming ? null : state.winner;
   const iWon = !!winner && viewer.names.has(winner.bidder);
   const iLead = !!high && viewer.names.has(high.bidder);
   const listedForWinner = !!winner && !!nameState?.forSale && nameState.price !== null && Math.abs(nameState.price - winner.amount) < 1e-8;
-  const typed = amountText.trim() ? parseAmount(amountText) : state.minNext;
+  const typed = amountText.trim() ? parseAmount(amountText) : shown.minNext;
   const seller = sellerName ?? shortAddress(auction.owner);
 
   const bid = async (event: FormEvent) => {
@@ -244,7 +248,7 @@ function NameAuctionBox({
     setNotice(null);
     if (!viewer.address) return viewer.signIn();
     if (!viewer.name) return setNotice({ severity: "info", text: "Bids are published under your Qortal name: register one in Hub to bid." });
-    if (!Number.isFinite(typed) || typed + EPSILON < state.minNext) return setNotice({ severity: "error", text: `Bid at least ${qort(state.minNext)}.` });
+    if (!Number.isFinite(typed) || typed + EPSILON < shown.minNext) return setNotice({ severity: "error", text: `Bid at least ${qort(shown.minNext)}.` });
     if (typed > MAX_BID) return setNotice({ severity: "error", text: `A bid can be at most ${qort(MAX_BID)}.` });
     setBusy(true);
     const uid = bidUid();
@@ -305,7 +309,7 @@ function NameAuctionBox({
       </Box>
       <Box>
         <Typography variant="body2" color="text.secondary">
-          {high ? `Leading bid, ${state.accepted.length} bid${state.accepted.length === 1 ? "" : "s"}` : "Starting bid"}
+          {high ? `Leading bid, ${shown.accepted.length} bid${shown.accepted.length === 1 ? "" : "s"}` : "Starting bid"}
         </Typography>
         <AmountTag value={high?.amount ?? auction.terms.startingBid} coin="QORT" size="large" />
         {auction.terms.reserve !== undefined && high && (
@@ -313,12 +317,28 @@ function NameAuctionBox({
             {state.reserveMet ? "Reserve met." : "Reserve not met yet."}
           </Typography>
         )}
-        {iLead && state.phase === "live" && (
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            You lead.
+        {high && state.phase === "live" && (
+          <Typography variant="body2" component="div" sx={{ fontWeight: iLead ? 600 : 400, mt: 0.5 }}>
+            {iLead ? (
+              a.pendingIds.has(high.id) ? "You lead (your bid is on its way to your node)." : "You lead."
+            ) : (
+              <>
+                Leading: <Bidder name={high.bidder} size={20} />
+              </>
+            )}
           </Typography>
         )}
       </Box>
+      {shown.accepted.length > 0 && (
+        <Box>
+          <Button size="small" onClick={() => setShowBids((v) => !v)} aria-expanded={showBids} aria-controls="name-auction-bids" sx={{ minHeight: 44, ml: -1 }}>
+            {showBids ? "Hide bids" : `Show bids (${shown.accepted.length})`}
+          </Button>
+          <Collapse in={showBids} unmountOnExit>
+            <BidList id="name-auction-bids" bids={shown.accepted} now={now} mine={viewer.names} pending={a.pendingIds} />
+          </Collapse>
+        </Box>
+      )}
       {nameState?.forSale && nameState.price !== null && !winner && state.phase !== "ended" && (
         <Typography variant="body2" color="text.secondary">
           Also for sale on chain at {qort(nameState.price)}: anyone can buy it at that price at any time.
@@ -331,8 +351,8 @@ function NameAuctionBox({
             label="Your bid"
             value={amountText}
             onChange={(e) => setAmountText(sanitizeAmountInput(e.target.value))}
-            placeholder={formatPrice(state.minNext)}
-            helperText={`At least ${qort(state.minNext)}`}
+            placeholder={formatPrice(shown.minNext)}
+            helperText={`At least ${qort(shown.minNext)}`}
             slotProps={{ htmlInput: { inputMode: "decimal", autoComplete: "off" }, input: { endAdornment: <InputAdornment position="end">QORT</InputAdornment> }, inputLabel: { shrink: true } }}
             sx={{ flex: "1 1 180px" }}
           />

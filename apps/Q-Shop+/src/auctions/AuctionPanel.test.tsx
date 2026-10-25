@@ -15,6 +15,10 @@ import { resetQdnCaches } from "../qdn/search";
 import { ProductPage } from "../pages/Product/ProductPage";
 import { AUCTIONS_PAID_STORAGE_KEY } from "./paid";
 
+/** "Highest bidder: <avatar> Cy", the line as a whole (BidList.tsx Bidder). */
+const highestBidder = (name: string) => (_: string, el: Element | null) =>
+  el?.tagName === "LI" && !!el.textContent?.startsWith("Highest bidder:") && el.textContent.trim().endsWith(name);
+
 const STORE_ID = "q-store-general-my-shop";
 const P11 = "q-store-product-my-shop-P000000011";
 const CAT1 = "q-store-catalogue-my-shop-CAT0000001";
@@ -83,7 +87,7 @@ describe("an auction on its product page", { timeout: 20_000 }, () => {
     expect(within(panel).getByText(/^Ends in 2d/)).toBeInTheDocument();
     expect(within(panel).getByText("Current bid")).toBeInTheDocument();
     expect(within(panel).getByText("15.50")).toBeInTheDocument();
-    expect(within(panel).getByText("Highest bidder: Cy.")).toBeInTheDocument();
+    expect(within(panel).getByText(highestBidder("Cy"))).toBeInTheDocument();
     expect(within(panel).getByText("The reserve price isn't met yet.")).toBeInTheDocument();
     expect(within(panel).getByRole("button", { name: "Bid 16.00 QORT" })).toBeInTheDocument();
     expect(within(panel).getByText("At least 16.00 QORT")).toBeInTheDocument();
@@ -109,6 +113,11 @@ describe("an auction on its product page", { timeout: 20_000 }, () => {
     fireEvent.click(within(panel).getByRole("button", { name: "Bid 14.00 QORT" }));
     expect(await within(panel).findByText("Bid placed: 14.00 QORT.")).toBeInTheDocument();
     expect(within(panel).getByText(/Your bid of 14\.00 QORT is on its way/)).toBeInTheDocument();
+    // It shows at once, before the node lists it: the current bid, the lead and the list.
+    expect(within(panel).getByText(/^You're the highest bidder \(your bid is on its way/)).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole("button", { name: /^Show bids/ }));
+    const list = await within(panel).findByRole("list", { name: "Bids, newest first" });
+    expect(within(within(list).getAllByRole("listitem")[0]).getByText("On its way to your node")).toBeInTheDocument();
     // The page's read, then a fresh one just before the publish.
     expect(bidSearches).toHaveLength(2);
     const [publish] = node.q.callsFor("PUBLISH_QDN_RESOURCE");
@@ -127,7 +136,7 @@ describe("an auction on its product page", { timeout: 20_000 }, () => {
     fireEvent.click(button);
     expect(await within(panel).findByText("Someone bid meanwhile: the least you can bid now is 20.50 QORT.")).toBeInTheDocument();
     expect(node.q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(0);
-    expect(await within(panel).findByText("Highest bidder: Cy.")).toBeInTheDocument();
+    expect(await within(panel).findByText(highestBidder("Cy"))).toBeInTheDocument();
   });
 
   it("lets the winner pay the winning bid through checkout, in QORT only, once the result is confirmed", async () => {
