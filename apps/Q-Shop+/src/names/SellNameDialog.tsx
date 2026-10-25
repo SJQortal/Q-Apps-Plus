@@ -18,6 +18,7 @@ import { invalidateQdnSearches } from "../qdn/search";
 import { formatPrice } from "../money/pricing";
 import { buildNameAuctionPublish, NAME_AUCTION_ID } from "./auctions";
 import { sellName } from "./actions";
+import { DateTimeField, dayKey } from "../components/common/DateTimeFields";
 
 const auctionUid = new ShortUniqueId({ length: 8 });
 export type NameSaleStatus = "free" | "forSale" | "auction" | "pending";
@@ -191,15 +192,7 @@ export function SellNameDialog({
                   slotProps={{ htmlInput: { inputMode: "decimal", autoComplete: "off" }, input: { endAdornment: <InputAdornment position="end">QORT</InputAdornment> } }}
                   fullWidth
                 />
-                <TextField
-                  label="Ends"
-                  type="datetime-local"
-                  value={auction.end}
-                  onChange={(e) => setField("end")(e.target.value)}
-                  slotProps={{ inputLabel: { shrink: true } }}
-                  helperText="Bidding opens when it's published."
-                  fullWidth
-                />
+                <DateTimeField label="Ends" value={auction.end} onChange={(end) => setField("end")(end)} min={dayKey(new Date())} helperText="Bidding opens when it's published." required />
                 <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" } }}>
                   <TextField
                     label="Reserve (optional)"

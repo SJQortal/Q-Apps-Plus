@@ -32,6 +32,7 @@ import { autocompletePaperProps, selectMenuProps } from "../components/common/me
 import { DISPATCH_DAY_CHOICES, MAX_RETURNS_TEXT, MAX_TERMS_TEXT, RETURN_DAY_CHOICES } from "../shop/policies";
 import { MAX_AWAY_NOTE } from "../shop/away";
 import { LANGUAGES, MAX_LANGUAGES, languageName } from "../shop/languages";
+import { DateField, dayKey } from "../components/common/DateTimeFields";
 
 const NOT_SAID = "none";
 
@@ -219,13 +220,12 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
             Buyers see it, and when you&apos;re back, before they pay; orders still come in.
           </Typography>
           <Collapse in={values.away} unmountOnExit>
-            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(0, 1fr) minmax(0, 2fr)" }, gap: 2, pt: 2 }}>
-              <TextField
-                type="date"
+            <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "minmax(230px, 1fr) minmax(0, 1.6fr)" }, gap: 2, pt: 2 }}>
+              <DateField
                 label="Back on (optional)"
                 value={values.awayUntil}
-                onChange={(e) => set("awayUntil", e.target.value)}
-                slotProps={{ inputLabel: { shrink: true } }}
+                onChange={(day) => set("awayUntil", day)}
+                min={dayKey(new Date())}
                 helperText="It goes away by itself after that day"
               />
               <TextField

@@ -186,7 +186,10 @@ describe("the Delivery tab", () => {
     expect(within(point).getByRole("button", { name: "Mon" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(within(point).getByRole("button", { name: "Sat" }));
     fireEvent.click(within(point).getByRole("button", { name: "Mon" }));
-    fireEvent.change(within(point).getByLabelText(/^To/), { target: { value: "17:30" } });
+    // Hours are typed or picked from the list: "5:30 pm" is 17:30.
+    const to = within(point).getByRole("combobox", { name: /^To/ });
+    fireEvent.change(to, { target: { value: "5:30 pm" } });
+    fireEvent.keyDown(to, { key: "Enter" });
     const general = await card("General");
     fireEvent.click(within(general).getByRole("button", { name: "Add a zone" }));
     const d = await dialog();

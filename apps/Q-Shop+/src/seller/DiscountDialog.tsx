@@ -14,6 +14,7 @@ import { dayToTime, randomCode, timeToDay, type DiscountDraft } from "../discoun
 import { nameOwner } from "../orders/reads";
 import { parseAmount, sanitizeAmountInput } from "./productDraft";
 import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
+import { DateField } from "../components/common/DateTimeFields";
 
 const newId = new ShortUniqueId({ length: 8 });
 
@@ -160,22 +161,8 @@ export function DiscountDialog({
           </Box>
 
           <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-            <TextField
-              label="Starts (optional)"
-              type="date"
-              value={starts}
-              onChange={(e) => setStarts(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ flex: "1 1 180px" }}
-            />
-            <TextField
-              label="Ends (optional)"
-              type="date"
-              value={ends}
-              onChange={(e) => setEnds(e.target.value)}
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ flex: "1 1 180px" }}
-            />
+            <DateField label="Starts (optional)" value={starts} onChange={setStarts} sx={{ flex: "1 1 180px" }} />
+            <DateField label="Ends (optional)" value={ends} onChange={setEnds} min={starts || undefined} sx={{ flex: "1 1 180px" }} />
           </Box>
           <TextField
             label="Minimum order (optional)"

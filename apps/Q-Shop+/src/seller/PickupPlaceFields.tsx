@@ -8,6 +8,7 @@ import { Autocomplete, Box, TextField, ToggleButton, ToggleButtonGroup, Typograp
 import { autocompletePaperProps } from "../components/common/menuStyle";
 import { ALL_COUNTRY_CODES, countryName } from "../constants/shipping";
 import { DAY_NAME, WEEK_ORDER, type PickupPlace } from "../delivery/model";
+import { TimeField } from "../components/common/DateTimeFields";
 
 export const NEW_PICKUP_PLACE: PickupPlace = { country: "", address: "", days: [1, 2, 3, 4, 5], from: "10:00", to: "18:00" };
 
@@ -64,24 +65,8 @@ export function PickupPlaceFields({ place, onChange, disabled, name }: { place: 
         )}
       </Box>
       <Box sx={{ gridColumn: "1 / -1", display: "flex", gap: 1.5, flexWrap: "wrap" }}>
-        <TextField
-          label="From"
-          type="time"
-          value={place.from ?? ""}
-          onChange={(e) => onChange({ ...place, from: e.target.value || undefined })}
-          disabled={disabled}
-          slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ flex: "1 1 140px" }}
-        />
-        <TextField
-          label="To"
-          type="time"
-          value={place.to ?? ""}
-          onChange={(e) => onChange({ ...place, to: e.target.value || undefined })}
-          disabled={disabled}
-          slotProps={{ inputLabel: { shrink: true } }}
-          sx={{ flex: "1 1 140px" }}
-        />
+        <TimeField label="From" value={place.from ?? ""} onChange={(from) => onChange({ ...place, from })} disabled={disabled} sx={{ flex: "1 1 140px" }} />
+        <TimeField label="To" value={place.to ?? ""} onChange={(to) => onChange({ ...place, to })} disabled={disabled} sx={{ flex: "1 1 140px" }} />
       </Box>
     </Box>
   );

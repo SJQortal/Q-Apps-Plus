@@ -10,6 +10,7 @@ import { selectMenuProps } from "../components/common/menuStyle";
 import { useNow } from "../hooks/useNow";
 import type { AuctionTerms } from "../auctions/rules";
 import { VoidBids } from "./VoidBids";
+import { DateTimeField } from "../components/common/DateTimeFields";
 import { sanitizeAmountInput, toLocalInput, type AuctionFormValues } from "./productDraft";
 
 const DURATIONS = [1, 3, 7, 14];
@@ -110,28 +111,12 @@ export function AuctionFields({
           </Typography>
         )}
       </Box>
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) minmax(0, 1fr)" } }}>
+      {/* A day and a time each: one moment per row, so the day reads whole. */}
+      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "minmax(0, 1fr)" }}>
         {startsLater && (
-          <TextField
-            label="Starts at"
-            type="datetime-local"
-            value={value.start}
-            onChange={(e) => set("start", e.target.value)}
-            required
-            fullWidth
-            disabled={running}
-            slotProps={{ inputLabel: { shrink: true } }}
-          />
+          <DateTimeField label="Starts at" value={value.start} onChange={(start) => set("start", start)} min={toLocalInput(now)} required disabled={running} />
         )}
-        <TextField
-          label="Ends"
-          type="datetime-local"
-          value={value.end}
-          onChange={(e) => set("end", e.target.value)}
-          required
-          fullWidth
-          slotProps={{ inputLabel: { shrink: true } }}
-        />
+        <DateTimeField label="Ends" value={value.end} onChange={(end) => set("end", end)} min={toLocalInput(now)} required />
       </Box>
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
         <Typography variant="body2" color="text.secondary">
