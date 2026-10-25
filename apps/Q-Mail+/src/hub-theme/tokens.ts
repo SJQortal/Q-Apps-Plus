@@ -32,6 +32,8 @@ export interface PaletteTokens {
   primary: { main: string; dark: string; light: string; contrastText: string };
   secondary: string;
   success: string;
+  /** Read as text too ("2 left", "Doesn't ship there"), so 4.5:1 like success and error. */
+  warning: string;
   error: string;
   background: { default: string; paper: string; surface: string; elevated: string };
   text: { primary: string; secondary: string };
@@ -106,6 +108,8 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
       },
       secondary: HUB_BLUE.hover,
       success: 'rgb(94, 176, 73)',
+      // MUI's own dark-mode orange: 7.8:1 or more on every surface here.
+      warning: '#ffa726',
       // Readable as text (4.5:1 or more) on the page, paper and elevated
       // surfaces; Torq's rgb(177, 70, 70) read at 3.5:1 and 3:1 there.
       error: 'rgb(224, 108, 108)',
@@ -143,7 +147,11 @@ const HUB30: Record<ColorMode, Omit<ThemeTokens, 'id' | 'mode'>> = {
         contrastText: '#FFFFFF',
       },
       secondary: '#2A56A5',
-      success: 'rgb(94, 176, 73)',
+      // Deeper than dark mode's rgb(94, 176, 73), which read at 1.9:1 as text
+      // on the warm page background; this one reads at 5.1:1 or more.
+      success: 'rgb(36, 98, 28)',
+      // MUI's default orange (#ed6c02) read at 2.2:1 on the page here; 5.1:1 or more.
+      warning: 'rgb(128, 72, 8)',
       // One step deeper than Torq's rgb(177, 70, 70), which read at 3.8:1 as
       // text on the warm page background.
       error: 'rgb(158, 43, 43)',
@@ -180,6 +188,7 @@ const BLACK: Omit<ThemeTokens, 'id' | 'mode'> = {
     primary: { main: '#1d9bf0', dark: '#1a8cd8', light: '#8ecdf8', contrastText: '#000000' },
     secondary: '#e7e9ea',
     success: '#00ba7c',
+    warning: '#ffa726',
     error: '#f91880',
     background: { default: '#000000', paper: '#000000', surface: '#000000', elevated: '#16181c' },
     // #8b9096 instead of X's #71767b: the input labels read at 3.9:1 on the elevated surface.
@@ -209,6 +218,8 @@ const WHITE: Omit<ThemeTokens, 'id' | 'mode'> = {
     primary: { main: '#111111', dark: '#000000', light: '#3a3a3a', contrastText: '#ffffff' },
     secondary: '#5f6b76',
     success: '#067d52',
+    // MUI's default orange (#ed6c02) read at 3:1 on white; 5.2:1 or more.
+    warning: '#a35200',
     error: '#d01268',
     background: { default: '#ffffff', paper: '#ffffff', surface: '#ffffff', elevated: '#f6f6f6' },
     text: { primary: '#111111', secondary: '#5f6b76' },
@@ -309,6 +320,7 @@ export function cssVariables(t: Omit<ThemeTokens, 'id' | 'mode'>): Record<string
     '--qp-on-primary': p.primary.contrastText,
     '--qp-secondary': p.secondary,
     '--qp-success': p.success,
+    '--qp-warning': p.warning,
     '--qp-error': p.error,
     '--qp-bg': p.background.default,
     '--qp-paper': p.background.paper,
