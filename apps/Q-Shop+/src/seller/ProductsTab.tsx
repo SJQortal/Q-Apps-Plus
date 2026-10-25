@@ -19,6 +19,9 @@
  * while the list scrolls, says how many chosen products the filters hide,
  * takes the keyboard focus, and Escape leaves it.
  */
+import { shortStoreIdOf } from "../qdn/identifiers";
+import { stockOf } from "../stock/model";
+import { useStockLeft } from "../stock/notes";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ProductImage } from "../components/common/ProductImage";
 import { useSelector } from "react-redux";
@@ -117,16 +120,18 @@ function AuctionTimes({ row }: { row: unknown }) {
   );
 }
 
-export function StatusChip({ status, auction }: { status: string; auction?: unknown }) {
+export function StatusChip({ status, auction, left }: { status: string; auction?: unknown; left?: number }) {
   const s = statusOf({ status, auction });
+  // A counted product (stock/model.ts): what's left, or Sold out once none is.
+  const soldOut = s === "AVAILABLE" && left === 0;
   // The status colour is the border; the text stays text.primary, because
   // orange (and blue) text on white is under 4.5:1 in the light themes.
-  const tone = STATUS_COLOR[s];
+  const tone = soldOut ? "warning" : STATUS_COLOR[s];
   return (
     <Chip
       size="small"
       variant="outlined"
-      label={STATUS_LABEL[s]}
+      label={soldOut ? "Sold out" : s === "AVAILABLE" && left !== undefined ? `${STATUS_LABEL[s]} · ${left} left` : STATUS_LABEL[s]}
       sx={{ fontWeight: 600, color: "text.primary", ...(tone === "default" ? {} : { borderColor: `${tone}.main` }) }}
     />
   );
@@ -184,6 +189,13 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   }, [selecting]);
 
   const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId);
+  // Counted products (stock/model.ts): what's left of each, from the shop's order notes.
+  const { left: stockLeftOf } = useStockLeft(
+    rows.flatMap((row) => {
+      const stock = stockOf(row);
+      return stock ? [{ shortStoreId: shortStoreIdOf(storeId), productId: row.productId, stock }] : [];
+    })
+  );
   const filtered = filterSellerProducts(rows, view, detailsOf, order);
   // With an order, each product's place in it is a column of its own.
   const places = useMemo(() => (order.length > 0 ? shopOrderPlaces(rows, order) : null), [rows, order]);
@@ -532,6 +544,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                     <ProductRow
                       key={row.productId}
                       row={row}
+                      stockLeft={stockLeftOf.get(row.productId)}
                       place={places ? (places.get(row.productId) ?? null) : undefined}
                       details={detailsOf(row)}
                       load={loadOf(row.catalogueId)}
@@ -651,10 +664,13 @@ interface ProductRowProps {
   selecting?: boolean;
   selected?: boolean;
   onToggle?: (row: SellerRow) => void;
+  /** Units left of a counted product (stock/model.ts), once read. */
+  stockLeft?: number;
 }
 
 const ProductRow = memo(function ProductRow({
   row,
+  stockLeft,
   place,
   details,
   load,
@@ -763,7 +779,7 @@ const ProductRow = memo(function ProductRow({
           )}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", color: "text.secondary", fontSize: 14 }}>
             <Box sx={{ display: { xs: "contents", md: "none" } }}>
-              <StatusChip status={row.status} auction={row.auction} />
+              <StatusChip status={row.status} auction={row.auction} left={stockLeft} />
               <AmountTag value={row.priceQort} coin="QORT" size="small" />
             </Box>
             {row.category && (
@@ -783,7 +799,7 @@ const ProductRow = memo(function ProductRow({
           <AmountTag value={row.priceQort} coin="QORT" size="small" />
         </Box>
         <Box sx={{ display: { xs: "none", md: "block" } }}>
-          <StatusChip status={row.status} auction={row.auction} />
+          <StatusChip status={row.status} auction={row.auction} left={stockLeft} />
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ display: { xs: "none", md: "block" } }}>
           {created}

@@ -306,6 +306,7 @@ export function VariantsEditor({
   onImageError,
   group = null,
   extraCoins = [],
+  stock = null,
 }: {
   /** null: no variants. */
   value: VariantFormValues | null;
@@ -321,6 +322,8 @@ export function VariantsEditor({
   group?: { removed: RemovedItem[] } | null;
   /** The shop's other coins an item can have its own price in (variants/drafts.ts itemExtraCoins), with the product's price in each. */
   extraCoins?: { coin: string; label: string; whole: boolean; base: string }[];
+  /** The product counts stock (stock/model.ts): each item has units, with what's left of an edited one by product id. */
+  stock?: { left: ReadonlyMap<string, number> } | null;
 }) {
   const on = value !== null;
   const form = value ?? EMPTY_VARIANTS;
@@ -519,6 +522,21 @@ export function VariantsEditor({
                         )}
                         <PictureButton picture={own} label={label} onPick={(picture) => setRow(key, { picture })} onError={onImageError} />
                       </Box>
+                      {stock && (
+                        <TextField
+                          size="small"
+                          label="Units"
+                          value={row.stock ?? ""}
+                          onChange={(e) => setRow(key, { stock: e.target.value.replace(/\D/g, "").slice(0, 7) })}
+                          // Empty: an edited item keeps counting (what's left shows); a new one needs its units.
+                          placeholder={row.productId && row.stockSaved ? `${stock.left.get(row.productId) ?? row.stockSaved.quantity} left` : "In stock"}
+                          slotProps={{
+                            htmlInput: { inputMode: "numeric", autoComplete: "off", "aria-label": `Units in stock of ${label}` },
+                            inputLabel: { shrink: true },
+                          }}
+                          sx={{ width: 120 }}
+                        />
+                      )}
                       {group && row.productId && (
                         <FormControlLabel
                           control={

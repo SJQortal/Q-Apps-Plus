@@ -4,6 +4,9 @@
  * other coin the shop takes, type, category and (when editing) status. It is
  * controlled: NewProduct.tsx holds the values and turns them into a draft.
  */
+import { StockFields } from "../../../stock/StockFields";
+import { useStockLeft } from "../../../stock/notes";
+import { shortStoreIdOf } from "../../../qdn/identifiers";
 import { lazy, Suspense, useId, useState, type Dispatch, type SetStateAction } from "react";
 import {
   Box,
@@ -127,6 +130,14 @@ export const ProductForm = ({
 }: ProductFormProps) => {
   const picturesLocked = !!picturesLoad;
   const descriptionLabel = useId();
+  // Stock counts (stock/model.ts): a saved product's orders, and in an edited group each item's.
+  const savedId = typeof saved?.id === "string" ? saved.id : null;
+  const savedShortStoreId = shortStoreIdOf(typeof saved?.storeId === "string" ? saved.storeId : "");
+  const groupStock = useStockLeft(
+    values.stock?.tracked && values.variants
+      ? Object.values(values.variants.rows).flatMap((row) => (row.productId && row.stockSaved ? [{ shortStoreId: savedShortStoreId, productId: row.productId, stock: row.stockSaved }] : []))
+      : []
+  );
   const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
     onChange((prev) => ({ ...prev, [key]: value }));
   // The category the title suggests (utils/categoryMatch.ts). While the seller hasn't picked one,
@@ -360,6 +371,16 @@ export const ProductForm = ({
             </ToggleButtonGroup>
           </Box>
         )}
+        {/* An auction sells one of a kind: nothing to count. */}
+        {values.sale !== "auction" && values.stock && (
+          <StockFields
+            value={values.stock}
+            onChange={(stock) => onChange((prev) => ({ ...prev, stock }))}
+            productId={savedId}
+            shortStoreId={savedShortStoreId}
+            variants={!!values.variants}
+          />
+        )}
       </Box>
 
       <Box component="section" aria-label="Price" sx={panelSx}>
@@ -520,6 +541,7 @@ export const ProductForm = ({
             basePrice={basePrice}
             onImageError={onImageError}
             group={variantGroup}
+            stock={values.stock?.tracked ? { left: groupStock.left } : null}
             extraCoins={itemExtraCoins(coins, pricing).map((coin) => ({ coin, label: coinLabel(coin, shop), whole: wholeOnly.includes(coin), base: values.prices[coin] ?? "" }))}
           />
         </Box>

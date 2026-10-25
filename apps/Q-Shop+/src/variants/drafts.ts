@@ -16,6 +16,8 @@
  * items included; an item taken out is retired, or dropped while it is only
  * a draft (groupEditDrafts).
  */
+import { stockFormProblem } from "../stock/catalog";
+import type { ProductStock } from "../stock/model";
 import { priceDecimals, type FiatPricing } from "../money/fiatPricing";
 import { MAX_PRODUCT_PICTURES as MAX_PRODUCT_IMAGES } from "../qdn/productPictures";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
@@ -55,6 +57,10 @@ export interface VariantRowValues {
    * doesn't follow the currency), by coin; empty or absent: the product's.
    */
   coins?: Record<string, string>;
+  /** Its units in stock now, as typed, when the product counts stock (stock/catalog.ts); "" keeps its count. */
+  stock?: string;
+  /** In an edited group: its count as published. */
+  stockSaved?: ProductStock | null;
 }
 
 /** A variant as the form holds it: with a picture of its own for its items. */
@@ -181,6 +187,8 @@ export function variantFormProblem(
       if (coinOptions.wholeOnly?.includes(coin) && !Number.isInteger(parseAmount(amount))) return `Use whole units for the ${name} price of ${variantLabel(item)}: it can't be split.`;
     }
     if (!itemPicture(form, values, item)) return `Add a picture for ${variantLabel(item)}: its own, its variant's, or the product's.`;
+    const stock = stockFormProblem(values.stock?.tracked ? { tracked: true, quantity: row.stock ?? "", saved: row.stockSaved ?? null } : undefined, variantLabel(item));
+    if (stock) return stock;
   }
   return null;
 }
@@ -239,6 +247,8 @@ function itemValues(
     title: variantTitle(values.title, item),
     images,
     prices,
+    // Each item counts its own units (the product's switch turns counting on for all of them).
+    stock: values.stock && (values.stock.tracked ? { tracked: true, quantity: row.stock ?? "", saved: row.stockSaved ?? null } : { tracked: false, quantity: "" }),
     ...(price
       ? inFiat
         ? { fiat: price }
@@ -281,6 +291,7 @@ export function groupFormValues(args: {
       status: own.status,
       price: "",
       picture: picture && picture !== lead.images[0] ? picture : null,
+      ...(own.stock?.saved && { stockSaved: own.stock.saved }),
     };
     if (unit === "QORT") {
       if (qortOf(own) && qortOf(own) !== qortOf(lead)) row.price = qortOf(own);

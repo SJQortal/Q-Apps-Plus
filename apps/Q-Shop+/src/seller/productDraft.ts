@@ -10,6 +10,7 @@
  * without retyping the ARRR price dropped it, and buyers then paid the
  * converted QORT price instead.
  */
+import { stockFormOf, stockFormProblem, withFormStock, type StockFormValues } from "../stock/catalog";
 import { assetIdOf, priceCurrencyKey } from "../money/coins";
 import { productIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { MAX_PRODUCT_PICTURES, withPicturesRef } from "../qdn/productPictures";
@@ -65,6 +66,8 @@ export interface ProductFormValues {
   auction?: AuctionFormValues;
   /** Its variants as typed (variants/drafts.ts): a new product's, or an edited group's; null or absent: none. Not stored as such. */
   variants?: VariantFormValues | null;
+  /** Its stock count (stock/catalog.ts); absent: the product's stays as it is. */
+  stock?: StockFormValues;
 }
 
 /** An auction's terms as the form holds them (times as `datetime-local` text, in the seller's time). */
@@ -339,7 +342,8 @@ export function validateProductForm(
       return "Use whole units for the price in an asset that can't be split";
     }
   }
-  return null;
+  // In variants each item's units are checked with it (variants/drafts.ts).
+  return values.variants ? null : stockFormProblem(values.stock);
 }
 
 /**
@@ -393,7 +397,7 @@ export function newProductDraft(args: {
     user: name,
   };
   if (values.sale === "auction") return withPicturesRef(withSale(draft, values, now, null));
-  return withPicturesRef(withFormFiat(draft, values, coins, args.pricing));
+  return withPicturesRef(withFormStock(withFormFiat(draft, values, coins, args.pricing), values.stock, now));
 }
 
 /**
@@ -436,11 +440,17 @@ export function editedProductDraft(args: {
   now?: number;
 }) {
   const { base, values, coins, name } = args;
-  const pictures = args.picturesKept ? <T,>(draft: T) => draft : withPicturesRef;
+  const now = args.now ?? Date.now();
+  // An auction sells one of a kind: it has no count (a count it had goes).
+  const stockForm: StockFormValues | undefined = values.sale === "auction" ? (values.stock ? { tracked: false, quantity: "" } : undefined) : values.stock;
+  const pictures = <T extends { id: string; images?: unknown }>(draft: T): T => {
+    const counted = withFormStock(draft, stockForm, now);
+    return args.picturesKept ? counted : withPicturesRef(counted);
+  };
   // Sold by auction (or no longer): its terms, its starting bid as its price (auctions/rules.ts).
   if (values.sale === "auction" || "auction" in base) {
     const edited = editedWithoutFiat(base, values, coins, name);
-    const sold = withSale(edited, values, args.now ?? Date.now(), auctionTermsOf(base));
+    const sold = withSale(edited, values, now, auctionTermsOf(base));
     if (values.sale === "auction" || !args.pricing) return pictures(sold);
     return pictures(withFormFiat(sold, values, coins, args.pricing));
   }
@@ -541,6 +551,7 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
       status: "AVAILABLE",
       prices: initialPriceText(null, coins),
       ...(pricing && { fiat: "" }),
+      stock: { tracked: false, quantity: "" },
     };
   }
   const fiat = pricing ? fiatPriceOf(product, pricing.currency) : null;
@@ -555,6 +566,7 @@ export function formValuesFor(product: Record<string, any> | null, coins: string
     category: typeof product.category === "string" ? product.category : "",
     status: (PRODUCT_STATUSES as readonly string[]).includes(product.status) ? product.status : "AVAILABLE",
     prices: initialPriceText(product as { price?: { currency: string; value: number }[] }, coins),
+    stock: stockFormOf(product),
     ...auctionValuesOf(product),
   };
 }

@@ -40,6 +40,7 @@ import {
 import { invalidateQdnJson, invalidateQdnSearches, isDeletedBody } from "../qdn/search";
 import { primePicturesDocs, splitProductPictures, withPicturesLanded } from "../qdn/productPictures";
 import { withAuctionRows } from "../auctions/catalog";
+import { withStockRows } from "../stock/catalog";
 import { withVariantRows } from "../variants/model";
 import { errorMessage } from "../qdn/hubErrors";
 import { draftsOfShop } from "./shopDrafts";
@@ -163,7 +164,7 @@ export function usePublishProducts() {
         newUid: () => uid(),
       });
       // Auction rows say when they run, variant rows their group and options (variants/model.ts); both keep their product's status.
-      const built = withVariantRows(withAuctionRows(original, pictures.drafts), pictures.drafts);
+      const built = withStockRows(withVariantRows(withAuctionRows(original, pictures.drafts), pictures.drafts), pictures.drafts);
       const labels: Record<string, string> = { ...pictures.labels };
       built.catalogues.forEach((cat, i) => {
         const n = Object.keys(cat.products ?? {}).length;

@@ -352,6 +352,30 @@ describe("the products tab", () => {
     expect(screen.getByRole("heading", { name: "Ready to publish: 1 product" })).toBeInTheDocument();
   });
 
+  it("counts stock when asked: off by default, its units required, and the count saved with the product", async () => {
+    stubNode();
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    fireEvent.click(screen.getByRole("button", { name: "Add product" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add product" });
+    const counting = within(dialog).getByRole("switch", { name: "Count stock" });
+    expect(counting).not.toBeChecked();
+    expect(within(dialog).getByText("Off: it stays in stock until you mark it out of stock.")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add images" }));
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Title/ }), { target: { value: "Tea cup" } });
+    await pickCategory(dialog, "home", "Home & Garden");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^Price in QORT/ }), { target: { value: "2" } });
+    fireEvent.click(counting);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
+    expect(await within(dialog).findByText("Type the units in stock.")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Units in stock" }), { target: { value: "12x" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add to drafts" }));
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(1));
+    const [added] = Object.values(store.getState().global.productsToSave) as any[];
+    expect(added.stock).toEqual({ v: 1, quantity: 12, since: expect.any(Number) });
+    // The original's keys first, the count after them.
+    expect(Object.keys(added).slice(-1)).toEqual(["stock"]);
+  });
+
   it("offers the categories every shop picks from, and nothing else for a new product", async () => {
     stubNode();
     const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
