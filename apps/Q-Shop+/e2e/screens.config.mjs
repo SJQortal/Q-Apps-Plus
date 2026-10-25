@@ -58,6 +58,8 @@ let IMG2 = IMG;
 let LOGO_WIDE = IMG;
 // A product photo with a transparent background (a cut-out), for products 0 and 3: lists show it without a backdrop.
 let CUTOUT = IMG;
+// Pictures 4–7 of shop 3's first product (its pictures document), each its own: the product page shows a repeated picture once.
+let MORE_PICS = [IMG, IMG, IMG, IMG];
 // A real PDF (made by Chromium in setup), for the description's PDF and its preview with pdf.js.
 let PDF = Buffer.from('%PDF-1.4');
 let PNG = Buffer.from(IMG.split(',')[1], 'base64');
@@ -136,6 +138,17 @@ const APRON_OPTIONS = [
 const APRON_ITEMS = { 4: ['Small', 'Natural'], 8: ['Small', 'Indigo'], 10: ['Large', 'Natural'] };
 // Read when served, after setup() makes the pictures: the lead's own and the product's, the others' own.
 const apronPictures = (p) => ({ 4: [IMG2, IMG, CUTOUT], 8: [CUTOUT], 10: [IMG] })[p];
+
+// The seller's product rows read their catalogue as they come into view (seller/ProductsTab.tsx), and
+// Lamp 11 is the last row: on a short screen, scroll until its row is named, then open it.
+async function editLamp11(page, timeout = 10000) {
+  const row = page.getByRole('button', { name: /^Edit\b.*Lamp 11\b/ });
+  for (let i = 0; i < 12 && !(await row.count()); i++) {
+    await page.evaluate(() => window.scrollBy(0, 400));
+    await page.waitForTimeout(250);
+  }
+  await row.click({ timeout });
+}
 const apronOf = (s, p) =>
   s.short === 'my-shop' && APRON_ITEMS[p]
     ? { group: 'APRONGRP01', title: 'Linen apron', options: APRON_OPTIONS, values: APRON_ITEMS[p], display: 'separate', lead: productId(s, 4) }
@@ -275,6 +288,8 @@ const storeJson = (s) => ({
   ...(s.short === 'my-shop' && { acceptedAssets: [{ id: 81, name: 'Gold Bar' }] }),
   // Ålund Ceramics is away for a week (shop/away.ts).
   ...(s.short === 'shop-2' && { away: { until: new Date(new Date(now).setHours(0, 0, 0, 0) + 7 * DAY).getTime(), note: 'At the Lisbon ceramics fair; messages answered in the evenings.' } }),
+  // Shop 1 answers in Portuguese and English (shop/languages.ts).
+  ...(s.short === 'shop-1' && { languages: ['pt', 'en'] }),
   // Shop 1 states its policies (shop/policies.ts): its page, products and checkout show them.
   ...(s.short === 'shop-1' && { policies: { dispatchDays: 2, returnDays: 14, returns: 'Unused items in their packaging, within 14 days of delivery. The buyer pays return postage; refunds go back in the coin paid.', terms: 'Made in small batches: colours vary a little from the pictures.' } }),
 });
@@ -402,6 +417,11 @@ export default {
     IMG2 = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 } })).toString('base64')}`;
     await gen.setContent('<div style="width:160px;height:160px;display:grid;place-items:center"><div style="width:110px;height:120px;border-radius:24px 24px 16px 16px;background:linear-gradient(#cbd5e1 0 22%,#facc15 22%)"></div></div>');
     CUTOUT = `data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 }, omitBackground: true })).toString('base64')}`;
+    MORE_PICS = [];
+    for (const [from, to] of [['#ef4444', '#f59e0b'], ['#14b8a6', '#0ea5e9'], ['#8b5cf6', '#ec4899'], ['#84cc16', '#22c55e']]) {
+      await gen.setContent(`<div style="width:160px;height:160px;background:linear-gradient(90deg,${from},${to})"></div>`);
+      MORE_PICS.push(`data:image/png;base64,${(await gen.screenshot({ clip: { x: 0, y: 0, width: 160, height: 160 } })).toString('base64')}`);
+    }
     await gen.setContent('<div style="font:16px sans-serif;padding:24px"><h1 style="font-size:28px">Mug care guide</h1><p>Wash by hand in warm water. The glaze is food safe and dishwasher safe up to 60 °C.</p><ul><li>No microwave for the gold rim</li><li>Dry upside down</li></ul></div>');
     PDF = await gen.pdf({ width: '420px', height: '595px', printBackground: true });
     await gen.setViewportSize({ width: 400, height: 160 });
@@ -506,7 +526,7 @@ export default {
     if (m) {
       const [, service, name, id] = m;
       if (service === 'FILE' && name === 'Seller 3' && id === 'qshare_file_care_abc123') return route.fulfill({ status: 200, contentType: 'application/pdf', body: PDF }).then(() => true);
-      if (service === 'DOCUMENT' && name === 'Seller 3' && id === 'q-store-pictures-shop-3-P000000000') return json(route, { productId: 'q-store-product-shop-3-P000000000', images: [IMG, IMG2, IMG, IMG2] }).then(() => true);
+      if (service === 'DOCUMENT' && name === 'Seller 3' && id === 'q-store-pictures-shop-3-P000000000') return json(route, { productId: 'q-store-product-shop-3-P000000000', images: MORE_PICS }).then(() => true);
       if (service === 'DOCUMENT' && name === 'Video Maker' && id === 'qtube_vid_kiln_xyz') return json(route, { title: 'Inside the kiln', videoReference: { name: 'Video Maker', identifier: 'qtube_vid_kiln_xyz_v', service: 'VIDEO' } }).then(() => true);
       if (service === 'THUMBNAIL') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
       if (service === 'IMAGE' && id === 'asset81_Gold Bar_aavatar' && name === 'Gold Issuer') return route.fulfill({ status: 200, contentType: 'image/png', body: PNG }).then(() => true);
@@ -633,7 +653,7 @@ export default {
     { key: 'product-auction-won', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 8)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/^You won!/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'shop-auctions', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => { await page.getByRole('button', { name: 'Auctions (2)' }).click({ timeout: 8000 }); await page.waitForTimeout(700); } },
     { key: 'seller-auction-edit', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.mouse.wheel(0, 700); await page.waitForTimeout(900); await page.getByRole('button', { name: /^Edit\b.*Ebook 9\b/ }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('checkbox', { name: /^Void: Troll Account/ }).scrollIntoViewIfNeeded({ timeout: 10000 }); await page.waitForTimeout(400); } },
-    { key: 'seller-product-auction', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('searchbox', { name: 'Search your products' }).fill('Lamp 11', { timeout: 8000 }); await page.getByRole('button', { name: /^Edit\b.*Lamp 11\b/ }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('button', { name: 'Auction', exact: true }).click({ timeout: 10000 }); await d.getByRole('textbox', { name: /^Starting bid/ }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-product-auction', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('searchbox', { name: 'Search your products' }).fill('Lamp 11', { timeout: 8000 }); await editLamp11(page); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('button', { name: 'Auction', exact: true }).click({ timeout: 10000 }); await d.getByRole('textbox', { name: /^Starting bid/ }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'orders', path: '/my-orders', after: async (page) => page.waitForTimeout(900) },
     { key: 'order-mark-delivered', path: '/my-orders', overlay: true, after: async (page) => {
       await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Arrived\?|Got it\?/ }).click({ timeout: 8000 });
@@ -703,9 +723,9 @@ export default {
     // Assets 82–84 have no picture on the mock node: each falls back to another (a 404 is how Core says so).
     { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, expectErrors: /404|Failed to load resource/, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
-    { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit\b.*Lamp 11\b/ }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
-    { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit\b.*Lamp 11\b/ }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
-    { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit\b.*Lamp 11\b/ }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a file or PDF' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Upload a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page, 2500); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a file or PDF' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Upload a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-edit-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const box = page.getByRole('dialog', { name: 'Edit shop' }).getByRole('textbox', { name: /^Meta description/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('Hand-thrown mugs and plates from Lisbon.'); await page.waitForTimeout(400); } },
     { key: 'seller-edit-policies', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => {
       await page.waitForTimeout(700);
@@ -760,6 +780,8 @@ export default {
       await page.getByRole('dialog', { name: /^Change 2 products/ }).getByRole('button', { name: /^Add \d to drafts$/ }).waitFor({ timeout: 8000 });
       await page.waitForTimeout(400);
     } },
+    { key: 'shop-owner-checkup', path: `/${encodeURIComponent('Seller Name')}/q-store-general-my-shop`, after: async (page) => { await page.getByRole('button', { name: 'Open the checkup' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'products-ships-to', path: '/products?ships=PT', after: async (page) => { await page.waitForSelector('article', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(1500); } },
     { key: 'shop-policies', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, after: async (page) => {
       await page.getByRole('button', { name: 'Returns and terms' }).click({ timeout: 8000 });
       await page.getByRole('dialog', { name: "Plus Gadgets's policies" }).waitFor({ timeout: 4000 });
@@ -810,7 +832,8 @@ export default {
     } },
     { key: 'seller-delivery-options', path: '/product-manager/q-store-general-my-shop?tab=delivery', after: async (page) => { await page.getByRole('region', { name: 'Delivery options' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'product-delivery', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
-      await page.getByRole('button', { name: 'Choose your country' }).click({ timeout: 8000 });
+      // The cart-delivery screen may have kept a country on this device already.
+      await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
       const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
       await d.getByRole('combobox', { name: 'Country' }).fill('Portugal');
       await page.getByRole('option', { name: 'Portugal', exact: true }).click({ timeout: 4000 });
