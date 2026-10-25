@@ -920,7 +920,7 @@ export default {
       await d.getByRole('button', { name: 'Continue' }).click({ timeout: 8000 });
       await d.getByRole('combobox', { name: /Country/ }).fill('Portugal', { timeout: 8000 });
       await page.getByRole('option', { name: 'Portugal' }).click({ timeout: 4000 });
-      await d.getByRole('radio', { name: /Collect it: Local pickup/ }).click({ timeout: 8000 });
+      await d.getByRole('radiogroup', { name: 'How it comes' }).getByRole('radio', { name: /Local pickup/ }).click({ timeout: 8000 });
       await d.getByLabel(/^How the seller can reach you/).waitFor({ timeout: 4000 });
       await page.waitForTimeout(400);
     } },
