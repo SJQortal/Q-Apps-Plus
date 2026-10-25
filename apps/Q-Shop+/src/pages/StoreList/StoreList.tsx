@@ -213,10 +213,9 @@ export const StoreList = () => {
                 description: "Shops that Qortal names open show up here.",
               };
 
-  const busyText =
-    home.more === "check" || (home.busy && payNeedsDetails(pay))
-      ? `Checking which shops take ${payLabel(pay)}…`
-      : "Loading more shops…";
+  // What the shops' details are being read for: the coin, where they ship, or both.
+  const checking = [payNeedsDetails(pay) && `take ${payLabel(pay)}`, ships && `ship to ${countryName(ships)}`].filter(Boolean).join(" and ");
+  const busyText = (home.more === "check" || home.busy) && checking ? `Checking which shops ${checking}…` : "Loading more shops…";
   const sortLabel = SHOP_SORTS.find((s) => s.value === sort)?.label ?? "Newest";
   const showList = home.shops.length > 0 || home.more !== null || home.busy;
 
