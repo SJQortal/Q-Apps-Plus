@@ -717,7 +717,7 @@ export default {
       await policies.evaluate((el) => el.scrollIntoView({ block: 'start' }));
       await page.waitForTimeout(400);
     } },
-    { key: 'shop-away', path: `/${encodeURIComponent('Zoë Ålund')}/q-store-general-shop-2`, after: async (page) => { await page.getByText(/is away\./).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'shop-away', path: `/${encodeURIComponent('Zoë Ålund')}/q-store-general-shop-2`, after: async (page) => { await page.getByText(/is away until/).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
     { key: 'seller-edit-away', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => {
       await page.waitForTimeout(700);
       await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 });
@@ -726,6 +726,35 @@ export default {
       await d.getByLabel('Back on (optional)').fill('2026-11-03');
       await d.getByRole('textbox', { name: 'Note for buyers (optional)' }).fill('At a craft fair; messages answered in the evenings.');
       await d.getByRole('textbox', { name: 'Note for buyers (optional)' }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'cart-delivery', path: '/cart', after: async (page) => {
+      // The buyer's country (delivery/buyerPlace.ts) prices each shop's delivery in the cart.
+      await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('qshopplus-settings') || '{}'); s.deliverTo = { country: 'Portugal', state: '' }; localStorage.setItem('qshopplus-settings', JSON.stringify(s)); });
+      await page.reload();
+      await page.getByText('Delivery to Portugal:').first().waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
+    { key: 'product-more-from-shop', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
+      const strip = page.getByRole('region', { name: /^More from/ });
+      await strip.scrollIntoViewIfNeeded({ timeout: 8000 });
+      await strip.getByRole('listitem').first().waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
+    { key: 'products-recently-viewed', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 3)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
+      await page.getByRole('button', { name: 'Add to cart' }).waitFor({ timeout: 8000 });
+      // In the app, as a buyer would: the product page remembered it.
+      await page.evaluate(() => { history.pushState({}, '', '/products'); dispatchEvent(new PopStateEvent('popstate')); });
+      await page.getByRole('region', { name: 'Recently viewed' }).getByRole('listitem').first().waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
+    { key: 'seller-bulk-status', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Select' }).click({ timeout: 8000 });
+      const list = page.getByRole('list', { name: 'Products' });
+      await list.getByRole('checkbox').nth(0).click({ timeout: 8000 });
+      await list.getByRole('checkbox').nth(1).click();
+      await page.getByRole('button', { name: 'Change status' }).click();
+      await page.getByRole('dialog', { name: /^Change 2 products/ }).getByRole('button', { name: /^Add \d to drafts$/ }).waitFor({ timeout: 8000 });
       await page.waitForTimeout(400);
     } },
     { key: 'shop-policies', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, after: async (page) => {
