@@ -31,6 +31,7 @@ const rateText = (rate: DeliveryRate | undefined): RateText => ({ first: asText(
 
 export function DeliveryZoneDialog({
   zone,
+  start,
   currency,
   newId,
   onSave,
@@ -40,6 +41,8 @@ export function DeliveryZoneDialog({
 }: {
   /** The zone to edit, or null for a new one. */
   zone: DeliveryZone | null;
+  /** A new zone's starting name and places (everywhere the shop ships, say). */
+  start?: Pick<DeliveryZone, "name" | "countries" | "states">;
   currency: string;
   newId: () => string;
   onSave: (zone: DeliveryZone) => void;
@@ -49,9 +52,9 @@ export function DeliveryZoneDialog({
   /** The zones' own prices' name, when the shop has options. */
   baseName?: string;
 }) {
-  const [name, setName] = useState(zone?.name ?? "");
-  const [countries, setCountries] = useState<string[]>(zone?.countries ?? []);
-  const [states, setStates] = useState<string[] | null>(zone?.states ?? null);
+  const [name, setName] = useState(zone?.name ?? start?.name ?? "");
+  const [countries, setCountries] = useState<string[]>(zone?.countries ?? start?.countries ?? []);
+  const [states, setStates] = useState<string[] | null>(zone?.states ?? start?.states ?? null);
   const [first, setFirst] = useState(asText(zone?.first));
   const [extra, setExtra] = useState(asText(zone?.extra));
   const [freeOver, setFreeOver] = useState(asText(zone?.freeOver));

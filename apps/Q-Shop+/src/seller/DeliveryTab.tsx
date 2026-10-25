@@ -18,7 +18,7 @@ import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined
 import type { RootState } from "../state/store";
 import { setNotification } from "../state/features/notificationsSlice";
 import { fiatPricingOf } from "../money/fiatPricing";
-import { shippingSummaryWithStates } from "../constants/shipping";
+import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } from "../constants/shipping";
 import { publishMedia } from "../richtext/publishMedia";
 import { BASE_OPTION_NAME, MAX_OPTIONS, MAX_PROFILES, MAX_ZONES, deliveryMoney as money, type DeliveryDoc, type DeliveryOption, type DeliveryProfile, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import { buildDeliveryPublish, fetchDeliveryDoc, rememberDeliveryDoc } from "../delivery/deliveryDoc";
@@ -152,7 +152,8 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
   );
 }
 
-type Editing = { profile: string | null; zone: DeliveryZone | null } | null;
+/** The zone being edited (null: a new one), and a new one's starting places. */
+type Editing = { profile: string | null; zone: DeliveryZone | null; start?: Pick<DeliveryZone, "name" | "countries" | "states"> } | null;
 
 function ProfileNameDialog({ name: initial, onSave, onClose }: { name: string; onSave: (name: string) => void; onClose: () => void }) {
   const [name, setName] = useState(initial);
@@ -384,6 +385,9 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
       ? "Prices are in QORT (buyers paying in ARRR pay them at the node's rate)."
       : `Prices are in ${doc.currency}, your shop's currency (QORT and ARRR follow from your rates).`;
 
+  // Where the shop ships (Edit shop), for a first zone in one step.
+  const everywhere = shippingCountriesOf(store);
+  const everywhereStates = everywhere?.includes(US) ? shippingStatesOf(store) : null;
   const profileCard = (profile: DeliveryProfile | null) => {
     const zones = profile ? profile.zones : doc.general.zones;
     const id = profile?.id ?? null;
@@ -422,9 +426,22 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
           onEdit={(zone) => setEditing({ profile: id, zone })}
           onRemove={(zone) => removeZone(id, zone)}
         />
-        <Button startIcon={<AddIcon />} onClick={() => setEditing({ profile: id, zone: null })} disabled={busy || zones.length >= MAX_ZONES} sx={{ alignSelf: "flex-start", minHeight: 44 }}>
-          Add a zone
-        </Button>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+          {/* A first zone in one step: everywhere the shop ships (Edit shop's countries), at one price. */}
+          {zones.length === 0 && everywhere && (
+            <Button
+              variant="contained"
+              onClick={() => setEditing({ profile: id, zone: null, start: { name: "Everywhere", countries: everywhere, ...(everywhereStates && { states: everywhereStates }) } })}
+              disabled={busy}
+              sx={{ minHeight: 44 }}
+            >
+              One price everywhere you ship
+            </Button>
+          )}
+          <Button startIcon={<AddIcon />} onClick={() => setEditing({ profile: id, zone: null })} disabled={busy || zones.length >= MAX_ZONES} sx={{ minHeight: 44 }}>
+            Add a zone
+          </Button>
+        </Box>
       </Paper>
     );
   };
@@ -483,6 +500,7 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
       {editing && (
         <DeliveryZoneDialog
           zone={editing.zone}
+          start={editing.start}
           options={doc.options ?? []}
           baseName={doc.base?.name}
           currency={doc.currency}

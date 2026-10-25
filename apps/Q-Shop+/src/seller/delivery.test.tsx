@@ -31,7 +31,7 @@ import { EU_COUNTRIES } from "../constants/shipping";
 
 const DELIVERY_ID = deliveryIdentifier(SHORT_STORE_ID);
 
-function setup(opts: { delivery?: unknown; index?: Record<string, unknown> } = {}) {
+function setup(opts: { delivery?: unknown; index?: Record<string, unknown>; shop?: Record<string, unknown> } = {}) {
   const index = opts.index ?? dataContainer;
   vi.stubGlobal(
     "fetch",
@@ -48,7 +48,7 @@ function setup(opts: { delivery?: unknown; index?: Record<string, unknown> } = {
   );
   const store = createAppStore();
   store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
-  store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
+  store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER, ...opts.shop }));
   store.dispatch(setDataContainer(index));
   const q = installQortalMock({
     FETCH_QDN_RESOURCE: async () => structuredClone(catalogue),
@@ -129,6 +129,19 @@ describe("the Delivery tab", () => {
       updated: expect.any(Number),
     });
     await waitFor(() => expect(screen.queryByRole("button", { name: "Publish delivery prices" })).not.toBeInTheDocument());
+  });
+
+  it("starts a first zone in one step: everywhere the shop ships, at the price typed", async () => {
+    setup({ shop: { shippingCountries: ["PT", "ES", "FR"] } });
+    fireEvent.click(await screen.findByRole("button", { name: "One price everywhere you ship" }));
+    const dialog = await screen.findByRole("dialog", { name: "New delivery zone" });
+    expect(within(dialog).getByRole("textbox", { name: /^Zone name/ })).toHaveValue("Everywhere");
+    fireEvent.change(within(dialog).getByRole("textbox", { name: /^First item/ }), { target: { value: "4" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save zone" }));
+    const general = await screen.findByRole("region", { name: "Shipping profile: General" });
+    expect(await within(general).findByText("Everywhere")).toBeInTheDocument();
+    expect(within(general).getByText(/France, Portugal and Spain|Portugal, Spain and France|3 countries/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "One price everywhere you ship" })).toBeNull();
   });
 
   it("adds delivery options buyers pick from, each priced in the zones that offer it", async () => {
