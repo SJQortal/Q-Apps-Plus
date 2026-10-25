@@ -179,7 +179,7 @@ export function CombinedCheckoutDialog({
       prev.map((p) => {
         if (p.key !== key) return p;
         // The discount follows: a free-delivery code takes the new option's fee off.
-        const priced = reprice(p, choice.line, p.discount?.applied ?? null);
+        const priced = reprice(p, choice.line, appliedOf[key] ?? null);
         // A price that can't be worked out keeps the option before (the buyer sees nothing change).
         if (!priced) return p;
         return { ...p, ...priced, delivery: choice.line, deliveryFree: choice.free, option: { id: choice.id, name: choice.name } };
@@ -271,7 +271,8 @@ export function CombinedCheckoutDialog({
     const withShop = included.filter((s) => s.shop);
     const [prices, codes, wholes] = await Promise.all([
       Promise.all(shipped.map((s) => loadShopDelivery(s.shop!.owner, s.shop!.id).then((d) => d, () => null))),
-      Promise.all(withShop.map((s) => discountsOf[s.view.key] ?? loadShopDiscounts(s.shop!.owner, s.shop!.id).catch(() => ({ doc: null, pricing: null }) as ShopDiscounts))),
+      // A read that fails isn't "no codes": left out here, so Apply reads again.
+      Promise.all(withShop.map((s) => discountsOf[s.view.key] ?? loadShopDiscounts(s.shop!.owner, s.shop!.id).catch(() => null))),
       Promise.all(
         withShop.map((s) => {
           const id = assetIdOf(s.coin);
@@ -280,7 +281,7 @@ export function CombinedCheckoutDialog({
       ),
     ]);
     const deliveryOf = new Map(shipped.map((s, i) => [s.view.key, prices[i]]));
-    const codesOf: Record<string, ShopDiscounts> = Object.fromEntries(withShop.map((s, i) => [s.view.key, codes[i]]));
+    const codesOf: Record<string, ShopDiscounts> = Object.fromEntries(withShop.flatMap((s, i) => (codes[i] ? [[s.view.key, codes[i]]] : [])));
     const wholeOf = new Map(withShop.map((s, i) => [s.view.key, wholes[i]]));
     // A discount for the buyer's own name at a shop, unless they took it off there.
     const ownOf: Record<string, AppliedDiscount> = {};

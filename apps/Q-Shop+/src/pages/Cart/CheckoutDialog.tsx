@@ -51,7 +51,7 @@ import { CODE_PATTERN, codeHash, discountTitle, nameHash, normalizeCode, type Di
 import { discountForCode, discountForName, discountLine, discountProblem } from "../../discounts/apply";
 import { loadShopDiscounts, type ShopDiscounts } from "../../discounts/discountsDoc";
 import { assetInfo } from "../../qdn/assets";
-import { deliveryMoney, deliveryOptionsOf } from "../../delivery/model";
+import { deliveryMoney } from "../../delivery/model";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
 
@@ -164,6 +164,14 @@ export function CheckoutDialog({
   const [choices, setChoices] = useState<DeliveryChoice[]>([]);
   const [optionId, setOptionId] = useState("");
   const paying = useRef(false);
+  // A code being checked (Pay waits for it), and what it was checked against: a Confirm built since, a step left
+  // or a payment started drops its answer.
+  const [checkingCode, setCheckingCode] = useState(false);
+  const confirmRound = useRef(0);
+  const stepNow = useRef<Step>(step);
+  useEffect(() => {
+    stepNow.current = step;
+  }, [step]);
   // Bumped by every address change: a delivery read that finishes after one is for the old address, and is dropped.
   const addressEdits = useRef(0);
   const stepStart = useRef<HTMLDivElement>(null);
@@ -227,6 +235,7 @@ export function CheckoutDialog({
       setStep("review");
       return;
     }
+    confirmRound.current += 1;
     setSnapshot({ coin, rate, amount: now.amount, details: now.details, lines: paid, delivery, discount: off && discountNow ? { applied: discountNow, amount: off.amount } : null });
     setNotice(null);
     setStep("confirm");
@@ -245,8 +254,14 @@ export function CheckoutDialog({
 
   // The pickups the shop offers in the buyer's country, worked out before any street is typed.
   const pickups = !isDigital && prices ? pickupChoices({ shop, delivery: prices, lines, address: delivery, coin, rate }) : [];
-  // A shop whose every option is collected has no delivery to an address.
-  const onlyPickup = !!prices?.doc && deliveryOptionsOf(prices.doc).every((o) => o.pickup);
+  // Whether anything delivers to the buyer's place; when only pickups are left there, the buyer collects.
+  const delivers = (() => {
+    if (isDigital || !prices?.doc || pickups.length === 0) return true;
+    const options = deliveryChoices({ shop, delivery: prices, lines, address: delivery, coin, rate });
+    if (!options.ok) return false;
+    return options.choices.length > 0 ? options.choices.some((c) => !c.pickup) : !prices.doc.base?.pickup;
+  })();
+  const onlyPickup = pickups.length > 0 && !delivers;
   const collecting = pickups.length > 0 && (collect || onlyPickup);
   // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here, unless the buyer collects.
   // ... and in the United States, its states when it ships to some only.
@@ -283,7 +298,9 @@ export function CheckoutDialog({
           : { ok: false, message: "That pickup isn't offered for this order there." }
         : !options.ok
           ? options
-          : picked
+          : !picked && (options.choices.length > 0 || prices.doc?.base?.pickup)
+            ? { ok: false, message: `${shop.title || shop.owner}'s delivery options don't reach this address: collect it, or ask the seller.` }
+            : picked
           ? { ok: true, line: picked.line, free: picked.free, option: { id: picked.id, name: picked.name } }
           : deliveryCharge({ shop, delivery: prices, lines, address: delivery, coin, rate });
     } catch {
@@ -309,7 +326,7 @@ export function CheckoutDialog({
 
   // The shop's codes, read when the buyer reaches Confirm; a discount for the buyer's own name applies by itself.
   const applyOwnDiscount = useEffectEvent((discount: Discount, hash: string, shopDiscounts: ShopDiscounts) => {
-    if (step !== "confirm" || !snapshot || !shopDiscounts.doc || applied || personalRemoved.current) return;
+    if (step !== "confirm" || paying.current || !snapshot || !shopDiscounts.doc || applied || personalRemoved.current) return;
     const problem = discountProblem({ discount, doc: shopDiscounts.doc, lines, buyerNameHash: hash, now: Date.now(), pricing: shopDiscounts.pricing, hasDeliveryFee: !!snapshot.delivery.line });
     if (problem) return;
     const next = { discount };
@@ -321,14 +338,15 @@ export function CheckoutDialog({
     let alive = true;
     loadShopDiscounts(shop.owner, shop.id).then(
       async (d) => {
+        // The name's fingerprint first: setting the codes runs this effect again.
+        const hash = alive && d.doc && buyer.name ? await nameHash(shop.id, buyer.name) : null;
         if (!alive) return;
         setDiscounts(d);
-        if (!d.doc || !buyer.name) return;
-        const hash = await nameHash(shop.id, buyer.name);
-        const own = discountForName(d.doc, hash, Date.now());
-        if (alive && own) applyOwnDiscount(own, hash, d);
+        const own = d.doc && hash ? discountForName(d.doc, hash, Date.now()) : null;
+        if (own && hash) applyOwnDiscount(own, hash, d);
       },
-      () => alive && setDiscounts({ doc: null, pricing: null })
+      // A read that failed isn't "no codes": Apply reads again.
+      () => {}
     );
     return () => {
       alive = false;
@@ -336,9 +354,31 @@ export function CheckoutDialog({
   }, [step, discounts, shop.owner, shop.id, buyer.name]);
 
   const applyCode = async (typed: string): Promise<string | null> => {
-    if (!snapshot) return "Try again.";
+    if (!snapshot || paying.current) return "Try again.";
     const code = normalizeCode(typed);
     if (!CODE_PATTERN.test(code)) return "A code is 3 to 24 letters or digits.";
+    setCheckingCode(true);
+    const round = confirmRound.current;
+    try {
+      const problem = await checkCode(code, snapshot);
+      // The buyer paid, left Confirm or changed the order meanwhile: this answer is for an order that's gone.
+      if (paying.current || stepNow.current !== "confirm" || round !== confirmRound.current) return problem ?? "Your order changed meanwhile: apply the code again.";
+      if (problem) return problem;
+      const discount = pendingDiscount.current;
+      if (!discount) return "Try again.";
+      const next = { discount, code };
+      setApplied(next);
+      toConfirm(snapshot.delivery, next);
+      return null;
+    } finally {
+      setCheckingCode(false);
+    }
+  };
+
+  // The discount a checked code opens (checkCode leaves it here for applyCode).
+  const pendingDiscount = useRef<Discount | null>(null);
+  const checkCode = async (code: string, current: Snapshot): Promise<string | null> => {
+    pendingDiscount.current = null;
     let found = discounts;
     if (!found) {
       try {
@@ -353,14 +393,12 @@ export function CheckoutDialog({
     const discount = discountForCode(found.doc, await codeHash(shop.id, code));
     if (!discount) return `${code} isn't a code at ${name}.`;
     const buyerHash = buyer.name ? await nameHash(shop.id, buyer.name) : null;
-    const problem = discountProblem({ discount, doc: found.doc, lines, buyerNameHash: buyerHash, now: Date.now(), pricing: found.pricing, hasDeliveryFee: !!snapshot.delivery.line });
+    const problem = discountProblem({ discount, doc: found.doc, lines, buyerNameHash: buyerHash, now: Date.now(), pricing: found.pricing, hasDeliveryFee: !!current.delivery.line });
     if (problem) return problem;
-    if (!discountLine({ discount, code, lines, deliveryLine: snapshot.delivery.line, coin: snapshot.coin, rate: snapshot.rate, digital: isDigital, wholeUnits })) {
-      return `${code} takes less than one whole ${coinLabel(snapshot.coin, shop)} off this order.`;
+    if (!discountLine({ discount, code, lines, deliveryLine: current.delivery.line, coin: current.coin, rate: current.rate, digital: isDigital, wholeUnits })) {
+      return `${code} takes less than one whole ${coinLabel(current.coin, shop)} off this order.`;
     }
-    const next = { discount, code };
-    setApplied(next);
-    toConfirm(snapshot.delivery, next);
+    pendingDiscount.current = discount;
     return null;
   };
 
@@ -685,7 +723,7 @@ export function CheckoutDialog({
     actions = (
       <>
         <Button onClick={() => setStep(isDigital ? "review" : "delivery")}>Back</Button>
-        <Button variant="contained" onClick={pay} disabled={running || !!payout.error}>
+        <Button variant="contained" onClick={pay} disabled={running || checkingCode || !!payout.error}>
           Pay {formatPrice(Number(snapshot.amount))} {snapshotLabel}
         </Button>
       </>

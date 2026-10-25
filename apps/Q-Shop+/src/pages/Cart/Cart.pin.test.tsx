@@ -68,6 +68,8 @@ function setup(opts: {
   deliveryGate?: Promise<void>;
   /** The shop's discount codes (discounts/model.ts): none unless the test gives some. */
   discounts?: { doc: unknown };
+  /** Holds the discount codes' read until it resolves. */
+  discountsGate?: Promise<void>;
 }) {
   const store = createAppStore();
   store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
@@ -102,7 +104,10 @@ function setup(opts: {
       if (String(url).startsWith("/arbitrary/resources/search?") && String(url).includes(`identifier=${DISCOUNTS_ID}`)) {
         return json(opts.discounts ? [{ name: SELLER, service: "DOCUMENT", identifier: DISCOUNTS_ID }] : []);
       }
-      if (opts.discounts && url === resourcePath("DOCUMENT", SELLER, DISCOUNTS_ID)) return json(opts.discounts.doc);
+      if (opts.discounts && url === resourcePath("DOCUMENT", SELLER, DISCOUNTS_ID)) {
+        await opts.discountsGate;
+        return json(opts.discounts.doc);
+      }
       if (opts.delivery?.productList && url === resourcePath("DOCUMENT", SELLER, dataContainerIdentifier(STORE_ID))) {
         return json(opts.delivery.productList);
       }
@@ -486,15 +491,55 @@ describe("checkout (pinned)", () => {
     await press("Continue");
     fireEvent.change(await screen.findByRole("combobox", { name: /Country/ }), { target: { value: "Portugal" } });
     fireEvent.click(await screen.findByRole("option", { name: "Portugal" }));
-    const collect = await screen.findByRole("radio", { name: /Collect it: Pick up/ });
-    expect(collect).toHaveAccessibleName(/Rua Augusta 10, Lisbon, Portugal · Mon–Fri 10:00–18:00/);
-    fireEvent.click(collect);
+    // Nothing else reaches Portugal, so the buyer collects it, told where and when.
+    expect(await screen.findByText(/you collect it \(Pick up: Rua Augusta 10, Lisbon, Portugal · Mon–Fri 10:00–18:00\)/)).toBeInTheDocument();
     await press("Continue");
     await press(/^Pay 12\.00 QORT$/);
     await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
     const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
     expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
     expect(order.delivery.shippingAddress).toMatchObject({ streetAddress: "", country: "Portugal", deliveryNote: `Delivery: Pick up. Contact: Q-Mail: ${BUYER}.` });
+  });
+
+  it("Pay waits while a code is checked, and an answer for an order already paid is dropped (review)", async () => {
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts: [{ id: "half", code: await codeHash(STORE_ID, "HALF"), percent: 50 }] };
+    const { q } = setup({ items: [{ product: mug, qty: 2 }], discounts: { doc }, discountsGate: gate });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Have a discount code?" }));
+    fireEvent.change(within(dialog).getByLabelText(/Discount code/), { target: { value: "HALF" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(await within(dialog).findByRole("button", { name: /^Pay / })).toBeDisabled();
+    open();
+    expect(await within(dialog).findByText("Discount HALF: 50% off")).toBeInTheDocument();
+    await press(/^Pay 1\.50 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")).toHaveLength(1);
+  });
+
+  it("a shop whose only delivery reaching the buyer is a pickup makes them collect it (review)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      base: { name: "Local pickup", pickup: true },
+      options: [{ id: "courier", name: "Courier" }],
+      general: { zones: [zone({ first: 0 })] },
+      profiles: [],
+      updated: 1,
+    };
+    setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    fireEvent.change(await screen.findByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    // Courier isn't priced in the zone: nothing delivers, so no "Deliver it to me".
+    expect(await screen.findByText(/doesn't deliver: you collect it \(Local pickup\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Deliver it to me" })).toBeNull();
+    expect(screen.queryByLabelText(/Street address/i)).toBeNull();
   });
 
   const discountsDoc = (discounts: unknown[]) => ({ v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts });
