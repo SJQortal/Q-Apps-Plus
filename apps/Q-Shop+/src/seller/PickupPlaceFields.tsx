@@ -17,7 +17,7 @@ export function PickupPlaceFields({ place, onChange, disabled, name }: { place: 
     <Box
       role="group"
       aria-label={`Pickup point: ${name || "this option"}`}
-      sx={{ gridColumn: "1 / -1", display: "grid", gap: 1.5, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) minmax(0, 2fr)" }, p: 1.5, mt: -0.5, borderRadius: 1.5, bgcolor: "action.hover" }}
+      sx={{ gridColumn: "1 / -1", display: "grid", gap: 1.5, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) minmax(0, 2fr)" }, p: 1.5, mt: -0.5, borderRadius: 1.5, border: 1, borderColor: "divider" }}
     >
       <Autocomplete
         options={countries}
