@@ -205,6 +205,16 @@ describe("the products tab", () => {
     expect(copy.isUpdate).toBeUndefined();
   });
 
+  it("a counted product's copy asks for its own stock instead of taking the original's count", async () => {
+    const { copyValues } = await import("../pages/ProductManager/NewProduct/NewProduct");
+    const { formValuesFor } = await import("./productDraft");
+    const counted = { ...poster, stock: { v: 1, quantity: 10, since: 1000, voided: ["ORDER1"] } };
+    const copy = copyValues(formValuesFor(counted, ["QORT"]));
+    expect(copy.stock).toEqual({ tracked: true, quantity: "" });
+    const { stockFormProblem } = await import("../stock/catalog");
+    expect(stockFormProblem(copy.stock)).not.toBeNull();
+  });
+
   it("publishes a product's pictures past the third in a document of their own, first; the catalogue keeps 3", async () => {
     stubNode();
     const { q, store } = setup({ PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true });

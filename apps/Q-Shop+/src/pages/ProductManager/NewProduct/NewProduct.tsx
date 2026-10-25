@@ -67,7 +67,9 @@ export interface ProductDialogProps {
 export function copyValues(values: ProductFormValues): ProductFormValues {
   const { auction: _auction, ...rest } = values;
   const category = listedCategory(values.category) ?? suggestCategory(values.title) ?? "";
-  return { ...rest, title: `${values.title.trim()} (copy)`.slice(0, 180), category, sale: "fixed", variants: null, status: "AVAILABLE" };
+  // A counted product's copy counts its own stock: the seller types it (the original's count, its date and its voided orders stay with it).
+  const stock = values.stock ? { tracked: values.stock.tracked, quantity: values.stock.saved ? "" : values.stock.quantity } : values.stock;
+  return { ...rest, title: `${values.title.trim()} (copy)`.slice(0, 180), category, sale: "fixed", variants: null, status: "AVAILABLE", stock };
 }
 
 type Base = Record<string, any> & { id: string };
