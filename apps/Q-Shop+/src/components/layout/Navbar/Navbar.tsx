@@ -14,6 +14,8 @@ import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
 import AddBusinessOutlinedIcon from "@mui/icons-material/AddBusinessOutlined";
 import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
+import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
+import { useShowNames } from "../../../utils/namesSetting";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
 import FavoriteIcon from "@mui/icons-material/Favorite";
@@ -66,6 +68,8 @@ const NavBar: React.FC = () => {
   const sell = useSell();
   const sellLabel = useSellLabel();
   const section = navSection(pathname);
+  // Names for sale (names/NamesPage.tsx), unless Settings hides them.
+  const showNames = useShowNames();
 
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -116,6 +120,17 @@ const NavBar: React.FC = () => {
               <LocalMallOutlinedIcon aria-hidden />
               Products
             </NavLinkButton>
+            {showNames && (
+              <NavLinkButton
+                type="button"
+                active={section === "names"}
+                aria-current={section === "names" ? "page" : undefined}
+                onClick={() => navigate("/names")}
+              >
+                <BadgeOutlinedIcon aria-hidden />
+                Names
+              </NavLinkButton>
+            )}
             <NavLinkButton
               type="button"
               active={section === "orders"}

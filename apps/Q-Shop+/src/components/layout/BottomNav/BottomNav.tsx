@@ -197,7 +197,8 @@ export function BottomNav() {
   return (
     <Bar aria-label="Main" compact={compact}>
       {nav.map((item) => {
-        const active = item.key === section;
+        // Names share Products' place on phones (a switch at the top of both pages: names/NamesPage.tsx).
+        const active = item.key === section || (item.key === "products" && section === "names");
         return (
           <Item
             key={item.key}

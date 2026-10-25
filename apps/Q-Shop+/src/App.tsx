@@ -23,6 +23,7 @@ const MyOrders = lazy(() => import("./pages/MyOrders/MyOrders").then((m) => ({ d
 const CartPage = lazy(() => import("./pages/Cart/CartPage").then((m) => ({ default: m.CartPage })));
 const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const FavoritesPage = lazy(() => import("./pages/Favorites/FavoritesPage").then((m) => ({ default: m.FavoritesPage })));
+const NamesPage = lazy(() => import("./names/NamesPage").then((m) => ({ default: m.NamesPage })));
 
 function RouteFallback() {
   return (
@@ -48,6 +49,7 @@ function App() {
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/favorites" element={<FavoritesPage />} />
                 <Route path="/products" element={<ProductsPage />} />
+                <Route path="/names" element={<NamesPage />} />
                 <Route path="/:user/:store" element={<Store />} />
                 <Route path="/" element={<StoreList />} />
               </Routes>

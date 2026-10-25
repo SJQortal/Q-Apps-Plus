@@ -71,7 +71,7 @@ describe("AppShell on desktop", () => {
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("main")).toContainElement(screen.getByTestId("where"));
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Orders", "Manage Shop"]);
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Names", "Orders", "Manage Shop"]);
     expect(within(nav).getByRole("button", { name: "Orders" })).toHaveAttribute("aria-current", "page");
     fireEvent.click(within(nav).getByRole("button", { name: "Products" }));
     expect(where()).toBe("/products");
@@ -265,7 +265,7 @@ describe("Manage Shop or Create Shop", () => {
     const store = newSellerStore("none");
     renderShell({ store });
     const nav = screen.getByRole("navigation", { name: "Main" });
-    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Orders", "Create Shop"]);
+    expect(within(nav).getAllByRole("button").map((b) => b.textContent)).toEqual(["Shops", "Products", "Names", "Orders", "Create Shop"]);
     fireEvent.click(within(nav).getByRole("button", { name: "Create Shop" }));
     expect(store.getState().global.isOpenCreateStoreModal).toBe(true);
   });

@@ -11,6 +11,8 @@ export interface StoredSettings {
   preferredCoin?: string;
   /** How a shop shows its products (utils/productView.ts). */
   productView?: string;
+  /** Show names for sale (utils/namesSetting.ts); absent: shown. */
+  showNames?: boolean;
 }
 
 /**

@@ -16,6 +16,7 @@
  * The URL keeps the search, sort, categories and stock filter, and Back from
  * a product comes back to the same place in the list.
  */
+import { ProductsNamesSwitch } from "../../names/NamesPage";
 import { useStockLeft } from "../../stock/notes";
 import { withStockLeft } from "../Store/shopData";
 import {
@@ -601,6 +602,7 @@ export function ProductsPage() {
   return (
     <Page>
       {(pull > 0 || refreshing) && <PullIndicator pull={pull} refreshing={refreshing} />}
+      <ProductsNamesSwitch current="products" />
       <PageHeader title="Products" subtitle="What every shop has for sale, in one place." />
       {showControls && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>

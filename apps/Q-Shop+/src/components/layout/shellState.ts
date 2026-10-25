@@ -72,10 +72,11 @@ export function sellerPath(storeId: string): string {
 }
 
 /** Which navigation item a path belongs to. Shop and product pages count as Shops. */
-export type NavSection = "shops" | "products" | "cart" | "orders" | "sell" | "settings" | "favorites";
+export type NavSection = "shops" | "products" | "names" | "cart" | "orders" | "sell" | "settings" | "favorites";
 
 export function navSection(pathname: string): NavSection {
   if (pathname === "/products" || pathname.startsWith("/products/")) return "products";
+  if (pathname === "/names") return "names";
   if (pathname.startsWith("/cart")) return "cart";
   if (pathname.startsWith("/my-orders")) return "orders";
   if (pathname.startsWith("/product-manager")) return "sell";

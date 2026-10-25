@@ -26,6 +26,9 @@ const WRITE_ACTIONS = new Set([
   'VOTE_ON_POLL',
   'DELETE_LIST_ITEM',
   'ADD_LIST_ITEMS',
+  'SELL_NAME',
+  'CANCEL_SELL_NAME',
+  'BUY_NAME',
 ]);
 
 export interface QortalMock {
