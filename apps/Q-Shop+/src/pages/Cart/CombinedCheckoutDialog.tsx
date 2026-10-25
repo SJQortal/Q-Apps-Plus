@@ -547,6 +547,11 @@ export function CombinedCheckoutDialog({
             Keep this window open until Hub has finished.
           </Typography>
         )}
+        {step === "result" && payable.some((p) => runs[p.key]?.state === "done") && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            My orders shows each order&apos;s status, and its tracking number when the seller adds one. When one arrives, mark it delivered, then review the shop.
+          </Typography>
+        )}
       </Stack>
     );
     actions =
