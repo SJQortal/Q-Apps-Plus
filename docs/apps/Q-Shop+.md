@@ -787,6 +787,22 @@ Simon, going to sleep: *"do a deep dive into our q-shop in general, investigate 
 - **Also:** **Ships to** on the Products page too, reading the listed shops five at a time (`a762c3b9`); a buyer's order shows the shop's returns and dispatch time under its status (`081e4c42`, one more cached read of the shop's JSON, which the pinned order read now names); an owner's own shop page says how many steps bring it up to date, with **Open the checkup**, so sellers who never open Manage Shop hear of it (`a75d26f7`); sellers say which **languages** they answer in (Edit shop → Policies), shown with the shop's policies everywhere they show (`0a164d94`, `337f9559`); the seller's Products list badges products on sale (`efb92477`); Settings shows the country delivery prices are worked out for, to change or forget (`71eb8684`); typed Ships to reads more (US in capitals, CONUS, World, a US state, countries in their own words: 90 of the local node's 110 typed texts now give countries, 84 before, `8931cde2`).
 - **Tests:** 1122 → 1164.
 
+**Review** (an agent that hadn't seen the work read tonight's diff; it checked checkout prices against the delivery estimate on 2,807 random carts, 0 mismatches, and React's rules; each fix its own commit):
+- Change status, Fix categories, retiring fee products and Running low start from a product's draft waiting in Ready to publish, so its unpublished edits aren't lost (`2403339e`).
+- Duplicate of a counted product asks for its own stock instead of copying the original's count (`761e2519`).
+- Typed Ships to no longer reads "South America" or "Latin America" as the United States (Latin America gives its own regions), "Rhode Island" as Iceland, or "New Jersey" as Jersey (`fc7a47ba`, tests `2eb4cd7d`).
+- A price before the sale left unchanged keeps its own currency: a product's "20.00 EUR" edited after the shop stopped pricing in EUR, or a variant priced in QORT under a lead priced in a currency, was saved as 20 QORT (`f880a9fa`).
+- The owner's shop page counts open steps as the checkup does: a digital shop isn't asked where it ships, a shop that ships is asked its dispatch time (`fbe8815e`).
+- The checkup finds fee products by a title that is a fee ("Shipping to the EU", "Postage", "EU delivery cost"), no longer "Ceramic mug – free shipping", "Porto Tawny" or "Toy delivery van"; **They're not delivery fees** leaves the step out on that device (`ff7dba4a`).
+- A short tracking number that happens to be in the note ("2" in "2 parcels") still gets its Tracking line for the original app (`ef4a2fcc`).
+- The Shops page says it's checking which shops ship to the chosen country, not only which take a coin (`324f9688`); Forget it in the country picker shows only for a country picked there, not one from the address kept at checkout (`a76e97eb`).
+- The seller page's seven tabs fit from about 680 px (12 px a side below 900 px): at 700 px "Shop Settings" was cut off (`c3f70597`). The first tab looked cut off too in 700 px screenshots, but the page never scrolled the strip: MUI's Tabs mis-measure during Chromium's full-page capture.
+- A shop's policies dialog names the languages its seller answers in, as the lines above it do (`1480c61f`).
+- Warning and success words read at 4.5:1 in every theme and mode (`404d37e9`, `theme/statusText.ts`): the White run's axe found "2 left" in Running low at 3:1, since the kit has no warning colour and MUI's default orange is too light on white (Hub 3.0 light's green reads at 2.7:1 too). The palette's own colour is darkened or lightened until it reads, in Running low, delivery on product pages and in the cart, and Ships to you. A warning colour in the kit itself is Follow-up 88.
+- The walkthrough's policies points and the 1.0 notes mention languages, the away notice and Ships to on Products (`fc66ada2`, `cbcffdb1`).
+- **Screens:** the full Hub 3.0 run (107 screens × 5 sizes, 523 captures) had 12 script failures and nothing wrong in the app: product-zoom counted repeated pictures that the product page now shows once; product-delivery didn't expect the country an earlier screen had kept; the seller's product scripts relied on Lamp 11's row, the last, being named without scrolling (`acf593ac`). After the fixes: the review's screens in Hub 3.0 at five sizes (95 captures); the seller page, policies and checkup again, and the newest screens in Classic and White (60, where White's axe found the orange above); the contrast screens in White and in Hub 3.0 and Classic light (105); the walkthrough's longer steps in Hub 3.0 and Classic (20): 0 console errors, overflow, unlabelled buttons and axe.
+- **Tests:** 1164 → 1175.
+
 **Script for the Hub check** (Tester accounts; every payment and publish is Simon's to confirm):
 1. A browser profile without `qshopplus-walkthrough`: the notice, then Welcome. Skip; Settings → About → Show the walkthrough and Seller guide.
 2. As the seller: Manage Shop (the seller guide opens once), the checkup on Overview: Fix categories → Add to drafts → Publish; Edit shop → Choose countries and Policies → Save; Delivery tab → Standard note, add Express and Local pickup, price them in a zone → Publish.
@@ -807,7 +823,7 @@ Simon, going to sleep: *"do a deep dive into our q-shop in general, investigate 
 
 ## Follow-ups
 
-**Round 5, 2026-10-25 (night): questions for Simon (75–87)**
+**Round 5, 2026-10-25 (night): questions for Simon (75–89)**
 
 75. **The Hub check** above wasn't done: no test Hub was running and the normal Hub is on your main account, so no purchase was made (0.1 QORT and BHC were allowed). Run the script, or start a test Hub with the debug port for the next session.
 76. **Delivery options:** up to 4 besides the zones' own prices. Enough? And should "Local pickup" ask for no address at checkout (today every physical order gives one)?
@@ -822,6 +838,8 @@ Simon, going to sleep: *"do a deep dive into our q-shop in general, investigate 
 85. **The walkthrough's texts** (`onboarding/tours.tsx`): read them once; they're what every new user sees first.
 86. **Away** keeps orders open (a seller who wants none marks products out of stock, now several at once). Should "away" also stop checkout in Q-Shop+ (the original would still sell)?
 87. **Recently viewed** stays on the device (never published). Also on the Shops page, or only Products?
+88. **A warning colour in the theme kit:** the kit sets success and error per theme but not warning, so MUI's default orange (3:1 on white) is what every app gets. Q-Shop+ now darkens or lightens it for text (`theme/statusText.ts`). Add a readable `warning` to each theme in `shared/hub-theme` instead (a `Repo:` change that touches every app)?
+89. **They're not delivery fees** (the checkup's fee step) is remembered on that device only. Enough, or keep it with the shop (an additive field)?
 
 **Round 5, 2026-10-24: questions for Simon on variants (55–62)**
 
