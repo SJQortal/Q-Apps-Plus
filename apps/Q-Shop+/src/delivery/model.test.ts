@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { priceCheckout } from "../money/checkout";
 import type { CartLine } from "../money/order";
 import { SHIPPING_REGIONS } from "../constants/shipping";
-import { DELIVERY_LINE_ID, deliveryDocOf, deliveryOptionsOf, isDeliveryLine, quoteDelivery, type DeliveryDoc } from "./model";
+import { DELIVERY_LINE_ID, deliveryDocOf, deliveryOptionsOf, isDeliveryLine, pickupDays, pickupText, quoteDelivery, type DeliveryDoc } from "./model";
 
 const STORE = "q-store-general-my-shop";
 const EUROPE = [...SHIPPING_REGIONS[0].codes];
@@ -121,6 +121,30 @@ describe("delivery prices", () => {
       STORE
     );
     expect(parsed?.options?.map((o) => o.id)).toEqual(["a", "c", "d", "e"]);
+  });
+
+  it("read a pickup point's place, say where and when, and offer it free only in its country", () => {
+    const parsed = deliveryDocOf(
+      {
+        ...doc(),
+        options: [
+          { id: "p", name: "Pick up", pickup: true, place: { country: "PT", address: " Rua Augusta 10 ", days: [6, 1, 2, 3, 4, 5, 9], from: "10:00", to: "25:00" } },
+          { id: "q", name: "Shop", pickup: true, place: { country: "PT", address: "", days: [1] } },
+        ],
+      },
+      STORE
+    ) as DeliveryDoc;
+    expect(parsed.options?.[0].place).toEqual({ country: "PT", address: "Rua Augusta 10", days: [1, 2, 3, 4, 5, 6], from: "10:00" });
+    expect(parsed.options?.[1].place).toBeUndefined();
+    expect(pickupDays([1, 2, 3, 4, 5])).toBe("Mon–Fri");
+    expect(pickupDays([1, 3, 6, 0])).toBe("Mon, Wed, Sat, Sun");
+    expect(pickupDays([0, 1, 2, 3, 4, 5, 6])).toBe("every day");
+    expect(pickupText({ country: "PT", address: "Rua Augusta 10", days: [1, 2, 3, 4, 5], from: "10:00", to: "18:00" })).toBe("Rua Augusta 10, Portugal · Mon–Fri 10:00–18:00");
+    expect(deliveryOptionsOf(parsed)[1].note).toBe("Rua Augusta 10, Portugal · Mon–Sat from 10:00");
+    const lines = [line("ghee", 2, 10)];
+    const quote = (country: string) => quoteDelivery({ doc: parsed, lines, country, state: "", pricing, takesArrr: true, option: "p" });
+    expect(quote("Portugal")).toEqual({ kind: "free", parts: [], option: { id: "p", name: "Pick up" } });
+    expect(quote("Poland")).toEqual({ kind: "option-unavailable" });
   });
 
   it("keep which options the buyer collects, the zones' own included (only a true pickup flag counts)", () => {

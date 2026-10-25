@@ -471,6 +471,32 @@ describe("checkout (pinned)", () => {
     expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
   });
 
+  it("a pickup point is offered free in its own country, even one the zones don't deliver to (+ app)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({})] },
+      profiles: [],
+      updated: 1,
+      options: [{ id: "shop", name: "Pick up", pickup: true, place: { country: "PT", address: "Rua Augusta 10, Lisbon", days: [1, 2, 3, 4, 5], from: "10:00", to: "18:00" } }],
+    };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    fireEvent.change(await screen.findByRole("combobox", { name: /Country/ }), { target: { value: "Portugal" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Portugal" }));
+    const collect = await screen.findByRole("radio", { name: /Collect it: Pick up/ });
+    expect(collect).toHaveAccessibleName(/Rua Augusta 10, Lisbon, Portugal · Mon–Fri 10:00–18:00/);
+    fireEvent.click(collect);
+    await press("Continue");
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
+    expect(order.delivery.shippingAddress).toMatchObject({ streetAddress: "", country: "Portugal", deliveryNote: `Delivery: Pick up. Contact: Q-Mail: ${BUYER}.` });
+  });
+
   const discountsDoc = (discounts: unknown[]) => ({ v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts });
 
   /** At Confirm: "Have a discount code?", the code, Apply. */

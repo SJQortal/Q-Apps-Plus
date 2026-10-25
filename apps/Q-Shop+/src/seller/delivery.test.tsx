@@ -176,23 +176,37 @@ describe("the Delivery tab", () => {
     expect(doc.general.zones[0]).toMatchObject({ countries: ["US"], first: 3, rates: { [doc.options[0].id]: { first: 12 } } });
   });
 
-  it("marks a pickup option as collected by the buyer (no address at checkout), ticked for Local pickup", async () => {
+  it("adds a pickup point with its country, address, days and hours: collected by the buyer, no address at checkout", async () => {
     const { q } = setup();
     const options = await screen.findByRole("region", { name: "Delivery options" });
-    fireEvent.click(within(options).getByRole("button", { name: "Local pickup" }));
-    expect(within(options).getByRole("checkbox", { name: /Buyers collect it.*\(Local pickup\)/ })).toBeChecked();
-    expect(within(options).getByRole("checkbox", { name: /Buyers collect it.*\(Standard\)/ })).not.toBeChecked();
+    fireEvent.click(within(options).getByRole("button", { name: "Add a pickup point" }));
+    expect(within(options).getByRole("checkbox", { name: /Buyers collect it.*\(Pick up\)/ })).toBeChecked();
+    const point = within(options).getByRole("group", { name: "Pickup point: Pick up" });
+    // Weekdays 10–18 to start with; Saturday added, Monday taken off.
+    expect(within(point).getByRole("button", { name: "Mon" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(point).getByRole("button", { name: "Sat" }));
+    fireEvent.click(within(point).getByRole("button", { name: "Mon" }));
+    fireEvent.change(within(point).getByLabelText(/^To/), { target: { value: "17:30" } });
     const general = await card("General");
     fireEvent.click(within(general).getByRole("button", { name: "Add a zone" }));
     const d = await dialog();
     fireEvent.click(within(d).getByRole("button", { name: "USA: the United States, every state" }));
+    // A pickup point isn't priced by zone.
+    expect(within(d).queryByRole("switch", { name: "Offer Pick up here" })).toBeNull();
     fireEvent.change(within(d).getAllByLabelText(/^First item/)[0], { target: { value: "3" } });
     fireEvent.click(within(d).getByRole("button", { name: "Save zone" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    expect(await screen.findByText("Give each pickup point its country, address and the days it's open.")).toBeInTheDocument();
+    fireEvent.change(within(point).getByRole("combobox", { name: /Country/ }), { target: { value: "Portugal" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Portugal" }));
+    fireEvent.change(within(point).getByLabelText(/^Pickup address/), { target: { value: "Rua Augusta 10, Lisbon" } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     const doc = decodeData64((q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any).data64);
-    expect(doc.options).toEqual([{ id: expect.any(String), name: "Local pickup", pickup: true }]);
+    expect(doc.options).toEqual([
+      { id: expect.any(String), name: "Pick up", pickup: true, place: { country: "PT", address: "Rua Augusta 10, Lisbon", days: [2, 3, 4, 5, 6], from: "10:00", to: "17:30" } },
+    ]);
   });
 
   it("shows the published prices, and asks to check them when the shop prices in another currency now", async () => {

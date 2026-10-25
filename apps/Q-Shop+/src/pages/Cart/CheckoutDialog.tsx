@@ -243,14 +243,14 @@ export function CheckoutDialog({
     setDeliveryProblem(null);
   };
 
-  // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here.
-  // ... and in the United States, its states when it ships to some only.
-  const noShipping = !isDigital && delivery.country ? placeNotShipped(shop, delivery.country, delivery.state) : null;
   // The pickups the shop offers in the buyer's country, worked out before any street is typed.
   const pickups = !isDigital && prices ? pickupChoices({ shop, delivery: prices, lines, address: delivery, coin, rate }) : [];
   // A shop whose every option is collected has no delivery to an address.
   const onlyPickup = !!prices?.doc && deliveryOptionsOf(prices.doc).every((o) => o.pickup);
   const collecting = pickups.length > 0 && (collect || onlyPickup);
+  // The shop's own list of countries (constants/shipping.ts): a country it doesn't ship to stops here, unless the buyer collects.
+  // ... and in the United States, its states when it ships to some only.
+  const noShipping = !isDigital && !collecting && delivery.country ? placeNotShipped(shop, delivery.country, delivery.state) : null;
 
   const fromDelivery = async () => {
     if (quoting) return;
@@ -269,16 +269,21 @@ export function CheckoutDialog({
       const prices = await loadShopDelivery(shop.owner, shop.id);
       const options = deliveryChoices({ shop, delivery: prices, lines, address: delivery, coin, rate });
       // Collecting: the pickups only; delivered: every other option.
-      offered = !options.ok
-        ? []
-        : collecting
-          ? pickupChoices({ shop, delivery: prices, lines, address: delivery, coin, rate })
-          : options.choices.filter((c) => !c.pickup);
+      // A pickup doesn't need the zones to deliver there.
+      offered = collecting
+        ? pickupChoices({ shop, delivery: prices, lines, address: delivery, coin, rate })
+        : options.ok
+          ? options.choices.filter((c) => !c.pickup)
+          : [];
       // The option picked before (Back to the address, then Continue) while it's still offered, else the first.
       const picked = offered.find((c) => c.id === optionId) ?? offered[0];
-      charge = !options.ok
-        ? options
-        : picked
+      charge = collecting
+        ? picked
+          ? { ok: true, line: picked.line, free: picked.free, option: { id: picked.id, name: picked.name } }
+          : { ok: false, message: "That pickup isn't offered for this order there." }
+        : !options.ok
+          ? options
+          : picked
           ? { ok: true, line: picked.line, free: picked.free, option: { id: picked.id, name: picked.name } }
           : deliveryCharge({ shop, delivery: prices, lines, address: delivery, coin, rate });
     } catch {

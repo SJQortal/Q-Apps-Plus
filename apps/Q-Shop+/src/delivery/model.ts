@@ -41,7 +41,7 @@
 import type { CartLine } from "../money/order";
 import { formatPrice, qortPrice, type PricedProduct } from "../money/pricing";
 import { coinPriceFromFiat, fiatPriceOf, formatFiat, priceDecimals, priceListFromFiat, type FiatPricing } from "../money/fiatPricing";
-import { ALL_COUNTRY_CODES, ALL_STATE_CODES, US, countryCode, stateCode } from "../constants/shipping";
+import { ALL_COUNTRY_CODES, ALL_STATE_CODES, US, countryCode, countryName, stateCode } from "../constants/shipping";
 
 export const DELIVERY_LINE_ID = "q-store-delivery";
 export const MAX_PROFILES = 20;
@@ -80,6 +80,56 @@ export interface DeliveryOption {
   note?: string;
   /** The buyer collects it: checkout asks who and how to reach them, no address (Simon, 2026-10-25). */
   pickup?: true;
+  /** Where and when it's collected (a pickup point): offered to buyers in its country, free. */
+  place?: PickupPlace;
+}
+
+/** A pickup point (Simon, 2026-10-25: "country, pickup location, days of the week and time"). */
+export interface PickupPlace {
+  /** ISO code of its country. */
+  country: string;
+  address: string;
+  /** Days it's open: 0 Sunday … 6 Saturday. */
+  days: number[];
+  /** Opening hours, "HH:MM". */
+  from?: string;
+  to?: string;
+}
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+/** The week from Monday, as days are listed. */
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+export const DAY_NAME = DAY_NAMES;
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export function pickupPlaceOf(raw: unknown): PickupPlace | null {
+  const p = raw as Partial<Record<keyof PickupPlace, unknown>> | null;
+  if (!p || typeof p !== "object" || typeof p.country !== "string" || !COUNTRIES.has(p.country)) return null;
+  const address = typeof p.address === "string" ? p.address.trim().slice(0, 160) : "";
+  const days = Array.isArray(p.days) ? [...new Set(p.days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6))] : [];
+  if (!address || days.length === 0) return null;
+  const from = typeof p.from === "string" && TIME.test(p.from) ? p.from : undefined;
+  const to = typeof p.to === "string" && TIME.test(p.to) ? p.to : undefined;
+  return { country: p.country, address, days: WEEK_ORDER.filter((d) => days.includes(d)), ...(from && { from }), ...(to && { to }) };
+}
+
+/** "Mon–Fri, Sun": days in a row joined. */
+export function pickupDays(days: readonly number[]): string {
+  const order = WEEK_ORDER.filter((d) => days.includes(d));
+  if (order.length === 7) return "every day";
+  const runs: number[][] = [];
+  for (const d of order) {
+    const last = runs[runs.length - 1];
+    if (last && WEEK_ORDER.indexOf(d) === WEEK_ORDER.indexOf(last[last.length - 1]) + 1) last.push(d);
+    else runs.push([d]);
+  }
+  return runs.map((r) => (r.length > 2 ? `${DAY_NAMES[r[0]]}–${DAY_NAMES[r[r.length - 1]]}` : r.map((d) => DAY_NAMES[d]).join(", "))).join(", ");
+}
+
+/** "Rua Augusta 10, Lisbon, Portugal · Mon–Fri 10:00–18:00" */
+export function pickupText(place: PickupPlace): string {
+  const hours = place.from && place.to ? ` ${place.from}–${place.to}` : place.from ? ` from ${place.from}` : place.to ? ` until ${place.to}` : "";
+  return `${place.address}, ${countryName(place.country)} · ${pickupDays(place.days)}${hours}`;
 }
 
 export interface DeliveryProfile {
@@ -179,7 +229,9 @@ export function deliveryDocOf(raw: unknown, storeId: string): DeliveryDoc | null
     const name = textOf(raw?.name, 40);
     if (!id || !name || options.some((x) => x.id === id)) continue;
     const note = textOf(raw?.note, 80);
-    options.push({ id, name, ...(note && { note }), ...(raw?.pickup === true && { pickup: true as const }) });
+    const pickup = raw?.pickup === true;
+    const place = pickup ? pickupPlaceOf(raw?.place) : null;
+    options.push({ id, name, ...(note && { note }), ...(pickup && { pickup: true as const }), ...(place && { place }) });
     if (options.length >= MAX_OPTIONS) break;
   }
   const baseRaw = d.base as { name?: unknown; note?: unknown; pickup?: unknown } | undefined;
@@ -209,7 +261,9 @@ export interface DeliveryChoiceInfo {
 
 /** Every option the doc names, the zones' own prices first. */
 export function deliveryOptionsOf(doc: DeliveryDoc): DeliveryChoiceInfo[] {
-  return [{ id: "", name: doc.base?.name ?? BASE_OPTION_NAME, ...(doc.base?.note && { note: doc.base.note }), ...(doc.base?.pickup && { pickup: true as const }) }, ...(doc.options ?? [])];
+  // A pickup point says where and when after the seller's own note.
+  const options = (doc.options ?? []).map(({ place, ...o }) => (place ? { ...o, note: [o.note, pickupText(place)].filter(Boolean).join(" · ") } : o));
+  return [{ id: "", name: doc.base?.name ?? BASE_OPTION_NAME, ...(doc.base?.note && { note: doc.base.note }), ...(doc.base?.pickup && { pickup: true as const }) }, ...options];
 }
 
 /** The profile a product is delivered with: the first custom one naming it, else the general one (null). */
@@ -287,6 +341,11 @@ export function quoteDelivery(args: {
   if (doc.currency !== "QORT" && (!pricing || pricing.currency !== doc.currency)) return { kind: "no-rates" };
   const country = countryCode(args.country);
   const state = country === US ? stateCode(args.state) : null;
+  // A pickup point: collected in its own country, free; the zones don't come into it.
+  if (chosen?.place) {
+    if (country !== chosen.place.country) return { kind: "option-unavailable" };
+    return { kind: "free", parts: [], option: { id: chosen.id, name: chosen.name } };
+  }
   const groups = new Map<string, { profile: DeliveryProfile | null; lines: CartLine[] }>();
   for (const line of physical) {
     const profile = profileFor(doc, line.productId);

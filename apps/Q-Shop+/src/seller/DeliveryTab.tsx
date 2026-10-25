@@ -27,6 +27,8 @@ import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
 import { ResponsiveDialog } from "../components/common/mobile";
 import type { SellerRow } from "./productList";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
+import { NEW_PICKUP_PLACE, PickupPlaceFields } from "./PickupPlaceFields";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 
 const uid = new ShortUniqueId({ length: 8 });
 const newId = () => uid();
@@ -88,13 +90,23 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
         if (o.id !== id) return o;
         const { pickup, ...rest } = patch;
         const next: DeliveryOption = { ...o, ...rest, name: (rest.name ?? o.name).slice(0, 40), ...(rest.note !== undefined && { note: rest.note.slice(0, 80) }) };
-        if (pickup === true) next.pickup = true;
-        if (pickup === false) delete next.pickup;
+        // A pickup gets its place (country, address, days, hours); taking the tick off takes it away.
+        if (pickup === true) {
+          next.pickup = true;
+          next.place = next.place ?? { ...NEW_PICKUP_PLACE };
+        }
+        if (pickup === false) {
+          delete next.pickup;
+          delete next.place;
+        }
         return next;
       }),
     });
   const addOption = (name: string) =>
-    onChange({ ...doc, options: [...options, { id: newId(), name, ...(PICKUP_NAME.test(name) && { pickup: true as const }) }].slice(0, MAX_OPTIONS) });
+    onChange({
+      ...doc,
+      options: [...options, { id: newId(), name, ...(PICKUP_NAME.test(name) && { pickup: true as const, place: { ...NEW_PICKUP_PLACE } }) }].slice(0, MAX_OPTIONS),
+    });
   const removeOption = (id: string) => {
     // Its prices go from every zone too.
     const strip = (zones: DeliveryZone[]) =>
@@ -157,7 +169,7 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
             <TextField
               label="Note (optional)"
               value={o.note ?? ""}
-              placeholder={o.name.toLowerCase().includes("pickup") ? "Where and when to collect" : "1–3 days"}
+              placeholder={o.place ? "Ring at the side door" : o.pickup ? "Where and when to collect" : "1–3 days"}
               onChange={(e) => setOption(o.id, { note: e.target.value })}
               disabled={disabled}
               slotProps={{ htmlInput: { maxLength: 80 }, inputLabel: { shrink: true } }}
@@ -166,6 +178,17 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
               <DeleteOutlineOutlinedIcon />
             </IconButton>
             <PickupTick checked={!!o.pickup} onChange={(pickup) => setOption(o.id, { pickup })} disabled={disabled} name={o.name} />
+            {o.place ? (
+              <PickupPlaceFields place={o.place} onChange={(place) => setOption(o.id, { place })} disabled={disabled} name={o.name} />
+            ) : (
+              o.pickup && (
+                <Box sx={{ gridColumn: "1 / -1", mt: -1 }}>
+                  <Button size="small" onClick={() => setOption(o.id, { place: { ...NEW_PICKUP_PLACE } })} disabled={disabled} sx={{ minHeight: 44 }}>
+                    Add the pickup address, days and hours
+                  </Button>
+                </Box>
+              )
+            )}
           </Box>
         ))}
       </Box>
@@ -173,6 +196,9 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
           <Button startIcon={<AddIcon />} onClick={() => addOption(ideas[0] ?? `Option ${options.length + 2}`)} disabled={disabled} sx={{ minHeight: 44 }}>
             Add an option
+          </Button>
+          <Button startIcon={<StorefrontOutlinedIcon />} onClick={() => addOption("Pick up")} disabled={disabled} sx={{ minHeight: 44 }}>
+            Add a pickup point
           </Button>
           {ideas.slice(0, 3).map((idea) => (
             <Button key={idea} variant="outlined" color="inherit" size="small" onClick={() => addOption(idea)} disabled={disabled} sx={{ minHeight: 36 }}>
@@ -381,6 +407,9 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
     if (!name || publishing) return;
     setError(null);
     if (doc.options?.some((o) => !o.name.trim())) return setError("Name each delivery option, or remove it.");
+    if (doc.options?.some((o) => o.place && (!o.place.country || !o.place.address.trim() || o.place.days.length === 0))) {
+      return setError("Give each pickup point its country, address and the days it's open.");
+    }
     const next: DeliveryDoc = { ...doc, updated: Date.now() };
     const built = buildDeliveryPublish({ name, doc: next });
     setPublishing(true);
@@ -459,7 +488,7 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
           zones={zones}
           currency={doc.currency}
           disabled={busy}
-          options={doc.options}
+          options={doc.options?.filter((o) => !o.place)}
           baseName={doc.base?.name}
           onEdit={(zone) => setEditing({ profile: id, zone })}
           onRemove={(zone) => removeZone(id, zone)}
@@ -539,7 +568,8 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
         <DeliveryZoneDialog
           zone={editing.zone}
           start={editing.start}
-          options={doc.options ?? []}
+          // A pickup point isn't priced by zone: it's free in its own country.
+          options={(doc.options ?? []).filter((o) => !o.place)}
           baseName={doc.base?.name}
           currency={doc.currency}
           newId={newId}
