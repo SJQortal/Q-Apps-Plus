@@ -708,6 +708,18 @@ export default {
     } },
     { key: 'checkout-all', path: '/cart', overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Check out all 2 shops' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Check out 2 shops' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'product-auction', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 4)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText('3 bids').waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
+    { key: 'product-auction-bids', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 4)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
+      await page.getByText('3 bids').waitFor({ timeout: 8000 });
+      await page.getByRole('button', { name: /^Show bids/ }).click({ timeout: 4000 });
+      await page.getByRole('list', { name: 'Bids, newest first' }).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(500);
+    } },
+    { key: 'seller-view-changes', path: '/product-manager/q-store-general-my-shop?tab=delivery', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add a pickup point' }).click({ timeout: 8000 });
+      await page.getByRole('region', { name: 'Unpublished changes' }).getByRole('button', { name: 'View changes' }).click({ timeout: 4000 });
+      await page.getByRole('dialog', { name: 'Your unpublished changes' }).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(400);
+    } },
     { key: 'product-auction-won', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 8)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/^You won!/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'shop-auctions', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => { await page.getByRole('button', { name: 'Auctions (2)' }).click({ timeout: 8000 }); await page.waitForTimeout(700); } },
     { key: 'seller-auction-edit', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.mouse.wheel(0, 700); await page.waitForTimeout(900); await page.getByRole('button', { name: /^Edit\b.*Ebook 9\b/ }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Edit product' }); await d.getByRole('checkbox', { name: /^Void: Troll Account/ }).scrollIntoViewIfNeeded({ timeout: 10000 }); await page.waitForTimeout(400); } },
