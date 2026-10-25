@@ -122,6 +122,15 @@ describe("home page", () => {
     );
   });
 
+  it("badges a shop whose seller is away, and its card's description says so", async () => {
+    const world = makeWorld();
+    world.shops[23].away = { note: "At a fair" };
+    renderHome({ world, allInView: true });
+    const link = await screen.findByRole("link", { name: "Shop number 23" });
+    await waitFor(() => expect(link).toHaveAccessibleDescription(/Its seller is away\./));
+    expect(within(link.closest("li")!).getByText("Away")).toBeInTheDocument();
+  });
+
   it("shows 20 cards, then the rest as the end of the list comes into view", async () => {
     renderHome({ allInView: true });
     await waitFor(() => expect(cards()).toHaveLength(24));

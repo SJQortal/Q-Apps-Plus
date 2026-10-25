@@ -29,6 +29,8 @@ export interface WorldShop {
   /** The typed "Ships to" (default "Europe") and Q-Shop+'s list of countries. */
   shipsTo?: string;
   shippingCountries?: string[];
+  /** Away for a while (shop/away.ts). */
+  away?: { until?: number; note?: string };
   products: any[];
   logo?: string;
   /**
@@ -147,6 +149,7 @@ export function storeJsonOf(shop: WorldShop) {
     location: "Lisbon",
     shipsTo: shop.shipsTo ?? "Europe",
     ...(shop.shippingCountries ? { shippingCountries: shop.shippingCountries } : {}),
+    ...(shop.away ? { away: shop.away } : {}),
     created: shop.created,
     shortStoreId: shop.shortStoreId,
     logo: shop.logo ?? LOGO,

@@ -7,6 +7,7 @@
  * node gets it and a plain placeholder, never an endless skeleton, if it
  * can't.
  */
+import { awayOf } from "../../../shop/away";
 import { memo, useEffect, useId, type MouseEvent } from "react";
 import { Box, Button, IconButton, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
@@ -209,6 +210,8 @@ function StoreCardView({ shop, mine, rating, favorites = 0, onOpen, onMenu }: St
   }, [json, known, dispatch, shop]);
 
   const { coins, labels } = coinsOf(shop, json);
+  // Its seller is away for a while (shop/away.ts): a badge, and the card's description says so.
+  const away = !!awayOf(json as { away?: unknown } | null);
   const shownCoins = coins.slice(0, MAX_COINS);
   const moreCoins = coins.length - shownCoins.length;
   const summary = [
@@ -216,6 +219,7 @@ function StoreCardView({ shop, mine, rating, favorites = 0, onOpen, onMenu }: St
     rating ? `Rated ${formatRating(rating.average)} out of 5 from ${rating.count} ${rating.count === 1 ? "review" : "reviews"}.` : "",
     favorites > 0 ? `${favorites === 1 ? "1 buyer keeps it" : `${favorites} buyers keep it`} as a favourite.` : "",
     `Pays in ${labels.join(", ")}.`,
+    away ? "Its seller is away." : "",
     mine ? "Your shop." : "",
   ]
     .filter(Boolean)
@@ -249,6 +253,25 @@ function StoreCardView({ shop, mine, rating, favorites = 0, onOpen, onMenu }: St
               }}
             >
               Yours
+            </Box>
+          )}
+          {away && (
+            <Box
+              aria-hidden
+              sx={{
+                position: "absolute",
+                bottom: 8,
+                left: 8,
+                px: 1,
+                lineHeight: "24px",
+                borderRadius: 12,
+                fontSize: 13,
+                fontWeight: 700,
+                bgcolor: "background.paper",
+                color: "text.primary",
+              }}
+            >
+              Away
             </Box>
           )}
         </Art>
