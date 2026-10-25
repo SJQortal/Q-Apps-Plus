@@ -722,6 +722,22 @@ export default {
       await page.waitForTimeout(500);
     } },
     { key: 'seller-delivery-options', path: '/product-manager/q-store-general-my-shop?tab=delivery', after: async (page) => { await page.getByRole('region', { name: 'Delivery options' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    { key: 'product-delivery', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
+      await page.getByRole('button', { name: 'Choose your country' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
+      await d.getByRole('combobox', { name: 'Country' }).fill('Portugal');
+      await page.getByRole('option', { name: 'Portugal', exact: true }).click({ timeout: 4000 });
+      await d.getByRole('button', { name: 'Show prices' }).click();
+      await page.getByRole('list', { name: 'Delivery options' }).waitFor({ timeout: 8000 });
+      await page.getByRole('list', { name: 'Delivery options' }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'product-delivery-picker', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, overlay: true, after: async (page) => {
+      await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
+      await d.getByRole('combobox', { name: 'Country' }).fill('United');
+      await page.waitForTimeout(400);
+    } },
     { key: 'product-stock', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 7)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/In stock · 4 left/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'names', path: '/names', after: async (page) => { await page.getByRole('list', { name: 'Names for sale' }).waitFor({ timeout: 8000 }); await page.getByText(/^Comes with/).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'names-buy', path: '/names', overlay: true, after: async (page) => {

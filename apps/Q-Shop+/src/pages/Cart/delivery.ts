@@ -42,10 +42,15 @@ export function saveDelivery(buyerName: string, value: DeliveryInput | null): vo
     else delete all[buyerName];
     if (Object.keys(all).length === 0) localStorage.removeItem(SAVED_DELIVERY_STORAGE_KEY);
     else localStorage.setItem(SAVED_DELIVERY_STORAGE_KEY, JSON.stringify(all));
+    // Product pages price delivery for it until the buyer picks a country there (delivery/buyerPlace.ts).
+    window.dispatchEvent(new Event(SAVED_DELIVERY_EVENT));
   } catch {
     // Storage is full or blocked: the address is simply not kept.
   }
 }
+
+/** Sent on window when a kept address changes. */
+export const SAVED_DELIVERY_EVENT = "qshopplus-saved-delivery";
 
 /** An empty address for `buyerName` (the name defaults to the buyer's Qortal name). */
 export function emptyDelivery(buyerName: string): DeliveryInput {

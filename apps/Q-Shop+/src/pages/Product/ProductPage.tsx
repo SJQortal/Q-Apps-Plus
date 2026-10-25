@@ -49,6 +49,8 @@ import { useMorePictures } from "../../hooks/useMorePictures";
 import { useLandAtTop } from "../../hooks/useLandAtTop";
 import { ProductDescription, ProductMedia, useDescriptionParts } from "../../richtext/ProductDescription";
 import { ShippingCountriesButton } from "../Store/ShippingCountries";
+import { ProductDelivery, type DeliveryShop } from "../../delivery/ProductDelivery";
+import type { CartLine } from "../../money/order";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
 import { FavoriteButton } from "../../favorites/FavoriteButton";
@@ -425,15 +427,6 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
           )}
           {/* An auction is stored out of stock for the original app; its panel says where it stands (a retired one says so). */}
           {(!auctionTerms || product.status === RETIRED) && stockLine(product.status, auctionTerms ? undefined : unitsLeft)}
-          {/* Where the shop ships, for something it ships (constants/shipping.ts). */}
-          {product.type !== "digital" && typeof shop?.shipsTo === "string" && shop.shipsTo && (
-            <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-              <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
-              <span>
-                Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop as { shippingCountries?: unknown; shippingStates?: unknown; title?: string }} />
-              </span>
-            </Typography>
-          )}
           {auctionTerms ? null : isOwner ? (
             <Alert
               severity="info"
@@ -459,6 +452,23 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               </Button>
             </Box>
           ) : null}
+          {/* For something it ships: what delivery costs to the buyer's country, and where the shop ships (delivery/ProductDelivery.tsx). */}
+          {product.type !== "digital" && !auctionTerms && (
+            <ProductDelivery
+              owner={owner}
+              storeId={storeId}
+              shop={shop as DeliveryShop | null}
+              line={{ productId, catalogueId, quantity, product: product as CartLine["product"] }}
+            />
+          )}
+          {product.type !== "digital" && auctionTerms && typeof shop?.shipsTo === "string" && shop.shipsTo && (
+            <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+              <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
+              <span>
+                Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop as { shippingCountries?: unknown; shippingStates?: unknown; title?: string }} />
+              </span>
+            </Typography>
+          )}
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
             {!isOwner && (
               <FavoriteButton fav={favoriteProduct(owner, storeId, productId, catalogueId)} label={productTitle || "this product"} variant="button" />
