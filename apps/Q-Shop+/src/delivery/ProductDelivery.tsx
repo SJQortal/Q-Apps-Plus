@@ -24,6 +24,7 @@ const PlacePickerDialog = lazy(() => import("./PlacePickerDialog").then((m) => (
 
 export interface DeliveryShop {
   title?: string;
+  location?: unknown;
   shipsTo?: unknown;
   supportedCoins?: unknown;
   shippingCountries?: unknown;
@@ -67,15 +68,23 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
   const shipsTo = typeof shop?.shipsTo === "string" ? shop.shipsTo.trim() : "";
   const hasPrices = !!current?.delivery?.doc;
 
-  const shipsToLine = shipsTo ? (
-    <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
-      Ships to {shipsTo} <ShippingCountriesButton shop={{ ...(shop ?? {}), title: shop?.title }} />
-    </Typography>
-  ) : null;
+  // Where it comes from (the shop's own words), and where the shop ships.
+  const from = typeof shop?.location === "string" ? shop.location.trim() : "";
+  const shipsToLine =
+    shipsTo || from ? (
+      <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+        {from && `Ships from ${from}${shipsTo ? " · " : ""}`}
+        {shipsTo && (
+          <>
+            {from ? "to" : "Ships to"} {shipsTo} <ShippingCountriesButton shop={{ ...(shop ?? {}), title: shop?.title }} />
+          </>
+        )}
+      </Typography>
+    ) : null;
 
   // No delivery prices: where it ships, as before, and whether that's the buyer's country.
   if (current && !hasPrices && !current.failed) {
-    if (!shipsTo) return null;
+    if (!shipsToLine) return null;
     const notShipped = place ? placeNotShipped(shop, place.country, place.state) : null;
     return (
       <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.75, color: "text.secondary" }}>

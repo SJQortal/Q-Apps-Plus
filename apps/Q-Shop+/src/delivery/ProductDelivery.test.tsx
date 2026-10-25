@@ -92,4 +92,9 @@ describe("delivery on a product page", () => {
     show();
     expect(await screen.findByText(/couldn't be read from your node right now; checkout works them out/)).toBeInTheDocument();
   });
+
+  it("says where it ships from, with where the shop ships", async () => {
+    renderWithProviders(<ProductDelivery owner="Shop+Plus" storeId={STORE} shop={{ ...shop, location: "Lisbon" }} line={line()} />);
+    expect(await screen.findByText(/^Ships from Lisbon · to Europe/)).toBeInTheDocument();
+  });
 });
