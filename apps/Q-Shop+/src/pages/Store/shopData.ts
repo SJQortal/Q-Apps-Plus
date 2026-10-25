@@ -39,11 +39,11 @@ export const PRODUCT_SORTS: { value: ProductSort; label: string }[] = [
 export const AUCTION_SORT: { value: ProductSort; label: string } = { value: "ending", label: "Ending soonest" };
 
 /** The seller's order, offered first on a shop page that has one. */
-export const FEATURED_SORT: { value: ShopSort; label: string } = { value: "featured", label: "Featured" };
+export const FEATURED_SORT: { value: ShopSort; label: string } = { value: "featured", label: "Collections" };
 
 /**
  * The sort a shop page shows: the buyer's pick, else the seller's order when
- * there is one (`hasOrder`), else newest first. "Featured" without an order
+ * there is one (`hasOrder`), else newest first. "Collections" without an order
  * is newest first.
  */
 export function effectiveSort(picked: ShopSort | null, hasOrder: boolean): ShopSort {

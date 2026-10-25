@@ -1,6 +1,6 @@
 /**
  * Arrange the shop (Products tab → Arrange): the shop's listed products in
- * the order buyers see as "Featured", which the seller changes and
+ * the order buyers see under "Collections", which the seller changes and
  * publishes (seller/useProductOrder.ts). The list starts from the order on
  * the product list, with products added since at the end, newest first;
  * "Newest first" drops the order again. Retired products aren't listed (one
@@ -63,8 +63,8 @@ export function ArrangeShop({
           inCollections.size > 0 && listed.length === 0
             ? "Every product you list is in a collection. Buyers see them collection by collection: change that order in your Collections tab, and a collection's own order in its editor."
             : inCollections.size > 0
-            ? "Your collections' products come first on your shop page, collection by collection in the order of your Collections tab. Arrange the rest here: they follow, in this order. It's the Featured sort; buyers can still sort by newest or price. Products you add later go at the end until you move them."
-            : "Buyers see your products in this order: it's the Featured sort, the first on your shop page, and they can still sort by newest or price. Products you add later go at the end until you move them."
+            ? "Your collections' products come first on your shop page, collection by collection in the order of your Collections tab. Arrange the rest here: they follow, in this order. It's the Collections sort; buyers can still sort by newest or price. Products you add later go at the end until you move them."
+            : "Buyers see your products in this order: it's the Collections sort, the first on your shop page, and they can still sort by newest or price. Products you add later go at the end until you move them."
         }
         rows={startRows}
         doneLabel="Publish order"

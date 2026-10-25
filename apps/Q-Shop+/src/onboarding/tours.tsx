@@ -170,7 +170,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         intro: "Help buyers find more.",
         points: [
           ["Collections", "group products (Gifts, Kitchen…); they show first on your shop page."],
-          ["Arrange", "set the order buyers see as Featured."],
+          ["Arrange", "set the order buyers see under Collections, and each collection's own."],
           ["Sales and codes", "a price before the sale shows crossed out; discount codes (Shop Settings) take a percentage or delivery off, for some products, some days or one buyer."],
           ["Share", "copy your shop's or a product's link anywhere on Qortal."],
         ],

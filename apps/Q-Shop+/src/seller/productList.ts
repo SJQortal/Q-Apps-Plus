@@ -41,7 +41,7 @@ export type SellerSort =
 export type StatusFilter = "all" | "AVAILABLE" | "AUCTION" | "OUT_OF_STOCK" | "RETIRED";
 
 export const SORT_LABEL: Record<SellerSort, string> = {
-  featured: "Shop order (Featured)",
+  featured: "Collections (shop order)",
   "featured-desc": "Shop order, last first",
   newest: "Newest first",
   oldest: "Oldest first",

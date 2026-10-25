@@ -1,6 +1,6 @@
 /**
  * Arrange products (full screen on phones): the products in the order buyers
- * see them as "Featured", each with Move up and Move down, and Move to top or
+ * see them under "Collections", each with Move up and Move down, and Move to top or
  * bottom in its menu. Used for the whole shop (seller/useProductOrder.ts) and
  * for one collection's products (seller/CollectionEditor.tsx). Titles and
  * pictures come from the catalogues, read only for the products listed

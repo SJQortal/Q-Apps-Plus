@@ -428,7 +428,7 @@ describe("shop page", { timeout: 20_000 }, () => {
     const sort = selectField("Sort");
     expect(selectValue(sort)).toBe("featured");
     expect(optionNames(sort)).toEqual([
-      "Featured",
+      "Collections",
       "Newest",
       "Oldest",
       "Price: low to high",
@@ -446,7 +446,7 @@ describe("shop page", { timeout: 20_000 }, () => {
     await waitFor(() => expect(cardTitles()).toHaveLength(12));
     const sort = selectField("Sort");
     expect(selectValue(sort)).toBe("newest");
-    expect(optionNames(sort)).not.toContain("Featured");
+    expect(optionNames(sort)).not.toContain("Collections");
   });
 
   it("offers Retry when the shop's collections can't be read for a collection link", async () => {

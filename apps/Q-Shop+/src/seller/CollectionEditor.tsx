@@ -2,7 +2,7 @@
  * New collection / Edit collection (full screen on phones): its title,
  * description and picture (made 640 px wide: it shows as a card), and which
  * of the shop's products it holds, picked from a searchable list. Buyers see
- * them in the order they were picked (the collection's "Featured" sort,
+ * them in the order they were picked (the collection's "Collections" sort,
  * Follow-up 14), which Arrange changes. Done puts it in the Collections
  * tab's working copy; nothing is published until the seller publishes the
  * collections there.
@@ -336,7 +336,7 @@ export function CollectionEditor({
     {arranging && (
       <ArrangeDialog
         title="Arrange this collection"
-        intro="Buyers see the collection's products in this order (the Featured sort), and can still sort by newest or price."
+        intro="Buyers see the collection's products in this order (the Collections sort), and can still sort by newest or price."
         rows={pickedRows}
         onDone={(order) => {
           const shown = new Set(order);

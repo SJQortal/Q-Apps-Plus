@@ -19,7 +19,7 @@
  * Products show as a grid of tiles or a list of rows (utils/productView.ts:
  * the buyer's choice, kept in Settings; by default rows on phones).
  *
- * "Featured" is the seller's order: the shop's (qdn/productOrder.ts) or,
+ * "Collections" is the seller's order: the shop's (qdn/productOrder.ts) or,
  * in a collection, the collection's. It is the default sort wherever there
  * is one; buyers can still pick another. A shop with collections lists them
  * first in Featured, the first collection's products, then the next's, then

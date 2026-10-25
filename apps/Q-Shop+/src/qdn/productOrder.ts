@@ -7,9 +7,9 @@
  * the original never reads it, and its "Recreate shop data" drops it (the
  * shop then lists newest first again until the seller arranges it).
  *
- * Shop pages offer it as the "Featured" sort, the default when there is one:
+ * Shop pages offer it as the "Collections" sort, the default when there is one:
  * the arranged products in their order, then any the seller added since,
- * newest first. A collection's "Featured" is the order of its own `products`
+ * newest first. A collection's own order is the order of its own `products`
  * (qdn/collections.ts).
  */
 import { dataContainerIdentifier } from "./identifiers";

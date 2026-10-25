@@ -1,6 +1,6 @@
 /**
  * "More from <shop>" under a product: up to 8 of the shop's other products,
- * in the shop's own order (Featured) then newest, a variant group as one
+ * in the shop's own order (the Collections sort) then newest, a variant group as one
  * tile, as a strip that scrolls sideways. Their catalogues are read only
  * once the strip nears the screen (most often the product's own, already in).
  */
