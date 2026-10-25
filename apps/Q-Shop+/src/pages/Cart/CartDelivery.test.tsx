@@ -7,6 +7,7 @@ import type { DeliveryDoc } from "../../delivery/model";
 import type { ShopDelivery } from "../../delivery/checkoutDelivery";
 import { setBuyerPlace } from "../../delivery/buyerPlace";
 import { CartDelivery } from "./CartDelivery";
+import { FreeDeliveryBar } from "../../delivery/FreeDeliveryBar";
 
 const STORE = "q-store-general-shop-1";
 const EUROPE = [...SHIPPING_REGIONS[0].codes];
@@ -67,5 +68,22 @@ describe("delivery in the cart", () => {
     delivery = { doc: null, pricing: null };
     const none = show([line()]);
     await waitFor(() => expect(none.container.textContent).toBe(""));
+  });
+
+  it("shows a bar of how much is left for free delivery there, and when it's reached", async () => {
+    act(() => setBuyerPlace({ country: "Portugal", state: "" }));
+    const one = renderWithProviders(<FreeDeliveryBar owner="Shop+Plus" storeId={STORE} lines={[line("physical", 2)]} />);
+    expect(await screen.findByText("Add 30.00 QORT more for free delivery to Portugal")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "40% of the way to free delivery" })).toHaveAttribute("aria-valuenow", "40");
+    one.unmount();
+    renderWithProviders(<FreeDeliveryBar owner="Shop+Plus" storeId={STORE} lines={[line("physical", 6)]} />);
+    expect(await screen.findByText("Free delivery to Portugal")).toBeInTheDocument();
+  });
+
+  it("offers free delivery on the shop's page while the cart has nothing of it", async () => {
+    act(() => setBuyerPlace({ country: "Portugal", state: "" }));
+    renderWithProviders(<FreeDeliveryBar owner="Shop+Plus" storeId={STORE} lines={[]} framed />);
+    expect(await screen.findByText("Free delivery to Portugal on orders from 50.00 QORT")).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).toBeNull();
   });
 });

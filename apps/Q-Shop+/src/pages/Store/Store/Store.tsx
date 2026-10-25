@@ -104,6 +104,7 @@ import { selectMenuProps } from "../../../components/common/menuStyle";
 import { bundleRows, variantGroupsOf } from "../../../variants/model";
 import { useStockLeft } from "../../../stock/notes";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
+import { FreeDeliveryBar, useShopCartLines } from "../../../delivery/FreeDeliveryBar";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -112,6 +113,12 @@ export enum CoinFilter {
 }
 
 /** Products section: the toolbar, the grid and its states. */
+/** The shop page's free-delivery bar: what this cart still needs, or the offer when it's empty. */
+function ShopFreeDelivery({ owner, storeId }: { owner: string; storeId: string }) {
+  const lines = useShopCartLines(owner, storeId);
+  return <FreeDeliveryBar owner={owner} storeId={storeId} lines={lines} framed />;
+}
+
 function ShopProducts({
   owner,
   storeId,
@@ -716,6 +723,8 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
           onEdit={() => dispatch(toggleEditStoreModal(true))}
           onSellerPage={sellerPage}
         />
+        {/* Free delivery from an amount, and how much this cart still needs (delivery/FreeDeliveryBar.tsx). */}
+        <ShopFreeDelivery owner={owner} storeId={storeId} />
         <ShopProducts
           owner={owner}
           storeId={storeId}

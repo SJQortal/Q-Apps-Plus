@@ -17,6 +17,7 @@ import { checkoutBlock, checkoutLinesOf, isLeftOut, priceLines, withLineStock, t
 import { stockOf } from "../../stock/model";
 import { useStockLeft } from "../../stock/notes";
 import type { ShopCartView } from "./useCartData";
+import { FreeDeliveryBar } from "../../delivery/FreeDeliveryBar";
 
 export interface CheckoutGate {
   allowed: boolean;
@@ -178,6 +179,8 @@ export function ShopCart({
             {shop && <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />}
             {/* What delivery adds, before checkout (Cart/CartDelivery.tsx). */}
             {shop && owner && <CartDelivery owner={owner} storeId={storeId} shop={shop} lines={lines} />}
+            {/* How much more for free delivery, when the shop's prices there have it (delivery/FreeDeliveryBar.tsx). */}
+            {shop && owner && <FreeDeliveryBar owner={owner} storeId={storeId} lines={lines} />}
             {!priced.ok && priced.reason === "price" && priced.missing.length > 0 && (
               <Typography variant="body2" color="text.secondary">
                 {priced.missing.join(", ")} {priced.missing.length === 1 ? "has" : "have"} no price in {coinLabel(coin, shop)}.

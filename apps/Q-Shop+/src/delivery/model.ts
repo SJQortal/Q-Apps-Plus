@@ -288,7 +288,7 @@ export function zoneFor(zones: readonly DeliveryZone[], countryCodeValue: string
 }
 
 /** A product's price in the doc's currency (its own fiat price, else its QORT price at the rate), for Free over. */
-function unitInCurrency(product: CartLine["product"], currency: string, pricing: FiatPricing | null): number {
+export function unitInCurrency(product: CartLine["product"], currency: string, pricing: FiatPricing | null): number {
   const qort = qortPrice(product) ?? 0;
   if (currency === "QORT") return qort;
   const own = fiatPriceOf(product as never, currency)?.value;

@@ -52,6 +52,7 @@ import { discountForCode, discountForName, discountLine, discountProblem } from 
 import { loadShopDiscounts, type ShopDiscounts } from "../../discounts/discountsDoc";
 import { assetInfo } from "../../qdn/assets";
 import { deliveryMoney } from "../../delivery/model";
+import { FreeDeliveryBar } from "../../delivery/FreeDeliveryBar";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
 
@@ -527,6 +528,7 @@ export function CheckoutDialog({
           </Alert>
         )}
         <CoinPicker coins={coins} value={coin} onChange={setCoin} shop={shop} />
+        {!isDigital && <FreeDeliveryBar owner={shop.owner} storeId={shop.id} lines={lines} />}
         <Divider />
         <Row label={<Typography sx={{ fontWeight: 700, fontSize: 16 }}>{hasDeliveryPrices ? "Subtotal" : "Total"}</Typography>}>
           {priced.ok ? <AmountTag value={priced.amount} coin={coin} shop={shop} size="large" sx={{ fontSize: 20 }} /> : <Typography>—</Typography>}
