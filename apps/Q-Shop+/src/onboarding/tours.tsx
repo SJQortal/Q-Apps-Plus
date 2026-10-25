@@ -160,7 +160,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         points: [
           ["Status", "Received, then Shipped with the carrier and tracking number (the buyer copies it), or Refunded."],
           ["Delivered", "the buyer marks it when it arrives, and can then review your shop."],
-          ["Overview", "orders to handle, and recent activity: reviews, favourites, deliveries."],
+          ["Overview", "orders to handle, products running low, and recent activity: reviews, favourites, deliveries."],
         ],
       },
       {
@@ -171,6 +171,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
         points: [
           ["Collections", "group products (Gifts, Kitchen…); they show first on your shop page."],
           ["Arrange", "set the order buyers see as Featured."],
+          ["Sales", "a price before the sale shows crossed out, with what buyers save."],
           ["Share", "copy your shop's or a product's link anywhere on Qortal."],
         ],
       },
