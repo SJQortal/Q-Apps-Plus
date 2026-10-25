@@ -9,6 +9,7 @@ import { formatOrderDate, isDigitalOrder, itemCount, itemSummary, orderItems, or
 import { useOrderCoinView } from "../useOrderCoin";
 import { OrderStatusChip } from "./OrderStatusChip";
 import { normalizeStatus } from "../status";
+import { trackingLine } from "../tracking";
 
 export type OrderRole = "buyer" | "seller";
 
@@ -176,6 +177,12 @@ export function OrderCard({
             </Box>
           )}
         </Box>
+        {/* The seller's carrier and tracking number (orders/tracking.ts), at a glance; the order copies it. */}
+        {status?.state === "known" && status.tracking && normalizeStatus(status.status) === "Shipped" && (
+          <Typography component="span" variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+            {trackingLine(status.tracking)}
+          </Typography>
+        )}
         {/* Shipped (a digital order: placed) and not marked yet: the order's dialog has Mark as delivered (orders/delivered.ts). */}
         {role === "buyer" && item.delivered === null && status?.state === "known" && (normalizeStatus(status.status) === "Shipped" || (digital && normalizeStatus(status.status) === "Received")) && (
           <Typography component="span" variant="body2" sx={{ mt: 0.5, fontWeight: 600, color: "primary.main" }}>
