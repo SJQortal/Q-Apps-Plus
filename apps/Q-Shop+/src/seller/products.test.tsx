@@ -37,6 +37,7 @@ import { roomTiming } from "../qdn/publishBatches";
 import { picturesIdentifier } from "../qdn/identifiers";
 import { picturesSig } from "../qdn/productPictures";
 import { isDraftOfShop } from "./shopDrafts";
+import { collectionDrafts, collectionsDraftKey } from "./useCollections";
 import { resetPublishedIndexes } from "./productIndex";
 import { PUBLISH_TIMEOUT_MS } from "../money/checkout";
 import { SHOP_CATEGORIES } from "../constants/categories";
@@ -874,6 +875,28 @@ describe("sorting the products by their columns", () => {
     await waitFor(() => expect(within(list).getAllByRole("listitem").map((li) => li.querySelector("h2")?.textContent ?? within(li).queryByText(/^(Mug|Poster|Chair)$/)?.textContent)).toEqual(["Mugs", "Mug", "Not in a collection", "Chair", "Poster"]));
     expect(selectValue(selectField("Sort"))).toBe("featured");
     expect(within(list).getAllByText(/in shop order/).map((el) => el.parentElement?.textContent)).toEqual(["1 in shop order", "2 in shop order", "3 in shop order"]);
+  });
+
+  it("arranges a collection from its line: the new order waits with the unpublished collections, and the list shows it", async () => {
+    const collectionsId = `q-store-collections-${SHORT_STORE_ID}`;
+    stubNode({ served: new Map([[collectionsId, { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id, poster.id, "gone-product"] }] }]]) });
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer({ ...dataContainer, collectionsId }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    const lines = () => within(list).getAllByRole("listitem").map((li) => li.querySelector("h2")?.textContent ?? within(li).queryByText(/^(Mug|Poster|Chair)$/)?.textContent);
+    await waitFor(() => expect(lines()).toEqual(["Mugs", "Mug", "Poster", "Not in a collection", "Chair"]));
+    fireEvent.click(within(list).getByRole("button", { name: "Arrange Mugs" }));
+    const dialog = await screen.findByRole("dialog", { name: "Arrange Mugs" });
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Move up: Poster" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save order" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Arrange Mugs" })).toBeNull());
+    await waitFor(() => expect(lines()).toEqual(["Mugs", "Poster", "Mug", "Not in a collection", "Chair"]));
+    // A product the list doesn't have keeps its place after the arranged ones.
+    expect(collectionDrafts.get(collectionsDraftKey(SELLER, STORE_ID))?.[0].products).toEqual([poster.id, mug.id, "gone-product"]);
+    expect(within(await screen.findByRole("region", { name: "Unpublished changes" })).getByText("Collections")).toBeInTheDocument();
+    // The products in no collection open the shop's Arrange.
+    fireEvent.click(within(list).getByRole("button", { name: "Arrange the products not in a collection" }));
+    expect(await screen.findByRole("dialog", { name: "Arrange your shop" })).toBeInTheDocument();
   });
 });
 

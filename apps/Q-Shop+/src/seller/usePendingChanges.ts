@@ -10,9 +10,8 @@ import { useEffect, useEffectEvent, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../state/store";
 import { removeManyFromProductsToSave } from "../state/features/globalSlice";
-import { collectionsIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { useShopDrafts } from "./shopDrafts";
-import { collectionDrafts } from "./useCollections";
+import { collectionDrafts, collectionsDraftKey } from "./useCollections";
 import { deliveryDrafts, discountDrafts } from "./sellerDrafts";
 import { draftKey } from "./deviceDrafts";
 import { productDraftStore } from "./productDraftsDevice";
@@ -33,7 +32,7 @@ export function usePendingChanges(): PendingChange[] {
   const storeId = store?.id ?? "";
   const key = draftKey(owner, storeId);
   // Collections key their working copy by the signed-in name and their document (seller/useCollections.ts).
-  const collectionsKey = user?.name && storeId ? `${user.name}\n${collectionsIdentifier(shortStoreIdOf(storeId))}` : "";
+  const collectionsKey = collectionsDraftKey(user?.name, storeId);
   const products = useShopDrafts();
   const collections = collectionDrafts.useDraft(collectionsKey);
   const delivery = deliveryDrafts.useDraft(key);
@@ -74,7 +73,7 @@ export function forgetShopDrafts(name: string, owner: string, storeId: string): 
   productDraftStore.set(key, null);
   deliveryDrafts.set(key, null);
   discountDrafts.set(key, null);
-  if (name && storeId) collectionDrafts.set(`${name}\n${collectionsIdentifier(shortStoreIdOf(storeId))}`, null);
+  collectionDrafts.set(collectionsDraftKey(name, storeId), null);
 }
 
 /**

@@ -111,6 +111,11 @@ function isOwnPublishNotServedYet(docId: string, now: ShopCollection[], publishe
 /** The working copies, per name and document, kept on this device until published or discarded (seller/deviceDrafts.ts). */
 export const collectionDrafts = createDeviceDraftStore<ShopCollection[]>("collections");
 
+/** The key of a name's collections draft for a shop (by its collections document). */
+export function collectionsDraftKey(name: string | null | undefined, storeId: string | null | undefined): string {
+  return name && storeId ? `${name}\n${collectionsIdentifier(shortStoreIdOf(storeId))}` : "";
+}
+
 function setDraftFor(draftKey: string, list: ShopCollection[] | null): void {
   collectionDrafts.set(draftKey, list);
 }

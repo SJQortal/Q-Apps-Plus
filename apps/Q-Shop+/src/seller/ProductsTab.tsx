@@ -11,7 +11,9 @@
  * been read again, fresh, and opens from its index row, as the original did:
  * saving puts it back into its catalogue.
  *
- * Arrange opens seller/ArrangeShop.tsx: the order buyers see as "Featured".
+ * Arrange opens seller/ArrangeShop.tsx: the order buyers see under "Collections".
+ * Sorted by shop order, each collection's line has its own Arrange: the
+ * collection's order, kept with the unpublished collections (seller/useCollections.ts).
  *
  * Select turns the list into checkboxes: Select all (everything the filters
  * show), then Delete, which the seller page asks about first
@@ -86,6 +88,9 @@ import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
 import { BulkStatusDialog } from "./BulkStatusDialog";
 import { rowSaleOf, saleOf } from "../sale/compareAt";
 import { ArrangeShop } from "./ArrangeShop";
+import { ArrangeDialog } from "./ArrangeDialog";
+import { collectionDrafts, collectionsDraftKey } from "./useCollections";
+import type { ShopCollection } from "../qdn/collections";
 import { featuredOrder, productOrderOf } from "../qdn/productOrder";
 import { useShopCollections } from "../pages/Store/useShopCollections";
 import { SectionDivider } from "../pages/Store/ProductList";
@@ -161,9 +166,13 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   const categories = useSelector((state: RootState) => state.global.listProducts.categories);
   const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
-  // The order buyers see as Featured: the published collections' products first, collection by collection,
-  // then the rest in the seller's own order (Arrange). The list opens on it once there is one.
-  const shopCollections = useShopCollections(owner ?? "", storeId, dataContainer).collections;
+  // The order buyers see under Collections: the collections' products first, collection by collection,
+  // then the rest in the seller's own order (Arrange). The list opens on it once there is one. Collections
+  // changed and not published yet (the seller page's Publish changes bar) show as they will be.
+  const publishedCollections = useShopCollections(owner ?? "", storeId, dataContainer).collections;
+  const collectionsKey = collectionsDraftKey(useSelector((state: RootState) => state.auth.user?.name), storeId);
+  const collectionsDraft = collectionDrafts.useDraft(collectionsKey);
+  const shopCollections = collectionsDraft ?? publishedCollections;
   const featured = useMemo(() => featuredOrder(shopCollections, productOrderOf(dataContainer)), [shopCollections, dataContainer]);
   const order = featured.order;
   const { request, retry, refresh, statusOf: loadOf, productOf } = useCatalogueLoader(owner);
@@ -180,6 +189,8 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   const openedFor = useRef<string | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [arranging, setArranging] = useState(false);
+  // The collection being arranged from its line in the list (by id).
+  const [arrangingCollection, setArrangingCollection] = useState<string | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   // Focus follows select mode: into its bar when it starts, back to Select when it ends.
   const selectButton = useRef<HTMLButtonElement>(null);
@@ -220,6 +231,26 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
   useEffect(() => {
     if (searchKey) request(searchKey.split("|"));
   }, [searchKey, request]);
+
+  // A collection's own order (its page, and its part of the Collections sort): its listed products.
+  const collectionToArrange = shopCollections.find((c) => c.id === arrangingCollection) ?? null;
+  const collectionRows = useMemo(() => {
+    if (!collectionToArrange) return [];
+    const byId = new Map(rows.map((row) => [row.productId, row]));
+    return collectionToArrange.products.flatMap((id) => {
+      const row = byId.get(id);
+      return row && row.status !== "RETIRED" ? [row] : [];
+    });
+  }, [collectionToArrange, rows]);
+  // The new order goes into the collections draft, published with the seller's other changes;
+  // products not arranged (retired, or not in the list) keep their places after it.
+  const saveCollectionOrder = (collection: ShopCollection, order: string[]) => {
+    const placed = new Set(order);
+    const next = shopCollections.map((c) =>
+      c.id === collection.id ? { ...c, products: [...order, ...c.products.filter((id) => !placed.has(id))] } : c
+    );
+    collectionDrafts.set(collectionsKey, JSON.stringify(next) === JSON.stringify(publishedCollections) ? null : next);
+  };
 
   const edit = (row: SellerRow) => {
     const draft = productsToSave[row.productId];
@@ -541,13 +572,26 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
                   const section = sort === "featured" && featured.sectionOf.size > 0 ? (featured.sectionOf.get(row.productId) ?? -1) : null;
                   const previous = section !== null && i > 0 ? (featured.sectionOf.get(visible[i - 1].productId) ?? -1) : null;
                   const starts = section !== null && section !== previous && (section >= 0 || i > 0);
+                  const collection = section !== null && section >= 0 ? shopCollections[section] : undefined;
+                  const sectionTitle = collection ? collection.title || "Collection" : "Not in a collection";
                   return [
                     starts && (
                       <SectionDivider
                         key={`section-${row.productId}`}
-                        title={section !== null && section >= 0 ? shopCollections[section]?.title || "Collection" : "Not in a collection"}
+                        title={sectionTitle}
                         first={i === 0}
                         heading="h2"
+                        action={
+                          <Button
+                            size="small"
+                            startIcon={<SwapVertIcon />}
+                            aria-label={collection ? `Arrange ${sectionTitle}` : "Arrange the products not in a collection"}
+                            onClick={() => (collection ? setArrangingCollection(collection.id) : setArranging(true))}
+                            sx={{ minHeight: 44, flexShrink: 0 }}
+                          >
+                            Arrange
+                          </Button>
+                        }
                       />
                     ),
                     <ProductRow
@@ -595,6 +639,20 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
             </Button>
           </Box>
         </BottomSheet>
+      )}
+      {collectionToArrange && (
+        <ArrangeDialog
+          key={collectionToArrange.id}
+          title={`Arrange ${collectionToArrange.title || "this collection"}`}
+          intro="Buyers see this collection's products in this order, on its page and in its part of the Collections sort. The new order waits with your other changes until you publish them."
+          rows={collectionRows}
+          doneLabel="Save order"
+          onDone={(order) => {
+            saveCollectionOrder(collectionToArrange, order);
+            setArrangingCollection(null);
+          }}
+          onClose={() => setArrangingCollection(null)}
+        />
       )}
       {arranging && <ArrangeShop collections={shopCollections} onClose={() => setArranging(false)} onPublished={() => setChosenSort(null)} />}
       {bulkStatus && (

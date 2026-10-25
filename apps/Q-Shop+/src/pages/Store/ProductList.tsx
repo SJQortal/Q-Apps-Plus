@@ -222,7 +222,7 @@ export function ProductGrid({ children, layout, ...rest }: { children: ReactNode
 
 /**
  * A titled line across a product grid: where one collection's products start
- * in Featured (qdn/productOrder.ts featuredOrder). The title opens the
+ * in the Collections sort (qdn/productOrder.ts featuredOrder). The title opens the
  * collection when there is one.
  */
 export function SectionDivider({
@@ -230,12 +230,15 @@ export function SectionDivider({
   to,
   first = false,
   heading = "h3",
+  action,
 }: {
   title: string;
   to?: string;
   first?: boolean;
   /** The heading level under the page's own headings. */
   heading?: "h2" | "h3";
+  /** A button at the end of the line (the seller's Arrange). */
+  action?: ReactNode;
 }) {
   return (
     <Box component="li" data-section sx={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 1.5, pt: first ? 0 : 1.5 }}>
@@ -249,6 +252,7 @@ export function SectionDivider({
         )}
       </Typography>
       <Box aria-hidden sx={{ flex: "1 1 24px", borderTop: 1, borderColor: "divider" }} />
+      {action}
     </Box>
   );
 }
