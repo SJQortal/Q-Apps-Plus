@@ -12,6 +12,7 @@
 import { PolicyLines } from "../../shop/PolicyLines";
 import { AwayNotice } from "../../shop/AwayNotice";
 import { NextSteps } from "./NextSteps";
+import { UpcomingOptions } from "./UpcomingOptions";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
@@ -393,6 +394,7 @@ export function CheckoutDialog({
       <Stack sx={{ gap: 2 }}>
         <LazyDeliveryForm value={delivery} onChange={changeDelivery} showErrors={showErrors} idPrefix={DELIVERY_PREFIX} />
         <RememberAddress checked={remember} onChange={setRemember} />
+        <UpcomingOptions owner={shop.owner} storeId={shop.id} />
         {noShipping && (
           <Alert severity="warning" role="alert">
             {shop.title || shop.owner} doesn&apos;t ship to {noShipping}
