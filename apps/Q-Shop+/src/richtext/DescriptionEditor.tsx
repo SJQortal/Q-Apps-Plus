@@ -9,9 +9,9 @@
  *   is read in four themes; a pasted picture could load from outside Qortal).
  * - Quill keeps a link only for its allowed schemes; qortal: is added, so a
  *   qortal:// link stays one (Quill wrote about:blank before).
- * - Video and File (the last two toolbar buttons) open AddVideoDialog and
- *   AddFileDialog; what they add is a block in the text
- *   (richtext/embeds.ts), shown here as a card.
+ * - Videos and files are added under the product's pictures
+ *   (richtext/MediaFields.tsx, Simon 2026-10-25), not here: the form hands
+ *   this editor the text alone (richtext/embeds.ts splitDescription).
  *
  * The value handed back is the editor's own HTML (Quill's raw markup); the
  * draft builders turn it into the stored forms (richtext/plainText.ts).
@@ -21,13 +21,13 @@
  * writes it differently (lists, blocks), on every key typed elsewhere in the
  * form. `value` is read when the editor mounts (again when a phone turns).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Box } from "@mui/material";
 import ReactQuill, { Quill } from "react-quill-new";
 import "react-quill-new/dist/quill.snow.css";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
-import { EMBED_CLASS, embedData, embedFromData, embedLabel, type QortalEmbed, type VideoEmbed } from "./embeds";
-import { AddFileDialog, AddVideoDialog, VideoThumbnailDialog } from "./AddMediaDialogs";
+import { EMBED_CLASS, embedData, embedFromData, embedLabel, type QortalEmbed } from "./embeds";
+import { QORTAL_URL } from "./sanitize";
 
 // ---------------------------------------------------------------- Quill setup (once)
 
@@ -62,11 +62,6 @@ function setUpQuill() {
   // qortal:// links stay links (Quill turns any other scheme into about:blank).
   const Link = Quill.import("formats/link") as unknown as { PROTOCOL_WHITELIST: string[] };
   if (!Link.PROTOCOL_WHITELIST.includes("qortal")) Link.PROTOCOL_WHITELIST = [...Link.PROTOCOL_WHITELIST, "qortal"];
-  const icons = Quill.import("ui/icons") as unknown as Record<string, string>;
-  icons.qortalVideo =
-    '<svg viewBox="0 0 18 18"><rect class="ql-stroke" x="2" y="4" width="14" height="10" rx="2"/><polygon class="ql-fill" points="8 7 12 9 8 11 8 7"/></svg>';
-  icons.qortalFile =
-    '<svg viewBox="0 0 18 18"><path class="ql-stroke" d="M5 2h6l3 3v11H5z"/><polyline class="ql-stroke" points="11 2 11 5 14 5"/><line class="ql-stroke" x1="7" x2="12" y1="9" y2="9"/><line class="ql-stroke" x1="7" x2="12" y1="12" y2="12"/></svg>';
 }
 setUpQuill();
 
@@ -75,6 +70,29 @@ setUpQuill();
  * break in half the themes), and so are pictures and Quill's own video (an
  * iframe): a paste brings none of them.
  */
+/** Quill's clipboard matcher: the qortal:// addresses in pasted text as links (after Quill's own text matcher). */
+function linkQortalText(_node: Node, delta: { ops: { insert?: unknown; attributes?: Record<string, unknown> }[] }) {
+  if (!delta.ops.some((op) => typeof op.insert === "string" && op.insert.includes("qortal://"))) return delta;
+  const Delta = Quill.import("delta") as unknown as new () => { insert(text: unknown, attributes?: Record<string, unknown>): unknown };
+  const out = new Delta();
+  for (const op of delta.ops) {
+    if (typeof op.insert !== "string" || op.attributes?.link || !op.insert.includes("qortal://")) {
+      out.insert(op.insert, op.attributes);
+      continue;
+    }
+    const text = op.insert;
+    let last = 0;
+    for (const match of text.matchAll(QORTAL_URL)) {
+      const at = match.index ?? 0;
+      if (at > last) out.insert(text.slice(last, at), op.attributes);
+      out.insert(match[0], { ...op.attributes, link: match[0] });
+      last = at + match[0].length;
+    }
+    if (last < text.length) out.insert(text.slice(last), op.attributes);
+  }
+  return out;
+}
+
 const FORMATS = ["bold", "italic", "underline", "strike", "link", "blockquote", "header", "list", "indent", "align", "qortalEmbed"];
 
 const DESKTOP_TOOLBAR = [
@@ -83,9 +101,8 @@ const DESKTOP_TOOLBAR = [
   [{ list: "ordered" }, { list: "bullet" }],
   ["blockquote", "link"],
   ["clean"],
-  ["qortalVideo", "qortalFile"],
 ];
-const PHONE_TOOLBAR = [["bold", "italic"], [{ list: "bullet" }], ["link"], ["qortalVideo", "qortalFile"]];
+const PHONE_TOOLBAR = [["bold", "italic"], [{ list: "bullet" }], ["link"]];
 
 /** Names for the toolbar's buttons (Quill names them by format, in English or not at all). */
 const BUTTON_NAMES: Record<string, string> = {
@@ -96,51 +113,59 @@ const BUTTON_NAMES: Record<string, string> = {
   "ql-blockquote": "Quote",
   "ql-link": "Link (select text first)",
   "ql-clean": "Clear formatting",
-  "ql-qortalVideo": "Add a video",
-  "ql-qortalFile": "Add a file or PDF",
 };
 
 export interface DescriptionEditorProps {
   value: string;
   onChange: (html: string) => void;
-  /** The name the shop publishes under (for its videos, and uploads). */
-  name: string | null | undefined;
-  productTitle: string;
-  shopTitle?: string;
   placeholder?: string;
   /** Labelled by this element (the field's visible label). */
   labelId?: string;
 }
 
-export default function DescriptionEditor({ value, onChange, name, productTitle, shopTitle, placeholder, labelId }: DescriptionEditorProps) {
+export default function DescriptionEditor({ value, onChange, placeholder, labelId }: DescriptionEditorProps) {
   const phone = usePhoneLayout();
   const quillRef = useRef<ReactQuill>(null);
   const wrapper = useRef<HTMLDivElement>(null);
-  const [dialog, setDialog] = useState<"video" | "file" | null>(null);
-  // A video in the description whose thumbnail is being added or changed, by its place.
-  const [thumbFor, setThumbFor] = useState<{ index: number; embed: VideoEmbed } | null>(null);
-  const openRef = useRef(setDialog);
-
   const modules = useMemo(
     () => ({
-      toolbar: {
-        container: phone ? PHONE_TOOLBAR : DESKTOP_TOOLBAR,
-        handlers: {
-          // With a video selected (from the keyboard), its thumbnail; else a new video.
-          qortalVideo: () => {
-            const quill = quillRef.current?.getEditor();
-            const at = quill?.getSelection();
-            const value = at && at.length === 1 ? (quill?.getContents(at.index, 1).ops[0]?.insert as { qortalEmbed?: QortalEmbed } | undefined)?.qortalEmbed : undefined;
-            if (at && value?.kind === "video") setThumbFor({ index: at.index, embed: value });
-            else openRef.current("video");
-          },
-          qortalFile: () => openRef.current("file"),
-        },
-      },
-      clipboard: { matchVisual: false },
+      toolbar: { container: phone ? PHONE_TOOLBAR : DESKTOP_TOOLBAR },
+      // Pasted qortal:// addresses come in as links (Simon, 2026-10-25: "recognized automatically").
+      clipboard: { matchVisual: false, matchers: [[Node.TEXT_NODE, linkQortalText]] },
     }),
     [phone]
   );
+
+  // A qortal:// address typed into the text becomes a link once a space or a new line ends it.
+  useEffect(() => {
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+    const onText = (delta: { ops: { insert?: unknown; retain?: number }[] }, _old: unknown, source: string) => {
+      if (source !== "user") return;
+      // Where the space (or new line) went in, from the change itself (the cursor hasn't moved yet).
+      let at = 0;
+      let typed: string | null = null;
+      for (const op of delta.ops) {
+        if (typeof op.retain === "number") at += op.retain;
+        else if (typeof op.insert === "string") {
+          typed = op.insert;
+          break;
+        }
+      }
+      if (!typed || !/^\s$/.test(typed) || at === 0) return;
+      const from = Math.max(0, at - 300);
+      const match = /qortal:\/\/\S+$/.exec(quill.getText(from, at - from));
+      const url = match?.[0].match(QORTAL_URL)?.[0];
+      if (!match || !url) return;
+      const start = at - match[0].length;
+      if (quill.getFormat(start, url.length).link) return;
+      quill.formatText(start, url.length, "link", url, "user");
+    };
+    quill.on("text-change", onText as never);
+    return () => {
+      quill.off("text-change", onText as never);
+    };
+  }, [phone]);
 
   // Names for the buttons and pickers, and the editor named by the field's label.
   useEffect(() => {
@@ -165,44 +190,6 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
       if (labelId) editor.setAttribute("aria-labelledby", labelId);
     }
   }, [phone, labelId]);
-
-  // A click on a video block opens its thumbnail (the block itself isn't editable text).
-  useEffect(() => {
-    const root = wrapper.current;
-    if (!root) return;
-    const onClick = (event: MouseEvent) => {
-      const node = event.target instanceof Element ? event.target.closest<HTMLElement>(`.ql-editor .${EMBED_CLASS}[data-kind="video"]`) : null;
-      const quill = quillRef.current?.getEditor();
-      if (!node || !quill) return;
-      const embed = embedFromData({ ...node.dataset });
-      const blot = Quill.find(node);
-      if (embed?.kind !== "video" || !blot || blot instanceof Quill) return;
-      setThumbFor({ index: quill.getIndex(blot as never), embed });
-    };
-    root.addEventListener("click", onClick);
-    return () => root.removeEventListener("click", onClick);
-  }, []);
-
-  const replaceVideo = (index: number, embed: VideoEmbed) => {
-    setThumbFor(null);
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    quill.deleteText(index, 1, "user");
-    quill.insertEmbed(index, "qortalEmbed", embed, "user");
-    quill.setSelection(index + 1, 0, "silent");
-  };
-
-  const insert = (embeds: QortalEmbed[]) => {
-    setDialog(null);
-    const quill = quillRef.current?.getEditor();
-    if (!quill) return;
-    let at = (quill.getSelection(true) ?? { index: quill.getLength() }).index;
-    for (const embed of embeds) {
-      quill.insertEmbed(at, "qortalEmbed", embed, "user");
-      at += 1;
-    }
-    quill.setSelection(at, 0, "silent");
-  };
 
   return (
     <Box
@@ -287,13 +274,6 @@ export default function DescriptionEditor({ value, onChange, name, productTitle,
         formats={FORMATS}
         placeholder={placeholder}
       />
-      {dialog === "video" && (
-        <AddVideoDialog open onClose={() => setDialog(null)} onAdd={(embed) => insert([embed])} name={name} productTitle={productTitle} shopTitle={shopTitle} />
-      )}
-      {dialog === "file" && <AddFileDialog open onClose={() => setDialog(null)} onAdd={insert} name={name} shopTitle={shopTitle} />}
-      {thumbFor && (
-        <VideoThumbnailDialog embed={thumbFor.embed} name={name} onClose={() => setThumbFor(null)} onSave={(embed) => replaceVideo(thumbFor.index, embed)} />
-      )}
     </Box>
   );
 }

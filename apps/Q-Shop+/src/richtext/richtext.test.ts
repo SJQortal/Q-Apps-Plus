@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { embedData, embedFromData, embedLabel, parseQortalLink, qshareLink, qtubeLink, type QortalEmbed } from "./embeds";
+import { embedData, embedFromData, embedLabel, joinDescription, parseQortalLink, qshareLink, qtubeLink, splitDescription, type QortalEmbed } from "./embeds";
 import { descriptionHtmlOf, htmlToPlainText, isPlainHtml, plainToHtml } from "./plainText";
 import { sanitizeDescription } from "./sanitize";
 
@@ -127,5 +127,28 @@ describe("a description made safe to show", () => {
     expect(clean).toBe(
       '<div class="qshop-embed" data-kind="video" data-name="Seller Name" data-identifier="q-store-video-AbCdEf1234" data-title="Making ghee">Video: Making ghee</div>'
     );
+  });
+});
+
+describe("qortal:// addresses typed as text", () => {
+  it("show as links, without the punctuation that ends the sentence", () => {
+    const html = sanitizeDescription("<p>Watch qortal://APP/Q-Tube/video/Bob/x. Or (qortal://APP/Q-Shop)! Thanks</p>");
+    expect(html).toContain('<a href="qortal://APP/Q-Tube/video/Bob/x"');
+    expect(html).toContain(">qortal://APP/Q-Tube/video/Bob/x</a>.");
+    expect(html).toContain('<a href="qortal://APP/Q-Shop"');
+    expect(html).toContain(">qortal://APP/Q-Shop</a>)!");
+  });
+});
+
+describe("a description's videos and files apart from its text", () => {
+  it("splits them out and joins them back ahead of the text", () => {
+    const html = `<p>Our ghee.</p>${embedHtml(video)}<p>More.</p>`;
+    const { embeds, text } = splitDescription(html);
+    expect(embeds).toEqual([video]);
+    expect(text).toBe("<p>Our ghee.</p><p>More.</p>");
+    const joined = joinDescription(embeds, text);
+    expect(joined.startsWith('<div class="qshop-embed"')).toBe(true);
+    expect(splitDescription(joined)).toEqual({ embeds: [video], text });
+    expect(splitDescription("<p>Plain</p>")).toEqual({ embeds: [], text: "<p>Plain</p>" });
   });
 });

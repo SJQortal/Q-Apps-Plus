@@ -95,8 +95,12 @@ function settleLinks(root: ParentNode): void {
   });
 }
 
-/** qortal:// URLs typed as text, up to whitespace or anything that could end an attribute. */
-const QORTAL_URL = /qortal:\/\/[^\s,<>"'`]+/g;
+/**
+ * qortal:// URLs typed as text, up to whitespace or anything that could end
+ * an attribute, and without the punctuation that ends a sentence after one
+ * ("see qortal://APP/Q-Tube." links qortal://APP/Q-Tube).
+ */
+export const QORTAL_URL = /qortal:\/\/[^\s,<>"'`]*[^\s,<>"'`.;:!?)\]]/g;
 const NO_LINKS_INSIDE = new Set(["A", "PRE", "CODE"]);
 
 function linkifyQortalText(root: Node): void {

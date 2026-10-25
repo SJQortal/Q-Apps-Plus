@@ -8,7 +8,7 @@ import { percentOff } from "../../../sale/compareAt";
 import { StockFields } from "../../../stock/StockFields";
 import { useStockLeft } from "../../../stock/notes";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
-import { lazy, Suspense, useId, useState, type Dispatch, type SetStateAction } from "react";
+import { lazy, Suspense, useId, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   Box,
   Button,
@@ -27,6 +27,7 @@ import ImageUploader from "../../../components/common/ImageUploader";
 
 // Quill and the media dialogs: loaded with the form, never for buyers.
 const DescriptionEditor = lazy(() => import("../../../richtext/DescriptionEditor"));
+const MediaFields = lazy(() => import("../../../richtext/MediaFields"));
 import { CoinIcon } from "../../../components/money/CoinIcon";
 import { CategoryField } from "../../../seller/CategoryField";
 import { CategoryIcon } from "../../../components/CategoryIcon";
@@ -57,6 +58,7 @@ import { AuctionFields } from "../../../seller/AuctionFields";
 import { auctionTermsOf } from "../../../auctions/rules";
 import { VariantsEditor, type RemovedItem } from "../../../variants/VariantsEditor";
 import { itemExtraCoins, variantPriceUnit } from "../../../variants/drafts";
+import { joinDescription, splitDescription } from "../../../richtext/embeds";
 
 interface ProductFormProps {
   values: ProductFormValues;
@@ -141,6 +143,8 @@ export const ProductForm = ({
 }: ProductFormProps) => {
   const picturesLocked = !!picturesLoad;
   const descriptionLabel = useId();
+  // The description's videos and files apart from its text (richtext/embeds.ts).
+  const media = useMemo(() => splitDescription(values.description), [values.description]);
   // Stock counts (stock/model.ts): a saved product's orders, and in an edited group each item's.
   const savedId = typeof saved?.id === "string" ? saved.id : null;
   const savedShortStoreId = shortStoreIdOf(typeof saved?.storeId === "string" ? saved.storeId : "");
@@ -287,6 +291,16 @@ export const ProductForm = ({
             onError={onImageError}
           />
         )}
+        {/* Videos and files, under the pictures as buyers see them (richtext/MediaFields.tsx); stored in the description. */}
+        <Suspense fallback={<Skeleton variant="rounded" height={44} aria-label="Loading" />}>
+          <MediaFields
+            embeds={media.embeds}
+            onChange={(embeds) => onChange((prev) => ({ ...prev, description: joinDescription(embeds, splitDescription(prev.description).text) }))}
+            name={publisher}
+            productTitle={values.title.trim()}
+            shopTitle={shopTitle}
+          />
+        </Suspense>
         <Typography variant="body2" color="text.secondary">
           The first picture is the cover in lists (star another to make it the cover). Q-Shop, the original app, shows the first 3.
         </Typography>
@@ -545,17 +559,14 @@ export const ProductForm = ({
           </Typography>
           <Suspense fallback={<Skeleton variant="rounded" height={208} aria-label="Loading the editor" />}>
             <DescriptionEditor
-              value={values.description}
-              onChange={(html) => set("description", html)}
-              name={publisher}
-              productTitle={values.title.trim()}
-              shopTitle={shopTitle}
+              value={media.text}
+              onChange={(html) => onChange((prev) => ({ ...prev, description: joinDescription(splitDescription(prev.description).embeds, html) }))}
               labelId={descriptionLabel}
               placeholder="What it is, what's included, sizes, care…"
             />
           </Suspense>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-            Format it with the toolbar, or paste formatted text. The link button takes a qortal:// address; the last two add a video or a PDF.
+            Format it with the toolbar, or paste formatted text. qortal:// addresses become links by themselves (the link button takes one too). Videos and PDFs go under the pictures.
           </Typography>
         </Box>
       </Box>

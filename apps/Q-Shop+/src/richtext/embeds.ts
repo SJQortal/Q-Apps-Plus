@@ -186,3 +186,35 @@ export function embedLabel(embed: QortalEmbed): string {
 export function embedLink(embed: QortalEmbed): string {
   return embed.link ?? resourceLink(embed.kind === "video" ? "VIDEO" : "FILE", embed.name, embed.identifier);
 }
+
+/**
+ * A description's videos and files apart from its text, for the product
+ * form (Simon, 2026-10-25: added as buttons under the pictures, each with an
+ * X, not in the text): the embed blocks at its top level, and the rest.
+ */
+export function splitDescription(html: string): { embeds: QortalEmbed[]; text: string } {
+  if (!html || !html.includes(EMBED_CLASS)) return { embeds: [], text: html };
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+  const embeds: QortalEmbed[] = [];
+  for (const node of Array.from(doc.body.children)) {
+    if (!node.classList.contains(EMBED_CLASS)) continue;
+    const embed = embedFromData({ ...(node as HTMLElement).dataset });
+    if (embed) embeds.push(embed);
+    node.remove();
+  }
+  return { embeds, text: doc.body.innerHTML };
+}
+
+/** An embed as the block the description stores (as the editor wrote it): its data, and its label as text. */
+export function embedHtml(embed: QortalEmbed): string {
+  const node = document.createElement("div");
+  node.className = EMBED_CLASS;
+  for (const [key, value] of Object.entries(embedData(embed))) node.dataset[key] = value;
+  node.textContent = embedLabel(embed);
+  return node.outerHTML;
+}
+
+/** The description stored: its videos and files first (the product page shows them under the pictures), then its text. */
+export function joinDescription(embeds: readonly QortalEmbed[], text: string): string {
+  return embeds.map(embedHtml).join("") + text;
+}
