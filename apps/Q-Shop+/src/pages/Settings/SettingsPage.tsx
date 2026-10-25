@@ -3,7 +3,7 @@
  * Sync and About, in that order. Every choice applies at once and is kept on
  * this device; Sync saves the theme and preferred coin to QDN only when asked.
  */
-import { useId, useState, type ReactNode } from "react";
+import { lazy, Suspense, useId, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Box, Button, Dialog, DialogTitle, IconButton, Switch, TextField, Tooltip, Typography, MenuItem } from "@mui/material";
 import { setShowNames, useShowNames } from "../../utils/namesSetting";
@@ -27,6 +27,9 @@ import { NameSwitcher } from "../../components/layout/NameSwitcher";
 import { useShellActions } from "../../components/layout/shellState";
 import { APP_VERSION } from "../../constants/changelog";
 import { openWalkthrough } from "../../onboarding/Walkthrough";
+
+// Opened now and then: loaded the first time (onboarding/HelpDialog.tsx).
+const HelpDialog = lazy(() => import("../../onboarding/HelpDialog").then((m) => ({ default: m.HelpDialog })));
 import {
   APP_NAME,
   ORIGINAL_APP_LINK,
@@ -129,6 +132,7 @@ export function SettingsPage() {
   const [blockedOpen, setBlockedOpen] = useState(false);
   const { list: hiddenShops } = useHiddenShops();
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [syncBusy, setSyncBusy] = useState<"save" | "restore" | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
@@ -480,6 +484,14 @@ export function SettingsPage() {
             </Button>
           </Buttons>
         </Row>
+        <Row>
+          <RowLabel title="Help">Paying, delivery, what to do when something goes wrong, and selling, in short answers.</RowLabel>
+          <Buttons>
+            <Button variant="outlined" onClick={() => setHelpOpen(true)}>
+              Help
+            </Button>
+          </Buttons>
+        </Row>
         {ORIGINAL_APP_LINK && (
           <Row>
             <RowLabel title={`The original ${ORIGINAL_APP_NAME}`}>Opens in a new Hub tab.</RowLabel>
@@ -518,6 +530,11 @@ export function SettingsPage() {
 
       {blockedOpen && <BlockedNamesModal open={blockedOpen} onClose={() => setBlockedOpen(false)} />}
       <ChangelogDialog open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+      {helpOpen && (
+        <Suspense fallback={null}>
+          <HelpDialog onClose={() => setHelpOpen(false)} />
+        </Suspense>
+      )}
     </Page>
   );
 }
