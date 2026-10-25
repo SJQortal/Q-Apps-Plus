@@ -22,6 +22,7 @@ import { isListedCategory } from "../constants/categories";
 import type { SellerRow } from "./productList";
 import type { SellerTab } from "../pages/ProductManager/sellerTabs";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
+import { openWalkthrough } from "../onboarding/Walkthrough";
 
 const HIDDEN_KEY = "qshopplus-checkup-hidden";
 /** Catalogues read for titles and types (a shop has a few; past this the checkup works from the list alone). */
@@ -184,6 +185,9 @@ export function ShopCheckup({ storeId, onOpenTab }: { storeId: string; onOpenTab
             {all ? "Everything Q-Shop+ needs is set. More you can do:" : `${done} of ${items.length} done. Each step takes a minute.`}
           </Typography>
         </Box>
+        <Button color="inherit" onClick={() => openWalkthrough("seller")} sx={{ minHeight: 44 }}>
+          Seller guide
+        </Button>
         {all && (
           <Button
             color="inherit"

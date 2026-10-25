@@ -17,6 +17,10 @@ import { resetSentCollections } from '../seller/useCollections';
 import { resetFavoritesMemory } from '../favorites/myFavorites';
 import { resetFavoriteCountsMemory } from '../favorites/counts';
 import { resetHiddenShopsMemory } from '../discovery/hiddenShops';
+import { suppressFirstRunForTests } from '../onboarding/Walkthrough';
+
+// The first-run walkthrough doesn't open by itself in tests (onboarding tests turn it on).
+suppressFirstRunForTests(true);
 
 // waitFor/findBy wait up to 3 s (1 s by default): the whole suite runs ~90 files at once, and on a
 // busy machine a page's first render can take longer than 1 s. Passing tests don't wait longer.

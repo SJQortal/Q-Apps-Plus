@@ -26,6 +26,7 @@ import { Page, PageHeader } from "../../components/layout/Page";
 import { NameSwitcher } from "../../components/layout/NameSwitcher";
 import { useShellActions } from "../../components/layout/shellState";
 import { APP_VERSION } from "../../constants/changelog";
+import { openWalkthrough } from "../../onboarding/Walkthrough";
 import {
   APP_NAME,
   ORIGINAL_APP_LINK,
@@ -465,6 +466,17 @@ export function SettingsPage() {
           <Buttons>
             <Button variant="outlined" startIcon={<HistoryOutlinedIcon />} onClick={() => setChangelogOpen(true)}>
               What&apos;s new
+            </Button>
+          </Buttons>
+        </Row>
+        <Row>
+          <RowLabel title="Walkthrough">A few steps through what {APP_NAME} does, and how selling works.</RowLabel>
+          <Buttons>
+            <Button variant="outlined" onClick={() => openWalkthrough("welcome")}>
+              Show the walkthrough
+            </Button>
+            <Button variant="outlined" onClick={() => openWalkthrough("seller")}>
+              Seller guide
             </Button>
           </Buttons>
         </Row>

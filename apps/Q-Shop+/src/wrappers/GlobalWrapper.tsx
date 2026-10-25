@@ -5,12 +5,13 @@
  * start-up when it couldn't read the shop's one; nothing is published here
  * now (docs/apps/Q-Shop+.md → Bugs 2).
  */
-import React, { lazy, Suspense, useEffect, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { RootState } from "../state/store";
 import { setIsOpen } from "../state/features/cartSlice";
 import ConsentModal from "../components/modals/ConsentModal";
+import { WalkthroughHost } from "../onboarding/Walkthrough";
 import { ShopDialogs } from "../components/modals/ShopDialogs";
 import { AppShell } from "../components/layout/AppShell";
 import { useUserAccount } from "../hooks/useUserAccount";
@@ -38,6 +39,9 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
   useIframe();
   const cartOpen = useSelector((state: RootState) => state.cart.isOpen);
   const [showDownloadModal, setShowDownloadModal] = useState<boolean>(false);
+  // The walkthrough opens once the original's notice is out of the way.
+  const [noticeSettled, setNoticeSettled] = useState(false);
+  const settleNotice = useCallback(() => setNoticeSettled(true), []);
 
   // "Open the cart" (cart.isOpen turning on) from anywhere goes to the cart
   // page. Leaving the cart pages (/cart and anything under it) any other way,
@@ -65,8 +69,9 @@ const GlobalWrapper: React.FC<Props> = ({ children }) => {
         onGatewaySignIn={() => setShowDownloadModal(true)}
       >
         {children}
+        <WalkthroughHost ready={noticeSettled} />
       </AppShell>
-      <ConsentModal />
+      <ConsentModal onSettled={settleNotice} />
       {showDownloadModal && (
         <Suspense fallback={null}>
           <DownloadQortalModal open={showDownloadModal} onClose={() => setShowDownloadModal(false)} />

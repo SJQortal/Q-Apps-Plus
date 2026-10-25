@@ -15,7 +15,7 @@ export const CONSENT_KEY = "general-consent";
  * recorded as read only when its button is pressed (the original recorded it
  * as soon as it showed).
  */
-export default function ConsentModal() {
+export default function ConsentModal({ onSettled }: { /** The notice is out of the way (accepted now, or before): the walkthrough may open. */ onSettled?: () => void } = {}) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -23,18 +23,22 @@ export default function ConsentModal() {
     generalLocal
       .getItem(CONSENT_KEY)
       .then((hasConsented) => {
-        if (!cancelled && !hasConsented) setOpen(true);
+        if (cancelled) return;
+        if (!hasConsented) setOpen(true);
+        else onSettled?.();
       })
       .catch(() => {
         // Storage unavailable: skip the notice rather than block the app.
+        if (!cancelled) onSettled?.();
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onSettled]);
 
   const accept = () => {
     setOpen(false);
+    onSettled?.();
     generalLocal.setItem(CONSENT_KEY, true).catch(() => {
       // The choice still applies for this visit.
     });

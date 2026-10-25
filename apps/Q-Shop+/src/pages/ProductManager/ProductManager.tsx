@@ -44,6 +44,7 @@ import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
 import { DeliveryTab } from "../../seller/DeliveryTab";
 import { CENTRED_TABS, CENTRED_WIDTH, SELLER_TABS, TAB_LABEL, isSellerTab, type SellerTab } from "./sellerTabs";
+import { useSellerGuideOnce } from "../../onboarding/Walkthrough";
 
 type ProductDialogState = { key: number; product: (Record<string, any> & { id: string }) | null } | null;
 type DeleteRequest = { key: number; products: ProductToDelete[]; onDeleted?: () => void } | null;
@@ -71,6 +72,8 @@ export const ProductManager = () => {
   const isCurrent = !!currentStore && currentStore.id === storeId;
   const routedShop = myStores.find((s) => s.id === storeId);
   const ready = isCurrent && !!dataContainer && dataContainer.storeId === storeId;
+  // How selling works, once, over the seller's first look at their shop (onboarding/tours.tsx).
+  useSellerGuideOnce(ready);
 
   // The routed shop is one of the seller's but not the current one: make it
   // current the way the rest of the app does, through the recently visited
