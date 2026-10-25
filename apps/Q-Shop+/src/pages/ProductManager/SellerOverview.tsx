@@ -27,6 +27,7 @@ import { OrderCard } from "../../orders/components/OrderCard";
 import { OrderListSkeleton } from "../../orders/components/OrderListView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
 import { RecentActivity } from "./RecentActivity";
+import { ShopCheckup } from "../../seller/ShopCheckup";
 import { buildActivity, useShopFavorites } from "../../seller/activity";
 import { useShopReviews } from "../Store/useShopData";
 import { shortStoreIdOf } from "../../qdn/identifiers";
@@ -98,7 +99,7 @@ function Tile({
   );
 }
 
-export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpenTab?: (tab: SellerTab) => void }) {
+export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpenTab?: (tab: SellerTab, extra?: Record<string, string>) => void }) {
   // Only the latest few orders are opened up front, plus the ones the counts need (orders/loader.ts).
   const list = useShopOrders(storeId, { openLimit: LATEST });
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
@@ -134,6 +135,8 @@ export function SellerOverview({ storeId, onOpenTab }: { storeId: string; onOpen
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      {/* What the shop still needs for Q-Shop+ (seller/checkup.ts): first, for shops made in the original app. */}
+      <ShopCheckup storeId={storeId} onOpenTab={onOpenTab} />
       <Box component="section" aria-labelledby="seller-overview-numbers">
         <Typography id="seller-overview-numbers" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
           At a glance

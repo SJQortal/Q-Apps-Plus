@@ -5,6 +5,7 @@
  * rates: seller/PricingDialog.tsx), and Advanced → Recreate shop data and
  * Delete shop.
  */
+import { useSearchParams } from "react-router-dom";
 import { useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
@@ -52,7 +53,17 @@ export function ShopTab() {
   const listReady = !!store && !!dataContainer && dataContainer.storeId === store.id;
   const pricing = listReady ? fiatPricingOf(dataContainer) : null;
   const [pricingOpen, setPricingOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
+  // `?edit=1` (the Overview's checkup) opens Edit shop at once.
+  const [params, setParams] = useSearchParams();
+  const [editOpen, setEditOpenState] = useState(() => params.get("edit") === "1");
+  const setEditOpen = (open: boolean) => {
+    setEditOpenState(open);
+    if (!open && params.has("edit")) {
+      const next = new URLSearchParams(params);
+      next.delete("edit");
+      setParams(next, { replace: true });
+    }
+  };
   const [recreateOpen, setRecreateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   if (!store) return null;

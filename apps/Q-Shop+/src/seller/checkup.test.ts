@@ -1,0 +1,52 @@
+import { describe, expect, it } from "vitest";
+import { isFeeProduct, shopCheckup, suggestShippingCountries } from "./checkup";
+import type { SellerRow } from "./productList";
+
+const row = (id: string, category: string, status = "AVAILABLE"): SellerRow => ({ productId: id, created: 1, priceQort: 1, category, catalogueId: "c", status });
+
+describe("the shop checkup", () => {
+  it("reads the countries old typed Ships to texts name (texts from the node's shops)", () => {
+    const all = suggestShippingCountries("Worldwide").codes.length;
+    expect(all).toBeGreaterThan(200);
+    expect(suggestShippingCountries("U.S.A.").codes).toEqual(["US"]);
+    expect(suggestShippingCountries("USA (50 States)").codes).toEqual(["US"]);
+    expect(suggestShippingCountries("Üle Eesti").codes).toEqual(["EE"]);
+    expect(suggestShippingCountries("Austria Germany Switzerland").codes).toEqual(["AT", "DE", "CH"]);
+    expect(suggestShippingCountries("Iceland, Poland, UK, USA, Canada").codes).toEqual(["IS", "PL", "GB", "US", "CA"]);
+    expect(suggestShippingCountries("Anywhere").codes.length).toBe(all);
+    expect(suggestShippingCountries("Domestic").codes).toEqual([]);
+    expect(suggestShippingCountries("Europe").codes).toContain("FR");
+    expect(suggestShippingCountries("Russia").codes).toEqual(["RU"]);
+  });
+
+  it("finds products used to charge delivery", () => {
+    expect(isFeeProduct(row("a", "Shipping"), "USPS Priority")).toBe(true);
+    expect(isFeeProduct(row("a", "Food"), "Postage to Canada")).toBe(true);
+    expect(isFeeProduct(row("a", "Food & Drink"), "Ghee 100 ml")).toBe(false);
+  });
+
+  it("lists what a shop still needs: old categories, its details, payments, where it ships, delivery prices, fee products", () => {
+    const rows = [row("a", "Health & Beauty"), row("b", "füüsilised"), row("c", "Postage"), row("d", "toy", "RETIRED")];
+    const items = shopCheckup({
+      shop: { title: "Old shop", description: "Hi", logo: "data:x", location: "Tallinn", shipsTo: "Üle Eesti", supportedCoins: ["QORT", "ARRR"], foreignCoins: { ARRR: "" } },
+      rows,
+      detailsOf: (r) => ({ title: r.productId === "c" ? "Saatmine" : "Thing", type: "physical" }),
+      hasDelivery: false,
+    });
+    expect(items).toEqual([
+      { key: "categories", done: false, count: 2 },
+      { key: "details", done: true },
+      { key: "payments", done: false },
+      { key: "shipsTo", done: false },
+      { key: "delivery", done: false },
+      { key: "feeProducts", done: false, count: 1 },
+    ]);
+    // A shop of digital products only needn't say where it ships.
+    const digital = shopCheckup({ shop: { logo: "x", description: "d", location: "l" }, rows: [row("a", "Services")], detailsOf: () => ({ type: "digital" }), hasDelivery: false });
+    expect(digital.map((i) => [i.key, i.done])).toEqual([
+      ["categories", true],
+      ["details", true],
+      ["payments", true],
+    ]);
+  });
+});

@@ -12,6 +12,7 @@
  * single states and territories. The summary in words is what the shop's
  * "Ships to" says (constants/shipping.ts).
  */
+import { suggestShippingCountries } from "./checkup";
 import { useId, useMemo, useState } from "react";
 import { Box, Button, Checkbox, Collapse, FormControlLabel, IconButton, InputAdornment, TextField, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -265,6 +266,8 @@ export function ShipsToPicker({
   };
   const shipsToUs = chosen.has(US);
   const summary = shippingSummaryWithStates(value ?? [], shipsToUs ? states : null);
+  // An older shop's typed text, read as countries when its words say (seller/checkup.ts): one tap to use them.
+  const suggestion = value === null && typed ? suggestShippingCountries(typed) : null;
   const inhabited = SHIPPING_REGIONS.filter((r) => r.id !== "remote").flatMap((r) => r.codes);
 
   return (
@@ -279,6 +282,16 @@ export function ShipsToPicker({
             ? `Now: "${typed}" (typed before). Tick the regions and countries you deliver physical products to, so buyers see it and checkout can tell them.`
             : "Tick the regions and countries you deliver physical products to."}
       </Typography>
+      {suggestion && suggestion.codes.length > 0 && (
+        <Box>
+          <Button variant="contained" size="small" onClick={() => onChange(suggestion.codes)} sx={{ minHeight: 40 }}>
+            {`Use ${shippingSummaryWithStates(suggestion.codes, null)}`}
+          </Button>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {`From what you typed ("${typed}"). Check it, then add or take out regions and countries below.`}
+          </Typography>
+        </Box>
+      )}
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
         <Button variant="outlined" color="inherit" size="small" onClick={() => set(inhabited, true)} sx={{ minHeight: 40 }}>
           Worldwide

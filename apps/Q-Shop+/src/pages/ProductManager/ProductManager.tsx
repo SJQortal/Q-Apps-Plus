@@ -92,10 +92,11 @@ export const ProductManager = () => {
   }, [dispatch]);
 
   const setTab = useCallback(
-    (next: string) => {
+    (next: string, extra?: Record<string, string>) => {
       if (!isSellerTab(next)) return;
       const params = new URLSearchParams(searchParams);
       params.set("tab", next);
+      for (const [k, v] of Object.entries(extra ?? {})) params.set(k, v);
       setSearchParams(params, { replace: true });
     },
     [searchParams, setSearchParams]
