@@ -789,7 +789,11 @@ export default {
       await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 });
       const d = page.getByRole('dialog', { name: 'Edit shop' });
       await d.getByRole('switch', { name: "I'm away for a while" }).click({ timeout: 4000 });
-      await d.getByLabel('Back on (optional)').fill('2026-11-03');
+      // The app's own calendar (components/common/DateTimeFields.tsx): next month, the 3rd.
+      await d.getByRole('button', { name: 'Choose: Back on (optional)' }).click({ timeout: 4000 });
+      const cal = page.getByRole('dialog', { name: 'Back on (optional)' });
+      await cal.getByRole('button', { name: 'Next month' }).click({ timeout: 4000 });
+      await cal.getByRole('button', { name: /\b3,? / }).first().click({ timeout: 4000 });
       await d.getByRole('textbox', { name: 'Note for buyers (optional)' }).fill('At a craft fair; messages answered in the evenings.');
       await d.getByRole('textbox', { name: 'Note for buyers (optional)' }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
@@ -929,6 +933,23 @@ export default {
       // The header's or the phone bar's Shops.
       await page.getByRole('link', { name: /^Shops$/ }).or(page.getByRole('button', { name: /^Shops$/ })).first().click({ timeout: 4000 });
       await page.getByRole('dialog', { name: "Your changes aren't published" }).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-pickup-time', path: '/product-manager/q-store-general-my-shop?tab=delivery', overlay: true, after: async (page) => {
+      const points = page.getByRole('region', { name: 'Pickup points' });
+      await points.getByRole('combobox', { name: /^From/ }).first().click({ timeout: 8000 });
+      await page.getByRole('listbox').waitFor({ timeout: 4000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-auction-calendar', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('searchbox', { name: 'Search your products' }).fill('Lamp 11', { timeout: 8000 });
+      await editLamp11(page);
+      const d = page.getByRole('dialog', { name: 'Edit product' });
+      await d.getByRole('button', { name: 'Auction', exact: true }).click({ timeout: 10000 });
+      await d.getByRole('button', { name: 'At a date' }).click({ timeout: 4000 });
+      await d.getByRole('button', { name: 'Choose: Starts at' }).click({ timeout: 4000 });
+      await page.getByRole('dialog', { name: 'Starts at' }).waitFor({ timeout: 4000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-delivery-options', path: '/product-manager/q-store-general-my-shop?tab=delivery', after: async (page) => { await page.getByRole('region', { name: 'Delivery options' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
