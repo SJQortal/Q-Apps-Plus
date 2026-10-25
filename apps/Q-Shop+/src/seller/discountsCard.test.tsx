@@ -17,6 +17,7 @@ import { discountsIdentifier } from "../qdn/identifiers";
 import { resetQdnCaches } from "../qdn/search";
 import { codeHash, nameHash } from "../discounts/model";
 import { DiscountsCard } from "./DiscountsCard";
+import { resetPeopleCaches } from "../discounts/people";
 
 const DISCOUNTS_ID = discountsIdentifier(SHORT_STORE_ID);
 
@@ -30,6 +31,10 @@ function setup(opts: { published?: unknown } = {}) {
         return ok(opts.published && String(input).includes(DISCOUNTS_ID) ? [{ name: SELLER, service: "DOCUMENT", identifier: DISCOUNTS_ID }] : []);
       }
       if (path === `/arbitrary/DOCUMENT/${encodeURIComponent(SELLER)}/${DISCOUNTS_ID}`) return ok(opts.published);
+      // Names and Q-Chat groups (discounts/people.ts).
+      if (path === "/names/search" && String(input).includes("query=An&")) return ok([{ name: "Annie" }, { name: "Ann" }]);
+      if (path === `/groups/member/${SELLER_ADDRESS}`) return ok([{ groupId: 7, groupName: "Biohackers", memberCount: 3 }]);
+      if (path === "/groups/members/7") return ok({ memberCount: 3, members: [{ member: "Q1", primaryName: "Cy" }, { member: "Q2", primaryName: "Dee" }, { member: "Q3" }] });
       return { ok: false, status: 404, text: async () => '{"error":1401}', json: async () => ({ error: 1401 }) };
     })
   );
@@ -54,6 +59,7 @@ const published = (q: QortalMock) => decodeData64(String((q.callsFor("PUBLISH_QD
 
 beforeEach(() => {
   resetQdnCaches();
+  resetPeopleCaches();
   localStorage.clear();
 });
 afterEach(() => vi.unstubAllGlobals());
@@ -90,11 +96,16 @@ describe("discount codes in Shop Settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add a discount code" }));
     const d = await screen.findByRole("dialog", { name: "Add a discount code" });
     fireEvent.click(within(d).getByRole("button", { name: "Add" }));
-    expect(await within(d).findByText("Give it a code, or the Qortal name it's for.")).toBeInTheDocument();
-    fireEvent.change(within(d).getByLabelText(/Only for this Qortal name/), { target: { value: "Bob" } });
+    expect(await within(d).findByText("Give it a code, or the Qortal names it's for.")).toBeInTheDocument();
+    const names = within(d).getByRole("combobox", { name: /Only for these Qortal names/ });
+    // A typed name goes in with Enter, and is checked on Add.
+    fireEvent.change(names, { target: { value: "Bob" } });
+    fireEvent.keyDown(names, { key: "Enter" });
     fireEvent.click(within(d).getByRole("button", { name: "Add" }));
     expect(await within(d).findByText("There's no Qortal name Bob.")).toBeInTheDocument();
-    fireEvent.change(within(d).getByLabelText(/Only for this Qortal name/), { target: { value: "Ann" } });
+    fireEvent.keyDown(names, { key: "Backspace" });
+    fireEvent.change(names, { target: { value: "Ann" } });
+    fireEvent.keyDown(names, { key: "Enter" });
     fireEvent.click(within(d).getByRole("button", { name: "Add" }));
     const list = await screen.findByRole("list", { name: "Discount codes" });
     expect(within(list).getByText("For Ann, no code")).toBeInTheDocument();
@@ -106,6 +117,39 @@ describe("discount codes in Shop Settings", () => {
     await waitFor(() => expect(within(list).getByRole("button", { name: "Delete For Ann, no code" })).toBeEnabled());
     fireEvent.click(within(list).getByRole("button", { name: "Delete For Ann, no code" }));
     expect(await screen.findByText("No discount codes yet.")).toBeInTheDocument();
+  });
+
+  it("gives several names a discount: suggested as typed, and a Q-Chat group's members", async () => {
+    const { q } = setup();
+    await screen.findByText("No discount codes yet.");
+    fireEvent.click(screen.getByRole("button", { name: "Add a discount code" }));
+    const d = await screen.findByRole("dialog", { name: "Add a discount code" });
+    const names = within(d).getByRole("combobox", { name: /Only for these Qortal names/ });
+    fireEvent.change(names, { target: { value: "An" } });
+    // The exact name first, then longer ones.
+    const ann = await screen.findByRole("option", { name: "Ann" }, { timeout: 2000 });
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Ann", "Annie"]);
+    fireEvent.click(ann);
+    fireEvent.click(within(d).getByRole("button", { name: "Add a Q-Chat group's members" }));
+    const g = await screen.findByRole("dialog", { name: "Add a group's members" });
+    // The seller's own groups are offered before anything is typed.
+    fireEvent.keyDown(within(g).getByRole("combobox", { name: "Q-Chat group" }), { key: "ArrowDown" });
+    fireEvent.click(await within(g).findByRole("option", { name: /Biohackers/ }));
+    fireEvent.click(within(g).getByRole("button", { name: "Add their names" }));
+    expect(await within(d).findByText("Added 2 names from Biohackers; 1 member has no name.")).toBeInTheDocument();
+    fireEvent.click(within(d).getByRole("button", { name: "Add" }));
+    const list = await screen.findByRole("list", { name: "Discount codes" });
+    expect(within(list).getByText("For Ann, Cy and Dee, no code")).toBeInTheDocument();
+    // Suggested and group names are real already: nothing to check.
+    expect(q.callsFor("GET_NAME_DATA")).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Publish discount codes" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    const doc = published(q);
+    const hashes = [await nameHash(STORE_ID, "Ann"), await nameHash(STORE_ID, "Cy"), await nameHash(STORE_ID, "Dee")];
+    // The first name stays in forName, for builds that read only that.
+    expect(doc.discounts).toEqual([{ id: expect.any(String), percent: 10, forName: hashes[0], forNames: hashes }]);
+    const id = doc.discounts[0].id;
+    expect(JSON.parse(atob(String(doc.secret).slice(4)))).toEqual({ codes: {}, names: { [id]: "Ann" }, nameLists: { [id]: ["Ann", "Cy", "Dee"] } });
   });
 
   it("reads the published codes back with the seller's list, and changes one", async () => {

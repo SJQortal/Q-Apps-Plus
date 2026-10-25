@@ -1,16 +1,19 @@
 /**
  * Adding or changing a discount code (discounts/): the code (or Random), a
  * percentage off and/or free delivery, and its limits: chosen products, the
- * days it runs, a minimum order in the shop's currency, one Qortal name. A
- * discount for one name needs no code: that buyer's checkout applies it.
+ * days it runs, a minimum order in the shop's currency, the Qortal names it's
+ * for (seller/DiscountNames.tsx). A discount for names needs no code: those
+ * buyers' checkouts apply it.
  */
 import { useState } from "react";
 import ShortUniqueId from "short-unique-id";
 import { Alert, Box, Button, Checkbox, FormControlLabel, InputAdornment, Radio, RadioGroup, TextField, Typography } from "@mui/material";
 import CasinoOutlinedIcon from "@mui/icons-material/CasinoOutlined";
 import { ResponsiveDialog } from "../components/common/mobile";
-import { CODE_PATTERN, MAX_PERCENT, normalizeCode } from "../discounts/model";
-import { dayToTime, randomCode, timeToDay, type DiscountDraft } from "../discounts/drafts";
+import { CODE_PATTERN, MAX_PERCENT, discountNames, normalizeCode } from "../discounts/model";
+import { DiscountNamesField } from "./DiscountNames";
+import { mapWithConcurrency } from "../qdn/search";
+import { dayToTime, draftNames, hiddenNames, randomCode, timeToDay, type DiscountDraft } from "../discounts/drafts";
 import { nameOwner } from "../orders/reads";
 import { parseAmount, sanitizeAmountInput } from "./productDraft";
 import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
@@ -35,7 +38,9 @@ export function DiscountDialog({
   onClose: () => void;
 }) {
   const [code, setCode] = useState(draft?.codeText ?? "");
-  const [name, setName] = useState(draft?.nameText ?? "");
+  const [names, setNames] = useState<string[]>(() => (draft ? draftNames(draft) : []));
+  // Names known to exist (saved before, suggested by the node, or a group's): only typed ones are checked.
+  const [known, setKnown] = useState<Set<string>>(() => new Set((draft ? draftNames(draft) : []).map((n) => n.toLowerCase())));
   const [percent, setPercent] = useState(draft ? String(draft.percent) : "10");
   const [freeDelivery, setFreeDelivery] = useState(!!draft?.freeDelivery);
   const [some, setSome] = useState(!!draft?.products);
@@ -48,8 +53,8 @@ export function DiscountDialog({
   const [checking, setChecking] = useState(false);
   // A code set on another device whose list couldn't be read here: kept unless a new one is typed.
   const hiddenCode = !!draft?.code && !draft.codeText;
-  // The same for a name limit set elsewhere: it stays unless a name is typed.
-  const hiddenName = !!draft?.forName && !draft.nameText;
+  // The same for names set elsewhere: they stay unless names are added here.
+  const hiddenName = !!draft && hiddenNames(draft);
 
   const save = async () => {
     setProblem(null);
@@ -59,22 +64,25 @@ export function DiscountDialog({
     if (percentValue === 0 && !freeDelivery) return setProblem("Take something off: a percentage, free delivery, or both.");
     if (typed && !CODE_PATTERN.test(typed)) return setProblem("A code is 3 to 24 letters or digits (and - or _).");
     if (typed && takenCodes.includes(typed)) return setProblem("You have this code already.");
-    const forName = name.trim();
-    if (!typed && !hiddenCode && !forName && !hiddenName) return setProblem("Give it a code, or the Qortal name it's for.");
+    if (!typed && !hiddenCode && names.length === 0 && !hiddenName) return setProblem("Give it a code, or the Qortal names it's for.");
     if (some && products.length === 0) return setProblem("Choose the products, or pick Every product.");
     const startTime = starts ? dayToTime(starts, false) : undefined;
     const endTime = ends ? dayToTime(ends, true) : undefined;
     if (startTime !== undefined && endTime !== undefined && endTime < startTime) return setProblem("It ends before it starts.");
     const least = minTotal.trim() ? parseAmount(minTotal) : undefined;
     if (least !== undefined && !(least > 0)) return setProblem("A minimum order is an amount over nothing, or leave it empty.");
-    if (forName && forName !== draft?.nameText) {
+    const unchecked = names.filter((n) => !known.has(n.toLowerCase()));
+    if (unchecked.length > 0) {
       setChecking(true);
-      const known = await nameOwner(forName).then(
-        () => true,
-        () => false
+      const found = await mapWithConcurrency(unchecked, 4, (n) =>
+        nameOwner(n).then(
+          () => true,
+          () => false
+        )
       );
       setChecking(false);
-      if (!known) return setProblem(`There's no Qortal name ${forName}.`);
+      const missing = unchecked.filter((_, i) => !found[i]);
+      if (missing.length > 0) return setProblem(missing.length === 1 ? `There's no Qortal name ${missing[0]}.` : `These aren't Qortal names: ${missing.join(", ")}.`);
     }
     const next: DiscountDraft = {
       id: draft?.id ?? newId(),
@@ -87,10 +95,10 @@ export function DiscountDialog({
       ...(draft?.paused && { paused: true as const }),
       // A new code replaces the old; none typed keeps a code set elsewhere.
       ...(typed ? { codeText: typed } : hiddenCode && draft?.code ? { code: draft.code } : {}),
-      ...(forName
-        ? { nameText: forName, ...(forName === draft?.nameText && draft.forName && { forName: draft.forName }) }
-        : hiddenName && draft?.forName
-          ? { forName: draft.forName }
+      ...(names.length > 0
+        ? { nameTexts: names }
+        : hiddenName && draft
+          ? { ...(draft.forName && { forName: draft.forName }), ...(draft.forNames && { forNames: draft.forNames }) }
           : {}),
     };
     onSave(next);
@@ -109,7 +117,7 @@ export function DiscountDialog({
               Cancel
             </Button>
             <Button variant="contained" onClick={() => void save()} disabled={checking}>
-              {checking ? "Checking the name…" : draft ? "Save" : "Add"}
+              {checking ? "Checking the names…" : draft ? "Save" : "Add"}
             </Button>
           </>
         }
@@ -171,17 +179,11 @@ export function DiscountDialog({
             helperText="What the products must come to before it applies."
             slotProps={{ htmlInput: { inputMode: "decimal" }, input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> } }}
           />
-          <TextField
-            label="Only for this Qortal name (optional)"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={hiddenName ? "Kept as it is" : undefined}
-            helperText={
-              hiddenName
-                ? "Set on another device for one Qortal name: type a name to change it, or leave it empty to keep it."
-                : "Leave the code empty and that buyer's checkout applies it by itself."
-            }
-            slotProps={{ htmlInput: { maxLength: 40, autoComplete: "off", spellCheck: false } }}
+          <DiscountNamesField
+            names={names}
+            onChange={setNames}
+            onKnown={(more) => setKnown((prev) => new Set([...prev, ...more.map((n) => n.toLowerCase())]))}
+            hidden={hiddenName && draft ? discountNames(draft).length : 0}
           />
           {problem && (
             <Alert severity="error" role="alert">
