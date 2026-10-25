@@ -9,6 +9,7 @@
  * happen. Nothing here can pay twice: Pay runs once per press and is gone
  * while it runs, and the results only ever finish an order already paid.
  */
+import { PolicyLines } from "../../shop/PolicyLines";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
@@ -494,6 +495,8 @@ export function CheckoutDialog({
               </Typography>
             ))}
         </Box>
+        {/* The shop's dispatch time and returns, before paying (shop/policies.ts). */}
+        <PolicyLines shop={shop} digital={isDigital} />
         <Alert severity="info">Hub asks you to confirm the payment, then to record your order (2 steps).</Alert>
         {notice && <Alert severity={notice.severity}>{notice.text}</Alert>}
       </Stack>

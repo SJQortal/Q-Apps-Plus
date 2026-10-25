@@ -28,6 +28,7 @@ import { FavoriteButton } from "../../favorites/FavoriteButton";
 import { favoriteShop } from "../../favorites/model";
 import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
 import { shortStoreIdOf } from "../../qdn/identifiers";
+import { PolicyLines } from "../../shop/PolicyLines";
 
 const panelSx = {
   border: 1,
@@ -264,6 +265,7 @@ export function ShopHeader({
                 </span>
               </Typography>
             ) : null}
+            <PolicyLines shop={shop} />
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
               <Typography variant="body2" color="text.secondary" component="span">
                 Accepts

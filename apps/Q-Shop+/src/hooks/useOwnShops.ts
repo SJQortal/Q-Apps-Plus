@@ -24,6 +24,7 @@
  * Only the shop asked for last may land, and a shop lands whole (its JSON and
  * index together), so a load overtaken by another leaves nothing behind.
  */
+import { policiesOf } from "../shop/policies";
 import { useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { AppDispatch, RootState } from "../state/store";
@@ -78,6 +79,7 @@ export function currentStoreFrom(storeId: string, owner: string, json: any, row?
     metaDescription: typeof json?.metaDescription === "string" ? json.metaDescription : undefined,
     shippingCountries: Array.isArray(json?.shippingCountries) ? json.shippingCountries : undefined,
     shippingStates: Array.isArray(json?.shippingStates) ? json.shippingStates : undefined,
+    policies: policiesOf(json) ?? undefined,
     owner,
   } as unknown as CurrentStore;
 }

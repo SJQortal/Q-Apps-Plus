@@ -39,14 +39,30 @@ describe("the shop checkup", () => {
       { key: "payments", done: false },
       { key: "shipsTo", done: false },
       { key: "delivery", done: false },
+      { key: "policies", done: false },
       { key: "feeProducts", done: false, count: 1 },
     ]);
-    // A shop of digital products only needn't say where it ships.
-    const digital = shopCheckup({ shop: { logo: "x", description: "d", location: "l" }, rows: [row("a", "Services")], detailsOf: () => ({ type: "digital" }), hasDelivery: false });
+    // A shop of digital products only needn't say where it ships, or when it dispatches.
+    const digital = shopCheckup({
+      shop: { logo: "x", description: "d", location: "l", policies: { returnDays: 0 } },
+      rows: [row("a", "Services")],
+      detailsOf: () => ({ type: "digital" }),
+      hasDelivery: false,
+    });
     expect(digital.map((i) => [i.key, i.done])).toEqual([
       ["categories", true],
       ["details", true],
       ["payments", true],
+      ["policies", true],
     ]);
+  });
+
+  it("wants dispatch time and returns said for a shop that ships", () => {
+    const check = (policies: unknown) =>
+      shopCheckup({ shop: { policies }, rows: [row("a", "Toys & Hobbies")], detailsOf: () => ({ type: "physical" }), hasDelivery: true }).find((i) => i.key === "policies")?.done;
+    expect(check(undefined)).toBe(false);
+    expect(check({ returnDays: 14 })).toBe(false);
+    expect(check({ returnDays: 14, dispatchDays: 2 })).toBe(true);
+    expect(check({ returnDays: 0, dispatchDays: 30 })).toBe(true);
   });
 });

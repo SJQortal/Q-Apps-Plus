@@ -13,10 +13,11 @@
  */
 import { isListedCategory } from "../constants/categories";
 import { shippingCountriesOf } from "../constants/shipping";
+import { policiesOf } from "../shop/policies";
 import { FOREIGN_TICKERS } from "../money/coins";
 import type { SellerRow } from "./productList";
 
-export type CheckupKey = "categories" | "shipsTo" | "delivery" | "feeProducts" | "payments" | "details";
+export type CheckupKey = "categories" | "shipsTo" | "delivery" | "feeProducts" | "payments" | "details" | "policies";
 
 export interface CheckupItem {
   key: CheckupKey;
@@ -41,6 +42,7 @@ export interface CheckupShop {
   shippingCountries?: unknown;
   supportedCoins?: string[];
   foreignCoins?: Record<string, string>;
+  policies?: unknown;
 }
 
 /**
@@ -74,6 +76,9 @@ export function shopCheckup(args: {
     items.push({ key: "shipsTo", done: !!shippingCountriesOf(args.shop) });
     items.push({ key: "delivery", done: args.hasDelivery !== false });
   }
+  // Dispatch time and returns (shop/policies.ts): buyers far away decide on them.
+  const policies = policiesOf(args.shop);
+  items.push({ key: "policies", done: policies?.returnDays !== undefined && (!ships || policies.dispatchDays !== undefined) });
   if (fees.length > 0) items.push({ key: "feeProducts", done: false, count: fees.length });
   return items;
 }

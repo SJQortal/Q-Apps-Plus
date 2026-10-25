@@ -1,3 +1,4 @@
+import type { ShopPolicies } from "../../shop/policies";
 import { createSlice } from "@reduxjs/toolkit";
 import { Product } from "./storeSlice";
 import { Order } from "./orderSlice";
@@ -25,6 +26,8 @@ export interface CurrentStore {
   shippingCountries?: string[];
   /** + app, additive: the US states it ships to, when some only. */
   shippingStates?: string[];
+  /** + app, additive: dispatch time, returns and terms (shop/policies.ts). */
+  policies?: ShopPolicies;
   id: string;
   title: string;
   description: string;

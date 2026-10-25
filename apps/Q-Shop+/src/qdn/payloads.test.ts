@@ -123,6 +123,17 @@ describe("shop publishes (the original's shapes)", () => {
     expect(typed.storeObj).toMatchObject({ shippingStates: ["OR"] });
   });
 
+  it("writes the shop's policies last, an edit takes them out with null, and keeps the shop's own when not given", () => {
+    const policies = { dispatchDays: 2, returnDays: 14, returns: "Unused, in its box" };
+    const created = buildCreateStorePublish({ name: SELLER, shortStoreId: SHORT_STORE_ID, fields: { ...fields, policies }, created: 1 });
+    expect(Object.keys(created.storeObj).at(-1)).toBe("policies");
+    expect(created.storeObj).toMatchObject({ policies });
+    const removed = buildEditStorePublish({ name: SELLER, currentStore: { ...viewedStore, policies }, fields: { ...fields, policies: null } });
+    expect("policies" in removed.storeObj).toBe(false);
+    const kept = buildEditStorePublish({ name: SELLER, currentStore: { ...viewedStore, policies }, fields });
+    expect(kept.storeObj).toMatchObject({ policies });
+  });
+
   it("writes a meta description into the shop and its QDN description, and leaves it out when empty (additive data)", () => {
     const meta = "Ghee, tallow and sleep gear from Reykjavík.";
     const created = buildCreateStorePublish({ name: SELLER, shortStoreId: SHORT_STORE_ID, fields: { ...fields, metaDescription: meta }, created: 1 });

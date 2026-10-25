@@ -12,6 +12,8 @@ import { CoinIcon } from "../../../components/money/CoinIcon";
 import { coinLabel, shopCoins, type ShopCoinSettings } from "../../../money/coins";
 import { mailToLink } from "../../../qdn/links";
 import { useLoadedPictures } from "../../../components/common/useLoadedPictures";
+import { PolicyLines } from "../../../shop/PolicyLines";
+import { policiesOf } from "../../../shop/policies";
 
 export interface ShopDetails extends ShopCoinSettings {
   title?: string;
@@ -20,6 +22,7 @@ export interface ShopDetails extends ShopCoinSettings {
   location?: string;
   shipsTo?: string;
   created?: number | string;
+  policies?: unknown;
 }
 
 export function formatShopDate(created: number | string | undefined): string {
@@ -107,6 +110,11 @@ export function StoreDetails({
         {opened ? <Row label="Opened">{opened}</Row> : null}
         {shop.location ? <Row label="Location">{shop.location}</Row> : null}
         {shop.shipsTo ? <Row label="Ships to">{shop.shipsTo}</Row> : null}
+        {policiesOf(shop) ? (
+          <Row label="Policies">
+            <PolicyLines shop={shop} full />
+          </Row>
+        ) : null}
         <Row label="Accepts">
           <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexWrap: "wrap", gap: 1.5 }}>
             {coins.map((coin) => (

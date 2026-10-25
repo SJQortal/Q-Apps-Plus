@@ -9,6 +9,7 @@
 import { FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
 import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } from "../constants/shipping";
 import type { StoreFields } from "../qdn/payloads";
+import { MAX_RETURNS_TEXT, MAX_TERMS_TEXT, policiesForPublish, policiesOf } from "../shop/policies";
 
 export interface ShopFormValues {
   logo: string | null;
@@ -28,6 +29,11 @@ export interface ShopFormValues {
   /** Payout address per coin, kept while a coin is switched off. */
   addresses: Record<ForeignTicker, string>;
   assets: ShopAsset[];
+  /** Policies (shop/policies.ts): working days to dispatch, days to return (0: none), null: not said. */
+  dispatchDays: number | null;
+  returnDays: number | null;
+  returns: string;
+  terms: string;
 }
 
 /** The original's limit for a shop title. */
@@ -60,8 +66,10 @@ export function shopFormValues(store?: {
   supportedCoins?: string[];
   foreignCoins?: Record<string, string>;
   acceptedAssets?: ShopAsset[];
+  policies?: unknown;
 } | null): ShopFormValues {
   const supported = Array.isArray(store?.supportedCoins) ? store.supportedCoins : [];
+  const policies = policiesOf(store);
   return {
     logo: store?.logo || null,
     title: store?.title ?? "",
@@ -77,6 +85,10 @@ export function shopFormValues(store?: {
     assets: Array.isArray(store?.acceptedAssets)
       ? store.acceptedAssets.filter((a) => Number.isSafeInteger(a?.id) && a.id > 0).map((a) => ({ id: a.id, name: String(a.name ?? "") }))
       : [],
+    dispatchDays: policies?.dispatchDays ?? null,
+    returnDays: policies?.returnDays ?? null,
+    returns: policies?.returns ?? "",
+    terms: policies?.terms ?? "",
   };
 }
 
@@ -97,6 +109,7 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
     foreignCoins,
     supportedCoins,
     acceptedAssets: values.assets.map((a) => ({ id: a.id, name: a.name })),
+    policies: policiesForPublish(values) ?? null,
   };
 }
 
@@ -116,6 +129,8 @@ export function validateShopForm(values: ShopFormValues): string | null {
     return "Tick where the shop ships to (Worldwide for anywhere)";
   }
   if (usStates(values)?.length === 0) return "Tick the US states the shop ships to, or untick the United States";
+  if (values.returns.trim().length > MAX_RETURNS_TEXT) return `Shorten what you say about returns to ${MAX_RETURNS_TEXT} characters`;
+  if (values.terms.trim().length > MAX_TERMS_TEXT) return `Shorten your other terms to ${MAX_TERMS_TEXT} characters`;
   for (const t of FOREIGN_TICKERS) {
     if (values.coins[t] && !values.addresses[t].trim()) return `Add your ${t} payout address, or switch ${t} off`;
   }

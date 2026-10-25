@@ -50,6 +50,7 @@ import { useLandAtTop } from "../../hooks/useLandAtTop";
 import { ProductDescription, ProductMedia, useDescriptionParts } from "../../richtext/ProductDescription";
 import { ShippingCountriesButton } from "../Store/ShippingCountries";
 import { ProductDelivery, type DeliveryShop } from "../../delivery/ProductDelivery";
+import { PolicyLines } from "../../shop/PolicyLines";
 import type { CartLine } from "../../money/order";
 import { useShopCollections } from "../Store/useShopCollections";
 import { CopyLinkButton } from "../Store/CopyLinkButton";
@@ -461,6 +462,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               line={{ productId, catalogueId, quantity, product: product as CartLine["product"] }}
             />
           )}
+          {/* The shop's dispatch time and returns (shop/policies.ts). */}
+          <PolicyLines shop={shop as { policies?: unknown; title?: string } | null} digital={product.type === "digital"} />
           {product.type !== "digital" && auctionTerms && typeof shop?.shipsTo === "string" && shop.shipsTo && (
             <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
               <LocalShippingOutlinedIcon fontSize="small" aria-hidden />

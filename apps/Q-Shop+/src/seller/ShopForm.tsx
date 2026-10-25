@@ -1,7 +1,8 @@
 /**
  * The shop's fields, shared by Create shop and Edit shop: logo, title,
- * description, location, ships to, the coins it takes (QORT always; ARRR
- * with a payout address) and the Q-Assets it accepts. Controlled: the dialog
+ * description, location, ships to, its policies (dispatch time, returns,
+ * terms), the coins it takes (QORT always; ARRR with a payout address) and
+ * the Q-Assets it accepts. Controlled: the dialog
  * holds the values (seller/shopFields.ts).
  */
 import { useState, type Dispatch, type SetStateAction } from "react";
@@ -12,6 +13,7 @@ import {
   CircularProgress,
   Collapse,
   FormControlLabel,
+  MenuItem,
   Switch,
   TextField,
   Typography,
@@ -25,6 +27,10 @@ import { isHubDecline } from "../qdn/hubErrors";
 import { AssetPicker } from "./AssetPicker";
 import { MAX_META_DESCRIPTION, MAX_SHOP_TITLE, SHOP_CARD_TEXT_WIDTH, addressWarning, type ShopFormValues } from "./shopFields";
 import { ShipsToPicker } from "./ShipsToPicker";
+import { selectMenuProps } from "../components/common/menuStyle";
+import { DISPATCH_DAY_CHOICES, MAX_RETURNS_TEXT, MAX_TERMS_TEXT, RETURN_DAY_CHOICES } from "../shop/policies";
+
+const NOT_SAID = "none";
 
 export const SectionTitle = ({ children, as = "h3" }: { children: string; as?: "h2" | "h3" }) => (
   <Typography
@@ -125,6 +131,69 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           states={values.shippingStates}
           onStatesChange={(states) => set("shippingStates", states)}
           typed={values.shipsTo}
+        />
+      </Box>
+
+      <Box component="section" aria-label="Policies" sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <SectionTitle>Policies</SectionTitle>
+        <Typography variant="body2" color="text.secondary">
+          Buyers see these on your shop, your products and at checkout, before they pay. All optional.
+        </Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 2 }}>
+          <TextField
+            select
+            label="Dispatch time"
+            value={values.dispatchDays ?? NOT_SAID}
+            onChange={(e) => set("dispatchDays", e.target.value === NOT_SAID ? null : Number(e.target.value))}
+            helperText="From payment to sending it off"
+            slotProps={{ select: { MenuProps: selectMenuProps } }}
+          >
+            <MenuItem value={NOT_SAID}>Not said</MenuItem>
+            {DISPATCH_DAY_CHOICES.map((days) => (
+              <MenuItem key={days} value={days}>
+                {days === 1 ? "1 working day" : `${days} working days`}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Returns"
+            value={values.returnDays ?? NOT_SAID}
+            onChange={(e) => set("returnDays", e.target.value === NOT_SAID ? null : Number(e.target.value))}
+            helperText="How long after delivery a buyer can ask"
+            slotProps={{ select: { MenuProps: selectMenuProps } }}
+          >
+            <MenuItem value={NOT_SAID}>Not said</MenuItem>
+            {RETURN_DAY_CHOICES.map((days) => (
+              <MenuItem key={days} value={days}>
+                {days === 0 ? "No returns" : `Within ${days} days`}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Box>
+        <TextField
+          label="Returns and refunds, in your words"
+          value={values.returns}
+          onChange={(e) => set("returns", e.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={6}
+          placeholder="Unused items in their packaging; the buyer pays return postage; refunds in the coin paid."
+          slotProps={{ htmlInput: { maxLength: MAX_RETURNS_TEXT } }}
+          helperText={`${values.returns.length}/${MAX_RETURNS_TEXT}`}
+        />
+        <TextField
+          label="Other terms"
+          value={values.terms}
+          onChange={(e) => set("terms", e.target.value)}
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={8}
+          placeholder="Made to order; customs duties are the buyer's; message me before ordering more than 10."
+          slotProps={{ htmlInput: { maxLength: MAX_TERMS_TEXT } }}
+          helperText={`${values.terms.length}/${MAX_TERMS_TEXT}`}
         />
       </Box>
 

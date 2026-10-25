@@ -267,6 +267,8 @@ const storeJson = (s) => ({
   supportedCoins: s.arrr ? ['QORT', 'ARRR'] : ['QORT'],
   // The seller's shop also takes a Q-Asset: its products, and each variant, can have a price in it.
   ...(s.short === 'my-shop' && { acceptedAssets: [{ id: 81, name: 'Gold Bar' }] }),
+  // Shop 1 states its policies (shop/policies.ts): its page, products and checkout show them.
+  ...(s.short === 'shop-1' && { policies: { dispatchDays: 2, returnDays: 14, returns: 'Unused items in their packaging, within 14 days of delivery. The buyer pays return postage; refunds go back in the coin paid.', terms: 'Made in small batches: colours vary a little from the pictures.' } }),
 });
 
 const reviews = [
@@ -679,6 +681,24 @@ export default {
     { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit\b.*Lamp 11\b/ }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: /^Edit\b.*Lamp 11\b/ }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a file or PDF' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Upload a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-edit-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const box = page.getByRole('dialog', { name: 'Edit shop' }).getByRole('textbox', { name: /^Meta description/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('Hand-thrown mugs and plates from Lisbon.'); await page.waitForTimeout(400); } },
+    { key: 'seller-edit-policies', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 });
+      const d = page.getByRole('dialog', { name: 'Edit shop' });
+      const policies = d.getByRole('region', { name: 'Policies' });
+      await policies.scrollIntoViewIfNeeded({ timeout: 4000 });
+      await policies.getByRole('combobox', { name: 'Dispatch time' }).click();
+      await page.getByRole('option', { name: '3 working days' }).click();
+      await policies.getByRole('combobox', { name: 'Returns' }).click();
+      await page.getByRole('option', { name: 'Within 30 days' }).click();
+      await policies.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await page.waitForTimeout(400);
+    } },
+    { key: 'shop-policies', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Returns and terms' }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: "Plus Gadgets's policies" }).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(400);
+    } },
     { key: 'seller-ships-to-us', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit shop' }); await d.getByRole('button', { name: 'USA: the United States, every state' }).click({ timeout: 6000 }); const us = d.getByRole('region', { name: 'Within the United States' }); await us.getByRole('button', { name: 'Lower 48 and DC' }).click(); await us.getByRole('button', { name: 'Choose states' }).click(); await us.getByRole('checkbox', { name: 'Texas' }).click(); await us.evaluate((el) => el.scrollIntoView({ block: 'start' })); await page.waitForTimeout(400); } },
     { key: 'settings', path: '/settings' },
     { key: 'walkthrough', path: '/', overlay: true, after: async (page) => {

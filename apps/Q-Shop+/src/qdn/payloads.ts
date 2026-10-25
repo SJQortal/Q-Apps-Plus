@@ -4,6 +4,7 @@
  * payload exactly, key order included (docs/apps/Q-Shop+.md → Data contract;
  * pinned by payloads.test.ts and the *.pin tests that run the components).
  */
+import type { ShopPolicies } from "../shop/policies";
 import {
   CATALOGUE_BASE,
   dataContainerIdentifier,
@@ -75,6 +76,11 @@ export interface StoreFields {
    * list), when it ships to some only. Left out when empty (every state).
    */
   shippingStates?: string[];
+  /**
+   * + app, additive: dispatch time, returns and other terms (shop/policies.ts).
+   * null takes them out of the shop; left out, an edit keeps the shop's own.
+   */
+  policies?: ShopPolicies | null;
 }
 
 /**
@@ -116,6 +122,15 @@ function withMetaDescription<T extends Record<string, any>>(obj: T, metaDescript
   return rest;
 }
 
+/** The shop object with `policies` set, or without them (null); unchanged when not given. */
+function withPolicies<T extends Record<string, any>>(obj: T, policies: ShopPolicies | null | undefined): T {
+  if (policies === undefined) return obj;
+  if (policies) return { ...obj, policies: { ...policies } };
+  const rest = { ...obj };
+  delete rest.policies;
+  return rest;
+}
+
 function withAssets<T extends object>(obj: T, assets: StoreFields["acceptedAssets"]): T {
   return assets && assets.length > 0 ? { ...obj, acceptedAssets: assets } : obj;
 }
@@ -137,7 +152,7 @@ export function buildCreateStorePublish(args: {
 }) {
   const { name, shortStoreId, fields, created } = args;
   const identifier = storeIdentifier(shortStoreId);
-  const storeObj = withShippingStates(
+  const storeObj = withPolicies(withShippingStates(
     withShippingCountries(
     withMetaDescription(
       withAssets(
@@ -159,7 +174,7 @@ export function buildCreateStorePublish(args: {
     fields.shippingCountries
     ),
     fields.shippingStates
-  );
+  ), fields.policies);
   const dataContainer = emptyDataContainer(identifier, shortStoreId, name);
   const resourceStore: PublishResource = {
     action: "PUBLISH_QDN_RESOURCE",
@@ -221,7 +236,10 @@ export function buildEditStorePublish(args: {
       storeObj = rest;
     }
   }
-  storeObj = withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates);
+  storeObj = withPolicies(
+    withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates),
+    fields.policies
+  );
   return {
     storeObj,
     request: {
