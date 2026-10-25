@@ -1,4 +1,6 @@
+import { useSelector } from "react-redux";
 import { Box, Button, ButtonBase, CircularProgress, Rating, Skeleton, Typography } from "@mui/material";
+import type { RootState } from "../../state/store";
 import { visuallyHiddenSx } from "../../pages/Store/a11y";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import type { Order } from "../../state/features/orderSlice";
@@ -10,6 +12,8 @@ import { useOrderCoinView } from "../useOrderCoin";
 import { OrderStatusChip } from "./OrderStatusChip";
 import { normalizeStatus } from "../status";
 import { trackingLine } from "../tracking";
+import { dispatchDue, policiesOf } from "../../shop/policies";
+import { useNow } from "../../hooks/useNow";
 
 export type OrderRole = "buyer" | "seller";
 
@@ -80,6 +84,11 @@ export function OrderCard({
   // The seller's cards never name the coin from the buyer's own text (orders/useOrderCoin.ts).
   const coin = useOrderCoinView(order, role);
   const date = formatOrderDate(row.created);
+  // The seller's own shop's policies (its dispatch time), for orders to handle.
+  const ownShop = useSelector((state: RootState) => (role === "seller" ? state.global.currentStore : null));
+  const policies = policiesOf(ownShop);
+  // Whether one is late changes slowly: the time, kept every 10 minutes.
+  const now = useNow(600_000);
 
   if (!order) {
     const failed = openState === "unavailable" || openState === "unreadable";
@@ -128,6 +137,10 @@ export function OrderCard({
 
   const items = orderItems(order);
   const digital = isDigitalOrder(order);
+  // The seller's order still to handle, in a shop that states its dispatch time.
+  const dispatchDays = role === "seller" && !digital && status?.state === "known" && normalizeStatus(status.status) === "Received" && !item.delivered ? policies?.dispatchDays : undefined;
+  const dueDate = dispatchDays ? dispatchDue(row.created, dispatchDays) : null;
+  const due = dueDate ? { late: now > dueDate.getTime(), text: dueDate.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) } : null;
   const who = counterpart(item, role);
   const count = itemCount(items);
   return (
@@ -177,6 +190,12 @@ export function OrderCard({
             </Box>
           )}
         </Box>
+        {/* To handle: when it's due to leave, by the shop's dispatch time (shop/policies.ts). */}
+        {due && (
+          <Typography component="span" variant="body2" sx={{ fontWeight: 600, color: due.late ? "error.main" : "text.secondary" }}>
+            {due.late ? `Dispatch was due ${due.text}` : `Dispatch by ${due.text}`}
+          </Typography>
+        )}
         {/* The seller's carrier and tracking number (orders/tracking.ts), at a glance; the order copies it. */}
         {status?.state === "known" && status.tracking && normalizeStatus(status.status) === "Shipped" && (
           <Typography component="span" variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>

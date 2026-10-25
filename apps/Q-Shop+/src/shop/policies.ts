@@ -75,3 +75,15 @@ export function policiesForPublish(values: { dispatchDays: number | null; return
     }) ?? undefined
   );
 }
+
+/** The day an order placed at `placed` (ms) is due to leave: so many working days on (Saturdays and Sundays skipped), at the day's end. */
+export function dispatchDue(placed: number, workingDays: number): Date {
+  const day = new Date(placed);
+  let left = workingDays;
+  while (left > 0) {
+    day.setDate(day.getDate() + 1);
+    if (day.getDay() !== 0 && day.getDay() !== 6) left--;
+  }
+  day.setHours(23, 59, 59, 999);
+  return day;
+}
