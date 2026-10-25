@@ -748,6 +748,8 @@ export default {
     { key: 'seller-collections', path: `/product-manager/q-store-general-my-shop?tab=collections`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-collection-editor', path: `/product-manager/q-store-general-my-shop?tab=collections`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit: Gifts for friends', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(700); } },
     { key: 'seller-collection-arrange', path: `/product-manager/q-store-general-my-shop?tab=collections`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit: Gifts for friends', exact: true }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Edit collection' }).getByRole('button', { name: 'Arrange' }).click({ timeout: 4000 }); await page.getByRole('dialog', { name: 'Arrange this collection' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(700); } },
+    { key: 'seller-products-collections', path: `/product-manager/q-store-general-my-shop?tab=products`, after: async (page) => { await page.getByRole('button', { name: 'Arrange Gifts for friends' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(700); } },
+    { key: 'seller-products-arrange-collection', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Arrange Gifts for friends' }).click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Arrange Gifts for friends' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(800); } },
     { key: 'seller-arrange', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Arrange', exact: true }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Arrange your shop' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(900); } },
     { key: 'seller-pricing', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Change rates and prices' }).click({ timeout: 2500 }); await page.getByRole('dialog', { name: 'Prices in USD' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(1200); } },
     { key: 'seller-category-search', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Add product' }).click({ timeout: 2500 }); const dialog = page.getByRole('dialog', { name: 'Add product' }); await dialog.getByRole('textbox', { name: /^Title/ }).fill('Blue Light Blocking Glasses | Night'); const box = dialog.getByRole('combobox', { name: /^Category/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.click(); await box.fill('glasses'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
@@ -913,6 +915,19 @@ export default {
       const d = page.getByRole('dialog', { name: 'Add a discount code' });
       await d.getByLabel('Code', { exact: true }).fill('SPRING10');
       await d.getByRole('radio', { name: 'Only some products' }).click();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-publish-bar', path: '/product-manager/q-store-general-my-shop?tab=delivery', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add a pickup point' }).click({ timeout: 8000 });
+      await page.getByRole('region', { name: 'Unpublished changes' }).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-leave-changes', path: '/product-manager/q-store-general-my-shop?tab=delivery', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add a pickup point' }).click({ timeout: 8000 });
+      await page.getByRole('region', { name: 'Unpublished changes' }).waitFor({ timeout: 4000 });
+      // The header's or the phone bar's Shops.
+      await page.getByRole('link', { name: /^Shops$/ }).or(page.getByRole('button', { name: /^Shops$/ })).first().click({ timeout: 4000 });
+      await page.getByRole('dialog', { name: "Your changes aren't published" }).waitFor({ timeout: 4000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-delivery-options', path: '/product-manager/q-store-general-my-shop?tab=delivery', after: async (page) => { await page.getByRole('region', { name: 'Delivery options' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
