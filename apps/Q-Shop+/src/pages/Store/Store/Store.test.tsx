@@ -193,6 +193,18 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(cardTitles()).toContain("Product 4");
   });
 
+  it("On sale lists the products with a price before, with what buyers save", async () => {
+    const world = makeWorld();
+    const products = world.shops[0].products;
+    products[3] = { ...products[3], compareAt: { currency: "QORT", value: products[3].price[0].value * 4 } } as never;
+    renderShop(world);
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    fireEvent.click(screen.getByRole("button", { name: "On sale (1)" }));
+    await waitFor(() => expect(cardTitles()).toEqual(["Product 3"]));
+    const card = screen.getByRole("heading", { level: 3, name: "Product 3" }).closest("article")!;
+    expect(within(card).getByText("75% off")).toBeInTheDocument();
+  });
+
   it("says Sold out on a counted product the orders' notes used up, reading them with the order count's own search", async () => {
     const world = makeWorld();
     const products = world.shops[0].products;

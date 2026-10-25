@@ -10,7 +10,7 @@
  * sorted prices by `price[0]`, which isn't always the QORT price; these sort
  * by the index's QORT price and fall back to newest first.
  */
-import { rowSaleOf } from "../../sale/compareAt";
+import { rowSaleOf, saleOf } from "../../sale/compareAt";
 import type { Catalogue } from "../../state/features/globalSlice";
 import type { Product } from "../../state/features/storeSlice";
 import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status";
@@ -79,6 +79,8 @@ export interface ProductQuery {
   inStockOnly: boolean;
   /** Only auctions still open (running, or yet to start). */
   auctionsOnly?: boolean;
+  /** Only products on sale (sale/compareAt.ts). */
+  saleOnly?: boolean;
   /** A price range in QORT (the index's price; an auction's starting bid); null or absent: no bound. */
   minQort?: number | null;
   maxQort?: number | null;
@@ -270,9 +272,16 @@ export function filterAndSortProducts(
     .filter((row) => categories.size === 0 || (!!row.category && categories.has(row.category)))
     .filter((row) => !query.inStockOnly || isInStock(row, catalogues, now))
     .filter((row) => !query.auctionsOnly || isOpenAuction(row, catalogues, now))
+    .filter((row) => !query.saleOnly || isOnSale(row, catalogues))
     .filter((row) => inPriceRange(row, query.minQort, query.maxQort))
     // When an auction ends: its catalogue's terms once loaded, as the filters read them.
     .sort(compareRows(query.sort, order, now, (row) => auctionTimesOf(row, catalogues)));
+}
+
+/** On sale: its catalogue's product once loaded, else its row's percent off (sale/compareAt.ts). */
+export function isOnSale(row: ProductRow, catalogues: CatalogueMap): boolean {
+  const product = productOf(row, catalogues);
+  return product ? saleOf(product as Parameters<typeof saleOf>[0]) !== null : !!row.sale;
 }
 
 /** Within the range, by the index's QORT price; a product without one is out once there's a bound. */

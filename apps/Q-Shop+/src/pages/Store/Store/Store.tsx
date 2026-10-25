@@ -70,6 +70,8 @@ import {
   AUCTION_SORT,
   auctionTimesOf,
   openAuctionCount,
+  isListed,
+  isOnSale,
   priceBound,
   PRODUCTS_PAGE,
   searchCatalogueIds,
@@ -82,7 +84,7 @@ import {
 import { featuredOrder, productOrderOf } from "../../../qdn/productOrder";
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
 import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
-import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, SectionDivider, useDebounced } from "../ProductList";
+import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, SaleToggle, SectionDivider, useDebounced } from "../ProductList";
 import { useNow } from "../../../hooks/useNow";
 import { prefersReducedMotion, useSmoothSwap } from "../../../hooks/useSmoothSwap";
 import { productLayout, useProductView } from "../../../utils/productView";
@@ -138,7 +140,7 @@ function ShopProducts({
   const layout = productLayout(useProductView(), phone);
   const shopCoin = useShopCoin(shop);
   const { catalogues, statuses, load, retryFailed } = useCatalogueLoader(owner);
-  const [filters, setFilters] = useState<Omit<ProductQuery, "sort">>({ categories: [], inStockOnly: false, auctionsOnly: false });
+  const [filters, setFilters] = useState<Omit<ProductQuery, "sort">>({ categories: [], inStockOnly: false, auctionsOnly: false, saleOnly: false });
   // Auctions open and close as time passes: the list looks again every 30 s.
   const now = useNow(30_000);
   const [price, setPrice] = useState({ min: "", max: "" });
@@ -203,6 +205,7 @@ function ShopProducts({
     [filters, sort, price]
   );
   const auctions = useMemo(() => openAuctionCount(rows, catalogues, now), [rows, catalogues, now]);
+  const onSale = useMemo(() => rows.filter((row) => isListed(row, catalogues) && isOnSale(row, catalogues)).length, [rows, catalogues]);
   const baseSorts = order.length > 0 ? [FEATURED_SORT, ...PRODUCT_SORTS] : PRODUCT_SORTS;
   const sortOptions = auctions > 0 || sort === "ending" ? [...baseSorts, AUCTION_SORT] : baseSorts;
   const categories = useMemo(() => categoriesOf(rows), [rows]);
@@ -247,7 +250,7 @@ function ShopProducts({
   }, [scope, filtered, catalogues]);
   const cappedNote = `Only the first ${searchScope.total} products were searched; pick a category to narrow it down.`;
   const priced = query.minQort !== null || query.maxQort !== null;
-  const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0) + (query.auctionsOnly ? 1 : 0) + (priced ? 1 : 0);
+  const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0) + (query.auctionsOnly ? 1 : 0) + (query.saleOnly ? 1 : 0) + (priced ? 1 : 0);
 
   const toggleCategory = (category: string) =>
     setFilters((q) => ({
@@ -255,7 +258,7 @@ function ShopProducts({
       categories: q.categories.includes(category) ? q.categories.filter((c) => c !== category) : [...q.categories, category],
     }));
   const clearFilters = () => {
-    setFilters((q) => ({ ...q, categories: [], inStockOnly: false, auctionsOnly: false }));
+    setFilters((q) => ({ ...q, categories: [], inStockOnly: false, auctionsOnly: false, saleOnly: false }));
     setPrice({ min: "", max: "" });
   };
   const priceFields = <PriceRangeFields min={price.min} max={price.max} onChange={setPrice} titled={!phone} />;
@@ -508,6 +511,7 @@ function ShopProducts({
               {sortSelect}
               <CoinPicker shop={shop} shopCoin={shopCoin} />
               <AuctionsToggle count={auctions} on={!!query.auctionsOnly} onChange={(on) => setFilters((q) => ({ ...q, auctionsOnly: on }))} />
+              <SaleToggle count={onSale} on={!!query.saleOnly} onChange={(on) => setFilters((q) => ({ ...q, saleOnly: on }))} />
               {phone && (
                 <Button
                   variant={activeFilters ? "contained" : "outlined"}
