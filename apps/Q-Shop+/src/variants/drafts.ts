@@ -253,8 +253,9 @@ function itemValues(
       ? inFiat
         ? { fiat: price }
         : { prices: { ...prices, QORT: price } }
-      : // An edited item with a QORT price of its own (none in the currency) keeps it.
-        row.qort && { fiat: "", prices: { ...prices, QORT: row.qort } }),
+      : // An edited item with a QORT price of its own (none in the currency) keeps it,
+        // and the group's price before a sale (typed in the currency) doesn't apply to it.
+        row.qort && { fiat: "", prices: { ...prices, QORT: row.qort }, ...(inFiat && { compareAt: undefined }) }),
   };
 }
 

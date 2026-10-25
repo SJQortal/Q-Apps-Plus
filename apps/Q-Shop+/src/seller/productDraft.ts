@@ -433,6 +433,12 @@ function withFormFiat<T extends Record<string, unknown>>(
  * `isUpdate: true`, the status and the publishing name. A new product that is
  * still a draft stays a new product: only its fields change.
  */
+/** The price before a sale as the form shows it (formValuesFor). */
+function compareAtText(product: unknown): string {
+  const was = compareAtOf(product as { compareAt?: unknown });
+  return was ? (was.currency === "QORT" ? amountToText(was.value) : fiatToText(was.value, was.currency)) : "";
+}
+
 export function editedProductDraft(args: {
   base: Record<string, any> & { id: string };
   values: ProductFormValues;
@@ -447,7 +453,10 @@ export function editedProductDraft(args: {
   /** When it is saved (an auction starting "now" starts then). */
   now?: number;
 }) {
-  const { base, values, coins, name } = args;
+  const { base, coins, name } = args;
+  // The price before a sale left as it was keeps its own currency (a shop that stopped pricing in
+  // EUR, say, mustn't turn "20.00 EUR" into 20 QORT); a changed one takes the price's currency.
+  const values = args.values.compareAt !== undefined && args.values.compareAt === compareAtText(base) ? { ...args.values, compareAt: undefined } : args.values;
   const now = args.now ?? Date.now();
   // An auction sells one of a kind: it has no count (a count it had goes).
   const stockForm: StockFormValues | undefined = values.sale === "auction" ? (values.stock ? { tracked: false, quantity: "" } : undefined) : values.stock;

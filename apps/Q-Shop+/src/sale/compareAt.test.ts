@@ -58,4 +58,16 @@ describe("a product on sale", () => {
     expect(rowSaleOf({ sale: 0 })).toBeUndefined();
     expect(rowSaleOf({ sale: "25" })).toBeUndefined();
   });
+
+  it("an edit that leaves the price before a sale alone keeps its currency, with or without the shop's pricing", () => {
+    const base = { ...qort(75, { fiatPrice: { currency: "EUR", value: 15, qort: 75 }, compareAt: { currency: "EUR", value: 20 } }), id: "p1", catalogueId: "c", isUpdate: true, title: "Mug", images: [], type: "physical", category: "Home & Garden", status: "AVAILABLE" };
+    const values = formValuesFor(base as never, ["QORT"]);
+    expect(values.compareAt).toBe("20.00");
+    // The shop no longer prices in a currency: the form has no pricing.
+    const edited = editedProductDraft({ base: base as never, values, coins: ["QORT"], name: "Seller" });
+    expect((edited as { compareAt?: unknown }).compareAt).toEqual({ currency: "EUR", value: 20 });
+    // Typed anew, it takes the price's currency (QORT here).
+    const retyped = editedProductDraft({ base: base as never, values: { ...values, compareAt: "90" }, coins: ["QORT"], name: "Seller" });
+    expect((retyped as { compareAt?: unknown }).compareAt).toEqual({ currency: "QORT", value: 90 });
+  });
 });
