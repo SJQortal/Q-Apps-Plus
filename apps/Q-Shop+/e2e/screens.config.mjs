@@ -181,7 +181,8 @@ const DELIVERY = {
     base: { name: 'Standard', note: '5–10 days' },
     // Local pickup is collected (delivery/model.ts `pickup`): checkout asks for no address with it.
     options: [{ id: 'exp', name: 'Express', note: '1–3 days, tracked' }, { id: 'pick', name: 'Local pickup', note: 'Ring at the side door', pickup: true, place: { country: 'PT', address: 'Rua Augusta 10, Lisbon', days: [1, 2, 3, 4, 5], from: '10:00', to: '18:00' } }],
-    general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5, rates: { exp: { first: 6, extra: 1 }, pick: { first: 0 } } }] },
+    // Free from 25 QORT (delivery/FreeDeliveryBar.tsx shows how much is left).
+    general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5, freeOver: 25, rates: { exp: { first: 6, extra: 1 }, pick: { first: 0 } } }] },
     profiles: [],
     updated: now - DAY,
   },
@@ -821,6 +822,12 @@ export default {
       await page.reload();
       await page.getByText('Delivery to Portugal:').first().waitFor({ timeout: 8000 });
       await page.waitForTimeout(500);
+    } },
+    { key: 'shop-free-delivery', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1`, after: async (page) => {
+      await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('qshopplus-settings') || '{}'); s.deliverTo = { country: 'Portugal', state: '' }; localStorage.setItem('qshopplus-settings', JSON.stringify(s)); });
+      await page.reload();
+      await page.getByRole('status', { name: 'Free delivery' }).waitFor({ timeout: 8000 });
+      await page.waitForTimeout(600);
     } },
     { key: 'product-more-from-shop', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
       const strip = page.getByRole('region', { name: /^More from/ });
