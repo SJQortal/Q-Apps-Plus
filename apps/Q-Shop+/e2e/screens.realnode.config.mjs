@@ -65,6 +65,11 @@ export default {
     };
   `,
 
+  // The first-run walkthrough and seller guide (onboarding/Walkthrough.tsx) have been seen.
+  initScripts: () => [
+    `try { localStorage.setItem('qshopplus-walkthrough', '1'); localStorage.setItem('qshopplus-seller-guide', '1'); } catch (e) {}`,
+  ],
+
   async route(route, url) {
     if (route.request().method() !== 'GET') return false;
     const res = await fetch(NODE + url.pathname + url.search, { method: 'GET' }).catch(() => null);
@@ -87,6 +92,11 @@ export default {
       // Categories read every shop's product list; the node lists TanteEmma's (shop "1") but can't serve it (404), and the page leaves it out.
       expectErrors: /404|Failed to load resource/ },
     { key: 'real-cart', path: '/cart', after: async (page) => page.waitForTimeout(2000) },
+    { key: 'real-bhc', path: `/${encodeURIComponent('Biohackers Corner')}/q-store-general-bhc`, after: async (page) => page.waitForTimeout(6000) },
+    { key: 'real-bhc-product', path: `/${encodeURIComponent('Biohackers Corner')}/q-store-general-bhc/q-store-product-bhc-wqazMQpHaL/q-store-catalogue-bhc-H9X2iZOp9B`, after: async (page) => page.waitForTimeout(6000) },
+    { key: 'real-names', path: '/names', after: async (page) => page.waitForTimeout(8000) },
+    // As a seller (QSP_AS="Biohackers Corner"): the seller page, read only.
+    { key: 'real-seller', path: '/product-manager/q-store-general-bhc', optional: true, after: async (page) => page.waitForTimeout(6000) },
     { key: 'real-settings', path: '/settings' },
   ],
 };

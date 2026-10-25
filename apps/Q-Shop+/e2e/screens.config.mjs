@@ -151,7 +151,17 @@ const DELIVERY = {
     profiles: [{ id: 'heavy', name: 'Heavy items', products: [productId({ short: 'my-shop' }, 3), productId({ short: 'my-shop' }, 6)], zones: [{ id: 'world', name: 'Worldwide', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT', 'JP', 'AU'], first: 25 }] }],
     updated: now - DAY,
   },
-  'shop-1': { v: 1, storeId: 'q-store-general-shop-1', currency: 'QORT', general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5 }] }, profiles: [], updated: now - DAY },
+  'shop-1': {
+    v: 1,
+    storeId: 'q-store-general-shop-1',
+    currency: 'QORT',
+    // Delivery options (delivery/model.ts): Express and a pickup, priced in the zone.
+    base: { name: 'Standard', note: '5–10 days' },
+    options: [{ id: 'exp', name: 'Express', note: '1–3 days, tracked' }, { id: 'pick', name: 'Local pickup', note: 'Lisbon shop, weekdays 10–18' }],
+    general: { zones: [{ id: 'all', countries: ['US', 'CA', 'GB', 'DE', 'FR', 'PL', 'PT'], first: 2, extra: 0.5, rates: { exp: { first: 6, extra: 1 }, pick: { first: 0 } } }] },
+    profiles: [],
+    updated: now - DAY,
+  },
 };
 // Favourites (favorites/model.ts): [name, shop index, product or null]. The signed-in seller keeps two shops and
 // two products; other names keep some shops, for Most loved and the cards' hearts.
@@ -410,6 +420,9 @@ export default {
     `try {
       if (!sessionStorage.getItem('qsp-seeded')) {
         sessionStorage.setItem('qsp-seeded', '1');
+        // The first-run walkthrough and seller guide (onboarding/Walkthrough.tsx) have been seen; their own screens open them.
+        localStorage.setItem('qshopplus-walkthrough', '1');
+        localStorage.setItem('qshopplus-seller-guide', '1');
         // A shop hidden on this device (discovery/hiddenShops.ts), for Settings' list.
         localStorage.setItem('qshopplus-hidden-shops', JSON.stringify([{ owner: 'Seller 13', shortStoreId: 'shop-13', title: 'Knitting Club', at: ${now} }]));
         localStorage.setItem('qshopplus-cart', JSON.stringify(${JSON.stringify({
@@ -667,6 +680,48 @@ export default {
     { key: 'seller-edit-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const box = page.getByRole('dialog', { name: 'Edit shop' }).getByRole('textbox', { name: /^Meta description/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('Hand-thrown mugs and plates from Lisbon.'); await page.waitForTimeout(400); } },
     { key: 'seller-ships-to-us', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit shop' }); await d.getByRole('button', { name: 'USA: the United States, every state' }).click({ timeout: 6000 }); const us = d.getByRole('region', { name: 'Within the United States' }); await us.getByRole('button', { name: 'Lower 48 and DC' }).click(); await us.getByRole('button', { name: 'Choose states' }).click(); await us.getByRole('checkbox', { name: 'Texas' }).click(); await us.evaluate((el) => el.scrollIntoView({ block: 'start' })); await page.waitForTimeout(400); } },
     { key: 'settings', path: '/settings' },
+    { key: 'walkthrough', path: '/', overlay: true, after: async (page) => {
+      await page.evaluate(() => localStorage.removeItem('qshopplus-walkthrough'));
+      await page.reload();
+      await page.getByRole('dialog', { name: 'Welcome to Q-Shop+' }).waitFor({ timeout: 10000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'walkthrough-sell', path: '/', overlay: true, after: async (page) => {
+      await page.evaluate(() => localStorage.removeItem('qshopplus-walkthrough'));
+      await page.reload();
+      const d = page.getByRole('dialog', { name: 'Welcome to Q-Shop+' });
+      await d.getByRole('button', { name: 'Step 5: Sell on Q-Shop+' }).click({ timeout: 10000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-guide', path: '/settings', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Seller guide' }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: 'How selling works' }).getByRole('button', { name: 'Next' }).click();
+      await page.getByRole('dialog', { name: 'How selling works' }).getByRole('button', { name: 'Next' }).click();
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-checkup', path: '/product-manager/q-store-general-my-shop', after: async (page) => { await page.getByRole('region', { name: /Get your shop ready|Your shop is up to date/ }).waitFor({ timeout: 8000 }); await page.waitForTimeout(800); } },
+    { key: 'seller-fix-categories', path: '/product-manager/q-store-general-my-shop', overlay: true, optional: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Fix categories' }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: 'Fix categories' }).getByRole('list').waitFor({ timeout: 8000 });
+      await page.waitForTimeout(800);
+    } },
+    { key: 'checkout-delivery-options', path: '/cart', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Check out Plus Gadgets' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Continue' }).click({ timeout: 8000 });
+      await d.getByLabel(/^Customer name/).fill('Ana Silva', { timeout: 8000 });
+      await d.getByLabel(/^Street address/).fill('Rua Augusta 10');
+      await d.getByLabel(/^City/).fill('Lisbon');
+      await d.getByLabel(/^Zip code/).fill('1100-053');
+      await d.getByRole('combobox', { name: /Country/ }).fill('Portugal');
+      await page.getByRole('option', { name: 'Portugal' }).click({ timeout: 4000 });
+      await d.getByLabel(/^Region/).fill('Lisboa');
+      await d.getByRole('button', { name: 'Continue' }).click();
+      await d.getByRole('radiogroup', { name: 'Delivery' }).waitFor({ timeout: 8000 });
+      await d.getByRole('radio', { name: /Express/ }).click();
+      await page.waitForTimeout(500);
+    } },
+    { key: 'seller-delivery-options', path: '/product-manager/q-store-general-my-shop?tab=delivery', after: async (page) => { await page.getByRole('region', { name: 'Delivery options' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'product-stock', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 7)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByText(/In stock · 4 left/).waitFor({ timeout: 8000 }); await page.waitForTimeout(400); } },
     { key: 'names', path: '/names', after: async (page) => { await page.getByRole('list', { name: 'Names for sale' }).waitFor({ timeout: 8000 }); await page.getByText(/^Comes with/).first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'names-buy', path: '/names', overlay: true, after: async (page) => {
