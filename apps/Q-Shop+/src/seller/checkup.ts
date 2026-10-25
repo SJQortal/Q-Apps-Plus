@@ -13,11 +13,10 @@
  */
 import { isListedCategory } from "../constants/categories";
 import { shippingCountriesOf } from "../constants/shipping";
-import { policiesOf } from "../shop/policies";
 import { FOREIGN_TICKERS } from "../money/coins";
 import type { SellerRow } from "./productList";
 
-export type CheckupKey = "products" | "categories" | "shipsTo" | "delivery" | "feeProducts" | "payments" | "details" | "policies";
+export type CheckupKey = "products" | "categories" | "shipsTo" | "delivery" | "feeProducts" | "payments" | "details";
 
 export interface CheckupItem {
   key: CheckupKey;
@@ -53,7 +52,6 @@ export interface CheckupShop {
   shippingCountries?: unknown;
   supportedCoins?: string[];
   foreignCoins?: Record<string, string>;
-  policies?: unknown;
 }
 
 /**
@@ -93,9 +91,6 @@ export function shopCheckup(args: {
     items.push({ key: "shipsTo", done: !!shippingCountriesOf(args.shop) });
     items.push({ key: "delivery", done: args.hasDelivery !== false });
   }
-  // Dispatch time and returns (shop/policies.ts): buyers far away decide on them.
-  const policies = policiesOf(args.shop);
-  items.push({ key: "policies", done: policies?.returnDays !== undefined && (!ships || policies.dispatchDays !== undefined) });
   if (fees.length > 0 && !args.feesKept) items.push({ key: "feeProducts", done: false, count: fees.length });
   return items;
 }
@@ -106,8 +101,9 @@ export { suggestShippingCountries } from "../constants/shippingText";
 /**
  * What an owner's own shop page can tell without reading more: steps of the
  * checkup still open among the shop's details, its categories (from its
- * product list), where it ships and its policies. The page then points to
- * the full checkup in Manage Shop.
+ * product list) and where it ships. The page then points to the full
+ * checkup in Manage Shop. Policies aren't a step (Simon, 2026-10-25): sellers
+ * set them in Edit shop when they want.
  */
 export function openShopSteps(
   shop: CheckupShop,
@@ -120,8 +116,5 @@ export function openShopSteps(
   if (listed.some((row) => !isListedCategory(row.category))) open++;
   if (!shop.logo || !shop.description?.trim() || !shop.location?.trim()) open++;
   if (ships && !shippingCountriesOf(shop)) open++;
-  // Returns, and for a shop that ships its dispatch time, as shopCheckup asks.
-  const policies = policiesOf(shop);
-  if (policies?.returnDays === undefined || (ships && policies.dispatchDays === undefined)) open++;
   return open;
 }

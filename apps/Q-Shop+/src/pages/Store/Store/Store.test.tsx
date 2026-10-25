@@ -276,9 +276,9 @@ describe("shop page", { timeout: 20_000 }, () => {
 
   it("tells the owner how many steps bring their shop up to date, and opens the checkup", async () => {
     renderShop(makeWorld(), SHOP_PATH, { name: "Seller Name" });
-    // The fake shops use old categories, type their Ships to and state no policies.
+    // The fake shops use old categories and type their Ships to (policies aren't a step).
     const banner = await screen.findByText(/steps? brings? your shop up to date for Q-Shop\+/);
-    expect(banner.textContent).toMatch(/^3 steps/);
+    expect(banner.textContent).toMatch(/^2 steps/);
     fireEvent.click(screen.getByRole("button", { name: "Open the checkup" }));
     expect(await screen.findByText("Seller page")).toBeInTheDocument();
   });

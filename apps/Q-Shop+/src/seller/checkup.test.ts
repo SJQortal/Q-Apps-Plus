@@ -40,12 +40,11 @@ describe("the shop checkup", () => {
       { key: "payments", done: false },
       { key: "shipsTo", done: false },
       { key: "delivery", done: false },
-      { key: "policies", done: false },
       { key: "feeProducts", done: false, count: 1 },
     ]);
-    // A shop of digital products only needn't say where it ships, or when it dispatches.
+    // A shop of digital products only needn't say where it ships. Policies aren't a step (Simon, 2026-10-25).
     const digital = shopCheckup({
-      shop: { logo: "x", description: "d", location: "l", policies: { returnDays: 0 } },
+      shop: { logo: "x", description: "d", location: "l" },
       rows: [row("a", "Services")],
       detailsOf: () => ({ type: "digital" }),
       hasDelivery: false,
@@ -55,7 +54,6 @@ describe("the shop checkup", () => {
       ["categories", true],
       ["details", true],
       ["payments", true],
-      ["policies", true],
     ]);
   });
 
@@ -63,15 +61,6 @@ describe("the shop checkup", () => {
     const first = (listLoaded: boolean) => shopCheckup({ shop: {}, rows: [], detailsOf: () => undefined, hasDelivery: null, listLoaded }).find((i) => i.key === "products")?.done;
     expect(first(true)).toBe(false);
     expect(first(false)).toBe(true);
-  });
-
-  it("wants dispatch time and returns said for a shop that ships", () => {
-    const check = (policies: unknown) =>
-      shopCheckup({ shop: { policies }, rows: [row("a", "Toys & Hobbies")], detailsOf: () => ({ type: "physical" }), hasDelivery: true }).find((i) => i.key === "policies")?.done;
-    expect(check(undefined)).toBe(false);
-    expect(check({ returnDays: 14 })).toBe(false);
-    expect(check({ returnDays: 14, dispatchDays: 2 })).toBe(true);
-    expect(check({ returnDays: 0, dispatchDays: 30 })).toBe(true);
   });
 
   it("reads more of what sellers typed: US in capitals, CONUS, World, a US state, countries in their own words", () => {
@@ -117,9 +106,10 @@ describe("the shop checkup", () => {
 
   it("counts the steps an owner's shop page can tell, without reading more", () => {
     const rows = [{ category: "Paper" }, { category: "Home & Garden" }];
-    expect(openShopSteps({ logo: "x", description: "d", location: "l" }, rows, true)).toBe(3);
-    expect(openShopSteps({ logo: "x", description: "d", location: "l", shippingCountries: ["PT"], policies: { returnDays: 14, dispatchDays: 2 } }, [{ category: "Home & Garden" }], true)).toBe(0);
-    // A shop of digital products isn't asked where it ships, or when it dispatches: as the checkup.
-    expect(openShopSteps({ logo: "x", description: "d", location: "l", policies: { returnDays: 0 } }, [{ category: "Services" }], false)).toBe(0);
+    // An old category and no countries; policies aren't a step.
+    expect(openShopSteps({ logo: "x", description: "d", location: "l" }, rows, true)).toBe(2);
+    expect(openShopSteps({ logo: "x", description: "d", location: "l", shippingCountries: ["PT"] }, [{ category: "Home & Garden" }], true)).toBe(0);
+    // A shop of digital products isn't asked where it ships: as the checkup.
+    expect(openShopSteps({ logo: "x", description: "d", location: "l" }, [{ category: "Services" }], false)).toBe(0);
   });
 });

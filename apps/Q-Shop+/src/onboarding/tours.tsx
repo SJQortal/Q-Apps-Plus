@@ -100,7 +100,7 @@ export const TOURS: Record<TourId, { title: string; steps: TourStep[] }> = {
           ["Manage Shop", "opens with a checkup of what to update, each in a few taps."],
           ["Categories", "pick them from the shared list: each product's is suggested from its title."],
           ["Shipping", "turn your Ships to text into countries, set delivery prices, and retire products you used to charge delivery."],
-          ["Policies", "say how soon you dispatch, whether you take returns, and the languages you answer in."],
+          ["Policies", "in Edit shop, say how soon you dispatch, whether you take returns, and the languages you answer in."],
         ],
       },
     ],

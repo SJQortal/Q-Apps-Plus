@@ -197,15 +197,6 @@ export function ShopCheckup({
         </Button>
       ),
     },
-    policies: {
-      title: "Say how you dispatch and take returns",
-      text: "How soon an order leaves, whether you take returns and within how long, and any terms of yours. Buyers see them before they pay.",
-      action: (
-        <Button variant="outlined" color="inherit" onClick={editShop} sx={{ minHeight: 44 }}>
-          Set policies
-        </Button>
-      ),
-    },
     feeProducts: {
       title: "Retire your delivery-fee products",
       text: `${feeRows.length === 1 ? "1 product charges" : `${feeRows.length} products charge`} for delivery (${feeRows

@@ -47,7 +47,7 @@ export const HELP: { title: string; items: [string, string][] }[] = [
     items: [
       [
         "How do I start?",
-        "Create Shop (top of the page), then Manage Shop: its Overview has a checkup of what to set up, step by step: your first product, where you ship, delivery prices and your policies.",
+        "Create Shop (top of the page), then Manage Shop: its Overview has a checkup of what to set up, step by step: your first product, where you ship and delivery prices. Your policies (dispatch time, returns, languages) go in Edit shop.",
       ],
       [
         "Why does Hub ask me to confirm so often?",
@@ -59,7 +59,7 @@ export const HELP: { title: string; items: [string, string][] }[] = [
       ],
       [
         "My shop is from the original Q-Shop",
-        "It works as it is. The checkup on your Overview brings it up to date: categories from the list, countries for Ships to, delivery prices, policies, and products you used to charge delivery.",
+        "It works as it is. The checkup on your Overview brings it up to date: categories from the list, countries for Ships to, delivery prices, and products you used to charge delivery.",
       ],
     ],
   },
