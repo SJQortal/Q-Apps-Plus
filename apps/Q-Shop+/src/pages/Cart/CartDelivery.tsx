@@ -60,8 +60,28 @@ export function CartDelivery({ owner, storeId, shop, lines }: { owner: string; s
   }
   const estimate = deliveryEstimate({ shop: shop ?? {}, delivery, lines, place });
   const where = placeLabel(place);
-  if (estimate.kind === "not-shipped") return row(<Typography variant="body2" sx={{ fontWeight: 600 }}>{`${shop?.title || "This shop"} doesn't ship to ${estimate.place}.`}</Typography>, "warning");
-  if (estimate.kind === "unavailable") return row(<Typography variant="body2" sx={{ fontWeight: 600 }}>{`Not everything here is delivered to ${estimate.place}.`}</Typography>, "warning");
+  // Not shipped there: another country is a tap away (Simon, 2026-10-25).
+  const otherCountry = (
+    <Button size="small" onClick={() => setPicking(true)} aria-haspopup="dialog" sx={{ minHeight: 32, px: 0.75, ml: -0.75 }}>
+      Check another country
+    </Button>
+  );
+  if (estimate.kind === "not-shipped" || estimate.kind === "unavailable") {
+    return (
+      <>
+        {row(
+          <>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {estimate.kind === "not-shipped" ? `${shop?.title || "This shop"} doesn't ship to ${estimate.place}.` : `Not everything here is delivered to ${estimate.place}.`}
+            </Typography>
+            {otherCountry}
+          </>,
+          "warning"
+        )}
+        {picker}
+      </>
+    );
+  }
   if (estimate.kind !== "ok" || estimate.choices.length === 0) return null;
   const several = estimate.choices.length > 1;
   // The cheapest paid option, and a free one (Local pickup, say), when there is one.

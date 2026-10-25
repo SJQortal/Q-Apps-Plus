@@ -38,7 +38,7 @@ import { errorMessage } from "../../qdn/hubErrors";
 import { copyText } from "../../utils/clipboard";
 import { CoinPicker } from "./CoinPicker";
 import { LazyDeliveryForm } from "./LazyDeliveryForm";
-import { emptyDelivery, focusFirstMissing, missingPickupFields, pickupDelivery, saveDelivery, savedDelivery } from "./delivery";
+import { deliveryFieldId, emptyDelivery, focusFirstMissing, missingPickupFields, pickupDelivery, saveDelivery, savedDelivery } from "./delivery";
 import { RememberAddress } from "./RememberAddress";
 import { PendingOrderCard } from "./PendingOrders";
 import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
@@ -624,7 +624,25 @@ export function CheckoutDialog({
         {/* Before the country is in, it says the choice is coming; then the choice itself shows. */}
         {ways.length <= 1 && <UpcomingOptions owner={shop.owner} storeId={shop.id} />}
         {noShipping && (
-          <Alert severity="warning" role="alert">
+          <Alert
+            severity="warning"
+            role="alert"
+            action={
+              // Another country: the country field, with its list open (Simon, 2026-10-25).
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => {
+                  const field = document.getElementById(deliveryFieldId(DELIVERY_PREFIX, "country")) as HTMLInputElement | null;
+                  field?.focus();
+                  field?.select();
+                }}
+                sx={{ minHeight: 44, whiteSpace: "nowrap" }}
+              >
+                Another country
+              </Button>
+            }
+          >
             {shop.title || shop.owner} doesn&apos;t ship to {noShipping}
             {shop.shipsTo ? `: it ships to ${shop.shipsTo}` : ""}. Pick another address, or ask the seller.
           </Alert>

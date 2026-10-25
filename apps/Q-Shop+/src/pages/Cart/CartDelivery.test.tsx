@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { SHIPPING_REGIONS } from "../../constants/shipping";
 import type { CartLine } from "../../money/order";
@@ -57,6 +57,9 @@ describe("delivery in the cart", () => {
     act(() => setBuyerPlace({ country: "Japan", state: "" }));
     const japan = show([line()]);
     expect(await screen.findByText("Plus Gadgets doesn't ship to Japan.")).toBeInTheDocument();
+    // Another country is a tap away.
+    fireEvent.click(screen.getByRole("button", { name: "Check another country" }));
+    expect(await screen.findByRole("dialog", { name: "Where should things be delivered?" })).toBeInTheDocument();
     japan.unmount();
     const digital = show([line("digital")]);
     await waitFor(() => expect(digital.container.textContent).toBe(""));
