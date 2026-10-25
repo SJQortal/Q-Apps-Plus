@@ -612,6 +612,69 @@ describe("cart page", () => {
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "Continue" })).toBeEnabled());
   });
 
+  it("counts stock: a line over what's left offers to lower it, then the order publicly notes what it took", async () => {
+    // The mug counts 3 from t=1000; one order of 1 since: 2 left.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        const rows = u.includes("q-store-order-")
+          ? [{ name: "Ann", service: "DOCUMENT_PRIVATE", identifier: "q-store-order-my-shop-ORDERzzzz1", created: 2000, metadata: { description: "stock:MUGxxxxxx1x1" } }]
+          : [];
+        if (u.startsWith("/arbitrary/resources/search")) return { ok: true, status: 200, json: async () => rows, text: async () => JSON.stringify(rows) };
+        throw new Error(`unexpected fetch ${u}`);
+      })
+    );
+    const q = sellerMock();
+    const store = newStore();
+    withFixtureShop(store, [{ product: mug, qty: 3 }]);
+    store.dispatch(
+      setCatalogueHashMap({ ...catalogue, user: SELLER, isValid: true, products: { ...catalogue.products, [mug.id]: { ...mug, stock: { v: 1, quantity: 3, since: 1000 } } } })
+    );
+    renderCart(store);
+    expect(await screen.findByText("Only 2 left")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Check out ${STORE_TITLE}` })).toBeDisabled();
+    expect(screen.getByText("Only 2 of Mug are left: lower its quantity.")).toBeInTheDocument();
+    expect(screen.getByText(/This shop counts its stock: your order shows publicly how many of Mug you bought/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Change to 2" }));
+    await openCheckout();
+    await press("Continue");
+    await press(/^Pay 3\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const call = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
+    // The order stays encrypted; its metadata says only what it took.
+    expect(call.encrypt).toBe(true);
+    expect(call.resources[0].description).toBe("stock:MUGxxxxxx1x2");
+    expect(call.resources[1].description).toBeUndefined();
+  });
+
+  it("stops before paying when another buyer has just taken the last ones", async () => {
+    let orders: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const u = String(url);
+        const rows = u.includes("q-store-order-") ? orders : [];
+        if (u.startsWith("/arbitrary/resources/search")) return { ok: true, status: 200, json: async () => rows, text: async () => JSON.stringify(rows) };
+        throw new Error(`unexpected fetch ${u}`);
+      })
+    );
+    const q = sellerMock();
+    const store = newStore();
+    withFixtureShop(store, [{ product: mug, qty: 1 }]);
+    store.dispatch(
+      setCatalogueHashMap({ ...catalogue, user: SELLER, isValid: true, products: { ...catalogue.products, [mug.id]: { ...mug, stock: { v: 1, quantity: 1, since: 1000 } } } })
+    );
+    renderCart(store);
+    await openCheckout();
+    // Meanwhile someone else orders the last one.
+    orders = [{ name: "Bob", service: "DOCUMENT_PRIVATE", identifier: "q-store-order-my-shop-ORDERzzzz2", created: 2000, metadata: { description: "stock:MUGxxxxxx1x1" } }];
+    await press("Continue");
+    await press(/^Pay 1\.50 QORT$/);
+    expect(await screen.findByText(/^Mug has just sold out\. Remove it from your cart to check out\. Nothing was paid\.$/)).toBeInTheDocument();
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
   it("goes back to Confirm when the payment is declined, with nothing paid and the cart kept", async () => {
     const q = sellerMock({
       SEND_COIN: async () => {

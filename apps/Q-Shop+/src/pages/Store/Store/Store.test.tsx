@@ -193,6 +193,32 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(cardTitles()).toContain("Product 4");
   });
 
+  it("says Sold out on a counted product the orders' notes used up, reading them with the order count's own search", async () => {
+    const world = makeWorld();
+    const products = world.shops[0].products;
+    // Product 4: 3 counted, 2 + 1 ordered since (an order before the count, and one to another shop, don't count).
+    products[4] = { ...products[4], stock: { v: 1, quantity: 3, since: 2000 } } as never;
+    products[6] = { ...products[6], stock: { v: 1, quantity: 5, since: 2000 } } as never;
+    const order = (uid: string, created: number, description: string, short = "my-shop") =>
+      world.orders.push({ identifier: `q-store-order-${short}-${uid}`, buyer: "Ann", created, json: {}, description });
+    order("ORDERxxxx1", 3000, "stock:P000000004x2");
+    order("ORDERxxxx2", 3100, "stock:P000000004x1;P000000006x1");
+    order("ORDERxxxx0", 1000, "stock:P000000006x9");
+    order("ORDERxxxx9", 3200, "stock:P000000006x9", "my-shop-2");
+    const { node } = renderShop(world);
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    const sold = screen.getByRole("heading", { level: 3, name: "Product 4" }).closest("article")!;
+    await waitFor(() => expect(within(sold).getAllByText("Sold out").length).toBeGreaterThan(0));
+    const counted = screen.getByRole("heading", { level: 3, name: "Product 6" }).closest("article")!;
+    expect(within(counted).queryByText("Sold out")).toBeNull();
+    // In stock only leaves it out.
+    fireEvent.click(screen.getByLabelText("In stock only"));
+    await waitFor(() => expect(cardTitles()).not.toContain("Product 4"));
+    expect(cardTitles()).toContain("Product 6");
+    // The header's order count and the notes share one search of the shop's orders.
+    expect(new Set(searchUrls(node).filter((u) => u.includes("q-store-order-"))).size).toBe(1);
+  });
+
   it("narrows the products to a price range in QORT, from the index", async () => {
     const { node } = renderShop(makeWorld());
     await waitFor(() => expect(cardTitles()).toHaveLength(12));

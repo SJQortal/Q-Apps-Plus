@@ -129,6 +129,7 @@ export function ProductCard({
   auction = null,
   now = 0,
   bundle = null,
+  soldOut = false,
 }: {
   product: Product;
   productId: string;
@@ -154,12 +155,15 @@ export function ProductCard({
   now?: number;
   /** A group of variants listed as one (variants/model.ts): its title, how many, and its lowest price. */
   bundle?: Bundle | null;
+  /** Counted and none left (stock/model.ts): "Sold out" rather than "Out of stock". */
+  soldOut?: boolean;
 }) {
   const title = (bundle ? bundle.title : product.title?.trim()) || "Untitled product";
   const image = mainImageOf(product);
   const path = productPath(owner, storeId, productId, catalogueId);
   const available = status === AVAILABLE;
-  const label = isOwnProduct ? "Your product" : status === OUT_OF_STOCK ? "Out of stock" : status === RETIRED ? "Retired" : "Add to cart";
+  const outLabel = soldOut ? "Sold out" : "Out of stock";
+  const label = isOwnProduct ? "Your product" : status === OUT_OF_STOCK ? outLabel : status === RETIRED ? "Retired" : "Add to cart";
   const pictures = useLoadedPictures();
   // An auction is stored out of stock, for the original app: its card says where the auction stands instead.
   const auctionLine = auction && status !== RETIRED ? auctionCardText(auction, now) : null;
@@ -261,7 +265,8 @@ export function ProductCard({
                   <PriceTag product={product} coin={coin} rate={rate} shop={shop} />
                 )}
                 {bundle && <Chip size="small" label={`${bundle.count} options`} variant="outlined" />}
-                {!bundle && status === OUT_OF_STOCK && <Chip size="small" label="Out of stock" variant="outlined" />}
+                {bundle?.soldOut && <Chip size="small" label="Sold out" variant="outlined" />}
+                {!bundle && status === OUT_OF_STOCK && <Chip size="small" label={outLabel} variant="outlined" />}
                 {!bundle && status === RETIRED && <Chip size="small" label="Retired" variant="outlined" />}
               </Box>
             )}

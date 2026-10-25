@@ -65,6 +65,7 @@ import {
   filterAndSortProducts,
   productOf,
   productRowsFromContainer,
+  withStockLeft,
   PRODUCT_SORTS,
   AUCTION_SORT,
   auctionTimesOf,
@@ -97,6 +98,8 @@ import { CollectionCards, CollectionHeader } from "../ShopCollections";
 import { useOrderCount } from "../orderCount";
 import { selectMenuProps } from "../../../components/common/menuStyle";
 import { bundleRows, variantGroupsOf } from "../../../variants/model";
+import { useStockLeft } from "../../../stock/notes";
+import { shortStoreIdOf } from "../../../qdn/identifiers";
 
 /** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
@@ -148,7 +151,14 @@ function ShopProducts({
   const terms = useMemo(() => searchTerms(debouncedSearch), [debouncedSearch]);
   const searching = terms.length > 0;
 
-  const allRows = useMemo(() => productRowsFromContainer(index), [index]);
+  const indexRows = useMemo(() => productRowsFromContainer(index), [index]);
+  // Counted products (stock/model.ts): what's left, from the shop's order notes (one read, only when it counts any).
+  const stockItems = useMemo(
+    () => indexRows.flatMap((row) => (row.stock ? [{ shortStoreId: shortStoreIdOf(storeId), productId: row.productId, stock: row.stock }] : [])),
+    [indexRows, storeId]
+  );
+  const { left: stockLeft } = useStockLeft(stockItems);
+  const allRows = useMemo(() => withStockLeft(indexRows, stockLeft), [indexRows, stockLeft]);
   // The products the shop lists, for the collections' counts.
   const listedIds = useMemo(
     () => new Set(filterAndSortProducts(allRows, DEFAULT_PRODUCT_QUERY, catalogues).map((row) => row.productId)),
@@ -398,6 +408,7 @@ function ShopProducts({
                       auction={auctionTimesOf(row, catalogues)}
                       now={now}
                       bundle={row.bundle}
+                      soldOut={row.soldOut}
                     />
                   </LocalBoundary>
                 ) : (

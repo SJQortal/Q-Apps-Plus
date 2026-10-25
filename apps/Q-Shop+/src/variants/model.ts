@@ -219,6 +219,8 @@ export interface Bundle {
   count: number;
   minQort: number;
   maxQort: number;
+  /** Every item counted and none left (stock/model.ts). */
+  soldOut?: boolean;
 }
 
 /**
@@ -247,9 +249,17 @@ export function bundleRows<T extends { productId: string; priceQort?: number }>(
     placed.add(group);
     const all = members.get(group) ?? [row];
     const prices = all.map((r) => r.priceQort).filter((p): p is number => typeof p === "number" && p > 0);
+    const soldOut = all.every((r) => (r as { soldOut?: boolean }).soldOut === true);
     out.push({
       ...row,
-      bundle: { group, title: groups[group].title, count: all.length, minQort: prices.length ? Math.min(...prices) : 0, maxQort: prices.length ? Math.max(...prices) : 0 },
+      bundle: {
+        group,
+        title: groups[group].title,
+        count: all.length,
+        minQort: prices.length ? Math.min(...prices) : 0,
+        maxQort: prices.length ? Math.max(...prices) : 0,
+        ...(soldOut && { soldOut }),
+      },
     });
   }
   return out;

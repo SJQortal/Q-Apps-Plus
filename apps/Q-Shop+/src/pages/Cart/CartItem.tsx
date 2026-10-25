@@ -166,7 +166,15 @@ export function CartItem({
         )}
 
         {line.state === "unavailable" && (
-          <LineNote>{product?.status === "OUT_OF_STOCK" ? "Out of stock" : "No longer sold"}: left out of checkout</LineNote>
+          <LineNote>{line.soldOut ? "Sold out" : product?.status === "OUT_OF_STOCK" ? "Out of stock" : "No longer sold"}: left out of checkout</LineNote>
+        )}
+        {forSale && line.stockLeft !== undefined && line.quantity > line.stockLeft && (
+          <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+            <LineNote>{`Only ${line.stockLeft} left`}</LineNote>
+            <Button size="small" variant="outlined" color="inherit" onClick={() => onQuantity(line.stockLeft as number)} sx={{ minHeight: 44 }}>
+              {`Change to ${line.stockLeft}`}
+            </Button>
+          </Box>
         )}
         {line.state === "gone" && !quiet && <LineNote>The seller removed this product: left out of checkout</LineNote>}
         {line.state === "failed" && <LineNote>Not available on your node right now: left out of checkout</LineNote>}

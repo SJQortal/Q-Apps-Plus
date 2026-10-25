@@ -24,6 +24,8 @@
  * whole number of an indivisible asset stops the checkout before Hub is
  * asked for anything (Core would refuse the transfer).
  */
+import { soldSince, stockLeft, stockNote, stockOf } from "../stock/model";
+import { fetchStockNotes } from "../stock/notes";
 import { isHubDecline, isHubTimeout, errorMessage } from "../qdn/hubErrors";
 import { orderIdentifier, orderMailIdentifier, shortStoreIdOf } from "../qdn/identifiers";
 import { fetchQdnJson, resourceExists, invalidateQdnSearches } from "../qdn/search";
@@ -196,7 +198,43 @@ function publishOrderRequest(pending: PendingOrder, delivery: DeliveryInput) {
     buyerPublicKey: pending.buyer.publicKey,
     order,
     mail,
+    stockNote: stockNote(orderLinesOf(pending.details)),
   });
+}
+
+/** An order's product lines (not its total or delivery line), for its stock note. */
+function orderLinesOf(details: OrderDetails): { productId: string; quantity: number; product: unknown }[] {
+  return Object.entries(details).flatMap(([productId, line]) =>
+    productId !== "totalPrice" && line && typeof line === "object" ? [{ productId, quantity: Number(line.quantity), product: line.product }] : []
+  );
+}
+
+/**
+ * Before paying: the counted products' units left, read afresh from the
+ * shop's order notes (stock/notes.ts). Another buyer may have taken the last
+ * ones since the cart showed them; nothing is paid then. A node that can't
+ * say doesn't stop the order (the seller's count is a guide, not a lock).
+ */
+export async function stockProblem(details: OrderDetails, shortStoreId: string): Promise<string | null> {
+  const lines = orderLinesOf(details).flatMap((line) => {
+    const stock = stockOf(line.product);
+    return stock ? [{ ...line, stock }] : [];
+  });
+  if (lines.length === 0) return null;
+  let notes: Awaited<ReturnType<typeof fetchStockNotes>>["notes"];
+  try {
+    ({ notes } = await fetchStockNotes(shortStoreId, Math.min(...lines.map((l) => l.stock.since)), { fresh: true }));
+  } catch {
+    return null;
+  }
+  for (const line of lines) {
+    const left = stockLeft(line.stock, soldSince(line.stock, line.productId, notes));
+    const title = (line.product as { title?: unknown } | null)?.title;
+    const name = typeof title === "string" && title.trim() ? title.trim() : "an item";
+    if (left <= 0) return `${name} has just sold out. Remove it from your cart to check out.`;
+    if (line.quantity > left) return `Only ${left} of ${name} ${left === 1 ? "is" : "are"} left now. Lower its quantity to check out.`;
+  }
+  return null;
 }
 
 /** Is this pending order already on QDN (a publish that timed out may have landed)? */
@@ -409,6 +447,8 @@ export async function startCheckout(args: StartCheckoutArgs): Promise<CheckoutRe
   }
   const assetProblem = await assetPaymentProblem(coin, amount, shop);
   if (assetProblem) return { kind: "failed", message: assetProblem };
+  const stockNow = await stockProblem(details, shortStoreIdOf(shop.id));
+  if (stockNow) return { kind: "failed", message: stockNow };
 
   const pending: PendingOrder = {
     version: 1,

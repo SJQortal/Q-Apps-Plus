@@ -34,6 +34,10 @@ export interface CartViewLine {
   /** The product as its catalogue holds it (stored in the order as is); null until loaded. */
   product: Product | null;
   state: LineState;
+  /** Units left of a counted product (stock/model.ts), once read. */
+  stockLeft?: number;
+  /** Counted and none left: left out of checkout as Sold out. */
+  soldOut?: boolean;
 }
 
 /** The shop as checkout needs it, plus what the cart shows. */
@@ -93,6 +97,21 @@ export function cartViewLines(
     if (!product) return { ...base, product: null, state: "gone" };
     return { ...base, product, state: isForSale(product) ? "ready" : "unavailable" };
   });
+}
+
+/** The lines with what's left of their counted products (`left` by product id, stock/notes.ts): none left is out of checkout. */
+export function withLineStock(lines: CartViewLine[], left: ReadonlyMap<string, number>): CartViewLine[] {
+  if (left.size === 0) return lines;
+  return lines.map((line) => {
+    const units = line.state === "ready" ? left.get(line.productId) : undefined;
+    if (units === undefined) return line;
+    return units <= 0 ? { ...line, state: "unavailable", stockLeft: 0, soldOut: true } : { ...line, stockLeft: units };
+  });
+}
+
+/** A line asking for more than is left of its counted product. */
+export function isOverStock(line: CartViewLine): boolean {
+  return line.state === "ready" && line.stockLeft !== undefined && line.quantity > line.stockLeft;
 }
 
 /** What goes to checkout: the lines that are for sale, in the cart's order. */
@@ -201,6 +220,8 @@ export function checkoutBlock(
   }
   if (view.lines.some(isLoadingLine)) return "Loading your items…";
   if (checkoutLinesOf(view.lines).length === 0) return "Nothing here can be bought right now.";
+  const over = view.lines.find(isOverStock);
+  if (over) return `Only ${over.stockLeft} of ${over.product?.title?.trim() || "an item"} ${over.stockLeft === 1 ? "is" : "are"} left: lower its quantity.`;
   return undefined;
 }
 

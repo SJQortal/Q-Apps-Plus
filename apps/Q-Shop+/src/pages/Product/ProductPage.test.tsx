@@ -13,6 +13,7 @@ import { setCatalogueHashMap } from "../../state/features/globalSlice";
 import { createAppStore } from "../../state/store";
 import { setPeerRetryDelaysForTests } from "../Store/peerRetry";
 import { clampQuantity, ProductPage } from "./ProductPage";
+import { resetQdnCaches } from "../../qdn/search";
 
 const copyText = vi.fn(async (_text: string) => true);
 vi.mock("../../utils/clipboard", () => ({ copyText: (text: string) => copyText(text) }));
@@ -202,6 +203,25 @@ describe("product page", { timeout: 20_000 }, () => {
     fireEvent.change(input, { target: { value: "0" } });
     fireEvent.blur(input);
     expect(input).toHaveValue("1");
+  });
+
+  it("counts stock: what's left, a quantity up to it, and Sold out once the orders' notes use it up", async () => {
+    const world = makeWorld();
+    const i = world.shops[0].products.findIndex((p) => p.id === P11);
+    world.shops[0].products[i] = { ...world.shops[0].products[i], stock: { v: 1, quantity: 4, since: 2000 } } as never;
+    world.orders.push({ identifier: "q-store-order-my-shop-ORDERxxxx1", buyer: "Ann", created: 3000, json: {}, description: "stock:P000000011x2" });
+    const first = renderProduct(world, pathOf(P11));
+    expect(await screen.findByText("In stock · 2 left")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
+    expect(screen.getByRole("button", { name: "Increase quantity" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Quantity" })).toHaveValue("2");
+    first.unmount();
+
+    resetQdnCaches();
+    world.orders.push({ identifier: "q-store-order-my-shop-ORDERxxxx2", buyer: "Bob", created: 3100, json: {}, description: "stock:P000000011x2" });
+    renderProduct(world, pathOf(P11));
+    expect(await screen.findByText("Sold out: every unit has been ordered.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add to cart" })).toBeNull();
   });
 
   it("copies the product's link", async () => {

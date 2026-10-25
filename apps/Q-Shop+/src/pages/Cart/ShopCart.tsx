@@ -12,7 +12,9 @@ import { PHONE_MEDIA } from "../../hooks/usePhoneLayout";
 import { CartItem } from "./CartItem";
 import { CoinPicker } from "./CoinPicker";
 import { Picture } from "./Picture";
-import { checkoutBlock, checkoutLinesOf, isLeftOut, priceLines, type CartViewLine } from "./cartLines";
+import { checkoutBlock, checkoutLinesOf, isLeftOut, priceLines, withLineStock, type CartViewLine } from "./cartLines";
+import { stockOf } from "../../stock/model";
+import { useStockLeft } from "../../stock/notes";
 import type { ShopCartView } from "./useCartData";
 
 export interface CheckoutGate {
@@ -56,11 +58,19 @@ export function ShopCart({
   const { shop, owner, storeId } = view;
   const gone = view.shopPhase === "gone";
   const title = shop?.title || view.knownTitle || (gone ? shortStoreIdOf(storeId) : "") || "Shop";
-  const lines = checkoutLinesOf(view.lines);
-  const leftOut = view.lines.filter(isLeftOut).length;
+  // Counted products (stock/model.ts): what's left of each, from the shop's order notes.
+  const stockItems = view.lines.flatMap((line) => {
+    const stock = line.state === "ready" ? stockOf(line.product) : null;
+    return stock ? [{ shortStoreId: shortStoreIdOf(storeId), productId: line.productId, stock }] : [];
+  });
+  const { left: stockLeft } = useStockLeft(stockItems);
+  const viewLines = withLineStock(view.lines, stockLeft);
+  const lines = checkoutLinesOf(viewLines);
+  const leftOut = viewLines.filter(isLeftOut).length;
+  const counted = lines.filter((line) => stockOf(line.product));
   const priced = priceLines(lines, coin, rate, rateLoading, rateError);
 
-  const blocked = checkoutBlock(view, gate.allowed ? undefined : (gate.reason ?? "Sign in to check out."));
+  const blocked = checkoutBlock({ ...view, lines: viewLines }, gate.allowed ? undefined : (gate.reason ?? "Sign in to check out."));
 
   return (
     <Paper
@@ -131,7 +141,7 @@ export function ShopCart({
 
       {/* Its lines lay out by the list's own width (CartItem.tsx). */}
       <Box component="ul" sx={{ m: 0, p: 0, containerType: "inline-size" }} aria-label={`Items from ${title}`}>
-        {view.lines.map((line) => (
+        {viewLines.map((line) => (
           <CartItem
             key={line.productId}
             quiet={gone}
@@ -179,6 +189,13 @@ export function ShopCart({
             {leftOut > 0 && (
               <Typography variant="body2" color="text.secondary">
                 {leftOut === 1 ? "1 item can't be bought now and is" : `${leftOut} items can't be bought now and are`} left out of checkout.
+              </Typography>
+            )}
+            {counted.length > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                This shop counts its stock: your order shows publicly how many of{" "}
+                {counted.map((line) => line.product?.title?.trim() || "an item").join(", ")} you bought (not your address or what you paid), so
+                every buyer sees what&apos;s left.
               </Typography>
             )}
           </Box>

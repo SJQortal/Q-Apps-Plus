@@ -16,6 +16,8 @@
  * The URL keeps the search, sort, categories and stock filter, and Back from
  * a product comes back to the same place in the list.
  */
+import { useStockLeft } from "../../stock/notes";
+import { withStockLeft } from "../Store/shopData";
 import {
   Fragment,
   useCallback,
@@ -321,11 +323,18 @@ export function ProductsPage() {
 
   // Shops hidden on this device (discovery/hiddenShops.ts) list none of their products.
   const { list: hiddenShops } = useHiddenShops();
-  const rows = useMemo(() => {
+  const shopRows = useMemo(() => {
     if (hiddenShops.length === 0) return all.rows;
     const hidden = new Set(hiddenShops.map((h) => `${h.owner}\n${h.shortStoreId}`));
     return all.rows.filter((row) => !hidden.has(`${row.owner}\n${shortStoreIdOf(row.storeId)}`));
   }, [all.rows, hiddenShops]);
+  // Counted products (stock/model.ts): one read of each such shop's order notes.
+  const stockItems = useMemo(
+    () => shopRows.flatMap((row) => (row.stock ? [{ shortStoreId: shortStoreIdOf(row.storeId), productId: row.productId, stock: row.stock }] : [])),
+    [shopRows]
+  );
+  const { left: stockLeft } = useStockLeft(stockItems);
+  const rows = useMemo(() => withStockLeft(shopRows, stockLeft), [shopRows, stockLeft]);
   const favoriteCounts = useFavoriteCounts(sort === "favorites");
   const listed = useMemo(() => listedRows(rows, inStockOnly, catalogues, now), [rows, inStockOnly, catalogues, now]);
   const auctions = useMemo(() => listed.filter((row) => isOpenAuctionRow(row, catalogues, now)).length, [listed, catalogues, now]);
@@ -551,6 +560,7 @@ export function ProductsPage() {
                         auction={auctionTimesOfRow(row, catalogues)}
                         now={now}
                         bundle={row.bundle}
+                        soldOut={row.soldOut}
                       />
                     </LocalBoundary>
                   ) : (

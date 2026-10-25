@@ -18,6 +18,10 @@
  * pictures) swaps the product in place, so the gallery, its full-screen
  * viewer and the video under it stay as they are (variants/gallery.ts).
  */
+import { shortStoreIdOf } from "../../qdn/identifiers";
+import { productRowsFromContainer } from "../Store/shopData";
+import { stockOf, type ProductStock } from "../../stock/model";
+import { useStockLeft, type StockItem } from "../../stock/notes";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
@@ -63,22 +67,23 @@ const AuctionPanel = lazy(() => import("../../auctions/AuctionPanel").then((m) =
 
 const FETCHING_NOTE = "Fetching from peers…";
 
-/** The quantity a typed value stands for: a whole number from 1 to 99. */
-export function clampQuantity(value: string | number): number {
+/** The quantity a typed value stands for: a whole number from 1 to 99 (or to `max`, the units left). */
+export function clampQuantity(value: string | number, max: number = MAX_QUANTITY): number {
   const n = Math.floor(Number(value));
+  const top = Math.max(1, Math.min(max, MAX_QUANTITY));
   if (!Number.isFinite(n) || n < 1) return 1;
-  return Math.min(n, MAX_QUANTITY);
+  return Math.min(n, top);
 }
 
-function QuantityStepper({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  const quantity = clampQuantity(value);
+function QuantityStepper({ value, onChange, max = MAX_QUANTITY }: { value: string; onChange: (value: string) => void; max?: number }) {
+  const quantity = clampQuantity(value, max);
   return (
     <Box
       role="group"
       aria-label="Quantity"
       sx={{ display: "inline-flex", alignItems: "center", border: 1, borderColor: "divider", borderRadius: 2, flexShrink: 0 }}
     >
-      <IconButton aria-label="Decrease quantity" onClick={() => onChange(String(clampQuantity(quantity - 1)))} disabled={quantity <= 1} sx={{ width: 44, height: 44 }}>
+      <IconButton aria-label="Decrease quantity" onClick={() => onChange(String(clampQuantity(quantity - 1, max)))} disabled={quantity <= 1} sx={{ width: 44, height: 44 }}>
         <RemoveIcon />
       </IconButton>
       <InputBase
@@ -95,8 +100,8 @@ function QuantityStepper({ value, onChange }: { value: string; onChange: (value:
       />
       <IconButton
         aria-label="Increase quantity"
-        onClick={() => onChange(String(clampQuantity(quantity + 1)))}
-        disabled={quantity >= MAX_QUANTITY}
+        onClick={() => onChange(String(clampQuantity(quantity + 1, max)))}
+        disabled={quantity >= Math.min(max, MAX_QUANTITY)}
         sx={{ width: 44, height: 44 }}
       >
         <AddIcon />
@@ -161,12 +166,14 @@ function ProductSkeleton({ note }: { note?: string }) {
   );
 }
 
-function stockLine(status: string | undefined) {
+/** `left`: the units left of a counted product (stock/model.ts); undefined when it isn't counted, or while they are read. */
+function stockLine(status: string | undefined, left?: number) {
+  if (status === AVAILABLE && left === 0) return <Alert severity="warning">Sold out: every unit has been ordered.</Alert>;
   if (status === AVAILABLE)
     return (
       <Typography sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, fontWeight: 600 }}>
         <CheckCircleOutlinedIcon fontSize="small" color="success" aria-hidden />
-        In stock
+        {left === undefined ? "In stock" : `In stock · ${left.toLocaleString("en-US")} left`}
       </Typography>
     );
   if (status === OUT_OF_STOCK) return <Alert severity="warning">Out of stock: it can't be ordered right now.</Alert>;
@@ -197,7 +204,28 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   // A variant (variants/model.ts): its group's choices, and its pictures (variants/gallery.ts),
   // from every item's catalogue, read once the product's own is in.
   const variant = useMemo(() => variantOf(product), [product]);
-  const siblings = useMemo(() => (variant ? variantSiblings(index, variant.group) : []), [index, variant]);
+  const indexSiblings = useMemo(() => (variant ? variantSiblings(index, variant.group) : []), [index, variant]);
+  // Counted stock (stock/model.ts): this product's and its variants' units left, from the shop's
+  // order notes. The product's own count is its catalogue's; its variants' their list rows'.
+  const ownStock = stockOf(product);
+  const ownStockKey = JSON.stringify(ownStock);
+  const stockItems = useMemo(() => {
+    const short = shortStoreIdOf(storeId);
+    const own = JSON.parse(ownStockKey) as ProductStock | null;
+    const items: StockItem[] = own ? [{ shortStoreId: short, productId, stock: own }] : [];
+    const others = new Set(indexSiblings.map((s) => s.productId));
+    for (const row of productRowsFromContainer(index)) {
+      if (row.stock && row.productId !== productId && others.has(row.productId)) items.push({ shortStoreId: short, productId: row.productId, stock: row.stock });
+    }
+    return items;
+  }, [ownStockKey, index, indexSiblings, productId, storeId]);
+  const { left: stockLeft } = useStockLeft(stockItems);
+  const unitsLeft = ownStock ? stockLeft.get(productId) : undefined;
+  // A sold-out variant shows as out of stock in the picker.
+  const siblings = useMemo(
+    () => indexSiblings.map((s) => (stockLeft.get(s.productId) === 0 && s.status === AVAILABLE ? { ...s, status: OUT_OF_STOCK } : s)),
+    [indexSiblings, stockLeft]
+  );
   // Each product opens at its top (hooks/useLandAtTop.ts); picking another item of the same variants stays put.
   const landing = useRef<HTMLDivElement>(null);
   const [landedGroup, setLandedGroup] = useState<{ key: string; ids: string[] }>({ key: productId, ids: [productId] });
@@ -302,8 +330,9 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
     );
   } else {
     const name = productTitle || "Product";
-    const available = product.status === AVAILABLE;
-    const quantity = clampQuantity(quantityText);
+    const available = product.status === AVAILABLE && unitsLeft !== 0;
+    const maxQuantity = unitsLeft ?? MAX_QUANTITY;
+    const quantity = clampQuantity(quantityText, maxQuantity);
     const mainIndex = typeof product.mainImageIndex === "number" ? product.mainImageIndex : 0;
     const addToCart = () => {
       dispatch(setProductToCart({ storeId, storeOwner: owner, productId, catalogueId, quantity }));
@@ -395,7 +424,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             </Box>
           )}
           {/* An auction is stored out of stock for the original app; its panel says where it stands (a retired one says so). */}
-          {(!auctionTerms || product.status === RETIRED) && stockLine(product.status)}
+          {(!auctionTerms || product.status === RETIRED) && stockLine(product.status, auctionTerms ? undefined : unitsLeft)}
           {/* Where the shop ships, for something it ships (constants/shipping.ts). */}
           {product.type !== "digital" && typeof shop?.shipsTo === "string" && shop.shipsTo && (
             <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
@@ -418,7 +447,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             </Alert>
           ) : available ? (
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
-              <QuantityStepper value={quantityText} onChange={setQuantityText} />
+              <QuantityStepper value={quantityText} onChange={setQuantityText} max={maxQuantity} />
               <Button
                 variant="contained"
                 size="large"

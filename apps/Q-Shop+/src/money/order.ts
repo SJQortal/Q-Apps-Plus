@@ -358,6 +358,12 @@ export function buildOrderPublish(args: {
   buyerPublicKey: string;
   order: OrderDoc;
   mail: ReturnType<typeof buildOrderMail>;
+  /**
+   * + app, additive: the order's public note of its counted products
+   * (stock/model.ts stockNote), in its metadata; the order itself stays
+   * encrypted. None for an order without one, which stays as before.
+   */
+  stockNote?: string | null;
 }) {
   const orderRequest = {
     action: "PUBLISH_QDN_RESOURCE" as const,
@@ -365,6 +371,7 @@ export function buildOrderPublish(args: {
     name: args.buyerName,
     service: "DOCUMENT_PRIVATE",
     data64: jsonToBase64(args.order),
+    ...(args.stockNote && { description: args.stockNote }),
   };
   const mailRequest = {
     action: "PUBLISH_QDN_RESOURCE" as const,

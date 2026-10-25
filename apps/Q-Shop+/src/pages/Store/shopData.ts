@@ -16,6 +16,7 @@ import { AVAILABLE, OUT_OF_STOCK, RETIRED } from "../../constants/product-status
 import { auctionRowOf, type AuctionRow } from "../../auctions/catalog";
 import { auctionTermsOf } from "../../auctions/rules";
 import { variantRowOf, type VariantRow } from "../../variants/model";
+import { stockOf, type ProductStock } from "../../stock/model";
 
 /** Products per page on the shop page; catalogues are fetched for these only. */
 export const PRODUCTS_PAGE = 20;
@@ -62,6 +63,12 @@ export interface ProductRow {
   auction?: AuctionRow;
   /** Its group and option values, when it is a variant (variants/model.ts). */
   variant?: VariantRow;
+  /** Its stock count, when the seller counts it (stock/model.ts). */
+  stock?: ProductStock;
+  /** Units left by the orders' notes, once read (withStockLeft). */
+  stockLeft?: number;
+  /** Counted, and none left: it shows (and filters) as out of stock, labelled Sold out. */
+  soldOut?: boolean;
 }
 
 export interface ProductQuery {
@@ -92,6 +99,20 @@ function variantField(entry: unknown): { variant?: VariantRow } {
   return variant ? { variant } : {};
 }
 
+function stockField(entry: unknown): { stock?: ProductStock } {
+  const stock = stockOf(entry);
+  return stock ? { stock } : {};
+}
+
+/** The counted rows with what's left of them (`left`: units by product id, stock/notes.ts); others as they are. */
+export function withStockLeft<T extends ProductRow>(rows: T[], left: ReadonlyMap<string, number>): T[] {
+  if (left.size === 0) return rows;
+  return rows.map((row) => {
+    const units = row.stock ? left.get(row.productId) : undefined;
+    return units === undefined ? row : { ...row, stockLeft: units, soldOut: units <= 0 };
+  });
+}
+
 /** The index's products as rows, newest first. Malformed entries are skipped. */
 export function productRowsFromContainer(container: { products?: unknown } | null | undefined): ProductRow[] {
   const products = container?.products;
@@ -110,6 +131,7 @@ export function productRowsFromContainer(container: { products?: unknown } | nul
       status: typeof entry.status === "string" && entry.status ? entry.status : undefined,
       ...auctionField(entry),
       ...variantField(entry),
+      ...stockField(entry),
     });
   }
   return rows.sort((a, b) => b.created - a.created);
@@ -135,7 +157,9 @@ export function isCatalogueLoaded(row: ProductRow, catalogues: CatalogueMap): bo
 
 /** The catalogue's status once loaded, else the index's. */
 export function effectiveStatus(row: ProductRow, catalogues: CatalogueMap): string | undefined {
-  return productOf(row, catalogues)?.status || row.status || undefined;
+  const status = productOf(row, catalogues)?.status || row.status || undefined;
+  // Counted and none left (stock/model.ts): out of stock, whatever the seller last published.
+  return row.soldOut && status === AVAILABLE ? OUT_OF_STOCK : status;
 }
 
 /**
