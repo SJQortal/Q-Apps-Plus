@@ -160,8 +160,6 @@ const NavBar: React.FC = () => {
 
         <HeaderActions className="qp-header-actions">
           {phone && <QuickRateButton phone />}
-          {/* The account's QORT, left of the cart (Simon, 2026-10-25). */}
-          <BalanceButton phone={phone} />
           {!phone && (
             <Tooltip title="Cart">
               <IconButton
@@ -196,6 +194,8 @@ const NavBar: React.FC = () => {
               Sign in
             </Button>
           )}
+          {/* The account's QORT, left of the name (Simon, 2026-10-25). */}
+          <BalanceButton phone={phone} />
           {signedIn && (
             <AvatarContainer
               type="button"

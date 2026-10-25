@@ -1,5 +1,5 @@
 /**
- * Left of the cart: the signed-in account's QORT (wallet/balances.ts), and a
+ * Left of the account's name: its QORT (wallet/balances.ts), and a
  * tap away its ARRR and the Q-Assets the shops it has browsed take (Simon,
  * 2026-10-25). Settings can hide it (it's on the screen for anyone looking).
  * It narrows with the header (useHeaderFit.ts): last of all, the amount goes
