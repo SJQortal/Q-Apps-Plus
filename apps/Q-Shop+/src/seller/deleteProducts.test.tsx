@@ -212,6 +212,23 @@ describe("deleting products", () => {
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
 
+  it("Change status keeps a product's edits waiting in Ready to publish", async () => {
+    stubNode();
+    const { store } = setup();
+    // An unpublished price edit of the mug.
+    store.dispatch(setProductsToSave({ ...mug, catalogueId: CATALOGUE_ID, price: [{ currency: "qort", value: 9.99 }], isUpdate: true, user: SELLER }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    await within(list).findByText("Chair");
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: /^Select Mug\b/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Change status" }));
+    const dialog = await screen.findByRole("dialog", { name: "Change 1 product's status" });
+    fireEvent.click(within(dialog).getByRole("radio", { name: /^Out of stock/ }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Add 1 to drafts" }));
+    await waitFor(() => expect((store.getState().global.productsToSave as Record<string, any>)[mug.id]?.status).toBe("OUT_OF_STOCK"));
+    expect((store.getState().global.productsToSave as Record<string, any>)[mug.id].price).toEqual([{ currency: "qort", value: 9.99 }]);
+  });
+
   it("says when the search hides chosen products, and Escape leaves select mode", async () => {
     stubNode();
     setup();

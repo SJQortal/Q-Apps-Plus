@@ -17,7 +17,7 @@ import { ProductImage } from "../components/common/ProductImage";
 import { selectMenuProps } from "../components/common/menuStyle";
 import { SHOP_CATEGORIES } from "../constants/categories";
 import { suggestCategory } from "../utils/categoryMatch";
-import { productForEdit } from "./productDraft";
+import { editBase } from "./productDraft";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 import type { SellerRow } from "./productList";
 
@@ -33,6 +33,8 @@ function pictureOf(details: Record<string, unknown> | undefined): string | undef
 export function FixCategoriesDialog({ rows, onClose, onDrafted }: { rows: SellerRow[]; onClose: () => void; onDrafted: (count: number) => void }) {
   const dispatch = useDispatch();
   const name = useSelector((state: RootState) => state.auth.user?.name ?? "");
+  // Products with edits waiting in Ready to publish keep them.
+  const drafts = useSelector((state: RootState) => state.global.productsToSave) as Record<string, unknown>;
   const owner = useSelector((state: RootState) => state.global.currentStore?.owner || name);
   const { request, productOf, statusOf } = useCatalogueLoader(owner);
   const catalogues = [...new Set(rows.map((r) => r.catalogueId))].join("|");
@@ -50,10 +52,10 @@ export function FixCategoriesDialog({ rows, onClose, onDrafted }: { rows: Seller
   const draft = () => {
     let count = 0;
     for (const row of ready) {
-      const details = detailsOf(row);
-      if (!details) continue;
+      const base = editBase(row, detailsOf(row), drafts);
+      if (!base) continue;
       const category = choiceOf(row);
-      dispatch(setProductsToSave({ ...productForEdit(row, details), category, isUpdate: true, user: name }));
+      dispatch(setProductsToSave({ ...base, category, isUpdate: true, user: name }));
       count++;
     }
     onDrafted(count);

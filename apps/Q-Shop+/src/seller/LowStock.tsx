@@ -13,7 +13,7 @@ import { shortStoreIdOf } from "../qdn/identifiers";
 import { stockOf } from "../stock/model";
 import { useStockLeft } from "../stock/notes";
 import { useCatalogueLoader } from "./useCatalogueLoader";
-import { productForEdit } from "./productDraft";
+import { editBase } from "./productDraft";
 import type { SellerRow } from "./productList";
 
 export const LOW_STOCK = 3;
@@ -24,6 +24,8 @@ export function LowStock({ storeId, onEdit }: { storeId: string; onEdit?: (produ
   const name = useSelector((state: RootState) => state.auth.user?.name ?? "");
   const owner = useSelector((state: RootState) => state.global.currentStore?.owner || name);
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
+  // A product with edits waiting in Ready to publish opens as that draft, as the Products tab opens it.
+  const drafts = useSelector((state: RootState) => state.global.productsToSave) as Record<string, unknown>;
   const counted = useMemo(() => rows.filter((row) => row.status !== "RETIRED" && !row.auction && stockOf(row)), [rows]);
   const { left } = useStockLeft(counted.map((row) => ({ shortStoreId: shortStoreIdOf(storeId), productId: row.productId, stock: stockOf(row)! })));
   const low = counted
@@ -50,8 +52,11 @@ export function LowStock({ storeId, onEdit }: { storeId: string; onEdit?: (produ
           return (
             <Box component="li" key={row.productId} sx={{ borderTop: i === 0 ? 0 : 1, borderColor: "divider" }}>
               <ButtonBase
-                onClick={() => details && onEdit?.(productForEdit(row, details))}
-                disabled={!details || !onEdit}
+                onClick={() => {
+                  const base = editBase(row, details, drafts);
+                  if (base) onEdit?.(base);
+                }}
+                disabled={!editBase(row, details, drafts) || !onEdit}
                 sx={{ width: "100%", minHeight: 52, px: 2, py: 1, display: "flex", alignItems: "center", gap: 1.5, justifyContent: "flex-start", textAlign: "left", "&:hover": { bgcolor: "action.hover" } }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>{title ? <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{title}</Typography> : <Skeleton width="50%" />}</Box>

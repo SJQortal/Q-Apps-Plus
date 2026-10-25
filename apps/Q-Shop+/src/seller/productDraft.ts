@@ -528,6 +528,22 @@ export function productForEdit(
 }
 
 /**
+ * What a change made outside the product form (Change status, Fix
+ * categories, retiring, Running low) starts from: the product's draft when
+ * it has one waiting in Ready to publish, so its unpublished edits stay, else
+ * the published product. Null when neither is at hand yet.
+ */
+export function editBase(
+  row: { created: number; catalogueId: string; productId: string; user?: string; status: string },
+  catalogueProduct: Record<string, any> | undefined,
+  drafts: Record<string, unknown>
+): (Record<string, any> & { id: string }) | null {
+  const draft = drafts[row.productId] as (Record<string, any> & { id: string }) | undefined;
+  if (draft) return draft;
+  return catalogueProduct ? productForEdit(row, catalogueProduct) : null;
+}
+
+/**
  * A product its index row names but its catalogue doesn't hold (a publish in
  * which the catalogue failed and the index landed). As the original did, the
  * edit form starts from the index row, so saving writes the product back

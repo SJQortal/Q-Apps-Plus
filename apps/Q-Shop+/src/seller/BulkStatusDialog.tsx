@@ -12,7 +12,7 @@ import { Box, Button, FormControlLabel, Radio, RadioGroup, Typography } from "@m
 import type { RootState } from "../state/store";
 import { setProductsToSave } from "../state/features/globalSlice";
 import { ResponsiveDialog } from "../components/common/mobile";
-import { PRODUCT_STATUSES, STATUS_LABEL, productForEdit, type ProductStatus } from "./productDraft";
+import { PRODUCT_STATUSES, STATUS_LABEL, editBase, type ProductStatus } from "./productDraft";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 import type { SellerRow } from "./productList";
 
@@ -25,6 +25,8 @@ const HINT: Record<ProductStatus, string> = {
 export function BulkStatusDialog({ rows, onClose, onDrafted }: { rows: SellerRow[]; onClose: () => void; onDrafted: (count: number) => void }) {
   const dispatch = useDispatch();
   const name = useSelector((state: RootState) => state.auth.user?.name ?? "");
+  // Products with edits waiting in Ready to publish start from those, not the published copy.
+  const drafts = useSelector((state: RootState) => state.global.productsToSave) as Record<string, unknown>;
   const owner = useSelector((state: RootState) => state.global.currentStore?.owner || name);
   const { request, productOf, statusOf } = useCatalogueLoader(owner);
   const [status, setStatus] = useState<ProductStatus>("OUT_OF_STOCK");
@@ -33,16 +35,19 @@ export function BulkStatusDialog({ rows, onClose, onDrafted }: { rows: SellerRow
   useEffect(() => {
     if (catalogues) request(catalogues.split("|"));
   }, [catalogues, request]);
-  const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId) as Record<string, unknown> | undefined;
-  const ready = changeable.filter((row) => detailsOf(row) && row.status !== status);
-  const loading = changeable.some((row) => !detailsOf(row) && statusOf(row.catalogueId) !== "failed");
-  const unreadable = changeable.filter((row) => !detailsOf(row) && statusOf(row.catalogueId) === "failed").length;
+  const baseOf = (row: SellerRow) => editBase(row, productOf(row.catalogueId, row.productId) as Record<string, unknown> | undefined, drafts);
+  const ready = changeable.filter((row) => {
+    const base = baseOf(row);
+    return base && base.status !== status;
+  });
+  const loading = changeable.some((row) => !baseOf(row) && statusOf(row.catalogueId) !== "failed");
+  const unreadable = changeable.filter((row) => !baseOf(row) && statusOf(row.catalogueId) === "failed").length;
   const auctions = rows.length - changeable.length;
 
   const draft = () => {
     for (const row of ready) {
-      const details = detailsOf(row);
-      if (details) dispatch(setProductsToSave({ ...productForEdit(row, details), status, isUpdate: true, user: name }));
+      const base = baseOf(row);
+      if (base) dispatch(setProductsToSave({ ...base, status, isUpdate: true, user: name }));
     }
     onDrafted(ready.length);
   };

@@ -16,7 +16,7 @@ import { ResponsiveDialog } from "../components/common/mobile";
 import { fetchDeliveryDoc } from "../delivery/deliveryDoc";
 import { isFeeProduct, shopCheckup, type CheckupKey } from "./checkup";
 import { FixCategoriesDialog } from "./FixCategoriesDialog";
-import { productForEdit } from "./productDraft";
+import { editBase } from "./productDraft";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 import { isListedCategory } from "../constants/categories";
 import type { SellerRow } from "./productList";
@@ -79,6 +79,7 @@ export function ShopCheckup({
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const owner = store?.owner || name;
   const listLoaded = useSelector((state: RootState) => state.global.dataContainer?.storeId === storeId);
+  const drafts = useSelector((state: RootState) => state.global.productsToSave) as Record<string, unknown>;
   const hasDelivery = useHasDelivery(owner, storeId);
   const { request, productOf } = useCatalogueLoader(owner);
   const listed = useMemo(() => rows.filter((r) => r.status !== "RETIRED"), [rows]);
@@ -108,9 +109,10 @@ export function ShopCheckup({
   const retire = () => {
     let count = 0;
     for (const row of feeRows) {
-      const details = detailsOf(row);
-      if (!details) continue;
-      dispatch(setProductsToSave({ ...productForEdit(row, details as Record<string, unknown>), status: "RETIRED", isUpdate: true, user: name }));
+      // A product with edits waiting in Ready to publish keeps them.
+      const base = editBase(row, detailsOf(row) as Record<string, unknown> | undefined, drafts);
+      if (!base) continue;
+      dispatch(setProductsToSave({ ...base, status: "RETIRED", isUpdate: true, user: name }));
       count++;
     }
     setRetiring(false);
