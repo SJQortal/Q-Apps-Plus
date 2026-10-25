@@ -62,20 +62,27 @@ export function DeliveryProductsDialog({
   const needle = query.trim().toLowerCase();
   const details = (row: SellerRow) => productOf(row.catalogueId, row.productId) as Record<string, unknown> | undefined;
   const matching = rows.filter((row) => row.status !== "RETIRED" && (!needle || titleOf(details(row)).toLowerCase().includes(needle)));
+  // A shipping profile never delivers a digital product (Simon: "do not show … if they are digital, just grey
+  // them out at the bottom of the list"): they go last, greyed, and can't be picked (one picked before can be dropped).
+  const digitalRow = (row: SellerRow) => !title && details(row)?.type === "digital";
+  const deliverable = matching.filter((row) => !digitalRow(row));
+  const digital = matching.filter(digitalRow);
   // Each collection's products the search leaves, in its order, then the rest; one group without collections.
-  const groups: { key: string; title: string | null; rows: SellerRow[] }[] = [];
-  const byId = new Map(matching.map((row) => [row.productId, row]));
+  const groups: { key: string; title: string | null; rows: SellerRow[]; digital?: true }[] = [];
+  const byId = new Map(deliverable.map((row) => [row.productId, row]));
   const grouped = new Set<string>();
   for (const c of collections) {
     const inIt = c.products.flatMap((id) => (byId.has(id) ? [byId.get(id) as SellerRow] : []));
     for (const row of inIt) grouped.add(row.productId);
     if (inIt.length > 0) groups.push({ key: c.id, title: c.title || "Collection", rows: inIt });
   }
-  const rest = matching.filter((row) => !grouped.has(row.productId));
+  const rest = deliverable.filter((row) => !grouped.has(row.productId));
   if (rest.length > 0) groups.push({ key: "rest", title: groups.length > 0 ? "Not in a collection" : null, rows: rest });
+  if (digital.length > 0) groups.push({ key: "digital", title: "Digital products: never delivered", rows: digital, digital: true });
   const items = groups.flatMap((g) => g.rows.map((row) => ({ group: g, row })));
   const visible = items.slice(0, shown).map((item) => item.row);
-  const wanted = needle ? rows : visible;
+  // A profile reads every catalogue (a shop has a few), so digital products are known and go last.
+  const wanted = needle || !title ? rows : visible;
   const wantedKey = [...new Set(wanted.map((row) => row.catalogueId))].join("|");
   useEffect(() => {
     if (wantedKey) request(wantedKey.split("|"));
@@ -87,7 +94,7 @@ export function DeliveryProductsDialog({
       const all = ids.every((id) => prev.includes(id));
       return all ? prev.filter((id) => !ids.includes(id)) : [...new Set([...prev, ...ids])];
     });
-  const matchingIds = matching.map((row) => row.productId);
+  const matchingIds = deliverable.map((row) => row.productId);
   const allPicked = matchingIds.length > 0 && matchingIds.every((id) => pickedSet.has(id));
 
   return (
@@ -158,7 +165,12 @@ export function DeliveryProductsDialog({
               const loading = !d && statusOf(row.catalogueId) !== "failed" && statusOf(row.catalogueId) !== "ready";
               return (
                 <Fragment key={`${group.key}\n${row.productId}`}>
-                  {startsGroup && (
+                  {startsGroup && group.digital && (
+                    <Box component="li" sx={{ pt: i === 0 ? 0 : 1.5, pb: 0.5, borderBottom: 1, borderColor: "divider" }}>
+                      <Typography sx={{ fontWeight: 700, color: "text.secondary" }}>{group.title}</Typography>
+                    </Box>
+                  )}
+                  {startsGroup && !group.digital && (
                     <Box component="li" sx={{ pt: i === 0 ? 0 : 1.5, borderBottom: 1, borderColor: "divider" }}>
                       <FormControlLabel
                         control={
@@ -186,8 +198,9 @@ export function DeliveryProductsDialog({
                       />
                     </Box>
                   )}
-                  <li>
+                  <Box component="li" sx={group.digital ? { opacity: 0.55 } : undefined}>
                     <FormControlLabel
+                      disabled={!!group.digital && !pickedSet.has(row.productId)}
                       control={<Checkbox checked={pickedSet.has(row.productId)} onChange={() => toggle(row.productId)} />}
                       label={
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, py: 0.5 }}>
@@ -202,12 +215,6 @@ export function DeliveryProductsDialog({
                             ) : (
                               <Typography color="text.secondary">Untitled product</Typography>
                             )}
-                            {/* Only a shipping profile delivers (discount codes pick with a title of their own). */}
-                            {!title && d?.type === "digital" && (
-                              <Typography variant="body2" color="text.secondary">
-                                Digital: never delivered
-                              </Typography>
-                            )}
                             {other && !pickedSet.has(row.productId) && (
                               <Typography variant="body2" color="text.secondary">
                                 In {other} now
@@ -218,7 +225,7 @@ export function DeliveryProductsDialog({
                       }
                       sx={{ m: 0, width: "100%", alignItems: "center", "& .MuiFormControlLabel-label": { minWidth: 0, flex: 1 } }}
                     />
-                  </li>
+                  </Box>
                 </Fragment>
               );
             })}

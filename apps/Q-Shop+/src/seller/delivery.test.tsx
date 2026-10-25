@@ -147,8 +147,8 @@ describe("the Delivery tab", () => {
     expect(screen.queryByRole("button", { name: "One price everywhere you ship" })).toBeNull();
   });
 
-  it("chooses a profile's products by collection, or all of them", async () => {
-    collectionDrafts.set(collectionsDraftKey(SELLER, STORE_ID), [{ id: "MUGSxxxxx1", title: "Mugs", description: "", products: [mug.id, poster.id], created: 1, updated: 1 }]);
+  it("chooses a profile's products by collection, or all of them; digital ones go last, greyed, and can't be picked", async () => {
+    collectionDrafts.set(collectionsDraftKey(SELLER, STORE_ID), [{ id: "SEATSxxxx1", title: "Seats", description: "", products: [chair.id, mug.id], created: 1, updated: 1 }]);
     setup();
     fireEvent.click(await screen.findByRole("button", { name: "Add a shipping profile" }));
     let d = await dialog();
@@ -157,19 +157,18 @@ describe("the Delivery tab", () => {
     fireEvent.click(within(await card("Heavy items")).getByRole("button", { name: "Choose products" }));
     d = await dialog();
     const list = within(d).getByRole("list", { name: "Products to choose from" });
-    // Grouped: the collection's products under it, the rest under "Not in a collection".
-    const mugs = await within(list).findByRole("checkbox", { name: /^Mugs/ });
-    expect(within(list).getByRole("checkbox", { name: /^Not in a collection/ })).toBeInTheDocument();
-    fireEvent.click(mugs);
-    expect(within(d).getByRole("button", { name: "Use 2 products" })).toBeInTheDocument();
-    expect(within(list).getByRole("checkbox", { name: /^Not in a collection/ })).not.toBeChecked();
-    fireEvent.click(within(d).getByRole("button", { name: "Select all" }));
-    expect(within(d).getByRole("button", { name: "Use 3 products" })).toBeInTheDocument();
-    expect(within(d).getByRole("button", { name: "Select none" })).toBeInTheDocument();
-    // A collection's tick drops all of it again.
-    fireEvent.click(mugs);
+    // Grouped by collection: the chair under Seats; the digital mug and poster at the bottom, greyed.
+    const seats = await within(list).findByRole("checkbox", { name: /^Seats/ });
+    expect(await within(list).findByText("Digital products: never delivered")).toBeInTheDocument();
+    expect(within(list).getByRole("checkbox", { name: new RegExp(mug.title) })).toBeDisabled();
+    expect(within(list).getByRole("checkbox", { name: new RegExp(poster.title) })).toBeDisabled();
+    fireEvent.click(seats);
     expect(within(d).getByRole("button", { name: "Use 1 product" })).toBeInTheDocument();
+    fireEvent.click(seats);
+    expect(within(d).getByRole("button", { name: "Use 0 products" })).toBeInTheDocument();
+    // Select all takes what can be delivered.
     fireEvent.click(within(d).getByRole("button", { name: "Select all" }));
+    expect(within(d).getByRole("button", { name: "Use 1 product" })).toBeInTheDocument();
     fireEvent.click(within(d).getByRole("button", { name: "Select none" }));
     expect(within(d).getByRole("button", { name: "Use 0 products" })).toBeInTheDocument();
   });
