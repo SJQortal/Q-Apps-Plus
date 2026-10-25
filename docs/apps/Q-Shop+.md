@@ -823,23 +823,31 @@ Simon, going to sleep: *"do a deep dive into our q-shop in general, investigate 
 
 ## Follow-ups
 
-**Round 5, 2026-10-25 (night): questions for Simon (75–89)**
+**Round 5, 2026-10-25 (night): questions for Simon (75–89), answered the same morning**
 
-75. **The Hub check** above wasn't done: no test Hub was running and the normal Hub is on your main account, so no purchase was made (0.1 QORT and BHC were allowed). Run the script, or start a test Hub with the debug port for the next session.
-76. **Delivery options:** up to 4 besides the zones' own prices. Enough? And should "Local pickup" ask for no address at checkout (today every physical order gives one)?
-77. **The buyer's country** for delivery prices stays on the device. Also keep it in Settings → Sync (encrypted? today Sync is public JSON)?
-78. **Ships to** reads each shop's JSON, 20 shops at a time. Faster: put the shop's countries in its QDN metadata (tags), so one search answers. Worth a metadata change (additive) on the next shop save?
-79. **Policies:** dispatch 1–30 working days, returns none or 7/14/30/60/90 days. Other choices? Show "No returns" shops with a warning at checkout?
-80. **Policies, sales and tracking** live only in the + app's fields: the original's shop edit drops `policies` (as it drops `shippingCountries`); its product edit keeps `compareAt`; its status update writes no tracking (its note still shows the line). OK?
-81. **Tracking:** 20 carriers offered (DHL, UPS, FedEx, USPS, Royal Mail, Canada Post, Australia Post, Deutsche Post, La Poste, PostNL, PostNord, Correos, CTT, Poste Italiane, InPost, Omniva, Japan Post, China Post, SF Express, Aramex). Add any? A tracking link per carrier would only copy itself in Hub.
-82. **Sales:** a price before, no end date. Want an end date ("Sale ends in 2 days"), or a shop-wide sale (10% off everything)?
-83. **The checkup** now asks every shop that ships for its policies (a nudge; it never blocks). OK?
-84. **The header** on 600–760 px windows puts the navigation on a second row. OK, or the phone layout (bottom bar) there instead?
-85. **The walkthrough's texts** (`onboarding/tours.tsx`): read them once; they're what every new user sees first.
-86. **Away** keeps orders open (a seller who wants none marks products out of stock, now several at once). Should "away" also stop checkout in Q-Shop+ (the original would still sell)?
-87. **Recently viewed** stays on the device (never published). Also on the Shops page, or only Products?
-88. **A warning colour in the theme kit:** the kit sets success and error per theme but not warning, so MUI's default orange (3:1 on white) is what every app gets. Q-Shop+ now darkens or lightens it for text (`theme/statusText.ts`). Add a readable `warning` to each theme in `shared/hub-theme` instead (a `Repo:` change that touches every app)?
-89. **They're not delivery fees** (the checkup's fee step) is remembered on that device only. Enough, or keep it with the shop (an additive field)?
+75. **The Hub check:** run together on the morning of 2026-10-25 (results under Done).
+76. ~~Delivery options~~ **Answered:** 4 options are enough. **Local pickup asks only a name and a contact**, no street address (to build; the original already reads orders with an empty address, as digital orders send).
+77. ~~The buyer's country in Sync~~ **Answered:** device only.
+78. ~~Ships to in QDN metadata~~ **Answered:** not for 1.0.
+79. ~~Policy choices~~ **Answered:** keep the choices; no warning for "No returns" shops.
+80. ~~Fields the original drops~~ **Answered:** fine until the upstream PR carries them.
+81. ~~Tracking carriers~~ **Answered:** the 20 are enough.
+82. ~~Sale end date or shop-wide sale~~ **Answered:** neither; **discount codes** instead (design below, to build).
+83. ~~Policies in the checkup~~ **Answered:** leave policies out of the checkup (to change).
+84. ~~The header at 600–760 px~~ **Answered:** keep the second row.
+85. ~~The walkthrough texts~~ **Answered:** Simon reads them in the Hub check.
+86. ~~Away and checkout~~ **Answered:** orders stay open while away.
+87. ~~Recently viewed on Shops~~ **Answered:** Products only.
+88. ~~A warning colour in the kit~~ **Answered:** yes, in `shared/hub-theme` for every app, as its own `Repo:` PR.
+89. ~~"They're not delivery fees" with the shop~~ **Answered:** device only.
+
+**Discount codes (Simon, 2026-10-25), the agreed design, to build:**
+- **Percent off only** (1–99 %), the same in QORT, ARRR and Q-Assets (an indivisible asset's discount rounds down to whole units). A code can also, or only, make **delivery free**.
+- **Limits the seller sets:** chosen products or collections only; a period (starts and/or ends); a minimum order in the shop's own currency (its pricing currency, else QORT); one Qortal name. A discount for one name needs no code: that buyer's checkout applies it.
+- **Secret codes:** the shop's public DOCUMENT `q-store-discounts-<short>` holds each code's fingerprint (a hash with the shop id) and its rules; the plain codes and names sit in a DOCUMENT_PRIVATE encrypted to the seller alone, published together. A guessable code can be found from its hash, so the editor offers random codes.
+- **In the order:** one negative line, `details["q-store-discount"]` (a pseudo-product of type `discount`, or `digital` in an all-digital order so the original still hides the address), e.g. "Discount SPRING10: 10% off and free delivery: −7.50"; `totalPrice` and the payment follow. The original shows lines and totals as given and never recomputes them. Money code: pinned by tests written first, recorded in the money-code table.
+- **For buyers:** a Discount code field at checkout's Confirm step (one per shop when checking out several); clear reasons when a code doesn't apply (ended, not started, minimum, other products, another name). Not for auctions or names; on top of sale prices.
+- **For sellers:** Shop Settings → Discount codes (list, add, pause, end), published in one step. Q-Shop+ checks each order's discount against the seller's codes (rules, period by the payment's block time, the buyer's name) and flags one that doesn't match, as it checks payments.
 
 **Round 5, 2026-10-24: questions for Simon on variants (55–62)**
 
