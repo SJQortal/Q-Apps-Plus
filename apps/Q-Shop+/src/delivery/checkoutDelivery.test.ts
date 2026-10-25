@@ -144,3 +144,23 @@ describe("reading the delivery prices", () => {
     expect(withOptionNote({ deliveryNote: "x" }, undefined).deliveryNote).toBe("x");
   });
 });
+
+describe("a delivery choice named after its shipping profile", () => {
+  it("calls the zones' own prices by the profile the products ship with, not the generic first option", () => {
+    const iceland = { country: "Iceland", state: "" };
+    const ghee: CartLine = { productId: "ghee", catalogueId: "c", quantity: 1, product: { title: "Ghee", type: "physical", price: [{ currency: "qort", value: 130 }] } as never };
+    const withProfile: DeliveryDoc = {
+      v: 1,
+      storeId: STORE,
+      currency: "QORT",
+      base: { name: "Standard" },
+      options: [{ id: "pick", name: "Pick up", pickup: true, place: { country: "IS", address: "Kolaportid Market", days: [6, 0], from: "11:00", to: "17:00" } }],
+      general: { zones: [] },
+      profiles: [{ id: "p", name: "Posturin", products: ["ghee"], zones: [{ id: "z", countries: ["IS"], first: 12 }] }],
+      updated: 1,
+    } as DeliveryDoc;
+    const offered = deliveryChoices({ shop, delivery: { doc: withProfile, pricing: null }, lines: [ghee], address: iceland, coin: "QORT", rate: null });
+    expect(offered.ok && offered.choices.map((c) => c.name)).toEqual(["Posturin", "Pick up"]);
+    expect(offered.ok && offered.choices[0].line?.product?.title).toBe("Delivery to Iceland, Posturin");
+  });
+});

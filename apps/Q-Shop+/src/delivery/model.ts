@@ -389,13 +389,19 @@ export function quoteDelivery(args: {
   }
   if (unavailable.length > 0) return { kind: "unavailable", titles: unavailable };
   const fee = round(parts.reduce((sum, p) => sum + p.fee, 0), doc.currency);
-  // With options, the line says which one the buyer picked.
-  const option = doc.options?.length ? { id: optionId, name: chosen?.name ?? doc.base?.name ?? BASE_OPTION_NAME } : null;
+  // With options, the line says which one the buyer picked. The zones' own prices carry the name the seller gave
+  // the shipping profile(s) they come from ("Posturin"), not the generic first option's (Simon: "so it is not
+  // confused"); the general prices keep the first option's name.
+  const profiles = [...new Set(parts.map((p) => p.profile).filter((n) => n !== "Delivery"))];
+  const baseName = profiles.length ? profiles.join(" + ") : (doc.base?.name ?? BASE_OPTION_NAME);
+  const option = doc.options?.length ? { id: optionId, name: chosen?.name ?? baseName } : null;
   if (!(fee > 0)) return { kind: "free", parts, ...(option && { option }) };
   const price: PricedProduct["price"] =
     doc.currency === "QORT" ? [{ currency: "qort", value: fee }] : priceListFromFiat(undefined, fee, pricing!.rates, args.takesArrr);
   const named = parts.filter((p) => p.fee > 0).map((p) => p.profile).filter((n) => n !== "Delivery");
-  const title = `Delivery to ${args.country}${args.state && country === US ? ` (${args.state})` : ""}${option ? `, ${option.name}` : ""}${named.length ? `: ${named.join(", ")}` : ""}`;
+  // "…, Posturin" rather than "…, Posturin: Posturin".
+  const which = named.length && named.join(" + ") !== option?.name ? `: ${named.join(", ")}` : "";
+  const title = `Delivery to ${args.country}${args.state && country === US ? ` (${args.state})` : ""}${option ? `, ${option.name}` : ""}${which}`;
   const product = {
     id: DELIVERY_LINE_ID,
     title,

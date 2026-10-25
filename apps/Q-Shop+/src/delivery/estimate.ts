@@ -60,12 +60,16 @@ export function deliveryEstimate(args: {
     // Zones don't depend on the option: none here means none for any.
     if (quote.kind === "unavailable") return { kind: "unavailable", place };
     if (quote.kind === "option-unavailable") continue;
+    // The zones' own prices go by their shipping profile's name (model.ts quoteDelivery).
+    const name = !option.id && quote.kind === "free" && quote.option?.name ? quote.option.name : option.name;
     if (quote.kind === "free") {
-      choices.push({ ...option, free: true });
+      choices.push({ ...option, name, free: true });
       continue;
     }
+    const charged = (quote.line.product as { delivery?: { option?: { name?: string } } } | undefined)?.delivery?.option?.name;
     choices.push({
       ...option,
+      name: !option.id && charged ? charged : name,
       free: false,
       qort: unitPrice(quote.line.product, "QORT", null),
       ...(quote.currency !== "QORT" && { fiat: { value: quote.fee, currency: quote.currency } }),

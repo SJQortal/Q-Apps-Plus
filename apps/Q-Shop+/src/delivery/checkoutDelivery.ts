@@ -120,7 +120,8 @@ export function deliveryChoices(args: Omit<Parameters<typeof deliveryCharge>[0],
   const choices: DeliveryChoice[] = [];
   for (const info of deliveryOptionsOf(doc)) {
     const charge = info.id ? deliveryCharge({ ...args, option: info.id }) : base;
-    if (charge.ok) choices.push({ ...info, line: charge.line, free: charge.free });
+    // The zones' own prices go by their shipping profile's name (model.ts quoteDelivery).
+    if (charge.ok) choices.push({ ...info, ...(!info.id && charge.option?.name && { name: charge.option.name }), line: charge.line, free: charge.free });
   }
   return { ok: true, choices };
 }

@@ -109,8 +109,8 @@ function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: 
           Delivery options
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Buyers pick one at checkout. Your zones&apos; prices below are the first option; add others, like Express or Tracked, and price them in each
-          zone that offers them.
+          Buyers pick one at checkout. Your zones&apos; prices below are the first option: buyers see it by your shipping profile&apos;s name
+          (Posturin, say), or by this name for the General prices. Add others, like Express or Tracked, and price them in each zone that offers them.
         </Typography>
       </Box>
       <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) minmax(0, 1.4fr) 44px" }, alignItems: "start" }}>
