@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFeeProduct, shopCheckup, suggestShippingCountries } from "./checkup";
+import { isFeeProduct, openShopSteps, shopCheckup, suggestShippingCountries } from "./checkup";
 import type { SellerRow } from "./productList";
 
 const row = (id: string, category: string, status = "AVAILABLE"): SellerRow => ({ productId: id, created: 1, priceQort: 1, category, catalogueId: "c", status });
@@ -72,5 +72,11 @@ describe("the shop checkup", () => {
     expect(check({ returnDays: 14 })).toBe(false);
     expect(check({ returnDays: 14, dispatchDays: 2 })).toBe(true);
     expect(check({ returnDays: 0, dispatchDays: 30 })).toBe(true);
+  });
+
+  it("counts the steps an owner's shop page can tell, without reading more", () => {
+    const rows = [{ category: "Paper" }, { category: "Home & Garden" }];
+    expect(openShopSteps({ logo: "x", description: "d", location: "l" }, rows)).toBe(3);
+    expect(openShopSteps({ logo: "x", description: "d", location: "l", shippingCountries: ["PT"], policies: { returnDays: 14 } }, [{ category: "Home & Garden" }])).toBe(0);
   });
 });

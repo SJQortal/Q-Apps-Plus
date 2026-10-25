@@ -89,3 +89,19 @@ export function shopCheckup(args: {
 
 // Kept with the other shipping words, for the home page's Ships to filter too.
 export { suggestShippingCountries } from "../constants/shippingText";
+
+/**
+ * What an owner's own shop page can tell without reading more: steps of the
+ * checkup still open among the shop's details, its categories (from its
+ * product list), where it ships and its policies. The page then points to
+ * the full checkup in Manage Shop.
+ */
+export function openShopSteps(shop: CheckupShop, rows: readonly { category?: string; status?: string }[]): number {
+  const listed = rows.filter((row) => row.status !== "RETIRED");
+  let open = 0;
+  if (listed.some((row) => !isListedCategory(row.category))) open++;
+  if (!shop.logo || !shop.description?.trim() || !shop.location?.trim()) open++;
+  if (listed.length > 0 && !shippingCountriesOf(shop)) open++;
+  if (policiesOf(shop)?.returnDays === undefined) open++;
+  return open;
+}

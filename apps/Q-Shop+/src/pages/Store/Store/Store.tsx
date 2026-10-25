@@ -29,6 +29,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  Alert,
   Box,
   Button,
   FormControlLabel,
@@ -84,6 +85,7 @@ import {
 import { featuredOrder, productOrderOf } from "../../../qdn/productOrder";
 import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
 import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
+import { openShopSteps } from "../../../seller/checkup";
 import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, SaleToggle, SectionDivider, useDebounced } from "../ProductList";
 import { useNow } from "../../../hooks/useNow";
 import { prefersReducedMotion, useSmoothSwap } from "../../../hooks/useSmoothSwap";
@@ -605,6 +607,8 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
   const dispatch = useDispatch();
   const currentStoreId = useSelector((state: RootState) => state.global.currentStore?.id);
   const { shop, shopStatus, index, productsStatus, isOwner, retry } = useViewedShop(owner, storeId);
+  // The owner's open checkup steps this page can tell (seller/checkup.ts openShopSteps).
+  const openSteps = useMemo(() => (isOwner && shop && index ? openShopSteps(shop, productRowsFromContainer(index)) : 0), [isOwner, shop, index]);
   const shopCollections = useShopCollections(owner, storeId, index);
   const [searchParams] = useSearchParams();
   const collectionId = searchParams.get("collection");
@@ -676,6 +680,20 @@ function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
   } else {
     content = (
       <>
+        {/* The owner's own shop, from before Q-Shop+: the checkup waits in Manage Shop (seller/checkup.ts). */}
+        {isOwner && openSteps > 0 && (
+          <Alert
+            severity="info"
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" onClick={sellerPage} sx={{ minHeight: 44, whiteSpace: "nowrap" }}>
+                Open the checkup
+              </Button>
+            }
+          >
+            {openSteps === 1 ? "1 step brings your shop up to date for Q-Shop+." : `${openSteps} steps bring your shop up to date for Q-Shop+.`} Each takes a minute.
+          </Alert>
+        )}
         <ShopHeader
           shop={shop}
           owner={owner}

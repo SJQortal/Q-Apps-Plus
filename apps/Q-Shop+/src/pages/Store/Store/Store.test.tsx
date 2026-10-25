@@ -274,6 +274,21 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("link", { name: /Message seller/ })).toBeNull();
   });
 
+  it("tells the owner how many steps bring their shop up to date, and opens the checkup", async () => {
+    renderShop(makeWorld(), SHOP_PATH, { name: "Seller Name" });
+    // The fake shops use old categories, type their Ships to and state no policies.
+    const banner = await screen.findByText(/steps? brings? your shop up to date for Q-Shop\+/);
+    expect(banner.textContent).toMatch(/^3 steps/);
+    fireEvent.click(screen.getByRole("button", { name: "Open the checkup" }));
+    expect(await screen.findByText("Seller page")).toBeInTheDocument();
+  });
+
+  it("doesn't tell a visitor about the owner's checkup", async () => {
+    renderShop(makeWorld());
+    await waitFor(() => expect(cardTitles()).toHaveLength(12));
+    expect(screen.queryByRole("button", { name: "Open the checkup" })).toBeNull();
+  });
+
   it("copies share links for the viewed shop, and for its products (not your own shop's id)", async () => {
     renderShop(makeWorld());
     fireEvent.click(await screen.findByRole("button", { name: "Share" }));
