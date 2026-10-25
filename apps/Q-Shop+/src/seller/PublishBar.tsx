@@ -18,6 +18,7 @@ import UndoOutlinedIcon from "@mui/icons-material/UndoOutlined";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { useBottomChromeHeight } from "../components/layout/BottomNav/BottomNav";
 import { takeLeaveWithoutAsking, type ChangeArea, type PendingChange } from "./usePendingChanges";
+import { ChangeDetails } from "./ChangeDetails";
 
 export const PUBLISH_BAR_SPACE = 84;
 
@@ -140,7 +141,7 @@ export function PublishBar({
         </ResponsiveDialog>
       )}
       {viewOpen && changes.length > 0 && (
-        <ResponsiveDialog open onClose={() => setViewOpen(false)} title="Your unpublished changes" maxWidth="sm">
+        <ResponsiveDialog open onClose={() => setViewOpen(false)} title="Your unpublished changes" maxWidth="md">
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5, pt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Buyers see these once you publish them. They&apos;re kept on this device until then.
@@ -179,7 +180,7 @@ export function PublishBar({
                     Publish
                   </Button>
                 </Box>
-                {c.area === "products" && renderProducts?.(() => setViewOpen(false))}
+                {c.area === "products" ? renderProducts?.(() => setViewOpen(false)) : <ChangeDetails area={c.area} />}
               </Box>
             ))}
           </Box>

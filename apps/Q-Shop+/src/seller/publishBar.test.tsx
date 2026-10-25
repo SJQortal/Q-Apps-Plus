@@ -103,6 +103,10 @@ describe("unpublished changes on the seller page", () => {
     const view = await screen.findByRole("dialog", { name: "Your unpublished changes" });
     expect(within(within(view).getByRole("region", { name: "1 product" })).getByText("Chair, new price")).toBeInTheDocument();
     expect(within(within(view).getByRole("region", { name: "Delivery prices" })).getByRole("button", { name: "Open Delivery" })).toBeInTheDocument();
+    // What changed, in words: here the shop's first delivery prices.
+    const delivery = within(view).getByRole("region", { name: "Delivery prices" });
+    expect(await within(delivery).findByText("Delivery prices for the first time")).toBeInTheDocument();
+    expect(within(delivery).getByText(/^General: added zone Portugal \(/)).toBeInTheDocument();
     fireEvent.click(within(view).getByRole("button", { name: "Close" }));
     fireEvent.click(within(await bar()).getByRole("button", { name: "Discard" }));
     fireEvent.click(within(await screen.findByRole("dialog", { name: "Discard your changes?" })).getByRole("button", { name: "Discard all" }));
