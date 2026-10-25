@@ -97,4 +97,14 @@ describe("delivery on a product page", () => {
     renderWithProviders(<ProductDelivery owner="Shop+Plus" storeId={STORE} shop={{ ...shop, location: "Lisbon" }} line={line()} />);
     expect(await screen.findByText(/^Ships from Lisbon · to Europe/)).toBeInTheDocument();
   });
+
+  it("offers to forget only a country picked here, not one from the address kept at checkout", async () => {
+    const { PlacePickerDialog } = await import("./PlacePickerDialog");
+    const view = renderWithProviders(<PlacePickerDialog place={{ country: "Portugal", state: "" }} onClose={() => {}} />);
+    expect(screen.queryByRole("button", { name: "Forget it" })).toBeNull();
+    view.unmount();
+    act(() => setBuyerPlace({ country: "Portugal", state: "" }));
+    renderWithProviders(<PlacePickerDialog place={{ country: "Portugal", state: "" }} onClose={() => {}} />);
+    expect(screen.getByRole("button", { name: "Forget it" })).toBeInTheDocument();
+  });
 });

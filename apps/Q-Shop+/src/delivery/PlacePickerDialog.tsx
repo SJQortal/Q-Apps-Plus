@@ -8,7 +8,7 @@ import { Autocomplete, Box, Button, TextField, Typography } from "@mui/material"
 import { ResponsiveDialog } from "../components/common/mobile";
 import { autocompletePaperProps } from "../components/common/menuStyle";
 import { ALL_COUNTRY_CODES, ALL_STATE_CODES, US, countryCode, countryName, stateName } from "../constants/shipping";
-import { cleanPlace, setBuyerPlace, type BuyerPlace } from "./buyerPlace";
+import { cleanPlace, pickedBuyerPlace, setBuyerPlace, type BuyerPlace } from "./buyerPlace";
 
 const byName = (a: string, b: string) => a.localeCompare(b);
 
@@ -33,7 +33,8 @@ export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPl
       maxWidth="xs"
       actions={
         <>
-          {place && (
+          {/* Only a country picked here can be forgotten (not the one from the address kept at checkout). */}
+          {place && pickedBuyerPlace() && (
             <Button
               color="inherit"
               onClick={() => {
