@@ -301,6 +301,20 @@ describe("the rest of the order", () => {
     expect(screen.getByRole("button", { name: "Update status" })).toBeDisabled();
   });
 
+  it("shows the buyer the shop's returns and dispatch time under the order's status", async () => {
+    const store = { title: STORE_TITLE, description: "d", location: "Lisbon", shipsTo: "Europe", shortStoreId: SHORT_STORE_ID, created: 1, logo: "x", foreignCoins: {}, supportedCoins: ["QORT"], policies: { dispatchDays: 2, returnDays: 14 } };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const body = String(url).startsWith("/arbitrary/STORE/") ? store : [];
+        return { ok: true, status: 200, json: async () => body, text: async () => JSON.stringify(body) };
+      })
+    );
+    setup("buyer", orderJson({ physical: true }), { status: "Shipped" });
+    expect(await screen.findByText("Returns within 14 days of delivery")).toBeInTheDocument();
+    expect(screen.getByText("Dispatched within 2 working days")).toBeInTheDocument();
+  });
+
   it("copies a physical order's address for the seller's shipping label", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
     setup("seller", orderJson({ physical: true }));

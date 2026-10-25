@@ -128,9 +128,11 @@ describe("order status (pinned)", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       `/arbitrary/resources/search?mode=ALL&service=DOCUMENT_PRIVATE&identifier=${STATUS_ID}&name=Seller+Name&limit=1&offset=0&includemetadata=false&reverse=true&exactmatchnames=true`
     );
-    // The status's one search; the other is the buyer's own "Delivered" (orders/delivered.ts, + app).
+    // The status's one search; the others are + app reads: the buyer's own "Delivered" (orders/delivered.ts)
+    // and the shop's JSON for its policies (shop/policies.ts, the home cards' cached copy).
     expect(fetchMock.mock.calls.filter(([url]) => url.includes("service=DOCUMENT_PRIVATE"))).toHaveLength(1);
-    expect(fetchMock.mock.calls.map(([url]) => url).filter((url) => !url.includes("service=DOCUMENT_PRIVATE"))).toEqual([
+    expect(fetchMock.mock.calls.map(([url]) => url).filter((url) => !url.includes("service=DOCUMENT_PRIVATE")).sort()).toEqual([
+      `/arbitrary/STORE/${encodeURIComponent(SELLER)}/q-store-general-${SHORT_STORE_ID}`,
       `/arbitrary/resources/search?mode=ALL&service=DOCUMENT&identifier=q-store-delivered-${ORDER_ID.slice("q-store-order-".length)}&name=${encodeURIComponent(BUYER)}&limit=1&offset=0&includemetadata=false&reverse=true&exactmatchnames=true`,
     ]);
     expect(q.calls).toEqual([

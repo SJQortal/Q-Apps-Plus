@@ -42,6 +42,9 @@ import { sendOrderStatus } from "../../../orders/statusUpdate";
 import { normalizeStatus, shownStatus } from "../../../orders/status";
 import type { Tracking } from "../../../orders/tracking";
 import { copyText } from "../../../utils/clipboard";
+import { requestShopDetails, useShopDetails } from "../../../discovery/shopDetails";
+import { shopKey } from "../../../discovery/shopIndex";
+import { PolicyLines } from "../../../shop/PolicyLines";
 import { addressLabelText, deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
 import { useOrderCoinView } from "../../../orders/useOrderCoin";
 import type { ShopCoinSettings } from "../../../money/coins";
@@ -144,6 +147,21 @@ function sameDraft(draft: StatusDraft, status: OrderStatusInfo | null): boolean 
     normalizeStatus(draft.status) !== "Shipped" ||
     (draft.trackingNumber.trim() === (status.tracking?.number ?? "") && draft.carrier.trim() === (status.tracking?.carrier ?? ""));
   return normalizeStatus(draft.status) === normalizeStatus(status.status) && draft.note === status.note && sameTracking;
+}
+
+/** The shop's policies under a buyer's order status, read with the home cards' shop details (cached). */
+function OrderShopPolicies({ owner, storeId, digital }: { owner: string; storeId: string; digital: boolean }) {
+  const details = useShopDetails(shopKey(owner, storeId));
+  useEffect(() => {
+    void requestShopDetails(owner, storeId);
+  }, [owner, storeId]);
+  const shop = details?.status === "ready" && details.valid ? (details.shop as { policies?: unknown; title?: string }) : null;
+  if (!shop) return null;
+  return (
+    <Box sx={{ mt: 1.5 }}>
+      <PolicyLines shop={shop} digital={digital} />
+    </Box>
+  );
 }
 
 function CopyAddressButton({ text }: { text: string }) {
@@ -422,6 +440,8 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
           ) : (
             <Skeleton width="60%" />
           )}
+          {/* The buyer's order: the shop's policies (returns, dispatch time), for when something goes wrong. */}
+          {role === "buyer" && storeId && order.sellerName && <OrderShopPolicies owner={order.sellerName} storeId={storeId} digital={digital} />}
         </Section>
 
         <Section title={`Items (${items.length})`}>
