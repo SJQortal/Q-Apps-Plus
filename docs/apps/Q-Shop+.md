@@ -784,7 +784,8 @@ Simon, going to sleep: *"do a deep dive into our q-shop in general, investigate 
 - The walkthrough keeps its own type scale (Classic's 23 px body text outgrew its titles, `be39548f`).
 - **For sellers:** the checkup's first step for a new shop is **Add your first product** (`5400e187`); **Running low** on the Overview lists counted products with 3 or fewer left, each a tap from its editor (`d9537445`); the Delivery tab starts a first zone in one step, **one price everywhere you ship** (`eb5fdc78`); orders to handle say **Dispatch by Tue 27 Oct** (or that it was due) from the shop's dispatch time (`62339eff`); **Copy address** in an order, for a shipping label (`a489704f`).
 - **For buyers:** **Order placed** says what happens next in the shop's terms (`e3c6d0dd`, and after checking out several shops, `e89c8e4b`); checkout's address step says an option is picked next when the shop has them (`ee29fefa`); order cards show the tracking number (`2b70540c`); product pages say where a product **ships from** (`7980f5fe`); **On sale** on shop pages too (`1abdfd8c`); shop cards say **Away** (`254644dc`); **Help** in Settings answers paying, delivery, safety, problems and selling (`27928fab`).
-- **Tests:** 1122 → 1153.
+- **Also:** **Ships to** on the Products page too, reading the listed shops five at a time (`a762c3b9`); a buyer's order shows the shop's returns and dispatch time under its status (`081e4c42`, one more cached read of the shop's JSON, which the pinned order read now names); an owner's own shop page says how many steps bring it up to date, with **Open the checkup**, so sellers who never open Manage Shop hear of it (`a75d26f7`).
+- **Tests:** 1122 → 1158.
 
 **Script for the Hub check** (Tester accounts; every payment and publish is Simon's to confirm):
 1. A browser profile without `qshopplus-walkthrough`: the notice, then Welcome. Skip; Settings → About → Show the walkthrough and Seller guide.
