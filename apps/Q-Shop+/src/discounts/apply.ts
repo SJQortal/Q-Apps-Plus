@@ -11,7 +11,7 @@ import { unitPrice } from "../money/pricing";
 import { priceCurrencyKey } from "../money/coins";
 import { fiatPriceOf, qortPriceOf, type FiatPricing } from "../money/fiatPricing";
 import { deliveryMoney } from "../delivery/model";
-import { DISCOUNT_LINE_ID, discountStatus, discountTitle, type Discount, type DiscountsDoc } from "./model";
+import { DISCOUNT_LINE_ID, discountNames, discountStatus, discountTitle, type Discount, type DiscountsDoc } from "./model";
 
 const day = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
@@ -55,7 +55,8 @@ export function discountProblem(args: {
   if (status === "paused") return "This code isn't in use right now.";
   if (status === "scheduled" && discount.starts !== undefined) return `This code starts on ${day(discount.starts)}.`;
   if (status === "ended" && discount.ends !== undefined) return `This code ended on ${day(discount.ends)}.`;
-  if (discount.forName && discount.forName !== args.buyerNameHash) return "This code is for another Qortal name.";
+  const names = discountNames(discount);
+  if (names.length > 0 && !(args.buyerNameHash && names.includes(args.buyerNameHash))) return "This code is for other Qortal names.";
   if (discountedLines(discount, args.lines).length === 0) return "This code is for other products of this shop.";
   if (discount.minTotal !== undefined) {
     const subtotal = productsSubtotal(args.lines, args.doc.currency, args.pricing);
@@ -123,6 +124,6 @@ export function discountForCode(doc: DiscountsDoc, hash: string): Discount | nul
 /** A discount for the buyer's own name that needs no code, the largest first; null when there's none in use. */
 export function discountForName(doc: DiscountsDoc, buyerNameHash: string | null, now: number): Discount | null {
   if (!buyerNameHash) return null;
-  const mine = doc.discounts.filter((d) => !d.code && d.forName === buyerNameHash && discountStatus(d, now) === "active");
+  const mine = doc.discounts.filter((d) => !d.code && discountNames(d).includes(buyerNameHash) && discountStatus(d, now) === "active");
   return mine.sort((a, b) => b.percent - a.percent || Number(!!b.freeDelivery) - Number(!!a.freeDelivery))[0] ?? null;
 }

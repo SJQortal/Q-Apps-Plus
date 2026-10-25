@@ -9,7 +9,7 @@ import { buildDeliveryPublish, rememberDeliveryDoc } from "../delivery/deliveryD
 import type { DeliveryDoc } from "../delivery/model";
 import { publishMedia, type PublishOutcome } from "../richtext/publishMedia";
 import type { DiscountsDoc } from "../discounts/model";
-import { docFromDrafts, type DiscountDraft } from "../discounts/drafts";
+import { docFromDrafts, hiddenNames, type DiscountDraft } from "../discounts/drafts";
 import { buildDiscountsPublish, encryptDiscountSecret, keepDiscountSecret, rememberDiscountsDoc } from "../discounts/discountsDoc";
 import { createDeviceDraftStore } from "./deviceDrafts";
 
@@ -59,7 +59,7 @@ export async function publishDiscountDrafts(args: {
   const { drafts, base } = args.draft;
   const { doc, secret } = await docFromDrafts({ storeId: args.storeId, currency: args.currency, drafts, now: args.now });
   // Codes or names this device can't read (set elsewhere): the published list keeps them for the devices that can.
-  const hidden = drafts.some((d) => (d.code && !d.codeText) || (d.forName && !d.nameText));
+  const hidden = drafts.some((d) => (d.code && !d.codeText) || hiddenNames(d));
   const encrypted =
     hidden && base?.secret
       ? base.secret

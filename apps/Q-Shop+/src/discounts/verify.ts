@@ -16,7 +16,7 @@ import { orderDelivery, orderDiscount, orderItems, type OrderItem } from "../ord
 import { fetchPaymentTransaction } from "../orders/reads";
 import { productsSubtotal } from "./apply";
 import { loadShopDiscounts } from "./discountsDoc";
-import { codeHash, nameHash, type DiscountsDoc } from "./model";
+import { codeHash, discountNames, nameHash, type DiscountsDoc } from "./model";
 
 /** The time of the block at a height (ms), null when the node can't say. */
 async function blockTime(height: number): Promise<number | null> {
@@ -51,8 +51,9 @@ export async function checkOrderDiscount(args: {
   if (discount.code && (!claim.code || (await codeHash(args.storeId, claim.code)) !== discount.code)) {
     return { ok: false, message: "The code in this order isn't your code." };
   }
-  if (discount.forName && (await nameHash(args.storeId, args.buyer)) !== discount.forName) {
-    return { ok: false, message: "This discount is for another Qortal name than the buyer's." };
+  const names = discountNames(discount);
+  if (names.length > 0 && !names.includes(await nameHash(args.storeId, args.buyer))) {
+    return { ok: false, message: "This discount is for other Qortal names than the buyer's." };
   }
   if (discount.starts !== undefined || discount.ends !== undefined) {
     if (args.at === null) return { ok: false, message: "Its dates can't be checked here: the payment isn't in a block on your node (or was in a coin without one)." };

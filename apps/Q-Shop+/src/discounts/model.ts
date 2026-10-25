@@ -24,6 +24,8 @@ import { sha256 } from "./sha256";
 export const MAX_DISCOUNTS = 50;
 export const MAX_PERCENT = 99;
 export const MAX_DISCOUNT_PRODUCTS = 300;
+/** Names one discount can be for (a Q-Chat group's members, say). */
+export const MAX_DISCOUNT_NAMES = 500;
 /** The order line a discount adds (discounts/apply.ts), as the delivery fee adds `q-store-delivery`. */
 export const DISCOUNT_LINE_ID = "q-store-discount";
 /** 3–24 letters, digits, "-" or "_", as the code is kept: in capitals. */
@@ -43,15 +45,29 @@ export interface Discount {
   minTotal?: number;
   /** Only these products (ids); every product when absent. */
   products?: string[];
-  /** Only for this Qortal name: its fingerprint (nameHash). */
+  /** Only for this Qortal name: its fingerprint (nameHash). With several names, the first of them. */
   forName?: string;
+  /**
+   * Only for these Qortal names (two or more): their fingerprints, additive
+   * (Simon, 2026-10-25). `forName` is then the first, so a build that reads
+   * only `forName` still keeps the discount to a name rather than to everyone.
+   */
+  forNames?: string[];
   paused?: true;
+}
+
+/** The fingerprints of the names a discount is for (none: it's for whoever has the code). */
+export function discountNames(discount: Pick<Discount, "forName" | "forNames">): string[] {
+  return discount.forNames?.length ? discount.forNames : discount.forName ? [discount.forName] : [];
 }
 
 /** What only the seller reads: the codes and names as typed, by discount id. */
 export interface DiscountSecret {
   codes: Record<string, string>;
+  /** The (first) name each discount is for. */
   names: Record<string, string>;
+  /** Every name, for a discount for several (additive). */
+  nameLists?: Record<string, string[]>;
 }
 
 export interface DiscountsDoc {
@@ -102,8 +118,11 @@ function discountOf(raw: unknown): Discount | null {
   // A discount that takes nothing off isn't one.
   if (d.percent === 0 && !freeDelivery) return null;
   const code = typeof d.code === "string" && HASH.test(d.code) ? d.code : undefined;
-  const forName = typeof d.forName === "string" && HASH.test(d.forName) ? d.forName : undefined;
-  // Without a code it's for one name, or for no one.
+  const forNames = Array.isArray(d.forNames)
+    ? [...new Set(d.forNames.filter((h): h is string => typeof h === "string" && HASH.test(h)))].slice(0, MAX_DISCOUNT_NAMES)
+    : [];
+  const forName = typeof d.forName === "string" && HASH.test(d.forName) ? d.forName : forNames[0];
+  // Without a code it's for one name (or several), or for no one.
   if (!code && !forName) return null;
   const starts = timeOf(d.starts);
   const ends = timeOf(d.ends);
@@ -121,6 +140,7 @@ function discountOf(raw: unknown): Discount | null {
     ...(minTotal !== undefined && { minTotal }),
     ...(products.length > 0 && { products }),
     ...(forName && { forName }),
+    ...(forNames.length > 1 && { forNames }),
     ...(d.paused === true && { paused: true as const }),
   };
 }
@@ -147,7 +167,7 @@ export function discountsDocOf(raw: unknown, storeId: string): DiscountsDoc | nu
 
 /** The seller's list read back from its decrypted JSON: only well-formed codes and names. */
 export function discountSecretOf(raw: unknown): DiscountSecret {
-  const s = raw as { codes?: unknown; names?: unknown } | null;
+  const s = raw as { codes?: unknown; names?: unknown; nameLists?: unknown } | null;
   const pick = (value: unknown, ok: (text: string) => boolean): Record<string, string> => {
     const out: Record<string, string> = {};
     if (!value || typeof value !== "object" || Array.isArray(value)) return out;
@@ -156,7 +176,19 @@ export function discountSecretOf(raw: unknown): DiscountSecret {
     }
     return out;
   };
-  return { codes: pick(s?.codes, (t) => CODE_PATTERN.test(t)), names: pick(s?.names, (t) => t.trim().length > 0 && t.length <= 40) };
+  const okName = (t: string) => t.trim().length > 0 && t.length <= 40;
+  const nameLists: Record<string, string[]> = {};
+  if (s?.nameLists && typeof s.nameLists === "object" && !Array.isArray(s.nameLists)) {
+    for (const [key, list] of Object.entries(s.nameLists as Record<string, unknown>)) {
+      const names = Array.isArray(list) ? list.filter((t): t is string => typeof t === "string" && okName(t)).slice(0, MAX_DISCOUNT_NAMES) : [];
+      if (idOf(key) && names.length > 0) nameLists[key] = names;
+    }
+  }
+  return {
+    codes: pick(s?.codes, (t) => CODE_PATTERN.test(t)),
+    names: pick(s?.names, okName),
+    ...(Object.keys(nameLists).length > 0 && { nameLists }),
+  };
 }
 
 export type DiscountStatus = "active" | "scheduled" | "ended" | "paused";

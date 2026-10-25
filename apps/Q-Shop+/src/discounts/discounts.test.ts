@@ -114,7 +114,7 @@ describe("a discount at checkout", () => {
     expect(problem({ ...base, paused: true })).toBe("This code isn't in use right now.");
     expect(problem({ ...base, starts: 2000 })).toMatch(/^This code starts on /);
     expect(problem({ ...base, ends: 500 })).toMatch(/^This code ended on /);
-    expect(problem({ ...base, forName: H1 })).toBe("This code is for another Qortal name.");
+    expect(problem({ ...base, forName: H1 })).toBe("This code is for other Qortal names.");
     expect(problem({ ...base, forName: H2 })).toBeNull();
     expect(problem({ ...base, products: ["chair"] })).toBe("This code is for other products of this shop.");
     // The order's products come to 25 QORT.
@@ -225,6 +225,34 @@ describe("reading and publishing discount codes", () => {
   });
 });
 
+describe("a discount for several names", () => {
+  const H3 = "00112233445566778899aabbccddeeff";
+  it("reads `forNames` (first in `forName` too), applies to any of them, and the seller checks it", async () => {
+    const parsed = discountsDocOf({ v: 1, storeId: STORE, currency: "QORT", updated: 1, discounts: [{ id: "g", percent: 20, forNames: [H1, H2, H2, "bad"] }] }, STORE);
+    expect(parsed?.discounts).toEqual([{ id: "g", percent: 20, forName: H1, forNames: [H1, H2] }]);
+    const d = parsed as DiscountsDoc;
+    expect(discountForName(d, H2, 1000)?.id).toBe("g");
+    expect(discountForName(d, H3, 1000)).toBeNull();
+    const args = { discount: d.discounts[0], doc: d, lines: [mug], now: 1000, pricing: null, hasDeliveryFee: false };
+    expect(discountProblem({ ...args, buyerNameHash: H2 })).toBeNull();
+    expect(discountProblem({ ...args, buyerNameHash: H3 })).toBe("This code is for other Qortal names.");
+    // The seller's check: any of the names.
+    const names = [await nameHash(STORE, "Bob"), await nameHash(STORE, "Ann")];
+    const order = { claim: { title: "Your discount: 20% off", amount: 4, id: "g", percent: 20 }, storeId: STORE, items: [], deliveryFee: 0, at: 1000, pricing: null };
+    const theirs = doc([{ id: "g", percent: 20, forName: names[0], forNames: names }]);
+    expect(await checkOrderDiscount({ ...order, doc: theirs, buyer: "Ann" })).toMatchObject({ ok: false, message: "It takes off more than your code gives." });
+    expect(await checkOrderDiscount({ ...order, doc: theirs, buyer: "Cy" })).toEqual({ ok: false, message: "This discount is for other Qortal names than the buyer's." });
+  });
+
+  it("keeps every name in the seller's list", () => {
+    expect(discountSecretOf({ codes: {}, names: { abc12345: "Ann" }, nameLists: { abc12345: ["Ann", "Bo", 3], "not an id": ["X"], empty: [7] } })).toEqual({
+      codes: {},
+      names: { abc12345: "Ann" },
+      nameLists: { abc12345: ["Ann", "Bo"] },
+    });
+  });
+});
+
 describe("the seller's check of an order's discount", () => {
   const item = (productId: string, total: number, extra: Record<string, unknown> = {}) => ({
     productId,
@@ -257,7 +285,7 @@ describe("the seller's check of an order's discount", () => {
     expect(await check(claim, { ...spring, ends: 500 }, { at: null })).toMatchObject({ ok: false, message: expect.stringMatching(/^Its dates can't be checked here/) });
     expect(await check(claim, spring, { at: null })).toEqual({ ok: true });
     expect(await check(claim, { ...spring, minTotal: 40 })).toEqual({ ok: false, message: "The order is under your code's minimum." });
-    expect(await check(claim, { ...spring, forName: await nameHash(STORE, "Bob") })).toEqual({ ok: false, message: "This discount is for another Qortal name than the buyer's." });
+    expect(await check(claim, { ...spring, forName: await nameHash(STORE, "Bob") })).toEqual({ ok: false, message: "This discount is for other Qortal names than the buyer's." });
     expect(await check(claim, spring, { doc: null })).toMatchObject({ ok: false });
   });
 

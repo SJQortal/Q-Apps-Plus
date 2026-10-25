@@ -64,7 +64,11 @@ export function DiscountsCard({ publishAsk = null }: { publishAsk?: PublishAsk |
         const read = doc && user?.publicKey ? await decryptDiscountSecret(doc, user.publicKey) : { codes: {}, names: {} };
         const local = localDiscountSecret(storeId);
         // The encrypted list wins; this device's copy fills what it can't say.
-        const secret = { codes: { ...local.codes, ...read.codes }, names: { ...local.names, ...read.names } };
+        const secret = {
+          codes: { ...local.codes, ...read.codes },
+          names: { ...local.names, ...read.names },
+          nameLists: { ...local.nameLists, ...read.nameLists },
+        };
         if (alive) setLoad({ key, status: "ready", doc, published: draftsOf(doc, secret) });
       } catch {
         if (alive) setLoad({ key, status: "failed" });

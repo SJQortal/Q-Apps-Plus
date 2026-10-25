@@ -5,21 +5,32 @@
  * fingerprinted only when published.
  */
 import { deliveryMoney } from "../delivery/model";
-import { codeHash, discountWhat, nameHash, type Discount, type DiscountSecret, type DiscountsDoc } from "./model";
+import { codeHash, discountNames, discountWhat, nameHash, type Discount, type DiscountSecret, type DiscountsDoc } from "./model";
 
 export interface DiscountDraft extends Discount {
   /** The code as typed (in capitals), when known; absent for one set on another device whose list couldn't be read. */
   codeText?: string;
-  /** The Qortal name it's for, as typed. */
+  /** The Qortal name it's for, as typed (a draft from before several names; see draftNames). */
   nameText?: string;
+  /** The Qortal names it's for, as typed. */
+  nameTexts?: string[];
+}
+
+/** The names a draft is for, as typed (none known: none, or set on another device). */
+export function draftNames(draft: Pick<DiscountDraft, "nameText" | "nameTexts">): string[] {
+  return draft.nameTexts ?? (draft.nameText ? [draft.nameText] : []);
+}
+
+/** A draft for names this device can't read (set on another device). */
+export function hiddenNames(draft: DiscountDraft): boolean {
+  return discountNames(draft).length > 0 && draftNames(draft).length === 0;
 }
 
 export function draftsOf(doc: DiscountsDoc | null, secret: DiscountSecret): DiscountDraft[] {
-  return (doc?.discounts ?? []).map((d) => ({
-    ...d,
-    ...(secret.codes[d.id] && { codeText: secret.codes[d.id] }),
-    ...(secret.names[d.id] && { nameText: secret.names[d.id] }),
-  }));
+  return (doc?.discounts ?? []).map((d) => {
+    const names = secret.nameLists?.[d.id] ?? (secret.names[d.id] ? [secret.names[d.id]] : []);
+    return { ...d, ...(secret.codes[d.id] && { codeText: secret.codes[d.id] }), ...(names.length > 0 && { nameTexts: names }) };
+  });
 }
 
 /** The document to publish (codes and names fingerprinted) and the seller's own list to encrypt and keep. */
@@ -27,12 +38,16 @@ export async function docFromDrafts(args: { storeId: string; currency: string; d
   const secret: DiscountSecret = { codes: {}, names: {} };
   const discounts: Discount[] = [];
   for (const draft of args.drafts) {
-    const { codeText, nameText, code: oldCode, forName: oldName, ...rest } = draft;
+    const { codeText, nameText: _nameText, nameTexts: _nameTexts, code: oldCode, forName: oldName, forNames: oldNames, ...rest } = draft;
     const code = codeText ? await codeHash(args.storeId, codeText) : oldCode;
-    const forName = nameText ? await nameHash(args.storeId, nameText) : oldName;
+    const texts = draftNames(draft);
+    // Names typed here are fingerprinted; names set elsewhere (not readable here) stay as they were.
+    const hashes = texts.length > 0 ? await Promise.all(texts.map((n) => nameHash(args.storeId, n))) : (oldNames ?? (oldName ? [oldName] : []));
+    const unique = [...new Set(hashes)];
     if (codeText) secret.codes[draft.id] = codeText;
-    if (nameText) secret.names[draft.id] = nameText;
-    discounts.push({ ...rest, ...(code && { code }), ...(forName && { forName }) });
+    if (texts.length > 0) secret.names[draft.id] = texts[0];
+    if (texts.length > 1) (secret.nameLists ??= {})[draft.id] = texts;
+    discounts.push({ ...rest, ...(code && { code }), ...(unique[0] && { forName: unique[0] }), ...(unique.length > 1 && { forNames: unique }) });
   }
   return { doc: { v: 1, storeId: args.storeId, currency: args.currency, discounts, updated: args.now }, secret };
 }
@@ -47,15 +62,27 @@ export function draftSummary(draft: DiscountDraft, currency: string): string {
   else if (draft.starts !== undefined) parts.push(`from ${day(draft.starts)}`);
   else if (draft.ends !== undefined) parts.push(`until ${day(draft.ends)}`);
   if (draft.minTotal !== undefined) parts.push(`orders over ${deliveryMoney(draft.minTotal, currency)}`);
-  if (draft.forName || draft.nameText) parts.push(draft.nameText ? `for ${draft.nameText}` : "for one Qortal name");
+  const who = forWhom(draft);
+  if (who) parts.push(who);
   return parts.join(" · ");
+}
+
+/** "for Ann", "for Ann, Bo and Cy", "for 24 Qortal names"; null when it's for whoever has the code. */
+function forWhom(draft: DiscountDraft): string | null {
+  const names = draftNames(draft);
+  const count = names.length || discountNames(draft).length;
+  if (count === 0) return null;
+  if (names.length === 1) return `for ${names[0]}`;
+  if (names.length > 1 && names.length <= 3) return `for ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return count === 1 ? "for one Qortal name" : `for ${count} Qortal names`;
 }
 
 /** What the list calls a discount: its code, or who it's for. */
 export function draftLabel(draft: DiscountDraft): string {
   if (draft.codeText) return draft.codeText;
   if (draft.code) return "A code set on another device";
-  return draft.nameText ? `For ${draft.nameText}, no code` : "For one Qortal name, no code";
+  const who = forWhom(draft) ?? "for one Qortal name";
+  return `${who[0].toUpperCase()}${who.slice(1)}, no code`;
 }
 
 // No 0/O or 1/I: easy to read out and type.
