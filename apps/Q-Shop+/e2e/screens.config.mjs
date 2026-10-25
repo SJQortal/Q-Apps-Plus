@@ -922,6 +922,16 @@ export default {
       await d.getByRole('radio', { name: 'Only some products' }).click();
       await page.waitForTimeout(400);
     } },
+    { key: 'seller-choose-products', path: '/product-manager/q-store-general-my-shop?tab=shop', overlay: true, after: async (page) => {
+      await page.getByRole('button', { name: 'Add a discount code' }).click({ timeout: 8000 });
+      const d = page.getByRole('dialog', { name: 'Add a discount code' });
+      await d.getByRole('radio', { name: 'Only some products' }).click();
+      await d.getByRole('button', { name: 'Choose products' }).click({ timeout: 4000 });
+      // Grouped by collection (seller/DeliveryProductsDialog.tsx); one collection ticked.
+      const list = page.getByRole('list', { name: 'Products to choose from' });
+      await list.getByRole('checkbox', { name: /^Gifts for friends/ }).click({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
     { key: 'seller-publish-bar', path: '/product-manager/q-store-general-my-shop?tab=delivery', overlay: true, after: async (page) => {
       await page.getByRole('button', { name: 'Add a pickup point' }).click({ timeout: 8000 });
       await page.getByRole('region', { name: 'Unpublished changes' }).waitFor({ timeout: 4000 });
