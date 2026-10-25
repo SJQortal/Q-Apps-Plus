@@ -17,6 +17,7 @@ import { useShopDelivery } from "../../delivery/useShopDelivery";
 import { deliveryEstimate } from "../../delivery/estimate";
 import type { DeliveryShop } from "../../delivery/ProductDelivery";
 import { placeLabel, useBuyerPlace } from "../../delivery/buyerPlace";
+import { statusText } from "../../theme/statusText";
 
 const PlacePickerDialog = lazy(() => import("../../delivery/PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
 
@@ -31,7 +32,7 @@ export function CartDelivery({ owner, storeId, shop, lines }: { owner: string; s
   if (!physical || !delivery?.doc) return null;
 
   const row = (children: ReactNode, tone?: "warning") => (
-    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.75, color: tone === "warning" ? "warning.main" : "text.secondary" }}>
+    <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.75, color: (theme) => (tone === "warning" ? statusText(theme, "warning") : theme.palette.text.secondary) }}>
       <LocalShippingOutlinedIcon fontSize="small" aria-hidden sx={{ mt: 0.25 }} />
       <Box sx={{ minWidth: 0, display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 0.75 }}>{children}</Box>
     </Box>
@@ -72,7 +73,7 @@ export function CartDelivery({ owner, storeId, shop, lines }: { owner: string; s
         <>
           <Typography variant="body2">{`Delivery to ${where}:`}</Typography>
           {free && (
-            <Typography variant="body2" sx={{ fontWeight: 700, color: "success.main" }}>
+            <Typography variant="body2" sx={{ fontWeight: 700, color: (theme) => statusText(theme, "success") }}>
               {several && free.name ? `free with ${free.name}` : "free"}
             </Typography>
           )}

@@ -18,6 +18,7 @@ import { ShippingCountriesButton } from "../pages/Store/ShippingCountries";
 import { placeNotShipped } from "../constants/shipping";
 import { useShopDelivery } from "./useShopDelivery";
 import { deliveryEstimate, type EstimateChoice } from "./estimate";
+import { statusText } from "../theme/statusText";
 import { placeLabel, useBuyerPlace } from "./buyerPlace";
 
 const PlacePickerDialog = lazy(() => import("./PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
@@ -35,7 +36,7 @@ const money = (value: number, currency: string) => `${formatPrice(value)} ${curr
 
 /** An option's price: QORT (every shop takes it), with the seller's own currency under it; or Free. */
 function Price({ choice, inline = false }: { choice: EstimateChoice; inline?: boolean }) {
-  if (choice.free) return <Typography sx={{ fontWeight: 700, color: "success.main" }}>Free</Typography>;
+  if (choice.free) return <Typography sx={{ fontWeight: 700, color: (theme) => statusText(theme, "success") }}>Free</Typography>;
   return (
     <Box sx={inline ? { display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 1 } : { textAlign: "right", flexShrink: 0 }}>
       {choice.qort !== undefined ? <AmountTag value={choice.qort} coin="QORT" size={inline ? "medium" : "small"} /> : null}
@@ -81,7 +82,7 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
         <Box sx={{ minWidth: 0 }}>
           {shipsToLine}
           {notShipped && (
-            <Typography variant="body2" sx={{ color: "warning.main", fontWeight: 600 }}>
+            <Typography variant="body2" sx={{ color: (theme) => statusText(theme, "warning"), fontWeight: 600 }}>
               Doesn't ship to {notShipped}.
             </Typography>
           )}
@@ -110,13 +111,13 @@ export function ProductDelivery({ owner, storeId, shop, line }: { owner: string;
     );
   } else if (estimate?.kind === "not-shipped") {
     body = (
-      <Typography variant="body2" sx={{ color: "warning.main", fontWeight: 600 }}>
+      <Typography variant="body2" sx={{ color: (theme) => statusText(theme, "warning"), fontWeight: 600 }}>
         {shop?.title || "This shop"} doesn't ship to {estimate.place}.
       </Typography>
     );
   } else if (estimate?.kind === "unavailable") {
     body = (
-      <Typography variant="body2" sx={{ color: "warning.main", fontWeight: 600 }}>
+      <Typography variant="body2" sx={{ color: (theme) => statusText(theme, "warning"), fontWeight: 600 }}>
         This product isn't delivered to {estimate.place}. Ask the seller.
       </Typography>
     );

@@ -12,6 +12,7 @@ import type { RootState } from "../state/store";
 import { countryCode, placeNotShipped, shippingCountriesOf } from "../constants/shipping";
 import { shopShipsTo } from "../discovery/sortFilter";
 import { placeLabel, useBuyerPlace } from "./buyerPlace";
+import { statusText } from "../theme/statusText";
 
 export function ShipsToYou({ shop }: { shop: { shippingCountries?: unknown; shippingStates?: unknown; shipsTo?: unknown } | null | undefined }) {
   const buyer = useSelector((state: RootState) => state.auth.user?.name);
@@ -23,7 +24,7 @@ export function ShipsToYou({ shop }: { shop: { shippingCountries?: unknown; ship
   else if (code && shopShipsTo(shop, code)) ships = true;
   if (ships === null) return null;
   return (
-    <Typography variant="body2" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, color: ships ? "success.main" : "warning.main", fontWeight: 600 }}>
+    <Typography variant="body2" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, color: (theme) => statusText(theme, ships ? "success" : "warning"), fontWeight: 600 }}>
       {ships ? <CheckCircleOutlineIcon fontSize="small" aria-hidden /> : <DoNotDisturbOnOutlinedIcon fontSize="small" aria-hidden />}
       <span>{ships ? `Ships to ${placeLabel(place)}` : `Doesn't ship to ${placeLabel(place)}`}</span>
     </Typography>

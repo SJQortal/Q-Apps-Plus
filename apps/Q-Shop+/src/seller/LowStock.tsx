@@ -15,6 +15,7 @@ import { useStockLeft } from "../stock/notes";
 import { useCatalogueLoader } from "./useCatalogueLoader";
 import { editBase } from "./productDraft";
 import type { SellerRow } from "./productList";
+import { statusText } from "../theme/statusText";
 
 export const LOW_STOCK = 3;
 const SHOWN = 6;
@@ -60,7 +61,7 @@ export function LowStock({ storeId, onEdit }: { storeId: string; onEdit?: (produ
                 sx={{ width: "100%", minHeight: 52, px: 2, py: 1, display: "flex", alignItems: "center", gap: 1.5, justifyContent: "flex-start", textAlign: "left", "&:hover": { bgcolor: "action.hover" } }}
               >
                 <Box sx={{ flex: 1, minWidth: 0 }}>{title ? <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{title}</Typography> : <Skeleton width="50%" />}</Box>
-                <Typography sx={{ fontWeight: 700, color: units <= 0 ? "error.main" : "warning.main", flexShrink: 0 }}>{label}</Typography>
+                <Typography sx={{ fontWeight: 700, color: (theme) => statusText(theme, units <= 0 ? "error" : "warning"), flexShrink: 0 }}>{label}</Typography>
                 {onEdit && <ChevronRightOutlinedIcon aria-hidden sx={{ color: "text.secondary" }} />}
               </ButtonBase>
             </Box>
