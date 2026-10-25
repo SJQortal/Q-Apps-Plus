@@ -19,9 +19,11 @@ import type { RootState } from "../state/store";
 import { setNotification } from "../state/features/notificationsSlice";
 import { fiatPricingOf } from "../money/fiatPricing";
 import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } from "../constants/shipping";
-import { publishMedia } from "../richtext/publishMedia";
 import { BASE_OPTION_NAME, MAX_OPTIONS, MAX_PROFILES, MAX_ZONES, deliveryMoney as money, type DeliveryDoc, type DeliveryOption, type DeliveryProfile, type DeliveryRate, type DeliveryZone } from "../delivery/model";
-import { buildDeliveryPublish, fetchDeliveryDoc, rememberDeliveryDoc } from "../delivery/deliveryDoc";
+import { fetchDeliveryDoc } from "../delivery/deliveryDoc";
+import { deliveryDraftProblem, deliveryDrafts, publishDeliveryDraft } from "./sellerDrafts";
+import { usePublishAsk } from "./usePendingChanges";
+import { draftKey } from "./deviceDrafts";
 import { DeliveryZoneDialog } from "./DeliveryZoneDialog";
 import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
 import { ResponsiveDialog } from "../components/common/mobile";
@@ -31,6 +33,7 @@ import { NEW_PICKUP_PLACE, PickupPlaceFields } from "./PickupPlaceFields";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 
 const uid = new ShortUniqueId({ length: 8 });
+const clock = () => Date.now();
 const newId = () => uid();
 
 /** "$5.00 · $1.00 each extra item · free from $100.00" */
@@ -321,7 +324,7 @@ function ZoneRows({
   );
 }
 
-export function DeliveryTab({ ready }: { ready: boolean }) {
+export function DeliveryTab({ ready, publishAsk = 0 }: { ready: boolean; publishAsk?: number }) {
   const dispatch = useDispatch();
   const store = useSelector((state: RootState) => state.global.currentStore);
   const name = useSelector((state: RootState) => state.auth.user?.name);
@@ -332,7 +335,6 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
   const owner = store?.owner || name || "";
   const storeId = store?.id ?? "";
   const [load, setLoad] = useState<{ key: string; status: "loading" | "ready" | "failed"; doc: DeliveryDoc | null }>({ key: "", status: "loading", doc: null });
-  const [draft, setDraft] = useState<{ key: string; doc: DeliveryDoc } | null>(null);
   const [editing, setEditing] = useState<Editing>(null);
   const [choosing, setChoosing] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
@@ -356,9 +358,13 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
   const current = load.key === key ? load : { key, status: "loading" as const, doc: null };
   const saved = current.doc;
   const empty: DeliveryDoc = { v: 1, storeId, currency: shopCurrency, general: { zones: [] }, profiles: [], updated: 0 };
-  const doc = draft && draft.key === key ? draft.doc : (saved ?? empty);
-  const changed = !!draft && draft.key === key && JSON.stringify(draft.doc) !== JSON.stringify(saved ?? empty);
-  const change = (next: DeliveryDoc) => setDraft({ key, doc: next });
+  // The draft is kept on this device until published or undone (seller/sellerDrafts.ts), whatever tab or page comes between.
+  const dKey = draftKey(owner, storeId);
+  const draft = deliveryDrafts.useDraft(dKey);
+  const doc = draft ?? saved ?? empty;
+  const changed = !!draft && JSON.stringify(draft) !== JSON.stringify(saved ?? empty);
+  // Back to what's published: no draft left.
+  const change = (next: DeliveryDoc) => deliveryDrafts.set(dKey, JSON.stringify(next) === JSON.stringify(saved ?? empty) ? null : next);
   /** The products in the other profiles than this one, with their profile's name. */
   const elsewhere = (profileId: string) => {
     const map = new Map<string, string>();
@@ -406,22 +412,19 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
   const publish = async () => {
     if (!name || publishing) return;
     setError(null);
-    if (doc.options?.some((o) => !o.name.trim())) return setError("Name each delivery option, or remove it.");
-    if (doc.options?.some((o) => o.place && (!o.place.country || !o.place.address.trim() || o.place.days.length === 0))) {
-      return setError("Give each pickup point its country, address and the days it's open.");
-    }
-    const next: DeliveryDoc = { ...doc, updated: Date.now() };
-    const built = buildDeliveryPublish({ name, doc: next });
+    const problem = deliveryDraftProblem(doc);
+    if (problem) return setError(problem);
     setPublishing(true);
-    const outcome = await publishMedia(built.request, { service: "DOCUMENT", name, identifier: built.identifier });
+    const outcome = await publishDeliveryDraft({ name, key: dKey, doc, now: clock() });
     setPublishing(false);
-    if (outcome.kind === "done") {
-      rememberDeliveryDoc(name, next);
-      setLoad({ key, status: "ready", doc: next });
-      setDraft(null);
+    if (outcome.kind === "done" && outcome.doc) {
+      setLoad({ key, status: "ready", doc: outcome.doc });
+      deliveryDrafts.set(dKey, null);
       dispatch(setNotification({ alertType: "success", msg: "Delivery prices published" }));
     } else if (outcome.kind === "failed") setError(outcome.message);
   };
+  // The page's Publish changes bar asked for it.
+  usePublishAsk(publishAsk, ready && current.status === "ready" && !!draft, () => void publish());
 
   if (!ready || current.status === "loading") {
     return (
@@ -555,7 +558,7 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
           <Button variant="contained" onClick={() => void publish()} disabled={busy || !name} startIcon={busy ? <CircularProgress size={18} color="inherit" /> : undefined} sx={{ minHeight: 48 }}>
             {busy ? "Publishing…" : "Publish delivery prices"}
           </Button>
-          <Button color="inherit" onClick={() => setDraft(null)} disabled={busy} sx={{ minHeight: 44 }}>
+          <Button color="inherit" onClick={() => deliveryDrafts.set(dKey, null)} disabled={busy} sx={{ minHeight: 44 }}>
             Discard changes
           </Button>
           <Typography variant="body2" color="text.secondary">

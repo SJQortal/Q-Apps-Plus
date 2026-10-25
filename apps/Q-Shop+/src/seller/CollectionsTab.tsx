@@ -37,6 +37,7 @@ import type { SellerRow } from "./productList";
 import { CollectionEditor } from "./CollectionEditor";
 import { PublishProductsDialog } from "./PublishProductsDialog";
 import { FormError } from "./FormError";
+import { usePublishAsk } from "./usePendingChanges";
 import { useCollections } from "./useCollections";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
 
@@ -47,7 +48,7 @@ function isShown(row: SellerRow | undefined): boolean {
 
 type Control = "up" | "down" | "edit" | "remove";
 
-export function CollectionsTab({ ready, loading = false }: { ready: boolean; loading?: boolean }) {
+export function CollectionsTab({ ready, loading = false, publishAsk = 0 }: { ready: boolean; loading?: boolean; publishAsk?: number }) {
   const c = useCollections();
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
@@ -75,6 +76,12 @@ export function CollectionsTab({ ready, loading = false }: { ready: boolean; loa
     const element = target && !(target as HTMLButtonElement).disabled ? target : fallback;
     element?.focus();
   }, [c.collections, editing, removed]);
+
+  const publish = async () => {
+    if (await c.prepare()) setPublishing(true);
+  };
+  // The page's Publish changes bar asked for it.
+  usePublishAsk(publishAsk, ready && c.status === "ready" && !c.busy, () => void publish());
 
   if (!ready && !loading) {
     return <EmptyState title="Your collections show here once your product list loads" description="See the note above." />;
@@ -107,9 +114,6 @@ export function CollectionsTab({ ready, loading = false }: { ready: boolean; loa
     controls.current.set(`${id}\n${control}`, element);
   };
 
-  const publish = async () => {
-    if (await c.prepare()) setPublishing(true);
-  };
   const move = (col: ShopCollection, at: number, by: -1 | 1) => {
     c.move(col.id, by);
     const to = at + by + 1;

@@ -48,7 +48,7 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </Box>
 );
 
-export function ShopTab() {
+export function ShopTab({ publishAsk = 0 }: { publishAsk?: number }) {
   const store = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const listReady = !!store && !!dataContainer && dataContainer.storeId === store.id;
@@ -172,7 +172,7 @@ export function ShopTab() {
       <Box>
         <SectionTitle as="h2">Discount codes</SectionTitle>
         <Card label="Discount codes">
-          <DiscountsCard />
+          <DiscountsCard publishAsk={publishAsk} />
         </Card>
       </Box>
 

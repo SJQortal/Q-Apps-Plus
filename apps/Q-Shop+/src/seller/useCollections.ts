@@ -22,7 +22,8 @@
  * - A publish that adds the pointer writes the product list, so it takes
  *   the list lock (seller/listWrite.ts) like every list write.
  */
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { createDeviceDraftStore } from "./deviceDrafts";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import type { AppDispatch, RootState } from "../state/store";
 import { setDataContainer } from "../state/features/globalSlice";
@@ -107,28 +108,16 @@ function isOwnPublishNotServedYet(docId: string, now: ShopCollection[], publishe
   return !!entry && entry.latest === json(published) && entry.replaced.has(json(now));
 }
 
-/** The working copies, per name and document, for the session. */
-const drafts = new Map<string, ShopCollection[]>();
-const draftListeners = new Set<() => void>();
+/** The working copies, per name and document, kept on this device until published or discarded (seller/deviceDrafts.ts). */
+export const collectionDrafts = createDeviceDraftStore<ShopCollection[]>("collections");
 
 function setDraftFor(draftKey: string, list: ShopCollection[] | null): void {
-  if (list === null) drafts.delete(draftKey);
-  else drafts.set(draftKey, list);
-  for (const listener of [...draftListeners]) listener();
+  collectionDrafts.set(draftKey, list);
 }
 
-function subscribeDrafts(listener: () => void): () => void {
-  draftListeners.add(listener);
-  return () => {
-    draftListeners.delete(listener);
-  };
-}
-
-/** For tests. */
+/** For tests (the drafts themselves: resetDeviceDrafts). */
 export function resetSentCollections(): void {
   sentChain.clear();
-  drafts.clear();
-  for (const listener of [...draftListeners]) listener();
 }
 
 export function useCollections() {
@@ -146,7 +135,7 @@ export function useCollections() {
 
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; status: CollectionsLoad; published: ShopCollection[] } | null>(null);
-  const draft = useSyncExternalStore(subscribeDrafts, () => drafts.get(draftKey) ?? null);
+  const draft = collectionDrafts.useDraft(draftKey);
   const [preparing, setPreparing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -294,7 +283,7 @@ export function useCollections() {
         primeQdnJson("DOCUMENT", current.name, id, current.doc);
         setLoaded({ key, status: "ready", published: current.collections });
         // The working copy that went out is done; one changed since (it can't be, while busy) would stay.
-        const left = drafts.get(draftKey);
+        const left = collectionDrafts.get(draftKey);
         if (!left || same(left, current.working)) setDraftFor(draftKey, null);
       }
       const listId = dataContainerIdentifier(current.storeId);

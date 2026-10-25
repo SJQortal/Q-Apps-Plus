@@ -47,7 +47,7 @@ export function draftSummary(draft: DiscountDraft, currency: string): string {
   else if (draft.starts !== undefined) parts.push(`from ${day(draft.starts)}`);
   else if (draft.ends !== undefined) parts.push(`until ${day(draft.ends)}`);
   if (draft.minTotal !== undefined) parts.push(`orders over ${deliveryMoney(draft.minTotal, currency)}`);
-  if (draft.forName) parts.push(draft.nameText ? `for ${draft.nameText}` : "for one Qortal name");
+  if (draft.forName || draft.nameText) parts.push(draft.nameText ? `for ${draft.nameText}` : "for one Qortal name");
   return parts.join(" · ");
 }
 

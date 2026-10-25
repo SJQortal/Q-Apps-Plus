@@ -15,18 +15,12 @@ import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
 import type { RootState } from "../state/store";
 import { setNotification } from "../state/features/notificationsSlice";
 import { fiatPricingOf } from "../money/fiatPricing";
-import { publishMedia } from "../richtext/publishMedia";
 import { MAX_DISCOUNTS, discountStatus, type DiscountsDoc } from "../discounts/model";
-import { docFromDrafts, draftLabel, draftSummary, draftsOf, type DiscountDraft } from "../discounts/drafts";
-import {
-  buildDiscountsPublish,
-  decryptDiscountSecret,
-  encryptDiscountSecret,
-  fetchDiscountsDoc,
-  keepDiscountSecret,
-  localDiscountSecret,
-  rememberDiscountsDoc,
-} from "../discounts/discountsDoc";
+import { draftLabel, draftSummary, draftsOf, type DiscountDraft } from "../discounts/drafts";
+import { decryptDiscountSecret, fetchDiscountsDoc, localDiscountSecret } from "../discounts/discountsDoc";
+import { discountDrafts, publishDiscountDrafts } from "./sellerDrafts";
+import { draftKey } from "./deviceDrafts";
+import { usePublishAsk } from "./usePendingChanges";
 import { DiscountDialog } from "./DiscountDialog";
 
 type Load = { key: string; status: "loading" } | { key: string; status: "failed" } | { key: string; status: "ready"; doc: DiscountsDoc | null; published: DiscountDraft[] };
@@ -41,7 +35,7 @@ function StatusChip({ draft, now }: { draft: DiscountDraft; now: number }) {
   return <Chip size="small" variant="outlined" label={label} sx={{ fontWeight: 600, ...(status === "active" && { borderColor: "success.main" }) }} />;
 }
 
-export function DiscountsCard() {
+export function DiscountsCard({ publishAsk = 0 }: { publishAsk?: number }) {
   const dispatch = useDispatch();
   const store = useSelector((state: RootState) => state.global.currentStore);
   const user = useSelector((state: RootState) => state.auth.user);
@@ -53,7 +47,9 @@ export function DiscountsCard() {
   const key = `${owner}\n${storeId}`;
   const [load, setLoad] = useState<Load>({ key: "", status: "loading" });
   const [retry, setRetry] = useState(0);
-  const [drafts, setDrafts] = useState<DiscountDraft[] | null>(null);
+  // The changes are kept on this device until published or undone (seller/sellerDrafts.ts).
+  const dKey = draftKey(owner, storeId);
+  const drafts = discountDrafts.useDraft(dKey)?.drafts ?? null;
   const [editing, setEditing] = useState<DiscountDraft | "new" | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +76,34 @@ export function DiscountsCard() {
   }, [key, owner, storeId, user?.publicKey, retry]);
 
   const current: Load = load.key === key ? load : { key, status: "loading" };
+  const ready = current.status === "ready";
+  const published = ready ? current.published : [];
+  const base = ready ? current.doc : null;
+  const list = drafts ?? published;
+  // A minimum order is in the shop's pricing currency, else QORT; until the product list is in, the published codes'.
+  const currency = listReady ? (pricing?.currency ?? "QORT") : (base?.currency ?? "QORT");
+  const changed = drafts !== null && JSON.stringify(drafts) !== JSON.stringify(published);
+  const change = (next: DiscountDraft[]) => {
+    setError(null);
+    discountDrafts.set(dKey, JSON.stringify(next) === JSON.stringify(published) ? null : { drafts: next, base });
+  };
+  const takenCodes = (except?: string) => list.filter((d) => d.id !== except && d.codeText).map((d) => d.codeText as string);
+
+  const publish = async () => {
+    if (!owner || publishing || !user?.publicKey || !ready) return;
+    setError(null);
+    setPublishing(true);
+    const outcome = await publishDiscountDrafts({ owner, key: dKey, storeId, currency, publicKey: user.publicKey, draft: { drafts: list, base }, now: clock() });
+    setPublishing(false);
+    if (outcome.kind === "done" && outcome.doc) {
+      setLoad({ key, status: "ready", doc: outcome.doc, published: list });
+      discountDrafts.set(dKey, null);
+      dispatch(setNotification({ alertType: "success", msg: "Discount codes published" }));
+    } else if (outcome.kind === "failed") setError(outcome.message);
+  };
+  // The page's Publish changes bar asked for it, once the codes are read.
+  usePublishAsk(publishAsk, ready && drafts !== null, () => void publish());
+
   if (!store) return null;
   if (current.status === "loading") return <Skeleton variant="rounded" height={120} aria-label="Loading discount codes" />;
   if (current.status === "failed") {
@@ -96,43 +120,6 @@ export function DiscountsCard() {
       </Alert>
     );
   }
-
-  const list = drafts ?? current.published;
-  // A minimum order is in the shop's pricing currency, else QORT; until the product list is in, the published codes'.
-  const currency = listReady ? (pricing?.currency ?? "QORT") : (current.doc?.currency ?? "QORT");
-  const changed = drafts !== null && JSON.stringify(drafts) !== JSON.stringify(current.published);
-  const change = (next: DiscountDraft[]) => {
-    setError(null);
-    setDrafts(next);
-  };
-  const takenCodes = (except?: string) => list.filter((d) => d.id !== except && d.codeText).map((d) => d.codeText as string);
-
-  const publish = async () => {
-    if (!owner || publishing || !user?.publicKey) return;
-    setError(null);
-    setPublishing(true);
-    const { doc, secret } = await docFromDrafts({ storeId, currency, drafts: list, now: clock() });
-    // The seller's own list, encrypted to them; when Hub can't, this device's copy still has it.
-    // Codes or names this device can't read (set elsewhere): the published list keeps them for the devices that can.
-    const hidden = list.some((d) => (d.code && !d.codeText) || (d.forName && !d.nameText));
-    const encrypted =
-      hidden && current.doc?.secret
-        ? current.doc.secret
-        : Object.keys(secret.codes).length || Object.keys(secret.names).length
-          ? await encryptDiscountSecret(secret, user.publicKey)
-          : null;
-    const next: DiscountsDoc = { ...doc, ...(encrypted && { secret: encrypted }) };
-    const request = buildDiscountsPublish({ name: owner, doc: next });
-    const outcome = await publishMedia(request, { service: "DOCUMENT", name: owner, identifier: request.identifier });
-    setPublishing(false);
-    if (outcome.kind === "done") {
-      rememberDiscountsDoc(owner, next);
-      keepDiscountSecret(storeId, secret);
-      setLoad({ key, status: "ready", doc: next, published: list });
-      setDrafts(null);
-      dispatch(setNotification({ alertType: "success", msg: "Discount codes published" }));
-    } else if (outcome.kind === "failed") setError(outcome.message);
-  };
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
@@ -187,7 +174,7 @@ export function DiscountsCard() {
           </Button>
         )}
         {changed && !publishing && (
-          <Button color="inherit" onClick={() => setDrafts(null)} sx={{ minHeight: 44 }}>
+          <Button color="inherit" onClick={() => discountDrafts.set(dKey, null)} sx={{ minHeight: 44 }}>
             Undo changes
           </Button>
         )}

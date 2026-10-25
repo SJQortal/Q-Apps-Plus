@@ -9,6 +9,7 @@
  */
 import { useId, useState } from "react";
 import { useSelector } from "react-redux";
+import { forgetShopDrafts, leaveWithoutAsking } from "./usePendingChanges";
 import { useNavigate } from "react-router-dom";
 import { Alert, Box, Button, CircularProgress, TextField, Typography } from "@mui/material";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
@@ -25,6 +26,14 @@ export function DeleteShopDialog({ onClose }: { onClose: () => void }) {
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const publicKey = useSelector((state: RootState) => state.auth.user?.publicKey);
+  const userName = useSelector((state: RootState) => state.auth.user?.name ?? "");
+  // The deleted shop's drafts go from this device, and leaving its seller page doesn't ask about them.
+  const leaveDeletedShop = () => {
+    if (currentStore) forgetShopDrafts(userName, currentStore.owner || userName, currentStore.id);
+    leaveWithoutAsking();
+    // Back mustn't lead to the deleted shop's seller page.
+    navigate("/", { replace: true });
+  };
   const del = useDeleteShop();
   const [typed, setTyped] = useState("");
   const [sending, setSending] = useState(false);
@@ -58,13 +67,12 @@ export function DeleteShopDialog({ onClose }: { onClose: () => void }) {
         onDone={() => {
           del.done();
           onClose();
-          // Back mustn't lead to the deleted shop's seller page.
-          navigate("/", { replace: true });
+          leaveDeletedShop();
         }}
         onClose={(sent) => {
           const gone = del.closed(sent);
           onClose();
-          if (gone) navigate("/", { replace: true });
+          if (gone) leaveDeletedShop();
         }}
       />
     );

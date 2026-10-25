@@ -43,6 +43,9 @@ import { FinishDeletesCard } from "../../seller/FinishDeletesCard";
 import { DeleteProductsDialog, type ProductToDelete } from "../../seller/DeleteProductsDialog";
 import { PublishProductsDialog } from "../../seller/PublishProductsDialog";
 import { usePublishProducts } from "../../seller/usePublishProducts";
+import { usePendingChanges } from "../../seller/usePendingChanges";
+import { PUBLISH_BAR_SPACE, PublishBar } from "../../seller/PublishBar";
+import { useRestoreProductDrafts } from "../../seller/productDraftsDevice";
 import { DeliveryTab } from "../../seller/DeliveryTab";
 import { CENTRED_TABS, CENTRED_WIDTH, SELLER_TABS, TAB_LABEL, isSellerTab, type SellerTab } from "./sellerTabs";
 import { useSellerGuideOnce } from "../../onboarding/Walkthrough";
@@ -69,6 +72,10 @@ export const ProductManager = () => {
   const [productDialog, setProductDialog] = useState<ProductDialogState>(null);
   const [deleteRequest, setDeleteRequest] = useState<DeleteRequest>(null);
   const publish = usePublishProducts();
+  // Unpublished changes of every kind, kept on this device (seller/usePendingChanges.ts), and the bar's Publish.
+  useRestoreProductDrafts();
+  const changes = usePendingChanges();
+  const [publishAsks, setPublishAsks] = useState({ collections: 0, delivery: 0, discounts: 0 });
 
   const isCurrent = !!currentStore && currentStore.id === storeId;
   const routedShop = myStores.find((s) => s.id === storeId);
@@ -307,16 +314,30 @@ export const ProductManager = () => {
             <CollectionsTab
               ready={ready}
               loading={ownShopStatus === "idle" || ownShopStatus === "loading" || ownShopStatus === "ready"}
+              publishAsk={publishAsks.collections}
             />
           )}
           {tab === "orders" && <OrdersTab />}
           {tab === "reviews" && (
             <ReviewsPanel storeId={currentStore.id} storeTitle={currentStore.title} storeImage={currentStore.logo || ""} />
           )}
-          {tab === "delivery" && <DeliveryTab ready={ready} />}
-          {tab === "shop" && <ShopTab />}
+          {tab === "delivery" && <DeliveryTab ready={ready} publishAsk={publishAsks.delivery} />}
+          {tab === "shop" && <ShopTab publishAsk={publishAsks.discounts} />}
         </Box>
+        {/* Room for the Publish changes bar, so it never covers the page's last lines. */}
+        {changes.length > 0 && <Box aria-hidden sx={{ height: PUBLISH_BAR_SPACE }} />}
       </Box>
+
+      <PublishBar
+        changes={changes}
+        busy={publish.preparing}
+        onPublish={(area) => {
+          if (area === "products") return void publish.prepare();
+          // The other kinds publish from their tab (its own checks and dialogs).
+          setTab(area === "discounts" ? "shop" : area);
+          setPublishAsks((asks) => ({ ...asks, [area]: asks[area] + 1 }));
+        }}
+      />
 
       {productDialog && (
         <ProductDialog

@@ -103,6 +103,7 @@ describe("discount codes in Shop Settings", () => {
     fireEvent.click(screen.getByRole("button", { name: "Publish discount codes" }));
     await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
     expect(published(q).discounts).toEqual([{ id: expect.any(String), percent: 10, paused: true, forName: await nameHash(STORE_ID, "Ann") }]);
+    await waitFor(() => expect(within(list).getByRole("button", { name: "Delete For Ann, no code" })).toBeEnabled());
     fireEvent.click(within(list).getByRole("button", { name: "Delete For Ann, no code" }));
     expect(await screen.findByText("No discount codes yet.")).toBeInTheDocument();
   });

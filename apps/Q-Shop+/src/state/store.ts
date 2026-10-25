@@ -8,6 +8,7 @@ import orderReducer from './features/orderSlice'
 import { writeStoredSettings } from '../utils/settingsStorage'
 import { loadStoredCarts, replaceCarts, saveCarts } from './features/cartSlice'
 import { CART_STORAGE_KEY } from '../constants/plus'
+import { keepProductDrafts } from '../seller/productDraftsDevice'
 
 const reducer = {
   notifications: notificationsReducer,
@@ -25,7 +26,7 @@ export function createAppStore() {
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware({
         serializableCheck: false
-      })
+      }).concat(keepProductDrafts)
   })
 }
 
