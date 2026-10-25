@@ -63,6 +63,6 @@ describe("fitHeader", () => {
     const el = header({ navNeeds: () => 0, navHas: 0, actionsEnd: (f) => (has(f, "title") ? 1003 : 1040) });
     expect(fitHeader(el, false)).toBe("icons name prefix title");
     const never = header({ navNeeds: () => 0, navHas: 0, actionsEnd: () => 1100 });
-    expect(fitHeader(never, false)).toBe("icons name prefix title rate");
+    expect(fitHeader(never, false)).toBe("icons name prefix title rate balance");
   });
 });

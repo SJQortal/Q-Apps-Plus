@@ -40,6 +40,7 @@ import {
 } from "./Navbar-styles";
 import { LogoMark } from "./LogoMark";
 import { QuickRateButton } from "./QuickRateButton";
+import { BalanceButton } from "./BalanceButton";
 import { useHeaderFit } from "./useHeaderFit";
 import { useHideOnScroll, usePublishHeaderOffset } from "./useHideOnScroll";
 
@@ -159,6 +160,8 @@ const NavBar: React.FC = () => {
 
         <HeaderActions className="qp-header-actions">
           {phone && <QuickRateButton phone />}
+          {/* The account's QORT, left of the cart (Simon, 2026-10-25). */}
+          <BalanceButton phone={phone} />
           {!phone && (
             <Tooltip title="Cart">
               <IconButton

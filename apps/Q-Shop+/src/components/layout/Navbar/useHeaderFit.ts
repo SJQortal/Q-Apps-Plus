@@ -12,6 +12,7 @@
  *   prefix  the rate without "1 QORT ="
  *   title   the logo without "Q-Shop+"
  *   rate    the rate's icon alone
+ *   balance the balance's QORT mark alone
  *
  * and when none does on desktop, the navigation moves to a row of its own
  * under the rest (`rows`), trying the same again from the start. (Phones
@@ -19,7 +20,7 @@
  */
 import { type RefObject, useLayoutEffect } from "react";
 
-const STEPS = ["icons", "name", "prefix", "title", "rate"] as const;
+const STEPS = ["icons", "name", "prefix", "title", "rate", "balance"] as const;
 
 function fits(header: HTMLElement, rows: boolean): boolean {
   const nav = header.querySelector("nav");

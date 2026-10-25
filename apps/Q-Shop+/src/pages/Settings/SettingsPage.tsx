@@ -7,6 +7,7 @@ import { lazy, Suspense, useId, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Box, Button, Dialog, DialogTitle, IconButton, Switch, TextField, Tooltip, Typography, MenuItem } from "@mui/material";
 import { setShowNames, useShowNames } from "../../utils/namesSetting";
+import { setShowBalance, useShowBalance } from "../../wallet/balances";
 import { styled } from "@mui/material/styles";
 import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
@@ -147,6 +148,8 @@ export function SettingsPage() {
   const viewFieldId = useId();
   const namesFieldId = useId();
   const showNames = useShowNames();
+  const balanceFieldId = useId();
+  const showBalance = useShowBalance();
 
   const name = user?.name || "";
   const names = (user?.names ?? []).map((n) => n.name).filter(Boolean);
@@ -376,6 +379,16 @@ export function SettingsPage() {
             checked={showNames}
             onChange={(_, on) => setShowNames(on)}
             slotProps={{ input: { "aria-labelledby": `${namesFieldId}-title` } }}
+          />
+        </Row>
+        <Row>
+          <RowLabel title="Balance in the header" id={`${balanceFieldId}-title`}>
+            Your QORT beside the cart, with ARRR and the Q-Assets shops take a tap away. Off hides it (on this device), say while sharing your screen.
+          </RowLabel>
+          <Switch
+            checked={showBalance}
+            onChange={(_, on) => setShowBalance(on)}
+            slotProps={{ input: { "aria-labelledby": `${balanceFieldId}-title` } }}
           />
         </Row>
         <Row>

@@ -20,6 +20,7 @@ import { resetHiddenShopsMemory } from '../discovery/hiddenShops';
 import { suppressFirstRunForTests } from '../onboarding/Walkthrough';
 import { resetRecentlyViewed } from '../discovery/recentlyViewed';
 import { resetDeviceDrafts } from '../seller/deviceDrafts';
+import { resetBalances, resetShowBalance } from '../wallet/balances';
 
 // The first-run walkthrough doesn't open by itself in tests (onboarding tests turn it on).
 suppressFirstRunForTests(true);
@@ -122,6 +123,8 @@ beforeEach(() => {
   resetDeletedShops();
   resetRecentlyViewed();
   resetDeviceDrafts();
+  resetBalances();
+  resetShowBalance();
   resetProductView();
   resetListWrite();
   resetFavoritesMemory();

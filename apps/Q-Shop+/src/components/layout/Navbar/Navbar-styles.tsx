@@ -75,6 +75,8 @@ export const HeaderInner = styled("div")(({ theme }) => ({
   '&[data-fit~="rate"] .qp-quick-rate': { paddingLeft: theme.spacing(1), paddingRight: theme.spacing(1) },
   '&[data-fit~="rate"] .qp-quick-rate .MuiButton-startIcon': { margin: 0 },
   '&[data-fit~="title"] .qp-app-title': { display: "none" },
+  '&[data-fit~="balance"] .qp-balance-amount, &[data-fit~="balance"] .qp-balance .MuiButton-endIcon': { display: "none" },
+  '&[data-fit~="balance"] .qp-balance .MuiButton-startIcon': { margin: 0 },
   '&[data-fit~="rows"]': { flexWrap: "wrap", rowGap: 0, paddingTop: theme.spacing(0.5), paddingBottom: theme.spacing(0.5) },
   '&[data-fit~="rows"] nav': { order: 1, flexBasis: "100%", marginLeft: 0, overflowX: "auto", scrollbarWidth: "none" },
   '&[data-fit~="rows"] .qp-quick-rate': { marginLeft: "auto" },

@@ -13,6 +13,8 @@ export interface StoredSettings {
   productView?: string;
   /** Show names for sale (utils/namesSetting.ts); absent: shown. */
   showNames?: boolean;
+  /** Show the account's balance in the header (wallet/balances.ts); absent: shown. This device only. */
+  showBalance?: boolean;
   /** Where the buyer gets things delivered, for prices before checkout (delivery/buyerPlace.ts); this device only, not synced. */
   deliverTo?: { country?: unknown; state?: unknown };
 }
