@@ -26,11 +26,12 @@ export function awayOf(shop: { away?: unknown } | null | undefined, now = Date.n
   return { ...(until !== undefined && { until }), ...(note && { note }) };
 }
 
-/** "Away until 3 November: orders are dispatched after that." */
-export function awayText(away: Away, locale?: string): string {
-  if (!away.until) return "Away for now: orders are dispatched once the seller is back.";
+/** "Plus Gadgets is away until 3 November: orders are dispatched after that." (or "Away …" without a title). */
+export function awayText(away: Away, title?: string, locale?: string): string {
+  const who = title?.trim() ? `${title.trim()} is away` : "Away";
+  if (!away.until) return `${who} for now: orders are dispatched once the seller is back.`;
   const day = new Date(away.until).toLocaleDateString(locale, { day: "numeric", month: "long" });
-  return `Away until ${day}: orders are dispatched after that.`;
+  return `${who} until ${day}: orders are dispatched after that.`;
 }
 
 /** "2026-11-03" (a date field's value) as local midnight in ms, or undefined. */

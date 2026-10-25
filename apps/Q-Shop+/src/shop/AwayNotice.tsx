@@ -8,8 +8,7 @@ export function AwayNotice({ shop, sx }: { shop: { away?: unknown; title?: strin
   return (
     <Alert severity="info" sx={sx}>
       <Typography component="span" sx={{ fontWeight: 600, display: "block" }}>
-        {shop?.title ? `${shop.title} is away. ` : ""}
-        {awayText(away)}
+        {awayText(away, shop?.title)}
       </Typography>
       {away.note && (
         <Typography component="span" variant="body2" sx={{ display: "block", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>

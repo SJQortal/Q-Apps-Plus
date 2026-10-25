@@ -17,8 +17,8 @@ describe("a seller away", () => {
   });
 
   it("says when orders are dispatched again", () => {
-    expect(awayText({ until: day(2026, 11, 3) }, "en-GB")).toBe("Away until 3 November: orders are dispatched after that.");
-    expect(awayText({})).toBe("Away for now: orders are dispatched once the seller is back.");
+    expect(awayText({ until: day(2026, 11, 3) }, "Plus Gadgets", "en-GB")).toBe("Plus Gadgets is away until 3 November: orders are dispatched after that.");
+    expect(awayText({}, "")).toBe("Away for now: orders are dispatched once the seller is back.");
   });
 
   it("goes from the form to the shop's JSON and back, and out when switched off", () => {
