@@ -564,6 +564,8 @@ export default {
     }
     if (p.startsWith('/crosschain/price/')) return route.fulfill({ status: 200, contentType: 'text/plain', body: '25000000' }).then(() => true);
     if (p.startsWith('/transactions/')) return json(route, []).then(() => true);
+    // The account's balances (wallet/balances.ts): QORT and the Gold Bar shops take.
+    if (p === '/assets/balances') return json(route, [{ assetId: 0, balance: '1523.44718203' }, { assetId: 81, balance: '12.5' }]).then(() => true);
     if (p.startsWith('/assets')) return json(route, p.includes('/info') ? { assetId: 81, name: 'Gold Bar', owner: 'QOwner', quantity: 1000, isDivisible: true, isUnspendable: false } : [{ assetId: 0, name: 'QORT', description: 'QORTAL coin', isDivisible: true }, { assetId: 81, name: 'Gold Bar', description: 'A test asset', isDivisible: true }, { assetId: 82, name: 'Silver', description: '', isDivisible: true }, { assetId: 83, name: 'Gold Seats', description: 'Whole seats only', isDivisible: false }, { assetId: 84, name: 'Golden Locked', description: '', isDivisible: true, isUnspendable: true }]).then(() => true);
     // Videos and files in descriptions: on the node at once.
     if (p.startsWith('/arbitrary/resource/status/')) return json(route, { status: 'READY', percentLoaded: 100 }).then(() => true);
@@ -679,6 +681,12 @@ export default {
     { key: 'product-pdf-full', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.getByRole('button', { name: 'Full screen' }).click({ timeout: 4000 }); await page.waitForTimeout(1200); } },
     { key: 'product-zoom', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('group', { name: 'Pictures' }).getByRole('button').nth(5).waitFor({ timeout: 8000 }); await page.getByRole('button', { name: /^Open picture 1 of/ }).click({ timeout: 4000 }); const d = page.getByRole('dialog'); await d.getByRole('button', { name: 'Zoom in' }).click(); await d.getByRole('button', { name: 'Zoom in' }).click(); await page.waitForTimeout(500); } },
     { key: 'product-collections', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 2)}/${catalogueId(shops[1], 0)}`, after: async (page) => { await page.getByRole('navigation', { name: 'Collections' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); } },
+    { key: 'header-balances', path: '/', overlay: true, after: async (page) => {
+      await page.waitForSelector('a[href*="q-store-general-"]', { timeout: 8000 }).catch(() => {});
+      await page.getByRole('button', { name: /^(QORT balance|Your balances)/ }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: 'Your balances' }).waitFor({ timeout: 4000 });
+      await page.waitForTimeout(500);
+    } },
     { key: 'cart', path: '/cart', after: async (page) => page.waitForTimeout(900) },
     { key: 'checkout', path: '/cart', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Check out Plus Gadgets', exact: true }).click({ timeout: 2500 }); await page.waitForTimeout(500); } },
     { key: 'checkout-delivery', path: '/cart', overlay: true, after: async (page) => {
