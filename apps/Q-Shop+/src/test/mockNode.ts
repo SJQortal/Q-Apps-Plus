@@ -60,7 +60,7 @@ export interface World {
   shops: WorldShop[];
   reviews: WorldReview[];
   /** Encrypted orders: identifier -> { buyer, json } (DECRYPT_DATA returns the JSON). */
-  orders: { identifier: string; buyer: string; created: number; json: any }[];
+  orders: { identifier: string; buyer: string; created: number; json: any; /** Its public metadata description (a stock note, stock/model.ts). */ description?: string }[];
   statuses: { identifier: string; seller: string; created: number; json: any }[];
   arrrRate: string;
   /** Favourites (favorites/model.ts): the rows their publishes make, metadata included. */
@@ -169,6 +169,8 @@ export function dataContainerOf(shop: WorldShop) {
       ...(p.auction && { auction: { start: p.auction.start, end: p.auction.end } }),
       // A variant's row says its group and values (variants/model.ts).
       ...(p.variant && { variant: { group: p.variant.group, values: p.variant.values } }),
+      // A counted product's row carries its count (stock/catalog.ts).
+      ...((p as { stock?: unknown }).stock ? { stock: (p as { stock?: unknown }).stock } : {}),
     };
     catalogues[Math.floor(idx / 10)].products[p.id] = true;
   });
@@ -247,7 +249,7 @@ function allRows(world: World): Row[] {
     });
   }
   for (const o of world.orders) {
-    rows.push({ name: o.buyer, service: "DOCUMENT_PRIVATE", identifier: o.identifier, created: o.created, updated: o.created, size: 900 });
+    rows.push({ name: o.buyer, service: "DOCUMENT_PRIVATE", identifier: o.identifier, created: o.created, updated: o.created, size: 900, ...(o.description && { metadata: { description: o.description } }) });
   }
   for (const f of world.favorites ?? []) {
     rows.push({ name: f.name, service: "DOCUMENT", identifier: f.identifier, created: f.created, updated: f.created, size: 200, metadata: { title: f.title, description: f.description } });

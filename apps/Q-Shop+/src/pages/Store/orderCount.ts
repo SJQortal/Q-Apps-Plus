@@ -51,7 +51,8 @@ export async function fetchOrderCount(
   const [shared, orders] = await Promise.all([
     isShopIdShared(owner, storeId, options),
     searchQdnAll(
-      { service: "DOCUMENT_PRIVATE", identifier: shopOrdersPrefix(shortStoreId), prefix: true, includemetadata: false, reverse: true },
+      // With metadata: the same pages stock counts read (stock/notes.ts), so a shop page reads its orders once.
+      { service: "DOCUMENT_PRIVATE", identifier: shopOrdersPrefix(shortStoreId), prefix: true, includemetadata: true, reverse: true },
       { pageSize: ORDER_COUNT_PAGE, maxPages: ORDER_COUNT_MAX_PAGES, fresh: options.fresh }
     ),
   ]);
