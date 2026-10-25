@@ -11,6 +11,7 @@
  */
 import { PolicyLines } from "../../shop/PolicyLines";
 import { AwayNotice } from "../../shop/AwayNotice";
+import { NextSteps } from "./NextSteps";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
@@ -541,8 +542,9 @@ export function CheckoutDialog({
           <CheckCircleOutlineIcon color="success" sx={{ fontSize: 56 }} aria-hidden />
           <Typography sx={{ fontWeight: 700, mt: 1 }}>Order placed</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {shop.title || shop.owner} has your order and a Q-Mail about it. Follow it in My orders.
+            {shop.title || shop.owner} has your order and a Q-Mail about it.
           </Typography>
+          <NextSteps shop={shop} digital={isDigital} />
         </Box>
       );
       actions = (

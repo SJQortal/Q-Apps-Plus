@@ -718,7 +718,8 @@ describe("cart page", () => {
     expect(listPendingOrders(BUYER)).toHaveLength(1);
 
     await press("Finish order");
-    expect(await screen.findByText(`${STORE_TITLE} has your order and a Q-Mail about it. Follow it in My orders.`)).toBeInTheDocument();
+    expect(await screen.findByText(`${STORE_TITLE} has your order and a Q-Mail about it.`)).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "What happens next" })).toBeInTheDocument();
     expect(q.callsFor("SEND_COIN")).toHaveLength(1);
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2);
     expect(listPendingOrders(BUYER)).toEqual([]);
@@ -756,7 +757,8 @@ describe("cart page", () => {
     expect(cartCards.every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
 
     answer(true);
-    expect(await screen.findByText(`${STORE_TITLE} has your order and a Q-Mail about it. Follow it in My orders.`)).toBeInTheDocument();
+    expect(await screen.findByText(`${STORE_TITLE} has your order and a Q-Mail about it.`)).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "What happens next" })).toBeInTheDocument();
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(2);
     expect(q.callsFor("SEND_COIN")).toHaveLength(1);
   });
