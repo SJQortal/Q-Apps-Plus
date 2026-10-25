@@ -77,6 +77,24 @@ describe("the shop checkup", () => {
     void mug;
   });
 
+  it("asks a new shop for its first product, and Add product opens the form", async () => {
+    const store = createAppStore();
+    store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
+    store.dispatch(setCurrentStore({ ...viewedStore, owner: SELLER }));
+    store.dispatch(setDataContainer({ ...dataContainer, products: {}, catalogues: [] }));
+    installQortalMock({});
+    renderWithProviders(
+      <Routes>
+        <Route path="/product-manager/:store" element={<ProductManager />} />
+      </Routes>,
+      { store, initialEntries: [`/product-manager/${STORE_ID}`] }
+    );
+    const card = await screen.findByRole("region", { name: "Get your shop ready for Q-Shop+" });
+    expect(within(card).getByText("Add your first product")).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Add product" }));
+    expect(await screen.findByRole("dialog", { name: "Add product" })).toBeInTheDocument();
+  });
+
   it("retires the products that charged delivery, once the shop has delivery prices", async () => {
     vi.stubGlobal(
       "fetch",

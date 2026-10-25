@@ -34,6 +34,7 @@ describe("the shop checkup", () => {
       hasDelivery: false,
     });
     expect(items).toEqual([
+      { key: "products", done: true },
       { key: "categories", done: false, count: 2 },
       { key: "details", done: true },
       { key: "payments", done: false },
@@ -50,11 +51,18 @@ describe("the shop checkup", () => {
       hasDelivery: false,
     });
     expect(digital.map((i) => [i.key, i.done])).toEqual([
+      ["products", true],
       ["categories", true],
       ["details", true],
       ["payments", true],
       ["policies", true],
     ]);
+  });
+
+  it("asks a new shop for its first product, once its list has been read", () => {
+    const first = (listLoaded: boolean) => shopCheckup({ shop: {}, rows: [], detailsOf: () => undefined, hasDelivery: null, listLoaded }).find((i) => i.key === "products")?.done;
+    expect(first(true)).toBe(false);
+    expect(first(false)).toBe(true);
   });
 
   it("wants dispatch time and returns said for a shop that ships", () => {

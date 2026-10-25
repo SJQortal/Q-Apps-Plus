@@ -17,7 +17,7 @@ import { policiesOf } from "../shop/policies";
 import { FOREIGN_TICKERS } from "../money/coins";
 import type { SellerRow } from "./productList";
 
-export type CheckupKey = "categories" | "shipsTo" | "delivery" | "feeProducts" | "payments" | "details" | "policies";
+export type CheckupKey = "products" | "categories" | "shipsTo" | "delivery" | "feeProducts" | "payments" | "details" | "policies";
 
 export interface CheckupItem {
   key: CheckupKey;
@@ -55,6 +55,8 @@ export function shopCheckup(args: {
   rows: readonly SellerRow[];
   detailsOf: (row: SellerRow) => { title?: unknown; type?: unknown } | undefined;
   hasDelivery: boolean | null;
+  /** The product list has been read (until then a new shop isn't told to add products). */
+  listLoaded?: boolean;
 }): CheckupItem[] {
   const listed = args.rows.filter((row) => row.status !== "RETIRED");
   const titleOf = (row: SellerRow) => {
@@ -68,6 +70,8 @@ export function shopCheckup(args: {
   const ships = loaded.length === 0 || loaded.some((d) => d?.type !== "digital");
   const missingAddress = FOREIGN_TICKERS.some((t) => args.shop.supportedCoins?.includes(t) && !args.shop.foreignCoins?.[t]?.trim());
   const items: CheckupItem[] = [
+    // A new shop's first step.
+    { key: "products", done: args.listLoaded === false || listed.length > 0 },
     { key: "categories", done: oldCategories.length === 0, count: oldCategories.length },
     { key: "details", done: !!args.shop.logo && !!args.shop.description?.trim() && !!args.shop.location?.trim() },
     { key: "payments", done: !missingAddress },

@@ -63,12 +63,22 @@ function useHasDelivery(owner: string, storeId: string): boolean | null {
   return found?.key === key ? found.has : null;
 }
 
-export function ShopCheckup({ storeId, onOpenTab }: { storeId: string; onOpenTab?: (tab: SellerTab, extra?: Record<string, string>) => void }) {
+export function ShopCheckup({
+  storeId,
+  onOpenTab,
+  onAddProduct,
+}: {
+  storeId: string;
+  onOpenTab?: (tab: SellerTab, extra?: Record<string, string>) => void;
+  /** Opens Add product (the seller page's own dialog). */
+  onAddProduct?: () => void;
+}) {
   const dispatch = useDispatch();
   const store = useSelector((state: RootState) => state.global.currentStore);
   const name = useSelector((state: RootState) => state.auth.user?.name ?? "");
   const rows = useSelector((state: RootState) => state.global.listProducts.products) as SellerRow[];
   const owner = store?.owner || name;
+  const listLoaded = useSelector((state: RootState) => state.global.dataContainer?.storeId === storeId);
   const hasDelivery = useHasDelivery(owner, storeId);
   const { request, productOf } = useCatalogueLoader(owner);
   const listed = useMemo(() => rows.filter((r) => r.status !== "RETIRED"), [rows]);
@@ -83,7 +93,7 @@ export function ShopCheckup({ storeId, onOpenTab }: { storeId: string; onOpenTab
 
   if (!store || store.id !== storeId) return null;
   const detailsOf = (row: SellerRow) => productOf(row.catalogueId, row.productId) as { title?: unknown; type?: unknown } | undefined;
-  const items = shopCheckup({ shop: store, rows, detailsOf, hasDelivery });
+  const items = shopCheckup({ shop: store, rows, detailsOf, hasDelivery, listLoaded });
   const done = items.filter((i) => i.done).length;
   const all = done === items.length;
   const oldRows = listed.filter((r) => !isListedCategory(r.category));
@@ -110,6 +120,15 @@ export function ShopCheckup({ storeId, onOpenTab }: { storeId: string; onOpenTab
   if (hidden && all) return null;
 
   const STEPS: Record<CheckupKey, { title: string; text: ReactNode; action?: ReactNode }> = {
+    products: {
+      title: "Add your first product",
+      text: "A title, a category, a few pictures and a price; it waits in Ready to publish until you publish it.",
+      action: (
+        <Button variant="contained" onClick={() => (onAddProduct ? onAddProduct() : onOpenTab?.("products"))} sx={{ minHeight: 44 }}>
+          Add product
+        </Button>
+      ),
+    },
     categories: {
       title: "Pick categories from the list",
       text: `${oldRows.length === 1 ? "1 product still uses" : `${oldRows.length} products still use`} a category from before${examples ? ` (${examples})` : ""}. Buyers filter every shop by one shared list.`,
