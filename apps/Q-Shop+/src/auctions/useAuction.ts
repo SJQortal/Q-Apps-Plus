@@ -62,16 +62,21 @@ export interface Auction {
   notePlaced: (bid: Bid) => void;
 }
 
-export function useAuction(productId: string, terms: AuctionTerms, seller: string): Auction {
+/** How the bids are read: a product's by default; a name auction passes its own (names/auctions.ts). */
+export type BidReader = (options: { fresh?: boolean }) => Promise<{ bids: Bid[]; complete: boolean }>;
+
+/** `productId` keys the auction (a name auction's key is its own). */
+export function useAuction(productId: string, terms: AuctionTerms, seller: string, reader?: BidReader): Auction {
   const now = useNow(1000);
   const [loaded, setLoaded] = useState<Loaded>({ key: "", status: "loading", bids: [], complete: true, stale: false });
   const [placed, setPlaced] = useState<Bid[]>([]);
   const current: Loaded = loaded.key === productId ? loaded : { key: productId, status: "loading", bids: [], complete: true, stale: false };
 
+  const readBids = useMemo<BidReader>(() => reader ?? ((options) => fetchBids(productId, seller, options)), [reader, productId, seller]);
   const load = useCallback(
     async (fresh: boolean): Promise<{ bids: Bid[]; complete: boolean } | null> => {
       try {
-        const read = await fetchBids(productId, seller, { fresh });
+        const read = await readBids({ fresh });
         setLoaded({ key: productId, status: "ready", bids: read.bids, complete: read.complete, stale: false });
         return read;
       } catch {
@@ -83,13 +88,13 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
         return null;
       }
     },
-    [productId, seller]
+    [productId, readBids]
   );
 
   // The first read may come from the session's cache (2 minutes); polls and refreshes don't.
   useEffect(() => {
     let cancelled = false;
-    fetchBids(productId, seller).then(
+    readBids({}).then(
       ({ bids, complete }) => {
         if (!cancelled) setLoaded({ key: productId, status: "ready", bids, complete, stale: false });
       },
@@ -100,7 +105,7 @@ export function useAuction(productId: string, terms: AuctionTerms, seller: strin
     return () => {
       cancelled = true;
     };
-  }, [productId, seller]);
+  }, [productId, readBids]);
 
   // Winners the chain shows were placed late (checked once the auction has ended and settled).
   const [late, setLate] = useState<{ bids: Bid[] | null; ids: string[] }>({ bids: null, ids: [] });

@@ -63,7 +63,12 @@ function decoded(text: string): string | null {
 
 /** The bids among search rows: this product's prefix exactly, for this seller, an amount in the metadata. */
 export function bidsFromRows(rows: readonly QdnResourceSummary[], productId: string, seller: string): Bid[] {
-  const prefix = bidPrefix(productId);
+  return bidsWithPrefix(rows, bidPrefix(productId), seller);
+}
+
+/** The bids among search rows under an exact prefix, naming `to` in their metadata (a product's seller, or a name auction's name). */
+export function bidsWithPrefix(rows: readonly QdnResourceSummary[], prefix: string, to: string): Bid[] {
+  const seller = to;
   const bids: Bid[] = [];
   for (const row of rows) {
     if (!row?.name || typeof row.identifier !== "string" || !row.identifier.startsWith(prefix)) continue;

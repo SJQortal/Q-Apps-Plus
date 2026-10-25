@@ -34,6 +34,8 @@ export async function placeBid(args: {
   latest: () => Promise<{ state: AuctionState; complete: boolean } | null>;
   send?: (request: Record<string, unknown>, timeout: number) => Promise<unknown>;
   clock?: () => number;
+  /** Builds the bid's publish (a product's by default; a name auction's is names/auctions.ts). */
+  build?: (now: number) => { identifier: string; request: Record<string, unknown> };
 }): Promise<BidOutcome> {
   const send = args.send ?? ((r, t) => qortalRequestWithTimeout(r as never, t));
   const clock = args.clock ?? Date.now;
@@ -45,10 +47,13 @@ export async function placeBid(args: {
   if (state.phase !== "live") return { kind: "closed", state };
   if (args.amount + EPSILON < state.minNext) return { kind: "outbid", state };
   const now = clock();
-  const built = buildBidPublish({ name: args.name, productId: args.productId, storeId: args.storeId, seller: args.seller, amount: args.amount, uid: args.uid, now });
+  const built = args.build
+    ? args.build(now)
+    : buildBidPublish({ name: args.name, productId: args.productId, storeId: args.storeId, seller: args.seller, amount: args.amount, uid: args.uid, now });
   const bid: Bid = { id: built.identifier, bidder: args.name, amount: roundQort(args.amount), created: now };
   const placed = (): BidOutcome => {
-    invalidateQdnSearches((url) => url.includes(BID_BASE));
+    // Product and name bids alike (q-store-bid-…, q-store-namebid-…).
+    invalidateQdnSearches((url) => url.includes(BID_BASE) || url.includes("q-store-namebid-"));
     return { kind: "placed", bid };
   };
   try {
