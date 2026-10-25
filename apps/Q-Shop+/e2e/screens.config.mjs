@@ -314,7 +314,8 @@ const orders = [
   [`q-store-order-my-shop-ORDERSEL03`, 'Zoë Ålund', orderJson(shops[0], 'Zoë Ålund', [[6, 3]]), now - 9 * DAY],
 ];
 const statuses = [
-  [`q-store-status-order-shop-1-ORDERBUY01`, 'Shop+Plus', { status: 'Shipped', note: 'Tracking number 123 456' }],
+  // With a carrier and tracking number (orders/tracking.ts), and its line in the note for the original.
+  [`q-store-status-order-shop-1-ORDERBUY01`, 'Shop+Plus', { status: 'Shipped', note: 'Sent today, well packed.\nTracking: CTT RR123456785PT', tracking: { number: 'RR123456785PT', carrier: 'CTT' } }],
   [`q-store-status-order-my-shop-ORDERSEL02`, ME, { status: 'Shipped', note: '' }],
   [`q-store-status-order-my-shop-ORDERSEL03`, ME, { status: 'Refunded', note: 'Out of stock, refunded' }],
   [`q-store-status-order-shop-2-ORDERBUY02`, 'Zoë Ålund', { status: 'Shipped', note: 'Posted with tracking' }],
@@ -629,6 +630,22 @@ export default {
     { key: 'order-mark-delivered', path: '/my-orders', overlay: true, after: async (page) => {
       await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Arrived\?|Got it\?/ }).click({ timeout: 8000 });
       await page.getByRole('dialog').getByRole('button', { name: /^Mark as (delivered|received)$/ }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'order-tracking', path: '/my-orders', overlay: true, after: async (page) => {
+      await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Plus Gadgets/ }).first().click({ timeout: 8000 });
+      await page.getByRole('dialog').getByRole('button', { name: 'Copy the tracking number' }).scrollIntoViewIfNeeded({ timeout: 8000 });
+      await page.waitForTimeout(400);
+    } },
+    { key: 'seller-order-tracking', path: `/product-manager/q-store-general-my-shop?tab=orders`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^All · / }).click({ timeout: 8000 });
+      await page.getByRole('list', { name: 'Orders received' }).getByRole('button').first().click({ timeout: 8000 });
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Shipped', exact: true }).click({ timeout: 8000 });
+      await d.getByRole('combobox', { name: 'Carrier (optional)' }).fill('DHL');
+      await d.getByRole('textbox', { name: 'Tracking number (optional)' }).fill('00340434161234567890');
+      await d.getByRole('textbox', { name: 'Tracking number (optional)' }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
     } },
     { key: 'order-delivered-review', path: '/my-orders', overlay: true, after: async (page) => {

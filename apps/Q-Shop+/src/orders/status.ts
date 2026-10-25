@@ -9,6 +9,7 @@
  */
 import { ORDER_STATUSES, type OrderStatus } from "../qdn/payloads";
 import type { DeliveredInfo, OrderStatusInfo } from "../state/features/orderSlice";
+import { noteWithoutTracking, trackingOf } from "./tracking";
 
 export { ORDER_STATUSES, type OrderStatus };
 
@@ -37,10 +38,13 @@ export function shownStatus(status: OrderStatusInfo | null, delivered: Delivered
 /** What a status document's JSON says. */
 export function statusInfoFrom(json: any, updated: number): OrderStatusInfo {
   const raw = typeof json?.status === "string" ? json.status : "";
+  const tracking = trackingOf(json);
   return {
     state: "known",
     status: normalizeStatus(raw) ?? raw.trim(),
-    note: typeof json?.note === "string" ? json.note : "",
+    // The tracking has its own place: its line for the original app stays out of the note shown.
+    note: noteWithoutTracking(typeof json?.note === "string" ? json.note : "", tracking),
+    ...(tracking && { tracking }),
     updated,
   };
 }

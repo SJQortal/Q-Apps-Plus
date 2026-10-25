@@ -5,6 +5,7 @@
  * pinned by payloads.test.ts and the *.pin tests that run the components).
  */
 import type { ShopPolicies } from "../shop/policies";
+import { noteWithTracking, type Tracking } from "../orders/tracking";
 import {
   CATALOGUE_BASE,
   dataContainerIdentifier,
@@ -736,16 +737,19 @@ export function buildStatusPublish(args: {
   seller: string;
   status: string;
   note: string;
+  /** + app, additive: the carrier and tracking number of a shipped order (orders/tracking.ts). */
+  tracking?: Tracking | null;
   buyerPublicKey: string;
   sellerPublicKey: string;
 }) {
+  const tracking = args.tracking?.number.trim() ? args.tracking : null;
   return {
     action: "PUBLISH_QDN_RESOURCE" as const,
     identifier: statusIdentifierForOrder(args.orderId),
     name: args.seller,
     service: "DOCUMENT_PRIVATE",
     filename: `${args.orderId}_status.json`,
-    data64: jsonToBase64({ status: args.status, note: args.note }),
+    data64: jsonToBase64({ status: args.status, note: noteWithTracking(args.note, tracking), ...(tracking && { tracking }) }),
     encrypt: true,
     publicKeys: [args.buyerPublicKey, args.sellerPublicKey],
   };

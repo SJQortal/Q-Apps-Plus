@@ -27,6 +27,7 @@ import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import RateReviewOutlinedIcon from "@mui/icons-material/RateReviewOutlined";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import type { RootState } from "../../../state/store";
 import type { Order, OrderStatusInfo } from "../../../state/features/orderSlice";
 import { setNotification } from "../../../state/features/notificationsSlice";
@@ -39,6 +40,8 @@ import { markDelivered } from "../../../orders/delivered";
 import { sameName } from "../../../orders/reads";
 import { sendOrderStatus } from "../../../orders/statusUpdate";
 import { normalizeStatus, shownStatus } from "../../../orders/status";
+import type { Tracking } from "../../../orders/tracking";
+import { copyText } from "../../../utils/clipboard";
 import { deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
 import { useOrderCoinView } from "../../../orders/useOrderCoin";
 import type { ShopCoinSettings } from "../../../money/coins";
@@ -137,7 +140,36 @@ function ItemRow({
 
 function sameDraft(draft: StatusDraft, status: OrderStatusInfo | null): boolean {
   if (!status || status.state !== "known") return false;
-  return normalizeStatus(draft.status) === normalizeStatus(status.status) && draft.note === status.note;
+  const sameTracking =
+    normalizeStatus(draft.status) !== "Shipped" ||
+    (draft.trackingNumber.trim() === (status.tracking?.number ?? "") && draft.carrier.trim() === (status.tracking?.carrier ?? ""));
+  return normalizeStatus(draft.status) === normalizeStatus(status.status) && draft.note === status.note && sameTracking;
+}
+
+/** A shipped order's carrier and tracking number, with Copy (orders/tracking.ts). */
+function TrackingBox({ tracking }: { tracking: Tracking }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, p: 1.5, borderRadius: 2, border: 1, borderColor: "divider", flexWrap: "wrap" }}>
+      <LocalShippingOutlinedIcon aria-hidden sx={{ color: "text.secondary" }} />
+      <Box sx={{ flex: "1 1 160px", minWidth: 0 }}>
+        <Typography variant="body2" color="text.secondary">
+          {tracking.carrier ? `Tracking with ${tracking.carrier}` : "Tracking number"}
+        </Typography>
+        <Typography sx={{ fontFamily: "monospace", fontSize: 16, overflowWrap: "anywhere" }}>{tracking.number}</Typography>
+      </Box>
+      <Button
+        variant="outlined"
+        color="inherit"
+        startIcon={copied ? <CheckCircleOutlinedIcon /> : <ContentCopyOutlinedIcon />}
+        onClick={async () => setCopied(await copyText(tracking.number))}
+        aria-label={copied ? "Tracking number copied" : "Copy the tracking number"}
+        sx={{ minHeight: 44 }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </Button>
+    </Box>
+  );
 }
 
 export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
@@ -168,8 +200,8 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
     draftState && draftState.key === draftKey && draftState.orderId === order?.id
       ? draftState.draft
       : status?.state === "known"
-        ? { status: normalizeStatus(status.status) ?? "Received", note: status.note }
-        : { status: "", note: "" };
+        ? { status: normalizeStatus(status.status) ?? "Received", note: status.note, carrier: status.tracking?.carrier ?? "", trackingNumber: status.tracking?.number ?? "" }
+        : { status: "", note: "", carrier: "", trackingNumber: "" };
   const setDraft = (next: StatusDraft) => setDraftState({ key: draftKey, orderId: order?.id ?? "", draft: next });
   const [retrying, setRetrying] = useState(false);
 
@@ -211,6 +243,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
       sellerPublicKey: me.publicKey,
       status: draft.status,
       note: draft.note,
+      tracking: draft.trackingNumber.trim() ? { number: draft.trackingNumber.trim(), ...(draft.carrier.trim() && { carrier: draft.carrier.trim() }) } : null,
     });
     if (result === "sent") dispatch(setNotification({ alertType: "success", msg: "Status updated" }));
     else if (result === "timeout") {
@@ -349,12 +382,17 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
                 <Skeleton variant="rounded" height={72} sx={{ mt: 2 }} />
               </Box>
             )
-          ) : status?.state === "known" && status.note ? (
-            <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}>
-              <Typography variant="body2" color="text.secondary">
-                Note from the seller
-              </Typography>
-              <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{status.note}</Typography>
+          ) : status?.state === "known" && (status.note || status.tracking) ? (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              {status.tracking && <TrackingBox tracking={status.tracking} />}
+              {status.note && (
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Note from the seller
+                  </Typography>
+                  <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{status.note}</Typography>
+                </Box>
+              )}
             </Box>
           ) : status?.state === "error" ? (
             <Typography variant="body2" color="text.secondary">

@@ -23,13 +23,15 @@ import { ShowOrder } from "./ShowOrder";
 
 const ID = orderId("ORDERxxxx1");
 
-function setup(role: "buyer" | "seller", json: any, status?: { status: string; note?: string }) {
+function setup(role: "buyer" | "seller", json: any, status?: { status: string; note?: string; tracking?: { number: string; carrier?: string } }) {
   const store = createAppStore();
   if (role === "seller") store.dispatch(addUser({ address: SELLER_ADDRESS, publicKey: SELLER_PK, name: SELLER }));
   else store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: "BuyerPK", name: BUYER }));
   if (status) {
     store.dispatch(
-      statusesLoaded([{ orderId: ID, info: { state: "known", status: status.status, note: status.note ?? "", updated: 5 } }])
+      statusesLoaded([
+        { orderId: ID, info: { state: "known", status: status.status, note: status.note ?? "", ...(status.tracking && { tracking: status.tracking }), updated: 5 } },
+      ])
     );
   }
   const order = { ...json, user: BUYER, id: ID, created: 1761000000000, updated: 2, isValid: true };
@@ -306,6 +308,15 @@ describe("the rest of the order", () => {
     expect(chip).toBeInTheDocument();
     expect(chip?.textContent).toBe("Refunded");
     expect(screen.getByText("Out of stock, refunded")).toBeInTheDocument();
+  });
+
+  it("shows the buyer a shipped order's tracking, with Copy, above the seller's note", () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+    setup("buyer", orderJson(), { status: "Shipped", note: "Sent today", tracking: { number: "RR123456785PT", carrier: "CTT" } });
+    expect(screen.getByText("Tracking with CTT")).toBeInTheDocument();
+    expect(screen.getByText("RR123456785PT")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy the tracking number" })).toBeInTheDocument();
+    expect(screen.getByText("Sent today")).toBeInTheDocument();
   });
 
   it("doesn't offer Received over a status it couldn't read: Retry, or an explicit choice", async () => {

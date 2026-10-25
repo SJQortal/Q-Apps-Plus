@@ -176,4 +176,28 @@ describe("order status (pinned)", () => {
     expect(q.callsFor("GET_NAME_DATA")[0]).toEqual({ action: "GET_NAME_DATA", name: BUYER });
     expect(q.callsFor("GET_ACCOUNT_DATA")[0]).toEqual({ action: "GET_ACCOUNT_DATA", address: BUYER_ADDRESS });
   });
+
+  it("a shipped order's carrier and tracking number go in the status (additive), with a line in the note for the original", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+    const q = installQortalMock({
+      GET_NAME_DATA: async () => ({ name: BUYER, owner: BUYER_ADDRESS }),
+      GET_ACCOUNT_DATA: async () => ({ address: BUYER_ADDRESS, publicKey: BUYER_PK }),
+      PUBLISH_QDN_RESOURCE: async () => ({ signature: "x" }),
+    });
+    renderShowOrder("seller", { name: SELLER, address: SELLER_ADDRESS, pk: SELLER_PK });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Shipped" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Carrier (optional)" }), { target: { value: "CTT" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Tracking number (optional)" }), { target: { value: "RR123456785PT" } });
+    fireEvent.change(screen.getByLabelText(/Note/), { target: { value: "Sent today" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update status" }));
+
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    const pub = q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any;
+    expect(decodeData64(pub.data64)).toEqual({
+      status: "Shipped",
+      note: "Sent today\nTracking: CTT RR123456785PT",
+      tracking: { number: "RR123456785PT", carrier: "CTT" },
+    });
+  });
 });

@@ -9,6 +9,7 @@
  * is looked up fresh for every publish (never from the read cache), as the
  * original does, and Hub gets its 30 minutes (docs/QORTAL.md → pitfall 10).
  */
+import type { Tracking } from "./tracking";
 import { buildStatusPublish } from "../qdn/payloads";
 import { invalidateQdnSearches } from "../qdn/search";
 import { shopStatusPrefix, shortStoreIdOfOrder, statusIdentifierForOrder } from "../qdn/identifiers";
@@ -23,11 +24,13 @@ export type StatusUpdateResult = "sent" | "declined" | "timeout" | "failed";
 
 export async function sendOrderStatus(
   store: OrderStore,
-  args: { order: Order; seller: string; sellerPublicKey: string; status: string; note: string }
+  args: { order: Order; seller: string; sellerPublicKey: string; status: string; note: string; tracking?: Tracking | null }
 ): Promise<StatusUpdateResult> {
   const { order, seller, sellerPublicKey, status, note } = args;
+  // Only a shipped order carries tracking.
+  const tracking = status === "Shipped" && args.tracking?.number.trim() ? args.tracking : null;
   const previous = store.getState().order.statuses[order.id] ?? null;
-  store.dispatch(statusSending({ orderId: order.id, status, note, sentAt: Date.now() }));
+  store.dispatch(statusSending({ orderId: order.id, status, note, tracking, sentAt: Date.now() }));
   try {
     const nameData = await qortalRequest({ action: "GET_NAME_DATA", name: order.user });
     const account = await qortalRequest({ action: "GET_ACCOUNT_DATA", address: nameData?.owner });
@@ -37,6 +40,7 @@ export async function sendOrderStatus(
       seller,
       status,
       note,
+      tracking,
       buyerPublicKey: account.publicKey,
       sellerPublicKey,
     });

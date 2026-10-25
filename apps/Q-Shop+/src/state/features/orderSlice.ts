@@ -17,6 +17,7 @@
  *   order id: null once read and there is none. Lists show "Delivered" from
  *   it (orders/status.ts shownStatus); the seller's own status stays as is.
  */
+import type { Tracking } from "../../orders/tracking";
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Product } from "./storeSlice";
 
@@ -93,6 +94,8 @@ export interface OrderStatusInfo {
   state: "known" | "error";
   status: string;
   note: string;
+  /** A shipped order's carrier and tracking number (orders/tracking.ts). */
+  tracking?: Tracking | null;
   /** The status document's `updated` (0 when there is none). */
   updated: number;
   /** Set when the seller sends a new status: older documents read later don't replace it. */
@@ -312,12 +315,13 @@ export const orderSlice = createSlice({
       }
     },
     /** The seller's update, shown at once (optimistic) and restored with `statusRestored` if it fails. */
-    statusSending: (state, action: PayloadAction<{ orderId: string; status: string; note: string; sentAt: number }>) => {
-      const { orderId, status, note, sentAt } = action.payload;
+    statusSending: (state, action: PayloadAction<{ orderId: string; status: string; note: string; tracking?: Tracking | null; sentAt: number }>) => {
+      const { orderId, status, note, tracking, sentAt } = action.payload;
       state.statuses[orderId] = {
         state: "known",
         status,
         note,
+        tracking: tracking ?? null,
         updated: state.statuses[orderId]?.updated ?? 0,
         sentAt,
         sending: true,
