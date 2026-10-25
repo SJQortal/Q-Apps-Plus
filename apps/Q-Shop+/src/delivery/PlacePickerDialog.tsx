@@ -2,15 +2,141 @@
  * Where the buyer gets things delivered (buyerPlace.ts): a country, and a
  * state in the United States, typed to find. Kept on this device for every
  * product page's delivery prices; checkout still asks for the full address.
+ *
+ * The countries are a list in the dialog itself, large and easy to read
+ * (Simon, from Hub: the drop-down "is very small"): type to narrow it, then
+ * pick one; the arrow keys move between the search and the list.
  */
-import { useMemo, useState } from "react";
-import { Autocomplete, Box, Button, TextField, Typography } from "@mui/material";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { alpha } from "@mui/material/styles";
+import { Box, Button, ButtonBase, InputAdornment, TextField, Typography } from "@mui/material";
+import SearchIcon from "@mui/icons-material/Search";
+import CheckIcon from "@mui/icons-material/Check";
 import { ResponsiveDialog } from "../components/common/mobile";
-import { autocompletePaperProps } from "../components/common/menuStyle";
 import { ALL_COUNTRY_CODES, ALL_STATE_CODES, US, countryCode, countryName, stateName } from "../constants/shipping";
 import { cleanPlace, pickedBuyerPlace, setBuyerPlace, type BuyerPlace } from "./buyerPlace";
 
 const byName = (a: string, b: string) => a.localeCompare(b);
+
+/** Names that start with what was typed first, then the ones that contain it (or whose code it is). */
+function narrow(names: string[], query: string, codeOf: (name: string) => string | null): string[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return names;
+  const starts = names.filter((n) => n.toLowerCase().startsWith(q) || codeOf(n)?.toLowerCase() === q);
+  const contains = names.filter((n) => !starts.includes(n) && n.toLowerCase().includes(q));
+  return [...starts, ...contains];
+}
+
+function PlaceList({
+  label,
+  names,
+  value,
+  onPick,
+  codeOf,
+  height,
+  autoFocus = false,
+}: {
+  label: string;
+  names: string[];
+  value: string | null;
+  onPick: (name: string) => void;
+  codeOf: (name: string) => string | null;
+  height: string;
+  autoFocus?: boolean;
+}) {
+  const [query, setQuery] = useState("");
+  const shown = narrow(names, query, codeOf);
+  const list = useRef<HTMLDivElement>(null);
+  const options = () => [...(list.current?.querySelectorAll<HTMLElement>("[role=option]") ?? [])];
+  // The chosen one in view when the list opens.
+  useEffect(() => {
+    list.current?.querySelector<HTMLElement>("[aria-selected=true]")?.scrollIntoView?.({ block: "center" });
+  }, []);
+  const move = (e: KeyboardEvent, from: number) => {
+    const all = options();
+    const to = e.key === "ArrowDown" ? from + 1 : e.key === "ArrowUp" ? from - 1 : e.key === "Home" ? 0 : e.key === "End" ? all.length - 1 : null;
+    if (to === null) return;
+    e.preventDefault();
+    if (to < 0) return void list.current?.parentElement?.querySelector<HTMLInputElement>("input")?.focus();
+    all[Math.min(to, all.length - 1)]?.focus();
+  };
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <TextField
+        type="search"
+        label={label}
+        value={query}
+        autoFocus={autoFocus}
+        placeholder="Type to find it"
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            options()[0]?.focus();
+          }
+          if (e.key === "Enter" && shown.length > 0) {
+            e.preventDefault();
+            onPick(shown[0]);
+          }
+        }}
+        slotProps={{
+          inputLabel: { shrink: true },
+          input: {
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+      <Box
+        ref={list}
+        role="listbox"
+        aria-label={label}
+        // A steady height: the dialog doesn't jump while typing narrows the list.
+        sx={{ height, overflowY: "auto", border: 1, borderColor: "divider", borderRadius: 2, p: 0.5 }}
+      >
+        {shown.length === 0 ? (
+          <Typography color="text.secondary" sx={{ p: 1.5 }}>
+            Nothing matches &ldquo;{query.trim()}&rdquo;.
+          </Typography>
+        ) : (
+          shown.map((name, i) => {
+            const chosen = name === value;
+            return (
+              <ButtonBase
+                key={name}
+                role="option"
+                aria-selected={chosen}
+                // One stop for Tab: the chosen one, else the first.
+                tabIndex={chosen || (!shown.includes(value ?? "") && i === 0) ? 0 : -1}
+                onClick={() => onPick(name)}
+                onKeyDown={(e) => move(e, i)}
+                sx={(theme) => ({
+                  width: "100%",
+                  minHeight: 48,
+                  px: 1.5,
+                  borderRadius: 1.5,
+                  justifyContent: "space-between",
+                  textAlign: "left",
+                  fontFamily: theme.typography.fontFamily,
+                  fontSize: 16,
+                  fontWeight: chosen ? 700 : 400,
+                  bgcolor: chosen ? alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.24 : 0.12) : "transparent",
+                  "&:hover, &.Mui-focusVisible": { bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.32 : 0.18) },
+                })}
+              >
+                {name}
+                {chosen && <CheckIcon fontSize="small" color="primary" />}
+              </ButtonBase>
+            );
+          })
+        )}
+      </Box>
+    </Box>
+  );
+}
 
 export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPlace | null; onClose: () => void; onPicked?: (place: BuyerPlace) => void }) {
   const countries = useMemo(() => ALL_COUNTRY_CODES.map(countryName).sort(byName), []);
@@ -30,7 +156,7 @@ export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPl
       open
       onClose={onClose}
       title="Where should things be delivered?"
-      maxWidth="xs"
+      maxWidth="sm"
       actions={
         <>
           {/* Only a country picked here can be forgotten (not the one from the address kept at checkout). */}
@@ -59,31 +185,25 @@ export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPl
         <Typography variant="body2" color="text.secondary">
           Product pages then show what delivery costs there. It stays on this device; checkout asks for your full address.
         </Typography>
-        <Autocomplete
-          // The list stays inside the dialog (its landmark).
-          disablePortal
-          slotProps={{ paper: autocompletePaperProps }}
-          options={countries}
+        <PlaceList
+          label="Country"
+          names={countries}
           value={country}
-          onChange={(_, value) => {
-            setCountry(value);
+          onPick={(name) => {
+            setCountry(name);
             setState(null);
           }}
-          autoHighlight
-          openOnFocus
-          renderInput={(params) => <TextField {...params} label="Country" autoFocus />}
+          codeOf={countryCode}
+          height={inUs ? "min(30vh, 260px)" : "min(50vh, 440px)"}
+          autoFocus
         />
         {inUs && (
-          <Autocomplete
-            disablePortal
-            slotProps={{ paper: autocompletePaperProps }}
-            options={states}
-            value={state}
-            onChange={(_, value) => setState(value)}
-            autoHighlight
-            openOnFocus
-            renderInput={(params) => <TextField {...params} label="State (optional)" helperText="Some shops price states differently." />}
-          />
+          <PlaceList label="State (optional)" names={states} value={state} onPick={setState} codeOf={() => null} height="min(26vh, 220px)" />
+        )}
+        {inUs && (
+          <Typography variant="body2" color="text.secondary">
+            Some shops price states differently.
+          </Typography>
         )}
       </Box>
     </ResponsiveDialog>
