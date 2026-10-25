@@ -11,7 +11,6 @@ import { resetShowNames, setShowNames } from "../utils/namesSetting";
 import { decodeData64 } from "../test/fixtures/shop";
 import { NamesPage } from "./NamesPage";
 import { resetNameCaches } from "./market";
-import { resetNameContent } from "./content";
 import { resetPendingNames } from "./actions";
 import { auctionDescription, NAME_AUCTION_ID } from "./auctions";
 
@@ -97,7 +96,6 @@ beforeEach(() => {
   installVisibleIntersectionObserver();
   resetQdnCaches();
   resetNameCaches();
-  resetNameContent();
   resetPendingNames();
   resetShowNames();
   localStorage.clear();
@@ -115,14 +113,13 @@ afterEach(() => {
 });
 
 describe("Names", () => {
-  it("lists names for sale and name auctions as cards, newest first, with who sells them and what they come with", async () => {
+  it("lists names for sale and name auctions as cards, newest first, with who sells them", async () => {
     renderNames();
     // Newest listed first: zed and alpha by their SELL_NAME transactions, the auction by its listing.
     await waitFor(() => expect(cardNames()).toEqual(["zed", "alpha", "spare"]));
     const alpha = screen.getByRole("article", { name: "alpha" });
     expect(within(alpha).getByText("12.50")).toBeInTheDocument();
     expect(await within(alpha).findByText("by Seller One")).toBeInTheDocument();
-    expect(await within(alpha).findByText("Comes with 3 videos · 1 website")).toBeInTheDocument();
     const spare = screen.getByRole("article", { name: "spare" });
     expect(within(spare).getByText("Auction")).toBeInTheDocument();
     expect(within(spare).getByRole("button", { name: "Bid: spare" })).toBeInTheDocument();
@@ -135,13 +132,14 @@ describe("Names", () => {
     expect(cardNames()).toEqual(["alpha"]);
   });
 
-  it("buys a name at its price: what comes with it, then BUY_NAME as the Names app asks it", async () => {
+  it("buys a name at its price: what comes with it in the explorer, then BUY_NAME as the Names app asks it", async () => {
     renderNames();
     fireEvent.click(await screen.findByRole("button", { name: "Buy: alpha" }));
     const dialog = await screen.findByRole("dialog", { name: "alpha" });
-    expect(await within(dialog).findByText("1 website")).toBeInTheDocument();
-    expect(within(dialog).getByText("3 videos")).toBeInTheDocument();
-    expect(within(dialog).getByRole("link", { name: "Visit its website" })).toHaveAttribute("href", "qortal://WEBSITE/alpha");
+    // What it comes with is the owner's account in Q-Mintership+'s explorer, not a read of everything it published.
+    expect(within(dialog).getByRole("link", { name: /^See what it published/ })).toHaveAttribute("href", `qortal://APP/Q-Mintership+/explorer/account/${SELLER}`);
+    const searched = vi.mocked(fetch).mock.calls.map(([input]) => new URL(String(input), "http://node"));
+    expect(searched.some((url) => url.pathname === "/arbitrary/resources/search" && url.searchParams.get("name") === "alpha" && !url.searchParams.get("identifier"))).toBe(false);
     fireEvent.click(await within(dialog).findByRole("button", { name: "Buy for 12.50 QORT" }));
     expect(within(dialog).getByText(/Buy alpha for 12\.50 QORT\? It moves to your account/)).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Buy" }));

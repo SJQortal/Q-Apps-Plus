@@ -18,8 +18,8 @@
  * Names app reads them all with limit=0), once a session and again after a
  * sale of the buyer's own; when each was listed, from the latest SELL_NAME
  * transactions (one page, for the Newest sort); and, per card on screen, the
- * seller's primary name (names/owners) and what the name published
- * (names/content.ts).
+ * seller's primary name (names/owners). What the name published is shown by
+ * the explorer (explorerAccountLink), not read here.
  */
 export const FOR_SALE_PAGE = 100;
 export const FOR_SALE_MAX_PAGES = 20;
@@ -162,6 +162,16 @@ export function resetNameCaches(): void {
   cached = null;
   inflight = null;
   primaryNames.clear();
+}
+
+/**
+ * An account in Q-Mintership+'s explorer, where buyers see what a name's
+ * owner has published (Simon, 2026-10-25: instead of reading what the name
+ * published here, link to it). "+" stays as typed: Hub doesn't decode the
+ * app's name in qortal:// links.
+ */
+export function explorerAccountLink(address: string): string {
+  return `qortal://APP/Q-Mintership+/explorer/account/${encodeURIComponent(address)}`;
 }
 
 /** A short form of an address, enough to recognise it. */

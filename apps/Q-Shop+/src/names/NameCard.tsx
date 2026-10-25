@@ -1,16 +1,15 @@
 /**
  * One name for sale on the Names page: its avatar and name, who sells it,
- * what it comes with, and its price or its auction's standing, with Buy or
- * Bid. What it comes with, who sells it and the auction's bids are read only
- * once the card is on screen.
+ * and its price or its auction's standing, with Buy or Bid. Who sells it and
+ * the auction's bids are read only once the card is on screen; what it comes
+ * with is the dialog's link to the explorer.
  */
 import { Box, Button, Chip, Paper, Typography } from "@mui/material";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { useInView } from "react-intersection-observer";
 import { NameAvatar } from "../components/common/NameAvatar";
 import { AmountTag } from "../components/money/PriceTag";
-import { useNameContent } from "./content";
-import { auctionTimeText, ContentLine, SellerLine, useAuctionGlance } from "./parts";
+import { auctionTimeText, SellerLine, useAuctionGlance } from "./parts";
 import type { MarketItem } from "./useNamesMarket";
 import type { PendingName } from "./actions";
 
@@ -30,7 +29,6 @@ export function NameCard({
   onOpen: (item: MarketItem) => void;
 }) {
   const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "300px 0px", fallbackInView: true });
-  const content = useNameContent(item.name, inView);
   const glance = useAuctionGlance(item.auction, now, inView);
   const auction = item.auction;
   const label = mine ? "Manage" : pending ? "Waiting for the next block…" : auction ? (glance?.phase === "ended" ? "See result" : "Bid") : "Buy";
@@ -58,7 +56,6 @@ export function NameCard({
           )}
         </Box>
       </Box>
-      <ContentLine content={content} />
       <Box sx={{ mt: "auto", display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         {auction ? (
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.25, minWidth: 0, flex: "1 1 auto" }}>

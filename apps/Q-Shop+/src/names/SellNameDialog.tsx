@@ -16,8 +16,6 @@ import { auctionFromForm, defaultAuctionValues, parseAmount, sanitizeAmountInput
 import { errorMessage, isHubDecline } from "../qdn/hubErrors";
 import { invalidateQdnSearches } from "../qdn/search";
 import { formatPrice } from "../money/pricing";
-import { useNameContent } from "./content";
-import { ContentLine } from "./parts";
 import { buildNameAuctionPublish, NAME_AUCTION_ID } from "./auctions";
 import { sellName } from "./actions";
 
@@ -58,7 +56,6 @@ export function SellNameDialog({
   const [auction, setAuction] = useState<AuctionFormValues>(() => defaultAuctionValues(Date.now()));
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  const content = useNameContent(picked, !!picked);
   const onlyName = picked === primary && names.length === 1;
 
   const submit = async () => {
@@ -152,7 +149,6 @@ export function SellNameDialog({
         {picked && (
           <>
             <Box>
-              <ContentLine content={content} max={4} />
               <Typography variant="body2" color="text.secondary">
                 Everything published under {picked} goes to its buyer with it, and you can&apos;t publish as {picked} any more.
               </Typography>

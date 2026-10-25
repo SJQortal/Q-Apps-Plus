@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchListingTimes, fetchNamesForSale, FOR_SALE_PAGE, listingOf, resetNameCaches } from "./market";
-import { serviceLabel, summarizeContent } from "./content";
 import { auctionDescription, auctionFromRow, buildNameAuctionEnd, buildNameAuctionPublish, buildNameBidPublish, NAME_AUCTION_ID } from "./auctions";
 import { buyName, cancelNameSale, isSettled, pendingNames, resetPendingNames, sellName } from "./actions";
 import { marketItems } from "./useNamesMarket";
@@ -71,32 +70,6 @@ describe("names for sale on chain", () => {
     });
     expect(await sellName("other", 1)).toEqual({ kind: "declined" });
     expect(pendingNames().has("other")).toBe(false);
-  });
-});
-
-describe("what a name comes with", () => {
-  it("counts the name's own resources by service, leaves out its avatar, and counts private ones apart", () => {
-    const rows = [
-      { name: "alpha", service: "VIDEO", identifier: "v1" },
-      { name: "alpha", service: "VIDEO", identifier: "v2" },
-      { name: "alpha", service: "WEBSITE", identifier: "default" },
-      { name: "alpha", service: "THUMBNAIL", identifier: "qortal_avatar" },
-      { name: "alpha", service: "DOCUMENT", identifier: "q-store-nameauction" },
-      { name: "alpha", service: "MAIL_PRIVATE", identifier: "m" },
-      { name: "alphabet", service: "VIDEO", identifier: "x" },
-    ];
-    expect(summarizeContent(rows, "alpha", false)).toEqual({
-      services: [
-        { service: "VIDEO", count: 2 },
-        { service: "WEBSITE", count: 1 },
-      ],
-      privateCount: 1,
-      total: 4,
-      capped: false,
-    });
-    expect(serviceLabel("VIDEO", 2)).toBe("2 videos");
-    expect(serviceLabel("WEBSITE", 1)).toBe("1 website");
-    expect(serviceLabel("SOME_NEW", 3)).toBe("3 some new");
   });
 });
 

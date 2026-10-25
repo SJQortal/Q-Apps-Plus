@@ -1,7 +1,7 @@
 /**
  * A name for sale, opened (full screen on phones): its avatar, who sells it,
- * everything it published (which goes with it), and Buy at its price or its
- * auction. The name is read again from Core on opening, so a name sold or
+ * a link to what its owner published (which goes with it), and Buy at its
+ * price or its auction. The name is read again from Core on opening, so a name sold or
  * repriced meanwhile can't be bought at the old price.
  *
  * An auction (names/auctions.ts) follows its bids live (auctions/useAuction:
@@ -10,10 +10,8 @@
  * bid, the winner buys it.
  */
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Alert, Box, Button, Chip, InputAdornment, Link, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, Chip, InputAdornment, Stack, TextField, Typography } from "@mui/material";
 import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
-import LanguageOutlinedIcon from "@mui/icons-material/LanguageOutlined";
-import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import ShortUniqueId from "short-unique-id";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { NameAvatar } from "../components/common/NameAvatar";
@@ -25,8 +23,7 @@ import { invalidateQdnSearches } from "../qdn/search";
 import { useAuction } from "../auctions/useAuction";
 import { placeBid } from "../auctions/placeBid";
 import { MAX_BID, timeLeft } from "../auctions/rules";
-import { useNameContent } from "./content";
-import { ContentChips, SellerLine, useSellerName } from "./parts";
+import { ExplorerButton, SellerLine, useSellerName } from "./parts";
 import { fetchNameState, shortAddress, type NameState } from "./market";
 import { buildNameAuctionEnd, buildNameBidPublish, fetchNameBids, NAME_AUCTION_ID, type NameAuction } from "./auctions";
 import { buyName, cancelNameSale, sellName, type NameTxResult, type PendingName } from "./actions";
@@ -72,7 +69,6 @@ export function NameDialog({
   /** Something was sent: the page's list reads again. */
   onChanged: () => void;
 }) {
-  const content = useNameContent(item.name, true);
   // The name as Core has it now; read again after something was sent.
   const [nonce, setNonce] = useState(0);
   const [read, setRead] = useState<{ key: string; value: NameState | null } | null>(null);
@@ -96,8 +92,6 @@ export function NameDialog({
   const live = state !== "loading" && state !== null ? state : null;
   const stillYours = live ? live.owner === item.owner : true;
   const price = live ? (live.forSale ? live.price : null) : item.price;
-  const hasWebsite = content && content !== "failed" && content.services.some((s) => s.service === "WEBSITE");
-  const hasApp = content && content !== "failed" && content.services.some((s) => s.service === "APP");
 
   const act = async (run: () => Promise<NameTxResult>, sent: string) => {
     if (busy) return;
@@ -153,41 +147,10 @@ export function NameDialog({
 
         <Box component="section" aria-label="What comes with it" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
           <Typography sx={{ fontWeight: 700 }}>What comes with it</Typography>
-          {content === null ? (
-            <Typography variant="body2" color="text.secondary">
-              Reading what it published…
-            </Typography>
-          ) : content === "failed" ? (
-            <Typography variant="body2" color="text.secondary">
-              Your node couldn&apos;t say what it published.
-            </Typography>
-          ) : content.total === 0 ? (
-            <Typography variant="body2" color="text.secondary">
-              Nothing published under it yet: just the name.
-            </Typography>
-          ) : (
-            <>
-              <ContentChips content={content} />
-              <Typography variant="body2" color="text.secondary">
-                Everything published under {item.name} goes to its buyer with it
-                {content.privateCount > 0 ? "; private items stay encrypted to the people they were sent to" : ""}.
-              </Typography>
-            </>
-          )}
-          {(hasWebsite || hasApp) && (
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-              {hasWebsite && (
-                <Button component={Link} href={`qortal://WEBSITE/${encodeURIComponent(item.name)}`} variant="outlined" color="inherit" startIcon={<LanguageOutlinedIcon />} sx={{ minHeight: 44 }}>
-                  Visit its website
-                </Button>
-              )}
-              {hasApp && (
-                <Button component={Link} href={`qortal://APP/${encodeURIComponent(item.name)}`} variant="outlined" color="inherit" startIcon={<AppsOutlinedIcon />} sx={{ minHeight: 44 }}>
-                  Open its Q-App
-                </Button>
-              )}
-            </Box>
-          )}
+          <Typography variant="body2" color="text.secondary">
+            Everything published under {item.name} goes to its buyer with it; private items stay encrypted to the people they were sent to.
+          </Typography>
+          <ExplorerButton address={item.owner} name={item.name} />
         </Box>
 
         {!stillYours ? (

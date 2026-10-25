@@ -1,15 +1,15 @@
 /**
  * Small parts the Names page and its dialogs share: who sells a name (their
- * primary name, read once a session), what the name comes with (its QDN
- * resources counted, names/content.ts), and an auction's standing from one
- * read of its bids (the dialog follows it live with useAuction).
+ * primary name, read once a session), the link to what its owner published
+ * (the explorer), and an auction's standing from one read of its bids (the
+ * dialog follows it live with useAuction).
  */
 import { useEffect, useState } from "react";
-import { Box, Chip, Skeleton, Typography } from "@mui/material";
+import { Box, Button, Link, Typography } from "@mui/material";
+import TravelExploreOutlinedIcon from "@mui/icons-material/TravelExploreOutlined";
 import { NameAvatar } from "../components/common/NameAvatar";
 import { auctionState, timeLeft, type AuctionState } from "../auctions/rules";
-import { serviceLabel, type NameContent } from "./content";
-import { primaryNameOf, shortAddress } from "./market";
+import { explorerAccountLink, primaryNameOf, shortAddress } from "./market";
 import { fetchNameBids, type NameAuction } from "./auctions";
 
 /** The seller's primary name (or their address while it loads, or when they have none). */
@@ -38,38 +38,20 @@ export function SellerLine({ owner, enabled = true }: { owner: string; enabled?:
   );
 }
 
-/** "Comes with 1 website · 3 videos" (the most first, `max` of them), or what's known so far. */
-export function ContentLine({ content, max = 3 }: { content: NameContent | null | "failed"; max?: number }) {
-  if (content === null) return <Skeleton width="70%" aria-hidden />;
-  if (content === "failed") return <Typography variant="body2" color="text.secondary">Couldn&apos;t read what it published.</Typography>;
-  if (content.total === 0) return <Typography variant="body2" color="text.secondary">Nothing published under it yet.</Typography>;
-  const shown = content.services.slice(0, max).map((s) => serviceLabel(s.service, s.count));
-  const more = content.services.length - shown.length;
+/** What an account published, in Q-Mintership+'s explorer (opens in a Hub tab). */
+export function ExplorerButton({ address, name }: { address: string; name: string }) {
   return (
-    <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
-      Comes with {shown.join(" · ")}
-      {more > 0 ? ` and ${more} more kind${more === 1 ? "" : "s"}` : ""}
-      {content.privateCount > 0 ? `${shown.length ? " · " : ""}${content.privateCount} private` : ""}
-      {content.capped ? " (300+ in all)" : ""}
-    </Typography>
-  );
-}
-
-/** Every kind of resource the name holds, as chips. */
-export function ContentChips({ content }: { content: NameContent }) {
-  return (
-    <Box component="ul" aria-label="What it published" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-      {content.services.map((s) => (
-        <Box component="li" key={s.service}>
-          <Chip size="small" variant="outlined" label={serviceLabel(s.service, s.count)} />
-        </Box>
-      ))}
-      {content.privateCount > 0 && (
-        <Box component="li">
-          <Chip size="small" variant="outlined" label={`${content.privateCount} private (encrypted)`} />
-        </Box>
-      )}
-    </Box>
+    <Button
+      component={Link}
+      href={explorerAccountLink(address)}
+      variant="outlined"
+      color="inherit"
+      startIcon={<TravelExploreOutlinedIcon />}
+      aria-label={`See what it published: ${name}'s owner in the explorer`}
+      sx={{ minHeight: 44, alignSelf: "flex-start" }}
+    >
+      See what it published
+    </Button>
   );
 }
 

@@ -26,8 +26,6 @@ import { usePhoneLayout } from "../hooks/usePhoneLayout";
 import { useNow } from "../hooks/useNow";
 import { useShellActions } from "../components/layout/shellState";
 import { useShowNames } from "../utils/namesSetting";
-import { useNameContent } from "./content";
-import { ContentLine } from "./parts";
 import { NameCard } from "./NameCard";
 import { NameDialog, type NameViewer } from "./NameDialog";
 import { SellNameDialog, type NameSaleStatus } from "./SellNameDialog";
@@ -443,8 +441,6 @@ function MyNameRow({
   onOpen: (name: string) => void;
   onSent: (message: string) => void;
 }) {
-  const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px", fallbackInView: true });
-  const content = useNameContent(name, inView);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const cancel = async () => {
@@ -456,7 +452,7 @@ function MyNameRow({
     else if (result.kind === "failed") setProblem(result.message);
   };
   return (
-    <Paper ref={ref} component="li" variant="outlined" sx={{ p: 2, borderRadius: 2, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+    <Paper component="li" variant="outlined" sx={{ p: 2, borderRadius: 2, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
       <NameAvatar name={name} size={48} />
       <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
@@ -465,7 +461,6 @@ function MyNameRow({
           </Typography>
           {primary && <Chip size="small" variant="outlined" label="Primary" />}
         </Box>
-        <ContentLine content={content} />
         <Typography variant="body2" sx={{ mt: 0.25, display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
           {pending ? (
             "Waiting for the next block…"
