@@ -180,13 +180,35 @@ describe("deleting products", () => {
     fireEvent.click(screen.getByRole("button", { name: "Select all" }));
     expect(screen.getByText("3 selected")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Select none" }));
-    expect(screen.getByText("Select the products to delete")).toBeInTheDocument();
+    expect(screen.getByText("Select products to change or delete")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("button", { name: "Select" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "Select" })).toHaveFocus());
     // Tapping a product opens it again.
     fireEvent.click(within(list).getByRole("button", { name: /^Edit Chair\b/ }));
     expect(await screen.findByRole("dialog", { name: "Edit product" })).toBeInTheDocument();
+    expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
+  });
+
+  it("Change status marks the chosen products out of stock in one go, as drafts", async () => {
+    stubNode();
+    const { store, q } = setup();
+    const list = await screen.findByRole("list", { name: "Products" });
+    await within(list).findByText("Chair");
+    fireEvent.click(screen.getByRole("button", { name: "Select" }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: /^Select Mug\b/ }));
+    fireEvent.click(within(list).getByRole("checkbox", { name: /^Select Chair\b/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Change status" }));
+    const dialog = await screen.findByRole("dialog", { name: "Change 2 products' status" });
+    fireEvent.click(within(dialog).getByRole("radio", { name: /^Out of stock/ }));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Add 2 to drafts" }));
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(2));
+    for (const draft of Object.values(store.getState().global.productsToSave) as unknown as Record<string, unknown>[]) {
+      expect(draft).toMatchObject({ status: "OUT_OF_STOCK", isUpdate: true });
+    }
+    expect(await screen.findByText("2 products are ready to publish with their new status.")).toBeInTheDocument();
+    expect(screen.queryByRole("toolbar", { name: "Selected products" })).toBeNull();
+    // Nothing is published until the seller publishes the drafts.
     expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(0);
   });
 

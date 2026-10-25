@@ -35,6 +35,7 @@ import {
   InputAdornment,
   MenuItem,
   Skeleton,
+  Snackbar,
   TextField,
   Typography,
 } from "@mui/material";
@@ -82,6 +83,7 @@ import {
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import { useCatalogueLoader, type CatalogueLoad } from "./useCatalogueLoader";
+import { BulkStatusDialog } from "./BulkStatusDialog";
 import { ArrangeShop } from "./ArrangeShop";
 import { featuredOrder, productOrderOf } from "../qdn/productOrder";
 import { useShopCollections } from "../pages/Store/useShopCollections";
@@ -278,6 +280,9 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
     const title = detailsOf(row)?.title;
     return typeof title === "string" && title.trim() ? title.trim() : undefined;
   };
+  // Change status (BulkStatusDialog): the chosen products, then the drafts' notice.
+  const [bulkStatus, setBulkStatus] = useState(false);
+  const [bulkDrafted, setBulkDrafted] = useState<string | null>(null);
   const askDelete = () => {
     if (!onDelete || chosen.length === 0) return;
     onDelete(
@@ -372,7 +377,7 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
         >
           <Typography role="status" sx={{ flex: phone ? "1 1 100%" : 1, minWidth: 0, fontWeight: 600 }}>
             {chosen.length === 0
-              ? "Select the products to delete"
+              ? "Select products to change or delete"
               : `${chosen.length === 1 ? "1 selected" : `${chosen.length} selected`}${
                   hiddenChosen > 0 ? `, ${hiddenChosen} hidden by the search or filters` : ""
                 }`}
@@ -384,6 +389,9 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
             sx={{ minHeight: 44 }}
           >
             {allChosen ? "Select none" : "Select all"}
+          </Button>
+          <Button variant="outlined" onClick={() => setBulkStatus(true)} disabled={chosen.length === 0} sx={{ minHeight: 44 }}>
+            Change status
           </Button>
           <Button
             variant="contained"
@@ -588,6 +596,18 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
         </BottomSheet>
       )}
       {arranging && <ArrangeShop collections={shopCollections} onClose={() => setArranging(false)} onPublished={() => setChosenSort(null)} />}
+      {bulkStatus && (
+        <BulkStatusDialog
+          rows={chosen}
+          onClose={() => setBulkStatus(false)}
+          onDrafted={(count) => {
+            setBulkStatus(false);
+            stopSelecting();
+            setBulkDrafted(count === 1 ? "1 product is ready to publish with its new status." : `${count} products are ready to publish with their new status.`);
+          }}
+        />
+      )}
+      <Snackbar open={!!bulkDrafted} autoHideDuration={6000} onClose={() => setBulkDrafted(null)} message={bulkDrafted ?? ""} />
     </Box>
   );
 }
