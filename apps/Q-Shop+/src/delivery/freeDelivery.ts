@@ -47,7 +47,7 @@ export function freeDeliveryProgress(args: {
   }
   const groups = new Map<string, { name: string | null; zones: DeliveryDoc["general"]["zones"]; subtotal: number }>();
   for (const line of physical) {
-    const profile = profileFor(doc, line.productId);
+    const profile = profileFor(doc, line.productId, country, state);
     const key = profile?.id ?? "";
     const group = groups.get(key) ?? { name: profile?.name ?? null, zones: profile ? profile.zones : doc.general.zones, subtotal: 0 };
     group.subtotal += unitInCurrency(line.product, doc.currency, pricing) * line.quantity;

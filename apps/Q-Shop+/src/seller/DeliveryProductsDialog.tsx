@@ -1,7 +1,8 @@
 /**
  * The products a shipping profile delivers (delivery/model.ts): picked from
  * the shop's products, searchable, with their pictures. A product in another
- * profile says so; picking it moves it here. Discount codes pick their
+ * profile says so, and can be in this one too (the first whose zones reach the
+ * buyer's country applies). Discount codes pick their
  * products with it too (seller/DiscountDialog.tsx).
  *
  * Simon: "add option to select all, or select collection … segregate the
@@ -116,7 +117,7 @@ export function DeliveryProductsDialog({
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
         <Typography variant="body2" color="text.secondary">
-          {intro ?? "These products are delivered at this profile's prices; every other product at the General ones. Digital products are never delivered."}
+          {intro ?? "These products are delivered at this profile's prices; every other product at the General ones. A product in several profiles goes by the first whose zones reach the buyer's country."}
         </Typography>
         <TextField
           type="search"
@@ -215,9 +216,9 @@ export function DeliveryProductsDialog({
                             ) : (
                               <Typography color="text.secondary">Untitled product</Typography>
                             )}
-                            {other && !pickedSet.has(row.productId) && (
+                            {other && (
                               <Typography variant="body2" color="text.secondary">
-                                In {other} now
+                                Also in {other}
                               </Typography>
                             )}
                           </Box>

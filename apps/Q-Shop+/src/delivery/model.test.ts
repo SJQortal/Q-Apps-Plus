@@ -157,3 +157,26 @@ describe("delivery prices", () => {
     expect(deliveryOptionsOf(parsed as DeliveryDoc).map((o) => !!o.pickup)).toEqual([true, true, false]);
   });
 });
+
+describe("a product in several shipping profiles", () => {
+  const mk = (productId: string, qort: number): CartLine => ({ productId, catalogueId: "c", quantity: 1, product: { title: productId, type: "physical", price: [{ currency: "qort", value: qort }] } as never });
+  const doc = {
+    v: 1,
+    storeId: "s",
+    currency: "QORT",
+    general: { zones: [] },
+    profiles: [
+      { id: "is", name: "Iceland", products: ["ghee"], zones: [{ id: "a", countries: ["IS"], first: 12 }] },
+      { id: "intl", name: "International", products: ["ghee"], zones: [{ id: "b", countries: ["PL", "PT"], first: 20 }] },
+    ],
+    updated: 1,
+  } as DeliveryDoc;
+  const quote = (country: string) => quoteDelivery({ doc, lines: [mk("ghee", 50)], country, state: "", pricing: null, takesArrr: false });
+
+  it("goes by the first profile whose zones reach the buyer's country", () => {
+    expect(quote("Iceland")).toMatchObject({ kind: "charge", fee: 12, parts: [{ profile: "Iceland" }] });
+    expect(quote("Poland")).toMatchObject({ kind: "charge", fee: 20, parts: [{ profile: "International" }] });
+    // Neither reaches Japan: not delivered there, as with one profile.
+    expect(quote("Japan")).toMatchObject({ kind: "unavailable" });
+  });
+});

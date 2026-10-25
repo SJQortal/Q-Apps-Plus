@@ -266,9 +266,19 @@ export function deliveryOptionsOf(doc: DeliveryDoc): DeliveryChoiceInfo[] {
   return [{ id: "", name: doc.base?.name ?? BASE_OPTION_NAME, ...(doc.base?.note && { note: doc.base.note }), ...(doc.base?.pickup && { pickup: true as const }) }, ...options];
 }
 
-/** The profile a product is delivered with: the first custom one naming it, else the general one (null). */
-export function profileFor(doc: DeliveryDoc, productId: string): DeliveryProfile | null {
-  return doc.profiles.find((p) => p.products.includes(productId)) ?? null;
+/**
+ * The profile a product is delivered with: the general one (null) when no
+ * custom one names it. A product can be in several (Simon, 2026-10-25: an
+ * Iceland profile and an international one, say): the first whose zones
+ * reach the buyer's country (and US state) when it's known, else the first.
+ */
+export function profileFor(doc: DeliveryDoc, productId: string, countryCodeValue?: string | null, stateCodeValue?: string | null): DeliveryProfile | null {
+  const named = doc.profiles.filter((p) => p.products.includes(productId));
+  if (named.length > 1 && countryCodeValue) {
+    const reaching = named.find((p) => zoneFor(p.zones, countryCodeValue, stateCodeValue ?? null));
+    if (reaching) return reaching;
+  }
+  return named[0] ?? null;
 }
 
 /**
@@ -348,7 +358,7 @@ export function quoteDelivery(args: {
   }
   const groups = new Map<string, { profile: DeliveryProfile | null; lines: CartLine[] }>();
   for (const line of physical) {
-    const profile = profileFor(doc, line.productId);
+    const profile = profileFor(doc, line.productId, country, state);
     const key = profile?.id ?? "";
     const group = groups.get(key) ?? { profile, lines: [] };
     group.lines.push(line);

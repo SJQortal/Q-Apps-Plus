@@ -73,7 +73,7 @@ export function deliveryEstimate(args: {
   }
   // Free over, from the zone's own prices, when the lines share one profile.
   const physical = args.lines.filter((l) => l.product && l.product.type !== "digital");
-  const profiles = new Set(physical.map((l) => profileFor(doc, l.productId)));
+  const profiles = new Set(physical.map((l) => profileFor(doc, l.productId, code, code === US ? stateCode(state) : null)));
   const profile = profiles.size === 1 ? [...profiles][0] : undefined;
   const zone = code && profile !== undefined ? zoneFor(profile ? profile.zones : doc.general.zones, code, code === US ? stateCode(state) : null) : null;
   const freeOver = zone?.freeOver !== undefined ? { value: zone.freeOver, currency: doc.currency } : undefined;

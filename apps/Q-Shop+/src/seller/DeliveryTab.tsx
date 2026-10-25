@@ -403,10 +403,10 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
   const changed = !!draft && JSON.stringify(draft) !== JSON.stringify(saved ?? empty);
   // Back to what's published: no draft left.
   const change = (next: DeliveryDoc) => deliveryDrafts.set(dKey, JSON.stringify(next) === JSON.stringify(saved ?? empty) ? null : next);
-  /** The products in the other profiles than this one, with their profile's name. */
+  /** The products in the other profiles than this one, with those profiles' names. */
   const elsewhere = (profileId: string) => {
     const map = new Map<string, string>();
-    for (const p of doc.profiles) if (p.id !== profileId) for (const id of p.products) if (!map.has(id)) map.set(id, p.name);
+    for (const p of doc.profiles) if (p.id !== profileId) for (const id of p.products) map.set(id, map.has(id) ? `${map.get(id)}, ${p.name}` : p.name);
     return map;
   };
   const choosingProfile = doc.profiles.find((p) => p.id === choosing);
@@ -433,12 +433,8 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
         : { ...doc, profiles: doc.profiles.map((p) => (p.id === profileId ? { ...p, zones: p.zones.filter((z) => z.id !== zone.id) } : p)) }
     );
   const setProducts = (profileId: string, products: string[]) => {
-    // A product is in one profile: picking it here takes it out of another.
-    const picked = new Set(products);
-    change({
-      ...doc,
-      profiles: doc.profiles.map((p) => (p.id === profileId ? { ...p, products } : { ...p, products: p.products.filter((id) => !picked.has(id)) })),
-    });
+    // A product can be in several profiles (each for its own countries): picking it here leaves it in the others.
+    change({ ...doc, profiles: doc.profiles.map((p) => (p.id === profileId ? { ...p, products } : p)) });
     setChoosing(null);
   };
   const addProfile = () => {
