@@ -33,6 +33,10 @@ export const HELP: { title: string; items: [string, string][] }[] = [
         "Message the seller first (the order has a button): most problems are a mix-up. A refund comes from the seller, as their policies say. Your review tells other buyers how it went.",
       ],
       [
+        "What's in the Names tab?",
+        "Qortal names for sale. A name is an identity on Qortal: buying one moves it, with everything published under it (its website, videos, Q-App…), to your account. Names sell at a price or by auction; Hub asks you to confirm the purchase.",
+      ],
+      [
         "I paid but the order isn't there",
         "If Hub showed the payment as sent, don't pay again: the cart keeps the paid order under Orders to finish, and finishing it records the order without paying.",
       ],
