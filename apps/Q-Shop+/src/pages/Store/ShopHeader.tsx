@@ -31,6 +31,8 @@ import { shortStoreIdOf } from "../../qdn/identifiers";
 import { PolicyLines } from "../../shop/PolicyLines";
 import { AwayNotice } from "../../shop/AwayNotice";
 import { ShipsToYou } from "../../delivery/ShipsToYou";
+import { languagesOf, languagesText } from "../../shop/languages";
+import TranslateOutlinedIcon from "@mui/icons-material/TranslateOutlined";
 
 
 const panelSx = {
@@ -177,80 +179,83 @@ export function ShopHeader({
           You hid this shop: it isn&apos;t listed in Shops or Products on this device.
         </Alert>
       )}
-      <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start" }}>
-        {shop.logo ? (
-          <Box
-            component="img"
-            src={shop.logo}
-            alt={`${title} logo`}
-            onLoad={pictures.onLoad(shop.logo)}
-            // The whole logo, never cropped to a square: as wide as it is (a wide logo up to the max), square while it
-            // loads. Its backdrop goes once it is in, so a transparent background shows the panel.
-            sx={{
-              height: { xs: 64, sm: 88 },
-              width: "auto",
-              minWidth: { xs: 64, sm: 88 },
-              maxWidth: { xs: 96, sm: 200 },
-              borderRadius: 2,
-              objectFit: "contain",
-              flexShrink: 0,
-              bgcolor: pictures.isLoaded(shop.logo) ? "transparent" : "action.hover",
-            }}
-          />
-        ) : (
-          <Box
-            aria-hidden
-            sx={{
-              width: { xs: 64, sm: 88 },
-              height: { xs: 64, sm: 88 },
-              borderRadius: 2,
-              flexShrink: 0,
-              display: "grid",
-              placeItems: "center",
-              bgcolor: "action.hover",
-              color: "text.secondary",
-            }}
-          >
-            <StorefrontOutlinedIcon fontSize="large" />
-          </Box>
-        )}
-        {/* Who and how it's rated on the left; where it is, where it ships and what it takes beside it on wider screens. */}
-        <Box
-          sx={{
-            flex: 1,
-            minWidth: 0,
-            display: "grid",
-            gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" },
-            columnGap: 4,
-            rowGap: 0.75,
-            alignItems: "start",
-          }}
-        >
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, minWidth: 0 }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-              <NameAvatar name={owner} size={24} eager />
-              <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
-                <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
-                  by{" "}
-                </Box>
-                {owner}
-                {isOwner ? (
+      {/*
+        Two columns on wider screens (Simon: "a lot of unused empty space under the shop logo"): the logo, who
+        and how it's rated, then where it is, the languages and the coins it takes under them; where it ships
+        and how it works beside them. On phones, one after the other.
+      */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 1fr) minmax(0, 1fr)" },
+          columnGap: 4,
+          rowGap: 1.5,
+          alignItems: "start",
+        }}
+      >
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center", minWidth: 0 }}>
+            {shop.logo ? (
+              <Box
+                component="img"
+                src={shop.logo}
+                alt={`${title} logo`}
+                onLoad={pictures.onLoad(shop.logo)}
+                // The whole logo, never cropped to a square: as wide as it is (a wide logo up to the max), square while it
+                // loads. Its backdrop goes once it is in, so a transparent background shows the panel.
+                sx={{
+                  height: { xs: 64, sm: 88 },
+                  width: "auto",
+                  minWidth: { xs: 64, sm: 88 },
+                  maxWidth: { xs: 96, sm: 200 },
+                  borderRadius: 2,
+                  objectFit: "contain",
+                  flexShrink: 0,
+                  bgcolor: pictures.isLoaded(shop.logo) ? "transparent" : "action.hover",
+                }}
+              />
+            ) : (
+              <Box
+                aria-hidden
+                sx={{
+                  width: { xs: 64, sm: 88 },
+                  height: { xs: 64, sm: 88 },
+                  borderRadius: 2,
+                  flexShrink: 0,
+                  display: "grid",
+                  placeItems: "center",
+                  bgcolor: "action.hover",
+                  color: "text.secondary",
+                }}
+              >
+                <StorefrontOutlinedIcon fontSize="large" />
+              </Box>
+            )}
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, minWidth: 0 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+                <NameAvatar name={owner} size={24} eager />
+                <Typography variant="body2" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
                   <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
-                    {" "}
-                    (you)
+                    by{" "}
                   </Box>
-                ) : null}
-              </Typography>
-            </Box>
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5 }}>
-              <RatingSummaryButton reviews={reviews} onOpen={onOpenReviews} />
-              {orders && (
-                <Typography variant="body2" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
-                  <ShoppingBagOutlinedIcon fontSize="small" aria-hidden />
-                  {orders}
+                  {owner}
+                  {isOwner ? (
+                    <Box component="span" sx={{ color: "text.secondary", fontWeight: 400 }}>
+                      {" "}
+                      (you)
+                    </Box>
+                  ) : null}
                 </Typography>
-              )}
-
+              </Box>
+              <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5 }}>
+                <RatingSummaryButton reviews={reviews} onOpen={onOpenReviews} />
+                {orders && (
+                  <Typography variant="body2" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+                    <ShoppingBagOutlinedIcon fontSize="small" aria-hidden />
+                    {orders}
+                  </Typography>
+                )}
+              </Box>
             </Box>
           </Box>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, minWidth: 0 }}>
@@ -260,16 +265,12 @@ export function ShopHeader({
                 <span>{shop.location}</span>
               </Typography>
             ) : null}
-            {shop.shipsTo ? (
+            {languagesOf(shop).length > 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-                <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
-                <span>
-                  Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop} />
-                </span>
+                <TranslateOutlinedIcon fontSize="small" aria-hidden />
+                <span>Answers in {languagesText(languagesOf(shop))}</span>
               </Typography>
-            ) : null}
-            <ShipsToYou shop={shop} />
-            <PolicyLines shop={shop} />
+            )}
             <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
               <Typography variant="body2" color="text.secondary" component="span">
                 Accepts
@@ -299,6 +300,18 @@ export function ShopHeader({
               </Box>
             </Box>
           </Box>
+        </Box>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, minWidth: 0 }}>
+            {shop.shipsTo ? (
+              <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
+                <LocalShippingOutlinedIcon fontSize="small" aria-hidden />
+                <span>
+                  Ships to {shop.shipsTo} <ShippingCountriesButton shop={shop} />
+                </span>
+              </Typography>
+            ) : null}
+            <ShipsToYou shop={shop} />
+            <PolicyLines shop={shop} hideLanguages />
         </Box>
       </Box>
       {shop.description ? <ShopDescription text={shop.description} /> : null}

@@ -38,11 +38,14 @@ export function PolicyLines({
   shop,
   digital = false,
   full = false,
+  hideLanguages = false,
 }: {
   shop: { policies?: unknown; languages?: unknown; title?: string } | null | undefined;
   /** Nothing is dispatched: dispatch time doesn't apply. */
   digital?: boolean;
   full?: boolean;
+  /** The languages are shown elsewhere (the shop page's header shows them under its logo). */
+  hideLanguages?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const policies = policiesOf(shop) ?? {};
@@ -50,7 +53,7 @@ export function PolicyLines({
   const returns = returnsText(policies);
   const words = !!(policies.returns || policies.terms);
   // The languages its seller answers in (shop/languages.ts), with the rest of how the shop works.
-  const languages = languagesOf(shop);
+  const languages = hideLanguages ? [] : languagesOf(shop);
   if (!dispatch && !returns && !words && languages.length === 0) return null;
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, minWidth: 0 }}>
