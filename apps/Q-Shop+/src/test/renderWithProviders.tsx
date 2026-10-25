@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { render, type RenderOptions } from '@testing-library/react';
 import { Provider } from 'react-redux';
-import { MemoryRouter, type MemoryRouterProps } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter, type MemoryRouterProps } from 'react-router-dom';
 import { HubThemeProvider } from '../hub-theme';
 import { createAppStore } from '../state/store';
 import { THEME_STORAGE_KEY, themeConfig } from '../theme/qplus-theme';
@@ -22,7 +22,7 @@ export function renderWithProviders(
   const result = render(
     <Provider store={store}>
       <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
-        <MemoryRouter initialEntries={initialEntries}>{ui}</MemoryRouter>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: ui }], { initialEntries })} />
       </HubThemeProvider>
     </Provider>,
     rest
