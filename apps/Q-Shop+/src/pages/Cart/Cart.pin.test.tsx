@@ -377,6 +377,55 @@ describe("checkout (pinned)", () => {
     expect(html).toContain("<strong>Delivery to United States (Oregon)</strong>");
   });
 
+  it("lets the buyer pick the shop's delivery option at Confirm, and tells the seller which (+ app)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({ rates: { exp: { first: 9 }, pick: { first: 0 } } })] },
+      profiles: [],
+      updated: 1,
+      options: [
+        { id: "exp", name: "Express", note: "1–3 days" },
+        { id: "pick", name: "Local pickup", note: "Portland, Saturdays" },
+      ],
+    };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    const options = await within(dialog).findByRole("radiogroup", { name: "Delivery" });
+    expect(within(options).getByRole("radio", { name: /Standard/ })).toBeChecked();
+    expect(within(dialog).getByText("Delivery to United States (Oregon), Standard")).toBeInTheDocument();
+    fireEvent.click(within(options).getByRole("radio", { name: /Express/ }));
+    expect(await within(dialog).findByText("Delivery to United States (Oregon), Express")).toBeInTheDocument();
+    await press(/^Pay 21\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ amount: "21.00000000" });
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details["q-store-delivery"].product).toMatchObject({ title: "Delivery to United States (Oregon), Express", delivery: { value: 9, option: { id: "exp", name: "Express" } } });
+    expect(order.delivery.shippingAddress.deliveryNote).toBe("Delivery: Express.");
+  });
+
+  it("a free delivery option adds no line, and the seller still reads it in the order's note (+ app)", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ rates: { pick: { first: 0 } } })] }, profiles: [], updated: 1, options: [{ id: "pick", name: "Local pickup" }] };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(await within(dialog).findByRole("radiogroup", { name: "Delivery" })).getByRole("radio", { name: /Local pickup/ }));
+    expect(await within(dialog).findByText("Delivery, Local pickup")).toBeInTheDocument();
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
+    expect(order.delivery.shippingAddress.deliveryNote).toBe("Delivery: Local pickup.");
+  });
+
   it("prices a delivery fee set in USD in QORT from the shop's rates", async () => {
     const doc = { v: 1, storeId: STORE_ID, currency: "USD", general: { zones: [zone({ first: 7 })] }, profiles: [], updated: 1 };
     const productList = { storeId: STORE_ID, products: {}, fiatPricing: { currency: "USD", rates: { QORT: 0.18 }, updated: 1 } };

@@ -40,7 +40,8 @@ import { PendingOrderCard } from "./PendingOrders";
 import { usePendingOrders, useRecordingOrder } from "./usePendingOrders";
 import { itemCount, priceLines, shortAddress, type CartShop } from "./cartLines";
 import { placeNotShipped } from "../../constants/shipping";
-import { deliveryCharge, loadShopDelivery } from "../../delivery/checkoutDelivery";
+import { deliveryCharge, deliveryChoices, loadShopDelivery, withOptionNote, type DeliveryChoice } from "../../delivery/checkoutDelivery";
+import { DeliveryOptionsPicker } from "./DeliveryOptionsPicker";
 import { deliveryMoney } from "../../delivery/model";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
@@ -53,7 +54,7 @@ interface Snapshot {
   details: OrderDetails;
   /** The lines Pay pays: the cart's, and the delivery fee's when there is one. */
   lines: CartLine[];
-  delivery: { line: CartLine | null; free: boolean };
+  delivery: { line: CartLine | null; free: boolean; option?: { id: string; name: string } };
 }
 
 type Outcome = CheckoutResult & { unexpected?: boolean };
@@ -131,6 +132,9 @@ export function CheckoutDialog({
   const [quoting, setQuoting] = useState(false);
   const [deliveryProblem, setDeliveryProblem] = useState<string | null>(null);
   const [hasDeliveryPrices, setHasDeliveryPrices] = useState(false);
+  // The shop's delivery options for this order and address (delivery/model.ts), and the buyer's pick.
+  const [choices, setChoices] = useState<DeliveryChoice[]>([]);
+  const [optionId, setOptionId] = useState("");
   const paying = useRef(false);
   // Bumped by every address change: a delivery read that finishes after one is for the old address, and is dropped.
   const addressEdits = useRef(0);
@@ -204,9 +208,18 @@ export function CheckoutDialog({
     setQuoting(true);
     const edits = addressEdits.current;
     let charge: ReturnType<typeof deliveryCharge>;
+    let offered: DeliveryChoice[] = [];
     try {
       const prices = await loadShopDelivery(shop.owner, shop.id);
-      charge = deliveryCharge({ shop, delivery: prices, lines, address: delivery, coin, rate });
+      const options = deliveryChoices({ shop, delivery: prices, lines, address: delivery, coin, rate });
+      offered = options.ok ? options.choices : [];
+      // The option picked before (Back to the address, then Continue) while it's still offered, else the first.
+      const picked = offered.find((c) => c.id === optionId) ?? offered[0];
+      charge = !options.ok
+        ? options
+        : picked
+          ? { ok: true, line: picked.line, free: picked.free, option: { id: picked.id, name: picked.name } }
+          : deliveryCharge({ shop, delivery: prices, lines, address: delivery, coin, rate });
     } catch {
       charge = { ok: false, message: `${shop.title || shop.owner}'s delivery prices couldn't be read from your node right now. Try again.` };
     }
@@ -216,8 +229,15 @@ export function CheckoutDialog({
       setDeliveryProblem(charge.message);
       return;
     }
+    setChoices(offered);
+    if (charge.option) setOptionId(charge.option.id);
     saveDelivery(buyer.name, remember ? delivery : null);
-    toConfirm({ line: charge.line, free: charge.free });
+    toConfirm({ line: charge.line, free: charge.free, ...(charge.option && { option: charge.option }) });
+  };
+
+  const pickOption = (choice: DeliveryChoice) => {
+    setOptionId(choice.id);
+    toConfirm({ line: choice.line, free: choice.free, option: { id: choice.id, name: choice.name } });
   };
 
   const pay = async () => {
@@ -242,7 +262,8 @@ export function CheckoutDialog({
         coin: snapshot.coin,
         rate: snapshot.rate,
         isDigital,
-        delivery: isDigital ? null : delivery,
+        // The delivery option picked goes in front of the buyer's note, so the seller sees it in either app.
+        delivery: isDigital ? null : withOptionNote(delivery, snapshot.delivery.option),
         orderUid: new ShortUniqueId({ length: 10 })(),
         mailUid: new ShortUniqueId()(),
         now: Date.now(),
@@ -438,6 +459,9 @@ export function CheckoutDialog({
             {itemCount(lines)} from {shop.title || shop.owner}
           </Typography>
         </Row>
+        {choices.length > 1 && (
+          <DeliveryOptionsPicker choices={choices} value={snapshot.delivery.option?.id ?? ""} onChange={pickOption} coin={snapshot.coin} rate={snapshot.rate} shop={shop} />
+        )}
         {snapshot.delivery.line ? (
           <Row label={<Typography variant="body2">{String(snapshot.delivery.line.product?.title ?? "Delivery")}</Typography>}>
             <AmountTag value={unitPrice(snapshot.delivery.line.product, snapshot.coin, snapshot.rate)} coin={snapshot.coin} shop={shop} size="small" />
@@ -449,7 +473,7 @@ export function CheckoutDialog({
           </Row>
         ) : (
           snapshot.delivery.free && (
-            <Row label={<Typography variant="body2">Delivery</Typography>}>
+            <Row label={<Typography variant="body2">{snapshot.delivery.option ? `Delivery, ${snapshot.delivery.option.name}` : "Delivery"}</Typography>}>
               <Typography variant="body2">Free</Typography>
             </Row>
           )

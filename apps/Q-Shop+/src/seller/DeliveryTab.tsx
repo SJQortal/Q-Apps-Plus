@@ -20,7 +20,7 @@ import { setNotification } from "../state/features/notificationsSlice";
 import { fiatPricingOf } from "../money/fiatPricing";
 import { shippingSummaryWithStates } from "../constants/shipping";
 import { publishMedia } from "../richtext/publishMedia";
-import { MAX_PROFILES, MAX_ZONES, deliveryMoney as money, type DeliveryDoc, type DeliveryProfile, type DeliveryZone } from "../delivery/model";
+import { BASE_OPTION_NAME, MAX_OPTIONS, MAX_PROFILES, MAX_ZONES, deliveryMoney as money, type DeliveryDoc, type DeliveryOption, type DeliveryProfile, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import { buildDeliveryPublish, fetchDeliveryDoc, rememberDeliveryDoc } from "../delivery/deliveryDoc";
 import { DeliveryZoneDialog } from "./DeliveryZoneDialog";
 import { DeliveryProductsDialog } from "./DeliveryProductsDialog";
@@ -31,11 +31,125 @@ const uid = new ShortUniqueId({ length: 8 });
 const newId = () => uid();
 
 /** "$5.00 · $1.00 each extra item · free from $100.00" */
-export function zonePrice(zone: DeliveryZone, currency: string): string {
+export function zonePrice(zone: DeliveryRate, currency: string): string {
   const parts = [zone.first > 0 ? money(zone.first, currency) : "Free"];
   if (zone.extra) parts.push(`${money(zone.extra, currency)} each extra item`);
   if (zone.freeOver) parts.push(`free from ${money(zone.freeOver, currency)}`);
   return parts.join(" · ");
+}
+
+/** Ideas for a new option's name, the most asked for first. */
+const OPTION_IDEAS = ["Express", "Local pickup", "Tracked", "Economy"];
+
+/**
+ * The delivery options buyers pick from at checkout (delivery/model.ts): the
+ * zones' own prices are the first (renamed here, "Standard" by default), and
+ * up to four others, each priced in the zones that offer it.
+ */
+function OptionsCard({ doc, onChange, disabled }: { doc: DeliveryDoc; onChange: (doc: DeliveryDoc) => void; disabled: boolean }) {
+  const options = doc.options ?? [];
+  const setBase = (patch: Partial<{ name: string; note: string }>) => {
+    const base = { name: doc.base?.name ?? "", note: doc.base?.note ?? "", ...patch };
+    const name = base.name.slice(0, 40);
+    const note = base.note.slice(0, 80);
+    const rest = { ...doc };
+    delete rest.base;
+    onChange(name.trim() || note.trim() ? { ...rest, base: { name: name || BASE_OPTION_NAME, ...(note && { note }) } } : rest);
+  };
+  const setOption = (id: string, patch: Partial<DeliveryOption>) =>
+    onChange({ ...doc, options: options.map((o) => (o.id === id ? { ...o, ...patch, name: (patch.name ?? o.name).slice(0, 40), ...(patch.note !== undefined && { note: patch.note.slice(0, 80) }) } : o)) });
+  const addOption = (name: string) => onChange({ ...doc, options: [...options, { id: newId(), name }].slice(0, MAX_OPTIONS) });
+  const removeOption = (id: string) => {
+    // Its prices go from every zone too.
+    const strip = (zones: DeliveryZone[]) =>
+      zones.map((z) => {
+        if (!z.rates?.[id]) return z;
+        const rates = { ...z.rates };
+        delete rates[id];
+        const next: DeliveryZone = { ...z, rates };
+        if (Object.keys(rates).length === 0) delete next.rates;
+        return next;
+      });
+    const rest = options.filter((o) => o.id !== id);
+    const next: DeliveryDoc = { ...doc, general: { zones: strip(doc.general.zones) }, profiles: doc.profiles.map((p) => ({ ...p, zones: strip(p.zones) })) };
+    if (rest.length > 0) next.options = rest;
+    else delete next.options;
+    onChange(next);
+  };
+  const ideas = OPTION_IDEAS.filter((idea) => !options.some((o) => o.name.toLowerCase() === idea.toLowerCase()));
+  return (
+    <Paper component="section" aria-labelledby="delivery-options-title" variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, borderRadius: 2, display: "flex", flexDirection: "column", gap: 1.5 }}>
+      <Box>
+        <Typography id="delivery-options-title" component="h3" sx={{ fontWeight: 700, fontSize: 17 }}>
+          Delivery options
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Buyers pick one at checkout. Your zones&apos; prices below are the first option; add others, like Express or Local pickup, and price them in
+          each zone that offers them.
+        </Typography>
+      </Box>
+      <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "minmax(0, 1fr) minmax(0, 1.4fr) 44px" }, alignItems: "start" }}>
+        <TextField
+          label="First option"
+          value={doc.base?.name ?? ""}
+          placeholder={BASE_OPTION_NAME}
+          onChange={(e) => setBase({ name: e.target.value })}
+          disabled={disabled}
+          slotProps={{ htmlInput: { maxLength: 40 }, inputLabel: { shrink: true } }}
+        />
+        <TextField
+          label="Note (optional)"
+          value={doc.base?.note ?? ""}
+          placeholder="5–10 days"
+          onChange={(e) => setBase({ note: e.target.value })}
+          disabled={disabled}
+          slotProps={{ htmlInput: { maxLength: 80 }, inputLabel: { shrink: true } }}
+        />
+        <Box />
+        {options.map((o, i) => (
+          <Box key={o.id} sx={{ display: "contents" }}>
+            <TextField
+              label={`Option ${i + 2}`}
+              value={o.name}
+              onChange={(e) => setOption(o.id, { name: e.target.value })}
+              disabled={disabled}
+              error={!o.name.trim()}
+              helperText={!o.name.trim() ? "Name it, or remove it" : undefined}
+              slotProps={{ htmlInput: { maxLength: 40 }, inputLabel: { shrink: true } }}
+            />
+            <TextField
+              label="Note (optional)"
+              value={o.note ?? ""}
+              placeholder={o.name.toLowerCase().includes("pickup") ? "Where and when to collect" : "1–3 days"}
+              onChange={(e) => setOption(o.id, { note: e.target.value })}
+              disabled={disabled}
+              slotProps={{ htmlInput: { maxLength: 80 }, inputLabel: { shrink: true } }}
+            />
+            <IconButton aria-label={`Remove the option ${o.name || i + 2}`} onClick={() => removeOption(o.id)} disabled={disabled} sx={{ width: 44, height: 44, mt: 0.5 }}>
+              <DeleteOutlineOutlinedIcon />
+            </IconButton>
+          </Box>
+        ))}
+      </Box>
+      {options.length < MAX_OPTIONS && (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+          <Button startIcon={<AddIcon />} onClick={() => addOption(ideas[0] ?? `Option ${options.length + 2}`)} disabled={disabled} sx={{ minHeight: 44 }}>
+            Add an option
+          </Button>
+          {ideas.slice(0, 3).map((idea) => (
+            <Button key={idea} variant="outlined" color="inherit" size="small" onClick={() => addOption(idea)} disabled={disabled} sx={{ minHeight: 36 }}>
+              {idea}
+            </Button>
+          ))}
+        </Box>
+      )}
+      {options.length > 0 && (
+        <Typography variant="body2" color="text.secondary">
+          Open a zone to price each option there. An option a zone doesn&apos;t price isn&apos;t offered for it.
+        </Typography>
+      )}
+    </Paper>
+  );
 }
 
 type Editing = { profile: string | null; zone: DeliveryZone | null } | null;
@@ -83,12 +197,17 @@ function ZoneRows({
   onEdit,
   onRemove,
   disabled,
+  options = [],
+  baseName,
 }: {
   zones: DeliveryZone[];
   currency: string;
   onEdit: (zone: DeliveryZone) => void;
   onRemove: (zone: DeliveryZone) => void;
   disabled: boolean;
+  /** The shop's other delivery options: each zone shows its price for those it offers. */
+  options?: DeliveryOption[];
+  baseName?: string;
 }) {
   if (zones.length === 0) {
     return (
@@ -112,7 +231,17 @@ function ZoneRows({
                   {where}
                 </Typography>
               )}
-              <Typography variant="body2">{zonePrice(zone, currency)}</Typography>
+              <Typography variant="body2">
+                {options.length > 0 ? `${baseName || BASE_OPTION_NAME}: ` : ""}
+                {zonePrice(zone, currency)}
+              </Typography>
+              {options
+                .filter((o) => zone.rates?.[o.id])
+                .map((o) => (
+                  <Typography key={o.id} variant="body2">
+                    {o.name}: {zonePrice(zone.rates![o.id], currency)}
+                  </Typography>
+                ))}
             </Box>
             <IconButton aria-label={`Edit zone: ${title}`} onClick={() => onEdit(zone)} disabled={disabled} sx={{ width: 44, height: 44 }}>
               <EditOutlinedIcon />
@@ -212,6 +341,7 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
   const publish = async () => {
     if (!name || publishing) return;
     setError(null);
+    if (doc.options?.some((o) => !o.name.trim())) return setError("Name each delivery option, or remove it.");
     const next: DeliveryDoc = { ...doc, updated: Date.now() };
     const built = buildDeliveryPublish({ name, doc: next });
     setPublishing(true);
@@ -283,7 +413,15 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
             </Box>
           )}
         </Box>
-        <ZoneRows zones={zones} currency={doc.currency} disabled={busy} onEdit={(zone) => setEditing({ profile: id, zone })} onRemove={(zone) => removeZone(id, zone)} />
+        <ZoneRows
+          zones={zones}
+          currency={doc.currency}
+          disabled={busy}
+          options={doc.options}
+          baseName={doc.base?.name}
+          onEdit={(zone) => setEditing({ profile: id, zone })}
+          onRemove={(zone) => removeZone(id, zone)}
+        />
         <Button startIcon={<AddIcon />} onClick={() => setEditing({ profile: id, zone: null })} disabled={busy || zones.length >= MAX_ZONES} sx={{ alignSelf: "flex-start", minHeight: 44 }}>
           Add a zone
         </Button>
@@ -318,6 +456,7 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
           them in {shopCurrency} and publish.
         </Alert>
       )}
+      <OptionsCard doc={doc} onChange={change} disabled={busy} />
       {profileCard(null)}
       {doc.profiles.map((p) => profileCard(p))}
       <Button variant="outlined" startIcon={<AddIcon />} onClick={addProfile} disabled={busy || doc.profiles.length >= MAX_PROFILES} sx={{ alignSelf: "flex-start", minHeight: 44 }}>
@@ -344,6 +483,8 @@ export function DeliveryTab({ ready }: { ready: boolean }) {
       {editing && (
         <DeliveryZoneDialog
           zone={editing.zone}
+          options={doc.options ?? []}
+          baseName={doc.base?.name}
           currency={doc.currency}
           newId={newId}
           onSave={(zone) => saveZone(editing.profile, zone)}

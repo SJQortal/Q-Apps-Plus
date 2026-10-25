@@ -12,7 +12,7 @@ import { dataContainerIdentifier } from "../qdn/identifiers";
 import { fetchQdnJson } from "../qdn/search";
 import { US, countryCode } from "../constants/shipping";
 import { fetchDeliveryDoc } from "./deliveryDoc";
-import { quoteDelivery, type DeliveryDoc } from "./model";
+import { deliveryOptionsOf, quoteDelivery, type DeliveryChoiceInfo, type DeliveryDoc } from "./model";
 
 export interface ShopDelivery {
   doc: DeliveryDoc | null;
@@ -29,8 +29,12 @@ export async function loadShopDelivery(owner: string, storeId: string): Promise<
 }
 
 export type DeliveryCharge =
-  /** `line` is the fee to add (null: nothing to pay); `free` when the shop's prices make it free there. */
-  | { ok: true; line: CartLine | null; free: boolean }
+  /**
+   * `line` is the fee to add (null: nothing to pay); `free` when the shop's
+   * prices make it free there; `option` the delivery option it's for, when
+   * the shop has options.
+   */
+  | { ok: true; line: CartLine | null; free: boolean; option?: { id: string; name: string } }
   | { ok: false; message: string };
 
 const listOf = (titles: string[]) =>
@@ -44,6 +48,8 @@ export function deliveryCharge(args: {
   address: Pick<DeliveryInput, "country" | "state">;
   coin: string;
   rate: number | null;
+  /** The buyer's delivery option ("" or absent: the zones' own prices). */
+  option?: string;
 }): DeliveryCharge {
   const { shop, lines, address, coin, rate } = args;
   const { doc, pricing } = args.delivery;
@@ -55,8 +61,10 @@ export function deliveryCharge(args: {
     state: address.state,
     pricing,
     takesArrr: Array.isArray(shop.supportedCoins) && shop.supportedCoins.includes("ARRR"),
+    option: args.option,
   });
-  if (quote.kind === "free") return { ok: true, line: null, free: !!doc };
+  if (quote.kind === "free") return { ok: true, line: null, free: !!doc, ...(quote.option && { option: quote.option }) };
+  if (quote.kind === "option-unavailable") return { ok: false, message: `That delivery option isn't offered for this order to ${address.country}.` };
   if (quote.kind === "no-rates") {
     return { ok: false, message: `${name}'s delivery prices can't be worked out right now: they're in a currency the shop no longer prices in. Ask the seller.` };
   }
@@ -71,5 +79,38 @@ export function deliveryCharge(args: {
   if (!unitPrice(quote.line.product, coin, rate)) {
     return { ok: false, message: `Delivery can't be paid in ${coinLabel(coin, shop)}: go back and pick another coin.` };
   }
-  return { ok: true, line: quote.line, free: false };
+  const option = (quote.line.product as { delivery?: { option?: { id: string; name: string } } } | null)?.delivery?.option;
+  return { ok: true, line: quote.line, free: false, ...(option && { option }) };
+}
+
+/** One delivery option the buyer can pick, with what it adds to the order. */
+export interface DeliveryChoice extends DeliveryChoiceInfo {
+  line: CartLine | null;
+  free: boolean;
+}
+
+/**
+ * The delivery options this order can have at the address, each with its
+ * fee (the zones' own prices first). Only options every product group's zone
+ * there offers are listed. Not ok when the order can't be delivered there
+ * at all (the zones' own prices decide that).
+ */
+export function deliveryChoices(args: Omit<Parameters<typeof deliveryCharge>[0], "option">): { ok: true; choices: DeliveryChoice[] } | { ok: false; message: string } {
+  const base = deliveryCharge(args);
+  if (!base.ok) return base;
+  const doc = args.delivery.doc;
+  if (!doc?.options?.length) return { ok: true, choices: [] };
+  const choices: DeliveryChoice[] = [];
+  for (const info of deliveryOptionsOf(doc)) {
+    const charge = info.id ? deliveryCharge({ ...args, option: info.id }) : base;
+    if (charge.ok) choices.push({ ...info, line: charge.line, free: charge.free });
+  }
+  return { ok: true, choices };
+}
+
+/** The order's delivery note with the option the buyer picked in front (the seller reads it in either app). */
+export function withOptionNote<T extends { deliveryNote: string }>(delivery: T, option: { name: string } | null | undefined): T {
+  if (!option) return delivery;
+  const note = delivery.deliveryNote.trim();
+  return { ...delivery, deliveryNote: `Delivery: ${option.name}.${note ? ` ${note}` : ""}` };
 }

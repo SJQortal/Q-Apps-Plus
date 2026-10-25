@@ -33,7 +33,8 @@ import { LazyDeliveryForm } from "./LazyDeliveryForm";
 import { emptyDelivery, focusFirstMissing, saveDelivery, savedDelivery } from "./delivery";
 import { RememberAddress } from "./RememberAddress";
 import { itemCount, priceLines, type CartShop } from "./cartLines";
-import { deliveryCharge, loadShopDelivery, type DeliveryCharge } from "../../delivery/checkoutDelivery";
+import { deliveryCharge, deliveryChoices, loadShopDelivery, withOptionNote, type DeliveryChoice, type DeliveryCharge } from "../../delivery/checkoutDelivery";
+import { DeliveryOptionsPicker } from "./DeliveryOptionsPicker";
 import type { ShopPricing } from "./useCartPricing";
 
 type Step = "review" | "delivery" | "confirm" | "running" | "result";
@@ -54,6 +55,11 @@ interface Payment {
   /** The delivery fee's line, in `lines` too; free: the shop's prices make it free there. */
   delivery: CartLine | null;
   deliveryFree: boolean;
+  /** The cart's lines, without the delivery fee's (to price another delivery option). */
+  baseLines: CartLine[];
+  /** The shop's delivery options for this order and address, and the one picked. */
+  choices: DeliveryChoice[];
+  option?: { id: string; name: string };
 }
 
 type RunState = "waiting" | CheckoutStep | "done" | "declined" | "failed" | "pending" | "skipped";
@@ -131,6 +137,21 @@ export function CombinedCheckoutDialog({
   const [remember, setRemember] = useState(() => savedDelivery(buyer.name) !== null);
   const [showErrors, setShowErrors] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([]);
+  // Each shop's delivery option picked at Confirm, by its key (kept through Back and Continue).
+  const [optionOf, setOptionOf] = useState<Record<string, string>>({});
+  const pickOption = (key: string, choice: DeliveryChoice) => {
+    setOptionOf((prev) => ({ ...prev, [key]: choice.id }));
+    setPayments((prev) =>
+      prev.map((p) => {
+        if (p.key !== key) return p;
+        const lines = choice.line ? [...p.baseLines, choice.line] : p.baseLines;
+        const priced = priceLines(lines, p.coin, p.rate, false, isForeignTicker(p.coin) && p.rate === null);
+        // A price that can't be worked out keeps the option before (the buyer sees nothing change).
+        if (!priced.ok) return p;
+        return { ...p, lines, amount: priced.amount, details: priced.details, delivery: choice.line, deliveryFree: choice.free, option: { id: choice.id, name: choice.name } };
+      })
+    );
+  };
   const [runs, setRuns] = useState<Record<string, Run>>({});
   const [gettingRates, setGettingRates] = useState(false);
   // Shops whose price couldn't be worked out at Confirm (no rate for their coin right now): left out.
@@ -182,11 +203,20 @@ export function CombinedCheckoutDialog({
       const rate = isForeignTicker(s.coin) ? (rates.get(s.coin) ?? null) : s.rate;
       const digital = isDigitalOnly(s.lines);
       let charge: DeliveryCharge = { ok: true, line: null, free: false };
+      let offered: DeliveryChoice[] = [];
       if (!digital) {
         const read = deliveryOf.get(s.view.key);
-        charge = read
-          ? deliveryCharge({ shop: s.shop, delivery: read, lines: s.lines, address: delivery, coin: s.coin, rate })
-          : { ok: false, message: `${s.title}'s delivery prices couldn't be read from your node right now.` };
+        if (!read) charge = { ok: false, message: `${s.title}'s delivery prices couldn't be read from your node right now.` };
+        else {
+          const options = deliveryChoices({ shop: s.shop, delivery: read, lines: s.lines, address: delivery, coin: s.coin, rate });
+          offered = options.ok ? options.choices : [];
+          const picked = offered.find((c) => c.id === optionOf[s.view.key]) ?? offered[0];
+          charge = !options.ok
+            ? options
+            : picked
+              ? { ok: true, line: picked.line, free: picked.free, option: { id: picked.id, name: picked.name } }
+              : deliveryCharge({ shop: s.shop, delivery: read, lines: s.lines, address: delivery, coin: s.coin, rate });
+        }
       }
       if (!charge.ok) {
         notDelivered.push({ key: s.view.key, message: charge.message });
@@ -211,6 +241,9 @@ export function CombinedCheckoutDialog({
         items: itemCount(s.lines),
         delivery: charge.line,
         deliveryFree: charge.free,
+        baseLines: s.lines,
+        choices: offered,
+        ...(charge.option && { option: charge.option }),
       });
     }
     setPayments(next);
@@ -266,7 +299,8 @@ export function CombinedCheckoutDialog({
           coin: p.coin,
           rate: p.rate,
           isDigital: p.digital,
-          delivery: p.digital ? null : delivery,
+          // The delivery option picked goes in front of the buyer's note, so the seller sees it in either app.
+          delivery: p.digital ? null : withOptionNote(delivery, p.option),
           orderUid: orderUid(),
           mailUid: mailUid(),
           now: clock(),
@@ -422,6 +456,19 @@ export function CombinedCheckoutDialog({
               >
                 <AmountTag value={p.amount} coin={p.coin} shop={p.shop} />
               </Row>
+              {p.choices.length > 1 && (
+                <Box sx={{ pb: 1.5 }}>
+                  <DeliveryOptionsPicker
+                    choices={p.choices}
+                    value={p.option?.id ?? ""}
+                    onChange={(choice) => pickOption(p.key, choice)}
+                    coin={p.coin}
+                    rate={p.rate}
+                    shop={p.shop}
+                    label={`Delivery from ${p.title}`}
+                  />
+                </Box>
+              )}
             </Box>
           ))}
         </Box>

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CartLine } from "../money/order";
 import { deliveryIdentifier } from "../qdn/identifiers";
 import { resourcePath } from "../qdn/search";
-import { deliveryCharge, loadShopDelivery } from "./checkoutDelivery";
+import { deliveryCharge, deliveryChoices, loadShopDelivery, withOptionNote } from "./checkoutDelivery";
 import { buildDeliveryPublish, fetchDeliveryDoc } from "./deliveryDoc";
 import { DELIVERY_LINE_ID, type DeliveryDoc } from "./model";
 
@@ -79,5 +79,33 @@ describe("reading the delivery prices", () => {
     expect(built.identifier).toBe(id);
     expect(built.request).toMatchObject({ action: "PUBLISH_QDN_RESOURCE", name: OWNER, service: "DOCUMENT", identifier: id, filename: "delivery.json" });
     expect(JSON.parse(atob(built.request.data64))).toEqual(d);
+  });
+
+  it("lists the delivery options the order can have there, each with its fee, the zones' own first", () => {
+    const withOptions: DeliveryDoc = {
+      ...doc([{ id: "eu", countries: ["PL", "IS"], first: 2, rates: { exp: { first: 9 }, pick: { first: 0 } } }, { id: "us", countries: ["US"], first: 20 }]),
+      options: [
+        { id: "exp", name: "Express", note: "1–3 days" },
+        { id: "pick", name: "Local pickup" },
+      ],
+    };
+    const offered = deliveryChoices({ shop, delivery: { doc: withOptions, pricing: null }, lines: [chair], address: poland, coin: "QORT", rate: null });
+    expect(offered.ok && offered.choices.map((c) => [c.id, c.name, c.note, c.free, c.line ? c.line.product?.price : null])).toEqual([
+      ["", "Standard", undefined, false, [{ currency: "qort", value: 2 }]],
+      ["exp", "Express", "1–3 days", false, [{ currency: "qort", value: 9 }]],
+      ["pick", "Local pickup", undefined, true, null],
+    ]);
+    // The US zone offers neither: its own prices only.
+    const us = deliveryChoices({ shop, delivery: { doc: withOptions, pricing: null }, lines: [chair], address: { country: "United States", state: "Texas" }, coin: "QORT", rate: null });
+    expect(us.ok && us.choices.map((c) => c.id)).toEqual([""]);
+    // No options: none to pick from.
+    const plain = deliveryChoices({ shop, delivery: { doc: doc([{ id: "eu", countries: ["PL"], first: 2 }]), pricing: null }, lines: [chair], address: poland, coin: "QORT", rate: null });
+    expect(plain).toEqual({ ok: true, choices: [] });
+  });
+
+  it("puts the picked option in front of the buyer's note", () => {
+    expect(withOptionNote({ deliveryNote: "Ring twice" }, { name: "Local pickup" }).deliveryNote).toBe("Delivery: Local pickup. Ring twice");
+    expect(withOptionNote({ deliveryNote: "" }, { name: "Express" }).deliveryNote).toBe("Delivery: Express.");
+    expect(withOptionNote({ deliveryNote: "x" }, undefined).deliveryNote).toBe("x");
   });
 });

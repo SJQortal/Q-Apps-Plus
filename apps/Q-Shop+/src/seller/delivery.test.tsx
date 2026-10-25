@@ -131,6 +131,38 @@ describe("the Delivery tab", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Publish delivery prices" })).not.toBeInTheDocument());
   });
 
+  it("adds delivery options buyers pick from, each priced in the zones that offer it", async () => {
+    const { q } = setup();
+    const options = await screen.findByRole("region", { name: "Delivery options" });
+    fireEvent.change(within(options).getByLabelText("Note (optional)", { selector: "input[placeholder='5–10 days']" }), { target: { value: "5–10 days" } });
+    fireEvent.click(within(options).getByRole("button", { name: "Express" }));
+    fireEvent.change(within(options).getAllByLabelText("Note (optional)")[1], { target: { value: "1–3 days" } });
+    fireEvent.click(within(options).getByRole("button", { name: "Local pickup" }));
+    const general = await card("General");
+    fireEvent.click(within(general).getByRole("button", { name: "Add a zone" }));
+    const d = await dialog();
+    fireEvent.click(within(d).getByRole("button", { name: "USA: the United States, every state" }));
+    expect(within(d).getByText("Price: Standard")).toBeInTheDocument();
+    fireEvent.change(within(d).getAllByLabelText(/^First item/)[0], { target: { value: "3" } });
+    fireEvent.click(within(d).getByRole("switch", { name: "Offer Express here" }));
+    fireEvent.change(within(within(d).getByRole("region", { name: "Express in this zone" })).getByLabelText(/^First item/), { target: { value: "12" } });
+    fireEvent.click(within(d).getByRole("button", { name: "Save zone" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(within(general).getByText("Standard: 3.00 QORT")).toBeInTheDocument();
+    expect(within(general).getByText("Express: 12.00 QORT")).toBeInTheDocument();
+    // An option without a name can't be published.
+    fireEvent.change(within(options).getByLabelText("Option 3"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    expect(await screen.findByText("Name each delivery option, or remove it.")).toBeInTheDocument();
+    fireEvent.click(within(options).getByRole("button", { name: "Remove the option 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish delivery prices" }));
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    const doc = decodeData64((q.callsFor("PUBLISH_QDN_RESOURCE")[0] as any).data64);
+    expect(doc.base).toEqual({ name: "Standard", note: "5–10 days" });
+    expect(doc.options).toEqual([{ id: expect.any(String), name: "Express", note: "1–3 days" }]);
+    expect(doc.general.zones[0]).toMatchObject({ countries: ["US"], first: 3, rates: { [doc.options[0].id]: { first: 12 } } });
+  });
+
   it("shows the published prices, and asks to check them when the shop prices in another currency now", async () => {
     const delivery = {
       v: 1,

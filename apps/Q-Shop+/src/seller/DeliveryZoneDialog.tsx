@@ -3,15 +3,16 @@
  * (countries by region, and US states, with seller/ShipsToPicker.tsx), what
  * delivering one item costs, what each extra item adds, and from what amount
  * of items it's free, with a worked example under them. Amounts in the
- * shop's currency (or QORT).
+ * shop's currency (or QORT). With delivery options (Express, Local pickup…),
+ * each can be offered here at its own prices.
  */
 import { useState } from "react";
-import { Box, Button, InputAdornment, TextField, Typography } from "@mui/material";
+import { Box, Button, FormControlLabel, InputAdornment, Switch, TextField, Typography } from "@mui/material";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { priceDecimals, sanitizeFiatInput } from "../money/fiatPricing";
 import { deliveryMoney } from "../delivery/model";
 import { shippingSummaryWithStates, US } from "../constants/shipping";
-import type { DeliveryZone } from "../delivery/model";
+import { BASE_OPTION_NAME, type DeliveryOption, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import { sanitizeAmountInput } from "./productDraft";
 import { ShipsToPicker } from "./ShipsToPicker";
 
@@ -25,12 +26,17 @@ export function parseDeliveryAmount(text: string, currency: string): number {
 
 const asText = (value: number | undefined) => (value === undefined ? "" : String(value));
 
+type RateText = { first: string; extra: string; freeOver: string };
+const rateText = (rate: DeliveryRate | undefined): RateText => ({ first: asText(rate?.first), extra: asText(rate?.extra), freeOver: asText(rate?.freeOver) });
+
 export function DeliveryZoneDialog({
   zone,
   currency,
   newId,
   onSave,
   onClose,
+  options = [],
+  baseName,
 }: {
   /** The zone to edit, or null for a new one. */
   zone: DeliveryZone | null;
@@ -38,6 +44,10 @@ export function DeliveryZoneDialog({
   newId: () => string;
   onSave: (zone: DeliveryZone) => void;
   onClose: () => void;
+  /** The shop's other delivery options: each can be offered here at its own prices. */
+  options?: DeliveryOption[];
+  /** The zones' own prices' name, when the shop has options. */
+  baseName?: string;
 }) {
   const [name, setName] = useState(zone?.name ?? "");
   const [countries, setCountries] = useState<string[]>(zone?.countries ?? []);
@@ -45,6 +55,10 @@ export function DeliveryZoneDialog({
   const [first, setFirst] = useState(asText(zone?.first));
   const [extra, setExtra] = useState(asText(zone?.extra));
   const [freeOver, setFreeOver] = useState(asText(zone?.freeOver));
+  // Each other option this zone offers, its prices as typed (absent: not offered here).
+  const [rates, setRates] = useState<Record<string, RateText>>(() =>
+    Object.fromEntries(options.filter((o) => zone?.rates?.[o.id]).map((o) => [o.id, rateText(zone?.rates?.[o.id])]))
+  );
   const [error, setError] = useState<string | null>(null);
   const clean = (text: string) => (currency === "QORT" ? sanitizeAmountInput(text) : sanitizeFiatInput(text, priceDecimals(currency)));
   // Any change answers the last message: it is shown again only if Save finds it still wrong.
@@ -78,6 +92,17 @@ export function DeliveryZoneDialog({
     if (!Number.isFinite(extraValue)) return setError("Check what each extra item adds.");
     if (!Number.isFinite(freeValue)) return setError("Check the amount from which delivery is free.");
     if (countries.includes(US) && states?.length === 0) return setError("Tick the US states this zone delivers to, or untick the United States.");
+    const offered: Record<string, DeliveryRate> = {};
+    for (const o of options) {
+      const text = rates[o.id];
+      if (!text) continue;
+      const f = parseDeliveryAmount(text.first, currency);
+      const x = text.extra.trim() ? parseDeliveryAmount(text.extra, currency) : 0;
+      const fo = text.freeOver.trim() ? parseDeliveryAmount(text.freeOver, currency) : 0;
+      if (!Number.isFinite(f)) return setError(`Type what ${o.name} costs for one item, in ${currency} (0 for free).`);
+      if (!Number.isFinite(x) || !Number.isFinite(fo)) return setError(`Check the ${o.name} prices.`);
+      offered[o.id] = { first: f, ...(x > 0 && { extra: x }), ...(fo > 0 && { freeOver: fo }) };
+    }
     onSave({
       id: zone?.id ?? newId(),
       ...(name.trim() && { name: name.trim().slice(0, 60) }),
@@ -86,6 +111,7 @@ export function DeliveryZoneDialog({
       first: firstValue,
       ...(extraValue > 0 && { extra: extraValue }),
       ...(freeValue > 0 && { freeOver: freeValue }),
+      ...(Object.keys(offered).length > 0 && { rates: offered }),
     });
   };
 
@@ -128,7 +154,7 @@ export function DeliveryZoneDialog({
           }}
           title="Delivers to"
         />
-        <Typography sx={{ fontWeight: 600 }}>Price</Typography>
+        <Typography sx={{ fontWeight: 600 }}>{options.length > 0 ? `Price: ${baseName || BASE_OPTION_NAME}` : "Price"}</Typography>
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(3, minmax(0, 1fr))" } }}>
           <TextField
             label="First item"
@@ -165,6 +191,41 @@ export function DeliveryZoneDialog({
             ))}
           </Box>
         )}
+        {options.map((o) => {
+          const text = rates[o.id];
+          const set = (key: keyof RateText) => (e: { target: { value: string } }) => {
+            setRates((prev) => ({ ...prev, [o.id]: { ...(prev[o.id] ?? rateText(undefined)), [key]: clean(e.target.value) } }));
+            setError(null);
+          };
+          return (
+            <Box key={o.id} component="section" aria-label={`${o.name} in this zone`} sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={!!text}
+                    onChange={(_, on) =>
+                      setRates((prev) => {
+                        const next = { ...prev };
+                        if (on) next[o.id] = rateText(undefined);
+                        else delete next[o.id];
+                        return next;
+                      })
+                    }
+                  />
+                }
+                label={`Offer ${o.name} here`}
+                sx={{ m: 0, minHeight: 44 }}
+              />
+              {text && (
+                <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(3, minmax(0, 1fr))" } }}>
+                  <TextField label="First item" required value={text.first} onChange={set("first")} placeholder="0.00" helperText="0: free (a pickup, say)" slotProps={amountField} />
+                  <TextField label="Each extra item" value={text.extra} onChange={set("extra")} placeholder="0.00" helperText="Optional" slotProps={amountField} />
+                  <TextField label="Free delivery from" value={text.freeOver} onChange={set("freeOver")} placeholder="None" helperText="Optional" slotProps={amountField} />
+                </Box>
+              )}
+            </Box>
+          );
+        })}
         {error && (
           <Typography role="alert" color="error">
             {error}

@@ -82,4 +82,44 @@ describe("delivery prices", () => {
     );
     expect(parsed?.general.zones).toEqual([{ id: "ok2", countries: ["PL"], first: 2 }]);
   });
+
+  it("offer the seller's delivery options: each zone prices the ones it offers, and the line says which was picked", () => {
+    const withOptions = doc({
+      base: { name: "Standard", note: "5–10 days" },
+      options: [
+        { id: "exp", name: "Express", note: "1–3 days" },
+        { id: "pick", name: "Local pickup", note: "Reykjavik, Saturdays" },
+      ],
+      general: { zones: [{ id: "eu", name: "Europe", countries: [...EUROPE, "IS"], first: 5, rates: { exp: { first: 15, extra: 2 }, pick: { first: 0 } } }] },
+      profiles: [],
+    });
+    const parsed = deliveryDocOf(JSON.parse(JSON.stringify(withOptions)), STORE);
+    expect(parsed?.options).toEqual(withOptions.options);
+    expect(parsed?.base).toEqual({ name: "Standard", note: "5–10 days" });
+    expect(parsed?.general.zones[0].rates).toEqual({ exp: { first: 15, extra: 2 }, pick: { first: 0 } });
+    const lines = [line("ghee", 2, 10)];
+    const base = quoteDelivery({ doc: withOptions, lines, country: "Poland", state: "", pricing, takesArrr: true });
+    expect(base).toMatchObject({ kind: "charge", fee: 5 });
+    if (base.kind === "charge") expect(base.line.product).toMatchObject({ title: "Delivery to Poland, Standard", delivery: { option: { id: "", name: "Standard" } } });
+    const express = quoteDelivery({ doc: withOptions, lines, country: "Poland", state: "", pricing, takesArrr: true, option: "exp" });
+    expect(express).toMatchObject({ kind: "charge", fee: 17 });
+    if (express.kind === "charge") expect(express.line.product).toMatchObject({ title: "Delivery to Poland, Express", delivery: { option: { id: "exp", name: "Express" } } });
+    // A free option is still the buyer's pick.
+    expect(quoteDelivery({ doc: withOptions, lines, country: "Iceland", state: "", pricing, takesArrr: true, option: "pick" })).toEqual({ kind: "free", parts: [{ profile: "Delivery", zone: "Europe", items: 2, fee: 0 }], option: { id: "pick", name: "Local pickup" } });
+    // An option a zone doesn't price, or one the shop doesn't have, isn't offered.
+    const partial = doc({ options: [{ id: "exp", name: "Express" }] });
+    expect(quoteDelivery({ doc: partial, lines, country: "Poland", state: "", pricing, takesArrr: true, option: "exp" })).toEqual({ kind: "option-unavailable" });
+    expect(quoteDelivery({ doc: withOptions, lines, country: "Poland", state: "", pricing, takesArrr: true, option: "nope" })).toEqual({ kind: "option-unavailable" });
+  });
+
+  it("keep only well-formed options: four at most, named, each once", () => {
+    const parsed = deliveryDocOf(
+      {
+        ...doc(),
+        options: [{ id: "a", name: "A" }, { id: "a", name: "Again" }, { id: "b", name: "" }, { id: "bad id", name: "X" }, { id: "c", name: "C" }, { id: "d", name: "D" }, { id: "e", name: "E" }, { id: "f", name: "F" }],
+      },
+      STORE
+    );
+    expect(parsed?.options?.map((o) => o.id)).toEqual(["a", "c", "d", "e"]);
+  });
 });
