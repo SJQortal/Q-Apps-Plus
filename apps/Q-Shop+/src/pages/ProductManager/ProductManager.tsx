@@ -329,7 +329,7 @@ export const ProductManager = () => {
           {tab === "reviews" && (
             <ReviewsPanel storeId={currentStore.id} storeTitle={currentStore.title} storeImage={currentStore.logo || ""} />
           )}
-          {tab === "delivery" && <DeliveryTab ready={ready} publishAsk={askFor("delivery")} />}
+          {tab === "delivery" && <DeliveryTab ready={ready} publishAsk={askFor("delivery")} onOpenTab={setTab} />}
           {tab === "shop" && <ShopTab publishAsk={askFor("discounts")} />}
         </Box>
         {/* Room for the Publish changes bar, so it never covers the page's last lines. */}

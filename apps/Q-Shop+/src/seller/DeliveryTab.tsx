@@ -18,6 +18,9 @@ import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined
 import type { RootState } from "../state/store";
 import { setNotification } from "../state/features/notificationsSlice";
 import { fiatPricingOf } from "../money/fiatPricing";
+import { assetCoinId, shopAssets, type ShopAsset } from "../money/coins";
+import { CoinIcon } from "../components/money/CoinIcon";
+import { formatPrice } from "../money/pricing";
 import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } from "../constants/shipping";
 import { BASE_OPTION_NAME, MAX_OPTIONS, MAX_PROFILES, MAX_ZONES, deliveryMoney as money, type DeliveryDoc, type DeliveryOption, type DeliveryProfile, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import { fetchDeliveryDoc } from "../delivery/deliveryDoc";
@@ -36,11 +39,15 @@ const uid = new ShortUniqueId({ length: 8 });
 const clock = () => Date.now();
 const newId = () => uid();
 
-/** "$5.00 · $1.00 each extra item · free from $100.00" */
-export function zonePrice(zone: DeliveryRate, currency: string): string {
+/** "$5.00 · $1.00 each extra item · free from $100.00 · 30 BHC Coin + 5 each extra" */
+export function zonePrice(zone: DeliveryRate, currency: string, assets: readonly ShopAsset[] = []): string {
   const parts = [zone.first > 0 ? money(zone.first, currency) : "Free"];
   if (zone.extra) parts.push(`${money(zone.extra, currency)} each extra item`);
   if (zone.freeOver) parts.push(`free from ${money(zone.freeOver, currency)}`);
+  for (const asset of assets) {
+    const fee = zone.assets?.[String(asset.id)];
+    if (fee) parts.push(`${formatPrice(fee.first)} ${asset.name}${fee.extra ? ` + ${formatPrice(fee.extra)} each extra` : ""}`);
+  }
   return parts.join(" · ");
 }
 
@@ -321,6 +328,7 @@ function ZoneRows({
   options?: DeliveryOption[];
   baseName?: string;
 }) {
+  const assets = shopAssets(useSelector((state: RootState) => state.global.currentStore));
   if (zones.length === 0) {
     return (
       <Typography variant="body2" color="text.secondary">
@@ -340,13 +348,13 @@ function ZoneRows({
               <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{title}</Typography>
               <Typography variant="body2">
                 {options.length > 0 ? `${baseName || BASE_OPTION_NAME}: ` : ""}
-                {zonePrice(zone, currency)}
+                {zonePrice(zone, currency, assets)}
               </Typography>
               {options
                 .filter((o) => zone.rates?.[o.id])
                 .map((o) => (
                   <Typography key={o.id} variant="body2">
-                    {o.name}: {zonePrice(zone.rates![o.id], currency)}
+                    {o.name}: {zonePrice(zone.rates![o.id], currency, assets)}
                   </Typography>
                 ))}
             </Box>
@@ -363,7 +371,56 @@ function ZoneRows({
   );
 }
 
-export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publishAsk?: PublishAsk | null }) {
+/**
+ * How delivery is paid in each Q-Asset the shop takes: a zone's own price in
+ * it (Edit zone → In Q-Assets), else the asset's setting in Edit shop
+ * (money/assetRates.ts), which is changed there.
+ */
+function AssetsCard({ assets, onEditShop }: { assets: readonly ShopAsset[]; onEditShop?: () => void }) {
+  if (assets.length === 0) return null;
+  const otherwise = (asset: ShopAsset) =>
+    asset.price?.from === "market"
+      ? "converts at the Q-Assets trade portal price"
+      : asset.price?.from === "seller"
+        ? `converts at your rate, 1 ${asset.name} = ${formatPrice(asset.price.qort)} QORT`
+        : `can't be paid in ${asset.name}`;
+  return (
+    <Paper component="section" aria-label="Delivery in Q-Assets" variant="outlined" sx={{ p: 2, borderRadius: 2, display: "flex", flexDirection: "column", gap: 1 }}>
+      <Typography component="h3" sx={{ fontWeight: 700 }}>
+        Delivery in Q-Assets
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        Give a zone its own price in a Q-Asset (Edit zone → In Q-Assets), or fill it from the trade portal. Delivery without one:
+      </Typography>
+      <Box component="ul" sx={{ m: 0, pl: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 0.75 }}>
+        {assets.map((asset) => (
+          <Box component="li" key={asset.id} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            <CoinIcon coin={assetCoinId(asset.id)} size={20} label={asset.name} />
+            <Typography variant="body2">
+              <strong>{asset.name}</strong>: {otherwise(asset)}.
+            </Typography>
+          </Box>
+        ))}
+      </Box>
+      {onEditShop && (
+        <Button onClick={onEditShop} sx={{ alignSelf: "flex-start", minHeight: 44 }}>
+          Change in Edit shop
+        </Button>
+      )}
+    </Paper>
+  );
+}
+
+export function DeliveryTab({
+  ready,
+  publishAsk = null,
+  onOpenTab,
+}: {
+  ready: boolean;
+  publishAsk?: PublishAsk | null;
+  /** Opens another seller tab (Edit shop for the Q-Assets' setting). */
+  onOpenTab?: (tab: string, extra?: Record<string, string>) => void;
+}) {
   const dispatch = useDispatch();
   const store = useSelector((state: RootState) => state.global.currentStore);
   const name = useSelector((state: RootState) => state.auth.user?.name);
@@ -579,6 +636,7 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
         </Alert>
       )}
       <OptionsCard doc={doc} onChange={change} disabled={busy} />
+      <AssetsCard assets={shopAssets(store)} onEditShop={onOpenTab && (() => onOpenTab("shop", { edit: "1" }))} />
       <PickupPointsCard doc={doc} onChange={change} disabled={busy} />
       {profileCard(null)}
       {doc.profiles.map((p) => profileCard(p))}
@@ -605,6 +663,9 @@ export function DeliveryTab({ ready, publishAsk = null }: { ready: boolean; publ
           options={(doc.options ?? []).filter((o) => !o.place)}
           baseName={(editing.profile && doc.profiles.find((p) => p.id === editing.profile)?.name) || doc.base?.name}
           currency={doc.currency}
+          assets={shopAssets(store)}
+          // QORT for one unit of the prices' currency (the shop's rate), to fill asset prices from the trade portal.
+          qortPerUnit={doc.currency === "QORT" ? 1 : pricing?.currency === doc.currency && pricing.rates.QORT ? 1 / pricing.rates.QORT : null}
           newId={newId}
           onSave={(zone) => saveZone(editing.profile, zone)}
           onClose={() => setEditing(null)}

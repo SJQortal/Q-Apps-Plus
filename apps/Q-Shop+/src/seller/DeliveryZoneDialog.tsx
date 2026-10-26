@@ -4,7 +4,8 @@
  * delivering one item costs, what each extra item adds, and from what amount
  * of items it's free, with a worked example under them. Amounts in the
  * shop's currency (or QORT). With delivery options (Express, Local pickup…),
- * each can be offered here at its own prices.
+ * each can be offered here at its own prices. With Q-Assets, each price can
+ * also be set in them, or filled from the trade portal (AssetFeeFields.tsx).
  */
 import { useState } from "react";
 import { Box, Button, FormControlLabel, InputAdornment, Switch, TextField, Typography } from "@mui/material";
@@ -15,6 +16,9 @@ import { US } from "../constants/shipping";
 import { BASE_OPTION_NAME, type DeliveryOption, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import { sanitizeAmountInput } from "./productDraft";
 import { ShipsToPicker } from "./ShipsToPicker";
+import { AssetFeeFields, type AssetFeeText } from "./AssetFeeFields";
+import type { ShopAsset } from "../money/coins";
+import type { AssetFee } from "../delivery/model";
 
 /** A typed amount, 0 included (free); NaN when it isn't one. */
 export function parseDeliveryAmount(text: string, currency: string): number {
@@ -28,6 +32,23 @@ const asText = (value: number | undefined) => (value === undefined ? "" : String
 
 type RateText = { first: string; extra: string; freeOver: string };
 const rateText = (rate: DeliveryRate | undefined): RateText => ({ first: asText(rate?.first), extra: asText(rate?.extra), freeOver: asText(rate?.freeOver) });
+const assetText = (fees: Record<string, AssetFee> | undefined): Record<string, AssetFeeText> =>
+  Object.fromEntries(Object.entries(fees ?? {}).map(([id, f]) => [id, { first: asText(f.first), extra: asText(f.extra) }]));
+
+/** The typed asset prices, or a problem; only the shop's assets count. */
+function assetFeesFrom(text: Record<string, AssetFeeText>, assets: readonly ShopAsset[], what: string): Record<string, AssetFee> | string {
+  const out: Record<string, AssetFee> = {};
+  for (const asset of assets) {
+    const t = text[String(asset.id)];
+    if (!t || (!t.first.trim() && !t.extra.trim())) continue;
+    const first = parseDeliveryAmount(t.first, "QORT");
+    const extra = t.extra.trim() ? parseDeliveryAmount(t.extra, "QORT") : 0;
+    if (!Number.isFinite(first)) return `Type what ${what} costs for one item in ${asset.name}, or leave both ${asset.name} fields empty.`;
+    if (!Number.isFinite(extra)) return `Check what each extra item adds in ${asset.name}.`;
+    out[String(asset.id)] = { first, ...(extra > 0 && { extra }) };
+  }
+  return out;
+}
 
 export function DeliveryZoneDialog({
   zone,
@@ -38,6 +59,8 @@ export function DeliveryZoneDialog({
   onClose,
   options = [],
   baseName,
+  assets = [],
+  qortPerUnit = null,
 }: {
   /** The zone to edit, or null for a new one. */
   zone: DeliveryZone | null;
@@ -51,6 +74,10 @@ export function DeliveryZoneDialog({
   options?: DeliveryOption[];
   /** The zones' own prices' name, when the shop has options. */
   baseName?: string;
+  /** The Q-Assets the shop takes: each price can also be set in them. */
+  assets?: readonly ShopAsset[];
+  /** QORT for one unit of `currency` (1 for QORT), to fill asset prices from the trade portal; null when unknown. */
+  qortPerUnit?: number | null;
 }) {
   const [countries, setCountries] = useState<string[]>(zone?.countries ?? start?.countries ?? []);
   const [states, setStates] = useState<string[] | null>(zone?.states ?? start?.states ?? null);
@@ -61,7 +88,13 @@ export function DeliveryZoneDialog({
   const [rates, setRates] = useState<Record<string, RateText>>(() =>
     Object.fromEntries(options.filter((o) => zone?.rates?.[o.id]).map((o) => [o.id, rateText(zone?.rates?.[o.id])]))
   );
+  const [baseAssets, setBaseAssets] = useState<Record<string, AssetFeeText>>(() => assetText(zone?.assets));
+  const [optionAssets, setOptionAssets] = useState<Record<string, Record<string, AssetFeeText>>>(() =>
+    Object.fromEntries(options.map((o) => [o.id, assetText(zone?.rates?.[o.id]?.assets)]))
+  );
   const [error, setError] = useState<string | null>(null);
+  /** An amount in `currency` as QORT, for filling from the trade portal. */
+  const asQort = (value: number) => (qortPerUnit && Number.isFinite(value) ? value * qortPerUnit : null);
   const clean = (text: string) => (currency === "QORT" ? sanitizeAmountInput(text) : sanitizeFiatInput(text, priceDecimals(currency)));
   // Any change answers the last message: it is shown again only if Save finds it still wrong.
   const typed = (set: (v: string) => void) => (e: { target: { value: string } }) => {
@@ -94,6 +127,8 @@ export function DeliveryZoneDialog({
     if (!Number.isFinite(extraValue)) return setError("Check what each extra item adds.");
     if (!Number.isFinite(freeValue)) return setError("Check the amount from which delivery is free.");
     if (countries.includes(US) && states?.length === 0) return setError("Tick the US states this zone delivers to, or untick the United States.");
+    const baseFees = assetFeesFrom(baseAssets, assets, baseName || "delivery");
+    if (typeof baseFees === "string") return setError(baseFees);
     const offered: Record<string, DeliveryRate> = {};
     for (const o of options) {
       const text = rates[o.id];
@@ -103,7 +138,9 @@ export function DeliveryZoneDialog({
       const fo = text.freeOver.trim() ? parseDeliveryAmount(text.freeOver, currency) : 0;
       if (!Number.isFinite(f)) return setError(`Type what ${o.name} costs for one item, in ${currency} (0 for free).`);
       if (!Number.isFinite(x) || !Number.isFinite(fo)) return setError(`Check the ${o.name} prices.`);
-      offered[o.id] = { first: f, ...(x > 0 && { extra: x }), ...(fo > 0 && { freeOver: fo }) };
+      const fees = assetFeesFrom(optionAssets[o.id] ?? {}, assets, o.name);
+      if (typeof fees === "string") return setError(fees);
+      offered[o.id] = { first: f, ...(x > 0 && { extra: x }), ...(fo > 0 && { freeOver: fo }), ...(Object.keys(fees).length > 0 && { assets: fees }) };
     }
     onSave({
       id: zone?.id ?? newId(),
@@ -112,6 +149,7 @@ export function DeliveryZoneDialog({
       first: firstValue,
       ...(extraValue > 0 && { extra: extraValue }),
       ...(freeValue > 0 && { freeOver: freeValue }),
+      ...(Object.keys(baseFees).length > 0 && { assets: baseFees }),
       ...(Object.keys(offered).length > 0 && { rates: offered }),
     });
   };
@@ -184,6 +222,17 @@ export function DeliveryZoneDialog({
             ))}
           </Box>
         )}
+        <AssetFeeFields
+          assets={assets}
+          value={baseAssets}
+          onChange={(next) => {
+            setBaseAssets(next);
+            setError(null);
+          }}
+          qortFirst={asQort(firstValue)}
+          qortExtra={asQort(extraValue)}
+          label={options.length > 0 ? baseName || BASE_OPTION_NAME : undefined}
+        />
         {options.map((o) => {
           const text = rates[o.id];
           const set = (key: keyof RateText) => (e: { target: { value: string } }) => {
@@ -215,6 +264,19 @@ export function DeliveryZoneDialog({
                   <TextField label="Each extra item" value={text.extra} onChange={set("extra")} placeholder="0.00" helperText="Optional" slotProps={amountField} />
                   <TextField label="Free delivery from" value={text.freeOver} onChange={set("freeOver")} placeholder="None" helperText="Optional" slotProps={amountField} />
                 </Box>
+              )}
+              {text && (
+                <AssetFeeFields
+                  assets={assets}
+                  value={optionAssets[o.id] ?? {}}
+                  onChange={(next) => {
+                    setOptionAssets((prev) => ({ ...prev, [o.id]: next }));
+                    setError(null);
+                  }}
+                  qortFirst={asQort(parseDeliveryAmount(text.first, currency))}
+                  qortExtra={asQort(text.extra.trim() ? parseDeliveryAmount(text.extra, currency) : 0)}
+                  label={o.name}
+                />
               )}
             </Box>
           );

@@ -75,7 +75,7 @@ export const HELP: { title: string; items: [string, string][] }[] = [
       ],
       [
         "How do delivery prices work?",
-        "The Delivery tab. Zones price delivery by country: the first item, each extra one, and free from an amount. Shipping profiles give some products their own zones, under the name buyers choose at checkout (Postbox, DHL Express…); a product can be in several, and buyers get the first that reaches them. Add options like Express, and pickup points where buyers collect for free.",
+        "The Delivery tab. Zones price delivery by country: the first item, each extra one, and free from an amount. Shipping profiles give some products their own zones, under the name buyers choose at checkout (Postbox, DHL Express…); a product can be in several, and buyers get the first that reaches them. Add options like Express, and pickup points where buyers collect for free. A zone can also have its price in each Q-Asset you take, typed or filled from the trade portal.",
       ],
       [
         "My shop is from the original Q-Shop",
