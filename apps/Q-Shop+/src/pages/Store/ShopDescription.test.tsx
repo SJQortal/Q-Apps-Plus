@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { renderWithProviders as render } from "../../test/renderWithProviders";
 import { ShopDescription } from "./ShopHeader";
 
 /** jsdom has no layout: the description is as tall as `height` while clamped to `clamp`. */
@@ -28,5 +29,17 @@ describe("ShopDescription", () => {
     expect(less).toHaveAttribute("aria-expanded", "true");
     fireEvent.click(less);
     expect(screen.getByRole("button", { name: "Show more" })).toBeInTheDocument();
+  });
+
+  it("makes its qortal:// addresses links that open in a new Hub tab, without the full stop after them", async () => {
+    sizes(80, 160);
+    const request = vi.fn(async () => true);
+    vi.stubGlobal("qortalRequest", request);
+    render(<ShopDescription text={"Our blog: qortal://APP/Q-Blog/Biohackers Corner. Visit soon"} />);
+    const link = screen.getByRole("link", { name: "qortal://APP/Q-Blog/Biohackers" });
+    expect(screen.getByText(/Corner\. Visit soon/)).toBeInTheDocument();
+    fireEvent.click(link);
+    await waitFor(() => expect(request).toHaveBeenCalledWith({ action: "OPEN_NEW_TAB", qortalLink: "qortal://APP/Q-Blog/Biohackers" }));
+    vi.unstubAllGlobals();
   });
 });

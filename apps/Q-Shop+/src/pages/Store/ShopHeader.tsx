@@ -33,6 +33,7 @@ import { AwayNotice } from "../../shop/AwayNotice";
 import { ShipsToYou } from "../../delivery/ShipsToYou";
 import { languagesOf, languagesText } from "../../shop/languages";
 import TranslateOutlinedIcon from "@mui/icons-material/TranslateOutlined";
+import { QortalText } from "../../richtext/QortalText";
 
 
 const panelSx = {
@@ -120,7 +121,7 @@ export function ShopDescription({ text }: { text: string }) {
           ...(!open && { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: { xs: 4, sm: 6 }, overflow: "hidden" }),
         }}
       >
-        {text}
+        <QortalText text={text} />
       </Typography>
       {(long || open) && (
         <Button size="small" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={id} sx={{ mt: 0.5, ml: -1, minHeight: 44 }}>

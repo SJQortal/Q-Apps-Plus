@@ -64,7 +64,7 @@ const VIDEO_EMBED =
   '<div class="qshop-embed" data-kind="video" data-name="Seller Name" data-identifier="q-store-video-AbCdEf1234" data-title="Making ghee">Video: Making ghee</div>';
 
 describe("a product's description", { timeout: 20_000 }, () => {
-  it("shows the seller's formatting, and a plain one as it was written", () => {
+  it("shows the seller's formatting, and a plain one as it was written", async () => {
     const { unmount } = renderWithProviders(
       <Described product={rich("<h2>Ghee</h2><p>Slow-cooked <strong>Icelandic</strong> ghee.</p><ul><li>Grass-fed</li></ul>")} />
     );
@@ -75,6 +75,12 @@ describe("a product's description", { timeout: 20_000 }, () => {
     renderWithProviders(<Described product={{ description: "Line one\nSee qortal://APP/Q-Blog/x" }} />);
     expect(screen.getByText("Line one")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "qortal://APP/Q-Blog/x" })).toHaveAttribute("href", "qortal://APP/Q-Blog/x");
+    // It opens in a new Hub tab.
+    const request = vi.fn(async () => true);
+    vi.stubGlobal("qortalRequest", request);
+    fireEvent.click(screen.getByRole("link", { name: "qortal://APP/Q-Blog/x" }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith({ action: "OPEN_NEW_TAB", qortalLink: "qortal://APP/Q-Blog/x" }));
+    vi.unstubAllGlobals();
   });
 
   it("puts its videos and attachments in sections of their own, out of the text", async () => {

@@ -16,10 +16,12 @@ import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { ResourceUnavailableError, resourceUrl, waitForResource } from "../qdn/resourceStatus";
 import { resourcePath } from "../qdn/search";
 import type { VideoEmbed } from "./embeds";
+import { useOpenQortalLink } from "./QortalText";
 
 type Phase = "idle" | "fetching" | "ready" | "failed";
 
 export function QortalVideo({ embed }: { embed: VideoEmbed }) {
+  const openLink = useOpenQortalLink();
   const [phase, setPhase] = useState<Phase>("idle");
   const [percent, setPercent] = useState<number | null>(null);
   const [problem, setProblem] = useState("");
@@ -141,7 +143,7 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
           by {embed.name}
         </Typography>
         {embed.link?.toLowerCase().startsWith("qortal://app/q-tube/") && (
-          <Link href={embed.link} className="qortal-link" variant="body2" underline="always" sx={{ display: "inline-flex", alignItems: "center", minHeight: 44 }}>
+          <Link href={embed.link} onClick={(event) => openLink(event, embed.link!)} className="qortal-link" variant="body2" underline="always" sx={{ display: "inline-flex", alignItems: "center", minHeight: 44 }}>
             Open in Q-Tube
           </Link>
         )}

@@ -4,7 +4,7 @@
  * gets the file onto the node (with progress), reads it and draws it with
  * pdf.js in a full-screen viewer (richtext/pdf/PdfViewer.tsx, loaded then).
  */
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
 import { Box, Button, CircularProgress, Link, Typography } from "@mui/material";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
@@ -14,6 +14,7 @@ import { ResourceUnavailableError, resourceUrl, waitForResource } from "../qdn/r
 import { isPdf, type FileEmbed } from "./embeds";
 import { MAX_PDF_BYTES } from "./qortalSources";
 import { useReadingMode } from "./pdf/useReadingMode";
+import { useOpenQortalLink } from "./QortalText";
 
 const PdfViewer = lazy(() => import("./pdf/PdfViewer"));
 
@@ -108,6 +109,7 @@ function PdfPreview({ embed, onClose }: { embed: FileEmbed; onClose: () => void 
 }
 
 export function QortalFile({ embed }: { embed: FileEmbed }) {
+  const openLink = useOpenQortalLink();
   const [preview, setPreview] = useState(false);
   const pdf = isPdf(embed);
   const name = embed.title || embed.filename || "File";
@@ -145,7 +147,7 @@ export function QortalFile({ embed }: { embed: FileEmbed }) {
           </Button>
         )}
         {embed.link && (
-          <Button component={Link} href={embed.link} className="qortal-link" variant="outlined" color="inherit" sx={{ minHeight: 44 }}>
+          <Button component={Link} href={embed.link} onClick={(event: MouseEvent) => openLink(event, embed.link!)} className="qortal-link" variant="outlined" color="inherit" sx={{ minHeight: 44 }}>
             {qshare ? "Open in Q-Share" : "Open"}
           </Button>
         )}

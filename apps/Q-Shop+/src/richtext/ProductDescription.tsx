@@ -9,7 +9,7 @@
  * - a paragraph that is only a Q-Tube video link plays it, and one that is
  *   only a Q-Share link shows the share's files; both are read from QDN only
  *   once they scroll into view, and stay plain links if they can't be;
- * - qortal:// links open in Hub; web, mail and phone links copy themselves.
+ * - qortal:// links open in a new Hub tab (QortalText.tsx useOpenQortalLink); web, mail and phone links copy themselves.
  *
  * A product with only the original's plain `description` shows it the same
  * way (a paragraph a line), so its Qortal links work too.
@@ -27,6 +27,7 @@ import { descriptionHtmlOf } from "./plainText";
 import { QortalVideo } from "./QortalVideo";
 import { QortalFile } from "./QortalFile";
 import { filesFromQshare, videoFromQtube } from "./qortalSources";
+import { useOpenQortalLink } from "./QortalText";
 
 export const RichText = styled("div")(({ theme }) => ({
   width: "100%",
@@ -114,9 +115,10 @@ export function segmentsOf(clean: string): Segment[] {
 }
 
 function PlainLink({ href }: { href: string }) {
+  const open = useOpenQortalLink();
   return (
     <Typography component="p">
-      <Link href={href} className="qortal-link" sx={{ wordBreak: "break-all" }}>
+      <Link href={href} className="qortal-link" title="Opens in a new tab" onClick={(event) => open(event, href)} sx={{ wordBreak: "break-all" }}>
         {href}
       </Link>
     </Typography>
@@ -241,8 +243,12 @@ export function ProductMedia({ parts }: { parts: DescriptionParts }) {
 export function ProductDescription({ parts }: { parts: DescriptionParts }) {
   const dispatch = useDispatch();
 
-  // qortal:// links keep their default (q-apps.js opens them in Hub); the others copy themselves.
+  const openQortal = useOpenQortalLink();
+  // qortal:// links open in a new Hub tab; the others copy themselves.
   const copyLink = async (event: MouseEvent<HTMLDivElement>) => {
+    const qortal = event.target instanceof Element ? event.target.closest("a[href]") : null;
+    const href = qortal?.getAttribute("href") ?? "";
+    if (/^qortal:\/\//i.test(href)) return openQortal(event, href);
     const link = event.target instanceof Element ? event.target.closest("a[data-copy-link]") : null;
     const target = link ? copyTarget(link.getAttribute("href") ?? "") : null;
     if (!target) return;
