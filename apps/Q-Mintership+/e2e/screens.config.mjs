@@ -70,6 +70,10 @@ function worldFor(route) {
 // Shareable links: a decision still waiting, one decided (with its signatures), a nomination.
 const DECIDED_SIG = addDecidedSignatures(world);
 const PENDING_SIG = world.pending.find((t) => t.type === 'GROUP_KICK').signature;
+// Ünïcode Ñame's expired invite answered Nora Nominator's nomination: credited to her.
+const NOMINATED_SIG = world.decided.find(
+  (t) => t.type === 'GROUP_INVITE' && t.invitee === ADDR.expired
+).signature;
 // Public comments on Wren Waiting's nomination and bob+builder's invite, and a hidden one.
 addComments(world);
 // Two former members have asked to join again: Requested to join MINTER Group marks them.
@@ -878,6 +882,14 @@ export default {
       key: 'decision-decided',
       path: `/decisions/${DECIDED_SIG}?as=learner`,
       after: wait('main [aria-label^="Approved by"]'),
+    },
+    // A decided invite that answered a nomination: proposed by the nominator, first approval by a Minter Admin.
+    {
+      key: 'decision-nominated',
+      path: `/decisions/${NOMINATED_SIG}?as=learner`,
+      after: async (page) => {
+        await page.getByText(/First approval by/).waitFor({ timeout: 8000 });
+      },
     },
     {
       key: 'nomination',
