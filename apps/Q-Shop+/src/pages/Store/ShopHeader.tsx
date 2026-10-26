@@ -34,6 +34,8 @@ import { ShipsToYou } from "../../delivery/ShipsToYou";
 import { languagesOf, languagesText } from "../../shop/languages";
 import TranslateOutlinedIcon from "@mui/icons-material/TranslateOutlined";
 import { QortalText } from "../../richtext/QortalText";
+import { ShopLinks } from "../../shop/ShopLinks";
+import { shopLinksOf } from "../../shop/links";
 
 
 const panelSx = {
@@ -316,6 +318,12 @@ export function ShopHeader({
         </Box>
       </Box>
       {shop.description ? <ShopDescription text={shop.description} /> : null}
+      {/* The seller's links (shop/links.ts): its Q-Apps and websites, with their avatars. */}
+      {shopLinksOf(shop).length > 0 && (
+        <Box sx={{ mt: 2 }}>
+          <ShopLinks links={shopLinksOf(shop)} />
+        </Box>
+      )}
       {/* Away for a while (shop/away.ts): before anyone adds to the cart. */}
       <AwayNotice shop={shop} sx={{ mt: 2 }} />
       <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2, "& > *": { flex: { xs: "1 1 auto", sm: "0 0 auto" } } }}>

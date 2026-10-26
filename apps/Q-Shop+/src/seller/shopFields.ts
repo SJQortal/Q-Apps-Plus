@@ -12,6 +12,7 @@ import type { StoreFields } from "../qdn/payloads";
 import { MAX_RETURNS_TEXT, MAX_TERMS_TEXT, policiesForPublish, policiesOf } from "../shop/policies";
 import { awayForPublish, awayOf, dayToInput } from "../shop/away";
 import { languagesOf } from "../shop/languages";
+import { MAX_SHOP_LINKS, isShopLinkUrl, shopLinksOf } from "../shop/links";
 
 export interface ShopFormValues {
   logo: string | null;
@@ -42,6 +43,8 @@ export interface ShopFormValues {
   awayNote: string;
   /** The languages the seller answers in (shop/languages.ts codes). */
   languages: string[];
+  /** The shop's qortal:// links (shop/links.ts), as typed: a row may still be empty. */
+  links: { url: string; label: string }[];
 }
 
 /** The original's limit for a shop title. */
@@ -77,6 +80,7 @@ export function shopFormValues(store?: {
   policies?: unknown;
   away?: unknown;
   languages?: unknown;
+  links?: unknown;
 } | null): ShopFormValues {
   const supported = Array.isArray(store?.supportedCoins) ? store.supportedCoins : [];
   const policies = policiesOf(store);
@@ -104,6 +108,7 @@ export function shopFormValues(store?: {
     awayUntil: dayToInput(away?.until),
     awayNote: away?.note ?? "",
     languages: languagesOf(store),
+    links: shopLinksOf(store).map((l) => ({ url: l.url, label: l.label ?? "" })),
   };
 }
 
@@ -127,7 +132,18 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
     policies: policiesForPublish(values) ?? null,
     away: awayForPublish(values),
     languages: values.languages.length > 0 ? [...values.languages] : null,
+    links: linksForPublish(values),
   };
+}
+
+/** The links with an address, trimmed, at most four (null: none, so the field goes). */
+function linksForPublish(values: ShopFormValues): { url: string; label?: string }[] | null {
+  const links = values.links
+    .map((l) => ({ url: l.url.trim(), label: l.label.trim() }))
+    .filter((l) => l.url)
+    .slice(0, MAX_SHOP_LINKS)
+    .map((l) => (l.label ? l : { url: l.url }));
+  return links.length > 0 ? links : null;
 }
 
 /** The US states it ships to when that is some only (null: every state, or not the United States). */
@@ -148,6 +164,7 @@ export function validateShopForm(values: ShopFormValues): string | null {
   if (usStates(values)?.length === 0) return "Tick the US states the shop ships to, or untick the United States";
   if (values.returns.trim().length > MAX_RETURNS_TEXT) return `Shorten what you say about returns to ${MAX_RETURNS_TEXT} characters`;
   if (values.terms.trim().length > MAX_TERMS_TEXT) return `Shorten your other terms to ${MAX_TERMS_TEXT} characters`;
+  if (values.links.some((l) => l.url.trim() && !isShopLinkUrl(l.url.trim()))) return "Use a qortal:// address for each link (Hub opens only those)";
   for (const t of FOREIGN_TICKERS) {
     if (values.coins[t] && !values.addresses[t].trim()) return `Add your ${t} payout address, or switch ${t} off`;
   }

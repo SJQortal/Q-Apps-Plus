@@ -32,6 +32,7 @@ import { autocompletePaperProps, selectMenuProps } from "../components/common/me
 import { DISPATCH_DAY_CHOICES, MAX_RETURNS_TEXT, MAX_TERMS_TEXT, RETURN_DAY_CHOICES } from "../shop/policies";
 import { MAX_AWAY_NOTE } from "../shop/away";
 import { LANGUAGES, MAX_LANGUAGES, languageName } from "../shop/languages";
+import { ShopLinksField } from "../shop/ShopLinksField";
 import { DateField, dayKey } from "../components/common/DateTimeFields";
 
 const NOT_SAID = "none";
@@ -99,6 +100,7 @@ export function ShopForm({ values, onChange, onImageError }: ShopFormProps) {
           minRows={3}
           maxRows={10}
         />
+        <ShopLinksField links={values.links} onChange={(links) => set("links", links)} />
         <Box>
           <TextField
             label="Meta description"

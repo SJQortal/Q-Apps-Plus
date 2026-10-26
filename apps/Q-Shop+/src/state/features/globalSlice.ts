@@ -32,6 +32,8 @@ export interface CurrentStore {
   away?: unknown;
   /** + app, additive: the languages the seller answers in (shop/languages.ts reads them safely). */
   languages?: unknown;
+  /** + app, additive: the shop's qortal:// links (shop/links.ts reads them safely). */
+  links?: unknown;
   id: string;
   title: string;
   description: string;

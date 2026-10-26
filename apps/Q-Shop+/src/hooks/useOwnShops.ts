@@ -82,6 +82,7 @@ export function currentStoreFrom(storeId: string, owner: string, json: any, row?
     policies: policiesOf(json) ?? undefined,
     away: json?.away && typeof json.away === "object" && !Array.isArray(json.away) ? json.away : undefined,
     languages: Array.isArray(json?.languages) ? json.languages : undefined,
+    links: Array.isArray(json?.links) ? json.links : undefined,
     owner,
   } as unknown as CurrentStore;
 }

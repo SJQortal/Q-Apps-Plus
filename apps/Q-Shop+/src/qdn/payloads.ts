@@ -6,6 +6,7 @@
  */
 import type { ShopPolicies } from "../shop/policies";
 import type { Away } from "../shop/away";
+import type { ShopLink } from "../shop/links";
 import { noteWithTracking, type Tracking } from "../orders/tracking";
 import {
   CATALOGUE_BASE,
@@ -87,6 +88,8 @@ export interface StoreFields {
   away?: Away | null;
   /** + app, additive: the languages the seller answers in (shop/languages.ts codes); null takes them out; left out, an edit keeps the shop's own. */
   languages?: string[] | null;
+  /** + app, additive: the shop's qortal:// links (shop/links.ts); null takes them out; left out, an edit keeps the shop's own. */
+  links?: ShopLink[] | null;
 }
 
 /**
@@ -137,6 +140,15 @@ function withLanguages<T extends Record<string, any>>(obj: T, languages: string[
   return rest;
 }
 
+/** The shop object with `links` set, or without them (null); unchanged when not given. */
+function withLinks<T extends Record<string, any>>(obj: T, links: ShopLink[] | null | undefined): T {
+  if (links === undefined) return obj;
+  if (links && links.length > 0) return { ...obj, links: links.map((l) => ({ ...l })) };
+  const rest = { ...obj };
+  delete rest.links;
+  return rest;
+}
+
 /** The shop object with `away` set, or without it (null); unchanged when not given. */
 function withAway<T extends Record<string, any>>(obj: T, away: Away | null | undefined): T {
   if (away === undefined) return obj;
@@ -176,7 +188,7 @@ export function buildCreateStorePublish(args: {
 }) {
   const { name, shortStoreId, fields, created } = args;
   const identifier = storeIdentifier(shortStoreId);
-  const storeObj = withLanguages(withAway(withPolicies(withShippingStates(
+  const storeObj = withLinks(withLanguages(withAway(withPolicies(withShippingStates(
     withShippingCountries(
     withMetaDescription(
       withAssets(
@@ -198,7 +210,7 @@ export function buildCreateStorePublish(args: {
     fields.shippingCountries
     ),
     fields.shippingStates
-  ), fields.policies), fields.away), fields.languages);
+  ), fields.policies), fields.away), fields.languages), fields.links);
   const dataContainer = emptyDataContainer(identifier, shortStoreId, name);
   const resourceStore: PublishResource = {
     action: "PUBLISH_QDN_RESOURCE",
@@ -260,7 +272,7 @@ export function buildEditStorePublish(args: {
       storeObj = rest;
     }
   }
-  storeObj = withLanguages(
+  storeObj = withLinks(withLanguages(
     withAway(
       withPolicies(
         withShippingStates(withShippingCountries(withMetaDescription(storeObj, fields.metaDescription), fields.shippingCountries), fields.shippingStates),
@@ -269,7 +281,7 @@ export function buildEditStorePublish(args: {
       fields.away
     ),
     fields.languages
-  );
+  ), fields.links);
   return {
     storeObj,
     request: {
