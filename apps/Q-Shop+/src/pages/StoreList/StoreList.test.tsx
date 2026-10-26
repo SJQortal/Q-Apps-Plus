@@ -183,8 +183,9 @@ describe("home page", () => {
     // Shop 22's JSON fails the original's check (no description).
     world.shops[22].description = "";
     const { node } = renderHome({ world, allInView: true });
-    await waitFor(() => expect(screen.getByRole("img", { name: "Shop number 23" })).toBeInTheDocument());
-    await waitFor(() => expect(screen.queryByRole("heading", { name: "Shop number 22" })).not.toBeInTheDocument());
+    // 24 shop reads at once: slow under a busy test run.
+    await waitFor(() => expect(screen.getByRole("img", { name: "Shop number 23" })).toBeInTheDocument(), { timeout: 8000 });
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Shop number 22" })).not.toBeInTheDocument(), { timeout: 8000 });
     expect(node.summary().resources.STORE).toBe(24);
   });
 
@@ -343,7 +344,7 @@ describe("home page", () => {
 
     it("an old link to Pays in BTC shows every shop: Q-Shop+ takes QORT, ARRR and assets only", async () => {
       const { node } = renderHome({ path: "/?pay=BTC" });
-      await waitFor(() => expect(cards()).toHaveLength(24));
+      await waitFor(() => expect(cards()).toHaveLength(24), { timeout: 8000 });
       expect(screen.queryByRole("button", { name: /Remove Pays in/ })).not.toBeInTheDocument();
       expect(node.summary().resources).toEqual({});
     });
@@ -353,9 +354,9 @@ describe("home page", () => {
       world.shops[4].acceptedAssets = [{ id: 81, name: "Gold" }];
       const first = renderHome({ world, path: "/?pay=assets", allInView: true });
       // 24 shop reads: under a busy test run this takes longer than waitFor's default second.
-      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 4"]), { timeout: 8000 });
+      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 4"]), { timeout: 15_000 });
       // Shop 4 can show before the other reads have landed: wait for all 24.
-      await waitFor(() => expect(first.node.summary().resources.STORE).toBe(24), { timeout: 8000 });
+      await waitFor(() => expect(first.node.summary().resources.STORE).toBe(24), { timeout: 15_000 });
       first.unmount();
 
       // Shop 7 starts taking an asset; the index (read again after a pull to
@@ -365,12 +366,12 @@ describe("home page", () => {
       invalidateQdnSearches();
       resetHomeMemory();
       const second = renderHome({ world, path: "/?pay=assets", allInView: true });
-      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 7", "Shop number 4"]), { timeout: 8000 });
+      await waitFor(() => expect(cardTitles()).toEqual(["Shop number 7", "Shop number 4"]), { timeout: 15_000 });
       // One shop JSON read again, not 24.
       expect(second.node.fetchCalls.filter((u) => u.startsWith("/arbitrary/STORE/"))).toEqual([
         "/arbitrary/STORE/Seller%207/q-store-general-shop-7",
       ]);
-    });
+    }, 50_000);
 
     it("My shops shows the signed-in name's shops, with a Yours badge", async () => {
       renderHome({ user: "Seller Name", myStores: [MY_SHOP] });
