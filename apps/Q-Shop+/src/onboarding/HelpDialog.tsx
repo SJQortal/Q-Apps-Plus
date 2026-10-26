@@ -66,6 +66,10 @@ export const HELP: { title: string; items: [string, string][] }[] = [
         "Buyers pay you directly: QORT to your Qortal address, ARRR to the address in Edit shop, Q-Assets to your Qortal address. Each order arrives by Q-Mail and in your Orders, with the payment checked against the chain.",
       ],
       [
+        "How do buyers pay in a Q-Asset?",
+        "Edit shop → Q-Assets. Give a product a price in the asset, or let the asset's other prices convert from QORT: at the Q-Assets trade portal's price (its latest trade, read from your node) or at your own rate (1 asset = so much QORT). Converting lets buyers pay everything in it, delivery included; an asset that can't be split rounds up to whole units.",
+      ],
+      [
         "How do discount codes work?",
         "Shop Settings → Discount codes: a percentage off, free delivery, or both, for chosen products (by collection, or all), some days, orders over an amount, or some Qortal names (suggested as you type, or a Q-Chat group's members). Codes stay secret on Qortal (only their fingerprints are published), and each order's discount is checked against yours.",
       ],
