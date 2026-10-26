@@ -331,7 +331,7 @@ const storeJson = (s) => ({
   foreignCoins: s.arrr ? { ARRR: 'zs1arrrpayoutaddressxxxxxxxxxxxxxxxxxxxxxxxx' } : { ARRR: '' },
   supportedCoins: s.arrr ? ['QORT', 'ARRR'] : ['QORT'],
   // The seller's shop also takes a Q-Asset: its products, and each variant, can have a price in it.
-  ...(s.short === 'my-shop' && { acceptedAssets: [{ id: 81, name: 'Gold Bar' }] }),
+  ...(s.short === 'my-shop' && { acceptedAssets: [{ id: 81, name: 'Gold Bar', price: { from: 'market' } }] }),
   // The shop's links (shop/links.ts): a Q-App and a website, with their avatars.
   ...((s.short === 'my-shop' || s.short === 'shop-1') && { links: [{ url: 'qortal://APP/Q-Blog/blog/Shop+Plus', label: 'Our blog' }, { url: 'qortal://WEBSITE/Shop+Plus' }] }),
   // Ålund Ceramics is away for a week (shop/away.ts).
@@ -579,6 +579,9 @@ export default {
     if (p.startsWith('/transactions/')) return json(route, []).then(() => true);
     // The account's balances (wallet/balances.ts): QORT and the Gold Bar shops take.
     if (p === '/assets/balances') return json(route, [{ assetId: 0, balance: '1523.44718203' }, { assetId: 81, balance: '12.5' }]).then(() => true);
+    // Gold Bar on the Q-Assets trade portal: bought with QORT, 2 QORT each (money/assetRates.ts).
+    if (p === '/assets/trades/recent') return json(route, url.searchParams.get('assetid') === '0' && url.searchParams.get('otherassetid') === '81' ? [{ assetId: 0, otherAssetId: 81, amount: '20', otherAmount: '10', timestamp: Date.now() - 2 * 86_400_000 }] : []).then(() => true);
+    if (p.startsWith('/assets/orderbook')) return json(route, []).then(() => true);
     if (p.startsWith('/assets')) return json(route, p.includes('/info') ? { assetId: 81, name: 'Gold Bar', owner: 'QOwner', quantity: 1000, isDivisible: true, isUnspendable: false } : [{ assetId: 0, name: 'QORT', description: 'QORTAL coin', isDivisible: true }, { assetId: 81, name: 'Gold Bar', description: 'A test asset', isDivisible: true }, { assetId: 82, name: 'Silver', description: '', isDivisible: true }, { assetId: 83, name: 'Gold Seats', description: 'Whole seats only', isDivisible: false }, { assetId: 84, name: 'Golden Locked', description: '', isDivisible: true, isUnspendable: true }]).then(() => true);
     // Videos and files in descriptions: on the node at once.
     if (p.startsWith('/arbitrary/resource/status/')) return json(route, { status: 'READY', percentLoaded: 100 }).then(() => true);
@@ -836,6 +839,15 @@ export default {
     { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-publish-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a video' }); await d.getByRole('tab', { name: 'Publish' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a PDF or file' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Publish a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
+    // An asset's other prices convert at the trade portal's price (money/assetRates.ts).
+    { key: 'seller-edit-shop-assets', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const d = page.getByRole('dialog', { name: 'Edit shop' }); await d.getByText(/on the trade portal \(latest trade/).scrollIntoViewIfNeeded({ timeout: 6000 }); await page.waitForTimeout(400); } },
+    // A buyer paying in Gold Bar: prices without one convert at the portal's price, with a line saying so.
+    { key: 'shop-pay-asset', path: `/${encodeURIComponent('Seller Name')}/q-store-general-my-shop`, after: async (page) => {
+      await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('qshopplus-settings') || '{}'); s.preferredCoin = 'ASSET:81'; localStorage.setItem('qshopplus-settings', JSON.stringify(s)); });
+      await page.reload();
+      await page.getByText(/1 Gold Bar ≈ 2.00 QORT/).waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
     { key: 'seller-edit-shop', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit shop' }).first().click({ timeout: 4000 }); const box = page.getByRole('dialog', { name: 'Edit shop' }).getByRole('textbox', { name: /^Meta description/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('Hand-thrown mugs and plates from Lisbon.'); await page.waitForTimeout(400); } },
     { key: 'seller-edit-policies', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, after: async (page) => {
       await page.waitForTimeout(700);
