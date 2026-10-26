@@ -46,9 +46,9 @@ describe("the balance in the header", () => {
     const rows = within(assets).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
     expect(within(rows[0]).getByText("Gold Bar")).toBeInTheDocument();
-    expect(within(rows[0]).getByText("12.5")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("12.50")).toBeInTheDocument();
     expect(within(rows[1]).getByText("Silver")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("0")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("0.00")).toBeInTheDocument();
     // Hub asks before ARRR is read, so it's read only when asked.
     expect(q.callsFor("GET_WALLET_BALANCE")).toHaveLength(0);
     fireEvent.click(within(panel).getByRole("button", { name: "Show" }));

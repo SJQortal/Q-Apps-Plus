@@ -19,14 +19,15 @@ import { fetchAssetQuote } from "../../../money/assetRates";
 import { readArrrBalance, refreshBalances, useBalances, useShowBalance } from "../../../wallet/balances";
 
 /** 1,234.56 (a large amount), 12.3456, 0.00012345 (a small one). */
+/** At least two decimals, as QORT amounts show everywhere ("7,000.60", not "7,000.6"). */
 export function balanceText(amount: number): string {
   const digits = amount >= 1000 ? 2 : amount >= 1 ? 4 : 8;
-  return amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: digits });
+  return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: digits });
 }
 
-/** The header's short form: two decimals, or four under one. */
+/** The header's short form: two decimals, or up to four under one. */
 function shortText(amount: number): string {
-  return amount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: amount >= 1 ? 2 : 4 });
+  return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: amount >= 1 ? 2 : 4 });
 }
 
 /** The Q-Assets the shops loaded so far take (their cards, pages and the cart), each once. */
