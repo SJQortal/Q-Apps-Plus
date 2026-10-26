@@ -12,14 +12,19 @@
  * fell back to QORT here; doing that through the preferred coin would also
  * have rewritten the buyer's Settings choice for every shop, since the
  * preferred coin is saved (state/store.ts).
+ *
+ * A Q-Asset has a rate when the shop gives it a price setting
+ * (money/assetRates.ts: the trade portal's or the seller's own); without
+ * one, only the seller's prices in the asset show, as before.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import type { RootState } from "../state/store";
 import { setPreferredCoin } from "../state/features/storeSlice";
 import { setNotification } from "../state/features/notificationsSlice";
-import { isForeignTicker, shopCoins, type CoinId, type ShopCoinSettings } from "./coins";
-import { cachedRate, getRate } from "./rates";
+import { assetIdOf, coinLabel, shopCoins, type CoinId, type ShopCoinSettings } from "./coins";
+import { cachedCoinRate, coinRate, needsRate, rateKey } from "./coinRate";
+import type { AssetRate } from "./assetRates";
 
 /**
  * Every price on screen uses this hook, so a failed rate would raise the same
@@ -45,8 +50,10 @@ export interface ShopCoin {
   coins: CoinId[];
   /** The coin prices show in and checkout pays in. */
   coin: string;
-  /** Foreign coin per QORT for `coin`; null for QORT, assets, while loading, or when the node has none. */
+  /** Foreign coin (or asset units) per QORT for `coin`; null for QORT, an asset without a price setting, while loading, or when the node has none. */
   rate: number | null;
+  /** For an asset with a rate: QORT per unit and where it comes from, to say so beside prices. */
+  assetRate: AssetRate | null;
   rateLoading: boolean;
   /**
    * The node couldn't give `coin`'s rate: prices converted from QORT can't be
@@ -59,6 +66,7 @@ export interface ShopCoin {
 interface RateState {
   coin: string;
   rate: number | null;
+  asset?: AssetRate | null;
   failed: boolean;
 }
 
@@ -67,33 +75,38 @@ export function useShopCoin(shop: ShopCoinSettings | null | undefined): ShopCoin
   const preferred = useSelector((state: RootState) => state.store.preferredCoin);
   const coins = useMemo(() => shopCoins(shop), [shop]);
   const coin = (coins as string[]).includes(preferred) ? preferred : "QORT";
-  const needsRate = isForeignTicker(coin);
-  const [rateState, setRateState] = useState<RateState>(() => ({
-    coin,
-    rate: needsRate ? cachedRate(coin) : null,
-    failed: false,
-  }));
-  const current: RateState =
-    rateState.coin === coin ? rateState : { coin, rate: needsRate ? cachedRate(coin) : null, failed: false };
-  const rate = needsRate ? current.rate : null;
-  const rateError = needsRate && rate === null && current.failed;
+  const needs = needsRate(coin, shop);
+  // Keyed by the coin and an asset's price setting, so a changed setting reads again.
+  const key = rateKey(coin, shop);
+  const [rateState, setRateState] = useState<RateState>(() => ({ coin: key, ...(cachedCoinRate(coin, shop) ?? { rate: null }), failed: false }));
+  const current: RateState = rateState.coin === key ? rateState : { coin: key, ...(cachedCoinRate(coin, shop) ?? { rate: null }), failed: false };
+  const rate = needs ? current.rate : null;
+  const rateError = needs && rate === null && current.failed;
+  const label = coinLabel(coin, shop);
+  const isAsset = assetIdOf(coin) !== null;
+  const shopRef = useRef(shop);
+  useEffect(() => {
+    shopRef.current = shop;
+  });
 
   useEffect(() => {
-    if (!needsRate) return;
+    if (!needs) return;
     let alive = true;
-    getRate(coin).then(
+    coinRate(coin, shopRef.current).then(
       (value) => {
-        if (alive) setRateState({ coin, rate: value, failed: false });
+        if (alive) setRateState({ coin: key, rate: value.rate, asset: value.asset, failed: false });
       },
       () => {
         if (!alive) return;
         // Keep the buyer's coin (never write a fallback into the saved preference).
-        setRateState({ coin, rate: null, failed: true });
+        setRateState({ coin: key, rate: null, failed: true });
         if (shouldNotify(coin)) {
           dispatch(
             setNotification({
               alertType: "error",
-              msg: `Your node has no ${coin} exchange rate right now. Prices the seller set in ${coin} still show; other prices can't be paid in ${coin}.`,
+              msg: isAsset
+                ? `The Q-Assets trade portal has no ${label} price on your node right now. Prices the seller set in ${label} still show; other prices can't be paid in ${label}.`
+                : `Your node has no ${coin} exchange rate right now. Prices the seller set in ${coin} still show; other prices can't be paid in ${coin}.`,
             })
           );
         }
@@ -102,8 +115,8 @@ export function useShopCoin(shop: ShopCoinSettings | null | undefined): ShopCoin
     return () => {
       alive = false;
     };
-  }, [coin, needsRate, dispatch]);
+  }, [coin, key, needs, isAsset, label, dispatch]);
 
   const setCoin = useCallback((next: string) => dispatch(setPreferredCoin(next)), [dispatch]);
-  return { coins, coin, rate, rateLoading: needsRate && rate === null && !rateError, rateError, setCoin };
+  return { coins, coin, rate, assetRate: (needs && current.asset) || null, rateLoading: needs && rate === null && !rateError, rateError, setCoin };
 }

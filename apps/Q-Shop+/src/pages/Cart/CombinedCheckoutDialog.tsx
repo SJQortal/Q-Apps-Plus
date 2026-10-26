@@ -25,8 +25,8 @@ import RemoveCircleOutlineIcon from "@mui/icons-material/RemoveCircleOutlineOutl
 import ScheduleOutlinedIcon from "@mui/icons-material/ScheduleOutlined";
 import { ResponsiveDialog } from "../../components/common/mobile";
 import { AmountTag } from "../../components/money/PriceTag";
-import { assetIdOf, coinLabel, isForeignTicker } from "../../money/coins";
-import { getRate } from "../../money/rates";
+import { assetIdOf, coinLabel } from "../../money/coins";
+import { coinRate, needsRate, rateKey } from "../../money/coinRate";
 import { formatPrice, unitPrice } from "../../money/pricing";
 import { paymentRequest, startCheckout, type CheckoutBuyer, type CheckoutStep } from "../../money/checkout";
 import { isDigitalOnly, missingDeliveryFields, type CartLine, type DeliveryInput, type OrderDetails } from "../../money/order";
@@ -86,7 +86,7 @@ function reprice(p: Payment, delivery: CartLine | null, applied: AppliedDiscount
     ? discountLine({ discount: applied.discount, code: applied.code, lines: p.baseLines, deliveryLine: delivery, coin: p.coin, rate: p.rate, digital: p.digital, wholeUnits: p.wholeUnits })
     : null;
   const lines = [...p.baseLines, ...(delivery ? [delivery] : []), ...(off ? [off.line] : [])];
-  const priced = priceLines(lines, p.coin, p.rate, false, isForeignTicker(p.coin) && p.rate === null);
+  const priced = priceLines(lines, p.coin, p.rate, false, p.rate === null && needsRate(p.coin, p.shop));
   if (!priced.ok) return null;
   return { lines, amount: priced.amount, details: priced.details, discount: off && applied ? { applied, amount: off.amount } : null };
 }
@@ -263,8 +263,9 @@ export function CombinedCheckoutDialog({
     setGettingRates(true);
     const edits = addressEdits.current;
     const rates = new Map<string, number | null>();
-    for (const coin of new Set(included.map((s) => s.coin).filter(isForeignTicker))) {
-      rates.set(coin, await getRate(coin).catch(() => null));
+    for (const s of included) {
+      const key = rateKey(s.coin, s.shop);
+      if (needsRate(s.coin, s.shop) && !rates.has(key)) rates.set(key, await coinRate(s.coin, s.shop, { fresh: true }).then((r) => r.rate, () => null));
     }
     // Each shop that ships prices its delivery for the address, all read at once; every shop's discount codes too.
     const shipped = included.filter((s) => s.shop && !isDigitalOnly(s.lines));
@@ -300,7 +301,7 @@ export function CombinedCheckoutDialog({
     const notDelivered: { key: string; message: string }[] = [];
     for (const s of included) {
       if (!s.shop) continue;
-      const rate = isForeignTicker(s.coin) ? (rates.get(s.coin) ?? null) : s.rate;
+      const rate = needsRate(s.coin, s.shop) ? (rates.get(rateKey(s.coin, s.shop)) ?? null) : s.rate;
       const digital = isDigitalOnly(s.lines);
       let charge: DeliveryCharge = { ok: true, line: null, free: false };
       let offered: DeliveryChoice[] = [];

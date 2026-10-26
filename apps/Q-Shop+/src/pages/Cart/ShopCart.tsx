@@ -6,6 +6,7 @@ import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
 import { AmountTag } from "../../components/money/PriceTag";
 import { useShopCoin } from "../../money/useShopCoin";
 import { coinLabel } from "../../money/coins";
+import { noRateText } from "../../money/coinRate";
 import type { CartLine } from "../../money/order";
 import { storePath } from "../../qdn/links";
 import { shortStoreIdOf } from "../../qdn/identifiers";
@@ -188,8 +189,8 @@ export function ShopCart({
             )}
             {!priced.ok && priced.reason === "no-rate" && (
               <Typography variant="body2" color="text.secondary">
-                Your node has no {coin} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {coin}. Pick
-                another coin, or remove {priced.missing.length === 1 ? "it" : "them"} to pay in {coin}.
+                {noRateText(coin, coinLabel(coin, shop))}, so {priced.missing.join(", ")} can&apos;t be paid in {coinLabel(coin, shop)}. Pick
+                another coin, or remove {priced.missing.length === 1 ? "it" : "them"} to pay in {coinLabel(coin, shop)}.
               </Typography>
             )}
             {leftOut > 0 && (

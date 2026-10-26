@@ -6,7 +6,7 @@
  */
 import type { CartLine, DeliveryInput } from "../money/order";
 import { unitPrice } from "../money/pricing";
-import { coinLabel, type ShopCoinSettings } from "../money/coins";
+import { assetIdOf, coinLabel, type ShopCoinSettings } from "../money/coins";
 import { fiatPricingOf, type FiatPricing } from "../money/fiatPricing";
 import { dataContainerIdentifier } from "../qdn/identifiers";
 import { fetchQdnJson } from "../qdn/search";
@@ -94,7 +94,9 @@ export function deliveryCharge(args: {
     };
   }
   if (!unitPrice(quote.line.product, coin, rate)) {
-    return { ok: false, message: `Delivery can't be paid in ${coinLabel(coin, shop)}: go back and pick another coin.` };
+    // An asset converts only at a price the shop gives it (money/assetRates.ts).
+    const why = assetIdOf(coin) !== null && !rate ? ` ${name} gives ${coinLabel(coin, shop)} no price for it.` : "";
+    return { ok: false, message: `Delivery can't be paid in ${coinLabel(coin, shop)}.${why} Go back and pick another coin.` };
   }
   const option = (quote.line.product as { delivery?: { option?: { id: string; name: string } } } | null)?.delivery?.option;
   return { ok: true, line: quote.line, free: false, ...(option && { option }) };

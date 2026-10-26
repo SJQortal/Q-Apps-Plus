@@ -24,8 +24,9 @@ describe("pricing (the original's rules)", () => {
     expect(unitPrice(mug, "ARRR", 0.3)).toBe(1.5 * 0.3);
     // No rate yet: no price (the original showed the QORT number as ARRR).
     expect(unitPrice(mug, "ARRR", null)).toBeUndefined();
-    // Assets need the seller's own price.
-    expect(unitPrice(mug, "ASSET:81", 2)).toBeUndefined();
+    // Assets: the seller's own price, else QORT × the asset's rate when the shop gives it one (money/assetRates.ts).
+    expect(unitPrice(mug, "ASSET:81", null)).toBeUndefined();
+    expect(unitPrice(mug, "ASSET:81", 2)).toBe(3);
     expect(unitPrice({ price: [{ currency: "ASSET:81", value: 4 }] }, "ASSET:81", null)).toBe(4);
     expect(ownPrice({ price: [{ currency: "ARRR", value: 0 }] }, "ARRR")).toBeUndefined();
   });

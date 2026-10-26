@@ -10,8 +10,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import type { RootState } from "../../state/store";
 import type { CartLine } from "../../money/order";
-import { coinLabel, isForeignTicker, shopCoins } from "../../money/coins";
-import { cachedRate, getRate } from "../../money/rates";
+import { coinLabel, shopCoins } from "../../money/coins";
+import { cachedCoinRate, coinRate, needsRate, noRateText, rateKey } from "../../money/coinRate";
 import { checkoutBlock, checkoutLinesOf, isLeftOut, priceLines, type CartShop, type PricedLines } from "./cartLines";
 import type { ShopCartView } from "./useCartData";
 
@@ -39,31 +39,38 @@ type RateEntry = { rate: number | null; failed: boolean };
 export function useCartPricing(views: ShopCartView[]): ShopPricing[] {
   const preferred = useSelector((state: RootState) => state.store.preferredCoin);
   const coins = useMemo(() => views.map((view) => coinForShop(view.shop, preferred)), [views, preferred]);
-  const needed = useMemo(() => [...new Set(coins.filter(isForeignTicker))].sort(), [coins]);
-  const neededKey = needed.join(",");
+  // One read per coin (and asset price setting), whichever shops share it.
+  const needed = useMemo(() => {
+    const byKey = new Map<string, { coin: string; shop: CartShop | null }>();
+    views.forEach((view, i) => {
+      if (needsRate(coins[i], view.shop)) byKey.set(rateKey(coins[i], view.shop), { coin: coins[i], shop: view.shop });
+    });
+    return byKey;
+  }, [views, coins]);
+  const neededKey = [...needed.keys()].sort().join("|");
   const [rates, setRates] = useState<Record<string, RateEntry>>({});
 
   useEffect(() => {
     let alive = true;
-    for (const coin of neededKey ? neededKey.split(",") : []) {
-      getRate(coin).then(
-        (rate) => alive && setRates((prev) => ({ ...prev, [coin]: { rate, failed: false } })),
-        () => alive && setRates((prev) => ({ ...prev, [coin]: { rate: null, failed: true } }))
+    for (const [key, { coin, shop }] of needed) {
+      coinRate(coin, shop).then(
+        ({ rate }) => alive && setRates((prev) => ({ ...prev, [key]: { rate, failed: false } })),
+        () => alive && setRates((prev) => ({ ...prev, [key]: { rate: null, failed: true } }))
       );
     }
     return () => {
       alive = false;
     };
-  }, [neededKey]);
+  }, [neededKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return useMemo(
     () =>
       views.map((view, i) => {
         const coin = coins[i];
-        const foreign = isForeignTicker(coin);
-        const entry = rates[coin];
+        const foreign = needsRate(coin, view.shop);
+        const entry = rates[rateKey(coin, view.shop)];
         // The shared cache while it's fresh (5 minutes), else this page's last read; Confirm reads again.
-        const rate = foreign ? (cachedRate(coin) ?? entry?.rate ?? null) : null;
+        const rate = foreign ? (cachedCoinRate(coin, view.shop)?.rate ?? entry?.rate ?? null) : null;
         const failed = foreign && rate === null && !!entry?.failed;
         const lines = checkoutLinesOf(view.lines);
         const priced = priceLines(lines, coin, rate, foreign && rate === null && !failed, failed);
@@ -75,7 +82,7 @@ export function useCartPricing(views: ShopCartView[]): ShopPricing[] {
             : priced.reason === "rate"
               ? `Getting the ${label} rate…`
               : priced.reason === "no-rate"
-                ? `No ${label} rate on your node right now.`
+                ? `${noRateText(coin, label)}.`
                 : `Some items have no price in ${label}.`);
         return {
           view,

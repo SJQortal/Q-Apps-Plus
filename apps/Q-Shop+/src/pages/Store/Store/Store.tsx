@@ -547,7 +547,7 @@ function ShopProducts({
                 {stockSwitch}
               </Box>
             )}
-            <RateNote shopCoin={shopCoin} />
+            <RateNote shopCoin={shopCoin} shop={shop} />
             {scope?.capped && results.length > 0 && (
               <Typography variant="body2" color="text.secondary">
                 {cappedNote}

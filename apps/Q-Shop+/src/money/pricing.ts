@@ -8,10 +8,14 @@
  * - line total = unit × quantity (float); order total = the sum, rounded only
  *   at the end with `toFixed(8)`, which is the amount sent to Hub.
  *
- * Assets have no market rate here: a product can be bought in an asset only
- * when the seller set a price in it.
+ * Assets: the seller's own price in the asset, else the QORT price × the
+ * asset's rate when the shop gives it one (money/assetRates.ts: the trade
+ * portal's or the seller's), rounded up to whole units for an indivisible
+ * asset; with no rate, a product can be bought in an asset only when the
+ * seller set a price in it.
  */
 import { assetIdOf, priceCurrencyKey } from "./coins";
+import { isWholeAsset } from "./assetRates";
 
 export interface PricedProduct {
   price?: { currency: string; value: number | string }[];
@@ -43,7 +47,12 @@ export function unitPrice(
   if (coin === "QORT") return price;
   const own = ownPrice(product, coin);
   if (own) return own;
-  if (assetIdOf(coin) !== null) return undefined;
+  const assetId = assetIdOf(coin);
+  if (assetId !== null) {
+    if (!price || !rate) return undefined;
+    const converted = +price * rate;
+    return isWholeAsset(assetId) ? Math.max(1, Math.ceil(converted - 1e-9)) : converted;
+  }
   if (price && rate) return +price * rate;
   // The original showed the QORT number here until the rate arrived; the + app
   // shows nothing instead (bug 6 in the brief).

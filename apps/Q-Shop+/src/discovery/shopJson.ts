@@ -12,6 +12,7 @@
  * seller's own copy, which doesn't come through here).
  */
 import type { ShopAsset } from "../money/coins";
+import { assetPricingOf } from "../money/assetRates";
 
 /** The STORE JSON as the original writes it, plus the + app's additive fields (docs/apps/Q-Shop+.md → Data contract). */
 export interface ShopJson {
@@ -54,7 +55,7 @@ function finiteNumber(value: unknown): number | undefined {
  * - created: a number, or gone;
  * - supportedCoins: the tickers (text) only;
  * - foreignCoins: the addresses (text) only;
- * - acceptedAssets: `{id, name}` with a positive whole id and a text name only.
+ * - acceptedAssets: `{id, name}` with a positive whole id and a text name only, and a well-formed `price` setting.
  */
 export function normalizeShopJson(json: unknown): (ShopJson & Record<string, unknown>) | null {
   if (!isPlainObject(json)) return null;
@@ -77,7 +78,11 @@ export function normalizeShopJson(json: unknown): (ShopJson & Record<string, unk
   }
   if ("acceptedAssets" in shop) {
     shop.acceptedAssets = Array.isArray(shop.acceptedAssets)
-      ? shop.acceptedAssets.filter(isShopAsset).map((asset) => ({ id: asset.id, name: asset.name }))
+      ? shop.acceptedAssets.filter(isShopAsset).map((asset) => {
+          // Its price setting (money/assetRates.ts), when well formed.
+          const price = assetPricingOf((asset as { price?: unknown }).price);
+          return price ? { id: asset.id, name: asset.name, price } : { id: asset.id, name: asset.name };
+        })
       : [];
   }
   return shop as ShopJson & Record<string, unknown>;

@@ -25,6 +25,7 @@ import { ResponsiveDialog } from "../../components/common/mobile";
 import { AmountTag, PriceTag } from "../../components/money/PriceTag";
 import { useShopCoin } from "../../money/useShopCoin";
 import { assetIdOf, coinLabel, isForeignTicker } from "../../money/coins";
+import { noRateText } from "../../money/coinRate";
 import { formatPrice, unitPrice } from "../../money/pricing";
 import {
   paymentRequest,
@@ -541,7 +542,7 @@ export function CheckoutDialog({
         )}
         {!priced.ok && priced.reason === "no-rate" && (
           <Alert severity="warning">
-            Your node has no {label} exchange rate right now, so {priced.missing.join(", ")} can't be paid in {label}.{" "}
+            {noRateText(coin, label)}, so {priced.missing.join(", ")} can&apos;t be paid in {label}.{" "}
             {coins.length > 1 ? "Pick another coin, or remove it from your cart." : "Remove it from your cart to check out."}
           </Alert>
         )}

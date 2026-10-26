@@ -42,6 +42,20 @@ describe("a shop's JSON, read safely", () => {
     expect(shopCoins(shop)).toEqual(["QORT"]);
   });
 
+  it("keeps an asset's price setting when it's well formed (the shop page priced nothing in the asset without it)", () => {
+    const shop = normalizeShopJson({
+      ...goodShop,
+      acceptedAssets: [
+        { id: 7, name: "Gold", price: { from: "market" } },
+        { id: 8, name: "Silver", price: { from: "seller", qort: "a lot" } },
+      ],
+    })!;
+    expect(shop.acceptedAssets).toEqual([
+      { id: 7, name: "Gold", price: { from: "market" } },
+      { id: 8, name: "Silver" },
+    ]);
+  });
+
   it("keeps only text tickers and addresses", () => {
     const shop = normalizeShopJson({ ...goodShop, supportedCoins: ["QORT", 5, null, "ARRR", { t: 1 }], foreignCoins: ["zs1"] })!;
     expect(shop.supportedCoins).toEqual(["QORT", "ARRR"]);

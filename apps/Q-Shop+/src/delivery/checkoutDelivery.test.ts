@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CartLine } from "../money/order";
+import { unitPrice } from "../money/pricing";
 import { deliveryIdentifier } from "../qdn/identifiers";
 import { resourcePath } from "../qdn/search";
 import { deliveryCharge, deliveryChoices, loadShopDelivery, pickupChoices, withOptionNote } from "./checkoutDelivery";
@@ -30,11 +31,14 @@ describe("the delivery charge at checkout", () => {
       ok: false,
       message: "My Shop doesn't deliver Chair to Texas, United States. Remove it from your cart, pick another address, or ask the seller.",
     });
-    // Assets have no rate: a fee in QORT can't be paid in one.
+    // An asset without a price setting has no rate: a fee in QORT can't be paid in one.
     expect(charge(doc([{ id: "eu", countries: ["PL"], first: 2 }]), "ASSET:7", null)).toEqual({
       ok: false,
-      message: "Delivery can't be paid in Gold: go back and pick another coin.",
+      message: "Delivery can't be paid in Gold. My Shop gives Gold no price for it. Go back and pick another coin.",
     });
+    // With a rate (the asset's trade portal price or the seller's), it converts: 2 QORT at 20 Gold per QORT.
+    const paid = charge(doc([{ id: "eu", countries: ["PL"], first: 2 }]), "ASSET:7", 20);
+    expect(paid.ok && paid.line && unitPrice(paid.line.product, "ASSET:7", 20)).toBe(40);
     const usd = { ...doc([{ id: "eu", countries: ["PL"], first: 2 }]), currency: "USD" };
     expect(charge(usd).ok).toBe(false);
   });

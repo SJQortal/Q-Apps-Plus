@@ -6,6 +6,7 @@
  * out (round 5), so a shop, price, order or setting that still names one is
  * read as without it.
  */
+import { assetPricingOf, type AssetPricing } from "./assetRates";
 
 export type ForeignTicker = "ARRR";
 export type CoinTicker = "QORT" | ForeignTicker;
@@ -64,6 +65,8 @@ export function priceCurrencyKey(coin: string): string {
 export interface ShopAsset {
   id: number;
   name: string;
+  /** How prices without one in the asset convert to it (money/assetRates.ts); none: they don't. */
+  price?: AssetPricing;
 }
 
 export interface ShopCoinSettings {
@@ -101,10 +104,11 @@ export function shopAssets(shop: ShopCoinSettings | null | undefined): ShopAsset
   const out: ShopAsset[] = [];
   for (const asset of assets) {
     if (!asset || typeof asset !== "object") continue;
-    const { id, name } = asset as { id?: unknown; name?: unknown };
+    const { id, name, price } = asset as { id?: unknown; name?: unknown; price?: unknown };
     if (typeof id !== "number" || !Number.isSafeInteger(id) || id <= 0 || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id, name: typeof name === "string" ? name : "" });
+    const pricing = assetPricingOf(price);
+    out.push({ id, name: typeof name === "string" ? name : "", ...(pricing && { price: pricing }) });
   }
   return out;
 }
