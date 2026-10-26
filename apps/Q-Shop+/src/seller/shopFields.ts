@@ -6,7 +6,7 @@
  * there is none, as the original wrote it); `acceptedAssets` and
  * `metaDescription` are the + app's additive fields.
  */
-import { FOREIGN_TICKERS, type ForeignTicker, type ShopAsset } from "../money/coins";
+import { FOREIGN_TICKERS, shopAssets, type ForeignTicker, type ShopAsset } from "../money/coins";
 import { US, shippingCountriesOf, shippingStatesOf, shippingSummaryWithStates } from "../constants/shipping";
 import type { StoreFields } from "../qdn/payloads";
 import { MAX_RETURNS_TEXT, MAX_TERMS_TEXT, policiesForPublish, policiesOf } from "../shop/policies";
@@ -98,7 +98,7 @@ export function shopFormValues(store?: {
     coins: perTicker((t) => supported.includes(t)),
     addresses: perTicker((t) => (typeof store?.foreignCoins?.[t] === "string" ? store.foreignCoins[t] : "")),
     assets: Array.isArray(store?.acceptedAssets)
-      ? store.acceptedAssets.filter((a) => Number.isSafeInteger(a?.id) && a.id > 0).map((a) => ({ id: a.id, name: String(a.name ?? "") }))
+      ? shopAssets(store)
       : [],
     dispatchDays: policies?.dispatchDays ?? null,
     returnDays: policies?.returnDays ?? null,
@@ -128,7 +128,7 @@ export function toStoreFields(values: ShopFormValues): StoreFields {
     logo: values.logo ?? "",
     foreignCoins,
     supportedCoins,
-    acceptedAssets: values.assets.map((a) => ({ id: a.id, name: a.name })),
+    acceptedAssets: values.assets.map((a) => ({ id: a.id, name: a.name, ...(a.price && { price: a.price }) })),
     policies: policiesForPublish(values) ?? null,
     away: awayForPublish(values),
     languages: values.languages.length > 0 ? [...values.languages] : null,

@@ -3,8 +3,9 @@
  * the best matching assets as the seller types (name or #id, any case: the
  * node's list, read once a session, qdn/assets.ts), Add for an exact id or
  * name, and Browse for every asset on the node. Buyers pay an asset with
- * TRANSFER_ASSET to the seller's Qortal address, and only for products with
- * a price in it (money/pricing.ts).
+ * TRANSFER_ASSET to the seller's Qortal address: for products with a price
+ * in it, or for everything (delivery too) when the asset converts at the
+ * trade portal's price or the seller's rate (AssetPriceSetting.tsx).
  */
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
@@ -24,6 +25,7 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { CoinIcon } from "../components/money/CoinIcon";
+import { AssetPriceSetting } from "./AssetPriceSetting";
 import { assetCoinId, type ShopAsset } from "../money/coins";
 import {
   assetInfo,
@@ -113,34 +115,44 @@ export function AssetPicker({ assets, onChange }: AssetPickerProps) {
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
       {assets.length === 0 ? (
         <Typography variant="body2" color="text.secondary">
-          No assets yet. Buyers can pay in an asset only for products you give a price in it.
+          No assets yet. Buyers can pay in an asset for products you give a price in it, or for everything once you set how it converts.
         </Typography>
       ) : (
         <List dense disablePadding aria-label="Accepted assets">
-          {assets.map((asset) => (
-            <ListItem
-              key={asset.id}
-              divider
-              sx={{ px: 0, minHeight: 48 }}
-              secondaryAction={
-                <Tooltip title="Stop accepting">
-                  <IconButton
-                    edge="end"
-                    aria-label={`Stop accepting ${asset.name}`}
-                    onClick={() => onChange((prev) => prev.filter((a) => a.id !== asset.id))}
-                    sx={{ width: 44, height: 44 }}
-                  >
-                    <CloseIcon />
-                  </IconButton>
-                </Tooltip>
-              }
-            >
-              <Box sx={{ mr: 1.5, display: "flex" }}>
-                <CoinIcon coin={assetCoinId(asset.id)} size={22} />
-              </Box>
-              <ListItemText primary={asset.name || `Asset #${asset.id}`} secondary={`Asset #${asset.id}`} />
-            </ListItem>
-          ))}
+          {assets.map((asset) => {
+            const label = asset.name || `Asset #${asset.id}`;
+            return (
+              <ListItem key={asset.id} divider sx={{ px: 0, py: 1, display: "block" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minHeight: 44 }}>
+                  <CoinIcon coin={assetCoinId(asset.id)} size={22} />
+                  <ListItemText primary={label} secondary={`Asset #${asset.id}`} sx={{ my: 0 }} />
+                  <Tooltip title="Stop accepting">
+                    <IconButton
+                      aria-label={`Stop accepting ${asset.name}`}
+                      onClick={() => onChange((prev) => prev.filter((a) => a.id !== asset.id))}
+                      sx={{ width: 44, height: 44 }}
+                    >
+                      <CloseIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                <AssetPriceSetting
+                  assetId={asset.id}
+                  label={label}
+                  value={asset.price}
+                  onChange={(price) =>
+                    onChange((prev) =>
+                      prev.map((a) => {
+                        if (a.id !== asset.id) return a;
+                        const { price: _old, ...rest } = a;
+                        return price ? { ...rest, price } : rest;
+                      })
+                    )
+                  }
+                />
+              </ListItem>
+            );
+          })}
         </List>
       )}
       <Box sx={{ display: "flex", gap: 1, alignItems: "flex-start", flexWrap: "wrap" }}>
