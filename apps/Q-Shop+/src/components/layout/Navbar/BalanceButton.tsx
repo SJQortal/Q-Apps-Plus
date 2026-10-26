@@ -5,7 +5,7 @@
  * It narrows with the header (useHeaderFit.ts): last of all, the amount goes
  * and the QORT mark stays.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, CircularProgress, Divider, IconButton, Popover, Skeleton, Tooltip, Typography } from "@mui/material";
 import type { Theme } from "@mui/material/styles";
@@ -15,6 +15,7 @@ import type { RootState } from "../../../state/store";
 import { CoinIcon } from "../../money/CoinIcon";
 import { dropdownPaperSx } from "../../common/menuStyle";
 import { assetCoinId, shopAssets, type ShopAsset, type ShopCoinSettings } from "../../../money/coins";
+import { fetchAssetQuote } from "../../../money/assetRates";
 import { readArrrBalance, refreshBalances, useBalances, useShowBalance } from "../../../wallet/balances";
 
 /** 1,234.56 (a large amount), 12.3456, 0.00012345 (a small one). */
@@ -49,6 +50,28 @@ function Row({ coin, label, children }: { coin: string; label: string; children:
       <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 600, overflowWrap: "anywhere" }}>{label}</Typography>
       <Box sx={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{children}</Box>
     </Box>
+  );
+}
+
+/** "≈ 12.30 QORT": what an asset balance is worth on the Q-Assets trade portal (money/assetRates.ts), read once the menu shows it. */
+function AssetWorth({ assetId, amount }: { assetId: number; amount: number }) {
+  const [qort, setQort] = useState<number | null>(null);
+  useEffect(() => {
+    if (!(amount > 0)) return;
+    let alive = true;
+    fetchAssetQuote(assetId).then(
+      (quote) => alive && setQort(quote ? quote.qort * amount : null),
+      () => undefined
+    );
+    return () => {
+      alive = false;
+    };
+  }, [assetId, amount]);
+  if (qort === null) return null;
+  return (
+    <Typography variant="caption" color="text.secondary" component="div" title="At the Q-Assets trade portal's price">
+      ≈ {balanceText(qort)} QORT
+    </Typography>
   );
 }
 
@@ -149,6 +172,7 @@ export function BalanceButton({ phone }: { phone: boolean }) {
               return (
                 <Row key={asset.id} coin={assetCoinId(asset.id)} label={label}>
                   {amount !== null ? balanceText(amount) : status === "failed" ? "–" : <Skeleton width={50} />}
+                  {amount !== null && <AssetWorth assetId={asset.id} amount={amount} />}
                 </Row>
               );
             })}
