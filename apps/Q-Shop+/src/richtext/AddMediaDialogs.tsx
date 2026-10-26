@@ -325,7 +325,7 @@ export function AddVideoDialog({
   const tabs = [
     { key: "link" as const, label: "Link" },
     { key: "mine" as const, label: "Your videos" },
-    { key: "upload" as const, label: "Upload" },
+    { key: "upload" as const, label: "Publish" },
   ];
 
   return (
@@ -406,7 +406,7 @@ export function AddVideoDialog({
             <Typography>Looking for your videos…</Typography>
           </Box>
         ) : rows.length === 0 ? (
-          <Typography color="text.secondary">{mineError ?? `${name} has no videos on Qortal yet. Upload one, or paste a link.`}</Typography>
+          <Typography color="text.secondary">{mineError ?? `${name} has no videos on Qortal yet. Publish one, or paste a link.`}</Typography>
         ) : (
           <>
             <List aria-label="Your videos" disablePadding sx={{ border: 1, borderColor: "divider", borderRadius: 2, overflow: "hidden" }}>
@@ -446,7 +446,7 @@ export function AddVideoDialog({
         <FilePick accept="video/*" label="Choose a video" file={file} onPick={setFile} />
         <TextField label="Video title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth slotProps={{ htmlInput: { maxLength: 180 } }} />
         <Typography variant="body2" color="text.secondary">
-          The video is published under {name ?? "your name"} and plays in this product's description. {FEE_NOTE}
+          The video is published under {name ?? "your name"} and plays under this product's pictures. {FEE_NOTE}
         </Typography>
         {publishing && (
           <Box role="status" sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -569,7 +569,7 @@ export function AddFileDialog({
     >
       <Tabs value={tab} onChange={(_, v) => setTab(v)} variant="fullWidth" aria-label="Where the file comes from">
         <Tab value="link" label="Q-Share link" id={`${id}-link-tab`} aria-controls={`${id}-link-panel`} sx={{ minHeight: 48 }} />
-        <Tab value="upload" label="Upload a PDF" id={`${id}-upload-tab`} aria-controls={`${id}-upload-panel`} sx={{ minHeight: 48 }} />
+        <Tab value="upload" label="Publish a PDF" id={`${id}-upload-tab`} aria-controls={`${id}-upload-panel`} sx={{ minHeight: 48 }} />
       </Tabs>
       <TabPanel id={`${id}-link`} active={tab === "link"}>
         <TextField
