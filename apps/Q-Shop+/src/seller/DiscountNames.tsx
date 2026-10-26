@@ -101,6 +101,7 @@ function GroupDialog({ onAdd, onClose }: { onAdd: (group: QortalGroup, names: st
         <Typography variant="body2" color="text.secondary">
           The discount is for the members it has now, each by their Qortal name. Members who join later aren&apos;t added by themselves.
         </Typography>
+        {/* Its list stays in the dialog (its landmark) but is placed "fixed", so this short dialog's scroll area doesn't cut it to two groups (Simon's Hub, 2026-10-26). */}
         <Autocomplete<QortalGroup>
           disablePortal
           options={options}
@@ -116,7 +117,7 @@ function GroupDialog({ onAdd, onClose }: { onAdd: (group: QortalGroup, names: st
           noOptionsText={searching ? "No group has that in its name." : "You're in no groups yet: type a group's name."}
           openOnFocus
           autoHighlight
-          slotProps={{ paper: autocompletePaperProps }}
+          slotProps={{ paper: autocompletePaperProps, popper: { popperOptions: { strategy: "fixed" } } }}
           renderOption={(props, g) => {
             const { key, ...rest } = props as typeof props & { key: string };
             return (
@@ -212,7 +213,8 @@ export function DiscountNamesField({
         limitTags={12}
         getLimitTagsText={(more) => `+${more} more`}
         noOptionsText="No name starts like that"
-        slotProps={{ paper: autocompletePaperProps }}
+        // Placed "fixed", so the dialog's scroll area doesn't cut the suggestions off near its bottom.
+        slotProps={{ paper: autocompletePaperProps, popper: { popperOptions: { strategy: "fixed" } } }}
         renderInput={(params) => (
           <TextField
             {...params}

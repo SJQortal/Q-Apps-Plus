@@ -157,7 +157,7 @@ describe("discount codes in Shop Settings", () => {
     const g = await screen.findByRole("dialog", { name: "Add a group's members" });
     // The seller's own groups are offered before anything is typed.
     fireEvent.keyDown(within(g).getByRole("combobox", { name: "Q-Chat group" }), { key: "ArrowDown" });
-    fireEvent.click(await within(g).findByRole("option", { name: /Biohackers/ }));
+    fireEvent.click(await screen.findByRole("option", { name: /Biohackers/ }));
     fireEvent.click(within(g).getByRole("button", { name: "Add their names" }));
     expect(await within(d).findByText("Added 2 names from Biohackers; 1 member has no name.")).toBeInTheDocument();
     fireEvent.click(within(d).getByRole("button", { name: "Add" }));
