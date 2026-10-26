@@ -14,17 +14,14 @@ import SearchIcon from "@mui/icons-material/Search";
 import CheckIcon from "@mui/icons-material/Check";
 import { ResponsiveDialog } from "../components/common/mobile";
 import { ALL_COUNTRY_CODES, ALL_STATE_CODES, US, countryCode, countryName, stateName } from "../constants/shipping";
+import { matchCountries } from "../constants/countrySearch";
 import { cleanPlace, pickedBuyerPlace, setBuyerPlace, type BuyerPlace } from "./buyerPlace";
 
 const byName = (a: string, b: string) => a.localeCompare(b);
 
-/** Names that start with what was typed first, then the ones that contain it (or whose code it is). */
+/** Countries by any name they go by (constants/countrySearch.ts); states by their own. */
 function narrow(names: string[], query: string, codeOf: (name: string) => string | null): string[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return names;
-  const starts = names.filter((n) => n.toLowerCase().startsWith(q) || codeOf(n)?.toLowerCase() === q);
-  const contains = names.filter((n) => !starts.includes(n) && n.toLowerCase().includes(q));
-  return [...starts, ...contains];
+  return matchCountries(names, query, (n) => n, codeOf);
 }
 
 function PlaceList({
@@ -68,7 +65,11 @@ function PlaceList({
         value={query}
         autoFocus={autoFocus}
         placeholder="Type to find it"
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          // From the top: a list scrolled to the chosen one cut the narrowed list's first and last rows off (Simon).
+          if (list.current) list.current.scrollTop = 0;
+        }}
         onKeyDown={(e) => {
           if (e.key === "ArrowDown") {
             e.preventDefault();
