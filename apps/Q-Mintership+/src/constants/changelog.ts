@@ -18,6 +18,28 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.4',
+    date: '2026-10-26',
+    title: 'Nominations credit their nominator',
+    summary:
+      'A nominee’s decided invite now says who proposed the nomination, with the Minter Admin who gave the first approval.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A decided invite that answered a nomination says “Proposed by” its nominator, then “First approval by” the Minter Admin whose invite started the round, on the decision’s own page. History and the Minter Profile’s timeline say “proposed by” the nominator too. An invite a Minter Admin made without a nomination still names them.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'A decided invite’s page offers Compare nominee and nominator, as it does while the decision waits.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.3',
     date: '2026-10-23',
     title: 'Full window on big screens',
