@@ -109,6 +109,8 @@ const HOUR = 3_600_000;
 // Names for sale on chain (names/market.ts), one name auction (names/auctions.ts) and what each name published.
 const NAME_SELLER_ADDRESS = 'QNameSeLLerAddressxxxxxxxxxx4a1b2c';
 const NAMES_FOR_SALE = [
+  // A seller with a very long name, and a very long price (both ran out of the card in Hub, 2026-10-26).
+  { name: 'Ewam Garden', price: 2003764204.28414965, at: now - HOUR, owner: 'QLongSeLLerAddressxxxxxxxxxxx9z8y7' },
   { name: 'bitcoin-maxi', price: 250, at: now - 2 * HOUR, registered: now - 400 * DAY },
   { name: 'Coffee House', price: 45.5, at: now - 5 * HOUR, registered: now - 90 * DAY },
   { name: 'qortal-art', price: 1200, at: now - 2 * DAY },
@@ -552,10 +554,11 @@ export default {
     const sp = url.searchParams;
     if (p.endsWith('/arbitrary/resources/search')) return json(route, search(sp)).then(() => true);
     if (p === '/names/primary/QOwner') return json(route, { name: 'Gold Issuer', owner: 'QOwner' }).then(() => true);
+    if (p === '/names/primary/QLongSeLLerAddressxxxxxxxxxxx9z8y7') return json(route, { name: 'Ewam Garden of One Thousand Buddhas', owner: 'QLongSeLLerAddressxxxxxxxxxxx9z8y7' }).then(() => true);
     if (p === `/names/primary/${NAME_SELLER_ADDRESS}`) return json(route, { name: 'Name Trader', owner: NAME_SELLER_ADDRESS }).then(() => true);
     if (p === `/names/primary/${ME_ADDRESS}`) return json(route, { name: ME, owner: ME_ADDRESS }).then(() => true);
     if (p === '/names/forsale') {
-      const all = NAMES_FOR_SALE.map((n) => ({ name: n.name, owner: NAME_SELLER_ADDRESS, isForSale: true, salePrice: n.price.toFixed(8), ...(n.registered && { registered: n.registered }) }));
+      const all = NAMES_FOR_SALE.map((n) => ({ name: n.name, owner: n.owner ?? NAME_SELLER_ADDRESS, isForSale: true, salePrice: n.price.toFixed(8), ...(n.registered && { registered: n.registered }) }));
       const offset = Number(sp.get('offset') || 0);
       return json(route, all.slice(offset, offset + Number(sp.get('limit') || 100))).then(() => true);
     }
@@ -1016,9 +1019,9 @@ export default {
       const names = d.getByRole('combobox', { name: /Only for these Qortal names/ });
       await names.scrollIntoViewIfNeeded();
       await names.fill('Ann');
-      await d.getByRole('option', { name: 'Ann', exact: true }).click({ timeout: 4000 });
+      await page.getByRole('option', { name: 'Ann', exact: true }).click({ timeout: 4000 });
       await names.fill('Ir');
-      await d.getByRole('option', { name: 'Iron', exact: true }).waitFor({ timeout: 4000 });
+      await page.getByRole('option', { name: 'Iron', exact: true }).waitFor({ timeout: 4000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-discount-group', path: '/product-manager/q-store-general-my-shop?tab=shop', overlay: true, after: async (page) => {
@@ -1026,7 +1029,7 @@ export default {
       const d = page.getByRole('dialog', { name: 'Add a discount code' });
       await d.getByRole('button', { name: "Add a Q-Chat group's members" }).click({ timeout: 4000 });
       const g = page.getByRole('dialog', { name: "Add a group's members" });
-      await g.getByRole('option', { name: /Biohackers Iceland/ }).waitFor({ timeout: 4000 });
+      await page.getByRole('option', { name: /Biohackers Iceland/ }).waitFor({ timeout: 4000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-choose-products', path: '/product-manager/q-store-general-my-shop?tab=shop', overlay: true, after: async (page) => {

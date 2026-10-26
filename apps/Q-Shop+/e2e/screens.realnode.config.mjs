@@ -97,6 +97,8 @@ export default {
     { key: 'real-names', path: '/names', after: async (page) => page.waitForTimeout(8000) },
     // As a seller (QSP_AS="Biohackers Corner"): the seller page, read only.
     { key: 'real-seller', path: '/product-manager/q-store-general-bhc', optional: true, after: async (page) => page.waitForTimeout(6000) },
+    { key: 'real-seller-delivery', path: '/product-manager/q-store-general-bhc?tab=delivery', optional: true, after: async (page) => page.waitForTimeout(6000) },
+    { key: 'real-seller-products', path: '/product-manager/q-store-general-bhc?tab=products', optional: true, after: async (page) => page.waitForTimeout(6000) },
     { key: 'real-settings', path: '/settings' },
   ],
 };
