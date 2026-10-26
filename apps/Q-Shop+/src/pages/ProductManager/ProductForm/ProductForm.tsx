@@ -8,7 +8,7 @@ import { percentOff } from "../../../sale/compareAt";
 import { StockFields } from "../../../stock/StockFields";
 import { useStockLeft } from "../../../stock/notes";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
-import { lazy, Suspense, useId, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { Suspense, useId, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import {
   Box,
   Button,
@@ -26,8 +26,8 @@ import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
 
 // Quill and the media dialogs: loaded with the form, never for buyers.
-const DescriptionEditor = lazy(() => import("../../../richtext/DescriptionEditor"));
-const MediaFields = lazy(() => import("../../../richtext/MediaFields"));
+const DescriptionEditor = lazyWithRetry(() => import("../../../richtext/DescriptionEditor"));
+const MediaFields = lazyWithRetry(() => import("../../../richtext/MediaFields"));
 import { CoinIcon } from "../../../components/money/CoinIcon";
 import { CategoryField } from "../../../seller/CategoryField";
 import { CategoryIcon } from "../../../components/CategoryIcon";
@@ -59,6 +59,7 @@ import { auctionTermsOf } from "../../../auctions/rules";
 import { VariantsEditor, type RemovedItem } from "../../../variants/VariantsEditor";
 import { itemExtraCoins, variantPriceUnit } from "../../../variants/drafts";
 import { joinDescription, splitDescription } from "../../../richtext/embeds";
+import { lazyWithRetry } from "../../../utils/lazyWithRetry";
 
 interface ProductFormProps {
   values: ProductFormValues;

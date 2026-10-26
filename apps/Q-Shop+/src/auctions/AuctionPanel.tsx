@@ -4,7 +4,7 @@
  * result. The winner pays the winning bid through the shop's checkout, in
  * QORT; the seller sees who won and can message them.
  */
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import ShortUniqueId from "short-unique-id";
@@ -31,8 +31,9 @@ import { auctionCheckoutShop, wonLine } from "./auctionCheckout";
 import { isAuctionPaid, noteAuctionPaid } from "./paid";
 import { MAX_BID, timeLeft, type AuctionTerms, type Bid } from "./rules";
 import { whenText } from "./format";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
-const CheckoutDialog = lazy(() => import("../pages/Cart/CheckoutDialog").then((m) => ({ default: m.CheckoutDialog })));
+const CheckoutDialog = lazyWithRetry(() => import("../pages/Cart/CheckoutDialog").then((m) => ({ default: m.CheckoutDialog })));
 const bidUid = new ShortUniqueId({ length: 6 });
 const EPSILON = 1e-9;
 

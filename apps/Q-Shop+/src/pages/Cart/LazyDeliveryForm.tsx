@@ -1,7 +1,8 @@
-import { lazy, Suspense, type ComponentProps } from "react";
+import { Suspense, type ComponentProps } from "react";
 import { Box, Skeleton } from "@mui/material";
+import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
-const DeliveryForm = lazy(() => import("./DeliveryForm").then((m) => ({ default: m.DeliveryForm })));
+const DeliveryForm = lazyWithRetry(() => import("./DeliveryForm").then((m) => ({ default: m.DeliveryForm })));
 
 /** Shaped like the form while it loads. */
 function DeliveryFormSkeleton() {

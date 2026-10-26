@@ -4,14 +4,15 @@
  * country…", which also becomes the buyer's country for delivery prices. A
  * select on desktop, chips in a phone's filter sheet.
  */
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
 import { Box, Chip, MenuItem, TextField, Typography } from "@mui/material";
 import { selectMenuProps } from "../components/common/menuStyle";
 import { countryCode, countryName } from "../constants/shipping";
 import { parseShips } from "../discovery/sortFilter";
 import type { BuyerPlace } from "./buyerPlace";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
-const PlacePickerDialog = lazy(() => import("./PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
+const PlacePickerDialog = lazyWithRetry(() => import("./PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
 
 const ANY = "any";
 const PICK = "pick";

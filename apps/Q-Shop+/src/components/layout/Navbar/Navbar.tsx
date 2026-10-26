@@ -43,11 +43,12 @@ import { QuickRateButton } from "./QuickRateButton";
 import { BalanceButton } from "./BalanceButton";
 import { useHeaderFit } from "./useHeaderFit";
 import { useHideOnScroll, usePublishHeaderOffset } from "./useHideOnScroll";
+import { lazyWithRetry } from "../../../utils/lazyWithRetry";
 
 // Both open now and then: loaded the first time they open, so the name
 // switcher, the sheet and the block list stay out of the first download.
-const AccountMenu = lazy(() => import("./AccountMenu"));
-const BlockedNamesModal = lazy(() =>
+const AccountMenu = lazyWithRetry(() => import("./AccountMenu"));
+const BlockedNamesModal = lazyWithRetry(() =>
   import("../../common/BlockedNamesModal/BlockedNamesModal").then((m) => ({ default: m.BlockedNamesModal }))
 );
 

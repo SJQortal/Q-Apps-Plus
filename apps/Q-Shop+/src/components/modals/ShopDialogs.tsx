@@ -3,15 +3,16 @@
  * from anywhere through Redux (toggleCreateStoreModal / toggleEditStoreModal).
  * Each loads and mounts only when opened. A new shop opens its seller page.
  */
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import type { RootState } from "../../state/store";
 import { toggleCreateStoreModal, toggleEditStoreModal } from "../../state/features/globalSlice";
+import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
 // Loaded when first opened: the forms, image compression and asset lists stay out of the first paint.
-const CreateStoreModal = lazy(() => import("./CreateStoreModal"));
-const EditStoreModal = lazy(() => import("./EditStoreModal"));
+const CreateStoreModal = lazyWithRetry(() => import("./CreateStoreModal"));
+const EditStoreModal = lazyWithRetry(() => import("./EditStoreModal"));
 
 export function ShopDialogs() {
   const dispatch = useDispatch();

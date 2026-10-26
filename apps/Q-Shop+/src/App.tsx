@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import { Box, CircularProgress } from "@mui/material";
 import { Provider } from "react-redux";
@@ -8,22 +8,23 @@ import Notification from "./components/common/Notification/Notification";
 import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { HubThemeProvider } from "./hub-theme";
 import { THEME_STORAGE_KEY, themeConfig } from "./theme/qplus-theme";
+import { lazyWithRetry } from "./utils/lazyWithRetry";
 
 // Every screen loads on demand, so the first paint only carries the shell
 // (docs/QORTAL.md → Efficiency rules 8). Route shapes are the original's, so
 // links copied from Q-Shop open here too.
-const StoreList = lazy(() => import("./pages/StoreList/StoreList").then((m) => ({ default: m.StoreList })));
-const ProductsPage = lazy(() => import("./pages/Products/ProductsPage").then((m) => ({ default: m.ProductsPage })));
-const Store = lazy(() => import("./pages/Store/Store/Store").then((m) => ({ default: m.Store })));
-const ProductPage = lazy(() => import("./pages/Product/ProductPage").then((m) => ({ default: m.ProductPage })));
-const ProductManager = lazy(() =>
+const StoreList = lazyWithRetry(() => import("./pages/StoreList/StoreList").then((m) => ({ default: m.StoreList })));
+const ProductsPage = lazyWithRetry(() => import("./pages/Products/ProductsPage").then((m) => ({ default: m.ProductsPage })));
+const Store = lazyWithRetry(() => import("./pages/Store/Store/Store").then((m) => ({ default: m.Store })));
+const ProductPage = lazyWithRetry(() => import("./pages/Product/ProductPage").then((m) => ({ default: m.ProductPage })));
+const ProductManager = lazyWithRetry(() =>
   import("./pages/ProductManager/ProductManager").then((m) => ({ default: m.ProductManager }))
 );
-const MyOrders = lazy(() => import("./pages/MyOrders/MyOrders").then((m) => ({ default: m.MyOrders })));
-const CartPage = lazy(() => import("./pages/Cart/CartPage").then((m) => ({ default: m.CartPage })));
-const SettingsPage = lazy(() => import("./pages/Settings/SettingsPage").then((m) => ({ default: m.SettingsPage })));
-const FavoritesPage = lazy(() => import("./pages/Favorites/FavoritesPage").then((m) => ({ default: m.FavoritesPage })));
-const NamesPage = lazy(() => import("./names/NamesPage").then((m) => ({ default: m.NamesPage })));
+const MyOrders = lazyWithRetry(() => import("./pages/MyOrders/MyOrders").then((m) => ({ default: m.MyOrders })));
+const CartPage = lazyWithRetry(() => import("./pages/Cart/CartPage").then((m) => ({ default: m.CartPage })));
+const SettingsPage = lazyWithRetry(() => import("./pages/Settings/SettingsPage").then((m) => ({ default: m.SettingsPage })));
+const FavoritesPage = lazyWithRetry(() => import("./pages/Favorites/FavoritesPage").then((m) => ({ default: m.FavoritesPage })));
+const NamesPage = lazyWithRetry(() => import("./names/NamesPage").then((m) => ({ default: m.NamesPage })));
 
 function RouteFallback() {
   return (

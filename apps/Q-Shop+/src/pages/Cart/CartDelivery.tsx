@@ -5,7 +5,7 @@
  * added at checkout, with a way to see it. Nothing for a shop without
  * delivery prices, or a cart of digital products.
  */
-import { lazy, Suspense, useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
@@ -18,8 +18,9 @@ import { deliveryEstimate } from "../../delivery/estimate";
 import type { DeliveryShop } from "../../delivery/ProductDelivery";
 import { placeLabel, useBuyerPlace } from "../../delivery/buyerPlace";
 import { statusText } from "../../theme/statusText";
+import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
-const PlacePickerDialog = lazy(() => import("../../delivery/PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
+const PlacePickerDialog = lazyWithRetry(() => import("../../delivery/PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
 
 export function CartDelivery({ owner, storeId, shop, lines }: { owner: string; storeId: string; shop: DeliveryShop | null | undefined; lines: readonly CartLine[] }) {
   const buyer = useSelector((state: RootState) => state.auth.user?.name);

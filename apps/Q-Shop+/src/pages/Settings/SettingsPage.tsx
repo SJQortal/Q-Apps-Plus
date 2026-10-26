@@ -3,7 +3,7 @@
  * Sync and About, in that order. Every choice applies at once and is kept on
  * this device; Sync saves the theme and preferred coin to QDN only when asked.
  */
-import { lazy, Suspense, useId, useState, type ReactNode } from "react";
+import { Suspense, useId, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Box, Button, Dialog, DialogTitle, IconButton, Switch, TextField, Tooltip, Typography, MenuItem } from "@mui/material";
 import { setShowNames, useShowNames } from "../../utils/namesSetting";
@@ -31,8 +31,8 @@ import { APP_VERSION } from "../../constants/changelog";
 import { openWalkthrough } from "../../onboarding/Walkthrough";
 
 // Opened now and then: loaded the first time (onboarding/HelpDialog.tsx, delivery/PlacePickerDialog.tsx).
-const HelpDialog = lazy(() => import("../../onboarding/HelpDialog").then((m) => ({ default: m.HelpDialog })));
-const PlacePickerDialog = lazy(() => import("../../delivery/PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
+const HelpDialog = lazyWithRetry(() => import("../../onboarding/HelpDialog").then((m) => ({ default: m.HelpDialog })));
+const PlacePickerDialog = lazyWithRetry(() => import("../../delivery/PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
 import {
   APP_NAME,
   ORIGINAL_APP_LINK,
@@ -51,6 +51,7 @@ import { selectMenuProps } from "../../components/common/menuStyle";
 import { saveDelivery, savedDelivery } from "../Cart/delivery";
 import { pickedBuyerPlace, placeLabel, setBuyerPlace, useBuyerPlace } from "../../delivery/buyerPlace";
 import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
+import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
 /** The coins a buyer can prefer, in the order the shops offer them. */
 export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR"];

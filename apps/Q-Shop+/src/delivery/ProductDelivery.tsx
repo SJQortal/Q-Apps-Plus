@@ -6,7 +6,7 @@
  * shops, which a cached search says), cached for the session; a shop
  * without them says where it ships, as before.
  */
-import { lazy, Suspense, useState, type ReactNode } from "react";
+import { Suspense, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
@@ -20,8 +20,9 @@ import { useShopDelivery } from "./useShopDelivery";
 import { deliveryEstimate, type EstimateChoice } from "./estimate";
 import { statusText } from "../theme/statusText";
 import { placeLabel, useBuyerPlace } from "./buyerPlace";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
-const PlacePickerDialog = lazy(() => import("./PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
+const PlacePickerDialog = lazyWithRetry(() => import("./PlacePickerDialog").then((m) => ({ default: m.PlacePickerDialog })));
 
 export interface DeliveryShop {
   title?: string;

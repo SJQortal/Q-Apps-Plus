@@ -4,14 +4,15 @@
  * changing it (seller/QuickRateDialog.tsx, loaded when first opened). It
  * narrows with the header (useHeaderFit.ts): the rate alone, then the icon alone.
  */
-import { lazy, Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { Box, Button, Tooltip } from "@mui/material";
 import CurrencyExchangeOutlinedIcon from "@mui/icons-material/CurrencyExchangeOutlined";
 import type { RootState } from "../../../state/store";
 import { fiatPricingOf, rateToText } from "../../../money/fiatRates";
+import { lazyWithRetry } from "../../../utils/lazyWithRetry";
 
-const QuickRateDialog = lazy(() => import("../../../seller/QuickRateDialog").then((m) => ({ default: m.QuickRateDialog })));
+const QuickRateDialog = lazyWithRetry(() => import("../../../seller/QuickRateDialog").then((m) => ({ default: m.QuickRateDialog })));
 
 export function QuickRateButton({ phone }: { phone: boolean }) {
   const name = useSelector((state: RootState) => state.auth.user?.name);

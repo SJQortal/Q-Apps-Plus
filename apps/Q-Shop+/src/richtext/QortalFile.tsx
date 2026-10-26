@@ -4,7 +4,7 @@
  * gets the file onto the node (with progress), reads it and draws it with
  * pdf.js in a full-screen viewer (richtext/pdf/PdfViewer.tsx, loaded then).
  */
-import { lazy, Suspense, useEffect, useState, type MouseEvent } from "react";
+import { Suspense, useEffect, useState, type MouseEvent } from "react";
 import { Box, Button, CircularProgress, Link, Typography } from "@mui/material";
 import PictureAsPdfOutlinedIcon from "@mui/icons-material/PictureAsPdfOutlined";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
@@ -15,8 +15,9 @@ import { isPdf, type FileEmbed } from "./embeds";
 import { MAX_PDF_BYTES } from "./qortalSources";
 import { useReadingMode } from "./pdf/useReadingMode";
 import { useOpenQortalLink } from "./QortalText";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
-const PdfViewer = lazy(() => import("./pdf/PdfViewer"));
+const PdfViewer = lazyWithRetry(() => import("./pdf/PdfViewer"));
 
 export function formatBytes(bytes: number | undefined): string {
   if (!bytes) return "";

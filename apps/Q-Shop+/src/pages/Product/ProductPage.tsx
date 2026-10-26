@@ -22,7 +22,7 @@ import { shortStoreIdOf } from "../../qdn/identifiers";
 import { productRowsFromContainer } from "../Store/shopData";
 import { stockOf, type ProductStock } from "../../stock/model";
 import { useStockLeft, type StockItem } from "../../stock/notes";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, Divider, IconButton, InputBase, Link, Skeleton, Typography } from "@mui/material";
@@ -67,9 +67,10 @@ import { auctionTermsOf } from "../../auctions/rules";
 import { valuesKey, variantOf, variantSiblings, type VariantSibling } from "../../variants/model";
 import { MAX_GROUP_PICTURES, groupPictures, itemForPicture, pictureCaption, shownPicture, type GroupMember } from "../../variants/gallery";
 import { VariantPicker } from "../../variants/VariantPicker";
+import { lazyWithRetry } from "../../utils/lazyWithRetry";
 
 // Only auction products need it (bids, countdown, the winner's checkout).
-const AuctionPanel = lazy(() => import("../../auctions/AuctionPanel").then((m) => ({ default: m.AuctionPanel })));
+const AuctionPanel = lazyWithRetry(() => import("../../auctions/AuctionPanel").then((m) => ({ default: m.AuctionPanel })));
 
 const FETCHING_NOTE = "Fetching from peers…";
 

@@ -18,9 +18,10 @@ import { useUserAccount } from "../hooks/useUserAccount";
 import { useOwnShops } from "../hooks/useOwnShops";
 import { useTrackInAppHistory } from "../hooks/useSafeBack";
 import { useIframe } from "../hooks/useIframe";
+import { lazyWithRetry } from "../utils/lazyWithRetry";
 
 // Only web-gateway visitors ever see it, and it carries ua-parser-js: load it when opened.
-const DownloadQortalModal = lazy(() =>
+const DownloadQortalModal = lazyWithRetry(() =>
   import("../components/modals/DownloadQortalModal").then((m) => ({ default: m.DownloadQortalModal }))
 );
 
