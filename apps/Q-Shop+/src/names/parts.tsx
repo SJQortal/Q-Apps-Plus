@@ -1,16 +1,53 @@
 /**
  * Small parts the Names page and its dialogs share: who sells a name (their
  * primary name, read once a session), the link to what its owner published
- * (the explorer), and an auction's standing from one read of its bids (the
- * dialog follows it live with useAuction).
+ * (the explorer), an auction's standing from one read of its bids (the
+ * dialog follows it live with useAuction), and a button that copies a name.
  */
 import { useEffect, useState } from "react";
-import { Box, Button, Link, Typography } from "@mui/material";
+import { useDispatch } from "react-redux";
+import { Box, Button, IconButton, Link, Tooltip, Typography } from "@mui/material";
 import TravelExploreOutlinedIcon from "@mui/icons-material/TravelExploreOutlined";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import CheckIcon from "@mui/icons-material/Check";
+import { copyText } from "../utils/clipboard";
+import { setNotification } from "../state/features/notificationsSlice";
 import { NameAvatar } from "../components/common/NameAvatar";
 import { auctionState, timeLeft, type AuctionState } from "../auctions/rules";
 import { explorerAccountLink, primaryNameOf, shortAddress } from "./market";
 import { fetchNameBids, type NameAuction } from "./auctions";
+
+/**
+ * A small copy button beside a name (Simon, 2026-10-26: "small copy icon for
+ * each Name on sale or on the auction"): it copies the name and turns into a
+ * tick for a moment; a failed copy says so, with the name.
+ */
+export function CopyNameButton({ name, size = "small" }: { name: string; size?: "small" | "medium" }) {
+  const dispatch = useDispatch();
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const copy = async () => {
+    if (await copyText(name)) setCopied(true);
+    else dispatch(setNotification({ alertType: "error", msg: `Couldn't copy it. The name is ${name}` }));
+  };
+  return (
+    <Tooltip title={copied ? "Copied" : "Copy name"}>
+      <IconButton
+        aria-label={copied ? `Copied ${name}` : `Copy ${name}`}
+        onClick={() => void copy()}
+        size={size}
+        // A 40 px target that doesn't push the name's line taller.
+        sx={{ width: 40, height: 40, my: -1, flexShrink: 0, color: copied ? "success.main" : "text.secondary" }}
+      >
+        {copied ? <CheckIcon fontSize="small" /> : <ContentCopyOutlinedIcon fontSize="small" />}
+      </IconButton>
+    </Tooltip>
+  );
+}
 
 /** The seller's primary name (or their address while it loads, or when they have none). */
 export function useSellerName(owner: string, enabled = true): string | null {

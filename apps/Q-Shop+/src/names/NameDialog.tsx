@@ -24,7 +24,7 @@ import { invalidateQdnSearches } from "../qdn/search";
 import { useAuction } from "../auctions/useAuction";
 import { placeBid } from "../auctions/placeBid";
 import { MAX_BID, timeLeft } from "../auctions/rules";
-import { ExplorerButton, SellerLine, useSellerName } from "./parts";
+import { CopyNameButton, ExplorerButton, SellerLine, useSellerName } from "./parts";
 import { fetchNameState, shortAddress, type NameState } from "./market";
 import { buildNameAuctionEnd, buildNameBidPublish, fetchNameBids, NAME_AUCTION_ID, type NameAuction } from "./auctions";
 import { buyName, cancelNameSale, sellName, type NameTxResult, type PendingName } from "./actions";
@@ -128,9 +128,12 @@ export function NameDialog({
         <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
           <NameAvatar name={item.name} size={88} eager />
           <Box sx={{ minWidth: 0 }}>
-            <Typography component="h2" sx={{ fontWeight: 700, fontSize: 24, lineHeight: 1.25, overflowWrap: "anywhere" }}>
-              {item.name}
-            </Typography>
+            <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.5, minWidth: 0 }}>
+              <Typography component="h2" sx={{ fontWeight: 700, fontSize: 24, lineHeight: 1.25, overflowWrap: "anywhere", minWidth: 0 }}>
+                {item.name}
+              </Typography>
+              <CopyNameButton name={item.name} />
+            </Box>
             {mine ? (
               <Typography variant="body2" color="text.secondary">
                 Yours
