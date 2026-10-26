@@ -13,6 +13,7 @@
  * "Ships to" says (constants/shipping.ts).
  */
 import { suggestShippingCountries } from "../constants/shippingText";
+import { matchCountries } from "../constants/countrySearch";
 import { useId, useMemo, useState } from "react";
 import { Box, Button, Checkbox, Collapse, FormControlLabel, IconButton, InputAdornment, TextField, Typography } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -63,11 +64,8 @@ function RegionRow({ region, chosen, onSet }: { region: ShippingRegion; chosen: 
   const inside = region.codes.filter((c) => chosen.has(c)).length;
   const all = inside === region.codes.length;
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return region.codes
-      .map((code) => ({ code, name: countryName(code) }))
-      .filter((c) => !q || c.name.toLowerCase().includes(q))
-      .sort((a, b) => a.name.localeCompare(b.name));
+    const all = region.codes.map((code) => ({ code, name: countryName(code) })).sort((a, b) => a.name.localeCompare(b.name));
+    return matchCountries(all, query, (c) => c.name, (c) => c.code);
   }, [region.codes, query]);
   return (
     <Box component="li" sx={{ listStyle: "none", borderTop: 1, borderColor: "divider", "&:first-of-type": { borderTop: 0 } }}>

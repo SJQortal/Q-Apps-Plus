@@ -7,6 +7,7 @@ import { useMemo } from "react";
 import { Autocomplete, Box, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import { autocompletePaperProps } from "../components/common/menuStyle";
 import { ALL_COUNTRY_CODES, countryName } from "../constants/shipping";
+import { matchCountries } from "../constants/countrySearch";
 import { DAY_NAME, WEEK_ORDER, type PickupPlace } from "../delivery/model";
 import { TimeField } from "../components/common/DateTimeFields";
 
@@ -25,6 +26,7 @@ export function PickupPlaceFields({ place, onChange, disabled, name }: { place: 
         value={place.country || null}
         onChange={(_, value) => onChange({ ...place, country: value ?? "" })}
         getOptionLabel={(code) => countryName(code)}
+        filterOptions={(codes, { inputValue }) => matchCountries(codes, inputValue, countryName, (code) => code)}
         disabled={disabled}
         disablePortal
         autoHighlight

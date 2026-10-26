@@ -16,6 +16,8 @@ import { Autocomplete, Box, TextField } from "@mui/material";
 import { US, missingDeliveryFields, type DeliveryInput } from "../../money/order";
 import { deliveryFieldId, missingPickupFields, type DeliveryField } from "./delivery";
 import { autocompletePaperProps } from "../../components/common/menuStyle";
+import { countryCode } from "../../constants/shipping";
+import { matchCountries } from "../../constants/countrySearch";
 
 interface PlaceOption {
   text: string;
@@ -117,6 +119,8 @@ export function DeliveryForm({
       loading={!options}
       value={value[field] || null}
       onChange={(_, next) => onChange({ ...value, [field]: next ?? "" })}
+      // Countries by any name they go by ("USA", "Polska"); states by their own.
+      filterOptions={(names, { inputValue }) => matchCountries(names, inputValue, (n) => n, field === "country" ? countryCode : () => null)}
       autoHighlight
       fullWidth
       slotProps={{ paper: autocompletePaperProps }}
