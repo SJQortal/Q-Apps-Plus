@@ -28,6 +28,7 @@ function nom(partial: Partial<Nomination> & Pick<Nomination, 'nominee' | 'state'
     waitingEndsAt: null,
     decision: null,
     latestInvite: null,
+    records: [],
     hasJoinRequest: false,
     hasStoredInvite: false,
     ...partial,

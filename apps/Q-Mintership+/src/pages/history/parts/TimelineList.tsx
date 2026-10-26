@@ -158,6 +158,7 @@ function TimelineItem({
   showProposer,
   nowMs,
   fresh = false,
+  proposerOf,
 }: {
   event: TimelineEvent;
   showSubject: boolean;
@@ -165,11 +166,12 @@ function TimelineItem({
   nowMs: number;
   /** New since the reader last looked: tinted, with an edge and a "New" chip. */
   fresh?: boolean;
+  /** Who proposed it when not its creator: an invite's nominator (TimelineListProps). */
+  proposerOf?: (event: TimelineEvent) => string | null;
 }) {
+  const by = proposerOf?.(event) ?? event.creator;
   const proposer =
-    showProposer && event.creator && event.kind !== 'join' && event.kind !== 'leave'
-      ? event.creator
-      : null;
+    showProposer && by && event.kind !== 'join' && event.kind !== 'leave' ? by : null;
   const chip = event.outcome === 'done' ? null : OUTCOME_CHIP[event.outcome];
   return (
     <Box
@@ -248,11 +250,13 @@ function TimelineGroup({
   showSubject,
   showProposer,
   nowMs,
+  proposerOf,
 }: {
   events: TimelineEvent[];
   showSubject: boolean;
   showProposer: boolean;
   nowMs: number;
+  proposerOf?: (event: TimelineEvent) => string | null;
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
@@ -358,6 +362,7 @@ function TimelineGroup({
               showSubject={showSubject}
               showProposer={showProposer}
               nowMs={nowMs}
+              proposerOf={proposerOf}
             />
           ))}
         </Box>
@@ -459,6 +464,12 @@ export interface TimelineListProps {
   groupAlike?: boolean;
   /** New since this person last looked (a Minter Admin's History): marked so. */
   isNew?: (event: TimelineEvent) => boolean;
+  /**
+   * Who proposed an event when that isn't its transaction's creator: a MINTER
+   * invite that answered a nomination was proposed by its nominator, and its
+   * creator gave the first approval (data/nominations.ts inviteProposers).
+   */
+  proposerOf?: (event: TimelineEvent) => string | null;
 }
 
 /** Events newest first, under a small month heading each. */
@@ -471,6 +482,7 @@ export function TimelineList({
   label,
   groupAlike = false,
   isNew,
+  proposerOf,
 }: TimelineListProps) {
   const items: Array<{ at: number; event?: TimelineEvent; poll?: TimelinePoll }> = [
     ...events.map((event) => ({ at: event.at, event })),
@@ -493,6 +505,7 @@ export function TimelineList({
       showProposer={showProposer}
       nowMs={nowMs}
       fresh={Boolean(isNew?.(event))}
+      proposerOf={proposerOf}
     />
   );
   return (
@@ -527,6 +540,7 @@ export function TimelineList({
                           showSubject={showSubject}
                           showProposer={showProposer}
                           nowMs={nowMs}
+                          proposerOf={proposerOf}
                         />
                       ) : (
                         row(run[0])

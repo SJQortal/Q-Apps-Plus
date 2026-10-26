@@ -607,6 +607,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
                 chainNow && group ? at + group.maximumBlockDelay * chainNow.msPerBlock : null,
               decision: null,
               latestInvite: null,
+              records: [],
               hasJoinRequest: Boolean(info?.hasJoinRequest),
               hasStoredInvite: false,
             },

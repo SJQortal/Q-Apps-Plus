@@ -38,7 +38,15 @@ import {
   type TimelineContext,
   type TimelineEvent,
 } from '../../data/timeline';
-import { useAdmins, useChainNow, useGroupInfo, useMyStatus } from '../../hooks/useData';
+import {
+  useAdmins,
+  useChainNow,
+  useGroupInfo,
+  useMyStatus,
+  useNominations,
+} from '../../hooks/useData';
+import { inviteProposers } from '../../data/nominations';
+import { waitingWindowBlocks } from '../../rules/timing';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { markHistorySeen, readHistorySeen } from '../../data/historySeen';
 import { isHistoryNews } from '../../data/historyNews';
@@ -179,6 +187,16 @@ export function ChainHistory() {
 
   const msPerBlock = chain.data?.msPerBlock ?? FALLBACK_MS_PER_BLOCK;
   const maximumBlockDelay = group.data?.maximumBlockDelay ?? 10_080;
+  // An invite that answered a nomination says its nominator proposed it (the read Home makes too).
+  const nominations = useNominations();
+  const proposerOf = useMemo(
+    () =>
+      inviteProposers(
+        nominations.data?.all,
+        waitingWindowBlocks({ minimumBlockDelay: 0, maximumBlockDelay }) * msPerBlock
+      ),
+    [nominations.data, maximumBlockDelay, msPerBlock]
+  );
   const threshold = group.data?.approvalThreshold;
   const owner = group.data?.owner;
   const adminCount = admins.data?.adminCount;
@@ -253,6 +271,7 @@ export function ChainHistory() {
         known={events}
         nowMs={nowMs}
         isNew={isNew}
+        proposerOf={proposerOf}
         longer={longer ? longerPeriodLabel(longer) : null}
         earliest={created}
         onLonger={showLonger}
@@ -283,6 +302,7 @@ export function ChainHistory() {
             showSubject
             nowMs={nowMs}
             isNew={isNew}
+            proposerOf={proposerOf}
             label={
               filter === 'all'
                 ? 'MINTER events, newest first'

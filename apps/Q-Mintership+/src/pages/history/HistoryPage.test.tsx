@@ -63,6 +63,28 @@ describe('History page: on chain', () => {
   });
 });
 
+describe('History page: who proposed an invite', () => {
+  // Simon, 2026-10-26: a nominee's decided invite says who nominated them, not the Minter
+  // Admin whose invite was the first approval.
+  it('names the nominator of an invite that answered a nomination, the Minter Admin otherwise', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    const list = await eventsList();
+    const expired = within(list)
+      .getByText(PEOPLE.expired.name as string)
+      .closest('li') as HTMLElement;
+    expect(await within(expired).findByText(/proposed by/, { exact: false })).toHaveTextContent(
+      /proposed by\s*N?Nora Nominator/
+    );
+    // Approved without a nomination record: its Minter Admin proposed it.
+    const joined = within(list)
+      .getByText(PEOPLE.recentlyJoined.name as string)
+      .closest('li') as HTMLElement;
+    expect(within(joined).getByText(/proposed by/, { exact: false })).not.toHaveTextContent(
+      'Nora Nominator'
+    );
+  });
+});
+
 describe('History page: filters', () => {
   const INVITE_TITLES =
     /^(Approved for MINTER|Approved and added to MINTER|Invited to MINTER|Nominated for MINTER)$/;
