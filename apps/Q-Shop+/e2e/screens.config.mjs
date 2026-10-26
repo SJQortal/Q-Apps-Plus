@@ -332,6 +332,8 @@ const storeJson = (s) => ({
   supportedCoins: s.arrr ? ['QORT', 'ARRR'] : ['QORT'],
   // The seller's shop also takes a Q-Asset: its products, and each variant, can have a price in it.
   ...(s.short === 'my-shop' && { acceptedAssets: [{ id: 81, name: 'Gold Bar' }] }),
+  // The shop's links (shop/links.ts): a Q-App and a website, with their avatars.
+  ...((s.short === 'my-shop' || s.short === 'shop-1') && { links: [{ url: 'qortal://APP/Q-Blog/blog/Shop+Plus', label: 'Our blog' }, { url: 'qortal://WEBSITE/Shop+Plus' }] }),
   // Ålund Ceramics is away for a week (shop/away.ts).
   ...(s.short === 'shop-2' && { away: { until: new Date(new Date(now).setHours(0, 0, 0, 0) + 7 * DAY).getTime(), note: 'At the Lisbon ceramics fair; messages answered in the evenings.' } }),
   // Shop 1 answers in Portuguese and English (shop/languages.ts).
