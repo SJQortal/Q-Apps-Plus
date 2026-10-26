@@ -29,9 +29,14 @@ export function useSellerName(owner: string, enabled = true): string | null {
 export function SellerLine({ owner, enabled = true }: { owner: string; enabled?: boolean }) {
   const name = useSellerName(owner, enabled);
   return (
-    <Typography component="span" variant="body2" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-      {name && <NameAvatar name={name} size={20} />}
-      <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+    // A block-level flex row as wide as the card at most: a long name ends in "…" instead of running out of the card.
+    <Typography component="span" variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, maxWidth: "100%" }}>
+      {name && (
+        <Box component="span" sx={{ display: "flex", flexShrink: 0 }}>
+          <NameAvatar name={name} size={20} />
+        </Box>
+      )}
+      <Box component="span" title={name ?? owner} sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         by {name ?? shortAddress(owner)}
       </Box>
     </Typography>

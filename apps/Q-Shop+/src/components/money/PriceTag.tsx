@@ -63,7 +63,8 @@ export function AmountTag({
       <Box component="span" sx={{ minWidth: 0, overflowWrap: "anywhere" }}>
         {text}
         {text !== "—" && (
-          <Box component="span" sx={{ fontWeight: 500, color: "text.secondary", ml: 0.5, fontSize: "0.85em" }}>
+          // The coin's name stays whole ("QORT", not "Q / ORT") when a long amount wraps.
+          <Box component="span" sx={{ fontWeight: 500, color: "text.secondary", ml: 0.5, fontSize: "0.85em", whiteSpace: "nowrap", overflowWrap: "normal", display: "inline-block" }}>
             {label}
           </Box>
         )}
