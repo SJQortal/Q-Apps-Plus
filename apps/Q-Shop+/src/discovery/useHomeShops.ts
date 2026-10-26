@@ -26,8 +26,11 @@ import {
   type ShopSort,
 } from "./sortFilter";
 
-/** Cards per step, and shops checked per step by a "Pays in" filter. */
-export const HOME_PAGE_SIZE = 20;
+/** Cards per step (Simon, 2026-10-26: 50 before Show more); each card reads its shop only once in view. */
+export const HOME_PAGE_SIZE = 50;
+
+/** Shops a "Pays in" filter checks per step (a read each). */
+export const HOME_CHECK_STEP = 20;
 
 export interface HomeQuery {
   /** Trimmed search text; "" lists every shop. */
@@ -330,7 +333,7 @@ export function useHomeShops(query: HomeQuery, mineKeys: Set<string> | null): Ho
       setShown({ key: listKey, count: count + HOME_PAGE_SIZE });
     } else if (more === "check") {
       setChecking(true);
-      checkShopDetails(filtered.unknown.slice(0, HOME_PAGE_SIZE)).finally(() => setChecking(false));
+      checkShopDetails(filtered.unknown.slice(0, HOME_CHECK_STEP)).finally(() => setChecking(false));
     } else if (more === "search") {
       loadMoreResults();
     }

@@ -24,7 +24,7 @@ import { useCatalogueLoader } from "./useCatalogueLoader";
 import { dropdownPaperSx } from "../components/common/menuStyle";
 
 /** Products listed at a time. */
-export const ARRANGE_PAGE = 30;
+export const ARRANGE_PAGE = 50;
 
 type Control = "up" | "down" | "more";
 

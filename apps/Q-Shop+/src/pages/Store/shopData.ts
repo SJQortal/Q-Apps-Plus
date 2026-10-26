@@ -19,8 +19,8 @@ import { auctionTermsOf } from "../../auctions/rules";
 import { variantRowOf, type VariantRow } from "../../variants/model";
 import { stockOf, type ProductStock } from "../../stock/model";
 
-/** Products per page on the shop page; catalogues are fetched for these only. */
-export const PRODUCTS_PAGE = 20;
+/** Products per page on the shop and Products pages (Simon, 2026-10-26: 50 before Show more); catalogues are fetched for these only. */
+export const PRODUCTS_PAGE = 50;
 /** A text search reads at most this many catalogues (10 products each). */
 export const SEARCH_CATALOGUE_CAP = 30;
 

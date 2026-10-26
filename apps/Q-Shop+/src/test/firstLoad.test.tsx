@@ -115,7 +115,7 @@ describe("first load", () => {
     expect(s.resources.STORE ?? 0).toBeLessThanOrEqual(CARDS_IN_VIEW);
     expect(s.resources["data container"] ?? 0).toBe(0);
     // Every card is there at once, from the index's metadata.
-    expect(document.querySelectorAll("[data-shop-card]")).toHaveLength(20);
+    expect(document.querySelectorAll("[data-shop-card]")).toHaveLength(24);
   }, 20_000);
 
   it("home, signed in as a shop owner", async () => {

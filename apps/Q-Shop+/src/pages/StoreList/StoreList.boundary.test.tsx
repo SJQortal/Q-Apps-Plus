@@ -33,7 +33,7 @@ describe("home page", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       renderWithProviders(<StoreList />, { initialEntries: ["/"] });
-      await waitFor(() => expect(document.querySelectorAll("[data-shop-card]")).toHaveLength(20));
+      await waitFor(() => expect(document.querySelectorAll("[data-shop-card]")).toHaveLength(24));
       expect(screen.getByRole("heading", { level: 1, name: "Shops" })).toBeInTheDocument();
       expect(screen.queryByRole("region", { name: "New products" })).toBeNull();
     } finally {

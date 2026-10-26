@@ -131,16 +131,16 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(screen.queryByText("No orders yet")).toBeNull();
   });
 
-  it("fetches catalogues only for the 20 products on screen, once each, and more on Show more", async () => {
-    const { node } = renderShop(makeWorld({ productsPerShop: 45 }));
-    await waitFor(() => expect(cardTitles()).toHaveLength(20));
-    // Newest first: products 44…25 live in catalogues 4, 3 and 2.
-    expect(cardTitles()[0]).toBe("Product 44");
-    expect(catalogueFetches(node).map((u) => u.split("-").pop())).toEqual(["CAT0000004", "CAT0000003", "CAT0000002"]);
+  it("fetches catalogues only for the 50 products on screen, once each, and more on Show more", async () => {
+    const { node } = renderShop(makeWorld({ productsPerShop: 120 }));
+    await waitFor(() => expect(cardTitles()).toHaveLength(50));
+    // Newest first: products 119…70 live in catalogues 11 to 7.
+    expect(cardTitles()[0]).toBe("Product 119");
+    expect(catalogueFetches(node).map((u) => u.split("-").pop())).toEqual(["CAT0000011", "CAT0000010", "CAT0000009", "CAT0000008", "CAT0000007"]);
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
-    await waitFor(() => expect(cardTitles()).toHaveLength(40));
-    expect(catalogueFetches(node)).toHaveLength(5);
-    expect(screen.getByText("45 products")).toBeInTheDocument();
+    await waitFor(() => expect(cardTitles()).toHaveLength(100));
+    expect(catalogueFetches(node)).toHaveLength(10);
+    expect(screen.getByText("120 products")).toBeInTheDocument();
   });
 
   it("filters by category and stock and sorts by the QORT price, from the index", async () => {
@@ -323,21 +323,21 @@ describe("shop page", { timeout: 20_000 }, () => {
   });
 
   it("searches titles and descriptions, reading the remaining catalogues", async () => {
-    const { node } = renderShop(makeWorld({ productsPerShop: 45 }));
-    await waitFor(() => expect(cardTitles()).toHaveLength(20));
+    const { node } = renderShop(makeWorld({ productsPerShop: 75 }));
+    await waitFor(() => expect(cardTitles()).toHaveLength(50));
     fireEvent.change(screen.getByRole("searchbox", { name: "Search this shop" }), { target: { value: "wraps" } });
     await waitFor(() => expect(cardTitles()).toEqual(["A product with a long title that wraps over two lines on phones"]));
     expect(screen.getByText("1 result for “wraps”")).toBeInTheDocument();
-    expect(catalogueFetches(node)).toHaveLength(5);
+    expect(catalogueFetches(node)).toHaveLength(8);
     fireEvent.change(screen.getByRole("searchbox", { name: "Search this shop" }), { target: { value: "nothing like it" } });
     expect(await screen.findByText("No products match “nothing like it”")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Show all products" }));
-    await waitFor(() => expect(cardTitles()).toHaveLength(20));
+    await waitFor(() => expect(cardTitles()).toHaveLength(50));
   });
 
   it("stops a search at 30 catalogues and says so", async () => {
     const { node } = renderShop(makeWorld({ productsPerShop: 320 }));
-    await waitFor(() => expect(cardTitles()).toHaveLength(20));
+    await waitFor(() => expect(cardTitles()).toHaveLength(50));
     fireEvent.change(screen.getByRole("searchbox", { name: "Search this shop" }), { target: { value: "wraps" } });
     expect(await screen.findByText(/Only the first 300 products were searched/, {}, { timeout: 4000 })).toBeInTheDocument();
     expect(catalogueFetches(node)).toHaveLength(30);

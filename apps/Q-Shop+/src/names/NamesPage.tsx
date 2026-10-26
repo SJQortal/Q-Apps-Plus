@@ -33,7 +33,7 @@ import { cancelNameSale, usePendingNames, type PendingName } from "./actions";
 import { useNamesMarket, type MarketItem } from "./useNamesMarket";
 import { fetchAccountNames, primaryNameOf } from "./market";
 
-export const NAMES_PAGE_SIZE = 24;
+export const NAMES_PAGE_SIZE = 50;
 
 export type NameSort = "newest" | "price-asc" | "price-desc" | "name" | "short";
 const SORTS: { value: NameSort; label: string }[] = [

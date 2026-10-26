@@ -52,9 +52,9 @@ beforeEach(() => {
 describe("Products", () => {
   it("lists every shop's newest products, reading only the newest shops' lists and the catalogues on screen", async () => {
     const { node } = renderProducts();
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(50));
     await waitFor(() => expect(titles()[0]).toBe("Product 11"));
-    // Shop 23's twelve, then shop 22's newest eight.
+    // Shop 23's twelve, then shop 22's, 21's and 20's, then shop 19's newest two.
     expect(titles().slice(0, 3)).toEqual(["Product 11", "Product 10", "Product 9"]);
     const first = cards()[0];
     expect(within(first).getByRole("link", { name: shopLink("Shop number 23") })).toHaveAttribute("href", "/Seller%2023/q-store-general-shop-23");
@@ -65,12 +65,12 @@ describe("Products", () => {
     expect(summary.searches).toEqual({ STORE: 1, DOCUMENT: 1 });
     expect(summary.unlimitedSearches).toBe(0);
     expect(dataContainers(node)).toBe(INDEX_BATCH);
-    // Two catalogues of shop 23, two of shop 22.
-    expect(summary.resources.DOCUMENT).toBe(4);
+    // Two catalogues each of shops 23 to 20, and shop 19's newest.
+    expect(summary.resources.DOCUMENT).toBe(9);
     expect(screen.getByText("Newest first")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Show more" }));
-    await waitFor(() => expect(cards()).toHaveLength(40));
+    await waitFor(() => expect(cards()).toHaveLength(100));
   });
 
   it("filters by one or several categories across every shop, whatever case the sellers typed", async () => {
@@ -78,7 +78,7 @@ describe("Products", () => {
     world.shops[2].products.forEach((p) => (p.category = " kitchen "));
     world.shops[4].products[0].category = "Zines";
     const { node } = renderProducts({ world });
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(24));
 
     fireEvent.click(screen.getByRole("button", { name: "Categories" }));
     const dialog = await screen.findByRole("dialog", { name: "Categories" });
@@ -190,7 +190,7 @@ describe("Products", () => {
     world.shops[2].title = "Gold corner";
     world.shops[1].products[3].title = "Golden mug";
     const { node } = renderProducts({ world });
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(48));
     fireEvent.change(screen.getByRole("searchbox", { name: "Search products" }), { target: { value: "gold" } });
     await waitFor(() => expect(screen.getByText("13 results for “gold”")).toBeInTheDocument());
     expect(cards().filter((card) => within(card).queryByRole("link", { name: shopLink("Gold corner") }))).toHaveLength(12);
@@ -201,7 +201,7 @@ describe("Products", () => {
 
   it("adds a product to its own shop's cart", async () => {
     const { store } = renderProducts();
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(50));
     fireEvent.click(await screen.findByRole("button", { name: "Add to cart: Product 11 (Shop number 23)" }));
     const cart = cartFor(store.getState().cart.carts, "Seller 23", "q-store-general-shop-23");
     expect(Object.values(cart?.orders ?? {})).toEqual([
@@ -212,7 +212,7 @@ describe("Products", () => {
 
   it("shows your own products without Add to cart", async () => {
     renderProducts({ user: "Seller 23" });
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(50));
     expect(within(cards()[0]).getByRole("button", { name: "Your product" })).toBeDisabled();
   });
 

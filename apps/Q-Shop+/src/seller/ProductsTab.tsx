@@ -103,7 +103,8 @@ import { useShopCollections } from "../pages/Store/useShopCollections";
 import { SectionDivider } from "../pages/Store/ProductList";
 import { selectMenuProps } from "../components/common/menuStyle";
 
-export const PRODUCTS_PAGE = 24;
+/** Products listed before Show more (Simon, 2026-10-26: "up to 50"). */
+export const PRODUCTS_PAGE = 50;
 
 const STATUS_CHIPS: StatusFilter[] = ["all", "AVAILABLE", "AUCTION", "OUT_OF_STOCK", "RETIRED"];
 const STATUS_COLOR: Record<string, "success" | "warning" | "info" | "default"> = {

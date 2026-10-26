@@ -44,7 +44,7 @@ import { ArrangeDialog } from "./ArrangeDialog";
 const uid = new ShortUniqueId({ length: 10 });
 
 /** Products listed in the picker at a time. */
-export const PICKER_PAGE = 30;
+export const PICKER_PAGE = 50;
 
 function titleOf(details: Record<string, any> | undefined): string {
   return typeof details?.title === "string" ? details.title.trim() : "";

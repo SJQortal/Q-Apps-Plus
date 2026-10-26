@@ -50,7 +50,7 @@ import { selectMenuProps } from "../components/common/menuStyle";
 import { PriceReviewDialog, sameCoinPrices } from "./PriceReviewDialog";
 
 /** Products listed at a time. */
-export const PRICING_PAGE = 30;
+export const PRICING_PAGE = 50;
 
 function titleOf(details: Record<string, any> | undefined): string {
   return typeof details?.title === "string" ? details.title.trim() : "";

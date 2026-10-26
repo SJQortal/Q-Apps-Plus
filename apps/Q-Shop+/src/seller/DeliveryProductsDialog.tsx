@@ -23,7 +23,8 @@ import { useCatalogueLoader } from "./useCatalogueLoader";
 import { useShopCollections } from "../pages/Store/useShopCollections";
 import { collectionDrafts, collectionsDraftKey } from "./useCollections";
 
-const PAGE = 30;
+/** Products listed at a time. */
+const PAGE = 50;
 const NO_PROFILES = new Map<string, string>();
 
 const titleOf = (details: Record<string, unknown> | undefined) => (typeof details?.title === "string" ? details.title.trim() : "");

@@ -98,7 +98,7 @@ describe("home page", () => {
   it("paints every card from one search, newest first, with no shop JSON until a card is in view", async () => {
     const { node } = renderHome();
     expect(screen.getByRole("heading", { level: 1, name: "Shops" })).toBeInTheDocument();
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(24));
     expect(cardTitles()[0]).toBe("Shop number 23");
     expect(screen.getByText("24 shops")).toBeInTheDocument();
     // The cards paint from the one shop-index search; the reviews index (for
@@ -132,9 +132,9 @@ describe("home page", () => {
     expect(within(link.closest("li")!).getByText("Away")).toBeInTheDocument();
   });
 
-  it("shows 20 cards, then the rest as the end of the list comes into view", async () => {
-    renderHome({ allInView: true });
-    await waitFor(() => expect(cards()).toHaveLength(24));
+  it("shows 50 cards, then the rest as the end of the list comes into view", async () => {
+    renderHome({ allInView: true, world: makeWorld({ shops: 60, productsPerShop: 1 }) });
+    await waitFor(() => expect(cards()).toHaveLength(60));
     expect(screen.getByText("That's every shop.")).toBeInTheDocument();
   });
 
@@ -170,7 +170,7 @@ describe("home page", () => {
 
   it("has no new-products strip while searching or filtering, and reads none until it is in view", async () => {
     const { node } = renderHome();
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(24));
     expect(screen.getByRole("region", { name: "New products" })).toBeInTheDocument();
     expect(node.q.callsFor("FETCH_QDN_RESOURCE")).toHaveLength(0);
     fireEvent.change(screen.getByRole("textbox", { name: "Search shops" }), { target: { value: "number 1" } });
@@ -191,7 +191,7 @@ describe("home page", () => {
   describe("search", () => {
     it("searches once typing pauses, keeps the text in the URL, and clears", async () => {
       const { asked } = renderHome();
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
       fireEvent.change(screen.getByRole("textbox", { name: "Search shops" }), { target: { value: "number 1" } });
       await waitFor(() => expect(location()).toBe("/?q=number+1"));
       await waitFor(() => expect(cards()).toHaveLength(11));
@@ -208,7 +208,7 @@ describe("home page", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "Clear the search" }));
       await waitFor(() => expect(location()).toBe("/"));
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
     });
 
     it("runs the search from the URL, so Back restores it", async () => {
@@ -244,7 +244,7 @@ describe("home page", () => {
       expect(await screen.findByText('No shops match "zzz"')).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Show all shops" }));
       await waitFor(() => expect(location()).toBe("/"));
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
     });
 
     it("doesn't count a match inside the coins marker", async () => {
@@ -267,7 +267,7 @@ describe("home page", () => {
     expect(await screen.findByText("Couldn't load shops")).toBeInTheDocument();
     down = false;
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(24));
   });
 
   describe("sorts", () => {
@@ -303,7 +303,7 @@ describe("home page", () => {
 
     it("changes from the Sort by menu, in the URL", async () => {
       renderHome();
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
       fireEvent.mouseDown(screen.getByRole("combobox", { name: "Sort by" }));
       fireEvent.click(await screen.findByRole("option", { name: "A–Z" }));
       await waitFor(() => expect(location()).toBe("/?sort=az"));
@@ -343,7 +343,7 @@ describe("home page", () => {
 
     it("an old link to Pays in BTC shows every shop: Q-Shop+ takes QORT, ARRR and assets only", async () => {
       const { node } = renderHome({ path: "/?pay=BTC" });
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
       expect(screen.queryByRole("button", { name: /Remove Pays in/ })).not.toBeInTheDocument();
       expect(node.summary().resources).toEqual({});
     });
@@ -374,7 +374,7 @@ describe("home page", () => {
 
     it("My shops shows the signed-in name's shops, with a Yours badge", async () => {
       renderHome({ user: "Seller Name", myStores: [MY_SHOP] });
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
       fireEvent.click(screen.getByRole("button", { name: "My shops" }));
       await waitFor(() => expect(location()).toBe("/?mine=1"));
       await waitFor(() => expect(cardTitles()).toEqual(["Seller's Shop"]));
@@ -385,7 +385,7 @@ describe("home page", () => {
 
     it("has no My shops for a name without a shop", async () => {
       renderHome({ user: "Buyer+One" });
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
       expect(screen.queryByRole("button", { name: "My shops" })).not.toBeInTheDocument();
     });
   });
@@ -406,7 +406,7 @@ describe("home page", () => {
     first.unmount();
     resetShowSellBanner();
     renderHome({ user: "Buyer+One", ownShopStatus: "none" });
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(24));
     expect(screen.queryByText("Have something to sell?")).not.toBeInTheDocument();
     localStorage.clear();
     resetShowSellBanner();
@@ -414,7 +414,7 @@ describe("home page", () => {
 
   it("doesn't offer it while signed out", async () => {
     renderHome({ ownShopStatus: "none" });
-    await waitFor(() => expect(cards()).toHaveLength(20));
+    await waitFor(() => expect(cards()).toHaveLength(24));
     expect(screen.queryByRole("button", { name: "Open your own shop" })).not.toBeInTheDocument();
   });
 
@@ -469,7 +469,7 @@ describe("home page", () => {
 
     it("sorts and filters in a sheet, and shows what is on as chips that turn it off", async () => {
       renderHome();
-      await waitFor(() => expect(cards()).toHaveLength(20));
+      await waitFor(() => expect(cards()).toHaveLength(24));
       expect(screen.queryByRole("combobox", { name: "Sort by" })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "Sort & filter" }));
       const sheet = await screen.findByRole("dialog", { name: "Sort and filter" });
