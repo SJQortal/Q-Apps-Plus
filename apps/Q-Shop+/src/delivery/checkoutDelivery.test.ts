@@ -36,6 +36,9 @@ describe("the delivery charge at checkout", () => {
       ok: false,
       message: "Delivery can't be paid in Gold. My Shop gives Gold no price for it. Go back and pick another coin.",
     });
+    // The zone's own price in the asset needs no rate.
+    const own = charge(doc([{ id: "eu", countries: ["PL"], first: 2, assets: { "7": { first: 9 } } }]), "ASSET:7", null);
+    expect(own.ok && own.line && unitPrice(own.line.product, "ASSET:7", null)).toBe(9);
     // With a rate (the asset's trade portal price or the seller's), it converts: 2 QORT at 20 Gold per QORT.
     const paid = charge(doc([{ id: "eu", countries: ["PL"], first: 2 }]), "ASSET:7", 20);
     expect(paid.ok && paid.line && unitPrice(paid.line.product, "ASSET:7", 20)).toBe(40);

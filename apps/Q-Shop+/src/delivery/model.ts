@@ -31,6 +31,14 @@
  * at checkout; an option shows only when every product group's zone there
  * offers it. The order's delivery line says which (`delivery.option`).
  *
+ * Q-Asset prices (Simon, 2026-10-26: "the field to add q-asset shipping
+ * prices or fetch them in various shipping zones"), additive: a rate may
+ * also say what it costs in an asset the shop takes,
+ * `assets: {<asset id>: {first, extra?}}` (free from `freeOver` as above).
+ * When every part of the fee has one, the fee's line carries that price in
+ * the asset; otherwise it converts from QORT as the asset's other prices do
+ * (money/assetRates.ts), or can't be paid in it.
+ *
  * The fee goes into the order as one more line, `details["q-store-delivery"]`,
  * priced like a product (a price list: QORT, and ARRR when the shop takes it),
  * so checkout's money code prices and pays it unchanged and the original
@@ -56,11 +64,22 @@ export function deliveryMoney(value: number, currency: string): string {
 }
 
 /** What delivery costs with one option: the first item, each extra item, free from an amount. */
+/** What one option costs in a Q-Asset: the first item, each extra item. */
+export interface AssetFee {
+  first: number;
+  extra?: number;
+}
+
 export interface DeliveryRate {
   first: number;
   extra?: number;
   freeOver?: number;
+  /** Its prices in Q-Assets the shop takes, by asset id (additive). */
+  assets?: Record<string, AssetFee>;
 }
+
+/** Asset prices a rate may carry. */
+export const MAX_RATE_ASSETS = 10;
 
 export interface DeliveryZone extends DeliveryRate {
   id: string;
@@ -159,13 +178,29 @@ const amountOf = (value: unknown): number | undefined => (typeof value === "numb
 const textOf = (value: unknown, max: number): string | undefined => (typeof value === "string" && value.trim() ? value.trim().slice(0, max) : undefined);
 const idOf = (value: unknown): string | null => (typeof value === "string" && /^[A-Za-z0-9_-]{1,32}$/.test(value) ? value : null);
 
+/** A rate's asset prices: positive whole asset ids, each with a `first` amount. */
+export function assetFeesOf(raw: unknown): Record<string, AssetFee> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const out: Record<string, AssetFee> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>).slice(0, MAX_RATE_ASSETS)) {
+    if (!/^[1-9]\d{0,15}$/.test(key)) continue;
+    const v = value as { first?: unknown; extra?: unknown } | null;
+    const first = amountOf(v?.first);
+    if (first === undefined) continue;
+    const extra = amountOf(v?.extra);
+    out[key] = { first, ...(extra !== undefined && extra > 0 && { extra }) };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function rateOf(raw: unknown): DeliveryRate | null {
   const r = raw as Partial<Record<keyof DeliveryRate, unknown>> | null;
   const first = amountOf(r?.first);
   if (!r || first === undefined) return null;
   const extra = amountOf(r.extra);
   const freeOver = amountOf(r.freeOver);
-  return { first, ...(extra !== undefined && extra > 0 && { extra }), ...(freeOver !== undefined && freeOver > 0 && { freeOver }) };
+  const assets = assetFeesOf(r.assets);
+  return { first, ...(extra !== undefined && extra > 0 && { extra }), ...(freeOver !== undefined && freeOver > 0 && { freeOver }), ...(assets && { assets }) };
 }
 
 function ratesOf(raw: unknown): Record<string, DeliveryRate> | undefined {
@@ -198,6 +233,7 @@ function zoneOf(raw: unknown): DeliveryZone | null {
     first,
     ...(extra !== undefined && extra > 0 && { extra }),
     ...(freeOver !== undefined && freeOver > 0 && { freeOver }),
+    ...(assetFeesOf(z.assets) && { assets: assetFeesOf(z.assets) }),
     ...(ratesOf(z.rates) && { rates: ratesOf(z.rates) }),
   };
 }
@@ -366,6 +402,9 @@ export function quoteDelivery(args: {
   }
   const parts: DeliveryPart[] = [];
   const unavailable: string[] = [];
+  // Per asset id, the fee in it so far; an asset a charged part has no price in drops out (null).
+  const assetFees = new Map<string, number | null>();
+  let charged = 0;
   for (const { profile, lines } of groups.values()) {
     const zones = profile ? profile.zones : doc.general.zones;
     const name = profile?.name ?? "Delivery";
@@ -386,6 +425,14 @@ export function quoteDelivery(args: {
     const free = rate.freeOver !== undefined && subtotal + 1e-9 >= rate.freeOver;
     const fee = free ? 0 : rate.first + (rate.extra ?? 0) * Math.max(0, items - 1);
     parts.push({ profile: name, zone: zone.name ?? "", items, fee: round(fee, doc.currency) });
+    if (fee > 0) {
+      for (const id of new Set([...assetFees.keys(), ...Object.keys(rate.assets ?? {})])) {
+        const own = rate.assets?.[id];
+        const sofar = assetFees.has(id) ? assetFees.get(id)! : charged === 0 ? 0 : null;
+        assetFees.set(id, sofar === null || !own ? null : sofar + own.first + (own.extra ?? 0) * Math.max(0, items - 1));
+      }
+      charged += 1;
+    }
   }
   if (unavailable.length > 0) return { kind: "unavailable", titles: unavailable };
   const fee = round(parts.reduce((sum, p) => sum + p.fee, 0), doc.currency);
@@ -396,8 +443,11 @@ export function quoteDelivery(args: {
   const baseName = profiles.length ? profiles.join(" + ") : (doc.base?.name ?? BASE_OPTION_NAME);
   const option = doc.options?.length ? { id: optionId, name: chosen?.name ?? baseName } : null;
   if (!(fee > 0)) return { kind: "free", parts, ...(option && { option }) };
-  const price: PricedProduct["price"] =
-    doc.currency === "QORT" ? [{ currency: "qort", value: fee }] : priceListFromFiat(undefined, fee, pricing!.rates, args.takesArrr);
+  const price: PricedProduct["price"] = [
+    ...(doc.currency === "QORT" ? [{ currency: "qort", value: fee }] : priceListFromFiat(undefined, fee, pricing!.rates, args.takesArrr)),
+    // The seller's own prices in assets, when every part of the fee has one (a 0 is free in it, not "no price": left out).
+    ...[...assetFees].flatMap(([id, value]) => (value !== null && value > 0 ? [{ currency: `ASSET:${id}`, value: Math.round(value * 1e8) / 1e8 }] : [])),
+  ];
   const named = parts.filter((p) => p.fee > 0).map((p) => p.profile).filter((n) => n !== "Delivery");
   // "…, Posturin" rather than "…, Posturin: Posturin".
   const which = named.length && named.join(" + ") !== option?.name ? `: ${named.join(", ")}` : "";

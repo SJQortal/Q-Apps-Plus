@@ -20,6 +20,7 @@ import { collectionDrafts, collectionsDraftKey } from "./useCollections";
 import { collectionChanges, deliveryChanges, discountChanges, type NameOf } from "./changeSummary";
 import type { ChangeArea } from "./usePendingChanges";
 import type { SellerRow } from "./productList";
+import { shopAssets } from "../money/coins";
 
 /** More lines than this fold into "and N more". */
 const MOST = 14;
@@ -56,6 +57,7 @@ export function ChangeDetails({ area }: { area: Exclude<ChangeArea, "products"> 
   const owner = useSelector((state: RootState) => state.global.currentStore?.owner || state.auth.user?.name || "");
   const signedIn = useSelector((state: RootState) => state.auth.user?.name || "");
   const storeId = useSelector((state: RootState) => state.global.currentStore?.id ?? "");
+  const shop = useSelector((state: RootState) => state.global.currentStore);
   const nameOf = useNameOf();
   const key = `${area}\n${owner}\n${storeId}`;
   const publishedDelivery = usePublished<DeliveryDoc | null>(area === "delivery" ? () => fetchDeliveryDoc(owner, storeId) : null, key);
@@ -67,7 +69,7 @@ export function ChangeDetails({ area }: { area: Exclude<ChangeArea, "products"> 
   let lines: string[] | null = null;
   if (area === "delivery") {
     const draft = deliveryDrafts.get(draftKey(owner, storeId));
-    if (draft && publishedDelivery !== undefined) lines = deliveryChanges(publishedDelivery, draft, nameOf);
+    if (draft && publishedDelivery !== undefined) lines = deliveryChanges(publishedDelivery, draft, nameOf, (id) => shopAssets(shop).find((a) => String(a.id) === id)?.name || `asset #${id}`);
   } else if (area === "collections") {
     const draft = collectionDrafts.get(collectionsDraftKey(signedIn, storeId));
     if (draft && publishedCollections !== undefined) lines = collectionChanges(publishedCollections ?? [], draft, nameOf);

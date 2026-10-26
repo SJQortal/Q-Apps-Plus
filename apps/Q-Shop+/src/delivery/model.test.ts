@@ -180,3 +180,33 @@ describe("a product in several shipping profiles", () => {
     expect(quote("Japan")).toMatchObject({ kind: "unavailable" });
   });
 });
+
+describe("delivery prices in Q-Assets", () => {
+  const priced = doc({
+    general: { zones: [{ id: "eu", countries: EUROPE, first: 5, extra: 1, freeOver: 100, assets: { "88": { first: 25, extra: 5 } } }] },
+    profiles: [{ id: "heavy", name: "Heavy items", products: ["anvil"], zones: [{ id: "world", countries: ["IS", "PL", "US"], first: 30, assets: { "88": { first: 150 } } }] }],
+  });
+  const priceIn = (q: ReturnType<typeof quote>, coin: string) => (q.kind === "charge" ? (q.line.product as { price: { currency: string; value: number }[] }).price.find((p) => p.currency === coin)?.value : undefined);
+
+  it("carry the zone's own asset price on the fee's line, added up over the order's parts", () => {
+    // 3 items in Europe: 25 + 2 × 5 BHC Coin.
+    expect(priceIn(quote(priced, [line("ghee", 3, 10)], "Poland"), "ASSET:88")).toBe(35);
+    // With the anvil's own zone too: 25 + 150.
+    expect(priceIn(quote(priced, [line("ghee", 1, 10), line("anvil", 1, 50)], "Poland"), "ASSET:88")).toBe(175);
+  });
+
+  it("leave it out when a part has none, so it converts from QORT (or can't be paid in the asset)", () => {
+    const partly = doc({ ...priced, profiles: [{ id: "heavy", name: "Heavy items", products: ["anvil"], zones: [{ id: "world", countries: ["IS", "PL", "US"], first: 30 }] }] });
+    expect(priceIn(quote(partly, [line("ghee", 1, 10), line("anvil", 1, 50)], "Poland"), "ASSET:88")).toBeUndefined();
+    // A part that's free there doesn't count against it.
+    expect(priceIn(quote(partly, [line("ghee", 1, 10)], "Poland"), "ASSET:88")).toBe(25);
+  });
+
+  it("are read only when well formed", () => {
+    const read = deliveryDocOf(
+      { ...priced, general: { zones: [{ id: "eu", countries: ["PL"], first: 5, assets: { "88": { first: 25, extra: 5 }, "0": { first: 1 }, x: { first: 2 }, "89": { extra: 3 } } }] } },
+      STORE
+    );
+    expect(read?.general.zones[0].assets).toEqual({ "88": { first: 25, extra: 5 } });
+  });
+});

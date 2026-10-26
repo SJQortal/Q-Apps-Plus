@@ -6,6 +6,7 @@
  * Iceland: first item $12.00 → $10.00", "Added code SPRING10: 10% off").
  */
 import { shippingSummaryWithStates } from "../constants/shipping";
+import { formatPrice } from "../money/pricing";
 import { DAY_NAME, WEEK_ORDER, deliveryMoney, type DeliveryDoc, type DeliveryOption, type DeliveryProfile, type DeliveryRate, type DeliveryZone } from "../delivery/model";
 import type { ShopCollection } from "../qdn/collections";
 import type { Discount } from "../discounts/model";
@@ -52,8 +53,20 @@ function priceText(rate: DeliveryRate, currency: string): string {
   return parts.join(" · ");
 }
 
-function rateChanges(before: DeliveryRate, after: DeliveryRate, currency: string): string[] {
+/** An asset's name for the lines ("BHC Coin"), by id. */
+export type AssetNameOf = (assetId: string) => string;
+const assetNumber: AssetNameOf = (id) => `asset #${id}`;
+
+function rateChanges(before: DeliveryRate, after: DeliveryRate, currency: string, assetNameOf: AssetNameOf): string[] {
   const out: string[] = [];
+  for (const id of new Set([...Object.keys(before.assets ?? {}), ...Object.keys(after.assets ?? {})])) {
+    const b = before.assets?.[id];
+    const a = after.assets?.[id];
+    const text = (fee: { first: number; extra?: number }) => `${formatPrice(fee.first)}${fee.extra ? ` + ${formatPrice(fee.extra)} each extra item` : ""}`;
+    if (!b && a) out.push(`in ${assetNameOf(id)} ${text(a)}`);
+    else if (b && !a) out.push(`no ${assetNameOf(id)} price`);
+    else if (a && b && (a.first !== b.first || (a.extra ?? 0) !== (b.extra ?? 0))) out.push(`in ${assetNameOf(id)} ${text(b)} → ${text(a)}`);
+  }
   const money = (v: number | undefined) => (v ? deliveryMoney(v, currency) : "none");
   if (before.first !== after.first) out.push(`first item ${before.first ? deliveryMoney(before.first, currency) : "free"} → ${after.first ? deliveryMoney(after.first, currency) : "free"}`);
   if ((before.extra ?? 0) !== (after.extra ?? 0)) out.push(`each extra item ${money(before.extra)} → ${money(after.extra)}`);
@@ -61,14 +74,14 @@ function rateChanges(before: DeliveryRate, after: DeliveryRate, currency: string
   return out;
 }
 
-function zoneChanges(where: string, before: readonly DeliveryZone[], after: readonly DeliveryZone[], currency: string, options: readonly DeliveryOption[]): string[] {
+function zoneChanges(where: string, before: readonly DeliveryZone[], after: readonly DeliveryZone[], currency: string, options: readonly DeliveryOption[], assetNameOf: AssetNameOf): string[] {
   const out: string[] = [];
   for (const z of added(before, after)) out.push(`${where}: added zone ${zoneTitle(z)} (${priceText(z, currency)})`);
   for (const z of removed(before, after)) out.push(`${where}: removed zone ${zoneTitle(z)}`);
   for (const [b, a] of kept(before, after)) {
     const at = `${where} › ${zoneTitle(a)}`;
     if (!same(b.countries, a.countries) || !same(b.states ?? [], a.states ?? [])) out.push(`${where} › ${zoneTitle(b)}: now ${zoneTitle(a)}`);
-    const prices = rateChanges(b, a, currency);
+    const prices = rateChanges(b, a, currency, assetNameOf);
     if (prices.length) out.push(`${at}: ${prices.join(", ")}`);
     const ids = new Set([...Object.keys(b.rates ?? {}), ...Object.keys(a.rates ?? {})]);
     for (const id of ids) {
@@ -78,7 +91,7 @@ function zoneChanges(where: string, before: readonly DeliveryZone[], after: read
       if (!rb && ra) out.push(`${at}: offers ${name} (${priceText(ra, currency)})`);
       else if (rb && !ra) out.push(`${at}: no longer offers ${name}`);
       else if (rb && ra) {
-        const changes = rateChanges(rb, ra, currency);
+        const changes = rateChanges(rb, ra, currency, assetNameOf);
         if (changes.length) out.push(`${at}: ${name} ${changes.join(", ")}`);
       }
     }
@@ -96,7 +109,8 @@ function hoursText(o: DeliveryOption): string {
   return `${days}${o.place.from && o.place.to ? ` ${o.place.from}–${o.place.to}` : ""}`;
 }
 
-export function deliveryChanges(before: DeliveryDoc | null, after: DeliveryDoc, nameOf: NameOf): string[] {
+export function deliveryChanges(before: DeliveryDoc | null, after: DeliveryDoc, nameOf: NameOf, assetName?: AssetNameOf): string[] {
+  const assetNameOf = assetName ?? assetNumber;
   const out: string[] = [];
   if (!before) out.push("Delivery prices for the first time");
   const was: DeliveryDoc = before ?? { ...after, base: undefined, options: [], general: { zones: [] }, profiles: [] };
@@ -127,10 +141,10 @@ export function deliveryChanges(before: DeliveryDoc | null, after: DeliveryDoc, 
   }
 
   const options = after.options ?? [];
-  out.push(...zoneChanges("General", was.general.zones, after.general.zones, after.currency, options));
+  out.push(...zoneChanges("General", was.general.zones, after.general.zones, after.currency, options, assetNameOf));
   for (const p of added(was.profiles, after.profiles)) {
     out.push(`Added shipping profile ${p.name}${p.products.length ? ` with ${listOf(p.products.map(nameOf))}` : ""}`);
-    out.push(...zoneChanges(p.name, [], p.zones, after.currency, options));
+    out.push(...zoneChanges(p.name, [], p.zones, after.currency, options, assetNameOf));
   }
   for (const p of removed(was.profiles, after.profiles)) out.push(`Removed shipping profile ${p.name}`);
   for (const [pb, pa] of kept<DeliveryProfile>(was.profiles, after.profiles)) {
@@ -139,7 +153,7 @@ export function deliveryChanges(before: DeliveryDoc | null, after: DeliveryDoc, 
     const minus = pb.products.filter((id) => !pa.products.includes(id));
     if (plus.length) out.push(`${pa.name}: added ${listOf(plus.map(nameOf))}`);
     if (minus.length) out.push(`${pa.name}: took out ${listOf(minus.map(nameOf))}`);
-    out.push(...zoneChanges(pa.name, pb.zones, pa.zones, after.currency, options));
+    out.push(...zoneChanges(pa.name, pb.zones, pa.zones, after.currency, options, assetNameOf));
   }
   return out;
 }
