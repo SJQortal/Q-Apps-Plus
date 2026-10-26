@@ -51,6 +51,8 @@ function App() {
                 <Route path="/favorites" element={<FavoritesPage />} />
                 <Route path="/products" element={<ProductsPage />} />
                 <Route path="/names" element={<NamesPage />} />
+                {/* A name's own link (qdn/links.ts nameLink): the Names page with its window open. */}
+                <Route path="/names/:name" element={<NamesPage />} />
                 <Route path="/:user/:store" element={<Store />} />
                 <Route path="/" element={<StoreList />} />
               </Routes>

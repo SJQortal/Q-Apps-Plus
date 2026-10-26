@@ -9,7 +9,9 @@ import GavelOutlinedIcon from "@mui/icons-material/GavelOutlined";
 import { useInView } from "react-intersection-observer";
 import { NameAvatar } from "../components/common/NameAvatar";
 import { AmountTag } from "../components/money/PriceTag";
-import { auctionTimeText, CopyNameButton, SellerLine, useAuctionGlance } from "./parts";
+import { auctionTimeText, SellerLine, useAuctionGlance } from "./parts";
+import { CopyLinkButton } from "../pages/Store/CopyLinkButton";
+import { nameLink } from "../qdn/links";
 import type { MarketItem } from "./useNamesMarket";
 import type { PendingName } from "./actions";
 
@@ -39,17 +41,18 @@ export function NameCard({
       component="article"
       variant="outlined"
       aria-label={item.name}
-      sx={{ p: 2, borderRadius: 2, display: "flex", flexDirection: "column", gap: 1.5, height: "100%", boxSizing: "border-box", minWidth: 0 }}
+      sx={{ position: "relative", p: 2, borderRadius: 2, display: "flex", flexDirection: "column", gap: 1.5, height: "100%", boxSizing: "border-box", minWidth: 0 }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+      {/* Top right: the link that opens this name's sale (Simon, 2026-10-26). */}
+      <Box sx={{ position: "absolute", top: 4, right: 4 }}>
+        <CopyLinkButton link={nameLink(item.name)} ariaLabel={`Copy link to ${item.name}`} />
+      </Box>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, pr: 4 }}>
         <NameAvatar name={item.name} size={56} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Box sx={{ display: "flex", alignItems: "flex-start", gap: 0.25, minWidth: 0 }}>
-            <Typography component="h3" sx={{ fontWeight: 700, fontSize: 18, lineHeight: 1.3, overflowWrap: "anywhere", minWidth: 0 }}>
-              {item.name}
-            </Typography>
-            <CopyNameButton name={item.name} />
-          </Box>
+          <Typography component="h3" sx={{ fontWeight: 700, fontSize: 18, lineHeight: 1.3, overflowWrap: "anywhere" }}>
+            {item.name}
+          </Typography>
           {mine ? (
             <Typography variant="body2" color="text.secondary">
               Yours

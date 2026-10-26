@@ -9,6 +9,7 @@ import { addUser } from "../state/features/authSlice";
 import { resetQdnCaches } from "../qdn/search";
 import { resetShowNames, setShowNames } from "../utils/namesSetting";
 import { decodeData64 } from "../test/fixtures/shop";
+import { nameLink } from "../qdn/links";
 import { NamesPage } from "./NamesPage";
 import { resetNameCaches } from "./market";
 import { resetPendingNames } from "./actions";
@@ -74,15 +75,16 @@ function stubNode() {
   );
 }
 
-function renderNames(signedIn = true) {
+function renderNames(signedIn = true, path = "/names") {
   const store = createAppStore();
   if (signedIn) store.dispatch(addUser({ address: ME, publicKey: "pk", name: "Buyer", names: [{ name: "Buyer", owner: ME }, { name: "spare2", owner: ME }] }));
   renderWithProviders(
     <Routes>
       <Route path="/names" element={<NamesPage />} />
+      <Route path="/names/:name" element={<NamesPage />} />
       <Route path="/settings" element={<p>Settings page</p>} />
     </Routes>,
-    { store, initialEntries: ["/names"] }
+    { store, initialEntries: [path] }
   );
   return store;
 }
@@ -130,6 +132,23 @@ describe("Names", () => {
     expect(cardNames()).toEqual(["zed", "alpha"]);
     fireEvent.change(screen.getByRole("textbox", { name: "Search names" }), { target: { value: "alp" } });
     expect(cardNames()).toEqual(["alpha"]);
+  });
+
+  it("gives each name for sale its own link, which opens its window, from the card's corner or the window", async () => {
+    renderNames(true, "/names/alpha");
+    // The link opens the name's window straight away.
+    const dialog = await screen.findByRole("dialog", { name: "alpha" });
+    expect(within(dialog).getByRole("button", { name: "Copy link" })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" })[0]);
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    // Each card has its link in the top right corner.
+    expect(within(screen.getByRole("article", { name: "zed" })).getByRole("button", { name: "Copy link to zed" })).toBeInTheDocument();
+    expect(nameLink("Ann Smith+")).toBe("qortal://APP/Q-Shop+/names/Ann%20Smith%2B");
+  });
+
+  it("says when a name's link is to a name no longer for sale", async () => {
+    renderNames(true, "/names/sold-already");
+    expect(await screen.findByText(/sold-already isn't for sale right now/)).toBeInTheDocument();
   });
 
   it("buys a name at its price: what comes with it in the explorer, then BUY_NAME as the Names app asks it", async () => {

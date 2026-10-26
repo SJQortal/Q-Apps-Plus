@@ -9,7 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useSelector } from "react-redux";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { decodeParam, namePath } from "../qdn/links";
 import { visuallyHiddenSx } from "../pages/Store/a11y";
 import { Alert, Box, Button, Chip, InputAdornment, MenuItem, Paper, Skeleton, TextField, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
@@ -127,7 +128,16 @@ function NamesMarketPage() {
   const [kind, setKind] = useState<NameKind>("all");
   const [sort, setSort] = useState<NameSort>("newest");
   const [pages, setPages] = useState(1);
-  const [open, setOpen] = useState<string | null>(null);
+  // The open name is in the address (/names/<name>), so its link opens it here and Back closes it.
+  const navigate = useNavigate();
+  const location = useLocation();
+  const open = decodeParam(useParams().name) || null;
+  const setOpen = (name: string | null) => {
+    if (name) navigate({ pathname: namePath(name), search: location.search }, { state: { fromList: true } });
+    // Opened from the list: Back returns to it; opened from a link: the list replaces it.
+    else if ((location.state as { fromList?: boolean } | null)?.fromList) navigate(-1);
+    else navigate({ pathname: "/names", search: location.search }, { replace: true });
+  };
   const [selling, setSelling] = useState<{ initial: string | null } | null>(null);
   const [sent, setSent] = useState<string | null>(null);
 
@@ -137,6 +147,8 @@ function NamesMarketPage() {
   const shown = listed.slice(0, pages * NAMES_PAGE_SIZE);
   const { ref: more } = useInView({ rootMargin: "400px 0px", skip: shown.length >= listed.length, onChange: (inView) => inView && setPages((p) => p + 1) });
   const openItem = open ? market.items.find((i) => i.name === open) ?? null : null;
+  // A link to a name that's no longer for sale (sold, or taken off): said once the list is in.
+  const gone = !!open && market.status === "ready" && !openItem;
   const auctions = market.items.filter((i) => i.auction).length;
 
   const setTab = (next: "sale" | "mine") => {
@@ -226,6 +238,11 @@ function NamesMarketPage() {
       {sent && (
         <Alert severity="success" onClose={() => setSent(null)} sx={{ mb: 2 }} role="status">
           {sent}
+        </Alert>
+      )}
+      {gone && (
+        <Alert severity="info" onClose={() => setOpen(null)} sx={{ mb: 2 }} role="status">
+          {open} isn&apos;t for sale right now: it may have been sold or taken off sale.
         </Alert>
       )}
       {tab === "sale" ? (
