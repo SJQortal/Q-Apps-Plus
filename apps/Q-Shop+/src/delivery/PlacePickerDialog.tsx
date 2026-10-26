@@ -19,6 +19,31 @@ import { cleanPlace, pickedBuyerPlace, setBuyerPlace, type BuyerPlace } from "./
 
 const byName = (a: string, b: string) => a.localeCompare(b);
 
+/** One row of the list. */
+const ROW = 48;
+
+/**
+ * As many whole rows as fit in `share` of the window (3 to `most`): the
+ * list's height is whole rows, and scrolling stops on a row, so no name is
+ * cut off at its top or bottom edge (Simon, 2026-10-26).
+ */
+function wholeRows(windowHeight: number, share: number, most: number): number {
+  return Math.max(3, Math.min(most, Math.floor((windowHeight * share) / ROW)));
+}
+
+function useWindowHeight(): number {
+  const [height, setHeight] = useState(() => (typeof window === "undefined" ? 800 : window.innerHeight));
+  useEffect(() => {
+    const onResize = () => setHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return height;
+}
+
+/** The delivery form's list writes a few names oddly ("People'S"): shown as they're spelled, kept as they are. */
+const shownName = (name: string) => name.replace(/'S\b/g, "'s");
+
 /** Countries by any name they go by (constants/countrySearch.ts); states by their own. */
 function narrow(names: string[], query: string, codeOf: (name: string) => string | null): string[] {
   return matchCountries(names, query, (n) => n, codeOf);
@@ -30,7 +55,7 @@ function PlaceList({
   value,
   onPick,
   codeOf,
-  height,
+  rows,
   autoFocus = false,
 }: {
   label: string;
@@ -38,7 +63,8 @@ function PlaceList({
   value: string | null;
   onPick: (name: string) => void;
   codeOf: (name: string) => string | null;
-  height: string;
+  /** Whole rows the list shows (wholeRows). */
+  rows: number;
   autoFocus?: boolean;
 }) {
   const [query, setQuery] = useState("");
@@ -95,8 +121,18 @@ function PlaceList({
         ref={list}
         role="listbox"
         aria-label={label}
-        // A steady height: the dialog doesn't jump while typing narrows the list.
-        sx={{ height, overflowY: "auto", border: 1, borderColor: "divider", borderRadius: 2, p: 0.5 }}
+        // A steady height of whole rows (the dialog doesn't jump while typing narrows the list), stopping on a row.
+        sx={{
+          height: rows * ROW + 10,
+          overflowY: "auto",
+          border: 1,
+          borderColor: "divider",
+          borderRadius: 2,
+          p: 0.5,
+          scrollSnapType: "y mandatory",
+          scrollPaddingBlock: "4px",
+          overscrollBehavior: "contain",
+        }}
       >
         {shown.length === 0 ? (
           <Typography color="text.secondary" sx={{ p: 1.5 }}>
@@ -116,8 +152,9 @@ function PlaceList({
                 onKeyDown={(e) => move(e, i)}
                 sx={(theme) => ({
                   width: "100%",
-                  minHeight: 48,
+                  minHeight: ROW,
                   px: 1.5,
+                  scrollSnapAlign: "start",
                   borderRadius: 1.5,
                   justifyContent: "space-between",
                   textAlign: "left",
@@ -128,7 +165,7 @@ function PlaceList({
                   "&:hover, &.Mui-focusVisible": { bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.32 : 0.18) },
                 })}
               >
-                {name}
+                {shownName(name)}
                 {chosen && <CheckIcon fontSize="small" color="primary" />}
               </ButtonBase>
             );
@@ -145,6 +182,9 @@ export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPl
   const [country, setCountry] = useState<string | null>(place?.country ?? null);
   const [state, setState] = useState<string | null>(place?.state || null);
   const inUs = countryCode(country) === US;
+  const windowHeight = useWindowHeight();
+  const countryRows = wholeRows(windowHeight, inUs ? 0.3 : 0.5, inUs ? 5 : 9);
+  const stateRows = wholeRows(windowHeight, 0.26, 4);
   const save = () => {
     const next = cleanPlace({ country, state: inUs ? state : "" });
     if (!next) return;
@@ -195,11 +235,11 @@ export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPl
             setState(null);
           }}
           codeOf={countryCode}
-          height={inUs ? "min(30vh, 260px)" : "min(50vh, 440px)"}
+          rows={countryRows}
           autoFocus
         />
         {inUs && (
-          <PlaceList label="State (optional)" names={states} value={state} onPick={setState} codeOf={() => null} height="min(26vh, 220px)" />
+          <PlaceList label="State (optional)" names={states} value={state} onPick={setState} codeOf={() => null} rows={stateRows} />
         )}
         {inUs && (
           <Typography variant="body2" color="text.secondary">
