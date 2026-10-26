@@ -167,3 +167,5 @@ export interface ExplorerWorld {
 export const COLLECTOR: ExplorerPerson & { name: string };
 /** Its names in Core's order (when each was registered); the primary is the third. */
 export const COLLECTOR_NAMES: string[];
+/** Tara Trader: Q-Trade trades on four coins, trade offers and Q-Asset trades (the Trades tab). */
+export const TRADER: ExplorerPerson & { name: string };
