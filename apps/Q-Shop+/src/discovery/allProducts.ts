@@ -298,13 +298,28 @@ export function searchAll(rows: AllProductRow[], terms: string[], searchedKeys: 
 let activeReads = 0;
 const waitingReads: (() => void)[] = [];
 
-/** One product index under its owner's name, INDEX_CONCURRENCY at a time. */
-async function readIndex(source: ShopSource, fresh: boolean): Promise<unknown> {
+/**
+ * How long one shop's product index may take. A node that can't find one
+ * answers only when Core gives up, about 40 s later, and Categories waited
+ * for it (Simon's Hub, 2026-10-26: "111 of 112 shops"); past this it counts
+ * as not on the node now, with Retry (a late answer is cached for it).
+ */
+export const INDEX_READ_TIMEOUT_MS = 12_000;
+
+/** One product index under its owner's name, INDEX_CONCURRENCY at a time, given up after INDEX_READ_TIMEOUT_MS. */
+export async function readIndex(source: Pick<ShopSource, "owner" | "storeId">, fresh: boolean): Promise<unknown> {
   if (activeReads >= INDEX_CONCURRENCY) await new Promise<void>((resolve) => waitingReads.push(resolve));
   activeReads++;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await fetchQdnJson("DOCUMENT", source.owner, dataContainerIdentifier(source.storeId), { fresh });
+    return await Promise.race([
+      fetchQdnJson("DOCUMENT", source.owner, dataContainerIdentifier(source.storeId), { fresh }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("The node took too long")), INDEX_READ_TIMEOUT_MS);
+      }),
+    ]);
   } finally {
+    clearTimeout(timer);
     activeReads--;
     waitingReads.shift()?.();
   }

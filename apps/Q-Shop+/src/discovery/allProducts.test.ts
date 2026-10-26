@@ -271,3 +271,21 @@ describe("loading", () => {
     expect(node.fetchCalls.filter((u) => u.includes(cat))).toHaveLength(1);
   });
 });
+
+describe("a shop's product list the node can't find", () => {
+  it("is given up on after a while, so Categories doesn't wait for Core's own timeout", async () => {
+    vi.useFakeTimers();
+    const { readIndex, INDEX_READ_TIMEOUT_MS } = await import("./allProducts");
+    // The node never answers this one.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    try {
+      const read = readIndex({ owner: "Slow Shop", storeId: "q-store-general-slow" }, true);
+      const failed = expect(read).rejects.toThrow(/too long/);
+      await vi.advanceTimersByTimeAsync(INDEX_READ_TIMEOUT_MS + 10);
+      await failed;
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
+  });
+});
