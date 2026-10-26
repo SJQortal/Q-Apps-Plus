@@ -253,6 +253,7 @@ describe('the Explorer’s landing page', () => {
       'Overview',
       'Connections',
       'Transactions',
+      'Trades',
       'Assets',
       'Minter Profile',
       'Names',
@@ -265,7 +266,7 @@ describe('the Explorer’s landing page', () => {
       expect(within(dialog).getByText(part)).toBeInTheDocument();
     expect(
       within(dialog).getByText(
-        /^You see all of the Explorer\. Connections, Compare, the activity chart, QORT minted, purchased \/ sold and received \/ sent, and exchanges named as such are shown only to Minter Admins, Dev Admins and MINTER members at level 5 or above\.$/
+        /^You see all of the Explorer\. Connections, Trades, Compare, the activity chart, QORT minted, purchased \/ sold and received \/ sent, and exchanges named as such are shown only to Minter Admins, Dev Admins and MINTER members at level 5 or above\.$/
       )
     ).toBeVisible();
     await expectNoAxeViolations(dialog);
@@ -291,7 +292,7 @@ describe('the Explorer’s landing page', () => {
       expect(within(dialog).getByText(part)).toBeInTheDocument();
     // Nothing about what isn't there, nor that anything is.
     expect(dialog).not.toHaveTextContent(
-      /Connections|Compare|activity chart|QORT minted|exchange|linked|Who sees what|level 5 or above/
+      /Connections|Trades|Compare|activity chart|QORT minted|exchange|linked|Who sees what|level 5 or above/
     );
     await expectNoAxeViolations(dialog);
   });
