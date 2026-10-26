@@ -1084,6 +1084,14 @@ export default {
       await d.getByRole('searchbox', { name: 'Country' }).fill('United');
       await page.waitForTimeout(400);
     } },
+    // Scrolled part-way: the list stops on a row and shows whole rows only (Simon: "some are cut").
+    { key: 'product-delivery-picker-scrolled', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, overlay: true, after: async (page) => {
+      await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
+      const list = page.getByRole('dialog', { name: 'Where should things be delivered?' }).getByRole('listbox', { name: 'Country' });
+      await list.hover();
+      await page.mouse.wheel(0, 1237);
+      await page.waitForTimeout(900);
+    } },
     { key: 'products-on-sale', path: '/products?sale=1', after: async (page) => { await page.getByText('% off').first().waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'seller-product-sale', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
       await page.getByRole('button', { name: 'Add product' }).click({ timeout: 8000 });
