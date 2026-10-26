@@ -37,7 +37,7 @@ import {
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
 import { nominatorLastVisit } from './world.mjs';
-import { AT_ADDRESS, FUNDER, SPONSOR, UNUSED_ADDRESS } from './world-explorer.mjs';
+import { AT_ADDRESS, FUNDER, SPONSOR, TRADER, UNUSED_ADDRESS } from './world-explorer.mjs';
 import { ADMIN_BOARD_IDS } from './world-legacy.mjs';
 
 const world = createWorld();
@@ -1402,6 +1402,42 @@ export default {
     },
     // The Assets tab (Simon, 2026-10-21): Ben Target's five Q-Assets as cards, worth most first,
     // GEMCOIN's and 🐉's avatars from their owners, the rest as coins; then the list.
+    // The Trades tab (Simon, 2026-10-26): Tara Trader's Q-Trade and Q-Asset trades, summary to breakdown.
+    {
+      key: 'explorer-trades',
+      path: `/explorer/account/${TRADER.address}/trades?as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByText('18,820.5 QORT').waitFor({ timeout: 8000 });
+        await page
+          .getByText('35 completed · 10 ended without a trade · 2 open')
+          .waitFor({ timeout: 8000 });
+        await page.getByRole('region', { name: 'Highlights' }).waitFor({ timeout: 8000 });
+      },
+    },
+    // Its chart as a table, and the Q-Trade list filtered to one coin.
+    {
+      key: 'explorer-trades-table',
+      path: `/explorer/account/${TRADER.address}/trades?as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('region', { name: 'Over time' }).waitFor({ timeout: 8000 });
+        await page.getByRole('button', { name: 'Show as a table' }).click();
+        await page.getByRole('combobox', { name: 'Coin' }).click();
+        await page.getByRole('option', { name: 'Dogecoin' }).click();
+        await page.getByRole('table').waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
+    // An account that has never traded.
+    {
+      key: 'explorer-trades-none',
+      path: `/explorer/account/${ADDR.learner}/trades?as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByText('No trades yet.').waitFor({ timeout: 8000 });
+      },
+    },
     {
       key: 'explorer-assets',
       path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
@@ -1415,7 +1451,9 @@ export default {
       key: 'explorer-assets-list',
       path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
       after: async (page) => {
-        await page.addInitScript(() => window.localStorage.setItem('qmintershipplus-assets-view', 'list'));
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-assets-view', 'list')
+        );
         await page.reload({ waitUntil: 'load' });
         await explorerSettle(page);
         await page.getByRole('list', { name: 'Its Q-Assets' }).waitFor({ timeout: 8000 });
@@ -1430,7 +1468,9 @@ export default {
         await explorerSettle(page);
         const dialog = page.getByRole('dialog');
         await dialog.getByText('This account: #2 of 3 holders.').waitFor({ timeout: 8000 });
-        await dialog.getByRole('list', { name: 'Latest trades with QORT' }).waitFor({ timeout: 8000 });
+        await dialog
+          .getByRole('list', { name: 'Latest trades with QORT' })
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
     },
@@ -1442,7 +1482,9 @@ export default {
       after: async (page) => {
         await explorerSettle(page);
         await page.getByRole('button', { name: 'How it adds up' }).click({ timeout: 8000 });
-        await page.getByRole('dialog', { name: 'What buyers would pay now' }).waitFor({ timeout: 8000 });
+        await page
+          .getByRole('dialog', { name: 'What buyers would pay now' })
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
     },
@@ -1472,8 +1514,14 @@ export default {
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
       after: async (page) => {
         await asList(page);
-        await page.getByRole('button', { name: /^Show the 1 transaction with / }).first().click();
-        await page.getByRole('link', { name: 'Open transaction' }).first().waitFor({ timeout: 8000 });
+        await page
+          .getByRole('button', { name: /^Show the 1 transaction with / })
+          .first()
+          .click();
+        await page
+          .getByRole('link', { name: 'Open transaction' })
+          .first()
+          .waitFor({ timeout: 8000 });
         // The pointer off the page, so no hover tooltip (a row's Compare) stays open in the capture.
         await page.mouse.move(0, 0);
         await page.waitForTimeout(400);
@@ -1592,7 +1640,10 @@ export default {
       path: `/explorer/account/${ADDR.banTarget}/transactions?kind=trading&as=admin`,
       after: async (page) => {
         await explorerSettle(page);
-        await page.getByText(/^Filled:/).first().waitFor({ timeout: 8000 });
+        await page
+          .getByText(/^Filled:/)
+          .first()
+          .waitFor({ timeout: 8000 });
       },
     },
     {
