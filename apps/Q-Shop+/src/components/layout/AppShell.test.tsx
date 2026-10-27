@@ -193,6 +193,35 @@ describe("AppShell on desktop", () => {
       vi.unstubAllGlobals();
     });
 
+    it("says whose each shop is when two of them have one title (Simon's Hub, 2026-10-27)", async () => {
+      restore = mockViewport(DESKTOP);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: string) => {
+          const url = String(input);
+          const rows = url.startsWith("/arbitrary/resources/search")
+            ? [
+                { name: "Seller Name", service: "STORE", identifier: "q-store-general-my-shop", created: 1, metadata: { title: "Seller's Shop" } },
+                { name: "Second Name", service: "STORE", identifier: "q-store-general-second", created: 2, metadata: { title: "Seller's Shop" } },
+              ]
+            : [];
+          return { ok: true, status: 200, json: async () => rows, text: async () => JSON.stringify(rows) };
+        })
+      );
+      renderShell({ store: sellerStore() });
+      openAccountMenu();
+      const menu = await screen.findByRole("dialog", { name: "Account menu for Seller Name" });
+      const shops = within(menu).getByRole("menu", { name: "My shops" });
+      await waitFor(() =>
+        expect(within(shops).getAllByRole("menuitem").map((m) => m.textContent)).toEqual([
+          "Seller's ShopSelling now · as Seller Name",
+          "other",
+          "Seller's ShopAs Second Name",
+        ])
+      );
+      vi.unstubAllGlobals();
+    });
+
     it("opens Create shop, Settings and Messages in Q-Mail", async () => {
       restore = mockViewport(DESKTOP);
       const store = sellerStore();

@@ -134,10 +134,13 @@ export function AccountMenu({ phone, open, anchorEl, onClose, onOpenBlockedNames
         <>
           <MenuSectionTitle>My shops</MenuSectionTitle>
           <MenuList aria-label="My shops" disablePadding sx={{ position: "relative", maxHeight: 240, overflowY: "auto" }}>
-            {shops.map((shop) => {
-              const title = shop.title || hashMapStores[shop.id]?.title || shortStoreIdOf(shop.id);
+            {shops.map((shop, _, all) => {
+              const titleOf = (s: typeof shop) => s.title || hashMapStores[s.id]?.title || shortStoreIdOf(s.id);
+              const title = titleOf(shop);
               const current = shop.id === currentStoreId && shop.owner === userName;
-              const otherName = shop.owner !== userName ? shop.owner : null;
+              // Two shops with one title (Biohackers Corner as Simon James, and as Biohackers Corner): each says whose it is.
+              const shared = all.some((other) => other !== shop && titleOf(other).trim().toLowerCase() === title.trim().toLowerCase());
+              const otherName = shop.owner !== userName || shared ? shop.owner : null;
               return (
                 <MenuItem key={`${shop.owner}\n${shop.id}`} onClick={() => openShop(shop.id, shop.owner)} sx={MENU_ROW_SX}>
                   <ListItemIcon sx={MENU_LEAD_SX}>
@@ -145,7 +148,7 @@ export function AccountMenu({ phone, open, anchorEl, onClose, onOpenBlockedNames
                   </ListItemIcon>
                   <ListItemText
                     primary={title}
-                    secondary={current ? "Selling now" : otherName ? `As ${otherName}` : undefined}
+                    secondary={current ? (otherName ? `Selling now · as ${otherName}` : "Selling now") : otherName ? `As ${otherName}` : undefined}
                     slotProps={{ primary: { noWrap: true } }}
                   />
                   {current && <CheckIcon fontSize="small" sx={{ color: "primary.main", ml: 1, flexShrink: 0 }} />}
