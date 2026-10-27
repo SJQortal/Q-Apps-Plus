@@ -116,6 +116,8 @@ export function ResponsiveDialog({
             sx={{
               flexShrink: 0,
               display: "flex",
+              // Too many for one row: the buttons go onto a second one, whole ("Save to drafts", not "Save to / drafts").
+              flexWrap: "wrap",
               gap: 1,
               justifyContent: "flex-end",
               alignItems: "center",
@@ -124,7 +126,7 @@ export function ResponsiveDialog({
               borderTop: 1,
               borderColor: "divider",
               bgcolor: "background.paper",
-              "& .MuiButton-root": { minHeight: 44 },
+              "& .MuiButton-root": { minHeight: 44, whiteSpace: "nowrap" },
             }}
           >
             {actions}

@@ -11,9 +11,9 @@
  * the form starts from the lead with every item, and saving makes a draft
  * for each (variants/drafts.ts groupEditDrafts). Delete takes them all.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Box, Button, Skeleton, Typography } from "@mui/material";
+import { Box, Button, IconButton, Skeleton, Tooltip, Typography, type SxProps, type Theme } from "@mui/material";
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
 import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
 import ShortUniqueId from "short-unique-id";
@@ -34,6 +34,7 @@ import { groupEditDrafts, groupFormValues, removedMembers, variantDrafts, varian
 import { variantLabel, variantOf, type ProductVariant } from "../../../variants/model";
 import { useVariantGroup } from "../../../variants/useVariantGroup";
 import { sameContent } from "../../../seller/sameContent";
+import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import {
   editedProductDraft,
   formValuesFor,
@@ -43,6 +44,42 @@ import {
 } from "../../../seller/productDraft";
 
 const uid = new ShortUniqueId({ length: 10 });
+
+/**
+ * Delete or Duplicate in the form's bar: with its word, or on phones as its
+ * icon alone (named, with a tooltip), so Cancel and Save to drafts keep the
+ * bar's one row at 360 px instead of breaking onto two lines.
+ */
+function ActionButton({
+  label,
+  icon,
+  iconOnly,
+  onClick,
+  color = "inherit",
+  sx,
+}: {
+  label: string;
+  icon: ReactNode;
+  iconOnly: boolean;
+  onClick: () => void;
+  color?: "inherit" | "error";
+  sx?: SxProps<Theme>;
+}) {
+  if (!iconOnly) {
+    return (
+      <Button color={color} startIcon={icon} onClick={onClick} sx={sx}>
+        {label}
+      </Button>
+    );
+  }
+  return (
+    <Tooltip title={label}>
+      <IconButton color={color} aria-label={label} onClick={onClick} sx={[{ width: 44, height: 44 }, ...(Array.isArray(sx) ? sx : sx ? [sx] : [])]}>
+        {icon}
+      </IconButton>
+    </Tooltip>
+  );
+}
 
 export interface ProductDialogProps {
   open: boolean;
@@ -139,6 +176,7 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
   const currentStore = useSelector((state: RootState) => state.global.currentStore);
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
+  const phone = usePhoneLayout();
 
   const coins = useMemo(() => shopCoins(currentStore) as string[], [currentStore]);
   // Prices in a currency at the seller's rates (Shop tab → Prices), when the shop uses them.
@@ -267,9 +305,11 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
         actions={
           <>
             {onDelete && listedProducts.length > 0 && (
-              <Button
+              <ActionButton
+                label={group && listedProducts.length > 1 ? `Delete all ${listedProducts.length}` : "Delete"}
+                icon={<DeleteOutlineOutlinedIcon />}
                 color="error"
-                startIcon={<DeleteOutlineOutlinedIcon />}
+                iconOnly={phone}
                 onClick={() =>
                   onDelete(
                     listedProducts.map((p) => ({
@@ -280,14 +320,16 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
                   )
                 }
                 sx={{ mr: "auto" }}
-              >
-                {group && listedProducts.length > 1 ? `Delete all ${listedProducts.length}` : "Delete"}
-              </Button>
+              />
             )}
             {onDuplicate && product && !group && !picturesPending && (
-              <Button color="inherit" startIcon={<ContentCopyOutlinedIcon />} onClick={() => onDuplicate(copyValues(values))} sx={listedProducts.length > 0 && onDelete ? undefined : { mr: "auto" }}>
-                Duplicate
-              </Button>
+              <ActionButton
+                label="Duplicate"
+                icon={<ContentCopyOutlinedIcon />}
+                iconOnly={phone}
+                onClick={() => onDuplicate(copyValues(values))}
+                sx={listedProducts.length > 0 && onDelete ? undefined : { mr: "auto" }}
+              />
             )}
             <Button color="inherit" onClick={requestClose}>
               Cancel
