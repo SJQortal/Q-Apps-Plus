@@ -13,6 +13,8 @@ import {
   LOWER_48,
   US_STATE_GROUPS,
   placeNotShipped,
+  shippingFromTags,
+  withShippingTags,
   shippingStatesOf,
   shippingSummaryWithStates,
   shipsToAddress,
@@ -90,5 +92,47 @@ describe("shipping within the United States, by state", () => {
     expect(placeNotShipped(shop, "United States", "Alaska")).toBe("Alaska, United States");
     expect(placeNotShipped(shop, "Germany", "")).toBe("Germany");
     expect(placeNotShipped(shop, "United States", "Oregon")).toBeNull();
+  });
+});
+
+describe("ships-to as region tags (another Q-Shop build)", () => {
+  // As the ppmSilver shop on QDN has it: every US state and territory, and North and Central America.
+  const caribbean = ["anguilla", "antigua-and-barbuda", "aruba", "bahamas", "barbados", "belize", "bermuda", "canada", "cayman-islands"];
+  const allStates = (STATE_LIST as { value: string }[]).map((st) => `state:us-${st.value.toLowerCase()}`);
+
+  it("reads countries by their slugged names and US states by code", () => {
+    const tags = shippingFromTags(["country:canada", "country:antigua-and-barbuda", "country:aland-islands", "state:us-ca", "state:us-or"]);
+    expect(tags).toEqual({
+      countries: ["AX", "US", "CA", "AG"],
+      states: ["CA", "OR"],
+      text: "Åland Islands, United States, Canada and Antigua and Barbuda; in the United States, California and Oregon",
+    });
+  });
+
+  it("every state is the whole United States", () => {
+    const tags = shippingFromTags([...allStates, ...caribbean.map((c) => `country:${c}`)])!;
+    expect(tags.states).toBeNull();
+    expect(tags.countries).toContain("US");
+    expect(tags.text).not.toMatch(/in the United States/);
+  });
+
+  it("isn't tags when it is text, empty, or a tag isn't on the lists", () => {
+    expect(shippingFromTags("Europe")).toBeNull();
+    expect(shippingFromTags([])).toBeNull();
+    expect(shippingFromTags(["country:canada", "country:atlantis"])).toBeNull();
+    expect(shippingFromTags(["country:canada", "state:us-zz"])).toBeNull();
+    expect(shippingFromTags(["country:canada", 5])).toBeNull();
+  });
+
+  it("gives the shop words for shipsTo and its countries, keeping a list it has", () => {
+    const read = withShippingTags<Record<string, unknown>>({ title: "Shop", shipsTo: ["country:canada", "state:us-tx"] });
+    expect(read).toEqual({ title: "Shop", shipsTo: "United States and Canada; in the United States, Texas", shippingCountries: ["US", "CA"], shippingStates: ["TX"] });
+    expect(shipsToCountry(read, "Canada")).toBe(true);
+    expect(shipsToCountry(read, "Germany")).toBe(false);
+    expect(placeNotShipped(read, "United States", "Ohio")).toBe("Ohio, United States");
+    const own = withShippingTags({ shipsTo: ["country:canada"], shippingCountries: ["DE"] });
+    expect(own).toEqual({ shipsTo: "Canada", shippingCountries: ["DE"] });
+    const text = { shipsTo: "Europe" };
+    expect(withShippingTags(text)).toBe(text);
   });
 });

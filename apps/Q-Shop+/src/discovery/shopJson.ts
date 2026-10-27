@@ -13,6 +13,7 @@
  */
 import type { ShopAsset } from "../money/coins";
 import { assetPricingOf } from "../money/assetRates";
+import { withShippingTags } from "../constants/shipping";
 
 /** The STORE JSON as the original writes it, plus the + app's additive fields (docs/apps/Q-Shop+.md → Data contract). */
 export interface ShopJson {
@@ -51,7 +52,8 @@ function finiteNumber(value: unknown): number | undefined {
 /**
  * The shop with every field it renders or pays with in the type the app
  * expects, or null when the JSON isn't an object at all:
- * - title, description, location, ships-to, short id and logo: text, or gone;
+ * - title, description, location, ships-to, short id and logo: text, or gone
+ *   (ships-to as region tags is read into words first, constants/shipping withShippingTags);
  * - created: a number, or gone;
  * - supportedCoins: the tickers (text) only;
  * - foreignCoins: the addresses (text) only;
@@ -59,7 +61,7 @@ function finiteNumber(value: unknown): number | undefined {
  */
 export function normalizeShopJson(json: unknown): (ShopJson & Record<string, unknown>) | null {
   if (!isPlainObject(json)) return null;
-  const shop: Record<string, unknown> = { ...json };
+  const shop: Record<string, unknown> = { ...withShippingTags(json) };
   for (const field of TEXT_FIELDS) {
     if (field in shop && !isString(shop[field])) delete shop[field];
   }

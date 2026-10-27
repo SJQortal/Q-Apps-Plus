@@ -242,3 +242,69 @@ export function placeNotShipped(
   if (shipsToAddress(shop, country, state)) return null;
   return shipsToCountry(shop, country) && state ? `${state}, ${country}` : country;
 }
+
+// ---------------------------------------------------------------- ships-to as region tags
+
+/** A country's name as a tag writes it: "Antigua and Barbuda" → "antigua-and-barbuda", "Åland Islands" → "aland-islands". */
+function nameSlug(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+const CODES_BY_SLUG: Record<string, string> = Object.fromEntries((COUNTRY_LIST as { text: string; value: string }[]).map((c) => [nameSlug(c.text), c.value]));
+
+/**
+ * `shipsTo` as a list of region tags instead of text, as another Q-Shop build
+ * writes it (seen on QDN, 2026-10-27): `["country:canada", "state:us-al", …]`,
+ * a country by its slugged name in the delivery form's list, a US state by
+ * its code. The original only checks that `shipsTo` is there, so it lists
+ * such a shop; the + app reads the tags as countries and states, with the
+ * summary in words for `shipsTo`. Null when it isn't such a list, or a tag
+ * isn't one of the lists' (then nothing is checked against it).
+ */
+export function shippingFromTags(value: unknown): { countries: string[]; states: string[] | null; text: string } | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const countries = new Set<string>();
+  const states = new Set<string>();
+  for (const tag of value) {
+    if (typeof tag !== "string") return null;
+    const [kind, place = ""] = tag.trim().toLowerCase().split(":", 2);
+    if (kind === "country" && CODES_BY_SLUG[place]) {
+      countries.add(CODES_BY_SLUG[place]);
+    } else if (kind === "state" && place.startsWith("us-") && place.slice(3).toUpperCase() in STATE_NAMES) {
+      states.add(place.slice(3).toUpperCase());
+      countries.add(US);
+    } else {
+      return null;
+    }
+  }
+  const codes = ALL_COUNTRY_CODES.filter((c) => countries.has(c));
+  // Every state, or the United States without a state named: the whole country.
+  const someStates = states.size > 0 && ALL_STATE_CODES.some((c) => !states.has(c)) ? ALL_STATE_CODES.filter((c) => states.has(c)) : null;
+  return { countries: codes, states: someStates, text: shippingSummaryWithStates(codes, someStates) };
+}
+
+/**
+ * A shop's JSON with region-tag `shipsTo` (shippingFromTags) read: `shipsTo`
+ * in words, and `shippingCountries` / `shippingStates` from the tags unless
+ * the shop keeps its own. Anything else comes back as it is. The seller's
+ * edit form reads it too, so a save from the + app writes `shipsTo` as text,
+ * as the original does.
+ */
+export function withShippingTags<T>(json: T): T {
+  if (!json || typeof json !== "object" || Array.isArray(json)) return json;
+  const shop = json as Record<string, unknown>;
+  const tags = shippingFromTags(shop.shipsTo);
+  if (!tags) return json;
+  const ownList = shippingCountriesOf(shop) !== null;
+  return {
+    ...shop,
+    shipsTo: tags.text,
+    ...(!ownList && { shippingCountries: tags.countries }),
+    ...(!ownList && tags.states && { shippingStates: tags.states }),
+  } as T;
+}

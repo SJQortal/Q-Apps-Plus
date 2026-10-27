@@ -24,6 +24,13 @@ describe("a shop's JSON, read safely", () => {
     expect(normalizeShopJson(goodShop)).toEqual(goodShop);
   });
 
+  it("reads ships-to as region tags into words, so the shop passes the original's check (ppmSilver)", () => {
+    const shop = normalizeShopJson({ ...goodShop, shipsTo: ["country:canada", "country:mexico", "state:us-al"] })!;
+    expect(shop.shipsTo).toBe("North America (except Greenland, Bermuda and Saint Pierre and Miquelon); in the United States, Alabama");
+    expect(shop.shippingCountries).toEqual(["US", "CA", "MX"]);
+    expect(checkStructureStore(shop)).toBe(true);
+  });
+
   it("isn't a shop when the JSON isn't an object", () => {
     expect(normalizeShopJson(null)).toBeNull();
     expect(normalizeShopJson("shop")).toBeNull();

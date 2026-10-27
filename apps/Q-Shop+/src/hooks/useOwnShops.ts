@@ -40,6 +40,7 @@ import { dataContainerIdentifier, isStoreIdentifier, STORE_BASE, shortStoreIdOf 
 import { QdnDeletedError, fetchQdnJson, resourceExists, searchQdn, type QdnResourceSummary } from "../qdn/search";
 import { isDeletedRow, isJsonFromBeforeDelete, isRowFromBeforeDelete } from "../qdn/deleted";
 import { checkStructureStore } from "../utils/checkStructure";
+import { withShippingTags } from "../constants/shipping";
 
 /** The shop's QDN description without the original's `**coins:…**` marker. */
 export function plainStoreDescription(description: string | undefined): string {
@@ -163,7 +164,8 @@ export async function loadOwnShop(
   dispatch(setOwnShopStatus("loading"));
   let json: any;
   try {
-    json = await fetchQdnJson("STORE", shop.owner, shop.id, options);
+    // Ships-to as region tags (another Q-Shop build) reads as countries, so the edit form shows them.
+    json = withShippingTags(await fetchQdnJson("STORE", shop.owner, shop.id, options));
   } catch (error) {
     if (error instanceof QdnDeletedError) return "deleted";
     if (current()) dispatch(setOwnShopStatus("unavailable"));

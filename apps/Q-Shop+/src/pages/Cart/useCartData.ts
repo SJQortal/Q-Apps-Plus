@@ -32,6 +32,7 @@ import { shopKey as listedShopKey } from "../../discovery/shopIndex";
 import { isJsonFromBeforeDelete } from "../../qdn/deleted";
 import { fetchAndEvaluateCatalogues } from "../../utils/fetchCatalogues";
 import { checkStructureStore } from "../../utils/checkStructure";
+import { withShippingTags } from "../../constants/shipping";
 import { useRetryingLoads, type LoadJob, type LoadPhase } from "./useRetryingLoads";
 import { cartShopFrom, cartViewLines, catalogueFor, type CartShop, type CartViewLine } from "./cartLines";
 
@@ -110,7 +111,8 @@ export function useCartData(carts: Record<string, Cart>): {
     async ({ storeId, owner }: ShopJob): Promise<boolean | "gone"> => {
       let json: unknown;
       try {
-        json = await fetchQdnJson("STORE", owner, storeId, { fresh: true });
+        // Ships-to as region tags (another Q-Shop build) reads as countries, so checkout can check them.
+        json = withShippingTags(await fetchQdnJson("STORE", owner, storeId, { fresh: true }));
       } catch (error) {
         // Its owner deleted the shop: its items can't be bought, and asking again won't change that.
         if (error instanceof QdnDeletedError) return "gone";
