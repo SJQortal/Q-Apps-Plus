@@ -22,7 +22,7 @@ import type { Order } from "../../state/features/orderSlice";
 import { EmptyState } from "../../components/common/EmptyState";
 import { useShopOrders } from "../../orders/hooks";
 import { countLabel } from "../../orders/status";
-import { sellerStatusCounts, splitSellerItems } from "../../orders/listView";
+import { sellerStatusCounts, splitForeignItems, splitSellerItems } from "../../orders/listView";
 import { OrderCard } from "../../orders/components/OrderCard";
 import { OrderListSkeleton } from "../../orders/components/OrderListView";
 import { ShowOrder } from "./ShowOrder/ShowOrder";
@@ -119,7 +119,8 @@ export function SellerOverview({
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Rows that couldn't be opened, or that name another seller (a shop with the same id), aren't counted.
-  const { main, others } = useMemo(() => splitSellerItems(list.items, list.seller), [list.items, list.seller]);
+  // Another app's orders (Q-Shops) under the shop's id are the Orders tab's one line, not "couldn't be opened".
+  const { main, others } = useMemo(() => splitSellerItems(splitForeignItems(list.items).rest, list.seller), [list.items, list.seller]);
   const { counts, loading: statusesLoading } = useMemo(() => sellerStatusCounts(main, list.seller), [main, list.seller]);
   const more = list.meta.hasMore;
   const ordersLoading = list.meta.phase === "loading" || list.meta.phase === "idle";
