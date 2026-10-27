@@ -74,7 +74,7 @@ describe("delivery on a product page", () => {
     act(() => setBuyerPlace({ country: "Portugal", state: "" }));
     show();
     fireEvent.click(await screen.findByRole("button", { name: "Change" }));
-    const dialog = await screen.findByRole("dialog", { name: "Where should things be delivered?" });
+    const dialog = await screen.findByRole("dialog", { name: "Deliver to" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Forget it" }));
     expect(await screen.findByRole("button", { name: "Choose your country" })).toBeInTheDocument();
   });

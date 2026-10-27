@@ -60,7 +60,7 @@ describe("delivery in the cart", () => {
     expect(await screen.findByText("Plus Gadgets doesn't ship to Japan.")).toBeInTheDocument();
     // Another country is a tap away.
     fireEvent.click(screen.getByRole("button", { name: "Check another country" }));
-    expect(await screen.findByRole("dialog", { name: "Where should things be delivered?" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Deliver to" })).toBeInTheDocument();
     japan.unmount();
     const digital = show([line("digital")]);
     await waitFor(() => expect(digital.container.textContent).toBe(""));

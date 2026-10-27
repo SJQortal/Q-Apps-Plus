@@ -196,7 +196,7 @@ export function PlacePickerDialog({ place, onClose, onPicked }: { place: BuyerPl
     <ResponsiveDialog
       open
       onClose={onClose}
-      title="Where should things be delivered?"
+      title="Deliver to"
       maxWidth="sm"
       actions={
         <>

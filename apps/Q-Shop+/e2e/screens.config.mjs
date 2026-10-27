@@ -1078,7 +1078,7 @@ export default {
     { key: 'product-delivery', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, after: async (page) => {
       // The cart-delivery screen may have kept a country on this device already.
       await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
-      const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
+      const d = page.getByRole('dialog', { name: 'Deliver to' });
       await d.getByRole('searchbox', { name: 'Country' }).fill('Portugal');
       await d.getByRole('option', { name: 'Portugal', exact: true }).click({ timeout: 4000 });
       await d.getByRole('button', { name: 'Show prices' }).click();
@@ -1088,14 +1088,14 @@ export default {
     } },
     { key: 'product-delivery-picker', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, overlay: true, after: async (page) => {
       await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
-      const d = page.getByRole('dialog', { name: 'Where should things be delivered?' });
+      const d = page.getByRole('dialog', { name: 'Deliver to' });
       await d.getByRole('searchbox', { name: 'Country' }).fill('United');
       await page.waitForTimeout(400);
     } },
     // Scrolled part-way: the list stops on a row and shows whole rows only (Simon: "some are cut").
     { key: 'product-delivery-picker-scrolled', path: `/${encodeURIComponent('Shop+Plus')}/q-store-general-shop-1/${productId(shops[1], 0)}/${catalogueId(shops[1], 0)}`, overlay: true, after: async (page) => {
       await page.getByRole('region', { name: /^Delivery/ }).getByRole('button', { name: /^(Choose your country|Change)$/ }).click({ timeout: 8000 });
-      const list = page.getByRole('dialog', { name: 'Where should things be delivered?' }).getByRole('listbox', { name: 'Country' });
+      const list = page.getByRole('dialog', { name: 'Deliver to' }).getByRole('listbox', { name: 'Country' });
       await list.hover();
       await page.mouse.wheel(0, 1237);
       await page.waitForTimeout(900);
