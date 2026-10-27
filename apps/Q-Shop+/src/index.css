@@ -116,3 +116,9 @@ a:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+/* A notice's button keeps its words on one line ("Sign in", not "Sign / in" at 360 px;
+   Simon's GO check, 2026-10-27): the message beside it wraps instead. */
+.MuiAlert-action .MuiButton-root {
+  white-space: nowrap;
+}
