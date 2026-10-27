@@ -34,8 +34,8 @@ export const CHANGELOG: Release[] = [
         title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
         full: true,
         notes: [
-          'A Trades tab, between Transactions and Assets: the QORT an account sold and bought on Q-Trade, every chain, each trade with its coin, its price, the other account and its AT; the trade offers it made and how each ended (completed, ended without a trade, open); its Q-Asset trades.',
-          'At its end, a breakdown: the QORT it sold and bought by coin, over time as a chart or a table, its offers by coin, by Q-Asset, and its biggest trades and the accounts it traded with most.',
+          'A Trades tab, between Transactions and Assets: the QORT an account sold and bought on Q-Trade, every chain, the trade offers it made and how each ended (completed, ended without a trade, open), and its Q-Asset trades, summed up at the top.',
+          'Under the summary, a breakdown: the QORT it sold and bought by coin, over time as a chart or a table, its offers by coin, by Q-Asset, and highlights: its biggest trades and averages, and the accounts it traded with most. Its trades are listed under it, each with its coin, its price, the other account and its AT.',
           'A decided invite’s page offers Compare nominee and nominator, as it does while the decision waits.',
         ],
       },
