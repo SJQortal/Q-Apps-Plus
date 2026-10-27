@@ -68,6 +68,15 @@ export default {
   // The first-run walkthrough and seller guide (onboarding/Walkthrough.tsx) have been seen.
   initScripts: () => [
     `try { localStorage.setItem('qshopplus-walkthrough', '1'); localStorage.setItem('qshopplus-seller-guide', '1'); } catch (e) {}`,
+    // A cart with Biohackers Corner's 1.5 L olive oil, priced 12,800 BHC Coin (Simon's phone, 2026-10-27), and ppmSilver's lip balm.
+    `try {
+      if (!sessionStorage.getItem('qsp-real-cart')) {
+        sessionStorage.setItem('qsp-real-cart', '1');
+        localStorage.setItem('qshopplus-cart', JSON.stringify({
+          'q-store-general-bhc': { orders: { 'q-store-product-bhc-6kizo6riub': { productId: 'q-store-product-bhc-6kizo6riub', catalogueId: 'q-store-catalogue-bhc-qFJMncQ0Ms', quantity: 1 } }, lastUpdated: Date.now(), storeId: 'q-store-general-bhc', storeOwner: 'Biohackers Corner' },
+        }));
+      }
+    } catch (e) {}`,
   ],
 
   async route(route, url) {
@@ -91,7 +100,12 @@ export default {
     { key: 'real-products-categories', path: '/products', overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(3000); await page.getByRole('button', { name: /^(Categories|Filters)/ }).first().click({ timeout: 3000 }); await page.getByRole('checkbox').first().waitFor({ timeout: 15000 }); await page.waitForTimeout(800); },
       // Categories read every shop's product list; the node lists TanteEmma's (shop "1") but can't serve it (404), and the page leaves it out.
       expectErrors: /404|Failed to load resource/ },
-    { key: 'real-cart', path: '/cart', after: async (page) => page.waitForTimeout(2000) },
+    { key: 'real-cart', path: '/cart', after: async (page) => page.waitForTimeout(4000) },
+    // Paid in the shop's own Q-Asset: the line's price and total in BHC Coin.
+    { key: 'real-cart-bhc', path: '/cart', optional: true, after: async (page) => { await page.waitForTimeout(3000); await page.getByRole('button', { name: /BHC Coin/ }).first().click({ timeout: 5000 }); await page.waitForTimeout(2500); } },
+    // ppmSilver: ships-to as region tags (Community feedback, 2026-10-27).
+    { key: 'real-ppm', path: '/AgoristMarket/q-store-general-ppmSilver', after: async (page) => page.waitForTimeout(6000) },
+    { key: 'real-search-ppm', path: '/?q=ppm', after: async (page) => page.waitForTimeout(4000) },
     { key: 'real-bhc', path: `/${encodeURIComponent('Biohackers Corner')}/q-store-general-bhc`, after: async (page) => page.waitForTimeout(6000) },
     { key: 'real-bhc-product', path: `/${encodeURIComponent('Biohackers Corner')}/q-store-general-bhc/q-store-product-bhc-wqazMQpHaL/q-store-catalogue-bhc-H9X2iZOp9B`, after: async (page) => page.waitForTimeout(6000) },
     { key: 'real-names', path: '/names', after: async (page) => page.waitForTimeout(8000) },
