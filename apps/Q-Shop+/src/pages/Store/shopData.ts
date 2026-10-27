@@ -196,6 +196,12 @@ export function isOpenAuction(row: ProductRow, catalogues: CatalogueMap, now: nu
   return !!times && now < times.end;
 }
 
+/** An auction taking bids now, by its times (a buy-now can end it sooner; its page knows). */
+export function isLiveAuction(row: ProductRow, catalogues: CatalogueMap, now: number): boolean {
+  const times = auctionTimesOf(row, catalogues);
+  return !!times && times.start <= now && now < times.end;
+}
+
 /** For sale: AVAILABLE, or an auction still open (stored out of stock, for the original). */
 export function isInStock(row: ProductRow, catalogues: CatalogueMap, now = Date.now()): boolean {
   return effectiveStatus(row, catalogues) === AVAILABLE || isOpenAuction(row, catalogues, now);
@@ -258,7 +264,12 @@ export function compareRows(
   }
 }
 
-/** Category, stock and auction filters, then the sort (`order`: the seller's, for "featured"). Returns a new array. */
+/**
+ * Category, stock and auction filters, then the sort (`order`: the seller's,
+ * for "featured"). Live auctions always come first, the soonest to end first
+ * (Simon, 2026-10-27: "if seller has active auctions, I would like the
+ * auctions to always show on top"); the rest keep the sort. Returns a new array.
+ */
 export function filterAndSortProducts(
   rows: ProductRow[],
   query: ProductQuery,
@@ -267,7 +278,7 @@ export function filterAndSortProducts(
   now = Date.now()
 ): ProductRow[] {
   const categories = new Set(query.categories);
-  return rows
+  const sorted = rows
     .filter((row) => isListed(row, catalogues))
     .filter((row) => categories.size === 0 || (!!row.category && categories.has(row.category)))
     .filter((row) => !query.inStockOnly || isInStock(row, catalogues, now))
@@ -276,6 +287,11 @@ export function filterAndSortProducts(
     .filter((row) => inPriceRange(row, query.minQort, query.maxQort))
     // When an auction ends: its catalogue's terms once loaded, as the filters read them.
     .sort(compareRows(query.sort, order, now, (row) => auctionTimesOf(row, catalogues)));
+  const live = sorted.filter((row) => isLiveAuction(row, catalogues, now));
+  if (live.length === 0) return sorted;
+  const endOf = (row: ProductRow) => auctionTimesOf(row, catalogues)?.end ?? Number.POSITIVE_INFINITY;
+  live.sort((a, b) => endOf(a) - endOf(b) || b.created - a.created);
+  return [...live, ...sorted.filter((row) => !isLiveAuction(row, catalogues, now))];
 }
 
 /** On sale: its catalogue's product once loaded, else its row's percent off (sale/compareAt.ts). */

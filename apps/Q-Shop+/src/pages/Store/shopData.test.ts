@@ -237,7 +237,30 @@ describe("auctions in a list", () => {
     expect(ids(filterAndSortProducts(rows, { ...query, auctionsOnly: true, sort: "ending" }, {}, [], NOW))).toEqual(["soon", "later"]);
     // Ending soonest in the whole list: open auctions first, then the rest newest first.
     expect(ids(filterAndSortProducts(rows, { ...query, sort: "ending" }, {}, [], NOW))).toEqual(["soon", "later", "plain", "over", "gone"]);
-    expect(ids(filterAndSortProducts(rows, { ...query, inStockOnly: true }, {}, [], NOW))).toEqual(["plain", "later", "soon"]);
+    // The live auction first (as in every view), then newest first.
+    expect(ids(filterAndSortProducts(rows, { ...query, inStockOnly: true }, {}, [], NOW))).toEqual(["soon", "plain", "later"]);
+  });
+
+  it("put live auctions on top in every sort, the soonest to end first; one yet to start or over keeps its place (Simon, 2026-10-27)", () => {
+    const more = productRowsFromContainer({
+      products: {
+        plain: { created: 5, catalogueId: "c1", priceQort: 3, status: "AVAILABLE" },
+        soon: { created: 1, catalogueId: "c1", priceQort: 9, status: "OUT_OF_STOCK", auction: { start: NOW - H, end: NOW + H } },
+        week: { created: 6, catalogueId: "c1", priceQort: 1, status: "OUT_OF_STOCK", auction: { start: NOW - H, end: NOW + 168 * H } },
+        later: { created: 4, catalogueId: "c1", priceQort: 2, status: "OUT_OF_STOCK", auction: { start: NOW + 3 * H, end: NOW + 9 * H } },
+        over: { created: 3, catalogueId: "c1", priceQort: 1, status: "OUT_OF_STOCK", auction: { start: NOW - 9 * H, end: NOW - H } },
+      },
+    });
+    expect(ids(filterAndSortProducts(more, query, {}, [], NOW))).toEqual(["soon", "week", "plain", "later", "over"]);
+    expect(ids(filterAndSortProducts(more, { ...query, sort: "price-desc" }, {}, [], NOW))).toEqual(["soon", "week", "plain", "later", "over"]);
+    expect(ids(filterAndSortProducts(more, { ...query, sort: "oldest" }, {}, [], NOW))).toEqual(["soon", "week", "over", "later", "plain"]);
+    // The seller's order (Collections): the rest keep it.
+    expect(ids(filterAndSortProducts(more, { ...query, sort: "featured" }, {}, ["over", "plain", "week"], NOW))).toEqual(["soon", "week", "over", "plain", "later"]);
+    // Once it ends, it goes back to its place; once one starts, it moves up.
+    expect(ids(filterAndSortProducts(more, query, {}, [], NOW + 2 * H))).toEqual(["week", "plain", "later", "over", "soon"]);
+    expect(ids(filterAndSortProducts(more, query, {}, [], NOW + 4 * H))).toEqual(["later", "week", "plain", "over", "soon"]);
+    // No live auction: the sort as it was.
+    expect(ids(filterAndSortProducts(more, query, {}, [], NOW + 200 * H))).toEqual(["week", "plain", "later", "over", "soon"]);
   });
 
   it("let the catalogue's terms win once it's loaded", () => {

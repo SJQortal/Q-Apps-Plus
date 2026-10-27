@@ -193,6 +193,33 @@ describe("shop page", { timeout: 20_000 }, () => {
     expect(cardTitles()).toContain("Product 4");
   });
 
+  it("lists live auctions on top, under their own line, in every view and with collections (Simon, 2026-10-27)", async () => {
+    const world = makeWorld();
+    const now = Date.now();
+    const products = world.shops[0].products;
+    const ids = products.map((p) => p.id);
+    const auction = (i: number, start: number, end: number) =>
+      (products[i] = { ...products[i], status: "OUT_OF_STOCK", auction: { v: 1, start, end, startingBid: products[i].price[0].value, extendMinutes: 5 } });
+    auction(2, now - 3_600_000, now + 5 * 3_600_000);
+    auction(4, now - 3_600_000, now + 3_600_000);
+    // Yet to start, and over: they keep their places.
+    auction(6, now + 3_600_000, now + 9 * 3_600_000);
+    auction(8, now - 9 * 3_600_000, now - 3_600_000);
+    world.shops[0].collections = [{ id: "GIFTSxxxx1", title: "Gifts", products: [ids[3], ids[4]] }];
+    renderShop(world);
+    // Collections: the live auctions first (the soonest to end first), then the collection, then the rest.
+    await waitFor(() => expect(cardTitles().slice(0, 4)).toEqual(["Product 4", "Product 2", "Product 3", "Product 11"]));
+    const grid = screen.getByRole("heading", { level: 3, name: "Live auctions" }).closest("ul") as HTMLElement;
+    expect([...grid.querySelectorAll("[data-section]")].map((li) => li.textContent)).toEqual(["Live auctions", "Gifts", "More products"]);
+    // Any other sort too, with a line where the rest start.
+    chooseOption(selectField("Sort"), "Price: low to high");
+    await waitFor(() => expect(cardTitles().slice(0, 2)).toEqual(["Product 4", "Product 2"]));
+    expect([...grid.querySelectorAll("[data-section]")].map((li) => li.textContent)).toEqual(["Live auctions", "More products"]);
+    const rest = cardTitles().slice(2);
+    expect(rest).toContain("Product 6");
+    expect(rest).toContain("Product 8");
+  });
+
   it("On sale lists the products with a price before, with what buyers save", async () => {
     const world = makeWorld();
     const products = world.shops[0].products;

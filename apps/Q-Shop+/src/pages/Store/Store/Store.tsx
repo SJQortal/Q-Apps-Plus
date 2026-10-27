@@ -64,6 +64,7 @@ import {
   effectiveStatus,
   FEATURED_SORT,
   filterAndSortProducts,
+  isLiveAuction,
   productOf,
   productRowsFromContainer,
   withStockLeft,
@@ -234,6 +235,14 @@ function ShopProducts({
   const listed = useMemo(() => bundleRows(results, variantGroups), [results, variantGroups]);
   const shown = listed.slice(0, pages * PRODUCTS_PAGE);
   const grouped = sort === "featured" && !collection && !searching && featured.sectionOf.size > 0;
+  // Live auctions lead every view (shopData filterAndSortProducts), under their own line, unless the
+  // list is auctions only and not grouped by collection.
+  const liveFirst = shown.length > 0 && (grouped || !query.auctionsOnly) && isLiveAuction(shown[0], catalogues, now);
+  const sectionAt = (i: number): "live" | "rest" | number | null => {
+    if (liveFirst && isLiveAuction(shown[i], catalogues, now)) return "live";
+    if (grouped) return featured.sectionOf.get(shown[i].productId) ?? -1;
+    return liveFirst ? "rest" : null;
+  };
   const hasMore = shown.length < listed.length;
   const more = useCallback(
     () => setPaging((prev) => ({ key: listKey, pages: (prev.key === listKey ? prev.pages : 1) + 1 })),
@@ -382,16 +391,15 @@ function ShopProducts({
           {shown.map((row, i) => {
             const product = productOf(row, catalogues);
             const state = statuses[row.catalogueId];
-            // Featured across the whole shop: a line with the collection's title where its products start.
-            const section = grouped ? (featured.sectionOf.get(row.productId) ?? -1) : null;
-            const previous = grouped && i > 0 ? (featured.sectionOf.get(shown[i - 1].productId) ?? -1) : null;
-            const sectionStarts = section !== null && section !== previous && (section >= 0 || i > 0);
-            const sectionCollection = section !== null && section >= 0 ? collections.collections[section] : null;
+            // A line where each group starts: live auctions, then each collection (Featured across the whole shop) or the rest.
+            const section = sectionAt(i);
+            const sectionStarts = section !== null && section !== (i > 0 ? sectionAt(i - 1) : null) && (section !== -1 || i > 0);
+            const sectionCollection = typeof section === "number" && section >= 0 ? collections.collections[section] : null;
             return [
               sectionStarts && (
                 <SectionDivider
                   key={`section-${row.productId}`}
-                  title={sectionCollection ? sectionCollection.title || "Collection" : "More products"}
+                  title={section === "live" ? "Live auctions" : sectionCollection ? sectionCollection.title || "Collection" : "More products"}
                   to={sectionCollection ? collectionPath(owner, storeId, sectionCollection.id) : undefined}
                   first={i === 0}
                 />
