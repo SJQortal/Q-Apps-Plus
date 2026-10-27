@@ -921,6 +921,8 @@ Found and fixed, one commit each:
 - **Seller Overview** (`63d9bd4a`): its "N orders under your shop's id couldn't be opened" count leaves out another app's orders too, as the Orders tab does.
 - **Pickup days** (`0fcdbe31`): a pickup point's Open on days sit in even rows (four, then three, on a phone; seven wider), each its own button; the joined group left Sat and Sun on a second row without a left border.
 
+**After the fixes:** the touched screens again at the five sizes in Hub 3.0 (the Delivery tab with the new pickup days among them), and cart, Sort and filter, buying and selling a name, the product form, your own shop and the Delivery tab in Q-Shop Classic and White: 61 captures, 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations; read at 360 px and, for the pickup days, at 1280.
+
 Checked and fine: seller orders decrypt and count (three orders of Simon James's Biohackers Corner shop: Shipped, Shipped, Refunded); the BHC cart and checkout at 360 and 390; Names and the account menu at 360; landscape (compact bar, seller tabs fit); the official Hub's `TRANSFER_ASSET` (Follow-up 12, answered below).
 
 ## Community feedback
