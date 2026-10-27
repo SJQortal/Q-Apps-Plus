@@ -1,5 +1,5 @@
 /**
- * The Trades tab's breakdown, at its end (Simon, 2026-10-26: "very nice
+ * The Trades tab's breakdown, under its summary (Simon, 2026-10-26: "very nice
  * breakdown of the trades, so it is easely visible how many QORT were sold
  * for LTC and other coins, how many ATs were made, all kinds of trade
  * summaries, q-asset trade summaries"), a card each:
@@ -14,8 +14,8 @@
  *   QORT its open ones hold.
  * - By Q-Asset: each asset, units bought and sold, the QORT for them and
  *   the average price.
- * - Highlights: its biggest sale and purchase, the average of each, and the
- *   accounts it traded with most.
+ * - Highlights: its biggest sale and purchase and the average of each, as
+ *   tiles, and the accounts it traded with most, ranked with a bar each.
  *
  * Colour says which coin (coinAccent) or which state (the theme's success
  * and info, with an icon), never alone: every bar has its key in words.
@@ -37,6 +37,7 @@ import {
   type CoinTotals,
   type OfferOutcome,
   type OfferTotals,
+  type Partner,
   type PortalSummary,
   type PortalTrade,
   type SideTotals,
@@ -396,91 +397,220 @@ export function AssetBreakdown({ summary }: { summary: AssetTradesSummary }) {
   );
 }
 
-function TradeFact({ trade }: { trade: PortalTrade }) {
+const TILE_VALUE_SX = {
+  m: 0,
+  fontWeight: 800,
+  fontSize: { xs: 18, md: 20 },
+  lineHeight: 1.3,
+  fontVariantNumeric: 'tabular-nums',
+  overflowWrap: 'anywhere',
+} as const;
+
+interface HighlightTile {
+  label: string;
+  value: string;
+  /** What it was, a line each, under the figure. */
+  lines: ReactNode[];
+}
+
+function Tile({ label, value, lines }: HighlightTile) {
   return (
-    <>
-      {formatAtomic(trade.qort)} QORT for {coinText(trade.coin, trade.chain)}
-      <Box component="span" sx={{ display: 'block', color: 'text.secondary' }}>
-        {trade.other ? (
-          <>
-            {trade.side === 'sold' ? 'to ' : 'from '}
-            <PersonInline address={trade.other} />,{' '}
-          </>
-        ) : null}
-        {formatDate(trade.timestamp)}
-      </Box>
-    </>
+    <Box sx={{ ...FIELD_BLOCK_SX, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+      <Typography component="dt" variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography component="dd" sx={TILE_VALUE_SX}>
+        {value}
+      </Typography>
+      {lines.map((line, i) => (
+        <Typography
+          key={i}
+          component="dd"
+          variant="body2"
+          color="text.secondary"
+          sx={{ m: 0, overflowWrap: 'anywhere' }}
+        >
+          {line}
+        </Typography>
+      ))}
+    </Box>
   );
 }
 
-/** How many partners Highlights names. */
+/** A trade under its figure: the coin, the other account, the day. */
+function tradeLines(trade: PortalTrade): ReactNode[] {
+  return [
+    `for ${coinText(trade.coin, trade.chain)}`,
+    ...(trade.other
+      ? [
+          // "to" or "from" stays whole, on the line of the name, in a narrow tile too.
+          <Box
+            component="span"
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, maxWidth: '100%' }}
+          >
+            <Box component="span" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+              {trade.side === 'sold' ? 'to' : 'from'}
+            </Box>{' '}
+            <Box component="span" sx={{ minWidth: 0, overflowWrap: 'normal' }}>
+              <PersonInline address={trade.other} />
+            </Box>
+          </Box>,
+        ]
+      : []),
+    formatDate(trade.timestamp),
+  ];
+}
+
+/** How many partners Highlights ranks. */
 const TOP_PARTNERS = 5;
 
+/**
+ * The accounts it traded with most, ranked: each with its trades and the
+ * QORT in them, a bar against the first's trades, and which way they went.
+ */
+function PartnerBoard({ partners, total }: { partners: readonly Partner[]; total: number }) {
+  const theme = useTheme();
+  const most = Math.max(1, ...partners.map((partner) => partner.sold + partner.bought));
+  return (
+    // As wide as a list reads well: on a wide page a bar across it would weigh more than its numbers.
+    <Box sx={{ maxWidth: 720 }}>
+      <Typography component="h4" sx={{ fontWeight: 700, fontSize: 15 }}>
+        Traded with most
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {total > partners.length
+          ? `The ${partners.length} it traded with most, of ${formatCount(total)} accounts.`
+          : `Every account it traded with: ${formatCount(total)}.`}
+      </Typography>
+      <Box
+        component="ol"
+        aria-label="The accounts it traded with most"
+        sx={{
+          listStyle: 'none',
+          m: 0,
+          mt: 1.25,
+          p: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1.5,
+        }}
+      >
+        {partners.map((partner, i) => {
+          const trades = partner.sold + partner.bought;
+          return (
+            <Box component="li" key={partner.address} sx={{ display: 'flex', gap: 1 }}>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{
+                  width: '1.75em',
+                  flexShrink: 0,
+                  textAlign: 'right',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {i + 1}.
+              </Typography>
+              <Box
+                sx={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}
+              >
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    columnGap: 1.5,
+                    rowGap: 0.25,
+                  }}
+                >
+                  <Typography component="div" variant="body2" sx={{ minWidth: 0 }}>
+                    <PersonInline address={partner.address} />
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                    <strong>{tradeCount(trades)}</strong>
+                    <Box component="span" sx={{ color: 'text.secondary' }}>
+                      {' '}
+                      · {qortText(partner.qort)}
+                    </Box>
+                  </Typography>
+                </Box>
+                <Box
+                  aria-hidden
+                  sx={{
+                    height: 6,
+                    borderRadius: 999,
+                    overflow: 'hidden',
+                    bgcolor: alpha(theme.palette.text.primary, 0.08),
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: `${Math.max((trades / most) * 100, 2)}%`,
+                      height: '100%',
+                      borderRadius: 999,
+                      bgcolor: 'primary.main',
+                    }}
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {partner.sold && partner.bought
+                    ? `Sold to them ${formatCount(partner.sold)}, bought from them ${formatCount(partner.bought)}`
+                    : partner.sold
+                      ? 'All sold to them'
+                      : 'All bought from them'}
+                </Typography>
+              </Box>
+            </Box>
+          );
+        })}
+      </Box>
+    </Box>
+  );
+}
+
+/**
+ * Its biggest sale and purchase and the average of each, as tiles (Simon,
+ * 2026-10-26: "the highlites could be arranged more nicely"): the sale's
+ * beside its average, the purchase's on the next row; then the accounts it
+ * traded with most (PartnerBoard).
+ */
 export function Highlights({ summary }: { summary: PortalSummary }) {
-  const average = (totals: SideTotals) =>
-    totals.count ? qortText(totals.qort / BigInt(totals.count)) : null;
-  const averageSale = average(summary.sold);
-  const averageBuy = average(summary.bought);
+  const tiles: HighlightTile[] = [];
+  const side = (biggest: PortalTrade | null, totals: SideTotals, label: string) => {
+    if (biggest)
+      tiles.push({
+        label: `Biggest ${label}`,
+        value: `${formatAtomic(biggest.qort)} QORT`,
+        lines: tradeLines(biggest),
+      });
+    if (totals.count)
+      tiles.push({
+        label: `Average ${label}`,
+        value: qortText(totals.qort / BigInt(totals.count)),
+        lines: [`over ${plural(totals.count, label)}`],
+      });
+  };
+  side(summary.biggestSale, summary.sold, 'sale');
+  side(summary.biggestBuy, summary.bought, 'purchase');
   const partners = summary.partners.slice(0, TOP_PARTNERS);
   return (
     <>
-      <Typography component="dl" variant="body2" sx={PAIRS_SX}>
-        {summary.biggestSale ? (
-          <>
-            <dt>Biggest sale</dt>
-            <dd>
-              <TradeFact trade={summary.biggestSale} />
-            </dd>
-          </>
-        ) : null}
-        {summary.biggestBuy ? (
-          <>
-            <dt>Biggest purchase</dt>
-            <dd>
-              <TradeFact trade={summary.biggestBuy} />
-            </dd>
-          </>
-        ) : null}
-        {averageSale ? (
-          <>
-            <dt>Average sale</dt>
-            <dd>{averageSale}</dd>
-          </>
-        ) : null}
-        {averageBuy ? (
-          <>
-            <dt>Average purchase</dt>
-            <dd>{averageBuy}</dd>
-          </>
-        ) : null}
-      </Typography>
+      <Box
+        component="dl"
+        sx={{
+          m: 0,
+          display: 'grid',
+          gap: 1,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
+        }}
+      >
+        {tiles.map((tile) => (
+          <Tile key={tile.label} {...tile} />
+        ))}
+      </Box>
       {partners.length ? (
-        <Box>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
-            {summary.partners.length > TOP_PARTNERS
-              ? `The ${TOP_PARTNERS} accounts it traded with most, of ${formatCount(summary.partners.length)}`
-              : 'The accounts it traded with'}
-          </Typography>
-          <Box
-            component="ol"
-            aria-label="The accounts it traded with most"
-            sx={{ m: 0, pl: 3, display: 'flex', flexDirection: 'column', gap: 0.75 }}
-          >
-            {partners.map((partner) => (
-              <Typography component="li" variant="body2" key={partner.address}>
-                <PersonInline address={partner.address} />{' '}
-                <Box component="span" sx={{ color: 'text.secondary' }}>
-                  {tradeCount(partner.sold + partner.bought)} · {qortText(partner.qort)}
-                  {partner.sold && partner.bought
-                    ? ` (sold to them ${formatCount(partner.sold)}, bought from them ${formatCount(partner.bought)})`
-                    : partner.sold
-                      ? ', all sold to them'
-                      : ', all bought from them'}
-                </Box>
-              </Typography>
-            ))}
-          </Box>
-        </Box>
+        <PartnerBoard partners={partners} total={summary.partners.length} />
       ) : null}
     </>
   );

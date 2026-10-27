@@ -190,14 +190,34 @@ describe('the Trades tab', () => {
     );
   });
 
-  it('names her biggest trades and whom she traded with most', async () => {
+  it('names her biggest trades and averages as tiles, and ranks whom she traded with most', async () => {
     await trades(TRADER.address);
     const highlights = await screen.findByRole('region', { name: 'Highlights' }, T);
-    expect(highlights).toHaveTextContent(/Biggest sale2,400 QORT for [\d.]+ LTCto/);
-    expect(highlights).toHaveTextContent(/Biggest purchase1,500 QORT for 46,500 DGBfrom/);
-    const top = within(highlights).getByRole('list', { name: 'The accounts it traded with most' });
-    expect(within(top).getAllByRole('listitem')[0]).toHaveTextContent(
-      /Lou Left.*20 trades · .* \(sold to them 18, bought from them 2\)/
+    const tile = (label: string) =>
+      within(highlights).getByText(label, { selector: 'dt' }).closest('div') as HTMLElement;
+    expect(tile('Biggest sale')).toHaveTextContent(
+      /^Biggest sale2,400 QORTfor 8\.8128 LTCto .*Sid Sponsor\d+ \w+ \d{4}$/
+    );
+    expect(tile('Average sale')).toHaveTextContent('Average sale537.73 QORTover 35 sales');
+    expect(tile('Biggest purchase')).toHaveTextContent(
+      /^Biggest purchase1,500 QORTfor 46,500 DGBfrom .*Pia Promote/
+    );
+    expect(tile('Average purchase')).toHaveTextContent(
+      'Average purchase406.43 QORTover 7 purchases'
+    );
+    // The sale's tiles first, then the purchase's.
+    expect(
+      within(highlights)
+        .getAllByRole('term')
+        .map((dt) => dt.textContent)
+    ).toEqual(['Biggest sale', 'Average sale', 'Biggest purchase', 'Average purchase']);
+    expect(within(highlights).getByText('Every account it traded with: 4.')).toBeInTheDocument();
+    const ranked = within(
+      within(highlights).getByRole('list', { name: 'The accounts it traded with most' })
+    ).getAllByRole('listitem');
+    expect(ranked).toHaveLength(4);
+    expect(ranked[0]).toHaveTextContent(
+      /^1\..*Lou Left20 trades · [\d,.]+ QORTSold to them 18, bought from them 2$/
     );
   });
 
