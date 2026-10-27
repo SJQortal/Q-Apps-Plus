@@ -68,6 +68,7 @@ import { valuesKey, variantOf, variantSiblings, type VariantSibling } from "../.
 import { MAX_GROUP_PICTURES, groupPictures, itemForPicture, pictureCaption, shownPicture, type GroupMember } from "../../variants/gallery";
 import { VariantPicker } from "../../variants/VariantPicker";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
+import { namedAfterOwner } from "../../shop/owner";
 
 // Only auction products need it (bids, countdown, the winner's checkout).
 const AuctionPanel = lazyWithRetry(() => import("../../auctions/AuctionPanel").then((m) => ({ default: m.AuctionPanel })));
@@ -529,8 +530,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               From{" "}
               <Link component={RouterLink} to={shopPath} color="inherit" underline="always">
                 {shopName}
-              </Link>{" "}
-              by {owner}
+              </Link>
+              {!namedAfterOwner(shopName, owner) && ` by ${owner}`}
             </>
           }
           actions={!isOwner ? <CartButton /> : undefined}

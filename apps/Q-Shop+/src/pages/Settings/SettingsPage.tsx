@@ -52,6 +52,7 @@ import { saveDelivery, savedDelivery } from "../Cart/delivery";
 import { pickedBuyerPlace, placeLabel, setBuyerPlace, useBuyerPlace } from "../../delivery/buyerPlace";
 import { showShop, useHiddenShops } from "../../discovery/hiddenShops";
 import { lazyWithRetry } from "../../utils/lazyWithRetry";
+import { namedAfterOwner } from "../../shop/owner";
 
 /** The coins a buyer can prefer, in the order the shops offer them. */
 export const PREFERRED_COINS: CoinTicker[] = ["QORT", "ARRR"];
@@ -470,10 +471,12 @@ export function SettingsPage() {
               {hiddenShops.map((shop) => (
                 <Box component="li" key={`${shop.owner}\n${shop.shortStoreId}`} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
                   <Typography sx={{ flex: "1 1 160px", minWidth: 0, overflowWrap: "anywhere" }}>
-                    {shop.title || shop.shortStoreId}{" "}
-                    <Box component="span" sx={{ color: "text.secondary" }}>
-                      by {shop.owner}
-                    </Box>
+                    {shop.title || shop.shortStoreId}
+                    {!namedAfterOwner(shop.title, shop.owner) && (
+                      <Box component="span" sx={{ color: "text.secondary" }}>
+                        {` by ${shop.owner}`}
+                      </Box>
+                    )}
                   </Typography>
                   <Button variant="outlined" onClick={() => showShop(shop.owner, shop.shortStoreId)} aria-label={`Show again: ${shop.title || shop.shortStoreId}`} sx={{ minHeight: 44 }}>
                     Show again

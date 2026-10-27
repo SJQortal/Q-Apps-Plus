@@ -19,6 +19,7 @@ import { stockOf } from "../../stock/model";
 import { useStockLeft } from "../../stock/notes";
 import type { ShopCartView } from "./useCartData";
 import { FreeDeliveryBar } from "../../delivery/FreeDeliveryBar";
+import { namedAfterOwner } from "../../shop/owner";
 
 export interface CheckoutGate {
   allowed: boolean;
@@ -98,7 +99,7 @@ export function ShopCart({
               title
             )}
           </Typography>
-          {owner && (
+          {owner && !namedAfterOwner(title, owner) && (
             <Typography variant="body2" color="text.secondary" noWrap>
               by {owner}
             </Typography>
