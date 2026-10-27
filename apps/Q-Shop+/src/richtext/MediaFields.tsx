@@ -15,6 +15,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import { embedLabel, type QortalEmbed, type VideoEmbed } from "./embeds";
 import { AddFileDialog, AddVideoDialog, VideoThumbnailDialog } from "./AddMediaDialogs";
+import { qtubeDocumentOf } from "./qortalSources";
 import { QortalVideo } from "./QortalVideo";
 import { QortalFile } from "./QortalFile";
 
@@ -80,7 +81,7 @@ export default function MediaFields({
                 disabled={disabled}
                 sx={{ alignSelf: "flex-start", minHeight: 40 }}
               >
-                {(embed as VideoEmbed).thumbnail ? "Change the thumbnail" : "Add a thumbnail"}
+                {(embed as VideoEmbed).thumbnail || qtubeDocumentOf(embed as VideoEmbed) ? "Change the thumbnail" : "Add a thumbnail"}
               </Button>
             </Box>
           ))}

@@ -111,6 +111,25 @@ describe("a product's description", { timeout: 20_000 }, () => {
     expect(second.container.querySelector("img")).toBeNull();
   });
 
+  it("shows a Q-Tube video's own thumbnail when the seller gave it none, and the seller's when they did", async () => {
+    const image = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    routes["/arbitrary/DOCUMENT/Tuber/qtube_vid_ghee_x1_metadata"] = {
+      body: { title: "Ghee", videoReference: { name: "Tuber", identifier: "qtube_vid_ghee_x1", service: "VIDEO" }, videoImage: image },
+    };
+    const qtube = '<div class="qshop-embed" data-kind="video" data-name="Tuber" data-identifier="qtube_vid_ghee_x1" data-title="Ghee" data-link="qortal://APP/Q-Tube/video/Tuber/qtube_vid_ghee_x1_metadata">Ghee</div>';
+    const { container } = renderWithProviders(<Described product={rich(`<p>Watch:</p>${qtube}`)} />);
+    const video = screen.getByRole("region", { name: "Video" });
+    await waitFor(() => expect(video.querySelector("img")).toHaveAttribute("src", image));
+    expect(within(video).getByRole("link", { name: "Open in Q-Tube" })).toBeInTheDocument();
+    container.remove();
+    calls.length = 0;
+    const own = qtube.replace('data-kind="video"', 'data-kind="video" data-thumb-name="Seller Name" data-thumb-identifier="q-store-thumb-ThUmB12345"');
+    const second = renderWithProviders(<Described product={rich(`<p>Watch:</p>${own}`)} />);
+    expect(second.container.querySelector("img")).toHaveAttribute("src", "/arbitrary/THUMBNAIL/Seller%20Name/q-store-thumb-ThUmB12345");
+    // The seller's own picture: Q-Tube's document isn't read.
+    expect(calls.some((url) => url.includes("qtube_vid_ghee_x1_metadata"))).toBe(false);
+  });
+
   it("plays a video only when asked, once the node has it", async () => {
     routes["/arbitrary/resource/status/VIDEO/Seller%20Name/q-store-video-AbCdEf1234"] = { body: { status: "READY" } };
     renderWithProviders(<Described product={rich(`<p>Watch:</p>${VIDEO_EMBED}`)} />);

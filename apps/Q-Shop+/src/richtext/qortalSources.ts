@@ -3,7 +3,9 @@
  * publishes (Simon, 2026-10-22):
  *
  * - A Q-Tube link names the video's JSON document (DOCUMENT `qtube_vid_…`),
- *   whose `videoReference` names the VIDEO resource that plays.
+ *   whose `videoReference` names the VIDEO resource that plays, and whose
+ *   `videoImage` is the video's thumbnail (a data URL: Q-Tube publishes no
+ *   THUMBNAIL), shown until it plays unless the seller picks their own.
  * - A Q-Share link names a share's JSON document (`qshare_file_…_metadata`),
  *   whose `files` name its FILE resources (docs/apps/Q-Share+.md → Data
  *   contract).
@@ -21,7 +23,7 @@ import ShortUniqueId from "short-unique-id";
 import { fetchQdnJson } from "../qdn/search";
 import { jsonToBase64 } from "../qdn/payloads";
 import { THUMB_BASE, VIDEO_BASE } from "../qdn/identifiers";
-import { isSafeIdentifier, qshareLink, qtubeLink, type FileEmbed, type VideoEmbed } from "./embeds";
+import { isSafeIdentifier, parseQortalLink, qshareLink, qtubeLink, type FileEmbed, type VideoEmbed } from "./embeds";
 
 function text(value: unknown, max: number): string | undefined {
   if (typeof value !== "string") return undefined;
@@ -38,6 +40,38 @@ export async function videoFromQtube(name: string, identifier: string): Promise<
   }
   const title = text(doc?.title, 180);
   return { kind: "video", name, identifier: ref.identifier, ...(title && { title }), link: qtubeLink(name, identifier) };
+}
+
+/** Q-Tube's VIDEO ids; the video's document is the same id with `_metadata`. */
+export const QTUBE_VIDEO_PREFIX = "qtube_vid_";
+
+/**
+ * The Q-Tube document that holds a video's thumbnail (Simon, 2026-10-27: "if
+ * the Q-Tube video is added it should add the Q-Tube video thumbnail as
+ * well"): the one its Q-Tube link names, or, for a video Q-Tube published
+ * (from a `qortal://VIDEO/…` link or the seller's videos), its id with
+ * `_metadata`. Null for any other video.
+ */
+export function qtubeDocumentOf(embed: Pick<VideoEmbed, "name" | "identifier" | "link">): { name: string; identifier: string } | null {
+  const target = parseQortalLink(embed.link);
+  if (target?.kind === "qtube" && target.name === embed.name) return { name: target.name, identifier: target.identifier };
+  if (embed.identifier.startsWith(QTUBE_VIDEO_PREFIX)) return { name: embed.name, identifier: `${embed.identifier}_metadata` };
+  return null;
+}
+
+/** A Q-Tube document's thumbnail, when the document is this video's and the picture is a plain image. */
+export function qtubeImageOf(doc: unknown, embed: Pick<VideoEmbed, "name" | "identifier">): string | null {
+  if (!doc || typeof doc !== "object") return null;
+  const { videoReference: ref, videoImage } = doc as { videoReference?: { service?: unknown; identifier?: unknown; name?: unknown }; videoImage?: unknown };
+  if (!ref || ref.service !== "VIDEO" || ref.identifier !== embed.identifier || (ref.name !== undefined && ref.name !== embed.name)) return null;
+  return typeof videoImage === "string" && /^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(videoImage) ? videoImage : null;
+}
+
+/** A Q-Tube video's thumbnail (read once per session), or null when it has none. Rejects when the document can't be read. */
+export async function qtubeThumbnail(embed: Pick<VideoEmbed, "name" | "identifier" | "link">): Promise<string | null> {
+  const doc = qtubeDocumentOf(embed);
+  if (!doc) return null;
+  return qtubeImageOf(await fetchQdnJson("DOCUMENT", doc.name, doc.identifier), embed);
 }
 
 /** The files of a Q-Share share, with the share's title. Rejects when it can't be read. */

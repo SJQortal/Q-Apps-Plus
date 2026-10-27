@@ -6,17 +6,19 @@
  * that the video plays in its format, not only horizontal"): once the video
  * says its size, the panel takes it, a tall one no higher than the screen
  * allows. Until then it shows the video's thumbnail when the seller gave it
- * one (Simon, 2026-10-23), in the picture's own shape, read only once on
- * screen. Under it: its title, who published it, and Open in Q-Tube when it
+ * one (Simon, 2026-10-23), else a Q-Tube video's own (Simon, 2026-10-27),
+ * in the picture's own shape, read only once near the screen. Under it: its title, who published it, and Open in Q-Tube when it
  * came from there.
  */
 import { useEffect, useRef, useState } from "react";
+import { useInView } from "react-intersection-observer";
 import { Box, Button, CircularProgress, IconButton, Link, Typography } from "@mui/material";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { ResourceUnavailableError, resourceUrl, waitForResource } from "../qdn/resourceStatus";
 import { resourcePath } from "../qdn/search";
 import type { VideoEmbed } from "./embeds";
 import { useOpenQortalLink } from "./QortalText";
+import { useQtubeThumbnail } from "./useQtubeThumbnail";
 
 type Phase = "idle" | "fetching" | "ready" | "failed";
 
@@ -27,8 +29,12 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
   const [problem, setProblem] = useState("");
   // The video's own width / height, once it is known; 16:9 until then.
   const [aspect, setAspect] = useState<number | null>(null);
-  const [thumbFailed, setThumbFailed] = useState(false);
-  const thumb = embed.thumbnail && !thumbFailed ? resourcePath("THUMBNAIL", embed.thumbnail.name, embed.thumbnail.identifier) : null;
+  // The seller's thumbnail, else Q-Tube's; a picture that fails to load gives way to the next.
+  const [failed, setFailed] = useState<string[]>([]);
+  const { ref: panel, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
+  const own = embed.thumbnail ? resourcePath("THUMBNAIL", embed.thumbnail.name, embed.thumbnail.identifier) : null;
+  const qtube = useQtubeThumbnail(embed, inView && (!own || failed.includes(own)));
+  const thumb = [own, qtube].find((src): src is string => !!src && !failed.includes(src)) ?? null;
   const stop = useRef<AbortController | null>(null);
   useEffect(() => () => stop.current?.abort(), []);
   const title = embed.title || "Video";
@@ -56,6 +62,7 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
   return (
     <Box component="figure" sx={{ m: 0, display: "flex", flexDirection: "column", gap: 0.75 }}>
       <Box
+        ref={panel}
         sx={{
           position: "relative",
           width: "100%",
@@ -113,7 +120,7 @@ export function QortalVideo({ embed }: { embed: VideoEmbed }) {
                   const { naturalWidth, naturalHeight } = event.currentTarget as HTMLImageElement;
                   if (naturalWidth > 0 && naturalHeight > 0) setAspect((a) => a ?? naturalWidth / naturalHeight);
                 }}
-                onError={() => setThumbFailed(true)}
+                onError={() => setFailed((list) => [...list, thumb])}
                 sx={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", display: "block" }}
               />
             )}

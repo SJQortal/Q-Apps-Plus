@@ -71,6 +71,36 @@ describe("videos and files under the product's pictures", { timeout: 20_000 }, (
     expect(screen.queryByRole("list", { name: "Videos" })).toBeNull();
   });
 
+  it("adds a Q-Tube video with Q-Tube's thumbnail, publishing nothing (Simon, 2026-10-27)", async () => {
+    const qortal = installQortalMock({});
+    const image = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string) =>
+        String(input) === "/arbitrary/DOCUMENT/Bob/qtube_vid_a"
+          ? { ok: true, status: 200, text: async () => JSON.stringify({ title: "Making ghee", videoReference: { name: "Bob", identifier: "qtube_vid_a_v", service: "VIDEO" }, videoImage: image }) }
+          : { ok: false, status: 404, text: async () => '{"error":1401}' }
+      )
+    );
+    const { last } = renderFields();
+    fireEvent.click(screen.getByRole("button", { name: "Add a video" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a video" });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Q-Tube or Qortal link" }), { target: { value: "qortal://APP/Q-Tube/video/Bob/qtube_vid_a" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Find the video" }));
+    await waitFor(() => expect(within(dialog).getByRole("img", { name: "The video's thumbnail" })).toHaveAttribute("src", image));
+    expect(within(dialog).getByText(/Q-Tube's thumbnail, nothing to publish/)).toBeInTheDocument();
+    // Q-Tube's picture can be replaced, not removed.
+    expect(within(dialog).getByRole("button", { name: "Choose another picture" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Remove" })).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add video" }));
+    await waitFor(() => expect(last()).toContain('data-identifier="qtube_vid_a_v"'));
+    expect(last()).not.toContain("data-thumb-identifier");
+    expect(qortal.calls.some((call) => String(call.action).startsWith("PUBLISH"))).toBe(false);
+    // Under the pictures, the video shows Q-Tube's thumbnail, and offers to change it.
+    const videos = screen.getByRole("list", { name: "Videos" });
+    expect(within(videos).getByRole("button", { name: "Change the thumbnail" })).toBeInTheDocument();
+  });
+
   it("adds one of the seller's videos with a thumbnail, published under the seller's name first", async () => {
     const q = installQortalMock({ PUBLISH_QDN_RESOURCE: async () => ({ signature: "s" }) });
     const rows = [{ name: "Seller Name", service: "VIDEO", identifier: "q-store-video-OLDxxxxxx1", created: 1, size: 1000, metadata: { title: "Churning" } }];

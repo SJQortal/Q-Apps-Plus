@@ -257,6 +257,10 @@ export default function DescriptionEditor({ value, onChange, placeholder, labelI
           fontWeight: 400,
           color: theme.palette.text.secondary,
         },
+        // A Q-Tube video shows Q-Tube's thumbnail (richtext/qortalSources.ts qtubeDocumentOf).
+        [`& .ql-editor .${EMBED_CLASS}[data-kind="video"][data-link^="qortal://APP/Q-Tube/"]::after, & .ql-editor .${EMBED_CLASS}[data-kind="video"][data-identifier^="qtube_vid_"]::after`]: {
+          content: '"  ·  Q-Tube\'s thumbnail (click to change)"',
+        },
         [`& .ql-editor .${EMBED_CLASS}[data-kind="video"][data-thumb-identifier]::after`]: { content: '"  ·  has a thumbnail (click to change)"' },
         [`& .ql-editor .${EMBED_CLASS}[data-kind="video"]::before`]: { content: '"▶ "', color: theme.palette.primary.main },
         [`& .ql-editor .${EMBED_CLASS}[data-kind="file"]::before`]: { content: '"📄 "' },

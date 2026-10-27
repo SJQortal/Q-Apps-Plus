@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { base64ToJson } from "../qdn/payloads";
 import { resetQdnCaches } from "../qdn/search";
-import { buildPdfSharePublish, buildThumbnailPublish, buildVideoPublish, filesFromQshare, shareSlug, videoFromQtube } from "./qortalSources";
+import { buildPdfSharePublish, buildThumbnailPublish, buildVideoPublish, filesFromQshare, qtubeDocumentOf, qtubeImageOf, qtubeThumbnail, shareSlug, videoFromQtube } from "./qortalSources";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -130,6 +130,25 @@ describe("videos and files from other apps", () => {
     });
     expect(await videoFromQtube("Bob", "qtube_vid_a")).toEqual({ kind: "video", name: "Bob", identifier: "qtube_vid_a_v", title: "Bob's video", link: "qortal://APP/Q-Tube/video/Bob/qtube_vid_a" });
     await expect(videoFromQtube("Bob", "qtube_vid_b")).rejects.toThrow();
+  });
+
+  it("finds a Q-Tube video's thumbnail in its document, for that video only (Simon, 2026-10-27)", async () => {
+    const image = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+    const ref = { name: "Bob", identifier: "qtube_vid_a_x1", service: "VIDEO" };
+    // From the Q-Tube link, or the VIDEO id Q-Tube gave it; nothing for another video.
+    expect(qtubeDocumentOf({ name: "Bob", identifier: "qtube_vid_a_x1", link: "qortal://APP/Q-Tube/video/Bob/qtube_vid_a_x1_metadata" })).toEqual({ name: "Bob", identifier: "qtube_vid_a_x1_metadata" });
+    expect(qtubeDocumentOf({ name: "Bob", identifier: "qtube_vid_a_x1" })).toEqual({ name: "Bob", identifier: "qtube_vid_a_x1_metadata" });
+    expect(qtubeDocumentOf({ name: "Bob", identifier: "q-store-video-1", link: "qortal://VIDEO/Bob/q-store-video-1" })).toBeNull();
+    expect(qtubeDocumentOf({ name: "Bob", identifier: "q-store-video-1", link: "qortal://APP/Q-Tube/video/Eve/qtube_vid_e" })).toBeNull();
+    // Only this video's document, and only a plain picture.
+    expect(qtubeImageOf({ videoReference: ref, videoImage: image }, ref)).toBe(image);
+    expect(qtubeImageOf({ videoReference: { ...ref, identifier: "qtube_vid_other" }, videoImage: image }, ref)).toBeNull();
+    expect(qtubeImageOf({ videoReference: { ...ref, name: "Eve" }, videoImage: image }, ref)).toBeNull();
+    expect(qtubeImageOf({ videoReference: ref, videoImage: "data:image/svg+xml;base64,PHN2Zz4=" }, ref)).toBeNull();
+    expect(qtubeImageOf({ videoReference: ref }, ref)).toBeNull();
+    serve({ "/arbitrary/DOCUMENT/Bob/qtube_vid_a_x1_metadata": { title: "A", videoReference: ref, videoImage: image } });
+    expect(await qtubeThumbnail({ name: "Bob", identifier: "qtube_vid_a_x1" })).toBe(image);
+    expect(await qtubeThumbnail({ name: "Bob", identifier: "q-store-video-1" })).toBeNull();
   });
 
   it("reads a Q-Share share's files, only those its publisher published", async () => {

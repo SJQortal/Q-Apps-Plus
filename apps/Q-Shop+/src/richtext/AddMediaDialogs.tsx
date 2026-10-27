@@ -12,7 +12,9 @@
  * A video can have a thumbnail (Simon, 2026-10-23): a picture the seller
  * picks, published as a THUMBNAIL of theirs (with an uploaded video, in the
  * same publish), shown until the video plays. VideoThumbnailDialog adds or
- * changes one for a video already in the description.
+ * changes one for a video already in the description. A Q-Tube video comes
+ * with Q-Tube's own (Simon, 2026-10-27), read from its document, nothing
+ * published; a picture the seller picks takes its place.
  *
  * Publishing goes through Hub, which asks the seller to confirm and shows the
  * fee and progress (richtext/publishMedia.ts).
@@ -28,6 +30,7 @@ import { searchQdn, type QdnResourceSummary } from "../qdn/search";
 import { parseQortalLink, resourceLink, type FileEmbed, type VideoEmbed } from "./embeds";
 import { MAX_PDF_BYTES, MAX_VIDEO_BYTES, buildPdfSharePublish, buildThumbnailPublish, buildVideoPublish, filesFromQshare, videoFromQtube } from "./qortalSources";
 import { publishMedia } from "./publishMedia";
+import { useQtubeThumbnail } from "./useQtubeThumbnail";
 import { formatBytes } from "./QortalFile";
 
 const PAGE = 20;
@@ -66,23 +69,27 @@ export const THUMBNAIL_WIDTH = 960;
 
 /**
  * A video's thumbnail: the picture picked (a WebP data URL), else the one it
- * has (`current`, its THUMBNAIL), with Choose and Remove.
+ * has (`current`, its THUMBNAIL), with Choose and Remove; else Q-Tube's
+ * (`qtube`), which a picked one replaces and can't be removed.
  */
 function ThumbnailPick({
   value,
   current,
+  qtube,
   onChange,
   disabled,
 }: {
   value: string | null;
   current?: string | null;
+  qtube?: string | null;
   onChange: (dataUrl: string | null) => void;
   disabled?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const shown = value ?? current ?? null;
+  const removable = value ?? current ?? null;
+  const shown = removable ?? qtube ?? null;
   const pick = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
@@ -107,6 +114,11 @@ function ThumbnailPick({
       {shown && (
         <Box component="img" src={shown} alt="The video's thumbnail" sx={{ maxWidth: 240, maxHeight: 180, borderRadius: 1, border: 1, borderColor: "divider", objectFit: "contain", alignSelf: "flex-start" }} />
       )}
+      {shown && !removable && (
+        <Typography variant="body2" color="text.secondary">
+          Q-Tube&apos;s thumbnail, nothing to publish. Choose another picture to use your own.
+        </Typography>
+      )}
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
         <input ref={input} type="file" accept="image/*" hidden onChange={(e) => void pick(e.target.files?.[0])} aria-hidden tabIndex={-1} />
         <Button
@@ -119,7 +131,7 @@ function ThumbnailPick({
         >
           {shown ? "Choose another picture" : "Add a thumbnail"}
         </Button>
-        {shown && (
+        {removable && (
           <Button color="inherit" onClick={() => onChange(null)} disabled={disabled || busy} sx={{ minHeight: 44 }}>
             Remove
           </Button>
@@ -161,6 +173,7 @@ export function VideoThumbnailDialog({
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const current = !removed && embed.thumbnail ? resourcePath("THUMBNAIL", embed.thumbnail.name, embed.thumbnail.identifier) : null;
+  const qtube = useQtubeThumbnail(embed);
   const changed = picked !== null || removed;
   const save = async () => {
     setError(null);
@@ -200,6 +213,7 @@ export function VideoThumbnailDialog({
         <ThumbnailPick
           value={picked}
           current={current}
+          qtube={qtube}
           onChange={(dataUrl) => {
             setPicked(dataUrl);
             if (!dataUrl) setRemoved(true);
@@ -321,6 +335,8 @@ export function AddVideoDialog({
     else if ("problem" in result) setAddError(result.problem);
   };
   const busy = publishing || adding;
+  // A Q-Tube video's own thumbnail, shown with it when the seller picks none.
+  const qtube = useQtubeThumbnail(tab === "link" ? found : tab === "mine" ? picked : null);
 
   const tabs = [
     { key: "link" as const, label: "Link" },
@@ -463,7 +479,7 @@ export function AddVideoDialog({
       {/* Once a video is chosen, in any tab: its thumbnail. */}
       {(tab === "link" ? found : tab === "mine" ? picked : file) && (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 2 }}>
-          <ThumbnailPick value={thumb} onChange={setThumb} disabled={busy} />
+          <ThumbnailPick value={thumb} qtube={qtube} onChange={setThumb} disabled={busy} />
           {addError && (
             <Typography role="alert" color="error">
               {addError}
