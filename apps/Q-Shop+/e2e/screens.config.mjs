@@ -94,6 +94,8 @@ function product(s, p) {
     ...(apronOf(s, p) && { title: `Linen apron — ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
     ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
+    // A big price (Simon's phone, 2026-10-27: "12,800.00 BHC Coin each" squeezed the cart line's title to a sliver).
+    ...(s.short === 'shop-3' && p === 2 && { price: [{ currency: 'qort', value: 12800 }] }),
     // On sale (sale/compareAt.ts): the mug was 2.00 QORT, and Lamp 11 was 18.00.
     ...(s.short === 'shop-1' && p === 0 && { compareAt: { currency: 'QORT', value: 2 } }),
     ...(s.short === 'shop-1' && p === 11 && { compareAt: { currency: 'QORT', value: 18 } }),
