@@ -247,6 +247,42 @@ describe('turning alerts on and off', () => {
     expect(await getHubAlertIds()).toEqual([]);
   });
 
+  it('removes Q-Mintership 3’s alert rules with the next change, never counting them as on', async () => {
+    const legacy = [
+      'qmintership-hub-minter-nominee-avery admin',
+      'qmintership-hub-forum-reply-blog-avery admin',
+    ];
+    mockQortalRequest('NOTIFICATION_GET', [
+      ...legacy.map((notificationId) => ({ notificationId })),
+      { notificationId: 'qmintership-other' },
+    ]);
+    mockQortalRequest('NOTIFICATION_PERMISSION', true);
+    mockQortalRequest('NOTIFICATION_ADD', true);
+    mockQortalRequest('NOTIFICATION_REMOVE', true);
+    // Settings reads them: alerts here are off.
+    expect(await getHubAlertIds()).toEqual([]);
+    await turnOnHubAlerts('admin', ME);
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([
+      ALERT_IDS.nominatedYou,
+      ALERT_IDS.supportedYou,
+      ...legacy,
+    ]);
+    // Gone: turning off afterwards removes only this app's own.
+    await turnOffHubAlerts();
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[1].notificationIds).toEqual([...ALL_ALERT_IDS]);
+  });
+
+  it('removes Q-Mintership 3’s rules when alerts are turned off too', async () => {
+    mockQortalRequest('NOTIFICATION_GET', [{ notificationId: 'qmintership-hub-admin-reply-ada' }]);
+    mockQortalRequest('NOTIFICATION_REMOVE', true);
+    await getHubAlertIds();
+    await turnOffHubAlerts();
+    expect(qortalCallsFor('NOTIFICATION_REMOVE')[0].notificationIds).toEqual([
+      ...ALL_ALERT_IDS,
+      'qmintership-hub-admin-reply-ada',
+    ]);
+  });
+
   it('removes the support rules Hub has too', async () => {
     mockQortalRequest('NOTIFICATION_REMOVE', true);
     setQueryData('hub:alerts', ['qmp-new-nomination', yours(N1)]);

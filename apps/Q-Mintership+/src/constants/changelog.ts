@@ -18,6 +18,56 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.4',
+    date: '2026-10-26',
+    title: 'Nominations credit their nominator',
+    summary:
+      'A nominee’s decided invite now says who proposed the nomination, with the Minter Admin who gave the first approval.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A decided invite that answered a nomination says “Proposed by” its nominator, then “First approval by” the Minter Admin whose invite started the round, on the decision’s own page. History and the Minter Profile’s timeline say “proposed by” the nominator too. An invite a Minter Admin made without a nomination still names them.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'A Trades tab, between Transactions and Assets: the QORT an account sold and bought on Q-Trade, every chain, the trade offers it made and how each ended (completed, ended without a trade, open), and its Q-Asset trades, summed up at the top.',
+          'Under the summary, a breakdown: the QORT it sold and bought by coin, over time as a chart or a table, its offers by coin, by Q-Asset, and highlights: its biggest trades and averages, and the accounts it traded with most. Its trades are listed under it, each with its coin, its price, the other account and its AT.',
+          'A decided invite’s page offers Compare nominee and nominator, as it does while the decision waits.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.0.3',
+    date: '2026-10-23',
+    title: 'Full window on big screens',
+    summary:
+      'A new Page width setting: Full window spreads the pages across the whole window, with cards side by side on big screens. Closed Minter Admin polls are kept in History.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'Settings → Appearance → Page width: Comfortable keeps each page in a centred column, as before; Full window uses the whole width of the window.',
+          'In Full window, decisions, nominations and Minter Admin polls sit side by side, as many as fit; so do Home’s and Settings’ sections and History’s months. The Explorer, Activity and their tables, charts and grids use the whole width. Forms keep their width, so fields stay easy to fill in.',
+          'Phones look as they did, upright or held sideways.',
+          'Opening a menu, such as a choice in Settings, no longer moves the page sideways, and the side rail and the page’s title bar stay where they are.',
+          'Home has the Q-Minter Guide’s minting overview and the history of minting for everyone, members and Minter Admins included.',
+        ],
+      },
+      {
+        title: 'For Minter Admins',
+        notes: [
+          'Closed Minter Admin polls are in History, among the decisions, by when voting ended: the question, who asked, the result and your vote, and a link to the poll. Minter Admin polls, a type of its own in History, shows them alone. Decisions lists the open ones, with a link to the closed ones.',
+          'A poll’s own page opens however long ago it closed; before, polls closed more than 31 days ago could no longer be found.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.2',
     date: '2026-10-21',
     title: 'Q-Assets in the Explorer',

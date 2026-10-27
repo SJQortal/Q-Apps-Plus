@@ -1,7 +1,7 @@
 /**
  * Who sees the Explorer's detailed parts (Simon, 2026-10-18: "only show them
  * to DEV + MA's and lvl5+ minters"): the Connections tab (and its preview,
- * Direct links, on the Overview), Compare, the lists of the accounts a
+ * Direct links, on the Overview), the Trades tab, Compare, the lists of the accounts a
  * sponsor sponsored or funded, the activity chart, QORT minted, purchased /
  * sold and received / sent, and exchanges named as such. Minter Admins, MINTER
  * members at level 5 or above (the nominators) and Dev Admins (the admins of

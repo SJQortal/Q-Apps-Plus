@@ -10,9 +10,12 @@ export type TimeDisplay = 'time' | 'blocks' | 'both';
 export type ActivityWindow = 30 | 60 | 90 | 180;
 /** Decisions: one queue, most urgent first, or a section per type. */
 export type DecisionsOrder = 'urgency' | 'type';
+/** Pages in a centred column, or across the whole window (cards side by side on big screens). */
+export type PageWidth = 'comfortable' | 'full';
 
 export const SETTINGS_KEYS = {
   motion: `${STORAGE_PREFIX}motion`,
+  pageWidth: `${STORAGE_PREFIX}page-width`,
   timeDisplay: `${STORAGE_PREFIX}time-display`,
   celebrate: `${STORAGE_PREFIX}celebrate`,
   activityWindow: `${STORAGE_PREFIX}activity-window`,
@@ -27,6 +30,18 @@ export const SETTINGS_KEYS = {
 
 /** Animations: follow the system, always reduce, or always play. */
 export const motionAtom = atomWithStorage<MotionSetting>(SETTINGS_KEYS.motion, 'system');
+
+/**
+ * Page width (crowetic, 2026-10-23: "on my 4K screen it is a tiny width … a lot nicer if I
+ * could make it fit the window"). Read before the first render, so a full-window page never
+ * opens narrow and then jumps wide.
+ */
+export const pageWidthAtom = atomWithStorage<PageWidth>(
+  SETTINGS_KEYS.pageWidth,
+  'comfortable',
+  undefined,
+  { getOnInit: true }
+);
 
 /** Countdowns as time left, blocks left, or both. */
 export const timeDisplayAtom = atomWithStorage<TimeDisplay>(SETTINGS_KEYS.timeDisplay, 'time');

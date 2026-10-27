@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { useAtomValue } from 'jotai';
 import { Box } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useHubMessages } from '../../hooks/useHubMessages';
@@ -15,6 +16,7 @@ import { useSettleConfirmingWrites } from '../../hooks/useSettleConfirmingWrites
 import { notifyHubDisplayedPath } from '../../routes/hubLocation';
 import { useLegacyRouteRedirect } from '../../routes/useLegacyRouteRedirect';
 import { useSession, useStartSession } from '../../state/session';
+import { pageWidthAtom } from '../../state/settings';
 import { useQuiz } from '../../state/explorerQuiz';
 import { PATHS } from '../../routes/paths';
 import { signerState } from '../../rules/tally';
@@ -22,6 +24,7 @@ import { ErrorBoundary } from '../common/ErrorBoundary';
 import { ListSkeleton } from '../common/states';
 import { BottomNav, BOTTOM_NAV_HEIGHT } from './BottomNav';
 import { NavRail } from './NavRail';
+import { FULL_WINDOW_MEDIA } from './flowColumns';
 import { isBottomBarLayout, isBottomNavShown, useFrameFacts } from './useBottomNav';
 
 /** The Explorer Quiz's bar, loaded only while the quiz is on. */
@@ -58,8 +61,18 @@ function useDecisionsBadge(isAdmin: boolean, publicKey: string): number {
 
 /** While a page's code loads: shown only if that takes a moment (.qmp-fade-late). */
 function PageFallback() {
+  const full = useAtomValue(pageWidthAtom) === 'full';
   return (
-    <Box className="qmp-fade-late" sx={{ p: 2, maxWidth: 760, mx: 'auto', width: '100%' }}>
+    <Box
+      className="qmp-fade-late"
+      sx={{
+        p: 2,
+        maxWidth: 760,
+        ...(full ? { [FULL_WINDOW_MEDIA]: { maxWidth: 'none' } } : null),
+        mx: 'auto',
+        width: '100%',
+      }}
+    >
       <ListSkeleton count={3} />
     </Box>
   );

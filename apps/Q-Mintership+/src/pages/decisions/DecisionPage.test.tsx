@@ -239,6 +239,34 @@ describe('A decision’s own page: decided', () => {
     expect(within(card).getByText(/^Expired in block /)).toBeVisible();
   });
 
+  // Simon, 2026-10-26: "it should say proposed by iffi": the nominator proposed it, and the
+  // Minter Admin whose invite answered the nomination gave the first approval.
+  it('credits an invite that answered a nomination to its nominator, with the first approval', async () => {
+    await open(
+      'admin',
+      (world) =>
+        world.decided.find(
+          (t: { type: string; invitee?: string }) =>
+            t.type === 'GROUP_INVITE' && t.invitee === ADDR.expired
+        ).signature
+    );
+    const card = await screen.findByRole('article', { name: /^Add to MINTER, / }, T);
+    const line = await within(card).findByText(/^Proposed by/, {}, T);
+    await waitFor(() => expect(line).toHaveTextContent(/^Proposed by\s*N?Nora Nominator, /), T);
+    expect(line).toHaveTextContent(/\. First approval by\s*A?Admin F, block [\d,]+\.$/);
+    // Compare the nominee with the nominator who proposed them.
+    expect(
+      await screen.findByRole('link', { name: 'Compare nominee and nominator' }, T)
+    ).toBeVisible();
+  });
+
+  it('still names the Minter Admin for an invite that answered no nomination', async () => {
+    await open('learner', (world) => addDecidedSignatures(world));
+    const card = await screen.findByRole('article', { name: 'Add to MINTER, Nora Nominator' }, T);
+    expect(within(card).getByText(/^Proposed by/)).toHaveTextContent(/^Proposed by\s*A?Admin A, /);
+    expect(within(card).queryByText(/First approval by/)).toBeNull();
+  });
+
   it('words a removal that was applied, with its reason', async () => {
     await open(
       'learner',

@@ -60,6 +60,7 @@ import { useTheme } from '@mui/material/styles';
 import { visuallyHidden } from '@mui/utils';
 import { useAtom, useAtomValue } from 'jotai';
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
+import { CARD_COLUMN } from '../../components/layout/flowColumns';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { BOTTOM_NAV_HEIGHT } from '../../components/layout/BottomNav';
 import { FabClearance, PageFab } from '../../components/layout/PageFab';
@@ -728,6 +729,7 @@ function DecisionsQueue() {
                           accent={accentOf(g.key)}
                           icon={<Icon />}
                           id={`${decisionGroupId(g.key)}-section`}
+                          flow={CARD_COLUMN}
                         >
                           {g.decisions.map(collectingCard(data.now))}
                         </Section>
@@ -741,6 +743,7 @@ function DecisionsQueue() {
                   count={collecting.length}
                   accent={accentOf('neutral')}
                   id="collecting"
+                  flow={CARD_COLUMN}
                 >
                   {shown.map(collectingCard(data.now, true))}
                   {hiddenNote}
@@ -770,6 +773,7 @@ function DecisionsQueue() {
                   accent={accentOf('waiting')}
                   icon={<SECTION_ICON.waiting />}
                   id="waiting"
+                  flow={CARD_COLUMN}
                 >
                   {nominationsQ.isLoading && !nominationsQ.data ? <CardSkeleton lines={3} /> : null}
                   {nominationsQ.isError && !nominationsQ.data ? (
@@ -834,6 +838,7 @@ function DecisionsQueue() {
                   count={closed.length}
                   accent={accentOf('neutral')}
                   id="closed"
+                  flow={CARD_COLUMN}
                 >
                   {closed.map((d) => (
                     <DecisionCard

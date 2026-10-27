@@ -1,6 +1,7 @@
 /**
  * A decision that is no longer waiting, on its own page: what it was and
- * about whom, who proposed it, how it ended and when (approved, rejected,
+ * about whom, who proposed it (an invite's nominator, when it answered a
+ * nomination, with its first approver), how it ended and when (approved, rejected,
  * expired, not applied, or applied at once before MINTER needed
  * approvals), and which Minter Admins approved and rejected it, in two
  * columns (AnswerColumns). Minter Admins also see its proposer's note for
@@ -15,6 +16,7 @@ import { AdminNote } from '../../components/decision/AdminNote';
 import { decisionNoteTarget } from '../../data/adminNotes';
 import { Card, ToneChip } from '../../components/common/Section';
 import { useDisplayName } from '../../hooks/useDisplayName';
+import type { NominationEntry } from '../../data/nominations';
 import {
   decisionKind,
   decisionSubject,
@@ -50,11 +52,14 @@ export function DecidedCard({
   link,
   now,
   adminNames,
+  nomination = null,
 }: {
   link: Decided;
   now: ChainNow;
   /** Admin addresses → names, when known (others are looked up). */
   adminNames: Map<string, string | null>;
+  /** For an invite: the nomination it answered, whose publisher proposed it (nominationBehind). */
+  nomination?: NominationEntry | null;
 }) {
   const { tx, outcome } = link;
   const kind = decisionKind(tx);
@@ -127,7 +132,17 @@ export function DecidedCard({
 
       <AdminNote target={noteTarget} near label={subject ? `${title}: ${who.label}` : title} />
 
-      {creator ? (
+      {/* An invite that answered a nomination was proposed by its nominator; the Minter Admin
+          who made the invite gave the first approval (as the nomination's Rounds say). */}
+      {creator && nomination && kind === 'invite' ? (
+        <Typography component="div" variant="body2" color="text.secondary">
+          Proposed by{' '}
+          <PersonInline address={nomination.publisher.address} name={nomination.publisher.name} />,{' '}
+          {formatDate(nomination.publishedAt)}. First approval by{' '}
+          <PersonInline address={creator} name={adminNames.get(creator)} />
+          {typeof tx.blockHeight === 'number' ? `, ${formatBlock(tx.blockHeight)}` : ''}.
+        </Typography>
+      ) : creator ? (
         <Typography component="div" variant="body2" color="text.secondary">
           {isOwnAdminChange(facts) ? (
             'Their own proposal, '
