@@ -110,7 +110,7 @@ function parseProductSort(value: string | null): ListSort | null {
 }
 
 function plural(n: number, one: string, many: string): string {
-  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+  return `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 }
 
 /**

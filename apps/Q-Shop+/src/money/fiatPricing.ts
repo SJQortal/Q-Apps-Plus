@@ -144,11 +144,15 @@ export function sanitizeFiatInput(text: string, decimals = 2): string {
   return `${cleaned.slice(0, dot)}.${cleaned.slice(dot + 1).replace(/\./g, "").slice(0, decimals)}`;
 }
 
-/** "$12.50", "€3.00", "¥1,200" (the browser's own currency names; nothing is fetched); "0.00012 XAU" for a ticker of the seller's own. */
+/**
+ * "$12.50", "€3.00", "¥1,200" (the browser's own currency names; nothing is
+ * fetched), written as prices are, whatever the device's language;
+ * "0.00012 XAU" for a ticker of the seller's own.
+ */
 export function formatFiat(value: number, currency: string): string {
   if (!isListedCurrency(currency)) return `${fiatToText(value, currency)} ${currency}`;
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
+    return new Intl.NumberFormat("en-US", { style: "currency", currency, maximumFractionDigits: 2 }).format(value);
   } catch {
     return `${value.toFixed(2)} ${currency}`;
   }
