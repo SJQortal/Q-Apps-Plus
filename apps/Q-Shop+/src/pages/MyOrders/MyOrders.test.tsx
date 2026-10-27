@@ -258,6 +258,24 @@ describe("My orders", () => {
     expect(within(list).getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
+  it("counts another app's orders under the list instead of showing them as orders it can't open (Simon's Hub, 2026-10-27)", async () => {
+    const w = world();
+    // Q-Shops' order JSON (its fields as Simon's Hub showed them), under Q-Shop's prefix and encrypted alike.
+    const qshops = { created: 1778196934636, version: 1, orderId: "qs-magdalena-x", shopPublisher: "Magdalena", orderedVia: "q-shops-q-app", qshopsAppHref: "qortal://APP/Q-Shops", payment: { method: "QORT", total: 0.5 } };
+    w.orders.find((o) => o.identifier === orderId("O00"))!.json = qshops;
+    w.orders.find((o) => o.identifier === orderId("O02"))!.json = qshops;
+    installMockNode(w);
+    renderPage();
+    const note = await screen.findByRole("note");
+    expect(note).toHaveTextContent("2 orders placed in Q-Shops aren't listed here. Open Q-Shops");
+    expect(within(note).getByRole("link", { name: "Open Q-Shops" })).toHaveAttribute("href", "qortal://APP/Q-Shops");
+    const list = screen.getByRole("list", { name: "Your orders" });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(1));
+    expect(screen.queryByText("Couldn't open this order")).toBeNull();
+    // Counted out of the filters too.
+    expect(screen.getByRole("button", { name: /^All · 1/ })).toBeInTheDocument();
+  });
+
   it("a shipped order can be marked delivered, then the shop reviewed; the filters count it as Delivered", async () => {
     const w = makeWorld({ shops: 2, me: { name: BUYER, address: BUYER_ADDRESS, publicKey: "BuyerPK" } });
     addOrder(w, "O00", 1000, { physical: true });

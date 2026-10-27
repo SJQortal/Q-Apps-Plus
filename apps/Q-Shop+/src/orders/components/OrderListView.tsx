@@ -1,11 +1,12 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from "react";
-import { Box, Button, Skeleton, Typography } from "@mui/material";
+import { Box, Button, Link, Skeleton, Typography } from "@mui/material";
 import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
 import { EmptyState } from "../../components/common/EmptyState";
 import type { Order } from "../../state/features/orderSlice";
 import type { OrderList } from "../hooks";
 import type { OrderListItem } from "../selectors";
-import { sellerStatusCounts, splitSellerItems, visibleItems } from "../listView";
+import { foreignAppCounts, sellerStatusCounts, splitForeignItems, splitSellerItems, visibleItems } from "../listView";
+import { useOpenQortalLink } from "../../richtext/QortalText";
 import { countStatuses, type StatusCounts, type StatusFilter } from "../status";
 import { ForeignOrderCard, OrderCard, type OrderRole } from "./OrderCard";
 import { StatusFilterBar } from "./StatusFilterBar";
@@ -116,6 +117,35 @@ export function UncountedOrders({ items, onRetry }: { items: OrderListItem[]; on
   );
 }
 
+/**
+ * Another app's orders under Q-Shop's prefix, counted under the list instead
+ * of shown as orders that can't be opened (Simon's Hub, 2026-10-27: eight
+ * Q-Shops orders, each "Couldn't open this order" with a Retry that couldn't
+ * help): "8 orders placed in Q-Shops aren't listed here. Open Q-Shops".
+ */
+function ForeignOrdersNote({ items }: { items: OrderListItem[] }) {
+  const openLink = useOpenQortalLink();
+  const apps = useMemo(() => foreignAppCounts(items), [items]);
+  if (apps.length === 0) return null;
+  return (
+    <Box role="note" sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+      {apps.map((app) => (
+        <Typography key={app.name} variant="body2" color="text.secondary">
+          {`${app.count === 1 ? "1 order" : `${app.count} orders`} placed in ${app.name} ${app.count === 1 ? "isn't" : "aren't"} listed here.`}
+          {app.link && (
+            <>
+              {" "}
+              <Link href={app.link} onClick={(event) => openLink(event, app.link as string)} className="qortal-link" underline="always">
+                Open {app.name}
+              </Link>
+            </>
+          )}
+        </Typography>
+      ))}
+    </Box>
+  );
+}
+
 function buyerCounts(items: OrderListItem[]): { counts: StatusCounts; loading: boolean } {
   const counts = countStatuses(
     items.map((i) => i.row.id),
@@ -162,9 +192,11 @@ export function OrderListView({
 }) {
   const { items, meta } = list;
   const seller = role === "seller" ? list.seller : "";
+  // Another app's orders (Q-Shops) are only counted under the list.
+  const { rest, foreign } = useMemo(() => splitForeignItems(items), [items]);
   const { main, others } = useMemo(
-    () => (role === "seller" ? splitSellerItems(items, seller) : { main: items, others: NO_ROWS }),
-    [items, role, seller]
+    () => (role === "seller" ? splitSellerItems(rest, seller) : { main: rest, others: NO_ROWS }),
+    [rest, role, seller]
   );
   const { counts, loading: statusesLoading } = useMemo(
     () => (role === "seller" ? sellerStatusCounts(main, seller) : buyerCounts(main)),
@@ -262,6 +294,7 @@ export function OrderListView({
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       {content}
       {others.length > 0 && <UncountedOrders items={others} onRetry={(row) => void list.retry(row)} />}
+      <ForeignOrdersNote items={foreign} />
       <LoadMore hasMore={more} loading={meta.loadingMore} failed={meta.moreError} onLoadMore={list.loadMore} />
     </Box>
   );

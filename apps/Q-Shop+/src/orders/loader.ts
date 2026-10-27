@@ -41,6 +41,7 @@ import {
   searchShopOrdersPage,
   shopStatusIndex,
   sleep,
+  type OpenOutcome,
   type StatusIndex,
   type StatusTarget,
 } from "./reads";
@@ -288,6 +289,13 @@ async function openRows(
 
 const openingRows = new WeakMap<OrderStore, Map<string, { task: Promise<Order | null>; live: () => boolean }>>();
 
+/** A row whose order was read but isn't one to show: another app's order (left out of the lists), or unreadable. */
+function notOpened(row: Order, outcome: Extract<OpenOutcome, { ok: false }>) {
+  return outcome.stage === "foreign"
+    ? orderOpenState({ id: row.id, state: "foreign", ...(outcome.app && { app: outcome.app }) })
+    : orderOpenState({ id: row.id, state: "unreadable" });
+}
+
 /** One row's first attempt; a row already being opened for the same list generation shares that attempt. */
 function openRow(
   store: OrderStore,
@@ -312,7 +320,7 @@ function openRow(
       return outcome.order;
     }
     if (outcome.stage !== "fetch") {
-      store.dispatch(orderOpenState({ id: row.id, state: "unreadable" }));
+      store.dispatch(notOpened(row, outcome));
       return null;
     }
     store.dispatch(orderOpenState({ id: row.id, state: "peers" }));
@@ -358,7 +366,7 @@ async function retryFromPeers(store: OrderStore, row: Order, live: () => boolean
       return outcome.order;
     }
     if (outcome.stage !== "fetch") {
-      store.dispatch(orderOpenState({ id: row.id, state: "unreadable" }));
+      store.dispatch(notOpened(row, outcome));
       return null;
     }
   }
@@ -388,7 +396,7 @@ export async function retryOrder(store: OrderStore, owner: ListOwner, row: Order
     store.dispatch(ordersOpened([outcome.order]));
     order = outcome.order;
   } else if (outcome.stage !== "fetch") {
-    store.dispatch(orderOpenState({ id: row.id, state: "unreadable" }));
+    store.dispatch(notOpened(row, outcome));
   } else {
     order = await retryFromPeers(store, row, live);
   }

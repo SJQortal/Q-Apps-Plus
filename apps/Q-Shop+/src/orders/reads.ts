@@ -25,7 +25,7 @@ import {
   statusIdentifierForOrder,
 } from "../qdn/identifiers";
 import { base64ToJson } from "../qdn/payloads";
-import { OrderReadError, readOrderJson, type OrderReadStage } from "../utils/fetchOrders";
+import { OrderReadError, readOrderJson, type ForeignOrderApp, type OrderReadStage } from "../utils/fetchOrders";
 import type { Order, OrderStatusInfo } from "../state/features/orderSlice";
 import { NO_STATUS_DOCUMENT, statusInfoFrom } from "./status";
 import { displaySafeOrder } from "./format";
@@ -122,7 +122,7 @@ export async function searchShopOrdersPage(shortStoreId: string, offset: number,
 
 // ------------------------------------------------------------------ orders
 
-export type OpenOutcome = { ok: true; order: Order } | { ok: false; stage: OrderReadStage };
+export type OpenOutcome = { ok: true; order: Order } | { ok: false; stage: OrderReadStage; app?: ForeignOrderApp };
 
 const openedOrders = new Map<string, { updated: number; json: Promise<any> }>();
 
@@ -157,7 +157,8 @@ export async function openOrderOnce(row: Order, fresh = false): Promise<OpenOutc
       order: displaySafeOrder({ ...order, created: row.created, updated: row.updated, user: row.user, id: row.id, isValid: true }),
     };
   } catch (error) {
-    return { ok: false, stage: error instanceof OrderReadError ? error.stage : "fetch" };
+    if (!(error instanceof OrderReadError)) return { ok: false, stage: "fetch" };
+    return error.app ? { ok: false, stage: error.stage, app: error.app } : { ok: false, stage: error.stage };
   }
 }
 

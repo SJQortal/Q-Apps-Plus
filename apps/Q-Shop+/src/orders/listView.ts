@@ -17,8 +17,33 @@ export type SellerRowKind = "mine" | "pending" | "other";
 
 export function sellerRowKind(item: OrderListItem, seller: string): SellerRowKind {
   if (item.order) return sameName(item.order.sellerName, seller) ? "mine" : "other";
-  if (item.openState === "unreadable" || item.openState === "unavailable") return "other";
+  if (item.openState === "unreadable" || item.openState === "unavailable" || item.openState === "foreign") return "other";
   return "pending";
+}
+
+/**
+ * Rows that are another app's orders under Q-Shop's prefix (Q-Shops writes
+ * `q-store-order-…` too): left out of a list, its counts and its filters, as
+ * the original leaves out what isn't its order, and only counted in a line
+ * under the list. Everything else is kept, in order.
+ */
+export function splitForeignItems(items: OrderListItem[]): { rest: OrderListItem[]; foreign: OrderListItem[] } {
+  const rest: OrderListItem[] = [];
+  const foreign: OrderListItem[] = [];
+  for (const item of items) (item.openState === "foreign" && !item.order ? foreign : rest).push(item);
+  return { rest, foreign };
+}
+
+/** Another app's orders by app, most first: "8 in Q-Shops". */
+export function foreignAppCounts(foreign: OrderListItem[]): { name: string; link: string | null; count: number }[] {
+  const byApp = new Map<string, { name: string; link: string | null; count: number }>();
+  for (const item of foreign) {
+    const name = item.foreignApp?.name ?? "another app";
+    const known = byApp.get(name);
+    if (known) known.count += 1;
+    else byApp.set(name, { name, link: item.foreignApp?.link ?? null, count: 1 });
+  }
+  return [...byApp.values()].sort((a, b) => b.count - a.count);
 }
 
 /** Shipped or Refunded by the seller's own status document: that settles the row without opening the order. */

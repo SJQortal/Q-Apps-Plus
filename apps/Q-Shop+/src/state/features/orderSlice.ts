@@ -112,8 +112,18 @@ export interface DeliveredInfo {
   sending?: boolean;
 }
 
-/** Why an order isn't open: still coming from peers, not on the node, or it can't be decrypted or read. */
-export type OrderOpenState = "peers" | "unavailable" | "unreadable";
+/**
+ * Why an order isn't open: still coming from peers, not on the node, it can't
+ * be decrypted or read, or it is another app's order under Q-Shop's prefix
+ * (utils/fetchOrders.ts foreignOrderApp), left out of the lists.
+ */
+export type OrderOpenState = "peers" | "unavailable" | "unreadable" | "foreign";
+
+/** The app another app's order came from (utils/fetchOrders.ts). */
+export interface ForeignApp {
+  name: string;
+  link: string | null;
+}
 
 export type OrderListKind = "buyer" | "seller";
 
@@ -139,6 +149,8 @@ export interface OrderListMeta {
 interface OrderState {
   hashMapOrders: Record<string, Order>;
   openState: Record<string, OrderOpenState>;
+  /** For orders whose openState is "foreign": the app they came from. */
+  foreignApps: Record<string, ForeignApp>;
   statuses: Record<string, OrderStatusInfo>;
   delivered: Record<string, DeliveredInfo | null>;
   /** The seller's received orders (rows), newest first. */
@@ -166,6 +178,7 @@ function emptyMeta(owner = "", generation = 0): OrderListMeta {
 const initialState: OrderState = {
   hashMapOrders: {},
   openState: {},
+  foreignApps: {},
   statuses: {},
   delivered: {},
   orders: [],
@@ -300,10 +313,12 @@ export const orderSlice = createSlice({
         delete state.openState[order.id];
       }
     },
-    orderOpenState: (state, action: PayloadAction<{ id: string; state: OrderOpenState | null }>) => {
-      const { id, state: openState } = action.payload;
+    orderOpenState: (state, action: PayloadAction<{ id: string; state: OrderOpenState | null; app?: ForeignApp }>) => {
+      const { id, state: openState, app } = action.payload;
       if (openState) state.openState[id] = openState;
       else delete state.openState[id];
+      if (openState === "foreign" && app) state.foreignApps[id] = app;
+      else delete state.foreignApps[id];
     },
     /** Statuses read from QDN (or "Received" when there is no document). */
     statusesLoaded: (state, action: PayloadAction<{ orderId: string; info: OrderStatusInfo }[]>) => {
