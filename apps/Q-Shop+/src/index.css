@@ -118,7 +118,15 @@ a:focus-visible {
 }
 
 /* A notice's button keeps its words on one line ("Sign in", not "Sign / in" at 360 px;
-   Simon's GO check, 2026-10-27): the message beside it wraps instead. */
+   Simon's GO check, 2026-10-27), and goes under the message, at its end, when both
+   don't fit side by side: the message keeps at least 12em instead of shrinking to a
+   few words a line beside "Open the checkup". */
 .MuiAlert-action .MuiButton-root {
   white-space: nowrap;
+}
+.MuiAlert-root:has(> .MuiAlert-action) {
+  flex-wrap: wrap;
+}
+.MuiAlert-root:has(> .MuiAlert-action) > .MuiAlert-message {
+  flex: 1 1 12em;
 }
