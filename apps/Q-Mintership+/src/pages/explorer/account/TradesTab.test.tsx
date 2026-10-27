@@ -123,7 +123,7 @@ describe('the Trades tab', () => {
       T
     );
     const parts = within(key).getAllByRole('listitem');
-    expect(parts.map((li) => li.textContent?.split(' · ')[0])).toEqual([
+    expect(parts.map((li) => li.textContent?.replace(/\u00a0/g, ' ').split(' · ')[0])).toEqual([
       'LTC 72 %',
       'BTC 2.4 %',
       'DOGE 25 %',

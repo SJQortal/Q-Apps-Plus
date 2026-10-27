@@ -48,14 +48,17 @@ export const UNIT_WORDS: Record<PeriodUnit, string> = {
   year: 'year',
 };
 
+/** Before the % sign: a space that never breaks the line. */
+const PERCENT = '\u00a0%';
+
 /** "98 %", "1.8 %", "99.8 %" (never 100 % for less than all), "under 0.1 %". */
 export function shareText(part: bigint, whole: bigint): string {
-  if (whole <= 0n || part <= 0n) return '0 %';
-  if (part >= whole) return '100 %';
+  if (whole <= 0n || part <= 0n) return `0${PERCENT}`;
+  if (part >= whole) return `100${PERCENT}`;
   const share = Number((part * 10_000n) / whole) / 100;
-  if (share >= 99.9) return 'over 99.9 %';
-  if (share >= 99.5) return `${share.toFixed(1)} %`;
-  if (share >= 10) return `${Math.round(share)} %`;
-  if (share >= 0.1) return `${share.toFixed(1)} %`;
-  return 'under 0.1 %';
+  if (share >= 99.9) return `over 99.9${PERCENT}`;
+  if (share >= 99.5) return `${share.toFixed(1)}${PERCENT}`;
+  if (share >= 10) return `${Math.round(share)}${PERCENT}`;
+  if (share >= 0.1) return `${share.toFixed(1)}${PERCENT}`;
+  return `under 0.1${PERCENT}`;
 }
