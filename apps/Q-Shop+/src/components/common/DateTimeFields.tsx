@@ -19,6 +19,7 @@ import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { autocompletePaperProps, dropdownPaperSx } from "./menuStyle";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -130,9 +131,10 @@ function parseDay(text: string): Date | null {
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
 }
 
-export function dateLabel(text: string): string {
+/** "Tue, Nov 3, 2026", or "Nov 3, 2026" (`short`) where the field is narrow. */
+export function dateLabel(text: string, short = false): string {
   const d = parseDay(text);
-  return d ? d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" }) : "";
+  return d ? d.toLocaleDateString(undefined, { ...(short ? {} : { weekday: "short" }), day: "numeric", month: "short", year: "numeric" }) : "";
 }
 
 /** Monday first. */
@@ -213,6 +215,7 @@ export function DateField({
   clearable = !required,
   helperText,
   sx,
+  short = false,
 }: {
   label: string;
   /** "YYYY-MM-DD", or "" for none. */
@@ -225,6 +228,8 @@ export function DateField({
   clearable?: boolean;
   helperText?: ReactNode;
   sx?: SxProps<Theme>;
+  /** Without the weekday ("Nov 3, 2026"): beside the time on a phone, "Tue, Nov 3, 2026" lost its year at 360 px. */
+  short?: boolean;
 }) {
   const field = useRef<HTMLDivElement>(null);
   // The field the calendar opens under, while it's open.
@@ -239,7 +244,7 @@ export function DateField({
       <TextField
         ref={field}
         label={label}
-        value={dateLabel(value)}
+        value={dateLabel(value, short)}
         placeholder="Choose a date"
         required={required}
         disabled={disabled}
@@ -312,11 +317,13 @@ export function DateTimeField({
 }) {
   const day = value.slice(0, 10);
   const time = value.slice(11, 16);
+  const phone = usePhoneLayout();
   return (
     <Box role="group" aria-label={label} sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(0, 1fr)", gap: 1, alignItems: "start" }}>
       <DateField
         label={label}
         value={day}
+        short={phone}
         min={min?.slice(0, 10)}
         onChange={(next) => onChange(next ? `${next}T${time || "12:00"}` : "")}
         disabled={disabled}
