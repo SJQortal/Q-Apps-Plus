@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import COUNTRY_LIST from "./countries.json";
 import STATE_LIST from "./states.json";
 import {
+  countryName,
   ALL_COUNTRY_CODES,
   EU_COUNTRIES,
   SHIPPING_REGIONS,
@@ -35,10 +36,10 @@ describe("shipping regions", () => {
     expect(shippingSummary([])).toBe("");
     expect(shippingSummary(ALL_COUNTRY_CODES)).toBe("Worldwide");
     expect(shippingSummary(ALL_COUNTRY_CODES.filter((c) => !["AQ", "BV", "TF", "HM", "GS"].includes(c)))).toBe("Worldwide");
-    expect(shippingSummary(ALL_COUNTRY_CODES.filter((c) => c !== "RU" && c !== "BY"))).toBe("Worldwide except Belarus and Russian Federation");
+    expect(shippingSummary(ALL_COUNTRY_CODES.filter((c) => c !== "RU" && c !== "BY"))).toBe("Worldwide except Belarus and Russia");
     expect(shippingSummary(EU_COUNTRIES)).toBe("the European Union");
     expect(shippingSummary(region("europe"))).toBe("Europe");
-    expect(shippingSummary([...region("europe").filter((c) => c !== "RU"), ...region("north-america")])).toBe("Europe (except Russian Federation) and North America");
+    expect(shippingSummary([...region("europe").filter((c) => c !== "RU"), ...region("north-america")])).toBe("Europe (except Russia) and North America");
     expect(shippingSummary([...EU_COUNTRIES, ...region("north-america")])).toBe("the European Union and North America");
     expect(shippingSummary(["IS", "NO", "SE"])).toBe("Iceland, Norway and Sweden");
     expect(shippingSummary(region("asia").slice(0, 6))).toBe("6 countries in Asia");
@@ -134,5 +135,21 @@ describe("ships-to as region tags (another Q-Shop build)", () => {
     expect(own).toEqual({ shipsTo: "Canada", shippingCountries: ["DE"] });
     const text = { shipsTo: "Europe" };
     expect(withShippingTags(text)).toBe(text);
+  });
+});
+
+describe("country names as the app shows them (Simon, 2026-10-27)", () => {
+  it("are plain where the delivery form's list is formal, and both read back to the country", () => {
+    const middleEast = SHIPPING_REGIONS.find((r) => r.id === "middle-east")!.codes.map(countryName).sort((a, b) => a.localeCompare(b));
+    expect(middleEast).toEqual(["Bahrain", "Iran", "Iraq", "Israel", "Jordan", "Kuwait", "Lebanon", "Oman", "Palestine", "Qatar", "Saudi Arabia", "Syria", "United Arab Emirates", "Yemen"]);
+    // No name a list would split, or shout.
+    for (const code of ALL_COUNTRY_CODES) expect(countryName(code)).not.toMatch(/[,()]|^[A-Z]{3,}$/);
+    // Addresses keep the list's own names; both kinds find the country.
+    expect(countryCode("Iran, Islamic Republic Of")).toBe("IR");
+    expect(countryCode("iran")).toBe("IR");
+    expect(countryCode("Palestinian Territory, Occupied")).toBe("PS");
+    expect(countryCode("Palestine")).toBe("PS");
+    expect(shipsToCountry({ shippingCountries: ["SY"] }, "Syrian Arab Republic")).toBe(true);
+    expect(placeNotShipped({ shippingCountries: ["SY"] }, "Iran, Islamic Republic Of", "")).toBe("Iran");
   });
 });

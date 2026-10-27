@@ -365,14 +365,14 @@ describe("edit shop", () => {
     // Europe, less Russia, opened to its countries.
     fireEvent.click(screen.getByRole("checkbox", { name: /^Europe/ }));
     fireEvent.click(screen.getByRole("button", { name: "Choose countries in Europe" }));
-    fireEvent.click(within(screen.getByRole("group", { name: "Countries in Europe" })).getByRole("checkbox", { name: "Russian Federation" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Countries in Europe" })).getByRole("checkbox", { name: "Russia" }));
     expect(screen.getByRole("checkbox", { name: /^Europe/ })).toHaveAttribute("data-indeterminate", "true");
-    expect(screen.getByText(/^Europe \(except Russian Federation\) · 51 countries$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Europe \(except Russia\) · 51 countries$/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
     const [req] = q.callsFor("PUBLISH_QDN_RESOURCE") as any[];
     const saved = decodeData64(req.data64);
-    expect(saved.shipsTo).toBe("Europe (except Russian Federation)");
+    expect(saved.shipsTo).toBe("Europe (except Russia)");
     expect(saved.shippingCountries).toHaveLength(51);
     expect(saved.shippingCountries).not.toContain("RU");
   });

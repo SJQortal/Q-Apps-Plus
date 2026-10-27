@@ -62,17 +62,62 @@ export const EU_COUNTRIES: readonly string[] = [
   "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
 ];
 
-const NAMES: Record<string, string> = Object.fromEntries((COUNTRY_LIST as { text: string; value: string }[]).map((c) => [c.value, c.text]));
-const CODES_BY_NAME: Record<string, string> = Object.fromEntries((COUNTRY_LIST as { text: string; value: string }[]).map((c) => [c.text.toLowerCase(), c.value]));
+/**
+ * Names to show where the delivery form's list has an official form that
+ * reads badly in a list of countries ("Iran, Islamic Republic Of, Iraq,
+ * Israel"; Simon, 2026-10-27): commas, brackets, odd capitals, old names.
+ * Shown only: addresses keep the list's own names, as the original writes
+ * them, and countryCode reads both.
+ */
+const PLAIN_NAMES: Record<string, string> = {
+  IR: "Iran",
+  PS: "Palestine",
+  SY: "Syria",
+  RU: "Russia",
+  KR: "South Korea",
+  KP: "North Korea",
+  LA: "Laos",
+  MK: "North Macedonia",
+  FM: "Micronesia",
+  MD: "Moldova",
+  TW: "Taiwan",
+  TZ: "Tanzania",
+  CD: "DR Congo",
+  VG: "British Virgin Islands",
+  VI: "U.S. Virgin Islands",
+  VA: "Vatican City",
+  FK: "Falkland Islands",
+  CC: "Cocos Islands",
+  LY: "Libya",
+  VN: "Vietnam",
+  BN: "Brunei",
+  CI: "Côte d'Ivoire",
+  RW: "Rwanda",
+};
+
+/** The delivery form's own name for a country (as addresses carry it). */
+const OFFICIAL_NAMES: Record<string, string> = Object.fromEntries((COUNTRY_LIST as { text: string; value: string }[]).map((c) => [c.value, c.text]));
+const NAMES: Record<string, string> = { ...OFFICIAL_NAMES, ...PLAIN_NAMES };
+const CODES_BY_NAME: Record<string, string> = Object.fromEntries(
+  Object.entries(OFFICIAL_NAMES)
+    .concat(Object.entries(PLAIN_NAMES))
+    .map(([code, name]) => [name.toLowerCase(), code])
+);
 
 export const ALL_COUNTRY_CODES: readonly string[] = SHIPPING_REGIONS.flatMap((r) => r.codes);
 const INHABITED = SHIPPING_REGIONS.filter((r) => r.id !== "remote").flatMap((r) => r.codes);
 
+/** A country's name as the app shows it (the plain one where the list's reads badly). */
 export function countryName(code: string): string {
   return NAMES[code] ?? code;
 }
 
-/** A country's code from its name as the delivery form writes it (any case), or null. */
+/** The delivery form's own name, when the app shows another (for search); else null. */
+export function officialCountryName(code: string): string | null {
+  return code in PLAIN_NAMES ? (OFFICIAL_NAMES[code] ?? null) : null;
+}
+
+/** A country's code from its name as the delivery form writes it, or as the app shows it (any case), or null. */
 export function countryCode(name: string | null | undefined): string | null {
   if (!name) return null;
   return CODES_BY_NAME[name.trim().toLowerCase()] ?? null;
@@ -240,7 +285,9 @@ export function placeNotShipped(
   state: string | null | undefined
 ): string | null {
   if (shipsToAddress(shop, country, state)) return null;
-  return shipsToCountry(shop, country) && state ? `${state}, ${country}` : country;
+  const code = countryCode(country);
+  const name = code ? countryName(code) : country;
+  return shipsToCountry(shop, country) && state ? `${state}, ${name}` : name;
 }
 
 // ---------------------------------------------------------------- ships-to as region tags

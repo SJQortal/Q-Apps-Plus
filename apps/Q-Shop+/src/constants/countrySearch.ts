@@ -6,6 +6,7 @@
  * the nicknames below. Accents and case don't count ("Ísland", "island").
  */
 import { LANGUAGES } from "../shop/languages";
+import { officialCountryName } from "./shipping";
 
 /** Short and everyday names the delivery form's list doesn't use. */
 const NICKNAMES: Record<string, string[]> = {
@@ -62,6 +63,9 @@ export function countryOtherNames(code: string): string[] {
   let known = names.get(code);
   if (!known) {
     const found = new Set<string>(NICKNAMES[code] ?? []);
+    // The delivery form's own name, where the app shows a plain one ("Syrian Arab Republic").
+    const official = officialCountryName(code);
+    if (official) found.add(searchText(official));
     for (const display of (languages ??= displayNames())) {
       try {
         const name = display.of(code);

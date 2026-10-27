@@ -28,3 +28,14 @@ describe("finding a country", () => {
     expect(united).toContain("TZ");
   });
 });
+
+describe("the delivery form's formal names", () => {
+  it("still find a country the app shows by its plain name (Simon, 2026-10-27)", () => {
+    const codes = ["IR", "SY", "PS", "IQ"];
+    const found = (q: string) => matchCountries(codes, q, countryName, (c) => c);
+    expect(found("syrian arab")).toEqual(["SY"]);
+    expect(found("islamic republic")).toEqual(["IR"]);
+    expect(found("occupied")).toEqual(["PS"]);
+    expect(found("palestine")).toEqual(["PS"]);
+  });
+});

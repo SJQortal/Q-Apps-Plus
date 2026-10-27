@@ -69,6 +69,13 @@ const PHRASES: [RegExp, () => readonly string[]][] = [
   [word("moldova"), () => ["MD"]],
   [word("north macedonia|macedonia"), () => ["MK"]],
   [word("tanzania"), () => ["TZ"]],
+  [word("syria"), () => ["SY"]],
+  [word("palestine"), () => ["PS"]],
+  [word("laos"), () => ["LA"]],
+  [word("libya"), () => ["LY"]],
+  [word("brunei"), () => ["BN"]],
+  [word("vatican city|vatican"), () => ["VA"]],
+  [word("falkland islands|falklands"), () => ["FK"]],
 ];
 
 const COUNTRY_NAMES = (COUNTRY_LIST as { text: string; value: string }[]).filter((c) => c.text.length > 3);

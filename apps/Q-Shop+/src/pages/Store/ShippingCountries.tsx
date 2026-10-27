@@ -1,5 +1,5 @@
 /**
- * "Ships to Europe (except Russian Federation) · 51 countries": the shop's
+ * "Ships to Europe (except Russia) · 51 countries": the shop's
  * countries (constants/shipping.ts), listed by region in a dialog, for a
  * buyer who wants to check theirs.
  */
