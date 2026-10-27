@@ -803,7 +803,21 @@ export function ProductsPage() {
       )}
 
       {phone && (
-        <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
+        <BottomSheet
+          open={filtersOpen}
+          onClose={() => setFiltersOpen(false)}
+          title="Filters"
+          actions={
+            <>
+              <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
+                Clear
+              </Button>
+              <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>
+                {all.complete ? `Show ${plural(filtered.length, "product", "products")}` : "Show products"}
+              </Button>
+            </>
+          }
+        >
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <Box>
               <Typography component="h3" variant="subtitle2" sx={{ mb: 1 }}>
@@ -819,14 +833,6 @@ export function ProductsPage() {
             </Box>
             {stockSwitch}
             <ShipsToChips value={ships} place={place} onChange={(code) => update({ ships: code })} chipSx={{ minHeight: 44, fontSize: 14 }} headingId="products-ships-label" />
-            <Box sx={{ display: "flex", gap: 1 }}>
-              <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
-                Clear
-              </Button>
-              <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>
-                {all.complete ? `Show ${plural(filtered.length, "product", "products")}` : "Show products"}
-              </Button>
-            </Box>
           </Box>
         </BottomSheet>
       )}

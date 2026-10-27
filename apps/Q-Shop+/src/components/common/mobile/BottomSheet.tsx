@@ -23,6 +23,12 @@ export interface BottomSheetProps {
    * later pages read through a ref). Only for one-per-page sheets.
    */
   keepMounted?: boolean;
+  /**
+   * Buttons that end the sheet (Done, Show 12 products): under the content,
+   * outside its scroll, so a sheet taller than a small phone (360×740) keeps
+   * them in view instead of below the content's end.
+   */
+  actions?: ReactNode;
 }
 
 /**
@@ -35,7 +41,7 @@ export interface BottomSheetProps {
  * so the drawer is mounted only while the sheet is open or sliding closed,
  * unless `keepMounted` asks for the old behaviour.
  */
-export function BottomSheet({ open, onClose, title, children, ariaLabel, keepMounted = false }: BottomSheetProps) {
+export function BottomSheet({ open, onClose, title, children, ariaLabel, keepMounted = false, actions }: BottomSheetProps) {
   const titleId = useId();
   // True from the start of the open slide until the close slide has finished.
   const [shown, setShown] = useState(false);
@@ -79,6 +85,9 @@ export function BottomSheet({ open, onClose, title, children, ariaLabel, keepMou
       ) : null}
       {/* Positioned, so screen-reader text (position: absolute) scrolls with the content instead of stretching the sheet. */}
       <Box sx={{ position: "relative", overflowY: "auto", overscrollBehavior: "contain", px: 2, pb: 2 }}>{children}</Box>
+      {actions ? (
+        <Box sx={{ display: "flex", gap: 1, px: 2, pt: 1.5, pb: 2, borderTop: 1, borderColor: "divider", flexShrink: 0 }}>{actions}</Box>
+      ) : null}
     </SwipeableDrawer>
   );
 }

@@ -577,7 +577,21 @@ function ShopProducts({
         <Box data-swap>{body}</Box>
 
         {phone && (
-          <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
+          <BottomSheet
+            open={filtersOpen}
+            onClose={() => setFiltersOpen(false)}
+            title="Filters"
+            actions={
+              <>
+                <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
+                  Clear
+                </Button>
+                <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>
+                  {`Show ${filtered.length} product${filtered.length === 1 ? "" : "s"}`}
+                </Button>
+              </>
+            }
+          >
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
               {categories.length > 0 && (
                 <Box>
@@ -599,14 +613,6 @@ function ShopProducts({
                 {priceFields}
               </Box>
               {stockSwitch}
-              <Box sx={{ display: "flex", gap: 1 }}>
-                <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
-                  Clear
-                </Button>
-                <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>
-                  {`Show ${filtered.length} product${filtered.length === 1 ? "" : "s"}`}
-                </Button>
-              </Box>
             </Box>
           </BottomSheet>
         )}

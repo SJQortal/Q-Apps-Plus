@@ -711,13 +711,19 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
       )}
 
       {phone && (
-        <BottomSheet open={sheetOpen} onClose={() => setSheetOpen(false)} title="Category and sort">
+        <BottomSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="Category and sort"
+          actions={
+            <Button variant="contained" fullWidth onClick={() => setSheetOpen(false)} sx={{ minHeight: 44 }}>
+              Done
+            </Button>
+          }
+        >
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}>
             {categorySelect}
             {sortSelect}
-            <Button variant="contained" onClick={() => setSheetOpen(false)} sx={{ minHeight: 44 }}>
-              Done
-            </Button>
           </Box>
         </BottomSheet>
       )}

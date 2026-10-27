@@ -221,7 +221,21 @@ export function SortFilterSheet(props: SortFilterProps) {
           {mine && <RemovableChip label="My shops" onRemove={() => onMine(false)} />}
         </Box>
       )}
-      <BottomSheet open={open} onClose={() => setOpen(false)} title="Sort and filter">
+      <BottomSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Sort and filter"
+        actions={
+          <Box sx={{ display: "flex", gap: 1, flex: 1, "& .MuiButton-root": { minHeight: 48, flex: 1 } }}>
+            <Button variant="contained" onClick={() => setOpen(false)}>
+              Done
+            </Button>
+            <Button variant="outlined" onClick={onReset} disabled={!active}>
+              Reset
+            </Button>
+          </Box>
+        }
+      >
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <FormControl>
             <FormLabel id="home-sort-label" sx={{ fontWeight: 700, color: "text.primary" }}>
@@ -268,14 +282,6 @@ export function SortFilterSheet(props: SortFilterProps) {
               sx={{ minHeight: 44, mr: 0 }}
             />
           )}
-          <Box sx={{ display: "flex", gap: 1, "& .MuiButton-root": { minHeight: 48, flex: 1 } }}>
-            <Button variant="contained" onClick={() => setOpen(false)}>
-              Done
-            </Button>
-            <Button variant="outlined" onClick={onReset} disabled={!active}>
-              Reset
-            </Button>
-          </Box>
         </Box>
       </BottomSheet>
     </Box>
