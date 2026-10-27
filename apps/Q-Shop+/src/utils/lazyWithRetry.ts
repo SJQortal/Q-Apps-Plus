@@ -50,7 +50,6 @@ export async function retryImport<T>(load: () => Promise<T>, wait = RETRY_AFTER_
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function lazyWithRetry<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
   return lazy(() => retryImport(load));
 }

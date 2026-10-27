@@ -5,7 +5,7 @@
  * start-up when it couldn't read the shop's one; nothing is published here
  * now (docs/apps/Q-Shop+.md → Bugs 2).
  */
-import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { RootState } from "../state/store";

@@ -5,7 +5,7 @@
  * down and comes back when you scroll up; the navigation lives in BottomNav
  * there, and Settings stays up here (the bar takes five items).
  */
-import React, { lazy, Suspense, useRef, useState } from "react";
+import React, { Suspense, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, IconButton, Skeleton, Tooltip } from "@mui/material";
