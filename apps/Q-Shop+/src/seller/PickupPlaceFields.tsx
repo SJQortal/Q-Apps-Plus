@@ -52,7 +52,17 @@ export function PickupPlaceFields({ place, onChange, disabled, name }: { place: 
           aria-labelledby={`days-${name}`}
           disabled={disabled}
           size="small"
-          sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minWidth: 48, minHeight: 44, textTransform: "none" } }}
+          // Even rows (four, then three, on a phone; all seven wider), each day its own button: wrapped, a joined group
+          // left Sat and Sun alone on a second row with no left border (screenshots at 360 px).
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "repeat(4, minmax(0, 1fr))", sm: "repeat(7, minmax(0, 1fr))" },
+            gap: 0.5,
+            maxWidth: { sm: 448 },
+            "& .MuiToggleButton-root": { minWidth: 44, minHeight: 44, textTransform: "none" },
+            "& .MuiToggleButtonGroup-grouped": { m: 0, border: 1, borderColor: "divider", borderRadius: 1 },
+            "& .MuiToggleButtonGroup-grouped.Mui-selected": { borderColor: "primary.main" },
+          }}
         >
           {WEEK_ORDER.map((d) => (
             <ToggleButton key={d} value={d}>
