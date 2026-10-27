@@ -8,9 +8,10 @@
  *
  * - Its summary (TradesSummary): QORT sold and bought on Q-Trade, the trade
  *   offers it made, its Q-Asset trades.
- * - Its Q-Trade trades and its Q-Asset trades, newest first (TradeLists).
  * - The breakdown (Breakdown, VolumeChart): by coin, over time, the trade
  *   offers, by Q-Asset, highlights.
+ * - Under it, its Q-Trade trades and its Q-Asset trades, newest first
+ *   (TradeLists; Simon, 2026-10-26: "I would like them under the Breakdown").
  *
  * Reads (each kept for the tab's next visit and the account page's
  * Refresh): its completed trades on every chain (`xportal:<a>`), the
@@ -91,28 +92,6 @@ export default function TradesTab({ address }: { address: string }) {
         assets={assets}
         assetSummary={assetSummary}
       />
-      <Section title="Q-Trade trades" id="trades-qtrade">
-        {portal.data ? (
-          portal.data.length ? (
-            <PortalTradeList trades={portal.data} />
-          ) : (
-            <EmptyState plain title="No completed trades on Q-Trade." />
-          )
-        ) : portal.isError ? null : (
-          <ListSkeleton count={3} label="Reading its trades on Q-Trade" />
-        )}
-      </Section>
-      <Section title="Q-Asset trades" id="trades-assets">
-        {assets.data ? (
-          assets.data.trades.length ? (
-            <AssetTradeList data={assets.data} />
-          ) : (
-            <EmptyState plain title="No Q-Asset trades." />
-          )
-        ) : assets.isError ? null : (
-          <ListSkeleton count={2} label="Reading its Q-Asset trades" />
-        )}
-      </Section>
       {summary?.coins.length || offers?.total.made || assetSummary?.count ? (
         <Section title="Breakdown" id="trades-breakdown" flow={CARD_COLUMN}>
           {summary?.coins.length ? (
@@ -146,6 +125,28 @@ export default function TradesTab({ address }: { address: string }) {
           ) : null}
         </Section>
       ) : null}
+      <Section title="Q-Trade trades" id="trades-qtrade">
+        {portal.data ? (
+          portal.data.length ? (
+            <PortalTradeList trades={portal.data} />
+          ) : (
+            <EmptyState plain title="No completed trades on Q-Trade." />
+          )
+        ) : portal.isError ? null : (
+          <ListSkeleton count={3} label="Reading its trades on Q-Trade" />
+        )}
+      </Section>
+      <Section title="Q-Asset trades" id="trades-assets">
+        {assets.data ? (
+          assets.data.trades.length ? (
+            <AssetTradeList data={assets.data} />
+          ) : (
+            <EmptyState plain title="No Q-Asset trades." />
+          )
+        ) : assets.isError ? null : (
+          <ListSkeleton count={2} label="Reading its Q-Asset trades" />
+        )}
+      </Section>
     </>
   );
 }

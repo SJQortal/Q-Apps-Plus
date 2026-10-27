@@ -201,6 +201,19 @@ describe('the Trades tab', () => {
     );
   });
 
+  it('puts the breakdown first, and her trades under it', async () => {
+    await trades(TRADER.address);
+    await screen.findByRole('region', { name: 'Highlights' }, T);
+    await screen.findByRole('list', { name: 'Its Q-Asset trades, newest first' }, T);
+    const order = ['Breakdown', 'Q-Trade trades', 'Q-Asset trades'].map(
+      (name) => screen.getByRole('region', { name }) as HTMLElement
+    );
+    for (let i = 1; i < order.length; i++)
+      expect(
+        order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+  });
+
   it('says so when an account has never traded', async () => {
     await trades(ADDR.learner);
     expect(await screen.findByText('No trades yet.', {}, T)).toBeInTheDocument();
