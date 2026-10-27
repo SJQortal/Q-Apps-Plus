@@ -75,10 +75,13 @@ export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews;
       onClick={onOpen}
       color="inherit"
       aria-label={average === null ? "No reviews yet: open reviews" : `Rated ${average.toFixed(1)} out of 5 from ${summary.count} review${summary.count === 1 ? "" : "s"}. Open reviews`}
-      sx={{ minHeight: 44, px: 1, ml: -1, gap: 1, fontWeight: 600, textTransform: "none", justifyContent: "flex-start" }}
+      // Beside a wide logo on a phone, "4.5 (1 review)" goes under the stars whole, not "4.5 (1" / "review)".
+      sx={{ minHeight: 44, px: 1, ml: -1, columnGap: 1, rowGap: 0, flexWrap: "wrap", fontWeight: 600, textTransform: "none", justifyContent: "flex-start", textAlign: "left" }}
     >
       {average !== null && <Rating value={roundToHalf(average)} precision={0.5} readOnly size="small" aria-hidden />}
-      <span>{label}</span>
+      <Box component="span" sx={{ whiteSpace: "nowrap" }}>
+        {label}
+      </Box>
     </Button>
   );
 }
