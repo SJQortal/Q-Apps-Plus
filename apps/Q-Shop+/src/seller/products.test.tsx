@@ -888,6 +888,39 @@ describe("sorting the products by their columns", () => {
     expect(within(list).getAllByText(/in shop order/).map((el) => el.parentElement?.textContent)).toEqual(["1 in shop order", "2 in shop order", "3 in shop order"]);
   });
 
+  it("puts a product in collections from its form, and takes it out: the change waits with the unpublished collections", async () => {
+    installVisibleIntersectionObserver();
+    const collectionsId = `q-store-collections-${SHORT_STORE_ID}`;
+    stubNode({
+      served: new Map([
+        [collectionsId, { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id, poster.id] }, { id: "ARTxxxxxx1", title: "Art", products: [] }] }],
+      ]),
+    });
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer({ ...dataContainer, collectionsId }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    await waitFor(() => expect(within(list).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toContain("Mugs"));
+    fireEvent.click(within(list).getByRole("button", { name: /^Edit.*\bPoster\b/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    const field = await within(dialog).findByRole("combobox", { name: "Collections" });
+    await waitFor(() => expect(field).not.toBeDisabled());
+    // In Mugs now; out of Mugs, into Art.
+    const chips = () => within(dialog).getAllByRole("button").map((b) => b.textContent).filter((t) => t === "Mugs" || t === "Art");
+    await waitFor(() => expect(chips()).toEqual(["Mugs"]));
+    fireEvent.keyDown(field, { key: "Backspace" });
+    fireEvent.mouseDown(field);
+    fireEvent.click(await screen.findByRole("option", { name: "Art" }));
+    expect(chips()).toEqual(["Art"]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit product" })).toBeNull());
+    // Nothing else changed, so the product itself has no draft; the collections do.
+    expect(store.getState().global.productsToSave[poster.id]).toBeUndefined();
+    expect(collectionDrafts.get(collectionsDraftKey(SELLER, STORE_ID))?.map((c) => [c.title, c.products])).toEqual([
+      ["Mugs", [mug.id]],
+      ["Art", [poster.id]],
+    ]);
+  });
+
   it("arranges a collection from its line: the new order waits with the unpublished collections, and the list shows it", async () => {
     const collectionsId = `q-store-collections-${SHORT_STORE_ID}`;
     stubNode({ served: new Map([[collectionsId, { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id, poster.id, "gone-product"] }] }]]) });

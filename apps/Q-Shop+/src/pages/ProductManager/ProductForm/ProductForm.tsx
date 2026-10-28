@@ -8,7 +8,7 @@ import { percentOff } from "../../../sale/compareAt";
 import { StockFields } from "../../../stock/StockFields";
 import { useStockLeft } from "../../../stock/notes";
 import { shortStoreIdOf } from "../../../qdn/identifiers";
-import { Suspense, useId, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { Suspense, useId, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import {
   Box,
   Button,
@@ -90,6 +90,8 @@ interface ProductFormProps {
   shopTitle?: string;
   /** Editing a variant group (variants/drafts.ts): its items' stock is theirs, and it sells at a price. */
   variantGroup?: { removed: RemovedItem[] } | null;
+  /** The shop's collections it's in (seller/CollectionsField.tsx), under its category. */
+  collectionsField?: ReactNode;
 }
 
 /** One part of the form: a panel of its own on wider screens, plain on phones. */
@@ -141,6 +143,7 @@ export const ProductForm = ({
   publisher = null,
   shopTitle,
   variantGroup = null,
+  collectionsField = null,
 }: ProductFormProps) => {
   const picturesLocked = !!picturesLoad;
   const descriptionLabel = useId();
@@ -359,6 +362,7 @@ export const ProductForm = ({
             </Button>
           </Box>
         )}
+        {collectionsField}
         {editing && values.sale === "auction" && (
           <Box>
             <Typography id="product-listing-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
