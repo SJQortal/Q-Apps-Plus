@@ -14,7 +14,7 @@ vi.mock("../components/common/ImageUploader", async (load) => ({
   compressImage: async () => "data:image/webp;base64,ROUND",
 }));
 
-const dataTransfer = () => ({ setData: () => {}, effectAllowed: "" });
+const pointer = (type: string, x: number) => Object.assign(new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: 0 }), { pointerId: 1, pointerType: "mouse" });
 
 describe("the variants editor", () => {
   it("adds a variant's new picture to the product's pictures too", async () => {
@@ -32,8 +32,10 @@ describe("the variants editor", () => {
     const onChange = vi.fn();
     renderWithProviders(<VariantsEditor value={form} onChange={onChange} images={[]} unit="QORT" basePrice="10" />);
     const chips = within(screen.getByRole("list", { name: "Round: values" })).getAllByRole("listitem");
-    fireEvent.dragStart(chips[2], { dataTransfer: dataTransfer() });
-    fireEvent.dragOver(chips[0], { dataTransfer: dataTransfer() });
+    // A mouse drags Red over Pale (hooks/usePointerReorder.ts).
+    document.elementFromPoint = (() => chips[0]) as never;
+    fireEvent(chips[2], pointer("pointerdown", 0));
+    fireEvent(window, pointer("pointermove", 100));
     expect(onChange).toHaveBeenLastCalledWith({ ...form, options: [{ ...form.options[0], values: [{ name: "Red" }, { name: "Pale" }, { name: "Orange" }] }] });
     expect(moved(["a", "b", "c"], 0, 2)).toEqual(["b", "c", "a"]);
     expect(moved(["a"], 0, 3)).toEqual(["a"]);

@@ -27,7 +27,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function Rows({ onMove }: { onMove: (from: number, to: number) => void }) {
+  const { itemProps, handleProps } = usePointerReorder(onMove, { handle: true });
+  return (
+    <ul>
+      {["a", "b"].map((x, i) => (
+        <li key={x} {...itemProps(i)} data-testid={x}>
+          <span {...handleProps} data-testid={`handle ${x}`} />
+          <input aria-label={`field ${x}`} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 describe("drag to reorder", () => {
+  it("in rows of fields, drags only by the handle, and a finger drags from it at once", () => {
+    const onMove = vi.fn();
+    const { getByTestId, getByLabelText } = render(<Rows onMove={onMove} />);
+    document.elementFromPoint = (() => getByTestId("b")) as never;
+    fireEvent(getByLabelText("field a"), pointer("pointerdown", { clientX: 0, clientY: 0 }));
+    fireEvent(window, pointer("pointermove", { clientX: 0, clientY: 90 }));
+    expect(onMove).not.toHaveBeenCalled();
+    fireEvent(window, pointer("pointerup", { clientX: 0, clientY: 90 }));
+    fireEvent(getByTestId("handle a"), pointer("pointerdown", { clientX: 0, clientY: 0, pointerType: "touch" }));
+    fireEvent(window, pointer("pointermove", { clientX: 0, clientY: 90, pointerType: "touch" }));
+    expect(onMove).toHaveBeenCalledWith(0, 1);
+  });
+
   it("moves an item a mouse drags over another", () => {
     const onMove = vi.fn();
     const { getByTestId } = render(<List onMove={onMove} />);

@@ -218,7 +218,7 @@ export const ProductForm = ({
       next.splice(to, 0, img);
       return { ...prev, images: next };
     });
-  const reorder = usePointerReorder(moveImage, picturesLocked);
+  const reorder = usePointerReorder(moveImage, { disabled: picturesLocked });
   // Keys that follow a picture when it moves (a dragged one stays mounted, so a finger's drag goes on):
   // its data's length and middle (PNG and WebP data end alike), then which copy of it, in order.
   const imageKeys = useMemo(() => {

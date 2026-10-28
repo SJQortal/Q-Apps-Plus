@@ -2,7 +2,8 @@
  * Drag to reorder with pointer events, so it works with a mouse in Hub and
  * with a finger in GO (HTML drag and drop doesn't, on touch). A mouse drags
  * once it moves a few pixels; a finger presses and holds first, so a swipe
- * still scrolls the page. While an item is dragged over another, the list
+ * still scrolls the page (or drags at once from a handle, in a list of rows
+ * with fields). While an item is dragged over another, the list
  * moves it there (onMove), as the variants editor's drag does.
  */
 import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
@@ -21,7 +22,13 @@ interface Press {
   timer: ReturnType<typeof setTimeout> | null;
 }
 
-export function usePointerReorder(onMove: (from: number, to: number) => void, disabled = false) {
+export interface PointerReorderOptions {
+  disabled?: boolean;
+  /** Only an element marked `data-reorder-handle` starts a drag (a row of fields), and a finger drags from it at once. */
+  handle?: boolean;
+}
+
+export function usePointerReorder(onMove: (from: number, to: number) => void, { disabled = false, handle = false }: PointerReorderOptions = {}) {
   const list = useId();
   const press = useRef<Press | null>(null);
   const move = useRef(onMove);
@@ -88,11 +95,12 @@ export function usePointerReorder(onMove: (from: number, to: number) => void, di
     "data-reorder-index": index,
     onPointerDown: (e: ReactPointerEvent) => {
       if (disabled || (e.pointerType === "mouse" && e.button !== 0)) return;
-      // Its buttons (star, remove) are pressed, not dragged.
-      if ((e.target as Element).closest("button")) return;
+      const target = e.target as Element;
+      if (handle ? !target.closest("[data-reorder-handle]") : target.closest("button, input, textarea, select, [contenteditable]")) return;
       const touch = e.pointerType !== "mouse";
-      const p: Press = { pointerId: e.pointerId, index, x: e.clientX, y: e.clientY, touch, started: false, timer: null };
-      if (touch) {
+      const p: Press = { pointerId: e.pointerId, index, x: e.clientX, y: e.clientY, touch, started: touch && handle, timer: null };
+      if (p.started) setDragging(index);
+      else if (touch) {
         p.timer = setTimeout(() => {
           if (press.current !== p) return;
           p.started = true;
@@ -109,5 +117,8 @@ export function usePointerReorder(onMove: (from: number, to: number) => void, di
     onDragStart: (e: { preventDefault: () => void }) => e.preventDefault(),
   });
 
-  return { itemProps, dragging };
+  /** For the handle of a `handle` list: a finger on it drags rather than scrolls. */
+  const handleProps = { "data-reorder-handle": "", style: { touchAction: "none" as const } };
+
+  return { itemProps, handleProps, dragging };
 }
