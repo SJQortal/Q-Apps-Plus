@@ -60,6 +60,7 @@ import { VariantsEditor, type RemovedItem } from "../../../variants/VariantsEdit
 import { itemExtraCoins, variantPriceUnit } from "../../../variants/drafts";
 import { joinDescription, splitDescription } from "../../../richtext/embeds";
 import { lazyWithRetry } from "../../../utils/lazyWithRetry";
+import { usePointerReorder } from "../../../hooks/usePointerReorder";
 
 interface ProductFormProps {
   values: ProductFormValues;
@@ -209,6 +210,26 @@ export const ProductForm = ({
       const [img] = next.splice(index, 1);
       return { ...prev, images: [img, ...next] };
     });
+  // Drag a picture to move it: a mouse in Hub, a press and hold in GO (hooks/usePointerReorder.ts).
+  const moveImage = (from: number, to: number) =>
+    onChange((prev) => {
+      const next = prev.images.slice();
+      const [img] = next.splice(from, 1);
+      next.splice(to, 0, img);
+      return { ...prev, images: next };
+    });
+  const reorder = usePointerReorder(moveImage, picturesLocked);
+  // Keys that follow a picture when it moves (a dragged one stays mounted, so a finger's drag goes on):
+  // its data's length and middle (PNG and WebP data end alike), then which copy of it, in order.
+  const imageKeys = useMemo(() => {
+    const seen = new Map<string, number>();
+    return values.images.map((img) => {
+      const base = `${img.length}:${img.slice(Math.floor(img.length / 2), Math.floor(img.length / 2) + 32)}`;
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      return `${base}#${n}`;
+    });
+  }, [values.images]);
 
   return (
     // Wide windows: pictures on the left, what it is and its price on the right, the description under both (Simon, 2026-10-24: "wider … nicely and simply arranged").
@@ -222,12 +243,22 @@ export const ProductForm = ({
             sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(30%, 108px), 1fr))", gap: 1 }}
           >
             {values.images.map((img, index) => (
-              <Box component="li" key={`${index}-${img.slice(-24)}`} sx={{ display: "flex", flexDirection: "column", gap: 0.5 }}>
+              <Box
+                component="li"
+                key={imageKeys[index]}
+                {...reorder.itemProps(index)}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5, opacity: reorder.dragging === index ? 0.6 : 1 }}
+              >
                 <Box
                   component="img"
                   src={img}
                   alt={`${title}, image ${index + 1}${index === 0 ? " (main)" : ""}`}
+                  draggable={false}
                   sx={{
+                    cursor: picturesLocked ? undefined : reorder.dragging === null ? "grab" : "grabbing",
+                    userSelect: "none",
+                    WebkitTouchCallout: "none",
+                    ...(reorder.dragging === index && { outline: 2, outlineColor: "primary.main", outlineOffset: 2 }),
                     width: "100%",
                     aspectRatio: "1 / 1",
                     objectFit: "cover",
@@ -306,7 +337,8 @@ export const ProductForm = ({
           />
         </Suspense>
         <Typography variant="body2" color="text.secondary">
-          The first picture is the cover in lists (star another to make it the cover). Q-Shop, the original app, shows the first 3.
+          Drag a picture to move it (on a phone, press and hold it first). The first is the cover in lists: star another to make it the
+          cover. Q-Shop, the original app, shows the first 3.
         </Typography>
       </Box>
 
