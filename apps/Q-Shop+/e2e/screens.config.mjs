@@ -889,6 +889,33 @@ export default {
       if (JSON.stringify(after) !== JSON.stringify([before[1], before[2], before[0]])) throw new Error(`touch drag didn't move the picture: ${JSON.stringify(after.map((a) => a?.slice(-12)))}`);
       await page.waitForTimeout(300);
     } },
+    // A variant's values move by a finger too: the first value held and dragged onto the last.
+    { key: 'seller-variants-drag-touch', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron\b/ }).first().click({ timeout: 10000 });
+      const dialog = page.getByRole('dialog', { name: 'Edit product' });
+      const list = dialog.getByRole('list', { name: /: values$/ }).first();
+      const chips = list.getByRole('listitem');
+      await chips.nth(1).waitFor({ timeout: 10000 });
+      await list.scrollIntoViewIfNeeded();
+      const names = () => chips.evaluateAll((els) => els.map((el) => el.textContent));
+      const before = await names();
+      const last = before.length - 1;
+      const from = await chips.nth(0).locator('span[tabindex="0"]').boundingBox();
+      const to = await chips.nth(last).locator('span[tabindex="0"]').boundingBox();
+      const cdp = await page.context().newCDPSession(page);
+      const at = (x, y) => [{ x, y }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(from.x + from.width / 2, from.y + from.height / 2) });
+      await page.waitForTimeout(450);
+      for (let i = 1; i <= 8; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(from.x + from.width / 2 + ((to.x - from.x) * i) / 8, from.y + from.height / 2 + ((to.y - from.y) * i) / 8) });
+        await page.waitForTimeout(30);
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      const after = await names();
+      if (after[last] !== before[0]) throw new Error(`touch drag didn't move the value: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+      await page.waitForTimeout(300);
+    } },
     { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-publish-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a video' }); await d.getByRole('tab', { name: 'Publish' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a PDF or file' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Publish a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
