@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderWithProviders } from "../test/renderWithProviders";
 import { VariantsEditor, moved } from "./VariantsEditor";
 import type { VariantFormValues } from "./drafts";
@@ -9,9 +9,25 @@ const form: VariantFormValues = {
   display: "bundle",
   rows: {},
 };
+vi.mock("../components/common/ImageUploader", async (load) => ({
+  ...(await load<typeof import("../components/common/ImageUploader")>()),
+  compressImage: async () => "data:image/webp;base64,ROUND",
+}));
+
 const dataTransfer = () => ({ setData: () => {}, effectAllowed: "" });
 
 describe("the variants editor", () => {
+  it("adds a variant's new picture to the product's pictures too", async () => {
+    const onChange = vi.fn();
+    const onAddImage = vi.fn();
+    renderWithProviders(<VariantsEditor value={form} onChange={onChange} onAddImage={onAddImage} images={[]} unit="QORT" basePrice="10" />);
+    const button = screen.getByRole("button", { name: "Add a picture of Round" });
+    const input = button.parentElement!.querySelector<HTMLInputElement>('input[type="file"]')!;
+    fireEvent.change(input, { target: { files: [new File(["x"], "round.png", { type: "image/png" })] } });
+    await waitFor(() => expect(onAddImage).toHaveBeenCalledWith("data:image/webp;base64,ROUND"));
+    expect(onChange).toHaveBeenLastCalledWith({ ...form, options: [{ ...form.options[0], picture: "data:image/webp;base64,ROUND" }] });
+  });
+
   it("moves a value where it is dragged", () => {
     const onChange = vi.fn();
     renderWithProviders(<VariantsEditor value={form} onChange={onChange} images={[]} unit="QORT" basePrice="10" />);

@@ -586,6 +586,11 @@ export const ProductForm = ({
             unit={itemUnit}
             basePrice={basePrice}
             onImageError={onImageError}
+            onAddImage={(image) =>
+              onChange((prev) =>
+                picturesLocked || prev.images.includes(image) || prev.images.length >= MAX_PRODUCT_IMAGES ? prev : { ...prev, images: [...prev.images, image] }
+              )
+            }
             group={variantGroup}
             stock={values.stock?.tracked ? { left: groupStock.left } : null}
             extraCoins={itemExtraCoins(coins, pricing).map((coin) => ({ coin, label: coinLabel(coin, shop), whole: wholeOnly.includes(coin), base: values.prices[coin] ?? "" }))}

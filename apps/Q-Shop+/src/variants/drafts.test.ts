@@ -228,8 +228,22 @@ describe("editing a published group", () => {
     expect(dropped).toEqual([members[1].id]);
     expect(drafts.map((d) => d.id)).toEqual([members[2].id, members[0].id]);
     expect(drafts.every((d) => d.variant.lead === members[2].id)).toBe(true);
-    // Square / Pale now carries its picture, then the product's; the old lead shows the product's first.
-    expect(drafts[0].images).toEqual([A, ROUND, B, C]);
+    // Square / Pale now carries the product's pictures; listed as one product, its card is the product's
+    // main (starred) picture, and its own (A) is among them. The old lead shows the product's first.
+    expect(drafts[0].images).toEqual([ROUND, A, B, C]);
+    // Listed each on its own, the lead's card shows its own picture first.
+    const separate = groupEditDrafts({
+      values: lead,
+      form: { ...edited, display: "separate" },
+      group: members[0].variant.group,
+      members,
+      coins: ["QORT"],
+      storeId: "q-store-general-my-shop",
+      name: "Seller Name",
+      uid,
+      now: 2000,
+    });
+    expect(separate.drafts[0].images).toEqual([A, ROUND, B, C]);
     expect(drafts[1].images).toEqual([ROUND]);
     // Still drafts of new products.
     expect(drafts.every((d) => !d.isUpdate)).toBe(true);

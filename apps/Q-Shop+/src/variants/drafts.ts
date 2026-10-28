@@ -234,8 +234,11 @@ function itemValues(
   pricing: FiatPricing | null | undefined
 ): ProductFormValues {
   const own = row.picture ?? used.find((o) => o.name === item[0])?.picture ?? null;
+  // Listed as one product, its card is the lead's first picture: the product's main (starred) one when the
+  // lead's own is among the product's; listed each on its own, the lead's card shows its own first.
+  const mainFirst = form.display === "bundle" && !!own && values.images.includes(own);
   const images = lead
-    ? [...new Set([own, ...values.images].filter((img): img is string => !!img))].slice(0, MAX_PRODUCT_IMAGES)
+    ? [...new Set((mainFirst ? values.images : [own, ...values.images]).filter((img): img is string => !!img))].slice(0, MAX_PRODUCT_IMAGES)
     : [own ?? values.images[0]].filter((img): img is string => !!img);
   const price = row.price.trim();
   const inFiat = variantPriceUnit(values, pricing) !== "QORT";

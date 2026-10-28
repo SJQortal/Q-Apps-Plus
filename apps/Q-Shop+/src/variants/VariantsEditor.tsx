@@ -304,6 +304,7 @@ export function VariantsEditor({
   unit,
   basePrice,
   onImageError,
+  onAddImage,
   group = null,
   extraCoins = [],
   stock = null,
@@ -318,6 +319,8 @@ export function VariantsEditor({
   /** The product's price as typed ("12", or "12 QORT" when it isn't in the items' unit), each item's when it has none of its own. */
   basePrice: string;
   onImageError?: (message: string) => void;
+  /** A picture added for a variant or an item: also one of the product's, to move or star (Simon, 2026-10-28). */
+  onAddImage?: (image: string) => void;
   /** Editing a published group: the products taken out of it so far. */
   group?: { removed: RemovedItem[] } | null;
   /** The shop's other coins an item can have its own price in (variants/drafts.ts itemExtraCoins), with the product's price in each. */
@@ -398,7 +401,15 @@ export function VariantsEditor({
                   <Box sx={{ gridColumn: { xs: "2 / -1", sm: "3" }, gridRow: { xs: "2", sm: "1" }, minWidth: 0 }}>
                     <ValuesField label={name} values={option.values} onChange={(values) => setOption(i, { values })} />
                   </Box>
-                  <PictureButton picture={option.picture} label={name} onPick={(picture) => setOption(i, { picture })} onError={onImageError} />
+                  <PictureButton
+                    picture={option.picture}
+                    label={name}
+                    onPick={(picture) => {
+                      setOption(i, { picture });
+                      if (picture) onAddImage?.(picture);
+                    }}
+                    onError={onImageError}
+                  />
                   <IconButton
                     aria-label={`Remove ${name}`}
                     onClick={() => (form.options.length === 1 ? onChange(null) : set({ options: form.options.filter((_, j) => j !== i) }))}
@@ -418,8 +429,8 @@ export function VariantsEditor({
             </Button>
           )}
           <Typography variant="body2" color="text.secondary">
-            A variant without values is one item (a gift box, say). A variant&apos;s picture is its items&apos;, unless an item has its own below. Drag a
-            value or a variant to move it.
+            A variant without values is one item (a gift box, say). A variant&apos;s picture is its items&apos;, unless an item has its own below. A picture added
+            here is also added to the product&apos;s pictures (while there are fewer than 10), to move or star as the main one. Drag a value or a variant to move it.
           </Typography>
 
           {section(
@@ -520,7 +531,15 @@ export function VariantsEditor({
                             ))}
                           </ToggleButtonGroup>
                         )}
-                        <PictureButton picture={own} label={label} onPick={(picture) => setRow(key, { picture })} onError={onImageError} />
+                        <PictureButton
+                          picture={own}
+                          label={label}
+                          onPick={(picture) => {
+                            setRow(key, { picture });
+                            if (picture) onAddImage?.(picture);
+                          }}
+                          onError={onImageError}
+                        />
                       </Box>
                       {stock && (
                         <TextField
