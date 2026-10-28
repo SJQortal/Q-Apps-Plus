@@ -19,7 +19,7 @@ export const CHANGELOG: Release[] = [
     title: "Edit from the product page, collections in the form",
     notes: [
       "On your own product's page: Edit product opens its form, and View as customer shows the page as buyers see it (their buttons shown, but they don't work there).",
-      "Drag a product's pictures to put them in order as you add or edit it: with a mouse, or on a phone by pressing and holding a picture first.",
+      "Drag a product's pictures, its variants and their values to put them in order as you add or edit it: with a mouse, or on a phone by pressing and holding first (a variant by its handle).",
       "A picture you add for a variant or an item is also added to the product's pictures, where you can move it or star it as the main one; a product listed as one shows its starred picture on its card.",
       "The product form has Collections: put a product in your shop's collections, or take it out, as you add or edit it. A product in variants goes in with all its items.",
       "A variant's items are named with a bar, \"Glasses | Round / Pale\", instead of a dash. Items saved before keep theirs until their product is saved again.",
