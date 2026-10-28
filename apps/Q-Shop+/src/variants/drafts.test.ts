@@ -65,7 +65,7 @@ describe("the form's variants", () => {
       uid,
       now: 1000,
     });
-    expect(drafts.map((d) => d.title)).toEqual(["Glasses — Round / Pale", "Glasses — Round / Orange", "Glasses — Square / Pale"]);
+    expect(drafts.map((d) => d.title)).toEqual(["Glasses | Round / Pale", "Glasses | Round / Orange", "Glasses | Square / Pale"]);
     expect(drafts.map((d) => (d.price as { value: number }[])[0].value)).toEqual([10, 12, 10]);
     // The lead: its own (the variant's) picture, then the product's; the others theirs only.
     expect(drafts[0].images).toEqual([ROUND, A, B, C]);
@@ -182,11 +182,11 @@ describe("editing a published group", () => {
     });
     expect(dropped).toEqual([]);
     expect(drafts.map((d) => [d.id, d.title, d.price[0].value, d.status, d.isUpdate ?? false])).toEqual([
-      [members[0].id, "Blue-light glasses — Oval / Pale", 11, "AVAILABLE", true],
-      ["q-store-product-my-shop-UID0000005", "Blue-light glasses — Oval / Blue", 11, "AVAILABLE", false],
-      [members[2].id, "Blue-light glasses — Square / Pale", 11, "AVAILABLE", true],
+      [members[0].id, "Blue-light glasses | Oval / Pale", 11, "AVAILABLE", true],
+      ["q-store-product-my-shop-UID0000005", "Blue-light glasses | Oval / Blue", 11, "AVAILABLE", false],
+      [members[2].id, "Blue-light glasses | Square / Pale", 11, "AVAILABLE", true],
       // Taken out: retired as it was, no longer in the group.
-      [members[1].id, "Glasses — Round / Orange", 12, "RETIRED", true],
+      [members[1].id, "Glasses | Round / Orange", 12, "RETIRED", true],
     ]);
     expect(drafts[3].variant).toBeUndefined();
     const group = members[0].variant.group;

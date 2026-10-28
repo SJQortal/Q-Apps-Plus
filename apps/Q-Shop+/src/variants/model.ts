@@ -11,7 +11,7 @@
  *
  * Each item is a product of its own: its id, price, stock and pictures. So
  * the cart, checkout and orders don't change, and the original Q-Shop lists
- * each as an item for sale, named for it ("Glasses — Round / Pale"). A group
+ * each as an item for sale, named for it ("Glasses | Round / Pale"). A group
  * ties them, additively:
  * - each item's product (catalogue) gains
  *   `variant: {group, title, options: [{name, values: [{name, color?}]}], values: [variant, value?], display, lead}`;
@@ -158,9 +158,13 @@ export function itemCount(options: VariantOption[]): number {
   return options.reduce((n, o) => n + Math.max(1, o.values.length), 0);
 }
 
-/** "Glasses — Round / Pale": the item's product title, as the original lists it. */
+/**
+ * "Glasses | Round / Pale": the item's product title, as the original lists it
+ * (Simon, 2026-10-28: "|", not the "—" of items saved before 1.0.1, which keep
+ * theirs until their product is saved again).
+ */
 export function variantTitle(title: string, values: string[]): string {
-  return `${title.trim()} — ${values.join(" / ")}`;
+  return `${title.trim()} | ${values.join(" / ")}`;
 }
 
 /** "Round / Pale" */

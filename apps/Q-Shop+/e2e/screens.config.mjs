@@ -90,8 +90,8 @@ function product(s, p) {
     ...(s.short === 'shop-3' && p === 0 && RICH),
     // The seller's own product with a video and a PDF (the product form shows them under its pictures).
     ...(s.short === 'my-shop' && p === 2 && MY_MEDIA),
-    ...(variantOfFixture(s, p) && { title: `Hand-thrown mug — ${VARIANT_COMBOS[p].join(' / ')}`, type: 'physical', price: [{ currency: 'qort', value: 18 + p * 2 }], status: p === 3 ? 'OUT_OF_STOCK' : 'AVAILABLE', variant: variantOfFixture(s, p) }),
-    ...(apronOf(s, p) && { title: `Linen apron — ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
+    ...(variantOfFixture(s, p) && { title: `Hand-thrown mug | ${VARIANT_COMBOS[p].join(' / ')}`, type: 'physical', price: [{ currency: 'qort', value: 18 + p * 2 }], status: p === 3 ? 'OUT_OF_STOCK' : 'AVAILABLE', variant: variantOfFixture(s, p) }),
+    ...(apronOf(s, p) && { title: `Linen apron | ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
     ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
     // A big price (Simon's phone, 2026-10-27: "12,800.00 BHC Coin each" squeezed the cart line's title to a sliver).
@@ -653,14 +653,14 @@ export default {
     } },
     { key: 'seller-edit-variants', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
       await page.getByRole('searchbox', { name: 'Search your products' }).fill('apron', { timeout: 8000 });
-      await page.getByRole('button', { name: /^Edit\b.*Linen apron — Small \/ Indigo\b/ }).click({ timeout: 10000 });
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron \| Small \/ Indigo\b/ }).click({ timeout: 10000 });
       const d = page.getByRole('dialog', { name: 'Edit product' });
       await d.getByRole('list', { name: 'Items' }).scrollIntoViewIfNeeded({ timeout: 10000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-edit-variants-removed', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
       await page.getByRole('searchbox', { name: 'Search your products' }).fill('apron', { timeout: 8000 });
-      await page.getByRole('button', { name: /^Edit\b.*Linen apron — Large \/ Natural\b/ }).click({ timeout: 10000 });
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron \| Large \/ Natural\b/ }).click({ timeout: 10000 });
       const d = page.getByRole('dialog', { name: 'Edit product' });
       await d.getByRole('button', { name: 'Remove Indigo' }).click({ timeout: 10000 });
       await d.getByRole('switch', { name: 'In stock: Large / Natural' }).click();

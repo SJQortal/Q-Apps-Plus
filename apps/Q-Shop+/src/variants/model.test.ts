@@ -14,7 +14,7 @@ describe("variants", () => {
   it("are each variant's own values, or the variant alone, never mixed across variants", () => {
     expect(variantItems(options)).toEqual([["Round", "Pale"], ["Round", "Orange"], ["Round", "Red"], ["Round", "Yellow"], ["Square", "Pale"], ["Gift box"]]);
     expect(itemCount(options)).toBe(6);
-    expect(variantTitle(" Glasses ", ["Round", "Pale"])).toBe("Glasses — Round / Pale");
+    expect(variantTitle(" Glasses ", ["Round", "Pale"])).toBe("Glasses | Round / Pale");
     expect(colorOf(options, ["Round", "Orange"])).toBe("#f97316");
     expect(colorOf(options, ["Round", "Red"])).toBeUndefined();
   });
