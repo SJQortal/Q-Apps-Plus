@@ -163,6 +163,16 @@ describe("the products tab", () => {
     expect(within(await screen.findByRole("list", { name: "Products" })).getAllByRole("listitem")).toHaveLength(3);
   });
 
+  it("opens a product's form from its page's Edit product (?edit=), once", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    setup({}, `/product-manager/${STORE_ID}?tab=products&edit=${encodeURIComponent(poster.id)}`);
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    expect(within(dialog).getByRole("textbox", { name: /^Title/ })).toHaveValue("Poster");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit product" })).toBeNull());
+  });
+
   it("an edit starts from the product's prices and keeps the ARRR price (bug 3)", async () => {
     installVisibleIntersectionObserver();
     stubNode();

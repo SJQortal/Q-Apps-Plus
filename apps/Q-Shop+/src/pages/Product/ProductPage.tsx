@@ -24,7 +24,7 @@ import { stockOf, type ProductStock } from "../../stock/model";
 import { useStockLeft, type StockItem } from "../../stock/notes";
 import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
-import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { Link as RouterLink, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Alert, Box, Button, Chip, Divider, IconButton, InputBase, Link, Skeleton, Typography } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
@@ -32,7 +32,9 @@ import AddShoppingCartOutlinedIcon from "@mui/icons-material/AddShoppingCartOutl
 import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
-import SellOutlinedIcon from "@mui/icons-material/SellOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import VisibilityOutlinedIcon from "@mui/icons-material/VisibilityOutlined";
+import ArrowBackOutlinedIcon from "@mui/icons-material/ArrowBackOutlined";
 import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
 import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
 import { setProductToCart, MAX_QUANTITY } from "../../state/features/cartSlice";
@@ -193,6 +195,21 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { shop, shopStatus, isOwner, index } = useViewedShop(owner, storeId);
+  // The seller sees their own product as a buyer does with `?view=customer`: the buyer's buttons
+  // are shown but don't work (inert), so nothing is bought, bid on or saved from this view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const asCustomer = isOwner && searchParams.get("view") === "customer";
+  const ownerView = isOwner && !asCustomer;
+  const setCustomerView = (on: boolean) =>
+    setSearchParams(
+      (now) => {
+        const next = new URLSearchParams(now);
+        if (on) next.set("view", "customer");
+        else next.delete("view");
+        return next;
+      },
+      { replace: true }
+    );
   const { catalogue, status, retry } = useCatalogue(owner, catalogueId);
   // Read after the product itself (its catalogue), never competing with it: a collections
   // document holds a picture per collection.
@@ -399,7 +416,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
                 owner={owner}
                 storeId={storeId}
                 shop={shop}
-                isOwner={isOwner}
+                isOwner={ownerView}
+                preview={asCustomer}
               />
             </Suspense>
           ) : (
@@ -441,19 +459,30 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
           {(!auctionTerms || product.status === RETIRED) && stockLine(product.status, auctionTerms ? undefined : unitsLeft)}
           {/* Away for a while (shop/away.ts): before adding it to the cart. */}
           <AwayNotice shop={shop as { away?: unknown; title?: string } | null} />
-          {auctionTerms ? null : isOwner ? (
+          {ownerView ? (
             <Alert
               severity="info"
               action={
-                <Button color="inherit" startIcon={<SellOutlinedIcon />} onClick={() => navigate(`/product-manager/${encodeURIComponent(storeId)}`)} sx={{ minHeight: 44 }}>
-                  Manage Shop
-                </Button>
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                  {/* The seller page opens the product's form (seller/ProductsTab.tsx `edit`); an item in variants opens its whole product. */}
+                  <Button
+                    color="inherit"
+                    startIcon={<EditOutlinedIcon />}
+                    onClick={() => navigate(`/product-manager/${encodeURIComponent(storeId)}?tab=products&edit=${encodeURIComponent(productId)}`)}
+                    sx={{ minHeight: 44 }}
+                  >
+                    Edit product
+                  </Button>
+                  <Button color="inherit" startIcon={<VisibilityOutlinedIcon />} onClick={() => setCustomerView(true)} sx={{ minHeight: 44 }}>
+                    View as customer
+                  </Button>
+                </Box>
               }
             >
               This is your product.
             </Alert>
-          ) : available ? (
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
+          ) : auctionTerms ? null : available ? (
+            <Box inert={asCustomer} sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5 }}>
               <QuantityStepper value={quantityText} onChange={setQuantityText} max={maxQuantity} />
               <Button
                 variant="contained"
@@ -486,8 +515,10 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
             </Typography>
           )}
           <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-            {!isOwner && (
-              <FavoriteButton fav={favoriteProduct(owner, storeId, productId, catalogueId)} label={productTitle || "this product"} variant="button" />
+            {!ownerView && (
+              <Box component="span" inert={asCustomer} sx={{ display: "contents" }}>
+                <FavoriteButton fav={favoriteProduct(owner, storeId, productId, catalogueId)} label={productTitle || "this product"} variant="button" />
+              </Box>
             )}
             <CopyLinkButton link={productLink(owner, storeId, productId, catalogueId)} label="Share" />
             <Button component={RouterLink} to={shopPath} variant="outlined" color="inherit" startIcon={<StorefrontOutlinedIcon />} sx={{ minHeight: 44 }}>
@@ -534,8 +565,22 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
               {!namedAfterOwner(shopName, owner) && ` by ${owner}`}
             </>
           }
-          actions={!isOwner ? <CartButton /> : undefined}
+          actions={!ownerView ? <CartButton /> : undefined}
         />
+        {asCustomer && (
+          <Alert
+            severity="info"
+            role="status"
+            action={
+              <Button color="inherit" startIcon={<ArrowBackOutlinedIcon />} onClick={() => setCustomerView(false)} sx={{ minHeight: 44 }}>
+                Back to your view
+              </Button>
+            }
+            sx={{ mb: 2 }}
+          >
+            This is how buyers see your product. Their buttons are shown but don&apos;t work here.
+          </Alert>
+        )}
         {/* A product with data this page can't show leaves the header and navigation in place. */}
         {/* A new boundary (and content) for another product; a variant's items share one. */}
         <LocalBoundary
