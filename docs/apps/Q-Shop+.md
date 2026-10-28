@@ -2,9 +2,9 @@
 
 Decentralised shops: sellers publish a store and products; buyers order and pay in QORT, ARRR or Qortal assets.
 
-**Published:** not yet.
+**Published:** `1.0.0` on 2026-10-28 at 13:29 UTC, as the QDN `APP` resource `Q-Shop+`, built from commit `0fcdbe31`. Checked the same day on Simon's node: the live resource's 195 files (183 JavaScript chunks, content-hashed) have the same names as a fresh build of that commit, and its `index.html` is the same byte for byte. Simon published five builds before it while fixing things with the community, all as `1.0.0` because none was recorded here: 2026-10-26 at 14:36 UTC (the first), 15:49, 16:18 and 17:44, and 2026-10-27 at 13:38 (three minutes after the ppmSilver fix).
 
-**Version on the branch:** `1.0.0` (unpublished; replaces the old `1.0.0-plus.1`), branch `q-shop-plus/1.0.0`, PR [#32](https://github.com/SJQortal/Q-Apps-Plus/pull/32) (supersedes #8).
+**Version on the branch:** `1.0.0`, as published; branch `q-shop-plus/1.0.0`, PR [#32](https://github.com/SJQortal/Q-Apps-Plus/pull/32) (supersedes #8). The next update is `1.0.1`, on a branch `q-shop-plus/1.0.1` from `main`, with `package.json`, Settings → About and the changelog bumped first.
 
 ## Baseline at import
 
