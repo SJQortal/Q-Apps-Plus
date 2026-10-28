@@ -30,7 +30,7 @@ import { fiatPricingOf } from "../../../money/fiatPricing";
 import { needsMorePictures } from "../../../qdn/productPictures";
 import { auctionTermsOf } from "../../../auctions/rules";
 import { useMorePictures } from "../../../hooks/useMorePictures";
-import { groupEditDrafts, groupFormValues, removedMembers, variantDrafts, variantFormProblem } from "../../../variants/drafts";
+import { NO_ROW, formItems, groupEditDrafts, groupFormValues, removedMembers, variantDrafts, variantFormProblem } from "../../../variants/drafts";
 import { variantLabel, variantOf, type ProductVariant } from "../../../variants/model";
 import { useVariantGroup } from "../../../variants/useVariantGroup";
 import { sameContent } from "../../../seller/sameContent";
@@ -275,7 +275,7 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
     const now = Date.now();
-    const inVariants = (!product || !!group) && !!values.variants && values.sale !== "auction";
+    const inVariants = !!values.variants && values.sale !== "auction";
     const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product), imagesOptional: inVariants, priceOptional: inVariants });
     if (invalid) return setError(invalid);
     const { variants, ...form } = values;
@@ -301,6 +301,22 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
       for (const id of dropped) dispatch(removeFromProductsToSave(id));
       for (const draft of drafts) dispatch(setProductsToSave(draft));
       // The items still in the group (one taken out is retired, and left where it was).
+      saveCollections(drafts.filter((d) => !!(d as { variant?: unknown }).variant).map((d) => d.id));
+      onClose();
+      return;
+    }
+    // A saved product given variants: it becomes the first item, keeping its id (its link, reviews,
+    // favourites, collections and orders), and the other items are new (variants/drafts.ts groupEditDrafts).
+    if (product && inVariants && variants) {
+      if (picturesPending) return setError("The product's pictures are still being read from your node. Save once they are in.");
+      const problem = variantFormProblem(variants, trimmed, pricing, coinChecks);
+      if (problem) return setError(problem);
+      const first = formItems(variants)[0]?.key;
+      const form = first
+        ? { ...variants, rows: { ...variants.rows, [first]: { ...(variants.rows[first] ?? NO_ROW), productId: product.id, status: variants.rows[first]?.status ?? product.status } } }
+        : variants;
+      const { drafts } = groupEditDrafts({ values: trimmed, form, group: uid(), members: [product], coins, storeId: currentStore.id, name, uid: () => uid(), now, pricing });
+      for (const draft of drafts) dispatch(setProductsToSave(draft));
       saveCollections(drafts.filter((d) => !!(d as { variant?: unknown }).variant).map((d) => d.id));
       onClose();
       return;

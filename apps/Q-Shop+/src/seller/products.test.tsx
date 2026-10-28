@@ -973,6 +973,31 @@ describe("sorting the products by their columns", () => {
 });
 
 
+describe("giving a saved product variants", () => {
+  it("makes the product the first item, keeping its id, and the others new products in its group", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    const variants = within(dialog).getByRole("region", { name: "Variants" });
+    fireEvent.click(within(variants).getByRole("switch", { name: /It comes in variants/ }));
+    expect(within(variants).getByText(/This product becomes the first item/)).toBeInTheDocument();
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 1" }), { target: { value: "A3" } });
+    fireEvent.click(within(variants).getByRole("button", { name: "Add another variant" }));
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 2" }), { target: { value: "A2" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(2));
+    const drafts = Object.values(store.getState().global.productsToSave) as any[];
+    const first = store.getState().global.productsToSave[poster.id] as any;
+    expect(first).toMatchObject({ title: "Poster | A3", isUpdate: true, variant: { values: ["A3"], lead: poster.id } });
+    const other = drafts.find((d) => d.id !== poster.id);
+    expect(other).toMatchObject({ title: "Poster | A2", variant: { values: ["A2"], lead: poster.id, group: first.variant.group } });
+    expect(other.isUpdate ?? false).toBe(false);
+  });
+});
+
 describe("adding a product in variants", () => {
   it("makes a draft per item (each variant's own values), and publishes the group on the product list", async () => {
     installVisibleIntersectionObserver();

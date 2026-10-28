@@ -607,10 +607,15 @@ export const ProductForm = ({
           </Typography>
         </Box>
       </Box>
-      {/* A new product at a price can come in variants; a group is edited with all its items. */}
-      {(!saved || variantGroup) && values.sale !== "auction" && (
+      {/* A product at a price can come in variants, a saved one too (it becomes the first item); a group is edited with all its items. */}
+      {values.sale !== "auction" && (
         <Box component="section" aria-label="Variants" sx={[panelSx, { gridColumn: "1 / -1" }]}>
           <SectionTitle>Variants</SectionTitle>
+          {saved && !variantGroup && values.variants && (
+            <Typography variant="body2" color="text.secondary">
+              This product becomes the first item, so its link, reviews and favourites stay with it; the other items are new products.
+            </Typography>
+          )}
           <VariantsEditor
             value={values.variants ?? null}
             onChange={(variants) => onChange((prev) => ({ ...prev, variants }))}
