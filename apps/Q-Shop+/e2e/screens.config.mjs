@@ -847,6 +847,48 @@ export default {
     { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, expectErrors: /404|Failed to load resource/, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page, 2500); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    // The form's pictures move by dragging (hooks/usePointerReorder.ts): the first dragged onto the third.
+    { key: 'seller-product-drag', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^Edit\b.*Hand-thrown mug\b/ }).first().click({ timeout: 10000 });
+      const pics = page.getByRole('dialog', { name: 'Edit product' }).getByRole('list', { name: /^Pictures/ }).getByRole('img');
+      await pics.nth(2).waitFor({ timeout: 8000 });
+      const before = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      const from = await pics.nth(0).boundingBox();
+      const to = await pics.nth(2).boundingBox();
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2, { steps: 3 });
+      await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+      await page.mouse.up();
+      const after = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      if (JSON.stringify(after) !== JSON.stringify([before[1], before[2], before[0]])) throw new Error(`drag didn't move the picture: ${JSON.stringify(after.map((a) => a?.slice(-12)))}`);
+      await page.waitForTimeout(300);
+    } },
+    // The same with a finger (GO): press and hold, then drag, as touch events.
+    { key: 'seller-product-drag-touch', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^Edit\b.*Hand-thrown mug\b/ }).first().click({ timeout: 10000 });
+      const pics = page.getByRole('dialog', { name: 'Edit product' }).getByRole('list', { name: /^Pictures/ }).getByRole('img');
+      await pics.nth(2).waitFor({ timeout: 8000 });
+      await pics.nth(2).scrollIntoViewIfNeeded();
+      const before = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      const from = await pics.nth(0).boundingBox();
+      const to = await pics.nth(2).boundingBox();
+      const cdp = await page.context().newCDPSession(page);
+      const at = (box) => [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(from) });
+      await page.waitForTimeout(450);
+      for (let i = 1; i <= 8; i++) {
+        const box = { x: from.x + ((to.x - from.x) * i) / 8, y: from.y + ((to.y - from.y) * i) / 8, width: from.width, height: from.height };
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(box) });
+        await page.waitForTimeout(30);
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      const after = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      if (JSON.stringify(after) !== JSON.stringify([before[1], before[2], before[0]])) throw new Error(`touch drag didn't move the picture: ${JSON.stringify(after.map((a) => a?.slice(-12)))}`);
+      await page.waitForTimeout(300);
+    } },
     { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-publish-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a video' }); await d.getByRole('tab', { name: 'Publish' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a PDF or file' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Publish a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
