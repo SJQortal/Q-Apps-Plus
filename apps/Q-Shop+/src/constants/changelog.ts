@@ -2,7 +2,7 @@
  * The version shown in Settings → About and the changelog dialog. Keep it in
  * step with package.json's "version" (a test checks).
  */
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.0.1";
 
 export interface Release {
   version: string;
@@ -13,6 +13,14 @@ export interface Release {
 
 /** Newest first. */
 export const CHANGELOG: Release[] = [
+  {
+    version: "1.0.1",
+    date: "2026-10-28",
+    title: "Variant names",
+    notes: [
+      "A variant's items are named with a bar, \"Glasses | Round / Pale\", instead of a dash. Items saved before keep theirs until their product is saved again.",
+    ],
+  },
   {
     version: "1.0.0",
     date: "2026-10-25",
