@@ -1,36 +1,52 @@
-import React, { ReactNode } from 'react'
+import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Box } from "@mui/material";
+import ErrorOutlineOutlinedIcon from "@mui/icons-material/ErrorOutlineOutlined";
+import { EmptyState } from "./EmptyState";
+import { APP_NAME } from "../../constants/plus";
 
-interface ErrorBoundaryProps {
-  children: ReactNode
-  fallback: ReactNode
+interface Props {
+  children: ReactNode;
 }
 
-interface ErrorBoundaryState {
-  hasError: boolean
+interface State {
+  hasError: boolean;
 }
 
-class ErrorBoundary extends React.Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  state: ErrorBoundaryState = {
-    hasError: false
+/**
+ * Catches render errors below it and shows a friendly message with a Reload
+ * button instead of a blank screen. The error goes to the console.
+ */
+export class ErrorBoundary extends Component<Props, State> {
+  state: State = { hasError: false };
+
+  static getDerivedStateFromError(): State {
+    return { hasError: true };
   }
 
-  static getDerivedStateFromError(_: Error): ErrorBoundaryState {
-    return { hasError: true }
+  componentDidCatch(error: unknown, info: ErrorInfo): void {
+    console.error(`${APP_NAME} crashed while rendering:`, error, info.componentStack);
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // You can log the error and errorInfo here, for example, to an error reporting service.
-    console.error('Error caught in ErrorBoundary:', error, errorInfo)
-  }
+  private reload = () => {
+    window.location.reload();
+  };
 
-  render(): React.ReactNode {
-    if (this.state.hasError) return this.props.fallback
-
-    return this.props.children
+  render(): ReactNode {
+    if (this.state.hasError) {
+      return (
+        <Box sx={{ maxWidth: 520, mx: "auto", p: 2, pt: 6 }}>
+          <EmptyState
+            icon={<ErrorOutlineOutlinedIcon />}
+            title="Something went wrong"
+            description="This part of the app could not be shown. Reloading usually fixes it."
+            actionLabel="Reload"
+            onAction={this.reload}
+          />
+        </Box>
+      );
+    }
+    return this.props.children;
   }
 }
 
-export default ErrorBoundary
+export default ErrorBoundary;

@@ -1,0 +1,184 @@
+/**
+ * "New products" on the home page: the products in the four newest
+ * catalogues (DOCUMENT `q-store-catalogue-<shortStoreId>-<uid>`, up to ten
+ * products each, images inside; docs/apps/Q-Shop+.md → Data contract). Read
+ * only when the strip scrolls into view: one search of 4 rows, then each
+ * catalogue with FETCH_QDN_RESOURCE, as the original's fetchCatalogues does.
+ *
+ * Trust (docs/QORTAL.md → pitfall 15): another name can publish a catalogue
+ * under any identifier, so a product is shown only for a shop that is in the
+ * shop index under the same name that published the catalogue, and it links
+ * to that name's shop. Nothing here goes into the app's catalogue cache,
+ * which the cart reads prices from.
+ */
+import { CATALOGUE_BASE, storeIdentifier } from "../qdn/identifiers";
+import { mapWithConcurrency, QDN_SEARCH_TTL_MS, searchQdn, type QdnResourceSummary } from "../qdn/search";
+import { HIDDEN_TEST_SHOP_OWNER } from "./shopIndex";
+import { variantOf } from "../variants/model";
+
+export const NEW_CATALOGUES = 4;
+export const NEW_PRODUCTS_MAX = 12;
+
+const PREFIX = `${CATALOGUE_BASE}-`;
+
+/** A product as a catalogue holds it (the fields the strip reads). */
+export interface CatalogueProduct {
+  id: string;
+  title: string;
+  description?: string;
+  created: number;
+  type?: string;
+  images: string[];
+  mainImageIndex?: number;
+  price: { currency: string; value: number }[];
+  status?: string;
+}
+
+export interface NewProduct {
+  /** Owner, catalogue and product: unique. */
+  key: string;
+  owner: string;
+  storeId: string;
+  catalogueId: string;
+  product: CatalogueProduct;
+  /** The product's main image, a data URL. */
+  image: string;
+}
+
+/** The short shop id inside `q-store-catalogue-<shortStoreId>-<uid>` (the uid has no dashes), or null. */
+export function shortStoreIdOfCatalogue(identifier: string): string | null {
+  if (!identifier.startsWith(PREFIX)) return null;
+  const parts = identifier.slice(PREFIX.length).split("-");
+  if (parts.length < 2) return null;
+  return parts.slice(0, -1).join("-") || null;
+}
+
+function mainImage(product: CatalogueProduct): string | null {
+  const images = Array.isArray(product.images) ? product.images : [];
+  const index = Number.isInteger(product.mainImageIndex) ? (product.mainImageIndex as number) : 0;
+  const image = images[index] ?? images[0];
+  return typeof image === "string" && image.startsWith("data:image/") ? image : null;
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  const n = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * A catalogue entry as the strip shows it, or null. Catalogues are JSON any
+ * name can publish, and a title like `{"a": 1}` was rendered as a React
+ * child, which threw and blanked the whole app for every visitor while the
+ * catalogue was among the newest. So the title must be text, the date a
+ * number, the pictures and prices lists, and the status text (or nothing).
+ *
+ * Not the original's checkStructure (a Q-Blog leftover the original never
+ * ran on catalogue products): it also wants a description and a type, and
+ * neither the original's product form nor the + app's requires a
+ * description, so products without one never showed here.
+ */
+function stripProduct(productId: string, value: unknown): CatalogueProduct | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const product = value as Record<string, unknown>;
+  const title = typeof product.title === "string" ? product.title.trim() : "";
+  const created = finiteNumber(product.created);
+  if (!title || !created || !Array.isArray(product.images) || !Array.isArray(product.price)) return null;
+  return {
+    ...(product as unknown as CatalogueProduct),
+    id: productId,
+    title,
+    created,
+    description: typeof product.description === "string" ? product.description : undefined,
+    type: typeof product.type === "string" ? product.type : undefined,
+    status: typeof product.status === "string" ? product.status : undefined,
+  };
+}
+
+/**
+ * The products worth showing from fetched catalogues, newest first: valid
+ * products (stripProduct), not retired, with an image, from listed shops
+ * only. A group of variants listed as one (variants/model.ts) shows once,
+ * by the group's title.
+ */
+export function newProductsFrom(
+  catalogues: { row: QdnResourceSummary; json: unknown }[],
+  isListedShop: (owner: string, storeId: string) => boolean
+): NewProduct[] {
+  const items: NewProduct[] = [];
+  const bundled = new Set<string>();
+  for (const { row, json } of catalogues) {
+    const short = shortStoreIdOfCatalogue(row.identifier);
+    if (!short || row.name === HIDDEN_TEST_SHOP_OWNER) continue;
+    const storeId = storeIdentifier(short);
+    if (!isListedShop(row.name, storeId)) continue;
+    const products = (json as { products?: Record<string, unknown> } | null)?.products;
+    if (!products || typeof products !== "object") continue;
+    for (const [productId, value] of Object.entries(products)) {
+      const stripped = stripProduct(productId, value);
+      if (!stripped || stripped.status === "RETIRED") continue;
+      const image = mainImage(stripped);
+      if (!image) continue;
+      const variant = variantOf(value);
+      if (variant?.display === "bundle") {
+        const group = `${row.name}\u0000${storeId}\u0000${variant.group}`;
+        if (bundled.has(group)) continue;
+        bundled.add(group);
+      }
+      const product = variant?.display === "bundle" ? { ...stripped, title: variant.title } : stripped;
+      items.push({
+        key: `${row.name}\u0000${row.identifier}\u0000${productId}`,
+        owner: row.name,
+        storeId,
+        catalogueId: row.identifier,
+        product,
+        image,
+      });
+    }
+  }
+  return items.sort((a, b) => b.product.created - a.product.created).slice(0, NEW_PRODUCTS_MAX);
+}
+
+const catalogueCache = new Map<string, { value: unknown; expires: number }>();
+
+/** A catalogue's JSON through Hub (FETCH_QDN_RESOURCE), kept for the session TTL by name and identifier. */
+async function fetchCatalogue(name: string, identifier: string, fresh: boolean): Promise<unknown> {
+  const key = `${name}\u0000${identifier}`;
+  const hit = catalogueCache.get(key);
+  if (!fresh && hit && hit.expires > Date.now()) return hit.value;
+  let value: unknown = await qortalRequest({ action: "FETCH_QDN_RESOURCE", name, service: "DOCUMENT", identifier });
+  if (typeof value === "string") value = JSON.parse(value);
+  catalogueCache.set(key, { value, expires: Date.now() + QDN_SEARCH_TTL_MS });
+  return value;
+}
+
+/** The newest products, or [] when there are none. Rejects only when the search itself fails. */
+export async function loadNewProducts(
+  isListedShop: (owner: string, storeId: string) => boolean,
+  options: { fresh?: boolean } = {}
+): Promise<NewProduct[]> {
+  const rows = await searchQdn(
+    { service: "DOCUMENT", identifier: PREFIX, prefix: true, reverse: true, limit: NEW_CATALOGUES, excludeblocked: true },
+    { fresh: options.fresh }
+  );
+  const wanted = rows.filter((row) => {
+    const short = shortStoreIdOfCatalogue(row.identifier ?? "");
+    return short && row.name && isListedShop(row.name, storeIdentifier(short));
+  });
+  const catalogues = await mapWithConcurrency(wanted, NEW_CATALOGUES, async (row) => {
+    try {
+      return { row, json: await fetchCatalogue(row.name, row.identifier, Boolean(options.fresh)) };
+    } catch {
+      // Not on the node yet, or not JSON: its products just don't show.
+      return null;
+    }
+  });
+  return newProductsFrom(
+    catalogues.filter((c): c is { row: QdnResourceSummary; json: unknown } => c !== null),
+    isListedShop
+  );
+}
+
+/** For tests. */
+export function resetNewProductsCache(): void {
+  catalogueCache.clear();
+}

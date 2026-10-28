@@ -12,7 +12,7 @@ Each app moves through the stages in docs/RELEASE.md: **build** (local, the roun
 | Q-Mail+ | upstream | merged (#15); 1.0.1 and 1.0.2 merged (#21) (`Desktop/Q-Apps+-QMail`) | 1–5, release | **1.0.2** (2026-10-12, `a0af8e4b`) | [Qortal/q-mail#7](https://github.com/Qortal/q-mail/pull/7) (4.0.0, 2026-10-12) | answer review on #7; drafts in the published mail state (an idea from community testing) |
 | Names+ | build | `names-plus/pass-1` · #5 | 1 checkpoint (29 Sep cloud night) | – | – | rounds 1–4 |
 | Q-Tube+ | build | `q-tube-plus/pass-1` · #6 | 1 checkpoint | – | – | rounds 1–4 (keep the vendored qapp-core 1.0.80) |
-| Q-Shop+ | build | `q-shop-plus/pass-1` · #8 | 1 checkpoint | – | – | replace the audio player that blanks React 19, then rounds 1–4 |
+| Q-Shop+ | community | merged ([#32](https://github.com/SJQortal/Q-Apps-Plus/pull/32)) (`Desktop/Q-Apps+-QShop`) | 1–3, 5, release; 4 in part (Hub and GO read-only, real data) | **1.0.0** (2026-10-28, `0fcdbe31`) | – | community feedback as 1.0.x (next 1.0.1); round 4's rest: the publish and payment dialogs, "+" links from a chat; Questions for Simon 14–16 |
 | Q-Node+ | build | `q-node-plus/pass-1` · #9 | 1 checkpoint | – | – | rounds 1–4 |
 | Q-Trade+ | build | `q-trade-plus/pass-1` (no PR) | 1 in progress (kit and shell, part 1) | – | – | finish round 1 |
 | Q-Support+ | build | `q-support-plus/pass-1` (no PR) | 1 in progress (upgrade) | – | – | finish round 1 |
