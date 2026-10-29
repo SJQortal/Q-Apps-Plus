@@ -21,6 +21,7 @@ export const CHANGELOG: Release[] = [
       "On your own product's page: Edit product opens its form, and View as customer shows the page as buyers see it (their buttons shown, but they don't work there).",
       "Drag a product's pictures, its variants and their values to put them in order as you add or edit it: with a mouse, or on a phone by pressing and holding first (a variant by its handle).",
       "A product you've already saved can be given variants when you edit it: it becomes the first item, keeping its link, reviews and favourites, and the others are added as new products.",
+      "Markdown in descriptions: text written with it (from a notes app or a chat bot) is pasted into a product's description formatted, and a product's or shop's plain description written with it shows formatted: headings, bold, lists, links, quotes.",
       "Recently viewed shows a product with variants once, as the one you looked at last, not each variant you opened.",
       "A picture you add for a variant or an item is also added to the product's pictures, where you can move it or star it as the main one; a product listed as one shows its starred picture on its card.",
       "The product form has Collections: put a product in your shop's collections, or take it out, as you add or edit it. A product in variants goes in with all its items.",
