@@ -38,6 +38,9 @@ const TITLES = [
   'Garden Seeds',
   'Knitting Club',
 ];
+// A product described with Markdown, as pasted from a notes app into the original Q-Shop.
+const MARKDOWN_PRODUCT = '## Ceremonial matcha\nStone-ground in **Uji**, *first harvest*.\n### In the tin\n- 30 g\n- A bamboo scoop\n  - and a whisk with the 100 g\n1. Sift it\n2. Whisk in hot water\n> Smooth, not bitter. — a buyer';
+
 const shops = OWNERS.map((owner, i) => {
   const short = i === 0 ? 'my-shop' : `shop-${i}`;
   return {
@@ -45,7 +48,8 @@ const shops = OWNERS.map((owner, i) => {
     short,
     id: `q-store-general-${short}`,
     title: TITLES[i],
-    description: i === 4 ? 'A description long enough to need two lines on a phone and a fold on the card, with a few more words.' : `Everything ${TITLES[i]} sells, made with care.`,
+    // Shop 2 wrote its description with Markdown (richtext/markdown.ts).
+    description: i === 2 ? '## Knitted by hand\n**Wool from Iceland**, spun on the farm.\n- Hats and scarves\n- Kits to [knit your own](qortal://APP/Q-Blog/Knitting)' : i === 4 ? 'A description long enough to need two lines on a phone and a fold on the card, with a few more words.' : `Everything ${TITLES[i]} sells, made with care.`,
     created: now - i * DAY * 3,
     updated: now - i * DAY * 2,
     arrr: i % 3 === 0,
@@ -71,7 +75,7 @@ const catalogueId = (s, c) => `q-store-catalogue-${s.short}-CAT${String(c).padSt
 function product(s, p) {
   return {
     title: p === 0 ? 'Hand-thrown mug with a long product title that wraps over two lines' : ['Poster', 'Notebook', 'Scarf', 'Ebook', 'Sticker pack', 'Lamp'][p % 6] + ` ${p}`,
-    description: p === 0 ? 'A mug.\nGlazed by hand, so every one is different.\n\nHolds 350 ml.' : `Description of product ${p}.`,
+    description: p === 0 ? 'A mug.\nGlazed by hand, so every one is different.\n\nHolds 350 ml.' : p === 1 && s.short === 'shop-3' ? MARKDOWN_PRODUCT : `Description of product ${p}.`,
     created: s.created + p * 60_000,
     version: 1,
     images: p === 0 ? [CUTOUT, IMG2, IMG] : p === 3 ? [CUTOUT] : p % 4 === 0 ? [IMG, IMG2, IMG] : [p % 2 ? IMG2 : IMG],
@@ -724,6 +728,9 @@ export default {
     // Your own product: Edit product and View as customer, then the buyer's view of it.
     { key: 'product-own', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop/${productId(shops[0], 0)}/${catalogueId(shops[0], 0)}`, after: async (page) => { await page.getByText('This is your product.').waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
     { key: 'product-own-customer', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop/${productId(shops[0], 0)}/${catalogueId(shops[0], 0)}?view=customer`, after: async (page) => { await page.getByText(/This is how buyers see your product/).waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    // Plain descriptions written with Markdown show formatted: a product's and a shop's.
+    { key: 'product-markdown', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 1)}/${catalogueId(shops[3], 0)}`, after: async (page) => { await page.getByRole('heading', { name: 'Ceremonial matcha' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'shop-markdown', path: `/${encodeURIComponent(shops[2].owner)}/q-store-general-shop-2`, after: async (page) => { await page.getByRole('heading', { name: 'Knitted by hand' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'product-pdf', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.waitForTimeout(1000); } },
     { key: 'product-pdf-smart', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.getByRole('button', { name: 'Smart' }).click({ timeout: 4000 }); await page.waitForTimeout(1200); } },
     { key: 'product-pdf-full', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.getByRole('button', { name: 'Full screen' }).click({ timeout: 4000 }); await page.waitForTimeout(1200); } },
