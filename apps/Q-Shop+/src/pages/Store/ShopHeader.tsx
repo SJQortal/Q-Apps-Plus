@@ -3,7 +3,7 @@
  * received (pages/Store/orderCount.ts), where it is and ships to, the coins it takes, and what you can do (message the seller, share, see
  * the details; the owner also edits the shop or opens Manage Shop).
  */
-import { useId, useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Box, Button, Rating, Skeleton, Typography } from "@mui/material";
 import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -34,6 +34,9 @@ import { ShipsToYou } from "../../delivery/ShipsToYou";
 import { languagesOf, languagesText } from "../../shop/languages";
 import TranslateOutlinedIcon from "@mui/icons-material/TranslateOutlined";
 import { QortalText } from "../../richtext/QortalText";
+import { looksLikeMarkdown, markdownToHtml } from "../../richtext/markdown";
+import { sanitizeDescription } from "../../richtext/sanitize";
+import { RichText, useRichTextLinks } from "../../richtext/RichText";
 import { ShopLinks } from "../../shop/ShopLinks";
 import { shopLinksOf } from "../../shop/links";
 
@@ -94,10 +97,14 @@ export function RatingSummaryButton({ reviews, onOpen }: { reviews: ShopReviews;
  */
 /**
  * The shop's own words: a long one shows its first lines (four on phones, six
- * wider) with Show more, so the products aren't a long scroll away.
+ * wider) with Show more, so the products aren't a long scroll away. Written
+ * with Markdown, it shows formatted (richtext/markdown.ts), as tall as those
+ * lines until Show more.
  */
 export function ShopDescription({ text }: { text: string }) {
-  const ref = useRef<HTMLParagraphElement>(null);
+  const html = useMemo(() => (looksLikeMarkdown(text) ? sanitizeDescription(markdownToHtml(text)) : null), [text]);
+  const onLinkClick = useRichTextLinks();
+  const ref = useRef<HTMLDivElement>(null);
   const id = useId();
   const [open, setOpen] = useState(false);
   const [long, setLong] = useState(false);
@@ -113,21 +120,38 @@ export function ShopDescription({ text }: { text: string }) {
   }, [text, open]);
   return (
     <>
-      <Typography
-        ref={ref}
-        id={id}
-        sx={{
-          mt: 2,
-          fontSize: { xs: 16, sm: 17 },
-          lineHeight: 1.65,
-          color: "text.primary",
-          whiteSpace: "pre-wrap",
-          overflowWrap: "anywhere",
-          ...(!open && { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: { xs: 4, sm: 6 }, overflow: "hidden" }),
-        }}
-      >
-        <QortalText text={text} />
-      </Typography>
+      {html !== null ? (
+        <RichText
+          ref={ref}
+          id={id}
+          onClick={onLinkClick}
+          dangerouslySetInnerHTML={{ __html: html }}
+          sx={{
+            mt: 2,
+            fontSize: { xs: 16, sm: 17 },
+            lineHeight: 1.65,
+            ...(!open && { maxHeight: { xs: "6.6em", sm: "9.9em" }, overflow: "hidden" }),
+            // Its lines aren't all one height (headings, lists), so the fold fades rather than cut a line.
+            ...(!open && long && { maskImage: "linear-gradient(to bottom, #000 55%, transparent)", WebkitMaskImage: "linear-gradient(to bottom, #000 55%, transparent)" }),
+          }}
+        />
+      ) : (
+        <Typography
+          ref={ref}
+          id={id}
+          sx={{
+            mt: 2,
+            fontSize: { xs: 16, sm: 17 },
+            lineHeight: 1.65,
+            color: "text.primary",
+            whiteSpace: "pre-wrap",
+            overflowWrap: "anywhere",
+            ...(!open && { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: { xs: 4, sm: 6 }, overflow: "hidden" }),
+          }}
+        >
+          <QortalText text={text} />
+        </Typography>
+      )}
       {(long || open) && (
         <Button size="small" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-controls={id} sx={{ mt: 0.5, ml: -1, minHeight: 44 }}>
           {open ? "Show less" : "Show more"}
