@@ -26,7 +26,7 @@ export const CHANGELOG: Release[] = [
       "Collections show their shares as a grid of cards, with a List/Grid switch of their own.",
       "Shares get a thumbnail, made on your device from the first image or video, or a picture you choose. Cards and rows show it.",
       "Copy someone's collection into yours. Your copy names the original, and its owner gets a notification.",
-      "Explore collections, under the filters on Home: everyone else's collections, with a search of their own.",
+      "Explore collections, under the filters on Home: everyone else's collections, with a search of their own, and yours at the top with a summary.",
       "Deleting a collection, or removing or moving a share in one, shows at once, and comes back if Hub says no.",
       "Opening a menu, a list or a dialog no longer moves the page sideways or hides the header.",
       "A bell at the top tells you when someone comments on your shares, replies to your comments, adds your share to a collection or copies one of your collections.",
