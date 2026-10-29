@@ -42,6 +42,35 @@ describe("the description editor", { timeout: 20_000 }, () => {
     expect(ops.some((op) => typeof op.insert === "object")).toBe(false);
   });
 
+  it("pastes text written with Markdown as its formatting, and leaves a formatted paste to Quill", async () => {
+    const { container, quill } = renderEditor();
+    await waitFor(() => expect(container.querySelector(".ql-editor")).not.toBeNull());
+    const editor = container.querySelector<HTMLElement>(".ql-editor")!;
+    const paste = (data: Record<string, string>) => {
+      const event = new Event("paste", { bubbles: true, cancelable: true }) as Event & { clipboardData: unknown };
+      event.clipboardData = { getData: (type: string) => data[type] ?? "" };
+      act(() => {
+        quill().setSelection(0, 0);
+        editor.dispatchEvent(event);
+      });
+      return event;
+    };
+    const event = paste({ "text/plain": "## Matcha\n**Ceremonial** grade, see [Q-Tube](qortal://APP/Q-Tube)\n- 30 g\n- 100 g" });
+    expect(event.defaultPrevented).toBe(true);
+    const ops = quill().getContents().ops as { insert: unknown; attributes?: Record<string, unknown> }[];
+    expect(ops.some((op) => op.attributes?.header === 2)).toBe(true);
+    expect(ops.find((op) => op.insert === "Ceremonial")?.attributes).toEqual({ bold: true });
+    expect(ops.find((op) => op.insert === "Q-Tube")?.attributes).toEqual({ link: "qortal://APP/Q-Tube" });
+    expect(ops.filter((op) => op.attributes?.list === "bullet")).toHaveLength(2);
+    expect(quill().getText()).not.toContain("**");
+    // A web page's copy, with formatting of its own: Quill's own paste, of its HTML (no list from the text).
+    act(() => quill().setText(""));
+    paste({ "text/plain": "**x**\n- a\n- b", "text/html": "<p><strong>x</strong></p>" });
+    const own = quill().getContents().ops as { insert: unknown; attributes?: Record<string, unknown> }[];
+    expect(own.find((op) => op.insert === "x")?.attributes).toEqual({ bold: true });
+    expect(own.some((op) => op.attributes?.list)).toBe(false);
+  });
+
   it("turns qortal:// addresses into links, pasted or typed, without the full stop after them", async () => {
     const { container, quill } = renderEditor();
     await waitFor(() => expect(container.querySelector(".ql-editor")).not.toBeNull());

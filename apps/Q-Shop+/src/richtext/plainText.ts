@@ -10,6 +10,7 @@
  */
 import { EMBED_CLASS, embedFromData, embedLabel, embedLink } from "./embeds";
 import { normalizeQuillHtml } from "./quillHtml";
+import { looksLikeMarkdown, markdownToHtml } from "./markdown";
 
 /** The most HTML a description may have (it is stored in the catalogue, with up to 9 other products). */
 export const MAX_DESCRIPTION_HTML = 20_000;
@@ -118,9 +119,14 @@ function sameText(a: string, b: string): boolean {
  * fields and rewrites only `description`, so a formatted description that no
  * longer matches is older than the seller's last edit there.
  */
-export function descriptionHtmlOf(product: { description?: unknown; htmlDescription?: unknown } | null | undefined): string {
+export function descriptionHtmlOf(
+  product: { description?: unknown; htmlDescription?: unknown } | null | undefined,
+  { markdown = false }: { markdown?: boolean } = {}
+): string {
   const plain = typeof product?.description === "string" ? product.description : "";
   const html = product?.htmlDescription;
   if (typeof html === "string" && html.trim() && sameText(htmlToPlainText(html), plain)) return html;
-  return plainToHtml(plain);
+  // Shown on its page, a plain description written with Markdown shows formatted (richtext/markdown.ts);
+  // the editor starts from its text as written.
+  return markdown && looksLikeMarkdown(plain) ? markdownToHtml(plain) : plainToHtml(plain);
 }
