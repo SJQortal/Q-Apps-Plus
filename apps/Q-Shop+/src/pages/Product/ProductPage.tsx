@@ -229,6 +229,7 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   // A variant (variants/model.ts): its group's choices, and its pictures (variants/gallery.ts),
   // from every item's catalogue, read once the product's own is in.
   const variant = useMemo(() => variantOf(product), [product]);
+  const variantGroup = variant?.group;
   const indexSiblings = useMemo(() => (variant ? variantSiblings(index, variant.group) : []), [index, variant]);
   // Counted stock (stock/model.ts): this product's and its variants' units left, from the shop's
   // order notes. The product's own count is its catalogue's; its variants' their list rows'.
@@ -310,8 +311,8 @@ function ProductView({ owner, storeId, productId, catalogueId }: { owner: string
   // Recently viewed (discovery/recentlyViewed.ts): a product someone else sells, once it shows.
   const shownToBuyer = !!product && !isOwner && status === "ready";
   useEffect(() => {
-    if (shownToBuyer) rememberViewed({ owner, storeId, productId, catalogueId });
-  }, [shownToBuyer, owner, storeId, productId, catalogueId]);
+    if (shownToBuyer) rememberViewed({ owner, storeId, productId, catalogueId, group: variantGroup });
+  }, [shownToBuyer, owner, storeId, productId, catalogueId, variantGroup]);
 
   // Catalogues are JSON any seller writes: only text is shown as a title.
   const productTitle = typeof product?.title === "string" ? product.title.trim() : "";

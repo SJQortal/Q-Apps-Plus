@@ -12,6 +12,8 @@ vi.mock("../qdn/search", async (original) => ({
     products: {
       "q-store-product-shop-1-P1": { title: "Mug", status: "AVAILABLE", images: [], price: [{ currency: "qort", value: 2 }] },
       "q-store-product-shop-1-P2": { title: "Gone", status: "RETIRED", images: [], price: [{ currency: "qort", value: 2 }] },
+      "q-store-product-shop-1-P7": { title: "Coffee | Bold", status: "AVAILABLE", images: [], price: [{ currency: "qort", value: 9 }], variant: { group: "G1" } },
+      "q-store-product-shop-1-P8": { title: "Coffee | Bright", status: "AVAILABLE", images: [], price: [{ currency: "qort", value: 9 }], variant: { group: "G1" } },
     },
   })),
 }));
@@ -28,6 +30,28 @@ describe("recently viewed", () => {
     expect(recentlyViewed()[0].productId).toBe(item(5).productId);
     clearRecentlyViewed();
     expect(localStorage.getItem(RECENTLY_VIEWED_KEY)).toBeNull();
+  });
+
+  it("keeps a product in variants once, as the item seen last", () => {
+    rememberViewed({ ...item(7), group: "G1" }, 1);
+    rememberViewed(item(1), 2);
+    rememberViewed({ ...item(8), group: "G1" }, 3);
+    expect(recentlyViewed().map((v) => v.productId)).toEqual([item(8).productId, item(1).productId]);
+    // Another shop's group of the same id is another product.
+    rememberViewed({ ...item(7), owner: "Other", group: "G1" }, 4);
+    expect(recentlyViewed()).toHaveLength(3);
+    clearRecentlyViewed();
+  });
+
+  it("shows a product in variants once, also from items saved before their group was", async () => {
+    rememberViewed(item(7), 1);
+    rememberViewed(item(1), 2);
+    rememberViewed(item(8), 3);
+    renderWithProviders(<RecentlyViewedStrip />);
+    expect(await screen.findByText("Coffee | Bright")).toBeInTheDocument();
+    expect(screen.getByText("Mug")).toBeInTheDocument();
+    expect(screen.queryByText("Coffee | Bold")).toBeNull();
+    act(() => screen.getByRole("button", { name: "Clear" }).click());
   });
 
   it("shows them on a strip, leaving out what its shop retired, and Clear empties it", async () => {
