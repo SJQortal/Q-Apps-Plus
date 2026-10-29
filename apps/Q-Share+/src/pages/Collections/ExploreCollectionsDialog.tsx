@@ -14,6 +14,7 @@ import { collectionKey } from "../../utils/collections";
 import { isNameHidden, useAppSettings } from "../../utils/settings";
 import { CollectionCard } from "./CollectionsPage";
 import { CardList } from "./Collections-styles";
+import { MyCollectionsSummary } from "./MyCollectionsSummary";
 import { useCollectionList } from "./useCollectionList";
 
 /** How long typing pauses before the search runs, in ms (Enter runs it at once). */
@@ -161,6 +162,12 @@ export default function ExploreCollectionsDialog({ open, onClose }: ExploreColle
 
   return (
     <ResponsiveDialog open={open} onClose={onClose} title="Explore collections" header={search} maxWidth="md" tall>
+      {/* Yours first, signed in and not searching: a way back to them, with what they hold. */}
+      {user?.name && !query ? (
+        <Box sx={{ mb: 2 }}>
+          <MyCollectionsSummary onOpen={onClose} />
+        </Box>
+      ) : null}
       {body}
     </ResponsiveDialog>
   );
