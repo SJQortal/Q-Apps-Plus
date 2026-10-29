@@ -10,8 +10,22 @@
         var STORAGE_KEY = 'qshareplus-ui-theme';
         var HUB20 = { light: '#fcfcfc', dark: '#1C1C1C' };
         var BOOT = {"hub30":{"light":"#EEE7DC","dark":"#0E0F14"},"black":{"light":"#000000","dark":"#000000"},"white":{"light":"#ffffff","dark":"#ffffff"}};
-        var params = new URLSearchParams(location.search);
-        var mode = window._qdnTheme || params.get('theme') || 'dark';
+        // Hub's light/dark: the URL's theme (remembered), else the remembered one (a
+        // reload after in-app navigation has no theme, and Core then injects
+        // "light"), else the injected one, else dark. Same order as boot.ts.
+        var HOST_MODE_KEY = 'qplus-hub-mode';
+        var fromUrl = new URLSearchParams(location.search).get('theme');
+        var remembered = null;
+        try {
+          remembered = localStorage.getItem(HOST_MODE_KEY);
+          if (fromUrl === 'light' || fromUrl === 'dark') localStorage.setItem(HOST_MODE_KEY, fromUrl);
+        } catch (e) {}
+        var mode =
+          fromUrl === 'light' || fromUrl === 'dark'
+            ? fromUrl
+            : remembered === 'light' || remembered === 'dark'
+              ? remembered
+              : window._qdnTheme;
         if (mode !== 'light' && mode !== 'dark') mode = 'dark';
         var ui = 'hub30';
         try {

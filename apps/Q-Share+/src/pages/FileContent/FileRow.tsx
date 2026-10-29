@@ -1,10 +1,16 @@
 import { useState } from "react";
-import { Box, Typography } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
+import GraphicEqRoundedIcon from "@mui/icons-material/GraphicEqRounded";
+import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
+import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import FileElement, { type FileInfo } from "../../components/common/FileElement";
 import { OpenPdfButton, PreviewPanel, PreviewToggleButton, previewKind, shouldAutoPreview } from "../../components/common/FilePreview";
 import { formatBytes } from "../../utils/formatBytes";
 import { useAppSettings } from "../../utils/settings";
 import { fileKind, fileKindIconElement, fileKindLabel } from "../../utils/fileKind";
+import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import type { PlayerShare, Track } from "../../state/features/playerSlice";
+import { usePlaylistControls } from "./PlaylistCard";
 
 /** One entry of a share's `files` array (docs/apps/Q-Share+.md, data contract). */
 export interface ShareFile {
@@ -20,6 +26,43 @@ interface FileRowProps {
   file: ShareFile;
   /** Identifier of the share the file belongs to, so the downloads panel can link back. */
   jsonId: string;
+  /** The share's playlist, when it has one: its audio rows play through the app's player. */
+  playlist?: { share: PlayerShare; tracks: Track[] };
+}
+
+/** An audio row's Play in a playlist share: starts the playlist here, or pauses and resumes this track. */
+function TrackButton({ playlist, file }: { playlist: { share: PlayerShare; tracks: Track[] }; file: ShareFile }) {
+  const phone = usePhoneLayout();
+  const controls = usePlaylistControls(playlist.share, playlist.tracks);
+  const index = playlist.tracks.findIndex((t) => t.identifier === file.identifier);
+  const current = controls.current?.identifier === file.identifier;
+  const label = current ? (controls.playing ? "Pause" : "Resume") : "Play";
+  return (
+    <Button
+      variant={current ? "contained" : "outlined"}
+      startIcon={current && controls.playing ? <PauseRoundedIcon /> : <PlayArrowRoundedIcon />}
+      onClick={(e) => {
+        e.stopPropagation();
+        controls.playOrToggle(index);
+      }}
+      aria-label={`${label} ${file.filename || "track"}`}
+      sx={{ minHeight: phone ? 48 : 40, width: phone ? "100%" : "auto", flexShrink: 0 }}
+    >
+      {label}
+    </Button>
+  );
+}
+
+/** Marks the row of the track the player is on. */
+function NowPlaying({ playlist, file }: { playlist: { share: PlayerShare; tracks: Track[] }; file: ShareFile }) {
+  const controls = usePlaylistControls(playlist.share, playlist.tracks);
+  if (controls.current?.identifier !== file.identifier) return null;
+  return (
+    <Typography variant="body2" sx={{ color: "primary.main", display: "flex", alignItems: "center", gap: 0.5, fontWeight: 600 }}>
+      <GraphicEqRoundedIcon fontSize="small" aria-hidden />
+      {controls.playing ? "Playing" : "Paused"}
+    </Typography>
+  );
 }
 
 /**
@@ -27,11 +70,14 @@ interface FileRowProps {
  * size, the download control (Download → progress → Save) and, when the
  * file can be shown inline, a preview toggle with the preview below ("Play
  * audio" / "Play video" for media; PDFs: "Open PDF", which uses Hub's reader).
+ * In a share with a playlist, audio rows have Play instead, which plays
+ * through the app's player from that track.
  */
-export const FileRow = ({ file, jsonId }: FileRowProps) => {
+export const FileRow = ({ file, jsonId, playlist }: FileRowProps) => {
   const settings = useAppSettings();
   const kind = fileKind(file.mimetype, file.filename);
   const preview = previewKind(file);
+  const inPlaylist = Boolean(playlist) && preview === "audio";
   const [previewOpen, setPreviewOpen] = useState(() => shouldAutoPreview(file, settings));
   const fileInfo: FileInfo = {
     name: file.name,
@@ -87,6 +133,7 @@ export const FileRow = ({ file, jsonId }: FileRowProps) => {
           <Typography variant="body2" color="text.secondary" sx={{ marginTop: 0.25 }}>
             {fileKindLabel(kind)} · {formatBytes(file.size || 0)}
           </Typography>
+          {inPlaylist && playlist ? <NowPlaying playlist={playlist} file={file} /> : null}
         </Box>
       </Box>
 
@@ -102,7 +149,9 @@ export const FileRow = ({ file, jsonId }: FileRowProps) => {
         <Box sx={{ flex: 1, minWidth: 0, display: "flex" }}>
           <FileElement fileInfo={fileInfo} jsonId={jsonId} />
         </Box>
-        {preview === "pdf" ? (
+        {inPlaylist && playlist ? (
+          <TrackButton playlist={playlist} file={file} />
+        ) : preview === "pdf" ? (
           <OpenPdfButton file={file} jsonId={jsonId} />
         ) : (
           preview && (
@@ -116,7 +165,9 @@ export const FileRow = ({ file, jsonId }: FileRowProps) => {
         )}
       </Box>
 
-      {preview && preview !== "pdf" && <PreviewPanel file={file} kind={preview} open={previewOpen} jsonId={jsonId} />}
+      {preview && preview !== "pdf" && !inPlaylist && (
+        <PreviewPanel file={file} kind={preview} open={previewOpen} jsonId={jsonId} />
+      )}
     </Box>
   );
 };

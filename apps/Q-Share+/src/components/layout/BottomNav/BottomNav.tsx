@@ -13,6 +13,7 @@ import { useLandscapePhone, usePhoneLayout } from "../../../hooks/usePhoneLayout
 import { requestOpenPublish } from "../../../constants/events";
 import { RootState } from "../../../state/store";
 import { requestOpenDownloads } from "./events";
+import { usePlayerBarHeight } from "../../player/playerLayout";
 
 /** Height of the bar without the safe-area inset; the spacer and the Fab use it too. */
 export const BOTTOM_NAV_HEIGHT = 72;
@@ -130,6 +131,8 @@ export function BottomNav() {
   const signedIn = useSelector((state: RootState) => Boolean(state.auth.user?.name));
   const downloads = useSelector((state: RootState) => state.global.downloads);
   const downloadCount = useMemo(() => Object.keys(downloads ?? {}).length, [downloads]);
+  // The playlist player sits on the bar; the Share button floats above both.
+  const playerHeight = usePlayerBarHeight();
 
   if (!phone) return null;
 
@@ -179,7 +182,16 @@ export function BottomNav() {
   return (
     <Bar aria-label="Main" compact={compact}>
       {signedIn && !compact && (
-        <ShareFab color="primary" aria-label="Share files" onClick={requestOpenPublish}>
+        <ShareFab
+          color="primary"
+          aria-label="Share files"
+          onClick={requestOpenPublish}
+          sx={
+            playerHeight
+              ? { bottom: `calc(${BOTTOM_NAV_HEIGHT + FAB_GAP + playerHeight}px + env(safe-area-inset-bottom, 0px))` }
+              : undefined
+          }
+        >
           <UploadFileOutlinedIcon />
         </ShareFab>
       )}
@@ -208,22 +220,24 @@ export function BottomNav() {
 }
 
 /**
- * How much of the bottom of a phone screen the bar and, when signed in, the
- * Share button floating above it cover (without the safe-area inset); 0 on
- * wider screens. The compact landscape bar carries Share itself.
+ * How much of the bottom of the screen the app's own bars cover (without
+ * the safe-area inset): on phones the bottom bar and, when signed in, the
+ * Share button floating above it (the compact landscape bar carries Share
+ * itself); plus the playlist player while one is queued, on any screen.
  */
 export function useBottomChromeHeight(): number {
   const phone = usePhoneLayout();
   const compact = useLandscapePhone();
   const signedIn = useSelector((state: RootState) => Boolean(state.auth.user?.name));
-  if (!phone) return 0;
-  return compact ? COMPACT_BOTTOM_NAV_HEIGHT : BOTTOM_NAV_HEIGHT + (signedIn ? FAB_GAP + FAB_SIZE : 0);
+  const player = usePlayerBarHeight();
+  if (!phone) return player;
+  return (compact ? COMPACT_BOTTOM_NAV_HEIGHT : BOTTOM_NAV_HEIGHT + (signedIn ? FAB_GAP + FAB_SIZE : 0)) + player;
 }
 
 /**
  * Keeps the page's last content clear of the fixed bar and, when signed in,
  * of the Share button floating above it (in Hub it covered the end of
- * "Submit comment"). Phones only.
+ * "Submit comment"), and of the playlist player on any screen.
  */
 export function BottomNavSpacer() {
   const height = useBottomChromeHeight();

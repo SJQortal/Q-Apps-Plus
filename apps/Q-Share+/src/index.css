@@ -25,19 +25,20 @@
   --qshare-app-height: 100dvh;
 }
 
-/* clip, not hidden: overflow-x: hidden on body makes it a scroll container
-   that never scrolls, and the sticky header and sub-headers stop sticking. */
-html,
-body {
-  overflow-x: clip;
-}
-
 body {
   margin: 0;
 }
 
+/* clip, not hidden: overflow-x: hidden makes a scroll container that never
+   scrolls, and the sticky header and sub-headers stop sticking (docs/QORTAL.md,
+   pitfall 2). On #root, not html or body: while a menu or dialog is open, MUI
+   hides the page's scrollbar with overflow: hidden on body and pads body by the
+   scrollbar's width. With html clipped, body's overflow no longer reaches the
+   window, so the scrollbar stayed, the padding didn't, and the whole page moved
+   sideways each time a menu opened. */
 #root {
   min-height: var(--qshare-app-height);
+  overflow-x: clip;
 }
 
 :focus-visible {

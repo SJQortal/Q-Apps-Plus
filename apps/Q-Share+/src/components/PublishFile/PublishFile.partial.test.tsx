@@ -24,6 +24,8 @@ const user = { address: "Qalice", publicKey: "pk", name: "alice", names: [{ name
 // Each test drives the whole Share dialog (MUI Select, two dialogs), which
 // takes a few seconds on a busy machine.
 const FLOW_TIMEOUT_MS = 20_000;
+/** Waits in the 25-file flow, which renders a long list on every step. */
+const SLOW = { timeout: 8_000 };
 
 function openDialog() {
   fireEvent.click(screen.getByRole("button", { name: "Share files" }));
@@ -74,6 +76,70 @@ describe("PublishFile after a partial publish", () => {
       expect(screen.getByRole("dialog", { name: "Share files" })).toBeInTheDocument();
       expect(screen.getByRole("textbox", { name: /title/i })).toHaveValue("Quarterly report");
       expect(store.getState().file.listVersion).toBe(before);
+      // The file is on QDN: it stays in the draft and isn't sent again.
+      expect(screen.getByText(/already on QDN/)).toBeInTheDocument();
+      expect(store.getState().notifications.alertTypes.alertInfo).toBe(
+        "The file is on QDN and stays in the draft: publishing again sends only the share details."
+      );
+      const first = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+      mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => true);
+      fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+      await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(2));
+      const second = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[1] as any).resources;
+      expect(second.map((r: any) => r.service)).toEqual(["DOCUMENT"]);
+      const stored = JSON.parse(atob(second[0].data64));
+      expect(stored.files.map((f: any) => f.identifier)).toEqual([first[0].identifier]);
+      expect(stored.files[0]).toMatchObject({ filename: "report.pdf", name: "alice", service: "FILE", mimetype: "application/pdf" });
+    },
+    FLOW_TIMEOUT_MS
+  );
+
+  it(
+    "after a big publish paused part-way, publishing again sends only the files not on QDN",
+    async () => {
+      store.dispatch(addUser(user));
+      mockFetch("/transactions/unconfirmed", []);
+      let call = 0;
+      mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+        call += 1;
+        if (call === 2) throw { error: "User declined request", message: "User declined request" };
+        return true;
+      });
+      renderWithProviders(<PublishFile />);
+      await openDialog();
+      const tracks = Array.from({ length: 25 }, (_, i) => new File(["x"], `track${i + 1}.mp3`, { type: "audio/mpeg" }));
+      fireEvent.change(screen.getByTestId("share-file-input"), { target: { files: tracks } });
+      expect(await screen.findByText("track25.mp3", undefined, SLOW)).toBeInTheDocument();
+      fireEvent.change(screen.getByRole("textbox", { name: /title/i }), { target: { value: "Album" } });
+      fireEvent.mouseDown(screen.getByRole("combobox", { name: /^category/i }));
+      fireEvent.click(await screen.findByRole("option", { name: "Audio" }, SLOW));
+      fireEvent.change(screen.getByLabelText("Description"), { target: { value: "<p>Songs</p>" } });
+      fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+
+      fireEvent.click(await screen.findByRole("button", { name: "Start publishing" }, SLOW));
+      expect(await screen.findByText("Publish paused", undefined, SLOW)).toBeInTheDocument();
+      closePublishing();
+      await waitFor(() => expect(screen.queryByText("Publish paused")).not.toBeInTheDocument(), SLOW);
+      expect(screen.getAllByText(/already on QDN/).length).toBe(20);
+      expect(store.getState().notifications.alertTypes.alertInfo).toBe(
+        "20 of 25 files are on QDN and stay in the draft: publishing again sends only the rest."
+      );
+      const firstBatch = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+
+      fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+      await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(3), SLOW);
+      const last = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").at(-1) as any).resources;
+      expect(last.map((r: any) => r.filename)).toEqual([
+        "track21.mp3",
+        "track22.mp3",
+        "track23.mp3",
+        "track24.mp3",
+        "track25.mp3",
+        "video_metadata.json",
+      ]);
+      const stored = JSON.parse(atob(last.at(-1).data64));
+      expect(stored.files.length).toBe(25);
+      expect(stored.files.slice(0, 20).map((f: any) => f.identifier)).toEqual(firstBatch.map((r: any) => r.identifier));
     },
     FLOW_TIMEOUT_MS
   );
@@ -130,8 +196,8 @@ describe("PublishFile after a partial publish", () => {
       mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => true);
       fireEvent.click(screen.getByRole("button", { name: "Publish" }));
       fireEvent.click(await screen.findByRole("button", { name: "Publish anyway" }));
-      await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe("Files published"));
-      expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(2);
+      await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(2));
+      expect(store.getState().notifications.alertTypes.alertSuccess).toBe("Files published");
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     },
     FLOW_TIMEOUT_MS

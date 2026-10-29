@@ -205,6 +205,22 @@ describe('Home filters on a phone', { timeout: 15_000 }, () => {
     expect(minHeight(within(sheet).getByRole('button', { name: 'Oldest' }))).toBe('44px');
   });
 
+  it('Explore collections sits under the filters in the sheet, and opens its window as the sheet closes', async () => {
+    mockFetch('/arbitrary/resources/search', []);
+    renderHome();
+    expect(await screen.findByText('No shares yet')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Filters and sort' });
+    const explore = within(sheet).getByRole('button', { name: 'Explore collections' });
+    // Below the filter form's Apply and Reset.
+    const reset = within(sheet).getByRole('button', { name: 'Reset' });
+    expect(reset.compareDocumentPosition(explore) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(getComputedStyle(explore).minHeight).toBe('44px');
+    fireEvent.click(explore);
+    expect(await screen.findByRole('dialog', { name: 'Explore collections' })).toBeInTheDocument();
+    await waitFor(() => expect(sheet).not.toBeVisible());
+  });
+
   it('a publisher suggested in the sheet is applied at once and closes the sheet; its list sits above the sheet', async () => {
     mockFetch('/arbitrary/resources/search', (url) =>
       url.searchParams.get('name') === 'Simon James'
@@ -1087,5 +1103,27 @@ describe('Home search fields', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Clear the publisher filter' }));
     expect(publisher).toHaveValue('');
     expect(store.getState().file.filterName).toBe('');
+  });
+});
+
+describe('Home: Explore collections', () => {
+  it('sits under the filters, and opens a window of collections with its own search', async () => {
+    mockFetch('/arbitrary/resources/search', (url) =>
+      url.searchParams.get('identifier') === 'qshare_collection_'
+        ? [{ name: 'bob', service: 'DOCUMENT', identifier: 'qshare_collection_picks_zz99yy', updated: 2, metadata: { title: "Bob's picks", description: '' } }]
+        : []
+    );
+    mockQortalAction('FETCH_QDN_RESOURCE', { version: 1, title: "Bob's picks", description: '', items: [{ name: 'x', identifier: 'y' }], created: 1, updated: 2 });
+    renderHome();
+    expect(await screen.findByText('No shares yet')).toBeInTheDocument();
+    // No collection search until the window opens.
+    expect(fetchCallsMatching('/arbitrary/resources/search').filter((url) => url.includes('identifier=qshare_collection_'))).toHaveLength(0);
+    const explore = screen.getByRole('button', { name: 'Explore collections' });
+    expect(screen.getByRole('button', { name: 'Reset' }).compareDocumentPosition(explore) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(explore);
+    const dialog = within(await screen.findByRole('dialog', { name: 'Explore collections' }));
+    expect(dialog.getByRole('textbox', { name: 'Search collections' })).toHaveFocus();
+    expect(await dialog.findByRole('button', { name: "Open Bob's picks" })).toBeInTheDocument();
+    expect(fetchCallsMatching('/arbitrary/resources/search').filter((url) => url.includes('identifier=qshare_collection_'))).toHaveLength(1);
   });
 });

@@ -15,12 +15,26 @@ export interface Release {
 export const CHANGELOG: Release[] = [
   {
     version: "1.0.1",
-    date: "2026-10-01",
-    title: "Play audio and video",
+    date: "2026-10-17",
+    title: "Notifications, 300 files, folders, playlists and thumbnails",
     notes: [
+      "Share up to 300 files at once. Big shares go out in batches of 20 that the network accepts, the share itself once all its files are there, and you can let Hub approve every batch at once.",
+      "If publishing stops halfway, the files already on QDN stay in your draft, so publishing again sends only the rest.",
+      "Collections can have folders (and folders inside folders) and covers. Move a share between folders, or add it straight to one.",
+      "Shares with several audio files play as a playlist, in a player that keeps going while you browse.",
+      "Sort by name in the Share form puts numbered tracks in order.",
+      "Collections show their shares as a grid of cards, with a List/Grid switch of their own.",
+      "Shares get a thumbnail, made on your device from the first image or video, or a picture you choose. Cards and rows show it.",
+      "Copy someone's collection into yours. Your copy names the original, and its owner gets a notification.",
+      "Explore collections, under the filters on Home: everyone else's collections, with a search of their own, and yours at the top with a summary.",
+      "Deleting a collection, or removing or moving a share in one, shows at once, and comes back if Hub says no.",
+      "Opening a menu, a list or a dialog no longer moves the page sideways or hides the header.",
+      "A bell at the top tells you when someone comments on your shares, replies to your comments, adds your share to a collection or copies one of your collections.",
+      "Turn on Hub alerts in Settings → Notifications, and Qortal Hub tells you about new comments even while Q-Share+ is closed.",
       "Audio and video files say Play audio and Play video, and Close player once the player is open.",
       "Subtitles and checksum files preview as text, audiobooks (.m4b) and WebM audio play, and comic books are listed as documents.",
       "On phones, the description's placeholder no longer covers the first word while the keyboard is still composing it.",
+      "In a dark Hub, refreshing Q-Share+ on any page but the first no longer shows it in its light colours.",
     ],
   },
   {

@@ -31,6 +31,8 @@ export interface QdnSearchParams {
   prefix?: boolean;
   /** Core: only resources published by names on the followedNames list. */
   followedonly?: boolean;
+  /** Core: only resources first published after this time (ms). Re-publishing doesn't count. */
+  after?: number;
 }
 
 export interface QdnResourceSummary {
@@ -76,6 +78,7 @@ export function buildSearchUrl(params: QdnSearchParams): string {
   if (params.exactmatchnames ?? true) p.set("exactmatchnames", "true");
   if (params.prefix) p.set("prefix", "true");
   if (params.followedonly) p.set("followedonly", "true");
+  if (params.after) p.set("after", String(Math.floor(params.after)));
   return `/arbitrary/resources/search?${p.toString()}`;
 }
 
@@ -113,11 +116,20 @@ export async function searchQdn(
   return request;
 }
 
+const invalidationListeners = new Set<() => void>();
+
 /** Drop cached searches, e.g. after the user publishes. Without a filter, all of them. */
 export function invalidateQdnSearches(matcher?: (url: string) => boolean): void {
   for (const key of [...cache.keys()]) {
     if (!matcher || matcher(key)) cache.delete(key);
   }
+  for (const listener of invalidationListeners) listener();
+}
+
+/** Run `listener` whenever searches are invalidated (longer-lived caches built on them clear too). */
+export function onQdnSearchesInvalidated(listener: () => void): () => void {
+  invalidationListeners.add(listener);
+  return () => invalidationListeners.delete(listener);
 }
 
 /**
