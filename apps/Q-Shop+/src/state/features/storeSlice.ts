@@ -1,8 +1,8 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { RootState } from "../store";
 import { CurrentStore, DataContainer, ProductDataContainer } from "./globalSlice";
 import { ForeignCoins } from "../../components/modals/CreateStoreModal";
-import { CoinFilter } from "../../pages/Store/Store/Store";
+import { readStoredSettings } from "../../utils/settingsStorage";
+import { assetIdOf, isCoinTicker } from "../../money/coins";
 
 interface GlobalState {
   products: Product[];
@@ -24,7 +24,8 @@ interface GlobalState {
     products: ProductDataContainer[];
     categories: string[];
   };
-  preferredCoin: CoinFilter
+  /** The coin the buyer prefers to see and pay in (QORT, ARRR, or ASSET:<id>). */
+  preferredCoin: string
 }
 
 const initialState: GlobalState = {
@@ -48,8 +49,18 @@ const initialState: GlobalState = {
     products: [],
     categories: []
   },
-  preferredCoin: CoinFilter.qort
+  preferredCoin: storedPreferredCoin()
 };
+
+/**
+ * The saved preferred coin, else QORT. A plain "QORT" on purpose: importing
+ * the shop page's CoinFilter here pulled the whole lazy shop page (and its
+ * imports) into the chunk every screen loads.
+ */
+function storedPreferredCoin(): string {
+  const coin = readStoredSettings().preferredCoin;
+  return typeof coin === "string" && (isCoinTicker(coin) || assetIdOf(coin) !== null) ? coin : "QORT";
+}
 
 export interface Price {
   currency: string;
@@ -92,6 +103,8 @@ export interface Store {
   shortStoreId?: string;
   foreignCoins?: ForeignCoins;
   supportedCoins?: string[];
+  /** + app, additive: Qortal assets the shop accepts. */
+  acceptedAssets?: { id: number; name: string }[];
 }
 
 export interface StoreReview {
@@ -115,7 +128,7 @@ export const storeSlice = createSlice({
       state.myStores.push(action.payload);
     },
     setViewedStoreDataContainer: (state, action) => {
-      let categories: any = {};
+      const categories: any = {};
       state.viewedStoreDataContainer = action.payload;
       const mappedProducts = Object.keys(action.payload.products)
         .map((key) => {
@@ -251,7 +264,7 @@ export const storeSlice = createSlice({
       );
     },
     setPreferredCoin: (state, action) => {
-      const coin: CoinFilter = action.payload;
+      const coin: string = action.payload;
       state.preferredCoin = coin
     },
   }

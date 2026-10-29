@@ -1,0 +1,294 @@
+/**
+ * The seller's overview of a shop (the seller page's first tab): tiles for
+ * the orders to handle, shipped and refunded (counted over the orders loaded
+ * so far, "+" while more pages exist), the products in the shop, and the
+ * five latest orders. The tiles and All orders open their tabs; the tab bar
+ * above is the way to the rest (Simon, 2026-10-23: no links at the foot).
+ * Between them, Recent activity (seller/activity.ts): orders, deliveries,
+ * reviews and favourites, newest first.
+ */
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSelector } from "react-redux";
+import { Box, Button, ButtonBase, Skeleton, Typography } from "@mui/material";
+import HourglassEmptyOutlinedIcon from "@mui/icons-material/HourglassEmptyOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import ReplayOutlinedIcon from "@mui/icons-material/ReplayOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import ChevronRightOutlinedIcon from "@mui/icons-material/ChevronRightOutlined";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import type { RootState } from "../../state/store";
+import type { Order } from "../../state/features/orderSlice";
+import { EmptyState } from "../../components/common/EmptyState";
+import { useShopOrders } from "../../orders/hooks";
+import { countLabel } from "../../orders/status";
+import { sellerStatusCounts, splitForeignItems, splitSellerItems } from "../../orders/listView";
+import { OrderCard } from "../../orders/components/OrderCard";
+import { OrderListSkeleton } from "../../orders/components/OrderListView";
+import { ShowOrder } from "./ShowOrder/ShowOrder";
+import { RecentActivity } from "./RecentActivity";
+import { ShopCheckup } from "../../seller/ShopCheckup";
+import { LowStock } from "../../seller/LowStock";
+import { buildActivity, useShopFavorites } from "../../seller/activity";
+import { useShopReviews } from "../Store/useShopData";
+import { shortStoreIdOf } from "../../qdn/identifiers";
+import { sameName } from "../../orders/reads";
+import type { SellerTab } from "./sellerTabs";
+
+
+const LATEST = 5;
+
+function Tile({
+  label,
+  value,
+  icon,
+  tone,
+  loading,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  tone: "warning" | "success" | "error" | "primary";
+  loading: boolean;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <Box component="span" aria-hidden sx={{ color: `${tone}.main`, display: "flex", "& svg": { fontSize: 22 } }}>
+        {icon}
+      </Box>
+      <Box component="span" sx={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
+        <Typography component="span" sx={{ fontSize: 26, fontWeight: 700, lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>
+          {loading ? <Skeleton width={40} /> : value}
+        </Typography>
+        <Typography component="span" variant="body2" color="text.secondary">
+          {label}
+        </Typography>
+      </Box>
+    </>
+  );
+  const sx = {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 1.5,
+    p: 2,
+    minHeight: 88,
+    width: "100%",
+    border: 1,
+    borderColor: "divider",
+    borderRadius: 2,
+    bgcolor: "background.paper",
+    textAlign: "left",
+    justifyContent: "flex-start",
+    boxSizing: "border-box",
+  } as const;
+  if (!onClick) return <Box sx={sx}>{content}</Box>;
+  return (
+    <ButtonBase
+      onClick={onClick}
+      focusRipple
+      sx={{
+        ...sx,
+        transition: "background-color 150ms ease",
+        "&:hover": { bgcolor: "action.hover" },
+        "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 2 },
+      }}
+    >
+      {content}
+    </ButtonBase>
+  );
+}
+
+export function SellerOverview({
+  storeId,
+  onOpenTab,
+  onAddProduct,
+  onEditProduct,
+}: {
+  storeId: string;
+  onOpenTab?: (tab: SellerTab, extra?: Record<string, string>) => void;
+  onAddProduct?: () => void;
+  /** Opens a product's editor (Running low). */
+  onEditProduct?: (product: Record<string, any> & { id: string }) => void;
+}) {
+  // Only the latest few orders are opened up front, plus the ones the counts need (orders/loader.ts).
+  const list = useShopOrders(storeId, { openLimit: LATEST });
+  const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Rows that couldn't be opened, or that name another seller (a shop with the same id), aren't counted.
+  // Another app's orders (Q-Shops) under the shop's id are the Orders tab's one line, not "couldn't be opened".
+  const { main, others } = useMemo(() => splitSellerItems(splitForeignItems(list.items).rest, list.seller), [list.items, list.seller]);
+  const { counts, loading: statusesLoading } = useMemo(() => sellerStatusCounts(main, list.seller), [main, list.seller]);
+  const more = list.meta.hasMore;
+  const ordersLoading = list.meta.phase === "loading" || list.meta.phase === "idle";
+  const productCount =
+    dataContainer && dataContainer.storeId === storeId ? Object.keys(dataContainer.products ?? {}).length : null;
+  const latest = useMemo(() => main.slice(0, LATEST), [main]);
+  // When rows above didn't count (another seller's, or unreadable), the ones that move up get opened now.
+  const { open } = list;
+  useEffect(() => {
+    open(latest.map((item) => item.row));
+  }, [open, latest]);
+  const opened: Order | null = list.items.find((i) => i.row.id === openId)?.order ?? null;
+  const shopReviews = useShopReviews(storeId, list.seller || null);
+  const favorites = useShopFavorites(list.seller, shortStoreIdOf(storeId));
+  const activity = useMemo(
+    () => buildActivity({ orders: main, reviews: shopReviews.reviews, favorites: favorites.favorites }),
+    [main, shopReviews.reviews, favorites.favorites]
+  );
+  const activityLoading = ordersLoading || shopReviews.status === "loading" || favorites.status === "loading";
+  const openOrder = useCallback((order: Order) => {
+    setOpenId(order.id);
+    setDialogOpen(true);
+  }, []);
+  const openOrders = onOpenTab ? () => onOpenTab("orders") : undefined;
+
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      {/* What the shop still needs for Q-Shop+ (seller/checkup.ts): first, for shops made in the original app. */}
+      <ShopCheckup storeId={storeId} onOpenTab={onOpenTab} onAddProduct={onAddProduct} />
+      <Box component="section" aria-labelledby="seller-overview-numbers">
+        <Typography id="seller-overview-numbers" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
+          At a glance
+        </Typography>
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr 1fr", sm: "repeat(3, 1fr)", md: "repeat(5, 1fr)" }, gap: 1.5 }}>
+          <Tile
+            label="To handle"
+            value={countLabel(counts.Received, more)}
+            icon={<HourglassEmptyOutlinedIcon />}
+            tone="warning"
+            loading={ordersLoading || statusesLoading}
+            onClick={openOrders}
+          />
+          <Tile
+            label="Shipped"
+            value={countLabel(counts.Shipped, more)}
+            icon={<LocalShippingOutlinedIcon />}
+            tone="primary"
+            loading={ordersLoading || statusesLoading}
+            onClick={openOrders}
+          />
+          <Tile
+            label="Delivered"
+            value={countLabel(counts.Delivered, more)}
+            icon={<CheckCircleOutlinedIcon />}
+            tone="success"
+            loading={ordersLoading || statusesLoading}
+            onClick={openOrders}
+          />
+          <Tile
+            label="Refunded"
+            value={countLabel(counts.Refunded, more)}
+            icon={<ReplayOutlinedIcon />}
+            tone="error"
+            loading={ordersLoading || statusesLoading}
+            onClick={openOrders}
+          />
+          <Tile
+            label="Products"
+            value={productCount === null ? "—" : String(productCount)}
+            icon={<Inventory2OutlinedIcon />}
+            tone="primary"
+            loading={false}
+            onClick={onOpenTab ? () => onOpenTab("products") : undefined}
+          />
+        </Box>
+        {more && !ordersLoading && main.length > 0 && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Counted over your {main.length} latest orders.
+          </Typography>
+        )}
+        {others.length > 0 && !ordersLoading && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {others.length === 1
+              ? "1 order under your shop's id couldn't be opened or names another seller. It isn't counted."
+              : `${others.length} orders under your shop's id couldn't be opened or name another seller. They aren't counted.`}
+          </Typography>
+        )}
+      </Box>
+
+      {/*
+        Two columns on wider screens (Simon: "could be more compact, no need to expand them across so much"):
+        what's running low and the recent activity, and beside them the latest orders.
+      */}
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", lg: "minmax(0, 1fr) minmax(0, 1fr)" }, gap: 3, alignItems: "start" }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 3, minWidth: 0 }}>
+          {/* Counted products with 3 or fewer left (seller/LowStock.tsx). */}
+          <LowStock storeId={storeId} onEdit={onEditProduct} />
+          <Box component="section" aria-labelledby="seller-overview-activity" sx={{ display: "flex", flexDirection: "column" }}>
+            <Typography id="seller-overview-activity" component="h2" sx={{ fontSize: 18, fontWeight: 700, mb: 1.5 }}>
+              Recent activity
+            </Typography>
+            <RecentActivity items={activity} loading={activityLoading} owner={list.seller} storeId={storeId} onOpenOrder={openOrder} />
+          </Box>
+        </Box>
+        <Box sx={{ minWidth: 0 }}>
+          <Box component="section" aria-labelledby="seller-overview-latest">
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1.5 }}>
+              <Typography id="seller-overview-latest" component="h2" sx={{ flex: 1, fontSize: 18, fontWeight: 700 }}>
+                Latest orders
+              </Typography>
+              {onOpenTab && list.items.length > 0 && (
+                <Button onClick={() => onOpenTab("orders")} endIcon={<ChevronRightOutlinedIcon />} sx={{ minHeight: 44 }}>
+                  All orders
+                </Button>
+              )}
+            </Box>
+            {list.meta.phase === "error" && list.items.length === 0 ? (
+              <EmptyState
+                title="Couldn't load your shop's orders"
+                description="The node didn't answer. Try again in a moment."
+                actionLabel="Retry"
+                onAction={() => void list.refresh()}
+              />
+            ) : ordersLoading && list.items.length === 0 ? (
+              <OrderListSkeleton rows={3} />
+            ) : latest.length === 0 && more ? (
+              <EmptyState
+                icon={<ReceiptLongOutlinedIcon />}
+                title="No orders found yet"
+                description={`None of the first ${list.meta.offset} results is an order of your shop. Open Orders to look further.`}
+                actionLabel={onOpenTab ? "Open orders" : undefined}
+                onAction={onOpenTab ? () => onOpenTab("orders") : undefined}
+              />
+            ) : latest.length === 0 ? (
+              <EmptyState
+                icon={<ReceiptLongOutlinedIcon />}
+                title="No orders yet"
+                description="When someone buys from your shop, the order shows here and you get a Q-Mail."
+              />
+            ) : (
+              <Box
+                component="ul"
+                aria-label="Latest orders"
+                sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}
+              >
+                {latest.map((item) => (
+                  <Box component="li" key={item.row.id}>
+                    <OrderCard
+                      item={item}
+                      role="seller"
+                      review={shopReviews.reviews.find((r) => sameName(r.name, item.row.user))}
+                      onOpen={(order) => {
+                        setOpenId(order.id);
+                        setDialogOpen(true);
+                      }}
+                      onRetry={(row) => void list.retry(row)}
+                    />
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        </Box>
+      </Box>
+
+      <ShowOrder open={dialogOpen && !!opened} onClose={() => setDialogOpen(false)} order={opened} role="seller" />
+    </Box>
+  );
+}
+
+export default SellerOverview;

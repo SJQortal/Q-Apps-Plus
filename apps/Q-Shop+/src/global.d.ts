@@ -20,7 +20,7 @@ interface QortalRequestOptions {
   filename?: string
   list_name?: string
   item?: string
-  items?: strings[]
+  items?: string[]
   tag1?: string
   tag2?: string
   tag3?: string
@@ -28,7 +28,7 @@ interface QortalRequestOptions {
   tag5?: string
   coin?: string
   destinationAddress?: string
-  amount?: number
+  amount?: number | string
   blob?: Blob
   mimeType?: string
   file?: File
@@ -36,6 +36,8 @@ interface QortalRequestOptions {
   prefix?: boolean
   exactMatchNames?: boolean,
   mode?: string
+  /** Any other field Hub's actions take (assetId, recipient, encrypt, publicKeys, …). */
+  [key: string]: unknown
 }
 
 declare function qortalRequest(options: QortalRequestOptions): Promise<any>

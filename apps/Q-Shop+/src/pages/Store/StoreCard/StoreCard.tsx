@@ -1,158 +1,385 @@
-import { FC, useEffect, useState } from "react";
-import {
-  AcceptedCoin,
-  AcceptedCoinsRow,
-  ExpandDescriptionIcon,
-  OpenStoreCard,
-  StoreCardDescription,
-  StoreCardImage,
-  StoreCardImageContainer,
-  StoreCardInfo,
-  StoreCardOwner,
-  StoreCardTitle,
-  StoresRow,
-  StyledStoreCard,
-  StyledTooltip,
-  YouOwnIcon,
-} from "../../StoreList/StoreList-styles";
-import ContextMenuResource from "../../../components/common/ContextMenu/ContextMenuResource";
-import { useNavigate } from "react-router-dom";
-import { useTheme } from "@mui/material";
-import { BriefcaseSVG } from "../../../assets/svgs/BriefcaseSVG";
+/**
+ * A shop on the home page. The whole card is one real link to the shop
+ * (named by its title), with a separate "More" button for Open shop and Copy
+ * link. Title, description and owner come from the search row at once; the
+ * shop's JSON (logo and coins) is read only when the card nears the screen
+ * (docs/QORTAL.md → Efficiency rules 6), with "Fetching from peers…" while the
+ * node gets it and a plain placeholder, never an endless skeleton, if it
+ * can't.
+ */
+import { awayOf } from "../../../shop/away";
+import { memo, useEffect, useId, type MouseEvent } from "react";
+import { Box, Button, IconButton, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import MoreVertIcon from "@mui/icons-material/MoreVert";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import { Link as RouterLink } from "react-router-dom";
+import { useInView } from "react-intersection-observer";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  resetListProducts,
-  resetProducts,
-} from "../../../state/features/globalSlice";
-import { RootState } from "../../../state/store";
-import { clearViewedStoreDataContainer } from "../../../state/features/storeSlice";
-import QORT from "../../../assets/img/qort.png";
-import ARRR from "../../../assets/img/arrr.png";
+import { accentWash, primarySoft } from "../../../hub-theme";
+import { NameAvatar } from "../../../components/common/NameAvatar";
+import { CoinIcon } from "../../../components/money/CoinIcon";
+import { coinLabel, shopCoins, type CoinId } from "../../../money/coins";
+import { storePath } from "../../../qdn/links";
+import { addToHashMapStores } from "../../../state/features/storeSlice";
+import type { RootState } from "../../../state/store";
+import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
+import { isOutdated, requestShopDetails, useShopDetails, type ShopDetails, type ShopJson } from "../../../discovery/shopDetails";
+import type { ShopEntry } from "../../../discovery/shopIndex";
+import { formatRating, type ShopRating } from "../../../discovery/ratings";
+import FavoriteIcon from "@mui/icons-material/Favorite";
+import { CARD_ART_HEIGHT } from "../../../discovery/ShopGrid";
+import { visuallyHidden } from "../../../discovery/a11y";
+import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
+import { useLoadedPictures } from "../../../components/common/useLoadedPictures";
 
-interface StoreCardProps {
-  storeTitle: string;
-  storeLogo: string;
-  storeDescription: string;
-  storeId: string;
-  storeOwner: string;
-  userName: string;
-  supportedCoins: string[];
+/** Coin marks shown before "+N". */
+const MAX_COINS = 5;
+
+export interface StoreCardProps {
+  shop: ShopEntry;
+  /** The signed-in name owns it: a "Yours" badge. */
+  mine: boolean;
+  /** undefined while the ratings aren't loaded; null when nobody but the owner has reviewed it. */
+  rating?: ShopRating | null;
+  /** How many buyers keep it as a favourite (favorites/counts.ts), once read. */
+  favorites?: number;
+  /** A plain click on the card (before the router navigates). */
+  onOpen: (shop: ShopEntry) => void;
+  onMenu: (shop: ShopEntry, anchor: HTMLElement) => void;
 }
 
-export const StoreCard: FC<StoreCardProps> = ({
-  storeTitle,
-  storeLogo,
-  storeDescription,
-  storeId,
-  storeOwner,
-  userName,
-  supportedCoins
-}) => {
-  const navigate = useNavigate();
+/**
+ * The card is a box; its title is the link, stretched over the whole card
+ * with ::after. So the link's name is exactly its visible text (the title),
+ * and a click anywhere on the card still opens the shop (axe
+ * label-content-name-mismatch flagged the old whole-card link).
+ */
+const CardBox = styled("div")(({ theme }) => ({
+  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  color: theme.palette.text.primary,
+  textDecoration: "none",
+  backgroundColor: theme.palette.background.paper,
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius,
+  overflow: "hidden",
+  transition: "border-color 160ms ease, box-shadow 160ms ease",
+  "@media (hover: hover)": {
+    "&:hover": { borderColor: theme.palette.primary.main, boxShadow: theme.shadows[3] },
+  },
+  // The logo comes a little closer under the pointer (Simon, 2026-10-24: "zoom in slightly, subtle").
+  "@media (hover: hover) and (prefers-reduced-motion: no-preference)": {
+    "&:hover img[data-logo]": { transform: "scale(1.04)" },
+  },
+  "&:has(a.card-link:focus-visible)": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+  "& a.card-link": { color: "inherit", textDecoration: "none", outline: "none" },
+  "& a.card-link::after": { content: '""', position: "absolute", inset: 0 },
+}));
+
+const Art = styled("div")(({ theme }) => ({
+  position: "relative",
+  flexShrink: 0,
+  height: CARD_ART_HEIGHT.phone,
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8,
+  padding: "0 12px",
+  textAlign: "center",
+  overflow: "hidden",
+  backgroundColor: accentWash(theme, 0.08),
+  borderBottom: `1px solid ${theme.palette.divider}`,
+  [theme.breakpoints.up("sm")]: { height: CARD_ART_HEIGHT.wide },
+  // Last, so it wins over the width rule on a phone held sideways.
+  [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { height: CARD_ART_HEIGHT.landscape },
+  // Once the logo is in, no backdrop: a logo with a transparent background sits on the card.
+  "&[data-clear]": { backgroundColor: "transparent", borderBottomColor: "transparent" },
+}));
+
+const Logo = styled("img")({
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+  padding: 12,
+  boxSizing: "border-box",
+  display: "block",
+  transition: "transform 300ms ease",
+});
+
+const Initial = styled("span")(({ theme }) => ({
+  width: 64,
+  height: 64,
+  borderRadius: "50%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 28,
+  fontWeight: 700,
+  backgroundColor: primarySoft(theme),
+  color: theme.palette.primary.main,
+  [`@media ${LANDSCAPE_PHONE_MEDIA}`]: { width: 44, height: 44, fontSize: 20 },
+}));
+
+const clamp = (lines: number) =>
+  ({
+    display: "-webkit-box",
+    WebkitLineClamp: lines,
+    WebkitBoxOrient: "vertical",
+    overflow: "hidden",
+    overflowWrap: "anywhere",
+  }) as const;
+
+/** Only images carried inside the JSON: a web address would be a request outside Qortal. */
+function logoOf(details: ShopDetails | undefined): string | undefined {
+  if (details?.status !== "ready" || !details.valid) return undefined;
+  const logo = details.shop.logo;
+  return typeof logo === "string" && logo.startsWith("data:image/") ? logo : undefined;
+}
+
+function coinsOf(shop: ShopEntry, json: ShopJson | null): { coins: CoinId[]; labels: string[] } {
+  const coins: CoinId[] = json ? shopCoins(json) : shop.acceptsArrr ? ["QORT", "ARRR"] : ["QORT"];
+  return { coins, labels: coins.map((coin) => coinLabel(coin, json)) };
+}
+
+function CardArt({ shop, details, onLogoLoad }: { shop: ShopEntry; details: ShopDetails | undefined; onLogoLoad: () => void }) {
+  const logo = logoOf(details);
+  if (logo) return <Logo data-logo src={logo} alt={shop.title} decoding="async" onLoad={onLogoLoad} />;
+  const caption =
+    details?.status === "retrying"
+      ? "Fetching from peers…"
+      : details?.status === "failed" && details.final
+        ? "Logo not available right now"
+        : null;
+  return (
+    <>
+      <Initial aria-hidden>{Array.from(shop.title.trim())[0]?.toUpperCase() ?? "?"}</Initial>
+      {caption && (
+        <Typography variant="body2" color="text.secondary">
+          {caption}
+        </Typography>
+      )}
+    </>
+  );
+}
+
+function StoreCardView({ shop, mine, rating, favorites = 0, onOpen, onMenu }: StoreCardProps) {
   const dispatch = useDispatch();
-  const theme = useTheme();
+  const titleId = useId();
+  const descriptionId = useId();
+  const summaryId = useId();
+  const details = useShopDetails(shop.key);
+  const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
 
-  const currentStore = useSelector(
-    (state: RootState) => state.global.currentStore
-  );
-  const currentViewedStore = useSelector(
-    (state: RootState) => state.store.currentViewedStore
-  );
-
-  const [isEllipsisActive, setIsEllipsisActive] = useState<boolean>(false);
-  const [showCompleteStoreDescription, setShowCompleteStoreDescription] =
-    useState<boolean>(false);
-
-  const handleStoreCardClick = (
-    e: React.MouseEvent<HTMLDivElement, MouseEvent>
-  ) => {
-    if ((e.target as HTMLElement)?.id === `expand-icon-${storeId}`) {
-      return;
-    }
-    // When visiting a new story, reset the products and listProducts state to prevent the previous store's products from showing. We do this depending on whether the user is the store owner or not. We don't need to worry about them coming directly from a url link because the redux store will be empty in that case
-    if (userName === storeOwner && currentStore?.id !== storeId) {
-      dispatch(resetProducts());
-      dispatch(resetListProducts());
-    } else if (userName !== storeOwner && currentViewedStore?.id !== storeId) {
-      dispatch(resetProducts());
-      dispatch(clearViewedStoreDataContainer());
-    }
-    // Setting storeOwner and storeId into the url params which can then be used in the Store component
-    navigate(`/${storeOwner}/${storeId}`);
-  };
-
-  const limitCharFunc = (str: string, limit = 50) => {
-    return str.length > limit ? `${str.slice(0, limit)}...` : str;
-  };
-
+  // Not read yet, forgotten by a pull to refresh, only tried once by a "Pays in" check,
+  // or the shop changed since it was read (a newer `updated` in the index): its old logo stays meanwhile.
+  const wanted = !details || (details.status === "failed" && !details.final) || isOutdated(details, shop.updated);
   useEffect(() => {
-    if (storeDescription.length >= 50) {
-      setIsEllipsisActive(true);
-    }
-  }, [storeDescription]);
+    if (inView && wanted) void requestShopDetails(shop.owner, shop.id, { updated: shop.updated });
+  }, [inView, wanted, shop.owner, shop.id, shop.updated]);
+
+  const json = details?.status === "ready" && details.valid ? details.shop : null;
+  const logo = logoOf(details);
+  const pictures = useLoadedPictures();
+
+  // The cart and the header's shop menu read titles from hashMapStores, as
+  // the original's home page filled it. Only when the id is new there: two
+  // owners can share a shop id, and must not overwrite each other in turn.
+  const known = useSelector((state: RootState) => Boolean(state.store.hashMapStores[shop.id]));
+  useEffect(() => {
+    if (!json || known) return;
+    dispatch(
+      addToHashMapStores({
+        title: shop.title,
+        description: shop.description,
+        created: shop.created,
+        updated: shop.updated,
+        tags: [],
+        ...json,
+        owner: shop.owner,
+        id: shop.id,
+        isValid: true,
+      })
+    );
+  }, [json, known, dispatch, shop]);
+
+  const { coins, labels } = coinsOf(shop, json);
+  // Its seller is away for a while (shop/away.ts): a badge, and the card's description says so.
+  const away = !!awayOf(json as { away?: unknown } | null);
+  const shownCoins = coins.slice(0, MAX_COINS);
+  const moreCoins = coins.length - shownCoins.length;
+  const summary = [
+    `By ${shop.owner}.`,
+    rating ? `Rated ${formatRating(rating.average)} out of 5 from ${rating.count} ${rating.count === 1 ? "review" : "reviews"}.` : "",
+    favorites > 0 ? `${favorites === 1 ? "1 buyer keeps it" : `${favorites} buyers keep it`} as a favourite.` : "",
+    `Pays in ${labels.join(", ")}.`,
+    away ? "Its seller is away." : "",
+    mine ? "Your shop." : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const follow = (event: MouseEvent<HTMLAnchorElement>) => {
+    // A new tab or window leaves this page as it is.
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    onOpen(shop);
+  };
 
   return (
-    <StoresRow item xs={12} sm={6} md={6} lg={3} key={storeId}>
-      <ContextMenuResource
-        name={storeOwner}
-        service="STORE"
-        identifier={storeId}
-        link={`qortal://APP/Q-Store/${storeOwner}/${storeId}`}
-      >
-        <StyledStoreCard
-          container
-          onClick={handleStoreCardClick}
-          showCompleteStoreDescription={
-            showCompleteStoreDescription ? true : false
-          }
-        >
-          <StoreCardImageContainer>
-            <StoreCardImage src={storeLogo} alt={storeTitle} />
-            <OpenStoreCard>Open</OpenStoreCard>
-          </StoreCardImageContainer>
-          <StoreCardInfo item>
-            <StoreCardTitle>{storeTitle}</StoreCardTitle>
-            <StoreCardDescription>
-              {showCompleteStoreDescription
-                ? storeDescription
-                : limitCharFunc(storeDescription)}
-            </StoreCardDescription>
-            {isEllipsisActive && (
-              <ExpandDescriptionIcon
-                id={`expand-icon-${storeId}`}
-                width={"20"}
-                height={"20"}
-                color={theme.palette.text.primary}
-                onClickFunc={(e: React.MouseEvent<any>) => {
-                  e.stopPropagation();
-                  setShowCompleteStoreDescription(prevState => !prevState);
-                }}
-                showCompleteStoreDescription={
-                  showCompleteStoreDescription ? true : false
-                }
-              />
-            )}
-          </StoreCardInfo>
-          <AcceptedCoinsRow>
-            <AcceptedCoin src={QORT} alt="QORT-logo" />
-            {supportedCoins?.includes('ARRR') && (
-             <AcceptedCoin src={ARRR} alt="ARRR-logo" />
-            )}
-          </AcceptedCoinsRow>
-          <StoreCardOwner>{storeOwner}</StoreCardOwner>
-          {storeOwner === userName && (
-            <StyledTooltip placement="top" title="You own this store">
-              <YouOwnIcon>
-                <BriefcaseSVG
-                  color={theme.palette.secondary.main}
-                  width={"23"}
-                  height={"23"}
-                />
-              </YouOwnIcon>
-            </StyledTooltip>
+    <Box component="li" ref={ref} data-shop-card sx={{ position: "relative", minWidth: 0 }}>
+      <CardBox>
+        <Art data-clear={pictures.isLoaded(logo) ? "" : undefined}>
+          <CardArt shop={shop} details={details} onLogoLoad={pictures.onLoad(logo)} />
+          {mine && (
+            <Box
+              aria-hidden
+              sx={{
+                position: "absolute",
+                top: 8,
+                left: 8,
+                px: 1,
+                lineHeight: "24px",
+                borderRadius: 12,
+                fontSize: 13,
+                fontWeight: 700,
+                bgcolor: "primary.main",
+                color: "primary.contrastText",
+              }}
+            >
+              Yours
+            </Box>
           )}
-        </StyledStoreCard>
-      </ContextMenuResource>
-    </StoresRow>
+          {away && (
+            <Box
+              aria-hidden
+              sx={{
+                position: "absolute",
+                bottom: 8,
+                left: 8,
+                px: 1,
+                lineHeight: "24px",
+                borderRadius: 12,
+                fontSize: 13,
+                fontWeight: 700,
+                bgcolor: "background.paper",
+                color: "text.primary",
+              }}
+            >
+              Away
+            </Box>
+          )}
+        </Art>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, p: 1.5, flex: 1, minWidth: 0 }}>
+          <Typography id={titleId} component="h2" sx={{ fontSize: 16, fontWeight: 700, lineHeight: 1.3, ...clamp(2) }}>
+            <RouterLink
+              className="card-link"
+              to={storePath(shop.owner, shop.id)}
+              onClick={follow}
+              aria-describedby={shop.description ? `${descriptionId} ${summaryId}` : summaryId}
+            >
+              {shop.title}
+            </RouterLink>
+          </Typography>
+          {shop.description && (
+            <Typography id={descriptionId} variant="body2" color="text.secondary" sx={{ lineHeight: 1.45, ...clamp(2) }}>
+              {shop.description}
+            </Typography>
+          )}
+          <Box aria-hidden sx={{ mt: "auto", pt: 1, display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, flex: 1 }}>
+              <NameAvatar name={shop.owner} size={22} />
+              <Typography variant="body2" color="text.secondary" noWrap>
+                {shop.owner}
+              </Typography>
+            </Box>
+            {rating && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}>
+                <StarRoundedIcon sx={{ fontSize: 18, color: "warning.main" }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {formatRating(rating.average)}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  ({rating.count})
+                </Typography>
+              </Box>
+            )}
+            {favorites > 0 && (
+              <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}>
+                <FavoriteIcon sx={{ fontSize: 16, color: "error.main" }} />
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  {favorites}
+                </Typography>
+              </Box>
+            )}
+          </Box>
+          <Box aria-hidden sx={{ display: "flex", alignItems: "center", gap: 0.75, minHeight: 20 }}>
+            {shownCoins.map((coin, i) => (
+              <CoinIcon key={coin} coin={coin} size={18} label={labels[i]} />
+            ))}
+            {moreCoins > 0 && (
+              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
+                +{moreCoins}
+              </Typography>
+            )}
+          </Box>
+          <Box component="span" id={summaryId} sx={visuallyHidden}>
+            {summary}
+          </Box>
+        </Box>
+      </CardBox>
+      <IconButton
+        aria-label={`More for ${shop.title}`}
+        aria-haspopup="menu"
+        onClick={(event) => onMenu(shop, event.currentTarget)}
+        sx={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          width: 40,
+          height: 40,
+          color: "text.primary",
+          bgcolor: "background.paper",
+          border: 1,
+          borderColor: "divider",
+          "&:hover": { bgcolor: "background.paper", borderColor: "text.secondary" },
+          "&:focus-visible": { outline: (theme) => `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+          [`@media ${PHONE_MEDIA}`]: { width: 44, height: 44, top: 4, right: 4 },
+        }}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
+    </Box>
   );
-};
+}
+
+/** One shop's bad data gives way to a plain card with a link, never the whole page (LocalBoundary). */
+function SafeStoreCard(props: StoreCardProps) {
+  const { shop } = props;
+  return (
+    <LocalBoundary
+      label={`The card of ${shop.owner}'s shop ${shop.id}`}
+      fallback={
+        <UnavailableCard
+          component="li"
+          heading={shop.title}
+          text="This shop's card couldn't be shown."
+          action={
+            <Button component={RouterLink} to={storePath(shop.owner, shop.id)} sx={{ minHeight: 44, alignSelf: "flex-start" }}>
+              Open shop
+            </Button>
+          }
+        />
+      }
+    >
+      <StoreCardView {...props} />
+    </LocalBoundary>
+  );
+}
+
+export const StoreCard = memo(SafeStoreCard);

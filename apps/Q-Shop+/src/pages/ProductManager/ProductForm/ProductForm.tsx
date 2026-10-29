@@ -1,381 +1,639 @@
-import React, { useEffect, useState } from "react";
-import { Box, FormControl, SelectChangeEvent, useTheme } from "@mui/material";
+/**
+ * The product form's fields: images (up to 3, the first is the main one),
+ * title, description, the QORT price and an optional own price for every
+ * other coin the shop takes, type, category and (when editing) status. It is
+ * controlled: NewProduct.tsx holds the values and turns them into a draft.
+ */
+import { percentOff } from "../../../sale/compareAt";
+import { StockFields } from "../../../stock/StockFields";
+import { useStockLeft } from "../../../stock/notes";
+import { shortStoreIdOf } from "../../../qdn/identifiers";
+import { Suspense, useId, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import {
+  Box,
+  Button,
+  IconButton,
+  InputAdornment,
+  Skeleton,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
+import StarOutlineOutlinedIcon from "@mui/icons-material/StarOutlineOutlined";
 import ImageUploader from "../../../components/common/ImageUploader";
-import { PublishProductParams } from "../NewProduct/NewProduct";
-import { Price, Product } from "../../../state/features/storeSlice";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../../state/store";
+
+// Quill and the media dialogs: loaded with the form, never for buyers.
+const DescriptionEditor = lazyWithRetry(() => import("../../../richtext/DescriptionEditor"));
+const MediaFields = lazyWithRetry(() => import("../../../richtext/MediaFields"));
+import { CoinIcon } from "../../../components/money/CoinIcon";
+import { CategoryField } from "../../../seller/CategoryField";
+import { CategoryIcon } from "../../../components/CategoryIcon";
+import { suggestCategory } from "../../../utils/categoryMatch";
 import {
-  AddLogoButton,
-  AddLogoIcon,
-  ButtonRow,
-  CancelButton,
-  CreateButton,
-  CustomInputField,
-  CustomNumberField,
-  LogoPreviewRow,
-  StoreLogoPreview,
-} from "../../../components/modals/CreateStoreModal-styles";
+  coinPriceFromFiat,
+  formatFiat,
+  priceDecimals,
+  rateToText,
+  sanitizeFiatInput,
+  staleFiatPriceOf,
+  type FiatPricing,
+} from "../../../money/fiatPricing";
+import { COINS, assetIdOf, coinLabel, isCoinTicker, type ShopCoinSettings } from "../../../money/coins";
 import {
-  AddButton,
-  CategoryRow,
-  CloseIcon,
-  CustomMenuItem,
-  CustomSelect,
-  InputFieldCustomLabel,
-  MaximumImagesRow,
-  ProductImagesRow,
-} from "../NewProduct/NewProduct-styles";
-import { setNotification } from "../../../state/features/notificationsSlice";
-import { addProductsToSaveCategory } from "../../../state/features/globalSlice";
-import { Variant } from "../../../components/common/NumericTextFieldQshop";
-import { CoinFilter } from "../../Store/Store/Store";
+  MAX_PRODUCT_IMAGES,
+  MAX_TITLE_LENGTH,
+  PRODUCT_STATUSES,
+  PRODUCT_TYPES,
+  STATUS_LABEL,
+  TYPE_LABEL,
+  sanitizeAmountInput,
+  typedFiat,
+  defaultAuctionValues,
+  type ProductFormValues,
+} from "../../../seller/productDraft";
+import { AuctionFields } from "../../../seller/AuctionFields";
+import { auctionTermsOf } from "../../../auctions/rules";
+import { VariantsEditor, type RemovedItem } from "../../../variants/VariantsEditor";
+import { itemExtraCoins, variantPriceUnit } from "../../../variants/drafts";
+import { joinDescription, splitDescription } from "../../../richtext/embeds";
+import { lazyWithRetry } from "../../../utils/lazyWithRetry";
+import { usePointerReorder } from "../../../hooks/usePointerReorder";
 
 interface ProductFormProps {
-  onSubmit: (product: PublishProductParams) => void;
-  onClose?: () => void;
-  editProduct?: Product | null;
+  values: ProductFormValues;
+  /** A state setter: several images picked at once each add to the latest values. */
+  onChange: Dispatch<SetStateAction<ProductFormValues>>;
+  /** The coins the shop takes, QORT first (money/coins.ts shopCoins). */
+  coins: string[];
+  shop: ShopCoinSettings | null | undefined;
+  /** The product's saved category when it isn't one of the list (constants/categories.ts): kept until another is picked. */
+  oldCategory?: string | null;
+  /** The shop prices in a currency at the seller's rates (money/fiatPricing.ts): a price in it comes first. */
+  pricing?: FiatPricing | null;
+  /** The product as saved, to say when its price in the currency was changed elsewhere. */
+  saved?: Record<string, unknown> | null;
+  /** Assets that can't be split (`ASSET:<id>`): their prices are whole units. */
+  wholeOnly?: string[];
+  /** Editing a published product: the status can change. */
+  editing: boolean;
+  onImageError: (message: string) => void;
+  /**
+   * The product's pictures past the third are still being read from QDN, or
+   * couldn't be (qdn/productPictures.ts): its pictures can't change until
+   * they are in.
+   */
+  picturesLoad?: { status: "loading" | "failed"; count: number; onRetry: () => void } | null;
+  /** The name the shop publishes under: videos and PDFs added in the description are published by it. */
+  publisher?: string | null;
+  shopTitle?: string;
+  /** Editing a variant group (variants/drafts.ts): its items' stock is theirs, and it sells at a price. */
+  variantGroup?: { removed: RemovedItem[] } | null;
+  /** The shop's collections it's in (seller/CollectionsField.tsx), under its category. */
+  collectionsField?: ReactNode;
 }
-interface ProductObj {
-  title?: string;
-  description?: string;
-  price: number;
-  images: string[];
-  category?: string;
-  priceARRR?: number;
-  priceQORT?: number;
+
+/** One part of the form: a panel of its own on wider screens, plain on phones. */
+const panelSx = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+  minWidth: 0,
+  p: { xs: 0, md: 2 },
+  // Width and style apart: a responsive `border` shorthand would reset the colour to the text's.
+  borderWidth: { xs: 0, md: 1 },
+  borderStyle: "solid",
+  borderColor: "divider",
+  borderRadius: 2,
+} as const;
+
+const SectionTitle = ({ children }: { children: string }) => (
+  <Typography component="h3" sx={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "text.secondary" }}>
+    {children}
+  </Typography>
+);
+
+function coinName(coin: string, shop: ShopCoinSettings | null | undefined): string {
+  return isCoinTicker(coin) ? COINS[coin].label : coinLabel(coin, shop);
 }
 
-export const ProductForm: React.FC<ProductFormProps> = ({
-  onClose,
-  onSubmit,
-  editProduct,
-}) => {
-  const theme = useTheme();
-  const dispatch = useDispatch();
-  const categories = useSelector(
-    (state: RootState) => state.global.listProducts.categories
-  );
-  const productsToSaveCategories = useSelector(
-    (state: RootState) => state.global.productsToSaveCategories
-  );
+/** What the price before a sale does, or what's wrong with it. */
+function saleHint(typed: string | undefined, now: number, currency: string): string {
+  const was = Number((typed ?? "").trim());
+  if (!(typed ?? "").trim()) return "Putting it on sale? Its old price shows crossed out, with what buyers save.";
+  if (!(was > 0)) return "Type the price it had before.";
+  if (!(now > 0)) return "Set its price first.";
+  if (was <= now) return `Higher than its price (${now} ${currency}), or buyers see no sale.`;
+  return `Buyers see ${percentOff(was, now)}% off.`;
+}
 
-  const [product, setProduct] = useState<ProductObj>({
-    title: "",
-    description: "",
-    price: 0,
-    images: [],
-  });
-  const currentStore = useSelector(
-    (state: RootState) => state.global.currentStore
+export const ProductForm = ({
+  values,
+  onChange,
+  coins,
+  shop,
+  oldCategory,
+  pricing,
+  saved,
+  wholeOnly = [],
+  editing,
+  onImageError,
+  picturesLoad = null,
+  publisher = null,
+  shopTitle,
+  variantGroup = null,
+  collectionsField = null,
+}: ProductFormProps) => {
+  const picturesLocked = !!picturesLoad;
+  const descriptionLabel = useId();
+  // The description's videos and files apart from its text (richtext/embeds.ts).
+  const media = useMemo(() => splitDescription(values.description), [values.description]);
+  // Stock counts (stock/model.ts): a saved product's orders, and in an edited group each item's.
+  const savedId = typeof saved?.id === "string" ? saved.id : null;
+  const savedShortStoreId = shortStoreIdOf(typeof saved?.storeId === "string" ? saved.storeId : "");
+  const groupStock = useStockLeft(
+    values.stock?.tracked && values.variants
+      ? Object.values(values.variants.rows).flatMap((row) => (row.productId && row.stockSaved ? [{ shortStoreId: savedShortStoreId, productId: row.productId, stock: row.stockSaved }] : []))
+      : []
   );
-  const [categoryList, setCategoryList] = useState<string[]>([]);
-  const [selectedType, setSelectedType] = useState<string>("digital");
-  const [images, setImages] = useState<string[]>([]);
-  const [selectedStatus, setSelectedStatus] = useState<string>("AVAILABLE");
-  const [newCategory, setNewCategory] = useState<string>("");
-  const [selectedCategory, setSelectedCategory] = useState<string | null>("");
+  const set = <K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) =>
+    onChange((prev) => ({ ...prev, [key]: value }));
+  // The category the title suggests (utils/categoryMatch.ts). While the seller hasn't picked one,
+  // it follows the title as they type it; once they pick, it stays theirs.
+  const [autoFill, setAutoFill] = useState(!values.category);
+  const [autoCategory, setAutoCategory] = useState<string | null>(null);
+  // What is typed in the category field to search it; null: it shows the category.
+  const [categoryText, setCategoryText] = useState<string | null>(null);
+  const suggested = suggestCategory(values.title);
+  const setTitle = (title: string) => {
+    const follow = autoFill && (!values.category || values.category === autoCategory);
+    const next = follow ? suggestCategory(title) : null;
+    if (next) {
+      setAutoCategory(next);
+      setCategoryText(null);
+    }
+    onChange((prev) => ({ ...prev, title, ...(next && { category: next }) }));
+  };
+  const pickCategory = (category: string) => {
+    setAutoFill(false);
+    setCategoryText(null);
+    set("category", category);
+  };
+  const categoryHelp =
+    oldCategory && values.category === oldCategory
+      ? `“${oldCategory}” isn't one of the categories every shop uses. Pick one, so buyers find this product with others like it.`
+      : autoFill && values.category && values.category === autoCategory
+        ? "Suggested from the title. Pick another if it doesn't fit."
+        : "Type what it is (e.g. glasses, ghee, hoodie) or pick one. The same categories in every shop.";
+  const setPrice = (coin: string, text: string) =>
+    onChange((prev) => ({
+      ...prev,
+      // An asset that can't be split takes whole units only.
+      prices: { ...prev.prices, [coin]: wholeOnly.includes(coin) ? text.replace(/\D/g, "") : sanitizeAmountInput(text) },
+    }));
+  const title = values.title.trim() || "Product";
+  const fiat = typedFiat(values, pricing);
+  // A price in the shop's currency gives the QORT and ARRR prices; only asset prices are typed then.
+  const otherCoins = coins.filter((c) => c !== "QORT" && !(fiat !== null && c === "ARRR"));
+  const stale = pricing && !(values.fiat ?? "").trim() ? staleFiatPriceOf(saved, pricing.currency) : null;
+  // Variants are priced in the shop's currency when it has one (variants/drafts.ts); the product's price shows in theirs, or in QORT.
+  const itemUnit = variantPriceUnit(values, pricing);
+  const qortText = (values.prices.QORT ?? "").trim();
+  const basePrice = fiat !== null ? (values.fiat ?? "") : qortText ? (itemUnit === "QORT" ? qortText : `${qortText} QORT`) : "";
 
-  const editProductQortPrice =
-    editProduct?.price?.find((item: Price) => item?.currency === "qort")
-      ?.value || product.price;
-      const editProductARRRPrice =
-      editProduct?.price?.find((item: Price) => item?.currency === CoinFilter.arrr)
-        ?.value || "";
-
-  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setProduct({
-      ...product,
-      [event.target.name]: event.target.value as string | number,
+  const removeImage = (index: number) => onChange((prev) => ({ ...prev, images: prev.images.filter((_, i) => i !== index) }));
+  const makeMain = (index: number) =>
+    onChange((prev) => {
+      const next = prev.images.slice();
+      const [img] = next.splice(index, 1);
+      return { ...prev, images: [img, ...next] };
     });
-  };
-
-  const handleProductPriceChange = (value: string) => {
-    const price = Number(value);
-    setProduct({ ...product, price: price });
-  };
-  const handleProductPriceChangeForeign = (value: string, coin:string) => {
-    const price = Number(value);
-    setProduct({ ...product, [`price${coin}`]: price });
-  };
-
-  const handleSelectChange = (event: SelectChangeEvent<string | null>) => {
-    const optionId = event.target.value;
-    const selectedOption = categoryList.find(option => option === optionId);
-    setSelectedCategory(selectedOption || null);
-  };
-
-  const handleNewCategory = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setNewCategory(event.target.value);
-  };
-
-  const handleSubmit = () => {
-    if (!selectedType || !selectedCategory) {
-      dispatch(
-        setNotification({
-          msg: "Please select type and category",
-          alertType: "error",
-        })
-      );
-      return;
-    }
-
-    if (isNaN(product.price)) {
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Price must be a number!",
-        })
-      );
-      return;
-    }
-
-    let price = []
-    price.push({
-      currency: "qort",
-      value: product.price,
-    })
-
-    for (const value of Object.values(CoinFilter)) {
-      if(product[`price${value}`]){
-        price.push(
-          {
-            currency: value,
-            value: +(product[`price${value}`] || 0),
-          },
-        )
-      }
-    }
-
-    onSubmit({
-      title: product.title,
-      description: product.description,
-      type: selectedType,
-      images,
-      category: selectedCategory,
-      status: selectedStatus,
-      price: price,
-      mainImageIndex: 0,
+  // Drag a picture to move it: a mouse in Hub, a press and hold in GO (hooks/usePointerReorder.ts).
+  const moveImage = (from: number, to: number) =>
+    onChange((prev) => {
+      const next = prev.images.slice();
+      const [img] = next.splice(from, 1);
+      next.splice(to, 0, img);
+      return { ...prev, images: next };
     });
-  };
-
-  const addNewCategoryToList = () => {
-    if (!newCategory) return;
-    setSelectedCategory(newCategory);
-    setCategoryList(prev => [...prev, newCategory]);
-    setNewCategory("");
-    dispatch(addProductsToSaveCategory(newCategory));
-  };
-
-  useEffect(() => {
-    if (categories || productsToSaveCategories) {
-      const existingCategories = [...categories, ...productsToSaveCategories];
-      setCategoryList(existingCategories);
-    }
-  }, [categories, productsToSaveCategories]);
-
-  useEffect(() => {
-    if (editProduct) {
-      try {
-        const { title, description, images, type, category, status } =
-          editProduct;
-
-        setProduct({
-          title,
-          description,
-          images: [],
-          price: editProductQortPrice,
-        });
-        if (images) {
-          setImages(images);
-        }
-        if (type) {
-          setSelectedType(type);
-        }
-        if (category) {
-          setSelectedCategory(category);
-        }
-        if (status) {
-          setSelectedStatus(status);
-        }
-      } catch (error) {
-        console.log({ error });
-      }
-    }
-  }, [editProduct]);
+  const reorder = usePointerReorder(moveImage, { disabled: picturesLocked });
+  // Keys that follow a picture when it moves (a dragged one stays mounted, so a finger's drag goes on):
+  // its data's length and middle (PNG and WebP data end alike), then which copy of it, in order.
+  const imageKeys = useMemo(() => {
+    const seen = new Map<string, number>();
+    return values.images.map((img) => {
+      const base = `${img.length}:${img.slice(Math.floor(img.length / 2), Math.floor(img.length / 2) + 32)}`;
+      const n = seen.get(base) ?? 0;
+      seen.set(base, n + 1);
+      return `${base}#${n}`;
+    });
+  }, [values.images]);
 
   return (
-    <>
-      {images.length > 0 && (
-        <ProductImagesRow>
-          {images.map((img, index) => (
-            <LogoPreviewRow>
-              <Box style={{ position: "relative" }}>
-                <StoreLogoPreview src={img} alt={`product-img-${index}`} />
-                <CloseIcon
-                  color={theme.palette.text.primary}
-                  onClickFunc={() => {
-                    setImages(prev => prev.filter(item => item !== img));
+    // Wide windows: pictures on the left, what it is and its price on the right, the description under both (Simon, 2026-10-24: "wider … nicely and simply arranged").
+    <Box sx={{ display: "grid", gap: { xs: 3, md: 2.5 }, gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "minmax(0, 5fr) minmax(0, 7fr)" }, alignItems: "start" }}>
+      <Box component="section" aria-label="Images" sx={[panelSx, { gap: 1.5, gridRow: { md: "span 2" } }]}>
+        <SectionTitle>Images</SectionTitle>
+        {values.images.length > 0 && (
+          <Box
+            component="ul"
+            aria-label={`Pictures (${values.images.length} of ${MAX_PRODUCT_IMAGES})`}
+            sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(30%, 108px), 1fr))", gap: 1 }}
+          >
+            {values.images.map((img, index) => (
+              <Box
+                component="li"
+                key={imageKeys[index]}
+                {...reorder.itemProps(index)}
+                sx={{ display: "flex", flexDirection: "column", gap: 0.5, opacity: reorder.dragging === index ? 0.6 : 1 }}
+              >
+                <Box
+                  component="img"
+                  src={img}
+                  alt={`${title}, image ${index + 1}${index === 0 ? " (main)" : ""}`}
+                  draggable={false}
+                  sx={{
+                    cursor: picturesLocked ? undefined : reorder.dragging === null ? "grab" : "grabbing",
+                    userSelect: "none",
+                    WebkitTouchCallout: "none",
+                    ...(reorder.dragging === index && { outline: 2, outlineColor: "primary.main", outlineOffset: 2 }),
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    objectFit: "cover",
+                    borderRadius: 1,
+                    border: 1,
+                    borderColor: index === 0 ? "primary.main" : "divider",
+                    bgcolor: "action.hover",
                   }}
-                  height={"22"}
-                  width={"22"}
-                ></CloseIcon>
+                />
+                <Box sx={{ display: "flex", justifyContent: "center", gap: 0.5 }}>
+                  {index > 0 && (
+                    <Tooltip title="Make main image">
+                      <span>
+                        <IconButton
+                          aria-label={`Make image ${index + 1} the main image`}
+                          onClick={() => makeMain(index)}
+                          disabled={picturesLocked}
+                          sx={{ width: 44, height: 44 }}
+                        >
+                          <StarOutlineOutlinedIcon />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  <Tooltip title="Remove image">
+                    <span>
+                      <IconButton aria-label={`Remove image ${index + 1}`} onClick={() => removeImage(index)} disabled={picturesLocked} sx={{ width: 44, height: 44 }}>
+                        <DeleteOutlineOutlinedIcon />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </Box>
               </Box>
-            </LogoPreviewRow>
-          ))}
-        </ProductImagesRow>
-      )}
-      {(images.length === 0 || images.length < 3) && (
-        <ImageUploader
-          onPick={(img: string) => setImages(prev => [...prev, img])}
-        >
-          <AddLogoButton>
-            Add Product Image
-            <AddLogoIcon
-              sx={{
-                height: "25px",
-                width: "auto",
-              }}
-            ></AddLogoIcon>
-          </AddLogoButton>
-        </ImageUploader>
-      )}
-      {images.length > 0 && (
-        <MaximumImagesRow>*Maximum 3 images</MaximumImagesRow>
-      )}
-      <CustomInputField
-        name="title"
-        label="Title"
-        variant="filled"
-        value={product.title}
-        onChange={handleInputChange}
-        inputProps={{ maxLength: 180 }}
-        required
-      />
-      <CustomInputField
-        name="description"
-        label="Description"
-        value={product.description}
-        variant="filled"
-        onChange={handleInputChange}
-        required
-      />
-      <CustomNumberField
-        name="price"
-        label="Price in QORT"
-        variant={Variant.filled}
-        initialValue={editProductQortPrice.toString()}
-        addIconButtons={false}
-        minValue={0}
-        maxValue={Number.MAX_SAFE_INTEGER}
-        allowDecimals={true}
-        onChangeFunc={handleProductPriceChange}
-        required={true}
-      />
-      {currentStore?.supportedCoins?.includes(CoinFilter.arrr) && (
-         <CustomNumberField
-         name="arrr-price"
-         label="Price in ARRR"
-         variant={Variant.filled}
-         initialValue={editProductARRRPrice.toString()}
-         addIconButtons={false}
-         minValue={0}
-         maxValue={Number.MAX_SAFE_INTEGER}
-         allowDecimals={true}
-         onChangeFunc={(val)=>handleProductPriceChangeForeign(val, CoinFilter.arrr)}
-         required={false}
-       />
-      )}
-     
-      <Box>
-        <FormControl fullWidth>
-          <InputFieldCustomLabel id="product-type-label">
-            Product Type
-          </InputFieldCustomLabel>
-          <CustomSelect
-            labelId="product-type-label"
-            label="Product Type"
-            variant="filled"
-            value={selectedType}
-            onChange={event => {
-              setSelectedType(event.target.value as string);
-            }}
-            required
-            fullWidth
-          >
-            <CustomMenuItem value="digital">Digital</CustomMenuItem>
-            <CustomMenuItem value="physical">Physical</CustomMenuItem>
-          </CustomSelect>
-        </FormControl>
-      </Box>
-      <CategoryRow style={{ marginBottom: "10px" }}>
-        <FormControl style={{ width: "60%" }}>
-          <InputFieldCustomLabel shrink={true} id="product-category-label">
-            Category
-          </InputFieldCustomLabel>
-          <CustomSelect
-            notched={true}
-            labelId="product-category-label"
-            label="Category"
-            value={selectedCategory}
-            displayEmpty={true}
-            onChange={event => {
-              handleSelectChange(event as SelectChangeEvent<string | null>);
-            }}
-            required
-            fullWidth
-          >
-            <CustomMenuItem value="">
-              <em>Add a Category</em>
-            </CustomMenuItem>
-            {categoryList.map(category => (
-              <CustomMenuItem value={category}>{category}</CustomMenuItem>
             ))}
-          </CustomSelect>
-        </FormControl>
-        <CategoryRow style={{ gap: "20px" }}>
-          <CustomInputField
-            style={{ flexGrow: 1 }}
-            name="newCategory"
-            label="New Category"
-            variant="filled"
-            value={newCategory}
-            onChange={handleNewCategory}
+            {picturesLoad?.status === "loading" &&
+              Array.from({ length: picturesLoad.count }, (_, i) => (
+                <Box component="li" key={`more-${i}`} aria-hidden>
+                  <Skeleton variant="rounded" sx={{ width: "100%", height: "auto", aspectRatio: "1 / 1" }} />
+                </Box>
+              ))}
+          </Box>
+        )}
+        {picturesLoad?.status === "loading" && (
+          <Typography variant="body2" color="text.secondary" role="status">
+            Loading {picturesLoad.count === 1 ? "1 more picture" : `${picturesLoad.count} more pictures`}…
+          </Typography>
+        )}
+        {picturesLoad?.status === "failed" && (
+          <Box role="alert" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+            <Typography variant="body2" sx={{ flex: "1 1 220px" }}>
+              {picturesLoad.count === 1 ? "1 more picture" : `${picturesLoad.count} more pictures`} of this product couldn't be read from
+              your node (or not as last published yet). Its pictures can change once they are in; anything else you change saves, and the
+              pictures stay as they are.
+            </Typography>
+            <Button variant="outlined" color="inherit" onClick={picturesLoad.onRetry} sx={{ minHeight: 44 }}>
+              Try again
+            </Button>
+          </Box>
+        )}
+        {!picturesLocked && values.images.length < MAX_PRODUCT_IMAGES && (
+          <ImageUploader
+            label={values.images.length === 0 ? "Add images" : "Add another image"}
+            max={MAX_PRODUCT_IMAGES - values.images.length}
+            onPick={(img) => onChange((prev) => ({ ...prev, images: [...prev.images, img].slice(0, MAX_PRODUCT_IMAGES) }))}
+            onError={onImageError}
           />
-          <AddButton variant="contained" onClick={addNewCategoryToList}>
-            Add
-          </AddButton>
-        </CategoryRow>
-      </CategoryRow>
-      {editProduct && (
-        <FormControl style={{ width: "60%" }}>
-          <InputFieldCustomLabel shrink={true} id="product-status">
-            Product Status
-          </InputFieldCustomLabel>
-          <CustomSelect
-            notched={true}
-            labelId="product-status"
-            name="status"
-            label="Product Status"
-            value={selectedStatus}
-            onChange={event => setSelectedStatus(event.target.value as string)}
-            required
-            fullWidth
+        )}
+        {/* Videos and files, under the pictures as buyers see them (richtext/MediaFields.tsx); stored in the description. */}
+        <Suspense fallback={<Skeleton variant="rounded" height={44} aria-label="Loading" />}>
+          <MediaFields
+            embeds={media.embeds}
+            onChange={(embeds) => onChange((prev) => ({ ...prev, description: joinDescription(embeds, splitDescription(prev.description).text) }))}
+            name={publisher}
+            productTitle={values.title.trim()}
+            shopTitle={shopTitle}
+          />
+        </Suspense>
+        <Typography variant="body2" color="text.secondary">
+          Drag a picture to move it (on a phone, press and hold it first). The first is the cover in lists: star another to make it the
+          cover. Q-Shop, the original app, shows the first 3.
+        </Typography>
+      </Box>
+
+      <Box component="section" aria-label="Details" sx={panelSx}>
+        <SectionTitle>Details</SectionTitle>
+        <TextField
+          label="Title"
+          value={values.title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+          fullWidth
+          slotProps={{ htmlInput: { maxLength: MAX_TITLE_LENGTH } }}
+          helperText={`${values.title.length}/${MAX_TITLE_LENGTH}`}
+        />
+        <Box>
+          <Typography id="product-type-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+            Type
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            value={values.type}
+            onChange={(_, value) => value && set("type", value)}
+            aria-labelledby="product-type-label"
+            sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 2.5, textTransform: "none" } }}
           >
-            <CustomMenuItem value="AVAILABLE">Available</CustomMenuItem>
-            <CustomMenuItem value="RETIRED">Retired</CustomMenuItem>
-            <CustomMenuItem value="OUT_OF_STOCK">Out of stock</CustomMenuItem>
-          </CustomSelect>
-        </FormControl>
+            {PRODUCT_TYPES.map((type) => (
+              <ToggleButton key={type} value={type}>
+                {TYPE_LABEL[type]}
+              </ToggleButton>
+            ))}
+          </ToggleButtonGroup>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            {values.type === "physical" ? "Buyers give a delivery address at checkout." : "No delivery address is asked for."}
+          </Typography>
+        </Box>
+        <CategoryField
+          value={values.category}
+          inputValue={categoryText ?? values.category}
+          onInputChange={(text) => setCategoryText(text === values.category ? null : text)}
+          onPick={pickCategory}
+          oldCategory={oldCategory}
+          helperText={categoryHelp}
+        />
+        {oldCategory && values.category === oldCategory && suggested && (
+          <Box>
+            <Button
+              variant="outlined"
+              onClick={() => pickCategory(suggested)}
+              startIcon={<CategoryIcon category={suggested} size={24} />}
+              sx={{ minHeight: 44, textTransform: "none" }}
+            >
+              {`Use ${suggested} (suggested from the title)`}
+            </Button>
+          </Box>
+        )}
+        {collectionsField}
+        {editing && values.sale === "auction" && (
+          <Box>
+            <Typography id="product-listing-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              In the shop
+            </Typography>
+            {/* An auction is stored out of stock for the original app; it can still be retired (once it has sold, say). */}
+            <ToggleButtonGroup
+              exclusive
+              value={values.status === "RETIRED" ? "RETIRED" : "OUT_OF_STOCK"}
+              onChange={(_, value) => value && set("status", value)}
+              aria-labelledby="product-listing-label"
+              sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
+            >
+              <ToggleButton value="OUT_OF_STOCK">Listed</ToggleButton>
+              <ToggleButton value="RETIRED">Retired</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
+        {editing && values.sale !== "auction" && !variantGroup && (
+          <Box>
+            <Typography id="product-status-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              Status
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              value={values.status}
+              onChange={(_, value) => value && set("status", value)}
+              aria-labelledby="product-status-label"
+              sx={{ flexWrap: "wrap", "& .MuiToggleButton-root": { minHeight: 44, px: 2, textTransform: "none" } }}
+            >
+              {PRODUCT_STATUSES.map((status) => (
+                <ToggleButton key={status} value={status}>
+                  {STATUS_LABEL[status]}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          </Box>
+        )}
+        {/* An auction sells one of a kind: nothing to count. */}
+        {values.sale !== "auction" && values.stock && (
+          <StockFields
+            value={values.stock}
+            onChange={(stock) => onChange((prev) => ({ ...prev, stock }))}
+            productId={savedId}
+            shortStoreId={savedShortStoreId}
+            variants={!!values.variants}
+          />
+        )}
+      </Box>
+
+      <Box component="section" aria-label="Price" sx={panelSx}>
+        <SectionTitle>Price</SectionTitle>
+        {/* A group sells at a price (auctions are one of a kind). */}
+        {!variantGroup && (
+          <Box>
+            <Typography id="product-sale-label" variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+              How it sells
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              value={values.sale ?? "fixed"}
+              onChange={(_, sale: "fixed" | "auction" | null) =>
+                sale &&
+                onChange((prev) => ({
+                  ...prev,
+                  sale,
+                  // A first auction starts from the QORT price typed so far.
+                  ...(sale === "auction" && {
+                    auction: prev.auction ?? { ...defaultAuctionValues(Date.now()), startingBid: prev.prices.QORT ?? "" },
+                  }),
+                  // An auction is stored out of stock (for the original); back at a price, it's for sale again.
+                  ...(sale === "fixed" && prev.sale === "auction" && { status: "AVAILABLE" }),
+                }))
+              }
+              aria-labelledby="product-sale-label"
+              sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 2.5, textTransform: "none" } }}
+            >
+              <ToggleButton value="fixed">Fixed price</ToggleButton>
+              <ToggleButton value="auction">Auction</ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
+        {values.sale === "auction" && values.auction && (
+          <AuctionFields
+            value={values.auction}
+            onChange={(auction) => onChange((prev) => ({ ...prev, auction }))}
+            saved={auctionTermsOf(saved)}
+            productId={typeof saved?.id === "string" ? saved.id : null}
+            seller={publisher}
+          />
+        )}
+        {values.sale !== "auction" && pricing && (
+          <TextField
+            label={`Price in ${pricing.currency}`}
+            value={values.fiat ?? ""}
+            onChange={(e) => onChange((prev) => ({ ...prev, fiat: sanitizeFiatInput(e.target.value, priceDecimals(pricing.currency)) }))}
+            fullWidth
+            helperText={
+              fiat !== null
+                ? `= ${coinPriceFromFiat(fiat, pricing.rates.QORT)} QORT${
+                    !coins.includes("ARRR")
+                      ? ""
+                      : pricing.rates.ARRR
+                        ? ` · ${coinPriceFromFiat(fiat, pricing.rates.ARRR)} ARRR`
+                        : " (ARRR at your node's rate)"
+                  } at your rates (1 QORT = ${rateToText(pricing.rates.QORT)} ${pricing.currency}). They follow when you change a rate in Shop Settings → Prices.`
+                : stale
+                  ? `Its QORT price was changed elsewhere since it was ${formatFiat(stale, pricing.currency)}. Type a price in ${pricing.currency} to follow your rates again.`
+                  : `Its QORT and ARRR prices then follow from your rates. Leave it empty to set them yourself.`
+            }
+            slotProps={{
+              htmlInput: { inputMode: "decimal", autoComplete: "off" },
+              input: { endAdornment: <InputAdornment position="end">{pricing.currency}</InputAdornment> },
+            }}
+          />
+        )}
+        {values.sale !== "auction" && fiat === null && (
+        <TextField
+          label="Price in QORT"
+          value={values.prices.QORT ?? ""}
+          onChange={(e) => setPrice("QORT", e.target.value)}
+          // In variants, each item can have its own price instead.
+          required={!values.variants}
+          fullWidth
+          slotProps={{
+            htmlInput: { inputMode: "decimal", autoComplete: "off" },
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <CoinIcon coin="QORT" size={20} />
+                </InputAdornment>
+              ),
+              endAdornment: <InputAdornment position="end">QORT</InputAdornment>,
+            },
+          }}
+        />
+        )}
+        {values.sale !== "auction" && (
+          // Shown crossed out to buyers, with what they save (sale/compareAt.ts).
+          <TextField
+            label="Price before the sale (optional)"
+            value={values.compareAt ?? ""}
+            onChange={(e) =>
+              onChange((prev) => ({
+                ...prev,
+                compareAt: fiat !== null && pricing ? sanitizeFiatInput(e.target.value, priceDecimals(pricing.currency)) : sanitizeAmountInput(e.target.value),
+              }))
+            }
+            fullWidth
+            helperText={saleHint(values.compareAt, fiat !== null ? fiat : Number(values.prices.QORT || NaN), fiat !== null && pricing ? pricing.currency : "QORT")}
+            slotProps={{
+              htmlInput: { inputMode: "decimal", autoComplete: "off" },
+              input: { endAdornment: <InputAdornment position="end">{fiat !== null && pricing ? pricing.currency : "QORT"}</InputAdornment> },
+            }}
+          />
+        )}
+        {values.sale !== "auction" && otherCoins.length > 0 && (
+          <>
+            <Typography variant="body2" color="text.secondary">
+              Your shop also takes {otherCoins.map((c) => coinLabel(c, shop)).join(", ")}. Set your own price in a coin, or
+              leave it empty to convert the QORT price at your node&apos;s rate when the buyer pays.
+            </Typography>
+            {otherCoins.map((coin) => {
+              const isAsset = assetIdOf(coin) !== null;
+              const label = coinLabel(coin, shop);
+              return (
+                <TextField
+                  key={coin}
+                  label={`Price in ${coinName(coin, shop)}`}
+                  value={values.prices[coin] ?? ""}
+                  onChange={(e) => setPrice(coin, e.target.value)}
+                  fullWidth
+                  helperText={
+                    isAsset
+                      ? `Buyers can pay in ${label} only when you set a price here.${wholeOnly.includes(coin) ? ` ${label} can't be split: whole units only.` : ""}`
+                      : "Optional. Empty: converted from the QORT price."
+                  }
+                  slotProps={{
+                    htmlInput: { inputMode: wholeOnly.includes(coin) ? "numeric" : "decimal", autoComplete: "off" },
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <CoinIcon coin={coin} size={20} />
+                        </InputAdornment>
+                      ),
+                      endAdornment: <InputAdornment position="end">{label}</InputAdornment>,
+                    },
+                  }}
+                />
+              );
+            })}
+          </>
+        )}
+      </Box>
+      <Box component="section" aria-labelledby={descriptionLabel} sx={[panelSx, { gridColumn: "1 / -1" }]}>
+        <Box>
+          <Typography id={descriptionLabel} component="h3" sx={{ fontWeight: 700, fontSize: 13, letterSpacing: 0.6, textTransform: "uppercase", color: "text.secondary", mb: 1 }}>
+            Description
+          </Typography>
+          <Suspense fallback={<Skeleton variant="rounded" height={208} aria-label="Loading the editor" />}>
+            <DescriptionEditor
+              value={media.text}
+              onChange={(html) => onChange((prev) => ({ ...prev, description: joinDescription(splitDescription(prev.description).embeds, html) }))}
+              labelId={descriptionLabel}
+              placeholder="What it is, what's included, sizes, care…"
+            />
+          </Suspense>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+            Format it with the toolbar, or paste formatted text. qortal:// addresses become links by themselves (the link button takes one too). Videos and PDFs go under the pictures.
+          </Typography>
+        </Box>
+      </Box>
+      {/* A product at a price can come in variants, a saved one too (it becomes the first item); a group is edited with all its items. */}
+      {values.sale !== "auction" && (
+        <Box component="section" aria-label="Variants" sx={[panelSx, { gridColumn: "1 / -1" }]}>
+          <SectionTitle>Variants</SectionTitle>
+          {saved && !variantGroup && values.variants && (
+            <Typography variant="body2" color="text.secondary">
+              This product becomes the first item, so its link, reviews and favourites stay with it; the other items are new products.
+            </Typography>
+          )}
+          <VariantsEditor
+            value={values.variants ?? null}
+            onChange={(variants) => onChange((prev) => ({ ...prev, variants }))}
+            images={values.images}
+            unit={itemUnit}
+            basePrice={basePrice}
+            onImageError={onImageError}
+            onAddImage={(image) =>
+              onChange((prev) =>
+                picturesLocked || prev.images.includes(image) || prev.images.length >= MAX_PRODUCT_IMAGES ? prev : { ...prev, images: [...prev.images, image] }
+              )
+            }
+            group={variantGroup}
+            stock={values.stock?.tracked ? { left: groupStock.left } : null}
+            extraCoins={itemExtraCoins(coins, pricing).map((coin) => ({ coin, label: coinLabel(coin, shop), whole: wholeOnly.includes(coin), base: values.prices[coin] ?? "" }))}
+          />
+        </Box>
       )}
-      <ButtonRow>
-        <CancelButton variant="outlined" color="error" onClick={onClose}>
-          Cancel
-        </CancelButton>
-        <CreateButton onClick={handleSubmit} variant="contained">
-          {editProduct ? "Edit Product" : "Add Product"}
-        </CreateButton>
-      </ButtonRow>
-    </>
+    </Box>
   );
 };

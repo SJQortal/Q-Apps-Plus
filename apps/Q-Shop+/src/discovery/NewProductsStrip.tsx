@@ -1,0 +1,192 @@
+/**
+ * A strip of the newest products across shops, between the first rows of
+ * shop cards. It reads nothing until it scrolls into view (src/discovery/
+ * newProducts.ts), scrolls sideways on its own (the page never does), and
+ * hides itself when there is nothing new to show.
+ */
+import { useEffect, useId, useState } from "react";
+import { Box, Button, Link, Skeleton, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
+import { Link as RouterLink } from "react-router-dom";
+import { useInView } from "react-intersection-observer";
+import { accentWash } from "../hub-theme";
+import { PriceTag } from "../components/money/PriceTag";
+import { auctionTermsOf } from "../auctions/rules";
+import { productPath } from "../qdn/links";
+import { loadNewProducts, type NewProduct } from "./newProducts";
+import { useLoadedPictures } from "../components/common/useLoadedPictures";
+import { ProductImage } from "../components/common/ProductImage";
+
+const TILE_WIDTH = { phone: 156, wide: 184 } as const;
+
+/** A row of product tiles that scrolls sideways on its own (the page never does). */
+export const Row = styled("ul")(({ theme }) => ({
+  listStyle: "none",
+  margin: 0,
+  padding: "2px 2px 8px",
+  display: "grid",
+  gridAutoFlow: "column",
+  gridAutoColumns: TILE_WIDTH.phone,
+  gap: 12,
+  overflowX: "auto",
+  overscrollBehaviorX: "contain",
+  scrollSnapType: "x mandatory",
+  [theme.breakpoints.up("sm")]: { gridAutoColumns: TILE_WIDTH.wide, gap: 16 },
+}));
+
+const Tile = styled(RouterLink)(({ theme }) => ({
+  display: "flex",
+  flexDirection: "column",
+  height: "100%",
+  color: theme.palette.text.primary,
+  textDecoration: "none",
+  backgroundColor: theme.palette.background.paper,
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius,
+  overflow: "hidden",
+  transition: "border-color 160ms ease",
+  "@media (hover: hover)": { "&:hover": { borderColor: theme.palette.primary.main } },
+  // The picture comes a little closer under the pointer, as on product cards.
+  "& img": { transition: "transform 300ms ease" },
+  "@media (hover: hover) and (prefers-reduced-motion: no-preference)": { "&:hover img": { transform: "scale(1.05)" } },
+  "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+}));
+
+export function ProductTile({ item }: { item: NewProduct }) {
+  const titleId = useId();
+  const detailId = useId();
+  const { product } = item;
+  const pictures = useLoadedPictures();
+  // An auction is stored out of stock for the original app: it says it's an auction instead.
+  const auction = product.status !== "RETIRED" && auctionTermsOf(product) !== null;
+  const outOfStock = !auction && product.status === "OUT_OF_STOCK";
+  return (
+    <Box component="li" sx={{ scrollSnapAlign: "start", minWidth: 0 }}>
+      <Tile
+        to={productPath(item.owner, item.storeId, product.id, item.catalogueId)}
+        aria-describedby={detailId}
+      >
+        {/* Once the picture is in, no backdrop: a transparent background shows the tile. */}
+        <Box sx={(theme) => ({ position: "relative", aspectRatio: "1 / 1", overflow: "hidden", bgcolor: pictures.isLoaded(item.image) ? "transparent" : accentWash(theme, 0.08) })}>
+          {/* The title is the next text in the link, so the picture adds nothing to its name. */}
+          <ProductImage src={item.image} alt="" onLoad={pictures.onLoad(item.image)} />
+          {(outOfStock || auction) && (
+            <Box
+              aria-hidden
+              sx={{
+                position: "absolute",
+                left: 8,
+                bottom: 8,
+                px: 1,
+                lineHeight: "24px",
+                borderRadius: 12,
+                fontSize: 13,
+                fontWeight: 700,
+                bgcolor: "background.paper",
+                color: "text.primary",
+              }}
+            >
+              {auction ? "Auction" : "Out of stock"}
+            </Box>
+          )}
+        </Box>
+        <Box sx={{ p: 1.25, display: "flex", flexDirection: "column", gap: 0.5, flex: 1 }}>
+          <Typography
+            id={titleId}
+            component="h3"
+            sx={{
+              fontSize: 14,
+              fontWeight: 600,
+              lineHeight: 1.35,
+              display: "-webkit-box",
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: "vertical",
+              overflow: "hidden",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {product.title}
+          </Typography>
+          <Box id={detailId} sx={{ mt: "auto", display: "flex", flexDirection: "column", gap: 0.25 }}>
+            {/* Medium: the coin name beside a small price would be under 13 px. */}
+            <PriceTag product={product} coin="QORT" rate={null} />
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {auction ? `Auction · ${item.owner}` : outOfStock ? `Out of stock · ${item.owner}` : item.owner}
+            </Typography>
+          </Box>
+        </Box>
+      </Tile>
+    </Box>
+  );
+}
+
+export function NewProductsStrip({ isListedShop }: { isListedShop: (owner: string, storeId: string) => boolean }) {
+  const headingId = useId();
+  const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px 0px" });
+  const [run, setRun] = useState(0);
+  const [result, setResult] = useState<{ run: number; items: NewProduct[] | null }>({ run: -1, items: null });
+
+  useEffect(() => {
+    if (!inView) return;
+    let alive = true;
+    loadNewProducts(isListedShop, { fresh: run > 0 }).then(
+      (items) => {
+        if (alive) setResult({ run, items });
+      },
+      () => {
+        if (alive) setResult({ run, items: null });
+      }
+    );
+    return () => {
+      alive = false;
+    };
+  }, [inView, run, isListedShop]);
+
+  const settled = result.run === run;
+  if (settled && result.items && result.items.length === 0) return null;
+
+  return (
+    <Box component="section" ref={ref} aria-labelledby={headingId} sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+        <Typography id={headingId} component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
+          New products
+        </Typography>
+        <Link
+          component={RouterLink}
+          to="/products"
+          underline="hover"
+          sx={{ fontSize: 14, fontWeight: 600, minHeight: 44, display: "inline-flex", alignItems: "center", px: 0.5 }}
+        >
+          See all products
+        </Link>
+      </Box>
+      {!settled ? (
+        <Box role="status" aria-busy="true" aria-label="Loading new products" sx={{ display: "flex", gap: 1.5, overflow: "hidden" }}>
+          {Array.from({ length: 4 }, (_, i) => (
+            <Box key={i} sx={{ flex: `0 0 ${TILE_WIDTH.phone}px` }}>
+              <Skeleton variant="rounded" sx={{ width: "100%", height: TILE_WIDTH.phone }} />
+              <Skeleton variant="text" sx={{ fontSize: 14, mt: 1 }} />
+              <Skeleton variant="text" sx={{ fontSize: 14, width: "60%" }} />
+            </Box>
+          ))}
+        </Box>
+      ) : result.items === null ? (
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Couldn't load new products.
+          </Typography>
+          <Button variant="outlined" onClick={() => setRun((n) => n + 1)} sx={{ minHeight: 44 }}>
+            Retry
+          </Button>
+        </Box>
+      ) : (
+        <Row aria-labelledby={headingId}>
+          {result.items.map((item) => (
+            <ProductTile key={item.key} item={item} />
+          ))}
+        </Row>
+      )}
+    </Box>
+  );
+}

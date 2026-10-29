@@ -1,211 +1,227 @@
-import { AppBar, Button, Typography, Box, Popover } from "@mui/material";
-import { styled } from "@mui/system";
-import { LightModeSVG } from "../../../assets/svgs/LightModeSVG";
-import { DarkModeSVG } from "../../../assets/svgs/DarkModeSVG";
-import { StorefrontSVG } from "../../../assets/svgs/StorefrontSVG";
+import { AppBar, Typography } from "@mui/material";
+import { styled, type Theme } from "@mui/material/styles";
+import { headerFill, primarySoft } from "../../../hub-theme";
+import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { CartSVG } from "../../../assets/svgs/CartSVG";
+import { HEADER_OFFSET } from "./useHideOnScroll";
 
-export const CustomAppBar = styled(AppBar)(({ theme }) => ({
+/** The header's slide on phones; sticky sub-headers follow it with the same timing. */
+const SLIDE = "180ms ease";
+
+/**
+ * Positions a page's sticky sub-header: just below the header while it
+ * shows, at the top of the screen once it slides away, and under it in the
+ * stacking order, so the header never comes back underneath. `padTop` is the
+ * bar's own top padding; the notch inset is added only once the header has
+ * gone and the bar is at the top.
+ */
+export const stickyBelowHeader = (theme: Theme, padTop: string) =>
+  ({
+    position: "sticky",
+    top: HEADER_OFFSET,
+    zIndex: theme.zIndex.appBar - 1,
+    paddingTop: `max(${padTop}, calc(${padTop} + env(safe-area-inset-top, 0px) - ${HEADER_OFFSET}))`,
+    transition: `top ${SLIDE}`,
+    "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+  }) as const;
+
+/** The sticky, translucent header (docs/DESIGN.md → Layout → Headers). */
+export const CustomAppBar = styled(AppBar, {
+  shouldForwardProp: (prop) => prop !== "collapsed",
+})<{ collapsed?: boolean }>(({ theme, collapsed }) => ({
   display: "flex",
   flexDirection: "row",
-  justifyContent: "space-between",
+  justifyContent: "center",
   alignItems: "center",
   width: "100%",
-  padding: "5px 16px",
+  minHeight: 56,
   backgroundImage: "none",
-  borderBottom: `1px solid ${theme.palette.primary.light}`,
-  backgroundColor: theme.palette.background.default,
-  [theme.breakpoints.only("xs")]: {
-    gap: "15px"
-  }
-}));
-
-export const QShopLogoContainer = styled("img")({
-  width: "12%",
-  minWidth: "50px",
-  height: "auto",
-  padding: "2px 0",
-  userSelect: "none",
-  objectFit: "contain",
-  cursor: "pointer"
-});
-
-export const CustomTitle = styled(Typography)({
-  fontWeight: 600,
-  color: "#000000"
-});
-
-export const StoreManagerIcon = styled(StorefrontSVG)(({ theme }) => ({
-  cursor: "pointer",
-  "&:hover": {
-    filter:
-      theme.palette.mode === "dark"
-        ? "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-        : "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))"
-  }
-}));
-
-export const CartIcon = styled(CartSVG)(({ theme }) => ({
-  cursor: "pointer",
-  "&:hover": {
-    filter:
-      theme.palette.mode === "dark"
-        ? "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-        : "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))"
-  }
-}));
-
-export const CreateBlogButton = styled(Button)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "row",
-  alignItems: "center",
-  padding: "8px 15px",
-  borderRadius: "40px",
-  gap: "4px",
-  backgroundColor: theme.palette.secondary.main,
-  color: "#fff",
-  fontFamily: "Raleway",
-  transition: "all 0.3s ease-in-out",
-  boxShadow: "none",
-  "&:hover": {
-    cursor: "pointer",
-    boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px;",
-    backgroundColor: theme.palette.secondary.main,
-    filter: "brightness(1.1)"
-  }
-}));
-
-export const AuthenticateButton = styled(Button)(({ theme }) => ({
-  display: "flex",
-  flexDirection: "row",
-  alignItems: "center",
-  padding: "8px 15px",
-  borderRadius: "40px",
-  gap: "4px",
-  backgroundColor: theme.palette.secondary.main,
-  color: "#fff",
-  fontFamily: "Raleway",
-  transition: "all 0.3s ease-in-out",
-  boxShadow: "none",
-  "&:hover": {
-    cursor: "pointer",
-    boxShadow: "rgba(0, 0, 0, 0.15) 1.95px 1.95px 2.6px;",
-    backgroundColor: theme.palette.secondary.dark,
-    filter: "brightness(1.1)"
-  }
-}));
-
-export const AvatarContainer = styled(Box)({
-  display: "flex",
-  alignItems: "center",
-  "&:hover": {
-    cursor: "pointer",
-    "& #expand-icon": {
-      transition: "all 0.3s ease-in-out",
-      filter: "brightness(0.7)"
-    }
-  }
-});
-
-export const DropdownContainer = styled(Box)(({ theme }) => ({
-  display: "flex",
-  alignItems: "center",
-  gap: "5px",
-  backgroundColor: theme.palette.background.paper,
-  padding: "10px 15px",
-  transition: "all 0.4s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      theme.palette.mode === "light" ? "brightness(0.95)" : "brightness(1.7)"
-  }
-}));
-
-export const DropdownText = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
-  fontSize: "16px",
+  backgroundColor: headerFill(theme),
+  backdropFilter: "blur(20px) saturate(180%)",
+  WebkitBackdropFilter: "blur(20px) saturate(180%)",
+  borderBottom: `1px solid ${theme.palette.divider}`,
   color: theme.palette.text.primary,
-  userSelect: "none"
+  boxShadow: "none",
+  paddingTop: "env(safe-area-inset-top, 0px)",
+  paddingLeft: "env(safe-area-inset-left, 0px)",
+  paddingRight: "env(safe-area-inset-right, 0px)",
+  transform: collapsed ? "translateY(-100%)" : "translateY(0)",
+  transition: `transform ${SLIDE}`,
+  willChange: "transform",
+  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+}));
+
+/**
+ * The header's content, in the same centred column as the pages' grid
+ * (layout/Page.tsx: 1280 px with 16 / 24 px side padding), so the logo lines
+ * up with the content's left edge. Phones keep an 8 px edge.
+ */
+export const HeaderInner = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(1),
+  width: "100%",
+  maxWidth: 1280,
+  minWidth: 0,
+  minHeight: 56,
+  padding: theme.spacing(0, 2),
+  boxSizing: "border-box",
+  [theme.breakpoints.up("sm")]: { padding: theme.spacing(0, 3) },
+  // What the header drops to stay on one line, then the navigation's own row (useHeaderFit.ts measures and sets data-fit).
+  '&[data-fit~="icons"] nav .MuiSvgIcon-root': { display: "none" },
+  '&[data-fit~="name"] .qp-account-name': { display: "none" },
+  '&[data-fit~="prefix"] .qp-rate-prefix': { display: "none" },
+  '&[data-fit~="rate"] .qp-rate-text': { display: "none" },
+  '&[data-fit~="rate"] .qp-quick-rate': { paddingLeft: theme.spacing(1), paddingRight: theme.spacing(1) },
+  '&[data-fit~="rate"] .qp-quick-rate .MuiButton-startIcon': { margin: 0 },
+  '&[data-fit~="title"] .qp-app-title': { display: "none" },
+  '&[data-fit~="balance"] .qp-balance-amount, &[data-fit~="balance"] .qp-balance .MuiButton-endIcon': { display: "none" },
+  '&[data-fit~="balance"] .qp-balance .MuiButton-startIcon': { margin: 0 },
+  '&[data-fit~="rows"]': { flexWrap: "wrap", rowGap: 0, paddingTop: theme.spacing(0.5), paddingBottom: theme.spacing(0.5) },
+  '&[data-fit~="rows"] nav': { order: 1, flexBasis: "100%", marginLeft: 0, overflowX: "auto", scrollbarWidth: "none" },
+  '&[data-fit~="rows"] .qp-quick-rate': { marginLeft: "auto" },
+  '&[data-fit~="rows"]:has(.qp-quick-rate) .qp-header-actions': { marginLeft: 0 },
+  // Last, so a landscape phone wider than 600 px gets the phone edge too.
+  [`@media ${PHONE_MEDIA}`]: { padding: theme.spacing(0, 1) },
+}));
+
+export const LogoButton = styled("button")(({ theme }) => ({
+  appearance: "none",
+  flexShrink: 0,
+  border: 0,
+  background: "transparent",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(1),
+  padding: theme.spacing(0.5),
+  minHeight: 44,
+  borderRadius: theme.shape.borderRadius,
+  color: theme.palette.primary.main,
+  font: "inherit",
+  // The logo, not the button's padding, starts at the column's edge.
+  marginLeft: theme.spacing(-0.5),
+  [`@media ${PHONE_MEDIA}`]: { marginLeft: 0 },
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: 2,
+  },
+}));
+
+/** The app's name beside the logo, in the page's own font (Raleway in Classic). */
+export const AppTitle = styled("span")(({ theme }) => ({
+  fontWeight: 700,
+  fontSize: 18,
+  lineHeight: 1,
+  whiteSpace: "nowrap",
+  color: theme.palette.text.primary,
+}));
+
+/** Shops, Orders and Manage Shop on desktop. */
+export const DesktopNav = styled("nav")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(0.5),
+  marginLeft: theme.spacing(2),
+  minWidth: 0,
+}));
+
+export const NavLinkButton = styled("button", {
+  shouldForwardProp: (prop) => prop !== "active",
+})<{ active?: boolean }>(({ theme, active }) => ({
+  appearance: "none",
+  border: 0,
+  cursor: "pointer",
+  display: "inline-flex",
+  alignItems: "center",
+  gap: theme.spacing(0.75),
+  minHeight: 40,
+  padding: theme.spacing(0.5, 1.5),
+  borderRadius: 999,
+  font: "inherit",
+  fontSize: 15,
+  fontWeight: active ? 700 : 500,
+  whiteSpace: "nowrap",
+  color: active ? theme.palette.primary.main : theme.palette.text.primary,
+  backgroundColor: active ? primarySoft(theme) : "transparent",
+  transition: "background-color 150ms ease, color 150ms ease",
+  "& .MuiSvgIcon-root": { fontSize: 20 },
+  "&:hover": { backgroundColor: active ? primarySoft(theme) : theme.palette.action.hover },
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: 2,
+  },
+  "@media (prefers-reduced-motion: reduce)": { transition: "none" },
+}));
+
+export const HeaderActions = styled("div")(({ theme }) => ({
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(0.5),
+  marginLeft: "auto",
+  minWidth: 0,
+  flexShrink: 0,
+}));
+
+export const AvatarContainer = styled("button")(({ theme }) => ({
+  appearance: "none",
+  border: `1px solid ${theme.palette.divider}`,
+  background: "transparent",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  gap: theme.spacing(1),
+  padding: theme.spacing(0.5, 1, 0.5, 0.5),
+  minHeight: 44,
+  minWidth: 44,
+  justifyContent: "center",
+  borderRadius: 999,
+  color: theme.palette.text.primary,
+  font: "inherit",
+  transition: "background-color 150ms ease",
+  "@media (hover: hover)": { "&:hover": { backgroundColor: theme.palette.action.hover } },
+  "&:focus-visible": {
+    outline: `2px solid ${theme.palette.primary.main}`,
+    outlineOffset: 2,
+  },
+  [`@media ${PHONE_MEDIA}`]: {
+    padding: theme.spacing(0.5),
+    border: 0,
+  },
 }));
 
 export const NavbarName = styled(Typography)(({ theme }) => ({
-  fontFamily: "Raleway",
-  fontSize: "18px",
+  fontSize: 15,
+  fontWeight: 600,
+  lineHeight: 1.3,
   color: theme.palette.text.primary,
-  margin: "0 10px"
+  maxWidth: 160,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  // Narrower desktop headers drop it as they need (useHeaderFit.ts); phones keep the avatar.
+  [`@media ${PHONE_MEDIA}`]: {
+    display: "none",
+  },
 }));
 
-export const ThemeSelectRow = styled(Box)({
-  display: "flex",
-  alignItems: "center",
-  gap: "5px",
-  flexBasis: 0
+/** A small uppercase title over a group of rows in the account menu. */
+export const MenuSectionTitle = styled("p")(({ theme }) => ({
+  margin: 0,
+  padding: theme.spacing(1.25, 2, 0.5),
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: theme.palette.text.secondary,
+}));
+
+/**
+ * The original's cart icon, still used by the shop and product pages. It
+ * takes its colour from the `color` prop; the hover is theme-neutral.
+ */
+export const CartIcon = styled(CartSVG)({
+  cursor: "pointer",
+  transition: "opacity 150ms ease",
+  "&:hover": { opacity: 0.75 },
 });
-
-export const LightModeIcon = styled(LightModeSVG)(({ theme }) => ({
-  transition: "all 0.1s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      theme.palette.mode === "dark"
-        ? "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-        : "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))"
-  }
-}));
-
-export const DarkModeIcon = styled(DarkModeSVG)(({ theme }) => ({
-  transition: "all 0.1s ease-in-out",
-  "&:hover": {
-    cursor: "pointer",
-    filter:
-      theme.palette.mode === "dark"
-        ? "drop-shadow(0px 4px 6px rgba(255, 255, 255, 0.6))"
-        : "drop-shadow(0px 4px 6px rgba(99, 88, 88, 0.1))"
-  }
-}));
-
-export const StoresButton = styled(Button)(({ theme }) => ({
-  backgroundColor: theme.palette.secondary.main,
-  textTransform: "none",
-  fontFamily: "Raleway",
-  gap: "5px",
-  fontSize: "17px",
-  borderRadius: "5px",
-  border: "none",
-  color: theme.palette.text.primary,
-  padding: "2px 15px",
-  transition: "all 0.3s ease-in-out",
-  boxShadow:
-    "rgba(50, 50, 93, 0.25) 0px 2px 5px -1px, rgba(0, 0, 0, 0.3) 0px 1px 3px -1px;",
-  "&:hover": {
-    cursor: "pointer",
-    backgroundColor: theme.palette.secondary.dark,
-    boxShadow:
-      "rgba(50, 50, 93, 0.35) 0px 3px 5px -1px, rgba(0, 0, 0, 0.4) 0px 2px 3px -1px;"
-  }
-}));
-
-export const CustomPopover = styled(Popover)(({ theme }) => ({
-  maxHeight: "400px",
-  overflowY: "auto",
-  "&::-webkit-scrollbar-track": {
-    backgroundColor: "transparent"
-  },
-  "&::-webkit-scrollbar-track:hover": {
-    backgroundColor: "transparent"
-  },
-  "&::-webkit-scrollbar": {
-    width: "8px",
-    height: "10px",
-    backgroundColor: "transparent"
-  },
-  "&::-webkit-scrollbar-thumb": {
-    backgroundColor: theme.palette.mode === "light" ? "#d3d9e1" : "#414763",
-    borderRadius: "8px",
-    backgroundClip: "content-box",
-    border: "4px solid transparent"
-  },
-  "&::-webkit-scrollbar-thumb:hover": {
-    backgroundColor: theme.palette.mode === "light" ? "#b7bcc4" : "#40455f"
-  }
-}));

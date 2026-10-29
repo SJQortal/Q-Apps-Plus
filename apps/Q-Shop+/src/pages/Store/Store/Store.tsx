@@ -1,1149 +1,780 @@
-import React, {
-  useState,
-  useEffect,
-  useCallback,
-  useMemo,
-  useRef,
-} from "react";
-import { useNavigate } from "react-router-dom";
+/**
+ * One shop: `/:user/:store` (the original's route, so links copied from
+ * Q-Shop open here too).
+ *
+ * Reads the shop and its product index (useViewedShop), then works out the
+ * list from the index alone: categories, in stock only and the sorts need no
+ * catalogue. Catalogues (10 products each, with titles and pictures) are
+ * fetched for the 20 products on screen, 5 at a time, once each; a text
+ * search reads the rest progressively, at most 30 catalogues. Prices show in
+ * the coin the buyer picks among the shop's (money/useShopCoin), computed by
+ * money/pricing exactly as checkout does.
+ *
+ * A shop with collections (qdn/collections.ts) shows them as a row of cards
+ * above the products; `?collection=<id>` shows one collection's products,
+ * under its picture, title and description, with the same filters and sorts.
+ * Changing collection eases (hooks/useSmoothSwap.ts): the section's height
+ * glides, the new products fade in, and the page scrolls smoothly to the
+ * collection only when its heading is out of view.
+ * Products show as a grid of tiles or a list of rows (utils/productView.ts:
+ * the buyer's choice, kept in Settings; by default rows on phones).
+ *
+ * "Collections" is the seller's order: the shop's (qdn/productOrder.ts) or,
+ * in a collection, the collection's. It is the default sort wherever there
+ * is one; buyers can still pick another. A shop with collections lists them
+ * first in Featured, the first collection's products, then the next's, then
+ * the rest, each group under a line with its collection's title.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../../state/store";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  useTheme,
-  Grid,
-  CircularProgress,
-  Chip,
-  FormControl,
-  Rating,
-  Typography,
+  Alert,
+  Box,
+  Button,
+  FormControlLabel,
+  IconButton,
+  InputAdornment,
   Skeleton,
+  Switch,
+  TextField,
+  Typography, MenuItem
 } from "@mui/material";
-import {
-  Catalogue,
-  resetListProducts,
-  resetProducts,
-  setIsLoadingGlobal,
-  updateRecentlyVisitedStoreId,
-} from "../../../state/features/globalSlice";
-import {
-  Product,
-  clearReviews,
-  clearViewedStoreDataContainer,
-  setCurrentViewedStore,
-  setPreferredCoin,
-  setViewedStoreDataContainer,
-} from "../../../state/features/storeSlice";
-import LazyLoad from "../../../components/common/LazyLoad";
-import ContextMenuResource from "../../../components/common/ContextMenu/ContextMenuResource";
-import { setStoreId, setStoreOwner } from "../../../state/features/storeSlice";
-import { ProductCard } from "../ProductCard/ProductCard";
-import { ProductDataContainer } from "../../../state/features/globalSlice";
-import { useFetchOrders } from "../../../hooks/useFetchOrders";
-import {
-  ProductManagerRow,
-  ProductManagerButton,
-  BackToStorefrontButton,
-  ProductsContainer,
-  NoProductsContainer,
-  NoProductsText,
-  StoreControlsRow,
-  EditStoreButton,
-  CartIconContainer,
-  NotificationBadge,
-  FiltersCol,
-  FiltersContainer,
-  FiltersTitle,
-  FiltersCheckbox,
-  FiltersRow,
-  FiltersSubContainer,
-  FilterSelect,
-  FilterSelectMenuItems,
-  ProductCardCol,
-  StoreTitleCard,
-  StoreLogo,
-  StoreTitleCol,
-  StoreTitle,
-  RatingContainer,
-  ReusableModalStyled,
-  FiltersOption,
-  FiltersChip,
-  AcceptedCoinRow,
-  OfferedCoinsRow,
-} from "./Store-styles";
+import SearchIcon from "@mui/icons-material/Search";
+import CloseIcon from "@mui/icons-material/Close";
+import TuneIcon from "@mui/icons-material/Tune";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import CloudOffOutlinedIcon from "@mui/icons-material/CloudOffOutlined";
+import SearchOffOutlinedIcon from "@mui/icons-material/SearchOffOutlined";
+import { useInView } from "react-intersection-observer";
+import type { RootState } from "../../../state/store";
 import { toggleEditStoreModal } from "../../../state/features/globalSlice";
-import { CartIcon } from "../../../components/layout/Navbar/Navbar-styles";
-import { setIsOpen } from "../../../state/features/cartSlice";
-import { Cart as CartInterface } from "../../../state/features/cartSlice";
-import { ExpandMoreSVG } from "../../../assets/svgs/ExpandMoreSVG";
+import { setProductToCart } from "../../../state/features/cartSlice";
+import { Page, PageHeader } from "../../../components/layout/Page";
+import { EmptyState } from "../../../components/common/EmptyState";
+import { BottomSheet, ResponsiveDialog } from "../../../components/common/mobile";
+import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
+import { useShopCoin } from "../../../money/useShopCoin";
+import { collectionPath, decodeParam, storePath } from "../../../qdn/links";
+import {
+  categoriesOf,
+  catalogueIdsOf,
+  DEFAULT_PRODUCT_QUERY,
+  effectiveSort,
+  effectiveStatus,
+  FEATURED_SORT,
+  filterAndSortProducts,
+  isLiveAuction,
+  productOf,
+  productRowsFromContainer,
+  withStockLeft,
+  PRODUCT_SORTS,
+  AUCTION_SORT,
+  auctionTimesOf,
+  openAuctionCount,
+  isListed,
+  isOnSale,
+  priceBound,
+  PRODUCTS_PAGE,
+  searchCatalogueIds,
+  searchProducts,
+  searchTerms,
+  type ProductQuery,
+  type ProductRow,
+  type ShopSort,
+} from "../shopData";
+import { featuredOrder, productOrderOf } from "../../../qdn/productOrder";
+import { useCatalogueLoader, useShopReviews, useViewedShop, type LoadStatus } from "../useShopData";
+import { ProductCard, ProductCardSkeleton } from "../ProductCard/ProductCard";
+import { openShopSteps } from "../../../seller/checkup";
+import { AuctionsToggle, CategoryChips, FETCHING_NOTE, PriceRangeFields, ProductGrid, ProductGridSkeleton, ProductViewToggle, SaleToggle, SectionDivider, useDebounced } from "../ProductList";
+import { useNow } from "../../../hooks/useNow";
+import { prefersReducedMotion, useSmoothSwap } from "../../../hooks/useSmoothSwap";
+import { productLayout, useProductView } from "../../../utils/productView";
+import { ShopHeader, ShopHeaderSkeleton } from "../ShopHeader";
 import { StoreDetails } from "../StoreDetails/StoreDetails";
-import { StoreReviews } from "../StoreReviews/StoreReviews";
-import { setNotification } from "../../../state/features/notificationsSlice";
-import {
-  DATA_CONTAINER_BASE,
-  REVIEW_BASE,
-  STORE_BASE,
-} from "../../../constants/identifiers";
-import QORT from "../../../assets/img/qort.png";
-import ARRR from "../../../assets/img/arrr.png";
-import {
-  AcceptedCoin,
-  ExchangeRateCard,
-  ExchangeRateRow,
-  ExchangeRateSubTitle,
-  ExchangeRateTitle,
-} from "../../StoreList/StoreList-styles";
-import { CompareArrowsSVG } from "../../../assets/svgs/CompareArrowsSVG";
+import { ReviewsPanel } from "../StoreReviews/ReviewsPanel";
+import { CoinPicker, RateNote } from "../CoinPicker";
+import { AddedToCartSnackbar, CartButton, type AddedNotice } from "../CartBits";
+import { visuallyHiddenSx } from "../a11y";
+import { LocalBoundary, UnavailableCard } from "../LocalBoundary";
+import { useShopCollections, type ShopCollections } from "../useShopCollections";
+import { CollectionCards, CollectionHeader } from "../ShopCollections";
+import { useOrderCount } from "../orderCount";
+import { selectMenuProps } from "../../../components/common/menuStyle";
+import { bundleRows, variantGroupsOf } from "../../../variants/model";
+import { useStockLeft } from "../../../stock/notes";
+import { shortStoreIdOf } from "../../../qdn/identifiers";
+import { FreeDeliveryBar, useShopCartLines } from "../../../delivery/FreeDeliveryBar";
 
-interface IListProducts {
-  sort: string;
-  products: ProductDataContainer[];
-  categories: { label: string }[];
-}
-
-enum PriceFilter {
-  highest = "Highest",
-  lowest = "Lowest",
-}
-
-enum DateFilter {
-  newest = "Newest",
-  oldest = "Oldest",
-}
-
+/** The coins a price list can show in. Kept here because Settings, the cart and the seller tools import it. */
 export enum CoinFilter {
   qort = "QORT",
   arrr = "ARRR",
 }
 
-export const Store = () => {
-  const navigate = useNavigate();
-  const theme = useTheme();
+/** Products section: the toolbar, the grid and its states. */
+/** The shop page's free-delivery bar: what this cart still needs, or the offer when it's empty. */
+function ShopFreeDelivery({ owner, storeId }: { owner: string; storeId: string }) {
+  const lines = useShopCartLines(owner, storeId);
+  return <FreeDeliveryBar owner={owner} storeId={storeId} lines={lines} framed />;
+}
+
+function ShopProducts({
+  owner,
+  storeId,
+  shop,
+  isOwner,
+  productsStatus,
+  index,
+  onRetry,
+  onSellerPage,
+  collections,
+  collectionId,
+}: {
+  owner: string;
+  storeId: string;
+  shop: Parameters<typeof useShopCoin>[0];
+  isOwner: boolean;
+  productsStatus: LoadStatus;
+  index: { products?: unknown } | null;
+  onRetry: () => void;
+  onSellerPage: () => void;
+  collections: ShopCollections;
+  /** `?collection=`: show only this collection's products. */
+  collectionId: string | null;
+}) {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const phone = usePhoneLayout();
+  const layout = productLayout(useProductView(), phone);
+  const shopCoin = useShopCoin(shop);
+  const { catalogues, statuses, load, retryFailed } = useCatalogueLoader(owner);
+  const [filters, setFilters] = useState<Omit<ProductQuery, "sort">>({ categories: [], inStockOnly: false, auctionsOnly: false, saleOnly: false });
+  // Auctions open and close as time passes: the list looks again every 30 s.
+  const now = useNow(30_000);
+  const [price, setPrice] = useState({ min: "", max: "" });
+  // The buyer's sort, once they pick one; until then the page's default (effectiveSort).
+  const [pickedSort, setPickedSort] = useState<ShopSort | null>(null);
+  const [searchText, setSearchText] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [added, setAdded] = useState<AddedNotice | null>(null);
+  const debouncedSearch = useDebounced(searchText, 250);
+  const terms = useMemo(() => searchTerms(debouncedSearch), [debouncedSearch]);
+  const searching = terms.length > 0;
 
-  const isFirstMountRef = useRef(false);
-
-  const user = useSelector((state: RootState) => state.auth.user);
-  const currentStore = useSelector(
-    (state: RootState) => state.global.currentStore
+  const indexRows = useMemo(() => productRowsFromContainer(index), [index]);
+  // Counted products (stock/model.ts): what's left, from the shop's order notes (one read, only when it counts any).
+  const stockItems = useMemo(
+    () => indexRows.flatMap((row) => (row.stock ? [{ shortStoreId: shortStoreIdOf(storeId), productId: row.productId, stock: row.stock }] : [])),
+    [indexRows, storeId]
   );
-  const isLoadingGlobal = useSelector(
-    (state: RootState) => state.global.isLoadingGlobal
+  const { left: stockLeft } = useStockLeft(stockItems);
+  const allRows = useMemo(() => withStockLeft(indexRows, stockLeft), [indexRows, stockLeft]);
+  // The products the shop lists, for the collections' counts.
+  const listedIds = useMemo(
+    () => new Set(filterAndSortProducts(allRows, DEFAULT_PRODUCT_QUERY, catalogues).map((row) => row.productId)),
+    [allRows, catalogues]
   );
-  const catalogueHashMap = useSelector(
-    (state: RootState) => state.global.catalogueHashMap
-  );
-  // Fetch all carts from Redux
-  const carts = useSelector((state: RootState) => state.cart.carts);
-  // Get storeId from Redux
-  const storeId = useSelector((state: RootState) => state.store.storeId);
-  // Get storeOwner from Redux
-  const storeOwner = useSelector((state: RootState) => state.store.storeOwner);
-  const preferredCoin = useSelector((state: RootState) => state.store.preferredCoin);
-
-  // Get current viewed store from Redux
-  const currentViewedStore = useSelector(
-    (state: RootState) => state.store.currentViewedStore
-  );
-  // List products from store's data container
-  const viewedStoreListProducts = useSelector(
-    (state: RootState) => state.store.viewedStoreListProducts
-  );
-  // List products from store's data container when you own the store
-  const ownStoreListProducts = useSelector(
-    (state: RootState) => state.global.listProducts
-  );
-
-  // Your own data container
-  const userOwnDataContainer = useSelector(
-    (state: RootState) => state.global.dataContainer
-  );
-
-  const { checkAndUpdateResourceCatalogue, getCatalogue } = useFetchOrders();
-
-  const { store, user: username } = useParams();
-
-  const [products, setProducts] = React.useState<Product[]>([]);
-  const [totalCartQuantity, setTotalCartQuantity] = useState<number>(0);
-  const [filterPrice, setFilterPrice] = useState<PriceFilter | null>(null);
-  const [filterDate, setFilterDate] = useState<DateFilter | null>(
-    DateFilter.newest
-  );
-  const [filterCoin, setFilterCoin] = useState<string>(CoinFilter.qort);
-  const [categoryChips, setCategoryChips] = useState<string[]>([]);
-  const [openStoreDetails, setOpenStoreDetails] = useState<boolean>(false);
-  const [openStoreReviews, setOpenStoreReviews] = useState<boolean>(false);
-  const [averageStoreRating, setAverageStoreRating] = useState<number | null>(
-    null
-  );
-  const [averageRatingLoader, setAverageRatingLoader] =
-    useState<boolean>(false);
-  const [hasFetched, setHasFetched] = useState<boolean>(false);
-  const [exchangeRate, setExchangeRate] = useState<number | null>(
-    null
-  );
-
-  const storeToUse = useMemo(()=> {
-   return username === user?.name
-  ? currentStore
-  : currentViewedStore
-  }, [username, user?.name, currentStore, currentViewedStore])
-
-  const calculateARRRExchangeRate = async()=> {
-    try {
-      const url = '/crosschain/price/PIRATECHAIN?maxtrades=10&inverse=true'
-    const info = await fetch(url, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-    const responseDataStore = await info.text();
-
-    const ratio = +responseDataStore /100000000
-    if(isNaN(ratio)) throw new Error('Cannot get exchange rate')
-    setExchangeRate(ratio)
-    } catch (error) {
-      dispatch(setPreferredCoin(CoinFilter.qort))
-      dispatch(
-        setNotification({
-          alertType: "error",
-          msg: "Cannot get exchange rate- reverted to QORT",
-        })
-      );
-    }
-
-  }
-
-  const switchCoin = async ()=> {
-    dispatch(setIsLoadingGlobal(true));
-    await calculateARRRExchangeRate()
-    dispatch(setIsLoadingGlobal(false));
-  }
-
-  // If shop's datacontainer changes, and listProducts becomes empty, clear local products array
+  const counts = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const c of collections.collections) out[c.id] = c.products.filter((id) => listedIds.has(id)).length;
+    return out;
+  }, [collections.collections, listedIds]);
+  const collection = collectionId ? (collections.collections.find((c) => c.id === collectionId) ?? null) : null;
+  // A collection link (shared, or a card tapped) opens on the collection: its heading comes into view and takes focus.
+  const collectionHeading = useRef<HTMLHeadingElement>(null);
+  const openedId = collection?.id;
   useEffect(() => {
-    if (username === user?.name && userOwnDataContainer && Object.keys(userOwnDataContainer.products).length === 0) {
-      setProducts([]);
-    }
-  }, [userOwnDataContainer]);
+    const heading = collectionHeading.current;
+    if (!openedId || !heading) return;
+    // A tapped card usually leaves it in view: the page stays put. Else a smooth scroll to it.
+    const top = heading.getBoundingClientRect().top;
+    const inView = top >= 64 && top <= window.innerHeight * 0.6;
+    if (!inView && typeof heading.scrollIntoView === "function") heading.scrollIntoView({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    heading.focus({ preventScroll: true });
+  }, [openedId]);
+  const productsSection = useRef<HTMLElement>(null);
+  useSmoothSwap(productsSection, openedId ?? "");
+  const waitingForCollection = !!collectionId && (collections.status === "loading" || collections.status === "fetching");
+  const collectionsUnreadable = !!collectionId && collections.status === "unavailable";
+  const collectionGone = !!collectionId && !collection && !waitingForCollection && !collectionsUnreadable && productsStatus === "ready";
+  const rows = useMemo(() => {
+    if (!collection) return allRows;
+    const members = new Set(collection.products);
+    return allRows.filter((row) => members.has(row.productId));
+  }, [allRows, collection]);
+  // The seller's order here: the collection's, or the shop's with its collections first.
+  const shopOrder = useMemo(() => productOrderOf(index), [index]);
+  const featured = useMemo(() => featuredOrder(collections.collections, shopOrder), [collections.collections, shopOrder]);
+  const order = collection ? collection.products : featured.order;
+  // Auctions only: by when they end, unless the buyer picked a sort.
+  const sort = filters.auctionsOnly && !pickedSort ? "ending" : effectiveSort(pickedSort, order.length > 0);
+  const query = useMemo<ProductQuery>(
+    () => ({ ...filters, sort, minQort: priceBound(price.min), maxQort: priceBound(price.max) }),
+    [filters, sort, price]
+  );
+  const auctions = useMemo(() => openAuctionCount(rows, catalogues, now), [rows, catalogues, now]);
+  const onSale = useMemo(() => rows.filter((row) => isListed(row, catalogues) && isOnSale(row, catalogues)).length, [rows, catalogues]);
+  const baseSorts = order.length > 0 ? [FEATURED_SORT, ...PRODUCT_SORTS] : PRODUCT_SORTS;
+  const sortOptions = auctions > 0 || sort === "ending" ? [...baseSorts, AUCTION_SORT] : baseSorts;
+  const categories = useMemo(() => categoriesOf(rows), [rows]);
+  const filtered = useMemo(() => filterAndSortProducts(rows, query, catalogues, order, now), [rows, query, catalogues, order, now]);
+  const scope = useMemo(() => (searching ? searchCatalogueIds(filtered) : null), [searching, filtered]);
+  const results = useMemo(
+    () => (scope ? searchProducts(filtered, terms, scope.ids, catalogues) : filtered),
+    [scope, filtered, terms, catalogues]
+  );
 
-  useEffect(()=> {
-    if(preferredCoin === CoinFilter.arrr && storeToUse?.supportedCoins?.includes(CoinFilter.arrr)){
-      switchCoin()
-    } 
-  }, [preferredCoin, storeToUse])
-
-  const coinToUse = useMemo(()=> {
-    if(preferredCoin === CoinFilter.arrr && storeToUse?.supportedCoins?.includes(CoinFilter.arrr)){
-      return CoinFilter.arrr
-    } else {
-      return CoinFilter.qort
-    }
-  }, [preferredCoin, storeToUse])
-  const getProducts = useCallback(async () => {
-    if (!store) return;
-    try {
-      const offset = products.length;
-      // Get products from store's data container, with ternary depending on whether you own the store or not
-      const productList =
-        username !== user?.name
-          ? viewedStoreListProducts.products
-          : ownStoreListProducts.products;
-      const responseData = productList.slice(offset, offset + 20);
-      const structureData = responseData.map(
-        (product: ProductDataContainer): Product => {
-          return {
-            created: product?.created,
-            catalogueId: product.catalogueId,
-            id: product?.productId || "",
-            user: product?.user || "",
-            status: product?.status || "",
-          };
-        }
-      );
-      isFirstMountRef.current = true;
-      setHasFetched(true);
-      const copiedProducts = [...products];
-      structureData.forEach((product: Product) => {
-        const index = copiedProducts.findIndex(p => p.id === product.id);
-        if (index !== -1) {
-          copiedProducts[index] = product;
-        } else {
-          copiedProducts.push(product);
-        }
-      });
-      setProducts(copiedProducts);
-      // First check in catalogueHashMap if the product raw data is available. If it is, don't do anything as that data will already be available to use in the filterProducts useMemo() function.
-      // If it isn't in catalogueHashMap, loop through the products and add the catalogue found so that you don't fetch other catalogues that you don't need, as each one contains 10 products. This goes too fast on first mount, therefore you can't rely on redux to verify if the catalogue is available or not.
-      let localCatalogue: Record<string, Catalogue> = {};
-      for (const content of structureData) {
-        if (
-          (catalogueHashMap[content.catalogueId] &&
-            catalogueHashMap[content.catalogueId].products[content.id]) ||
-          localCatalogue[content.catalogueId]
-        ) {
-          continue;
-        }
-        if (content.user && content.id) {
-          const res = checkAndUpdateResourceCatalogue({
-            id: content.catalogueId,
-          });
-          if (res) {
-            const fetchedCatalogue: Catalogue = await getCatalogue(
-              content.user,
-              content.catalogueId
-            );
-            if (fetchedCatalogue) {
-              localCatalogue = {
-                ...localCatalogue,
-                [content.catalogueId]: fetchedCatalogue,
-              };
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  }, [
-    products,
-    viewedStoreListProducts.products,
-    ownStoreListProducts.products,
-    store,
-    username,
-    user?.name,
-  ]);
-
-  // Get products on mount
-  useEffect(() => {
-    // Get products from store's data container, with ternary depending on whether you own the store or not
-    if (!isFirstMountRef.current && store) {
-      const productList =
-        username && username !== user?.name
-          ? viewedStoreListProducts.products
-          : ownStoreListProducts.products;
-      if (productList.length === 0) return;
-      // This gets the product raw data
-      getProducts();
-    }
-  }, [
-    getProducts,
-    username,
-    user?.name,
-    store,
-    viewedStoreListProducts?.products,
-    ownStoreListProducts?.products,
-  ]);
-
-  // Get store on mount & dipatch setCurrentViewedStore to redux when it's not your store. If it is your store, this is handled already in the global wrapper, so we do nothing as well.
-  const getStore = useCallback(async () => {
-    let name = username;
-    if (!name) return;
-    if (!store) return;
-
-    try {
-      dispatch(setIsLoadingGlobal(true));
-      // Have access to the storeId, store owner and recently viewed store id in global state for when you are in cart for example
-      dispatch(setStoreId(store));
-      dispatch(updateRecentlyVisitedStoreId(store));
-      dispatch(setStoreOwner(name));
-      // Check if store data is not already inside redux, and that if it is, that it's not from another store. This is to avoid unnecessary QDN calls. getProducts() will get its data from the existing data container in Redux if the store hasn't changed, hence why we clear the products array here as well as the datacontainer only if the currentViewedStore is not the same as the store in the url. The logic below is only for other's people's stores, not your own. Your own store is handled in the global wrapper.
-      if (
-        (!currentViewedStore && name !== user?.name) ||
-        (currentViewedStore?.id !== store && name !== user?.name)
-      ) {
-        setProducts([]);
-        dispatch(clearReviews());
-        dispatch(clearViewedStoreDataContainer());
-        let myStore;
-        const url = `/arbitrary/resources/search?service=STORE&identifier=${store}&exactmatchnames=true&mode=ALL&name=${name}&includemetadata=false`;
-        const info = await fetch(url, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        const responseDataStore = await info.json();
-        const filterOut = responseDataStore.filter((store: any) =>
-          store.identifier.startsWith(`${STORE_BASE}-`)
-        );
-        if (filterOut.length === 0) return;
-        if (filterOut.length !== 0) {
-          // Get first element since it returns an array of stores
-          myStore = filterOut[0];
-        }
-
-        const urlStore = `/arbitrary/STORE/${name}/${store}`;
-        const resource = await fetch(urlStore, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const responseData = await resource.json();
-        // Set shop data to redux now that you have the info/metadata & resource
-        dispatch(
-          setCurrentViewedStore({
-            created: responseData?.created || "",
-            id: myStore.identifier,
-            title: responseData?.title || "",
-            location: responseData?.location,
-            shipsTo: responseData?.shipsTo,
-            description: responseData?.description || "",
-            category: myStore.metadata?.category,
-            tags: myStore.metadata?.tags || [],
-            logo: responseData?.logo || "",
-            shortStoreId: responseData?.shortStoreId,
-            supportedCoins: responseData?.supportedCoins || [],
-            foreignCoins: responseData?.foreignCoins || {}
-          })
-        );
-
-        const urlDatacontainer = `/arbitrary/DOCUMENT/${name}/${store}-${DATA_CONTAINER_BASE}`;
-        const responseContainer = await fetch(urlDatacontainer, {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-        const responseDataContainer = await responseContainer.json();
-
-        // Call to see if the datacontainer actually exists
-        const dataContainerExists = await qortalRequest({
-          action: "SEARCH_QDN_RESOURCES",
-          service: "DOCUMENT",
-          identifier: `${myStore.identifier}-${DATA_CONTAINER_BASE}`,
-          name: name,
-          prefix: false,
-          exactMatchNames: true,
-          limit: 0,
-          offset: 0,
-          reverse: true,
-          mode: "ALL"
-        });
-
-        // Set dataContainer in redux if it is found. This is to do filtering in the future since it cannot be done on QDN at the moment.
-        if (
-          responseDataContainer &&
-          !("error" in responseDataContainer) &&
-          Object.keys(responseDataContainer).length > 0
-        ) {
-          dispatch(
-            setViewedStoreDataContainer({
-              ...responseDataContainer,
-              id: `${store}-${DATA_CONTAINER_BASE}`,
-            })
-          );
-          // If they haven't published a datacontainer, by querying "/arbitrary​/resources​/search", and it comes back as []
-          // If you can't find the data container, aka response code of 404, and it's not your own store, redirect to home page.
-        } else if (
-          responseContainer.status === 404 &&
-          dataContainerExists.length === 0
-        ) {
-          navigate("/");
-          dispatch(
-            setNotification({
-              msg: "Error getting store data container.",
-              alertType: "error",
-            })
-          );
-          // If they haven't published a datacontainer, by querying "/arbitrary​/resources​/search", and it comes back as []
-          // If you can't find the data container, aka response code of 404, and it's your own store, prompt to create the data container.
-        } else if (
-          !responseContainer.ok &&
-          responseContainer.status !== 404 &&
-          dataContainerExists.length > 0
-        ) {
-          navigate("/");
-          dispatch(
-            setNotification({
-              msg: "Server Error",
-              alertType: "error",
-            })
-          );
-          // If the datacontainer exists and you cannot find it, but it's a response of 500, throw general error and redirect to home page.
-        } else {
-          navigate("/");
-          dispatch(
-            setNotification({
-              msg: "Server Error",
-              alertType: "error",
-            })
-          );
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      dispatch(setIsLoadingGlobal(false));
-    }
-  }, [username, store, currentViewedStore]);
-
-  // Get 100 store reviews from QDN and calculate the average review.
-  const getStoreAverageReview = async () => {
-    if (!storeId) return;
-    try {
-      setAverageRatingLoader(true);
-      const parts = storeId.split(`${STORE_BASE}-`);
-      const shortStoreId = parts[1];
-      const query = `${REVIEW_BASE}-${shortStoreId}`;
-      // Since it the url includes /resources, you know you're fetching the resources and not the raw data
-      const url = `/arbitrary/resources/search?service=DOCUMENT&query=${query}&limit=100&includemetadata=false&mode=ALL&reverse=true`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseData = await response.json();
-      if (responseData.length === 0) {
-        setAverageStoreRating(null);
-        return;
-      }
-      // Modify resource into data that is more easily used on the front end
-      const storeRatingsArray = responseData.map((review: any) => {
-        const splitIdentifier = review.identifier.split("-");
-        // Return null if idenfier is not an exact match, because search is not case sensitive
-        const prefixIdentifier = splitIdentifier.slice(0, splitIdentifier.length - 2).join("-");
-        if (query !== prefixIdentifier) return null;
-        const rating = Number(splitIdentifier[splitIdentifier.length - 1]) / 10;
-        return rating;
-      }).filter((rating: number | null) => rating !== null); // Filter out null entries
-
-      // Calculate average rating of the store
-      let averageRating =
-        storeRatingsArray.reduce((acc: number, curr: number) => {
-          return acc + curr;
-        }, 0) / storeRatingsArray.length;
-
-      averageRating = Math.ceil(averageRating * 2) / 2;
-
-      setAverageStoreRating(averageRating);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setAverageRatingLoader(false);
-    }
+  // Paging restarts whenever the list's meaning changes.
+  const listKey = JSON.stringify([query, terms, collection?.id ?? null]);
+  const [paging, setPaging] = useState({ key: listKey, pages: 1 });
+  const pages = paging.key === listKey ? paging.pages : 1;
+  // A group of variants listed as one shows as one card (variants/model.ts).
+  const variantGroups = useMemo(() => variantGroupsOf(index), [index]);
+  const listed = useMemo(() => bundleRows(results, variantGroups), [results, variantGroups]);
+  const shown = listed.slice(0, pages * PRODUCTS_PAGE);
+  const grouped = sort === "featured" && !collection && !searching && featured.sectionOf.size > 0;
+  // Live auctions lead every view (shopData filterAndSortProducts), under their own line, unless the
+  // list is auctions only and not grouped by collection.
+  const liveFirst = shown.length > 0 && (grouped || !query.auctionsOnly) && isLiveAuction(shown[0], catalogues, now);
+  const sectionAt = (i: number): "live" | "rest" | number | null => {
+    if (liveFirst && isLiveAuction(shown[i], catalogues, now)) return "live";
+    if (grouped) return featured.sectionOf.get(shown[i].productId) ?? -1;
+    return liveFirst ? "rest" : null;
   };
+  const hasMore = shown.length < listed.length;
+  const more = useCallback(
+    () => setPaging((prev) => ({ key: listKey, pages: (prev.key === listKey ? prev.pages : 1) + 1 })),
+    [listKey]
+  );
+  const { ref: sentinel } = useInView({ rootMargin: "400px 0px", onChange: (inView) => inView && more(), skip: !hasMore });
 
-  // Get Store and set it in redux global state
+  // Catalogues for what is on screen, or for the search.
+  const needed = scope ? scope.ids : catalogueIdsOf(shown);
+  const neededKey = needed.join("|");
   useEffect(() => {
-    getStore();
-  }, [username, store]);
+    if (productsStatus === "ready") load(neededKey ? neededKey.split("|") : []);
+  }, [load, neededKey, productsStatus]);
 
-  // Get average store rating when storeId is available, and only if the storeId is different from the currentViewedStore when it's not your store, or if storeId is different from currentStore when it is your store. Do this to avoid unnecessary QDN calls.
-  useEffect(() => {
-    if (
-      storeId &&
-      ((currentViewedStore?.id !== storeId &&
-        username !== user?.name &&
-        storeOwner !== user?.name) ||
-        (currentStore?.id !== storeId && username === user?.name))
-    ) {
-      getStoreAverageReview();
-    }
-  }, [storeId, currentViewedStore, currentStore, username, storeOwner, user]);
+  const failedCount = Object.values(statuses).filter((s) => s === "failed").length;
+  const searchPending = scope ? scope.ids.filter((id) => !catalogues[id] && statuses[id] !== "failed").length : 0;
+  // The products a search covers (at most 30 catalogues' worth), and how many of them it has read.
+  const searchScope = useMemo(() => {
+    if (!scope) return { total: 0, read: 0 };
+    const ids = new Set(scope.ids);
+    const inScope = filtered.filter((row) => ids.has(row.catalogueId));
+    return { total: inScope.length, read: inScope.filter((row) => !!catalogues[row.catalogueId]).length };
+  }, [scope, filtered, catalogues]);
+  const cappedNote = `Only the first ${searchScope.total} products were searched; pick a category to narrow it down.`;
+  const priced = query.minQort !== null || query.maxQort !== null;
+  const activeFilters = query.categories.length + (query.inStockOnly ? 1 : 0) + (query.auctionsOnly ? 1 : 0) + (query.saleOnly ? 1 : 0) + (priced ? 1 : 0);
 
-  // Set cart notifications when cart changes
-  useEffect(() => {
-    if (user?.name && storeId) {
-      const shopCart: CartInterface = carts[storeId];
-      // Get the orders of this cart
-      const orders = shopCart?.orders || {};
-      let totalQuantity = 0;
-      Object.keys(orders).forEach(key => {
-        const order = orders[key];
-        const { quantity } = order;
-        totalQuantity += quantity;
-      });
-      setTotalCartQuantity(totalQuantity);
-    }
-  }, [carts, user, storeId]);
-
-  const getProductsHandler = useCallback(async () => {
-    if (!isFirstMountRef.current) return;
-    await getProducts();
-  }, [getProducts]);
-
-  // Filter products
-  const filteredProducts = useMemo(() => {
-    const newArray: any = products
-      .map((product: Product, index) => {
-        if (
-          catalogueHashMap[product?.catalogueId] &&
-          catalogueHashMap[product.catalogueId].products[product?.id]
-        ) {
-          return {
-            ...product,
-            ...catalogueHashMap[product.catalogueId].products[product?.id],
-            catalogueId: product?.catalogueId || "",
-          };
-        } else {
-          return product;
-        }
-      })
-      .filter((product: any) => {
-        const condition =
-          product?.status === "AVAILABLE" || product?.status === "OUT_OF_STOCK";
-        return condition;
-      });
-    const newArray2 = newArray.sort((a: Product, b: Product) => {
-      if (
-        filterPrice === PriceFilter.highest &&
-        a?.price &&
-        b?.price &&
-        a?.price[0]?.value &&
-        b?.price[0]?.value
-      ) {
-        return b?.price[0]?.value - a?.price[0]?.value;
-      } else if (
-        filterPrice === PriceFilter.lowest &&
-        a?.price &&
-        b?.price &&
-        a?.price[0]?.value &&
-        b?.price[0]?.value
-      ) {
-        return a?.price[0]?.value - Number(b?.price[0]?.value);
-      } else return newArray;
-    });
-    const newArray3: any = newArray2.filter((product: Product) => {
-      const condition =
-        categoryChips.length > 0
-          ? product?.category &&
-            categoryChips.some(chip => chip === product.category)
-          : true;
-      return condition;
-    });
-    const newArray4: any = newArray3.sort((a: Product, b: Product) => {
-      if (filterDate === DateFilter.newest) {
-        return b?.created - a?.created;
-      } else if (filterDate === DateFilter.oldest) {
-        return a?.created - b?.created;
-      } else {
-        return newArray3;
-      }
-    });
-    return newArray4;
-  }, [filterDate, filterPrice, products, categoryChips, catalogueHashMap]);
-
-  // Filtering by categories
-
-  const handleChipSelect = (value: string[]) => {
-    setCategoryChips(value);
+  const toggleCategory = (category: string) =>
+    setFilters((q) => ({
+      ...q,
+      categories: q.categories.includes(category) ? q.categories.filter((c) => c !== category) : [...q.categories, category],
+    }));
+  const clearFilters = () => {
+    setFilters((q) => ({ ...q, categories: [], inStockOnly: false, auctionsOnly: false, saleOnly: false }));
+    setPrice({ min: "", max: "" });
   };
+  const priceFields = <PriceRangeFields min={price.min} max={price.max} onChange={setPrice} titled={!phone} />;
 
-  const handleChipRemove = (chip: string) => {
-    setCategoryChips(prevChips => prevChips.filter(c => c !== chip));
-  };
-
-  if (isLoadingGlobal) return;
-
-  if (!currentViewedStore && username !== user?.name && !isLoadingGlobal)
-    return (
-      <Typography
-        marginTop={"20px"}
-        fontFamily={"Karla"}
-        fontSize={"25px"}
-        fontWeight={"500"}
-        textAlign={"center"}
-      >
-        Store Not Found!
-      </Typography>
+  const addToCart = (row: ProductRow) => {
+    const product = productOf(row, catalogues);
+    dispatch(
+      setProductToCart({ storeId, storeOwner: owner, productId: row.productId, catalogueId: row.catalogueId, quantity: 1 })
     );
+    const title = typeof product?.title === "string" ? product.title.trim() : "";
+    setAdded((prev) => ({ at: (prev?.at ?? 0) + 1, title: title || "Product", quantity: 1 }));
+  };
 
-  
-
-
-
-
- 
-  return (
-    <Grid container sx={{ width: "100%" }}>
-      <FiltersCol item xs={12} sm={3}>
-        <BackToStorefrontButton
-          style={{ maxWidth: "70%", alignSelf: "center" }}
-          onClick={() => {
-            navigate("/");
-          }}
-        >
-          Back To All Shops
-        </BackToStorefrontButton>
-        <FiltersContainer>
-          <FiltersTitle>
-            Categories
-            <ExpandMoreSVG
-              color={theme.palette.text.primary}
-              height={"22"}
-              width={"22"}
-            />
-          </FiltersTitle>
-          <FiltersSubContainer>
-            <FormControl sx={{ width: "100%" }}>
-              <FilterSelect
-                multiple
-                id="categories-select"
-                value={categoryChips}
-                options={
-                  username !== user?.name
-                    ? viewedStoreListProducts?.categories
-                    : ownStoreListProducts?.categories
-                }
-                disableCloseOnSelect
-                onChange={(e: any, value) =>
-                  handleChipSelect(value as string[])
-                }
-                renderTags={(values: any) =>
-                  values.map((value: string) => {
-                    return (
-                      <FiltersChip
-                        key={value}
-                        label={value}
-                        onDelete={() => {
-                          handleChipRemove(value);
-                        }}
-                      />
-                    );
-                  })
-                }
-                renderOption={(props, option: any) => (
-                  <FiltersOption {...props}>
-                    <FiltersCheckbox
-                      checked={categoryChips.some(chip => chip === option)}
-                    />
-                    {option}
-                  </FiltersOption>
-                )}
-                renderInput={params => (
-                  <FilterSelectMenuItems
-                    {...params}
-                    label="Categories"
-                    placeholder="Filter by category"
-                  />
-                )}
-              />
-            </FormControl>
-          </FiltersSubContainer>
-          <FiltersTitle>
-            Price
-            <ExpandMoreSVG
-              color={theme.palette.text.primary}
-              height={"22"}
-              width={"22"}
-            />
-          </FiltersTitle>
-          <FiltersSubContainer>
-            <FiltersRow>
-              Highest
-              <FiltersCheckbox
-                checked={filterPrice === PriceFilter.highest}
-                onChange={() => {
-                  setFilterPrice(PriceFilter.highest);
-                  setFilterDate(null);
-                }}
-                inputProps={{ "aria-label": "controlled" }}
-              />
-            </FiltersRow>
-            <FiltersRow>
-              Lowest
-              <FiltersCheckbox
-                checked={filterPrice === PriceFilter.lowest}
-                onChange={() => {
-                  setFilterPrice(PriceFilter.lowest);
-                  setFilterDate(null);
-                }}
-                inputProps={{ "aria-label": "controlled" }}
-              />
-            </FiltersRow>
-          </FiltersSubContainer>
-          <FiltersTitle>
-            Prices In
-            <ExpandMoreSVG
-              color={theme.palette.text.primary}
-              height={"22"}
-              width={"22"}
-            />
-          </FiltersTitle>
-          <FiltersSubContainer>
-            <FiltersRow>
-              <AcceptedCoinRow>
-                QORT
-                <AcceptedCoin src={QORT} alt="QORT-logo" />
-              </AcceptedCoinRow>
-              <FiltersCheckbox
-                checked={coinToUse === CoinFilter.qort}
-                onChange={() => {
-           
-                    if (coinToUse !== CoinFilter.qort) {
-                      dispatch(setPreferredCoin(CoinFilter.qort))
-
-                    } 
-                 
-
-                }}
-                inputProps={{ "aria-label": "controlled" }}
-              />
-            </FiltersRow>
-            {storeToUse?.foreignCoins?.ARRR && storeToUse?.supportedCoins?.includes('ARRR') && (
-              <FiltersRow>
-              <AcceptedCoinRow>
-                ARRR
-                <AcceptedCoin src={ARRR} alt="ARRR-logo" />
-              </AcceptedCoinRow>
-              <FiltersCheckbox
-                checked={coinToUse === CoinFilter.arrr}
-                onChange={() => {
-                    if (coinToUse !== CoinFilter.arrr) {
-                      dispatch(setPreferredCoin(CoinFilter.arrr))
-                    } 
-                }}
-                inputProps={{ "aria-label": "controlled" }}
-              />
-            </FiltersRow>
-            )}
-            
-          </FiltersSubContainer>
-          <FiltersTitle>
-            Date Product Added
-            <ExpandMoreSVG
-              color={theme.palette.text.primary}
-              height={"22"}
-              width={"22"}
-            />
-          </FiltersTitle>
-          <FiltersSubContainer>
-            <FiltersRow>
-              Most Recent
-              <FiltersCheckbox
-                checked={filterDate === DateFilter.newest}
-                onChange={() => {
-                  setFilterDate(DateFilter.newest);
-                  setFilterPrice(null);
-                }}
-                inputProps={{ "aria-label": "controlled" }}
-              />
-            </FiltersRow>
-            <FiltersRow>
-              Oldest
-              <FiltersCheckbox
-                checked={filterDate === DateFilter.oldest}
-                onChange={() => {
-                  setFilterDate(DateFilter.oldest);
-                  setFilterPrice(null);
-                }}
-                inputProps={{ "aria-label": "controlled" }}
-              />
-            </FiltersRow>
-          </FiltersSubContainer>
-          {coinToUse === CoinFilter.arrr && exchangeRate && (
-            <FiltersSubContainer>
-            <ExchangeRateCard>
-              <ExchangeRateRow>
-                <ExchangeRateTitle>1 QORT = {exchangeRate} ARRR</ExchangeRateTitle>
-              </ExchangeRateRow>
-              <ExchangeRateRow>
-                <ExchangeRateSubTitle>
-                  {`Rate calculated by recent trade portal trades`}
-                </ExchangeRateSubTitle>
-               
-              </ExchangeRateRow>
-              <ExchangeRateRow style={{ gap: "10px" }}>
-                <AcceptedCoin src={QORT} alt="QORT-logo" />
-                <CompareArrowsSVG
-                  color={theme.palette.text.primary}
-                  height={"32"}
-                  width={"32"}
-                />
-                <AcceptedCoin src={ARRR} alt="ARRR-logo" />
-              </ExchangeRateRow>
-            </ExchangeRateCard>
-          </FiltersSubContainer>
-          )}
-          
-        </FiltersContainer>
-      </FiltersCol>
-      <Grid item xs={12} sm={9}>
-        <ProductManagerRow>
-          <StoreTitleCard>
-            <StoreLogo
-              src={
-                username === user?.name
-                  ? currentStore?.logo
-                  : currentViewedStore?.logo
-              }
-              alt={
-                username === user?.name
-                  ? currentStore?.id
-                  : currentViewedStore?.id
-              }
-            />
-            <StoreTitleCol>
-              <StoreTitle
-                onClick={() => {
-                  setOpenStoreDetails(true);
-                }}
-              >
-                {username === user?.name
-                  ? currentStore?.title + " 🛈"
-                  : currentViewedStore?.title + " 🛈"}
-              </StoreTitle>
-              {averageRatingLoader ? (
-                <CircularProgress />
-              ) : (
-                <RatingContainer
-                  onClick={() => {
-                    setOpenStoreReviews(true);
-                  }}
-                >
-                  {!averageStoreRating ? (
-                    "No reviews yet"
-                  ) : (
-                    <Rating
-                      precision={0.5}
-                      value={averageStoreRating}
-                      readOnly
-                    />
-                  )}
-                </RatingContainer>
-              )}
-              <OfferedCoinsRow>
-                Accepted Coins
-                <AcceptedCoinRow>
-                  <AcceptedCoin
-                    style={{ width: "26px", height: "26px" }}
-                    src={QORT}
-                    alt="QORT-logo"
-                  />
-                  {storeToUse?.foreignCoins?.ARRR && storeToUse?.supportedCoins?.includes('ARRR') && (
-                    <AcceptedCoin
-                    style={{ width: "26px", height: "26px" }}
-                    src={ARRR}
-                    alt="ARRR-logo"
-                  />
-                  )}
-                  
-                </AcceptedCoinRow>
-              </OfferedCoinsRow>
-            </StoreTitleCol>
-          </StoreTitleCard>
-          {username === user?.name ? (
-            <StoreControlsRow>
-              <EditStoreButton
-                onClick={() => {
-                  dispatch(toggleEditStoreModal(true));
-                }}
-              >
-                Edit Shop
-              </EditStoreButton>
-              <ProductManagerButton
-                onClick={() => {
-                  navigate(`/product-manager/${store}`);
-                }}
-              >
-                Product Manager
-              </ProductManagerButton>
-            </StoreControlsRow>
-          ) : user?.name ? (
-            <CartIconContainer
-              fixedCartPosition={totalCartQuantity > 0 ? true : false}
-              onClick={() => {
-                dispatch(setIsOpen(true));
-              }}
-            >
-              <CartIcon
-                color={theme.palette.text.primary}
-                height={"32"}
-                width={"32"}
-              />
-              {totalCartQuantity > 0 && (
-                <NotificationBadge
-                  fixedCartPosition={totalCartQuantity > 0 ? true : false}
-                >
-                  {totalCartQuantity}
-                </NotificationBadge>
-              )}
-            </CartIconContainer>
-          ) : null}
-        </ProductManagerRow>
-        <ProductsContainer container spacing={2}>
-          {filteredProducts.length > 0 && hasFetched ? (
-            filteredProducts.map((product: Product) => {
-              const storeId: string = currentStore?.id || "";
-              let productItem = product;
-              let hasHash = false;
-              const existingProduct =
-                catalogueHashMap[product?.catalogueId]?.products[product?.id];
-              if (existingProduct) {
-                productItem = existingProduct;
-                hasHash = true;
-              }
-              if (!hasHash) {
-                return (
-                  <ProductCardCol
-                    xs={12}
-                    sm={6}
-                    md={4}
-                    lg={3}
-                    item
-                    key={product.id}
-                  >
-                    <Skeleton
-                      variant="rectangular"
-                      style={{
-                        width: "100%",
-                        height: "400px",
-                        paddingBottom: "10px",
-                        objectFit: "contain",
-                        visibility: "visible",
-                        borderRadius: "8px",
-                      }}
-                    />
-                  </ProductCardCol>
-                );
-              } else {
-                return (
-                  <ProductCardCol
-                    xs={12}
-                    sm={6}
-                    md={4}
-                    lg={3}
-                    item
-                    key={productItem.id}
-                  >
-                    <ContextMenuResource
-                      name={productItem.user}
-                      service="PRODUCT"
-                      identifier={productItem.id}
-                      link={`qortal://APP/Q-Shop/${
-                        productItem?.user ||
-                        catalogueHashMap[productItem?.catalogueId]?.user
-                      }/${storeId}/${productItem?.id}/${
-                        productItem?.catalogueId
-                      }`}
-                    >
-                      <ProductCard product={productItem} exchangeRate={exchangeRate} filterCoin={coinToUse} />
-                    </ContextMenuResource>
-                  </ProductCardCol>
-                );
-              }
-            })
-          ) : filteredProducts.length === 0 &&
-            username === user?.name &&
-            hasFetched ? (
-            <NoProductsContainer>
-              <NoProductsText>
-                You currently have no products! Add some in the Product Manager.
-              </NoProductsText>
-            </NoProductsContainer>
-          ) : (
-            <NoProductsContainer>
-              <NoProductsText>
-                There are currently no products for sale!
-              </NoProductsText>
-            </NoProductsContainer>
-          )}
-        </ProductsContainer>
-        <LazyLoad onLoadMore={getProductsHandler}></LazyLoad>
-      </Grid>
-      <ReusableModalStyled
-        id={"store-details"}
-        customStyles={{
-          width: "96%",
-          maxWidth: 1000,
-          height: "70%",
-          backgroundColor:
-            theme.palette.mode === "light" ? "#e8e8e8" : "#32333c",
-          position: "relative",
-          padding: "25px 40px",
-          borderRadius: "5px",
-          outline: "none",
-          overflowY: "auto",
-        }}
-        open={openStoreDetails}
-      >
-        <StoreDetails
-          setOpenStoreDetails={setOpenStoreDetails}
-          storeTitle={
-            username === user?.name
-              ? currentStore?.title || ""
-              : currentViewedStore?.title || ""
-          }
-          storeImage={
-            username === user?.name
-              ? currentStore?.logo || ""
-              : currentViewedStore?.logo || ""
-          }
-          storeOwner={username || ""}
-          storeDescription={
-            username === user?.name
-              ? currentStore?.description || ""
-              : currentViewedStore?.description || ""
-          }
-          dateCreated={
-            username === user?.name
-              ? currentStore?.created || 0
-              : currentViewedStore?.created || 0
-          }
-          location={
-            username === user?.name
-              ? currentStore?.location || ""
-              : currentViewedStore?.location || ""
-          }
-          shipsTo={
-            username === user?.name
-              ? currentStore?.shipsTo || ""
-              : currentViewedStore?.shipsTo || ""
-          }
-          supportedCoins={
-            username === user?.name
-              ? currentStore?.supportedCoins || [CoinFilter.qort]
-              : currentViewedStore?.supportedCoins || [CoinFilter.qort]
-          }
-          foreignCoins={
-            username === user?.name
-              ? currentStore?.foreignCoins || {}
-              : currentViewedStore?.foreignCoins || {}
-          }
-        />
-      </ReusableModalStyled>
-      <ReusableModalStyled
-        id={"store-details"}
-        customStyles={{
-          width: "96%",
-          maxWidth: 1200,
-          height: "95vh",
-          backgroundColor:
-            theme.palette.mode === "light" ? "#e8e8e8" : "#32333c",
-          position: "relative",
-          padding: "25px 40px",
-          borderRadius: "5px",
-          outline: "none",
-          overflowY: "auto",
-          overflowX: "hidden",
-        }}
-        open={openStoreReviews}
-      >
-        <StoreReviews
-          averageStoreRating={averageStoreRating}
-          storeTitle={
-            username === user?.name
-              ? currentStore?.title || ""
-              : currentViewedStore?.title || ""
-          }
-          storeImage={
-            username === user?.name
-              ? currentStore?.logo || ""
-              : currentViewedStore?.logo || ""
-          }
-          storeId={
-            username === user?.name
-              ? currentStore?.id || ""
-              : currentViewedStore?.id || ""
-          }
-          setOpenStoreReviews={setOpenStoreReviews}
-        />
-      </ReusableModalStyled>
-    </Grid>
+  const sortSelect = (
+    <TextField
+      select
+      size="small"
+      label="Sort"
+      value={sort}
+      onChange={(event) => setPickedSort(event.target.value as ShopSort)}
+      slotProps={{ select: { MenuProps: selectMenuProps } }}
+      sx={{ minWidth: 170, flex: { xs: "1 1 150px", sm: "0 0 auto" }, "& .MuiInputBase-root": { minHeight: 44 } }}
+    >
+      {sortOptions.map((option) => (
+        <MenuItem key={option.value} value={option.value}>
+          {option.label}
+        </MenuItem>
+      ))}
+    </TextField>
   );
+
+  const stockSwitch = (
+    <FormControlLabel
+      control={
+        <Switch checked={query.inStockOnly} onChange={(event) => setFilters((q) => ({ ...q, inStockOnly: event.target.checked }))} />
+      }
+      label="In stock only"
+      sx={{ minHeight: 44, mr: 0 }}
+    />
+  );
+
+  let status: string;
+  if (productsStatus !== "ready") status = "";
+  else if (searching && searchPending > 0) status = `Searching… ${searchScope.read} of ${searchScope.total} products read`;
+  else if (searching) status = `${results.length} result${results.length === 1 ? "" : "s"} for “${terms.join(" ")}”`;
+  else status = `${filtered.length} product${filtered.length === 1 ? "" : "s"}`;
+
+  let body: ReactNode;
+  if (productsStatus === "loading" || productsStatus === "fetching" || (productsStatus === "ready" && waitingForCollection)) {
+    body = <ProductGridSkeleton count={phone ? 4 : 8} note={productsStatus === "fetching" ? FETCHING_NOTE : undefined} layout={layout} />;
+  } else if (productsStatus === "missing") {
+    body = isOwner ? (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="Your shop has no product list yet"
+        description="Manage Shop can create it, then you can add products."
+        actionLabel="Open Manage Shop"
+        onAction={onSellerPage}
+      />
+    ) : (
+      <EmptyState icon={<StorefrontOutlinedIcon />} title="No products yet" description="This shop hasn't listed anything for sale." />
+    );
+  } else if (productsStatus === "unavailable") {
+    body = (
+      <EmptyState
+        icon={<CloudOffOutlinedIcon />}
+        title="Not available on your node right now"
+        description="The product list hasn't reached your node yet."
+        actionLabel="Retry"
+        onAction={onRetry}
+      />
+    );
+  } else if (collection && filterAndSortProducts(rows, DEFAULT_PRODUCT_QUERY, catalogues).length === 0) {
+    body = (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="Nothing in this collection right now"
+        actionLabel="All products"
+        onAction={() => navigate(storePath(owner, storeId))}
+      />
+    );
+  } else if (rows.length === 0) {
+    body = isOwner ? (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="No products yet"
+        description="Add your first product in Manage Shop."
+        actionLabel="Add products"
+        onAction={onSellerPage}
+      />
+    ) : (
+      <EmptyState icon={<StorefrontOutlinedIcon />} title="No products yet" description="This shop hasn't listed anything for sale." />
+    );
+  } else if (filtered.length === 0) {
+    body = <EmptyState icon={<TuneIcon />} title="No products match these filters" actionLabel="Clear filters" onAction={clearFilters} />;
+  } else if (searching && results.length === 0 && searchPending === 0) {
+    body = (
+      <EmptyState
+        icon={<SearchOffOutlinedIcon />}
+        title={`No products match “${terms.join(" ")}”`}
+        description={scope?.capped ? cappedNote : undefined}
+        actionLabel="Show all products"
+        onAction={() => setSearchText("")}
+      />
+    );
+  } else if (searching && results.length === 0) {
+    body = <ProductGridSkeleton count={phone ? 2 : 4} layout={layout} />;
+  } else {
+    body = (
+      <>
+        <ProductGrid layout={layout}>
+          {shown.map((row, i) => {
+            const product = productOf(row, catalogues);
+            const state = statuses[row.catalogueId];
+            // A line where each group starts: live auctions, then each collection (Featured across the whole shop) or the rest.
+            const section = sectionAt(i);
+            const sectionStarts = section !== null && section !== (i > 0 ? sectionAt(i - 1) : null) && (section !== -1 || i > 0);
+            const sectionCollection = typeof section === "number" && section >= 0 ? collections.collections[section] : null;
+            return [
+              sectionStarts && (
+                <SectionDivider
+                  key={`section-${row.productId}`}
+                  title={section === "live" ? "Live auctions" : sectionCollection ? sectionCollection.title || "Collection" : "More products"}
+                  to={sectionCollection ? collectionPath(owner, storeId, sectionCollection.id) : undefined}
+                  first={i === 0}
+                />
+              ),
+              <li key={row.productId}>
+                {product ? (
+                  <LocalBoundary
+                    label={`The card of product ${row.productId}`}
+                    fallback={<UnavailableCard text="This product couldn't be shown." />}
+                  >
+                    <ProductCard
+                      product={product}
+                      productId={row.productId}
+                      catalogueId={row.catalogueId}
+                      owner={owner}
+                      storeId={storeId}
+                      status={effectiveStatus(row, catalogues)}
+                      shop={shop}
+                      coin={shopCoin.coin}
+                      rate={shopCoin.rate}
+                      isOwnProduct={isOwner}
+                      onAddToCart={() => addToCart(row)}
+                      layout={layout}
+                      compact={layout === "tile" && phone}
+                      stacked={phone}
+                      auction={auctionTimesOf(row, catalogues)}
+                      now={now}
+                      bundle={row.bundle}
+                      soldOut={row.soldOut}
+                    />
+                  </LocalBoundary>
+                ) : (
+                  <ProductCardSkeleton
+                    note={state === "fetching" ? FETCHING_NOTE : state === "failed" ? "Not available on your node right now" : undefined}
+                    layout={layout}
+                  />
+                )}
+              </li>,
+            ];
+          })}
+        </ProductGrid>
+        {hasMore && (
+          <Box ref={sentinel} sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+            <Button variant="outlined" color="inherit" onClick={more} sx={{ minHeight: 44, minWidth: 160 }}>
+              Show more
+            </Button>
+          </Box>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {productsStatus === "ready" && collections.status !== "none" && (
+        <CollectionCards
+          owner={owner}
+          storeId={storeId}
+          collections={collections.collections}
+          counts={counts}
+          selectedId={collection?.id ?? null}
+          state={collections.status}
+          onRetry={collections.retry}
+        />
+      )}
+      <Box ref={productsSection} component="section" aria-labelledby="shop-products-heading" sx={{ mt: 3 }}>
+        {collection ? (
+          <CollectionHeader
+            owner={owner}
+            storeId={storeId}
+            collection={collection}
+            count={counts[collection.id] ?? 0}
+            headingId="shop-products-heading"
+            headingRef={collectionHeading}
+          />
+        ) : null}
+        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: 1.5, minHeight: 44 }}>
+          {collection ? (
+            <span />
+          ) : (
+            <Typography id="shop-products-heading" component="h2" sx={{ fontSize: 18, fontWeight: 700 }}>
+              Products
+            </Typography>
+          )}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, ml: "auto" }}>
+            <Typography variant="body2" color="text.secondary" role="status" aria-live="polite" sx={{ fontSize: 14 }}>
+              {status}
+            </Typography>
+            {productsStatus === "ready" && rows.length > 0 && <ProductViewToggle layout={layout} />}
+          </Box>
+        </Box>
+        {collectionGone && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            That collection isn&apos;t in this shop any more. Here are all the shop&apos;s products.
+          </Typography>
+        )}
+
+        {productsStatus === "ready" && rows.length > 0 && (
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mb: 2 }}>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, alignItems: "center" }}>
+              <TextField
+                type="search"
+                size="small"
+                placeholder="Search this shop"
+                value={searchText}
+                onChange={(event) => setSearchText(event.target.value)}
+                sx={{ flex: "1 1 260px", minWidth: 0, "& .MuiInputBase-root": { minHeight: 44 } }}
+                slotProps={{
+                  htmlInput: { "aria-label": "Search this shop", enterKeyHint: "search" },
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon fontSize="small" />
+                      </InputAdornment>
+                    ),
+                    endAdornment: searchText ? (
+                      <InputAdornment position="end">
+                        <IconButton aria-label="Clear search" onClick={() => setSearchText("")} edge="end" sx={{ width: 40, height: 40 }}>
+                          <CloseIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ) : undefined,
+                  },
+                }}
+              />
+              {sortSelect}
+              <CoinPicker shop={shop} shopCoin={shopCoin} />
+              <AuctionsToggle count={auctions} on={!!query.auctionsOnly} onChange={(on) => setFilters((q) => ({ ...q, auctionsOnly: on }))} />
+              <SaleToggle count={onSale} on={!!query.saleOnly} onChange={(on) => setFilters((q) => ({ ...q, saleOnly: on }))} />
+              {phone && (
+                <Button
+                  variant={activeFilters ? "contained" : "outlined"}
+                  color={activeFilters ? "primary" : "inherit"}
+                  startIcon={<TuneIcon />}
+                  onClick={() => setFiltersOpen(true)}
+                  sx={{ minHeight: 44, flex: "1 1 auto" }}
+                >
+                  {activeFilters ? `Filters (${activeFilters})` : "Filters"}
+                </Button>
+              )}
+            </Box>
+            {!phone && (
+              <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 2 }}>
+                <Box sx={{ flex: "1 1 320px", minWidth: 0 }}>
+                  <CategoryChips
+                    categories={categories}
+                    selected={query.categories}
+                    onToggle={toggleCategory}
+                    onClear={() => setFilters((q) => ({ ...q, categories: [] }))}
+                  />
+                </Box>
+                {priceFields}
+                {stockSwitch}
+              </Box>
+            )}
+            <RateNote shopCoin={shopCoin} shop={shop} />
+            {scope?.capped && results.length > 0 && (
+              <Typography variant="body2" color="text.secondary">
+                {cappedNote}
+              </Typography>
+            )}
+            {failedCount > 0 && (
+              <Box role="status" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Some products aren't available on your node right now.
+                </Typography>
+                <Button variant="outlined" color="inherit" onClick={retryFailed} sx={{ minHeight: 44 }}>
+                  Retry
+                </Button>
+              </Box>
+            )}
+          </Box>
+        )}
+
+        <Box data-swap>{body}</Box>
+
+        {phone && (
+          <BottomSheet
+            open={filtersOpen}
+            onClose={() => setFiltersOpen(false)}
+            title="Filters"
+            actions={
+              <>
+                <Button color="inherit" onClick={clearFilters} disabled={!activeFilters} sx={{ minHeight: 44 }}>
+                  Clear
+                </Button>
+                <Button variant="contained" fullWidth onClick={() => setFiltersOpen(false)} sx={{ minHeight: 44 }}>
+                  {`Show ${filtered.length} product${filtered.length === 1 ? "" : "s"}`}
+                </Button>
+              </>
+            }
+          >
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              {categories.length > 0 && (
+                <Box>
+                  <Typography component="h3" variant="subtitle2" sx={{ mb: 1 }}>
+                    Categories
+                  </Typography>
+                  <CategoryChips
+                    categories={categories}
+                    selected={query.categories}
+                    onToggle={toggleCategory}
+                    onClear={() => setFilters((q) => ({ ...q, categories: [] }))}
+                  />
+                </Box>
+              )}
+              <Box>
+                <Typography component="h3" variant="subtitle2" sx={{ mb: 1 }}>
+                  Price
+                </Typography>
+                {priceFields}
+              </Box>
+              {stockSwitch}
+            </Box>
+          </BottomSheet>
+        )}
+
+        <AddedToCartSnackbar notice={added} onClose={() => setAdded(null)} />
+      </Box>
+    </>
+  );
+}
+
+function ShopPage({ owner, storeId }: { owner: string; storeId: string }) {
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+  const currentStoreId = useSelector((state: RootState) => state.global.currentStore?.id);
+  const { shop, shopStatus, index, productsStatus, isOwner, retry } = useViewedShop(owner, storeId);
+  // The owner's open checkup steps this page can tell (seller/checkup.ts openShopSteps): whether it
+  // ships comes from the catalogues read so far, so a shop of digital products isn't asked where it ships.
+  const catalogueMap = useSelector((state: RootState) => state.global.catalogueHashMap);
+  const openSteps = useMemo(() => {
+    if (!isOwner || !shop || !index) return 0;
+    const rows = productRowsFromContainer(index).filter((row) => row.status !== "RETIRED");
+    const loaded = rows.map((row) => catalogueMap[row.catalogueId]?.products?.[row.productId] as { type?: unknown } | undefined).filter((p) => p !== undefined);
+    // Until a product is read, it isn't known to ship: the step waits rather than flash on a digital shop.
+    const ships = loaded.some((p) => p?.type !== "digital");
+    return openShopSteps(shop, rows, ships);
+  }, [isOwner, shop, index, catalogueMap]);
+  const shopCollections = useShopCollections(owner, storeId, index);
+  const [searchParams] = useSearchParams();
+  const collectionId = searchParams.get("collection");
+  const reviews = useShopReviews(storeId, owner);
+  // Once the shop is read: its `created` leaves out orders for an earlier shop with this id.
+  const orderCount = useOrderCount(owner, shop ? storeId : "", shop ? Number(shop.created) || undefined : undefined);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+  const sellerPage = () => navigate(`/product-manager/${encodeURIComponent(storeId)}`);
+
+  const title =
+    shop?.title ||
+    (shopStatus === "loading" || shopStatus === "fetching" ? (
+      <>
+        <Box component="span" sx={visuallyHiddenSx}>
+          Loading shop
+        </Box>
+        <Skeleton aria-hidden width="min(60%, 320px)" />
+      </>
+    ) : (
+      "Shop"
+    ));
+
+  let content: ReactNode;
+  if (shopStatus === "missing") {
+    content = (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="Shop not found"
+        description={`${owner} has no shop here, or it was removed.`}
+        actionLabel="Browse shops"
+        onAction={() => navigate("/")}
+      />
+    );
+  } else if (shopStatus === "deleted") {
+    content = (
+      <EmptyState
+        icon={<StorefrontOutlinedIcon />}
+        title="This shop was deleted"
+        description={`${owner} deleted this shop. Orders you placed there stay in My orders.`}
+        actionLabel="Browse shops"
+        onAction={() => navigate("/")}
+      />
+    );
+  } else if (shopStatus === "unavailable") {
+    content = (
+      <EmptyState
+        icon={<CloudOffOutlinedIcon />}
+        title="Not available on your node right now"
+        description="This shop hasn't reached your node yet."
+        actionLabel="Retry"
+        onAction={retry}
+      />
+    );
+  } else if (!shop) {
+    content = (
+      <>
+        <ShopHeaderSkeleton />
+        {shopStatus === "fetching" && (
+          <Typography variant="body2" color="text.secondary" role="status" sx={{ mt: 1 }}>
+            {FETCHING_NOTE}
+          </Typography>
+        )}
+        <Box sx={{ mt: 3 }}>
+          <ProductGridSkeleton count={4} />
+        </Box>
+      </>
+    );
+  } else {
+    content = (
+      <>
+        {/* The owner's own shop, from before Q-Shop+: the checkup waits in Manage Shop (seller/checkup.ts). */}
+        {isOwner && openSteps > 0 && (
+          <Alert
+            severity="info"
+            sx={{ mb: 2 }}
+            action={
+              <Button color="inherit" onClick={sellerPage} sx={{ minHeight: 44, whiteSpace: "nowrap" }}>
+                Open the checkup
+              </Button>
+            }
+          >
+            {openSteps === 1 ? "1 step brings your shop up to date for Q-Shop+." : `${openSteps} steps bring your shop up to date for Q-Shop+.`} Each takes a minute.
+          </Alert>
+        )}
+        <ShopHeader
+          shop={shop}
+          owner={owner}
+          storeId={storeId}
+          isOwner={isOwner}
+          canEdit={currentStoreId === storeId}
+          reviews={reviews}
+          orderCount={orderCount}
+          onOpenReviews={() => setReviewsOpen(true)}
+          onOpenDetails={() => setDetailsOpen(true)}
+          onEdit={() => dispatch(toggleEditStoreModal(true))}
+          onSellerPage={sellerPage}
+        />
+        {/* Free delivery from an amount, and how much this cart still needs (delivery/FreeDeliveryBar.tsx). */}
+        <ShopFreeDelivery owner={owner} storeId={storeId} />
+        <ShopProducts
+          owner={owner}
+          storeId={storeId}
+          shop={shop}
+          isOwner={isOwner}
+          productsStatus={productsStatus}
+          index={index}
+          onRetry={retry}
+          onSellerPage={sellerPage}
+          collections={shopCollections}
+          collectionId={collectionId}
+        />
+        {detailsOpen && <StoreDetails open onClose={() => setDetailsOpen(false)} shop={shop} owner={owner} />}
+        {reviewsOpen && (
+          <ResponsiveDialog open onClose={() => setReviewsOpen(false)} title={`Reviews · ${shop.title || "Shop"}`} maxWidth="md">
+            <ReviewsPanel storeId={storeId} storeTitle={shop.title || ""} storeImage={shop.logo || ""} storeOwner={owner} />
+          </ResponsiveDialog>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <Page width="grid">
+      <PageHeader back backTo="/" title={title} actions={!isOwner ? <CartButton /> : undefined} />
+      {content}
+    </Page>
+  );
+}
+
+export const Store = () => {
+  const params = useParams();
+  const owner = decodeParam(params.user);
+  const storeId = decodeParam(params.store);
+  // A new shop starts with fresh filters, search and paging.
+  return <ShopPage key={`${owner}\n${storeId}`} owner={owner} storeId={storeId} />;
 };
+
+export default Store;

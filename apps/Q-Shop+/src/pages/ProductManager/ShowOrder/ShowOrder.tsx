@@ -1,563 +1,695 @@
-import { FC, useEffect, useState, useMemo } from "react";
-import { ReusableModal } from "../../../components/modals/ReusableModal";
-import { Box, CircularProgress, useTheme } from "@mui/material";
-import EmailIcon from "@mui/icons-material/Email";
-import { useDispatch, useSelector } from "react-redux";
-import { RootState } from "../../../state/store";
-import {
-  base64ToUint8Array,
-  objectToBase64,
-  uint8ArrayToObject,
-} from "../../../utils/toBase64";
-import {
-  Divider,
-  OrderDetailsCard,
-  OrderDetailsContainer,
-  OrderId,
-  OrderQuantityRow,
-  OrderStatusCard,
-  OrderStatusNote,
-  OrderStatusRow,
-  OrderTitle,
-  OrderTitleCol,
-  PriceRow,
-  ShowOrderCol,
-  ShowOrderContent,
-  ShowOrderDateCreated,
-  ShowOrderHeader,
-  ShowOrderImages,
-  ShowOrderProductImage,
-  ShowOrderTitle,
-  TotalCostContainer,
-  TotalCostCol,
-  TotalCostFont,
-  OrderDetails,
-  DetailsFont,
-  DetailsRow,
-  DetailsCard,
-  CloseDetailsCardIcon,
-  DeliveryInfoCard,
-  CloseButton,
-  CloseButtonRow,
-  SellerOrderStatusRow,
-  CustomSelect,
-  UpdateStatusButton,
-  TotalPriceRow,
-} from "./ShowOrder-styles";
-import moment from "moment";
-import { DialogsSVG } from "../../../assets/svgs/DialogsSVG";
-import { Order, addToHashMap } from "../../../state/features/orderSlice";
-import { QortalSVG } from "../../../assets/svgs/QortalSVG";
-import { ExpandMoreSVG } from "../../../assets/svgs/ExpandMoreSVG";
+/**
+ * One order, for its buyer (My orders) or its seller (the shop's Orders):
+ * full screen on phones (ResponsiveDialog). What was bought, with pictures,
+ * quantities, unit and line amounts and the total in the order's coin; how
+ * it was paid (PaymentDetails); where it goes for a physical order; Message
+ * the other side (Q-Mail); the status and the seller's note. The seller
+ * changes the status here: shown at once, put back if the publish doesn't
+ * happen, and a decline in Hub's dialog is quiet.
+ *
+ * When the order's list hasn't read its status (or the dialog is opened on
+ * its own), the dialog reads it: a search for the status document under the
+ * seller's name, then FETCH + DECRYPT_DATA as the original
+ * (orders/loader.ts ensureOrderStatus).
+ *
+ * Once the seller has shipped it, the buyer can mark it delivered (a
+ * digital order: received, at once; Simon, 2026-10-24), with a small
+ * publish of their own (orders/delivered.ts), and is then asked for a
+ * review of the shop, which needs it. Both sides see "Delivered" from then on, unless
+ * the seller refunds it.
+ */
+import { useEffect, useState, type ReactNode } from "react";
+import { useDispatch, useSelector, useStore } from "react-redux";
+import { Link as RouterLink } from "react-router-dom";
+import { Alert, Box, Button, Divider, Link, Rating, Skeleton, Typography } from "@mui/material";
+import MailOutlineOutlinedIcon from "@mui/icons-material/MailOutlineOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import LocalOfferOutlinedIcon from "@mui/icons-material/LocalOfferOutlined";
+import { useOrderDiscountCheck } from "../../../discounts/verify";
+import { statusText } from "../../../theme/statusText";
+import StorefrontOutlinedIcon from "@mui/icons-material/StorefrontOutlined";
+import CheckCircleOutlinedIcon from "@mui/icons-material/CheckCircleOutlined";
+import RateReviewOutlinedIcon from "@mui/icons-material/RateReviewOutlined";
+import ContentCopyOutlinedIcon from "@mui/icons-material/ContentCopyOutlined";
+import type { RootState } from "../../../state/store";
+import type { Order, OrderStatusInfo } from "../../../state/features/orderSlice";
 import { setNotification } from "../../../state/features/notificationsSlice";
-import { CustomInputField } from "../../../components/modals/CreateStoreModal-styles";
-import { CustomMenuItem } from "../NewProduct/NewProduct-styles";
-import { CoinFilter } from "../../Store/Store/Store";
-import { ARRRSVG } from "../../../assets/svgs/ARRRSVG";
+import { ResponsiveDialog } from "../../../components/common/mobile";
+import { NameAvatar } from "../../../components/common/NameAvatar";
+import { AmountTag } from "../../../components/money/PriceTag";
+import { mailToLink, productPath, storePath } from "../../../qdn/links";
+import { ensureDelivered, ensureOrderStatus, type OrderStore } from "../../../orders/loader";
+import { markDelivered } from "../../../orders/delivered";
+import { sameName } from "../../../orders/reads";
+import { sendOrderStatus } from "../../../orders/statusUpdate";
+import { normalizeStatus, shownStatus } from "../../../orders/status";
+import type { Tracking } from "../../../orders/tracking";
+import { copyText } from "../../../utils/clipboard";
+import { requestShopDetails, useShopDetails } from "../../../discovery/shopDetails";
+import { shopKey } from "../../../discovery/shopIndex";
+import { PolicyLines } from "../../../shop/PolicyLines";
+import { addressLabelText, deliveryLines, formatOrderDate, isDigitalOrder, orderDelivery, orderDiscount, orderItems, orderTotal, type OrderItem } from "../../../orders/format";
+import { useOrderCoinView } from "../../../orders/useOrderCoin";
+import type { ShopCoinSettings } from "../../../money/coins";
+import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
+import { PaymentDetails } from "./PaymentDetails";
+import { StatusEditor, type StatusDraft } from "./StatusEditor";
+import { AddReview } from "../../Store/StoreReviews/AddReview/AddReview";
+import { StoreReviewCard } from "../../Store/StoreReviews/StoreReviewCard";
+import { useMyShopReview, useShopReviews } from "../../Store/useShopData";
+import { formatReviewDate } from "../../Store/StoreReviews/StoreReviewCard";
+import type { ShopReview } from "../../Store/reviewsData";
 
-/* <QortalSVG /> must be replaced by <ARRRSVG /> everywhere here depending on the payment info */
-
-interface ShowOrderProps {
-  isOpen: boolean;
-  setIsOpen: (isOpen: boolean) => void;
-  order: Order;
-  from: string;
+export interface ShowOrderProps {
+  open: boolean;
+  onClose: () => void;
+  /** The opened order (null renders nothing). */
+  order: Order | null;
+  role: "buyer" | "seller";
 }
 
-export const ShowOrder: FC<ShowOrderProps> = ({
-  isOpen,
-  setIsOpen,
-  order,
-  from,
-}) => {
-  const theme = useTheme();
-  const username = useSelector((state: RootState) => state.auth.user?.name);
-  const usernamePublicKey = useSelector(
-    (state: RootState) => state.auth.user?.publicKey
-  );
-  const hashMapOrders = useSelector(
-    (state: RootState) => state.order.hashMapOrders
-  );
-
-  const dispatch = useDispatch();
-
-  const [note, setNote] = useState<string>("");
-  const [selectedStatus, setSelectedStatus] = useState<string>("Received");
-  const [paymentInfo, setPaymentInfo] = useState(null);
-  const [paymentInfoForeign, setPaymentInfoForeign] = useState(false);
-
-  const [statusLoader, setStatusLoader] = useState(false);
-
-  const closeModal = () => {
-    setIsOpen(false);
-  };
-
-  const getPaymentInfo = async (signature: string) => {
-    try {
-      const url = `/transactions/signature/${signature}`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      // Coin payment info must be added to responseData so we can display it to the user
-      const responseData = await response.json();
-      if (responseData && !responseData.error) {
-        setPaymentInfo(responseData);
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const updateStatus = async () => {
-    try {
-      const orderStateObject: any = {
-        status: selectedStatus,
-        note,
-      };
-      const orderStatusToBase64 = await objectToBase64(orderStateObject);
-
-      let res = await qortalRequest({
-        action: "GET_NAME_DATA",
-        name: order?.user,
-      });
-      const address = res.owner;
-      const resAddress = await qortalRequest({
-        action: "GET_ACCOUNT_DATA",
-        address: address,
-      });
-      if (!resAddress?.publicKey) throw new Error("Cannot find store owner");
-      const string = order?.id;
-
-      const identifier = string.replace(/(q-store)(-order)/, "$1-status$2");
-      const productRequestBody = {
-        action: "PUBLISH_QDN_RESOURCE",
-        identifier: identifier,
-        name: username,
-        service: "DOCUMENT_PRIVATE",
-        filename: `${order?.id}_status.json`,
-        data64: orderStatusToBase64,
-        encrypt: true,
-        publicKeys: [resAddress.publicKey, usernamePublicKey],
-      };
-      await qortalRequest(productRequestBody);
-      dispatch(
-        setNotification({
-          alertType: "success",
-          msg: "Order status updated successfully!",
-        })
-      );
-    } catch (error) {
-      console.log({ error });
-    }
-  };
-
-  const verifyIfOrderStatusUpdated = async () => {
-    if (!order?.id) return;
-    // Find the index of "order-" in the string
-    const extractedOrderIdEnd = order?.id.slice(
-      order?.id.indexOf("order-") + "order-".length
-    );
-    try {
-      setStatusLoader(true);
-      const query = `q-store-status-order-${extractedOrderIdEnd}`;
-      // Check if resource exists
-      const url = `/arbitrary/resources/search?service=DOCUMENT_PRIVATE&query=${query}&limit=1&includemetadata=false&mode=ALL&reverse=true`;
-      const response = await fetch(url, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-      });
-      const responseData = await response.json();
-      if (responseData.length === 0) return;
-      // Get the raw data if the resource exists
-      else {
-        let orderRawData = await qortalRequest({
-          action: "FETCH_QDN_RESOURCE",
-          name: from === "ProductManager" ? username : order?.sellerName,
-          service: "DOCUMENT_PRIVATE",
-          identifier: query,
-          encoding: "base64",
-        });
-        const base64 = orderRawData;
-        let orderUserName = await qortalRequest({
-          action: "GET_NAME_DATA",
-          name: order?.user,
-        });
-        const address = orderUserName.owner;
-        const resAddress = await qortalRequest({
-          action: "GET_ACCOUNT_DATA",
-          address: address,
-        });
-        if (!resAddress?.publicKey) throw new Error("Cannot find order owner");
-        const recipientPublicKey = resAddress.publicKey;
-        // Decrypt the raw data since it was encrypted when the status was changed
-        let requestEncryptBody: any = {
-          action: "DECRYPT_DATA",
-          encryptedData: base64,
-          publicKey: recipientPublicKey,
-        };
-        const resDecrypt = await qortalRequest(requestEncryptBody);
-
-        if (!resDecrypt) return;
-        const decryptToUnit8Array = base64ToUint8Array(resDecrypt);
-        const orderStatus = uint8ArrayToObject(decryptToUnit8Array);
-        setNote(orderStatus?.note || "");
-        setSelectedStatus(orderStatus?.status || "");
-        dispatch(
-          addToHashMap({
-            ...order,
-            status: orderStatus?.status,
-            note: orderStatus?.note,
-          })
-        );
-        return;
-      }
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setStatusLoader(false);
-    }
-  };
-
-  //  Check to see if any of the products in the order are digital and that there are none which are physical. Hide delivery details in the order if that's the case.
-  const isDigitalOrder = useMemo(() => {
-    if (order && order?.details) {
-      if (!order) return false;
-      return Object.keys(order?.details || {})
-        .filter(key => key !== "totalPrice")
-        .every(key => {
-          const product = order?.details?.[key]?.product;
-          if (!product) return false;
-          return product?.type === "digital";
-        });
-    } else {
-      return false;
-    }
-  }, [order]);
-
-  // Check to see if product status has been updated when opening <ShowOrder /> from either ProductManager.tsx or from MyOrders.tsx
-  useEffect(() => {
-    if (isOpen && order?.id) {
-      verifyIfOrderStatusUpdated();
-    }
-  }, [isOpen, order?.id]);
-
-
-  const coinToUse = order?.payment?.currency
-
-
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Box
-      sx={{
-        display: "flex",
-        justifyContent: "flex-end",
-        width: "100%",
-      }}
-    >
-      <ReusableModal
-        open={isOpen}
-        customStyles={{
-          width: "100%",
-          maxWidth: 800,
-          height: "90%",
-          wordBreak: "break-word",
-          borderRadius: 8,
-          padding: "32px 20px",
-        }}
+    <Box component="section" sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+      <Typography
+        component="h3"
+        sx={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "text.secondary" }}
       >
-        <ShowOrderHeader>
-          <ShowOrderImages>
-            {Object.keys(order?.details || {})
-              .filter(key => key !== "totalPrice")
-              .map((key, index) => {
-                return (
-                  <ShowOrderProductImage
-                    key={key}
-                    src={order?.details?.[key]?.product?.images?.[0]}
-                    alt={`image-${index}`}
-                  />
-                );
-              })}
-          </ShowOrderImages>
-          <ShowOrderCol>
-            <ShowOrderTitle
-              href={`qortal://APP/Q-Mail/to/${
-                from === "ProductManager"
-                  ? order?.delivery?.customerName
-                  : order?.sellerName
-              }`}
-              className="qortal-link"
-            >
-              <EmailIcon
-                sx={{
-                  color: "#50e3c2",
-                }}
-              />
-              {from === "ProductManager"
-                ? `Message ${order?.delivery?.customerName} on Q-Mail`
-                : `Message ${order?.sellerName} on Q-Mail`}
-            </ShowOrderTitle>
-            <ShowOrderDateCreated>
-              {moment(order?.created).format("llll")}
-            </ShowOrderDateCreated>
-          </ShowOrderCol>
-        </ShowOrderHeader>
-        <ShowOrderContent>
-          <>
-            {statusLoader ? (
-              <CircularProgress />
-            ) : from === "ProductManager" ? (
-              <SellerOrderStatusRow>
-                <ShowOrderTitle>Order Status</ShowOrderTitle>
-                <CustomSelect
-                  name="status"
-                  value={selectedStatus}
-                  onChange={event => {
-                    setSelectedStatus(event.target.value as string);
-                  }}
-                  variant="filled"
-                  required
-                >
-                  <CustomMenuItem value="Received">Received</CustomMenuItem>
-                  <CustomMenuItem value="Shipped">Shipped</CustomMenuItem>
-                  <CustomMenuItem value="Refunded">Refunded</CustomMenuItem>
-                </CustomSelect>
-                <CustomInputField
-                  style={{ minWidth: "300px" }}
-                  name="note"
-                  label="Note"
-                  value={note}
-                  variant="filled"
-                  onChange={e => setNote(e.target.value)}
-                  size="small"
-                  fullWidth
-                />
-                <UpdateStatusButton onClick={updateStatus} variant="contained">
-                  Update Status
-                </UpdateStatusButton>
-              </SellerOrderStatusRow>
-            ) : (
-              <OrderStatusRow>
-                <OrderStatusCard
-                  style={{
-                    backgroundColor:
-                      hashMapOrders[order?.id]?.status === "Received"
-                        ? "#e5e916"
-                        : hashMapOrders[order?.id]?.status === "Shipped"
-                        ? "#29b100"
-                        : hashMapOrders[order?.id]?.status === " Refunded"
-                        ? "#f33c3c"
-                        : "#e5e916",
-                  }}
-                >
-                  Order Status: {hashMapOrders[order?.id]?.status}
-                </OrderStatusCard>
-                <OrderStatusNote>
-                  {hashMapOrders[order?.id]?.note}
-                </OrderStatusNote>
-              </OrderStatusRow>
-            )}
-          </>
-          <>
-            {order?.details && (
-              <>
-                <OrderDetails>
-                  {Object.keys(order?.details || {})
-                    .filter(key => key !== "totalPrice")
-                    .map(key => {
-                      const product = order?.details?.[key];
-                      return (
-                        <OrderDetailsContainer key={key}>
-                          <DialogsSVG
-                            color={theme.palette.text.primary}
-                            height={"22"}
-                            width={"22"}
-                          />
-                          <OrderDetailsCard>
-                            <OrderTitleCol>
-                              <OrderTitle>{product?.product?.title}</OrderTitle>
-                              <OrderId>
-                                Product Id: {product?.product?.id}
-                              </OrderId>
-                            </OrderTitleCol>
-                            <OrderTitleCol>
-                              <OrderQuantityRow>
-                                <OrderTitle
-                                  style={{ display: "flex", gap: "10px" }}
-                                >
-                                  {`x ${product?.quantity}`}
-                                  <span>{product?.pricePerUnit}</span>
-                                </OrderTitle>
-                                {coinToUse === CoinFilter.qort && (
-                                   <QortalSVG
-                                   width={"22"}
-                                   height={"22"}
-                                   color={theme.palette.text.primary}
-                                 />
-                                )}
-                                {coinToUse === CoinFilter.arrr && (
-                                   <ARRRSVG
-                                   width={"22"}
-                                   height={"22"}
-                                   color={theme.palette.text.primary}
-                                 />
-                                )}
-                              </OrderQuantityRow>
-                              <TotalPriceRow>
-                                Total: {product?.totalProductPrice}
-                                {coinToUse === CoinFilter.qort && (
-                                   <QortalSVG
-                                   width={"22"}
-                                   height={"22"}
-                                   color={theme.palette.text.primary}
-                                 />
-                                )}
-                                {coinToUse === CoinFilter.arrr && (
-                                   <ARRRSVG
-                                   width={"22"}
-                                   height={"22"}
-                                   color={theme.palette.text.primary}
-                                 />
-                                )}
-                              </TotalPriceRow>
-                            </OrderTitleCol>
-                          </OrderDetailsCard>
-                        </OrderDetailsContainer>
-                      );
-                    })}
-                </OrderDetails>
-                <TotalCostContainer>
-                  <TotalCostCol>
-                    <Divider />
-                    <PriceRow>
-                    {coinToUse === CoinFilter.qort && (
-                                   <QortalSVG
-                                   width={"22"}
-                                   height={"22"}
-                                   color={theme.palette.text.primary}
-                                 />
-                                )}
-                                {coinToUse === CoinFilter.arrr && (
-                                   <ARRRSVG
-                                   width={"22"}
-                                   height={"22"}
-                                   color={theme.palette.text.primary}
-                                 />
-                                )}
-                    
-                      <TotalCostFont>
-                        {order?.details?.totalPrice}
-                      </TotalCostFont>
-                    </PriceRow>
-                  </TotalCostCol>
-                  <TotalCostCol>
-                    <DetailsRow
-                      onClick={() =>{
-                        if(coinToUse === CoinFilter.qort){
-                          getPaymentInfo(
-                            order?.payment?.transactionSignature as string
-                          )
-                        } else {
-                          setPaymentInfoForeign(true)
-                        }
-                      }
-                       
-                        
-                      }
-                    >
-                      <DetailsFont>Payment Details</DetailsFont>
-                      <ExpandMoreSVG
-                        color={theme.palette.text.primary}
-                        height={"22"}
-                        width={"22"}
-                      />
-                    </DetailsRow>
-                  </TotalCostCol>
-
-                 {paymentInfoForeign && (
-                   <DetailsCard>
-                   {coinToUse === CoinFilter.arrr && (
-                    <>
-                     <span>Currency:</span>{" "}
-                          <span style={{ fontWeight: 300 }}>
-                            {coinToUse}
-                          </span>
-                          <span>Payment sent to</span>{" "}
-                          <span style={{ fontWeight: 300 }}>
-                            {order?.payment?.arrrAddressUsed}
-                          </span>
-                          </>
-                           )}
-                           <CloseDetailsCardIcon
-                        width={"18"}
-                        height={"18"}
-                        color={theme.palette.text.primary}
-                        onClickFunc={() => setPaymentInfoForeign(false)}
-                      />
-                   </DetailsCard>
-                 )}
-                    
-                 
-                  {paymentInfo && (
-                    <DetailsCard>
-                      {Object.keys(paymentInfo || {}).map(key => {
-                        return (
-                          <>
-                            <span>{key}:</span>{" "}
-                            <span style={{ fontWeight: 300 }}>
-                              {paymentInfo[key]}
-                            </span>
-                          </>
-                        );
-                      })}
-                      <CloseDetailsCardIcon
-                        width={"18"}
-                        height={"18"}
-                        color={theme.palette.text.primary}
-                        onClickFunc={() => setPaymentInfo(null)}
-                      />
-                    </DetailsCard>
-                  )}
-                </TotalCostContainer>
-              </>
-            )}
-          </>
-          {!isDigitalOrder && (
-            <DeliveryInfoCard>
-              <ShowOrderTitle>Delivery Information</ShowOrderTitle>
-              <OrderTitle>
-                <span>Shop Name:</span> {order?.storeName}
-              </OrderTitle>
-              <OrderTitle>
-                <span>Seller Name:</span> {order?.sellerName}
-              </OrderTitle>
-              <OrderTitle>
-                <span>Customer name:</span> {order?.delivery?.customerName}
-              </OrderTitle>
-              {order?.delivery?.shippingAddress && (
-                <>
-                  {Object.entries(order?.delivery?.shippingAddress).map(
-                    ([key, value]) => (
-                      <OrderTitle key={key}>
-                        <span>{key}:</span> {value}
-                      </OrderTitle>
-                    )
-                  )}
-                </>
-              )}
-            </DeliveryInfoCard>
-          )}
-        </ShowOrderContent>
-        <CloseButtonRow>
-          <CloseButton variant="outlined" color="error" onClick={closeModal}>
-            Close
-          </CloseButton>
-        </CloseButtonRow>
-      </ReusableModal>
+        {title}
+      </Typography>
+      {children}
     </Box>
   );
-};
+}
+
+function ItemRow({
+  item,
+  coin,
+  coinSettings,
+  sellerName,
+}: {
+  item: OrderItem;
+  coin: string;
+  coinSettings: ShopCoinSettings | null;
+  sellerName: string;
+}) {
+  const owner = item.product?.user || sellerName;
+  const storeId = item.product?.storeId;
+  const to =
+    owner && storeId && item.product?.id && item.catalogueId
+      ? productPath(owner, storeId, item.product.id, item.catalogueId)
+      : null;
+  const [imageFailed, setImageFailed] = useState(false);
+  return (
+    <Box component="li" sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", minWidth: 0 }}>
+      {item.image && !imageFailed ? (
+        <Box
+          component="img"
+          src={item.image}
+          alt={item.title}
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+          sx={{ width: 56, height: 56, borderRadius: 1.5, objectFit: "cover", flexShrink: 0, bgcolor: "action.hover" }}
+        />
+      ) : (
+        <Box aria-hidden sx={{ width: 56, height: 56, borderRadius: 1.5, flexShrink: 0, bgcolor: "action.hover" }} />
+      )}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        {to ? (
+          <Link
+            component={RouterLink}
+            to={to}
+            underline="always"
+            sx={{ fontWeight: 600, overflowWrap: "anywhere", textUnderlineOffset: "3px" }}
+          >
+            {item.title}
+          </Link>
+        ) : (
+          <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{item.title}</Typography>
+        )}
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          component="div"
+          sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap" }}
+        >
+          {item.quantity} ×
+          <AmountTag value={item.pricePerUnit} coin={coin} shop={coinSettings} size="small" sx={{ fontWeight: 500 }} />
+        </Typography>
+      </Box>
+      <Box sx={{ flexShrink: 0, textAlign: "right" }}>
+        <AmountTag value={item.totalProductPrice} coin={coin} shop={coinSettings} size="small" />
+      </Box>
+    </Box>
+  );
+}
+
+function sameDraft(draft: StatusDraft, status: OrderStatusInfo | null): boolean {
+  if (!status || status.state !== "known") return false;
+  const sameTracking =
+    normalizeStatus(draft.status) !== "Shipped" ||
+    (draft.trackingNumber.trim() === (status.tracking?.number ?? "") && draft.carrier.trim() === (status.tracking?.carrier ?? ""));
+  return normalizeStatus(draft.status) === normalizeStatus(status.status) && draft.note === status.note && sameTracking;
+}
+
+/** The shop's policies under a buyer's order status, read with the home cards' shop details (cached). */
+function OrderShopPolicies({ owner, storeId, digital }: { owner: string; storeId: string; digital: boolean }) {
+  const details = useShopDetails(shopKey(owner, storeId));
+  useEffect(() => {
+    void requestShopDetails(owner, storeId);
+  }, [owner, storeId]);
+  const shop = details?.status === "ready" && details.valid ? (details.shop as { policies?: unknown; title?: string }) : null;
+  if (!shop) return null;
+  return (
+    <Box sx={{ mt: 1.5 }}>
+      <PolicyLines shop={shop} digital={digital} />
+    </Box>
+  );
+}
+
+function CopyAddressButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      variant="outlined"
+      color="inherit"
+      startIcon={copied ? <CheckCircleOutlinedIcon /> : <ContentCopyOutlinedIcon />}
+      onClick={async () => setCopied(await copyText(text))}
+      sx={{ mt: 1, minHeight: 44 }}
+    >
+      {copied ? "Address copied" : "Copy address"}
+    </Button>
+  );
+}
+
+/** A shipped order's carrier and tracking number, with Copy (orders/tracking.ts). */
+function TrackingBox({ tracking }: { tracking: Tracking }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1, p: 1.5, borderRadius: 2, border: 1, borderColor: "divider", flexWrap: "wrap" }}>
+      <LocalShippingOutlinedIcon aria-hidden sx={{ color: "text.secondary" }} />
+      <Box sx={{ flex: "1 1 160px", minWidth: 0 }}>
+        <Typography variant="body2" color="text.secondary">
+          {tracking.carrier ? `Tracking with ${tracking.carrier}` : "Tracking number"}
+        </Typography>
+        <Typography sx={{ fontFamily: "monospace", fontSize: 16, overflowWrap: "anywhere" }}>{tracking.number}</Typography>
+      </Box>
+      <Button
+        variant="outlined"
+        color="inherit"
+        startIcon={copied ? <CheckCircleOutlinedIcon /> : <ContentCopyOutlinedIcon />}
+        onClick={async () => setCopied(await copyText(tracking.number))}
+        aria-label={copied ? "Tracking number copied" : "Copy the tracking number"}
+        sx={{ minHeight: 44 }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </Button>
+    </Box>
+  );
+}
+
+export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
+  const dispatch = useDispatch();
+  const store: OrderStore = useStore<RootState>();
+  const me = useSelector((state: RootState) => state.auth.user);
+  const status = useSelector((state: RootState) => (order ? state.order.statuses[order.id] ?? null : null));
+  // The buyer's "it arrived" (orders/delivered.ts): null when there is none, undefined while not read.
+  const delivered = useSelector((state: RootState) => (order ? state.order.delivered[order.id] : undefined));
+  // The seller's view never names the coin from the buyer's own text (orders/useOrderCoin.ts).
+  const coinView = useOrderCoinView(order, role);
+  const sellerName = role === "seller" ? me?.name || order?.sellerName || "" : order?.sellerName || "";
+
+  // The status, when the list hasn't read it (pinned read: ShowOrder.pin.test.tsx).
+  useEffect(() => {
+    if (open && order && sellerName) void ensureOrderStatus(store, order, sellerName);
+  }, [open, order, sellerName, store]);
+  useEffect(() => {
+    if (open && order) void ensureDelivered(store, order);
+  }, [open, order, store]);
+
+  // The seller's draft starts from the status as read, and again whenever it is read anew. A status
+  // that couldn't be read pre-selects nothing: "Received" there would put a real Shipped or Refunded
+  // (and its note) back to Received with one tap, so the seller retries or chooses explicitly.
+  const draftKey = status ? `${status.state}:${status.updated}` : "loading";
+  const [draftState, setDraftState] = useState<{ key: string; orderId: string; draft: StatusDraft } | null>(null);
+  const draft: StatusDraft =
+    draftState && draftState.key === draftKey && draftState.orderId === order?.id
+      ? draftState.draft
+      : status?.state === "known"
+        ? { status: normalizeStatus(status.status) ?? "Received", note: status.note, carrier: status.tracking?.carrier ?? "", trackingNumber: status.tracking?.number ?? "" }
+        : { status: "", note: "", carrier: "", trackingNumber: "" };
+  const setDraft = (next: StatusDraft) => setDraftState({ key: draftKey, orderId: order?.id ?? "", draft: next });
+  const [retrying, setRetrying] = useState(false);
+
+  // The seller sees the buyer's review of the shop, from the shop's shared review search.
+  const sellerShopId = role === "seller" && order ? ((orderItems(order).find((i) => i.product?.storeId)?.product?.storeId as string | undefined) ?? "") : "";
+  const shopReviews = useShopReviews(sellerShopId, sellerName || null);
+  // The seller's check of the order's discount against the shop's codes (discounts/verify.ts).
+  const discountCheck = useOrderDiscountCheck(role === "seller" ? order : null, sellerName, sellerShopId);
+  const buyerReview = sellerShopId && order ? (shopReviews.reviews.find((r) => sameName(r.name, order.user)) ?? null) : null;
+
+  if (!order) return null;
+
+  const items = orderItems(order);
+  const deliveryFee = orderDelivery(order);
+  const discount = orderDiscount(order);
+  const { coin, settings: coinSettings } = coinView;
+  const digital = isDigitalOrder(order);
+  const address = deliveryLines(order);
+  const other = role === "seller" ? order.user : order.sellerName || "";
+  const storeId = items.find((i) => i.product?.storeId)?.product?.storeId as string | undefined;
+  const sending = !!status?.sending;
+  const shown = shownStatus(status, delivered);
+  const refunded = status?.state === "known" && normalizeStatus(status.status) === "Refunded";
+  // The buyer's own order, shipped and not marked yet: it can be marked delivered.
+  const mine = role === "buyer" && sameName(order.user, me?.name);
+  const sellerStatus = status?.state === "known" ? normalizeStatus(status.status) : null;
+  // A digital order has nothing to ship: it can be marked received as soon as it is placed.
+  const canMarkDelivered = mine && delivered === null && (sellerStatus === "Shipped" || (digital && sellerStatus === "Received"));
+  const markAsDelivered = async () => {
+    const result = await markDelivered(store, order);
+    if (result === "sent") dispatch(setNotification({ alertType: "success", msg: "Marked as delivered" }));
+    else if (result === "timeout") {
+      dispatch(setNotification({ alertType: "info", msg: "Hub didn't answer in time. If you accepted, it shows as delivered after a refresh." }));
+    } else if (result === "failed") dispatch(setNotification({ alertType: "error", msg: "Couldn't mark it delivered. Try again." }));
+  };
+
+  const update = async () => {
+    if (sending || !me?.name || !me.publicKey || normalizeStatus(draft.status) === null) return;
+    const result = await sendOrderStatus(store, {
+      order,
+      seller: me.name,
+      sellerPublicKey: me.publicKey,
+      status: draft.status,
+      note: draft.note,
+      tracking: draft.trackingNumber.trim() ? { number: draft.trackingNumber.trim(), ...(draft.carrier.trim() && { carrier: draft.carrier.trim() }) } : null,
+    });
+    if (result === "sent") dispatch(setNotification({ alertType: "success", msg: "Status updated" }));
+    else if (result === "timeout") {
+      dispatch(
+        setNotification({
+          alertType: "info",
+          msg: "Hub didn't answer in time. If you accepted, the new status shows after a refresh.",
+        })
+      );
+    } else if (result === "failed")
+      dispatch(setNotification({ alertType: "error", msg: "Couldn't update the status. Try again." }));
+  };
+
+  // Reads the status document again from the node (the list's read, or the dialog's, failed).
+  const retryStatus = async () => {
+    if (retrying || !sellerName) return;
+    setRetrying(true);
+    try {
+      await ensureOrderStatus(store, order, sellerName, true);
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  const title = role === "seller" ? `Order from ${order.user}` : `Order at ${order.storeName || order.sellerName || "a shop"}`;
+  const statusUnreadable = role === "seller" && status?.state === "error";
+  const canUpdate =
+    role === "seller" && !!status && !sending && normalizeStatus(draft.status) !== null && !sameDraft(draft, status);
+
+  return (
+    <ResponsiveDialog
+      open={open}
+      onClose={onClose}
+      title={title}
+      maxWidth="md"
+      actions={
+        role === "seller" ? (
+          <Button variant="contained" onClick={update} disabled={!canUpdate} sx={{ minHeight: 44 }}>
+            {sending ? "Updating…" : "Update status"}
+          </Button>
+        ) : undefined
+      }
+    >
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        <Box sx={{ display: "flex", gap: 1.5, alignItems: "center", flexWrap: "wrap" }}>
+          <NameAvatar name={other || "?"} size={44} />
+          <Box sx={{ flex: 1, minWidth: 160 }}>
+            <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>
+              {role === "seller" ? order.user : order.storeName || order.sellerName}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {formatOrderDate(order.created)}
+              {role === "buyer" && order.sellerName && order.storeName ? ` · by ${order.sellerName}` : ""}
+            </Typography>
+          </Box>
+          <OrderStatusChip status={shown} role={role} size="medium" />
+        </Box>
+        <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+          {other && (
+            <Button
+              component="a"
+              href={mailToLink(other)}
+              className="qortal-link"
+              variant="outlined"
+              startIcon={<MailOutlineOutlinedIcon />}
+              sx={{ minHeight: 44 }}
+            >
+              {role === "seller" ? `Message ${order.user}` : `Message ${order.sellerName}`}
+            </Button>
+          )}
+          {role === "buyer" && order.sellerName && storeId && (
+            <Button
+              component={RouterLink}
+              to={storePath(order.sellerName, storeId)}
+              variant="outlined"
+              startIcon={<StorefrontOutlinedIcon />}
+              sx={{ minHeight: 44 }}
+            >
+              Visit shop
+            </Button>
+          )}
+        </Box>
+
+        <Section title="Status">
+          {delivered && !refunded && (
+            <DeliveredNote
+              who={mine ? null : order.user}
+              at={delivered.at}
+              sending={!!delivered.sending}
+              digital={digital}
+              reviewStoreId={mine && storeId && !delivered.sending ? storeId : undefined}
+              shop={order.storeName || order.sellerName || "the shop"}
+              storeTitle={order.storeName || ""}
+            />
+          )}
+          {buyerReview && <BuyerReviewNote review={buyerReview} />}
+          {canMarkDelivered && (
+            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, border: 1, borderColor: "divider" }}>
+              <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 700 }}>{digital ? "Got it?" : "Has it arrived?"}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Let {order.sellerName || "the seller"} know, then review the shop. Hub asks you to confirm a small publish under your name.
+                </Typography>
+              </Box>
+              <Button variant="contained" startIcon={<CheckCircleOutlinedIcon />} onClick={() => void markAsDelivered()} sx={{ minHeight: 44 }}>
+                {digital ? "Mark as received" : "Mark as delivered"}
+              </Button>
+            </Box>
+          )}
+          {role === "seller" ? (
+            status ? (
+              <>
+                {statusUnreadable && (
+                  <Alert
+                    severity="warning"
+                    action={
+                      <Button
+                        color="inherit"
+                        onClick={() => void retryStatus()}
+                        aria-disabled={retrying || undefined}
+                        sx={{ minHeight: 44, fontWeight: 700 }}
+                      >
+                        {retrying ? "Retrying…" : "Retry"}
+                      </Button>
+                    }
+                  >
+                    Couldn't read this order's current status. Retry, or choose a status below: updating replaces what
+                    the buyer sees now.
+                  </Alert>
+                )}
+                <StatusEditor draft={draft} onChange={setDraft} disabled={sending} />
+              </>
+            ) : (
+              <Box role="status" aria-label="Loading the status">
+                <Skeleton variant="rounded" height={44} />
+                <Skeleton variant="rounded" height={72} sx={{ mt: 2 }} />
+              </Box>
+            )
+          ) : status?.state === "known" && (status.note || status.tracking) ? (
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+              {status.tracking && <TrackingBox tracking={status.tracking} />}
+              {status.note && (
+                <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Note from the seller
+                  </Typography>
+                  <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{status.note}</Typography>
+                </Box>
+              )}
+            </Box>
+          ) : status?.state === "error" ? (
+            <Typography variant="body2" color="text.secondary">
+              The seller's status update couldn't be read.
+            </Typography>
+          ) : status ? (
+            <Typography variant="body2" color="text.secondary">
+              {normalizeStatus(status.status) === "Received"
+                ? "The seller hasn't updated this order yet."
+                : "No note from the seller."}
+            </Typography>
+          ) : (
+            <Skeleton width="60%" />
+          )}
+          {/* The buyer's order: the shop's policies (returns, dispatch time), for when something goes wrong. */}
+          {role === "buyer" && storeId && order.sellerName && <OrderShopPolicies owner={order.sellerName} storeId={storeId} digital={digital} />}
+        </Section>
+
+        <Section title={`Items (${items.length})`}>
+          <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
+            {items.map((item) => (
+              <ItemRow
+                key={item.productId}
+                item={item}
+                coin={coin}
+                coinSettings={coinSettings}
+                sellerName={order.sellerName || ""}
+              />
+            ))}
+            {deliveryFee && (
+              // The shop's delivery fee for the address (delivery/model.ts): a line of the order, not a product.
+              <Box component="li" sx={{ display: "flex", gap: 1.5, alignItems: "center", minWidth: 0 }}>
+                <Box aria-hidden sx={{ width: 56, height: 56, borderRadius: 1.5, flexShrink: 0, bgcolor: "action.hover", display: "grid", placeItems: "center" }}>
+                  <LocalShippingOutlinedIcon sx={{ color: "text.secondary" }} />
+                </Box>
+                <Typography sx={{ flex: 1, minWidth: 0, fontWeight: 600, overflowWrap: "anywhere" }}>{deliveryFee.title}</Typography>
+                <Box sx={{ flexShrink: 0, textAlign: "right" }}>
+                  <AmountTag value={deliveryFee.total} coin={coin} shop={coinSettings} size="small" />
+                </Box>
+              </Box>
+            )}
+            {discount && (
+              // A discount code's line (discounts/apply.ts): it takes off the total, not a product.
+              <Box component="li" sx={{ display: "flex", gap: 1.5, alignItems: "center", minWidth: 0 }}>
+                <Box aria-hidden sx={{ width: 56, height: 56, borderRadius: 1.5, flexShrink: 0, bgcolor: "action.hover", display: "grid", placeItems: "center" }}>
+                  <LocalOfferOutlinedIcon sx={{ color: "text.secondary" }} />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>{discount.title}</Typography>
+                  {role === "seller" && discountCheck && (
+                    <Typography variant="body2" sx={{ color: (theme) => (discountCheck.ok ? theme.palette.text.secondary : statusText(theme, "warning")), fontWeight: discountCheck.ok ? 400 : 600 }}>
+                      {discountCheck.ok ? "Matches one of your codes." : discountCheck.message}
+                    </Typography>
+                  )}
+                </Box>
+                <Box sx={{ flexShrink: 0, display: "flex", alignItems: "baseline", gap: 0.25 }}>
+                  <Typography component="span" sx={{ fontWeight: 600 }}>
+                    −
+                  </Typography>
+                  <AmountTag value={discount.amount} coin={coin} shop={coinSettings} size="small" />
+                </Box>
+              </Box>
+            )}
+          </Box>
+          <Divider />
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+            <Typography sx={{ fontWeight: 700 }}>Total</Typography>
+            <AmountTag value={orderTotal(order)} coin={coin} shop={coinSettings} size="large" />
+          </Box>
+        </Section>
+
+        <Section title="Payment">
+          <PaymentDetails order={order} role={role} coin={coinView} />
+        </Section>
+
+        <Section title="Delivery">
+          {digital ? (
+            <Typography variant="body2" color="text.secondary">
+              Digital order: nothing to ship.
+            </Typography>
+          ) : address.length > 0 ? (
+            <>
+              <Box component="dl" sx={{ m: 0 }}>
+                {address.map((line) => (
+                  <Box
+                    key={line.label}
+                    sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "140px 1fr" }, gap: { xs: 0, sm: 2 }, py: 0.5 }}
+                  >
+                    <Typography component="dt" variant="body2" color="text.secondary">
+                      {line.label}
+                    </Typography>
+                    <Typography component="dd" sx={{ m: 0, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                      {line.value}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+              {/* For the seller's shipping label: the address in one go. */}
+              {/* A pickup (delivery.ts pickupDelivery) has no street: nothing for a label. */}
+              {role === "seller" && address.some((l) => l.label === "Street address") && <CopyAddressButton text={addressLabelText(address)} />}
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              No delivery address in this order.
+            </Typography>
+          )}
+        </Section>
+
+        <Typography variant="caption" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+          Order {order.id}
+        </Typography>
+      </Box>
+    </ResponsiveDialog>
+  );
+}
+
+/**
+ * "Delivered": the buyer's own (with Write a review, or View review once
+ * they have one for the shop, at once after publishing it), or the buyer's
+ * for the seller to see. While it is being published, it says so.
+ */
+function DeliveredNote({
+  who,
+  at,
+  sending,
+  digital,
+  shop,
+  storeTitle,
+  reviewStoreId,
+}: {
+  /** The buyer's name for the seller; null for the buyer themself. */
+  who: string | null;
+  at: number;
+  sending: boolean;
+  /** A digital order is received, not delivered. */
+  digital: boolean;
+  shop: string;
+  /** The shop's own title, for the review dialog. */
+  storeTitle?: string;
+  /** The shop the buyer can review here; unset for the seller and while sending. */
+  reviewStoreId?: string;
+}) {
+  const me = useSelector((state: RootState) => state.auth.user);
+  const mine = useMyShopReview(reviewStoreId ?? "", reviewStoreId ? me?.name ?? "" : "");
+  const [writing, setWriting] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const review = reviewStoreId ? mine.review : null;
+  const date = at ? formatOrderDate(at) : "";
+  const on = date ? `On ${date}. ` : "";
+  return (
+    <Box
+      role="status"
+      sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}
+    >
+      <CheckCircleOutlinedIcon color="success" aria-hidden />
+      <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700 }}>
+          {sending
+            ? digital
+              ? "Marking it received…"
+              : "Marking it delivered…"
+            : who
+              ? digital
+                ? `${who} says they received it`
+                : `${who} says it arrived`
+              : digital
+                ? "You marked it received"
+                : "You marked it delivered"}
+        </Typography>
+        {!sending && (
+          <Typography variant="body2" color="text.secondary">
+            {who ? on.trim() : review ? `${on}Your review of ${shop} is published.` : `${on}How was ${shop}? A review helps other buyers.`}
+          </Typography>
+        )}
+      </Box>
+      {reviewStoreId &&
+        (review ? (
+          <Button variant="outlined" color="inherit" startIcon={<RateReviewOutlinedIcon />} onClick={() => setViewing(true)} sx={{ minHeight: 44 }}>
+            View review
+          </Button>
+        ) : mine.status === "loading" ? (
+          <Skeleton variant="rounded" width={160} height={44} />
+        ) : (
+          <Button variant="contained" startIcon={<RateReviewOutlinedIcon />} onClick={() => setWriting(true)} sx={{ minHeight: 44 }}>
+            Write a review
+          </Button>
+        ))}
+      {reviewStoreId && review && viewing && (
+        <ReviewDialog
+          review={review}
+          title={`Your review of ${shop}`}
+          onClose={() => setViewing(false)}
+          onWriteNew={() => {
+            setViewing(false);
+            setWriting(true);
+          }}
+        />
+      )}
+      {reviewStoreId && writing && (
+        <AddReview open storeId={reviewStoreId} storeTitle={storeTitle ?? ""} onClose={() => setWriting(false)} />
+      )}
+    </Box>
+  );
+}
+
+/** One review, opened from an order: the buyer's own (who can write a new one), or the buyer's for the seller. */
+export function ReviewDialog({ review, title, onClose, onWriteNew }: { review: ShopReview; title: string; onClose: () => void; onWriteNew?: () => void }) {
+  return (
+    <ResponsiveDialog
+      open
+      onClose={onClose}
+      title={title}
+      actions={
+        <>
+          {onWriteNew && (
+            <Button color="inherit" onClick={onWriteNew}>
+              Write a new review
+            </Button>
+          )}
+          <Button variant="contained" onClick={onClose}>
+            Close
+          </Button>
+        </>
+      }
+    >
+      <StoreReviewCard review={review} orderedHere />
+      {onWriteNew && (
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          A new review replaces this one.
+        </Typography>
+      )}
+    </ResponsiveDialog>
+  );
+}
+
+/**
+ * For the seller: the buyer's review of the shop (their latest, as the
+ * Reviews tab counts it), with its stars and title, and View review.
+ */
+function BuyerReviewNote({ review }: { review: ShopReview }) {
+  const [viewing, setViewing] = useState(false);
+  const date = formatReviewDate(review.created);
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 1.5, borderRadius: 2, bgcolor: "action.hover" }}>
+      <RateReviewOutlinedIcon color="primary" aria-hidden />
+      <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
+        <Typography sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>{review.name} reviewed your shop</Typography>
+        <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1 }}>
+          <Rating value={review.rating} precision={0.5} readOnly size="small" aria-label={`${review.rating} out of 5 stars`} />
+          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+            {[date, review.title ? `“${review.title}”` : ""].filter(Boolean).join(" · ")}
+          </Typography>
+        </Box>
+      </Box>
+      <Button variant="outlined" color="inherit" startIcon={<RateReviewOutlinedIcon />} onClick={() => setViewing(true)} sx={{ minHeight: 44 }}>
+        View review
+      </Button>
+      {viewing && <ReviewDialog review={review} title={`${review.name}'s review`} onClose={() => setViewing(false)} />}
+    </Box>
+  );
+}
