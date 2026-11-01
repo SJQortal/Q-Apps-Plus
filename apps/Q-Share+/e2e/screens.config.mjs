@@ -237,6 +237,7 @@ export default {
     { key: 'collections', path: '/collections', optional: true },
     { key: 'collection', path: `/collection/${NAME}/${HOLIDAY}`, optional: true, after: async (page) => page.waitForSelector('text=Live recordings', { timeout: 8000 }).catch(() => {}) },
     { key: 'folder', path: `/collection/${NAME}/${HOLIDAY}/folder/live01`, after: async (page) => page.waitForSelector('text=Live in Tokyo', { timeout: 8000 }).catch(() => {}) },
+    { key: 'collection-edit', path: `/collection/${NAME}/${HOLIDAY}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Edit' }).first().click({ timeout: 4000 }); await page.getByRole('radiogroup', { name: 'Space' }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'folder-new', path: `/collection/${NAME}/${HOLIDAY}/folder/live01`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'New folder' }).first().click({ timeout: 4000 }); await page.waitForTimeout(400); } },
     // bob+builder's copy of Holiday pack: the "Copy of … by Tester" line, and Copy to my collections.
     { key: 'collection-copied', path: `/collection/${encodeURIComponent('bob+builder')}/${COPY}`, after: async (page) => page.waitForSelector('text=Copy of', { timeout: 8000 }).catch(() => {}) },
