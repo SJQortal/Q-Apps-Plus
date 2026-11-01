@@ -10,14 +10,17 @@ import {
   COLLECTION_TITLE_MAX,
   buildCollectionBody,
   buildCollectionIdentifier,
+  collectionSpace,
   editCollectionBody,
   newCollectionUid,
   publishCollection,
   type Collection,
   type CollectionItem,
 } from "../../utils/collections";
+import { allCollectionItems } from "../../utils/collectionFolders";
 import { isHubDecline } from "../../utils/hubErrors";
 import { COVER_FAILED, CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
+import { SpacePicker, type SpaceChoice } from "./SpacePicker";
 
 export interface CollectionDialogProps {
   open: boolean;
@@ -40,6 +43,8 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [coverChoice, setCoverChoice] = useState<CoverChoice>(KEEP_COVER);
+  // null until a tile is tapped: the stored space (even one this version doesn't know) stays as it is.
+  const [spaceChoice, setSpaceChoice] = useState<SpaceChoice | null>(null);
 
   // Seed the fields each time the dialog opens (state adjusted during render, no effect).
   const [seededOpen, setSeededOpen] = useState(false);
@@ -52,6 +57,7 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
       setBusy(false);
       setError(null);
       setCoverChoice(KEEP_COVER);
+      setSpaceChoice(null);
     }
   }
 
@@ -72,9 +78,10 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
     try {
       const identifier = collection?.identifier ?? buildCollectionIdentifier(trimmedTitle, newCollectionUid());
       const { cover, covers } = coverChange(coverChoice, name);
+      const space = spaceChoice === null ? undefined : spaceChoice === "standard" ? null : spaceChoice;
       const body = collection
-        ? editCollectionBody(collection, { title: trimmedTitle, description, cover })
-        : buildCollectionBody({ title: trimmedTitle, description, items: initialItems ?? [], cover });
+        ? editCollectionBody(collection, { title: trimmedTitle, description, cover, space })
+        : buildCollectionBody({ title: trimmedTitle, description, items: initialItems ?? [], cover, space });
       let coverFailed = false;
       const saved = await publishCollection({
         name,
@@ -163,6 +170,15 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
           slotProps={{ htmlInput: { maxLength: COLLECTION_DESCRIPTION_MAX } }}
         />
         <CoverPicker current={collection?.cover} choice={coverChoice} onChange={setCoverChoice} kind="collection" disabled={busy} />
+        {open ? (
+          <SpacePicker
+            value={spaceChoice ?? collectionSpace(collection)}
+            onChange={setSpaceChoice}
+            disabled={busy}
+            items={collection ? allCollectionItems(collection) : initialItems}
+            suggest={spaceChoice === null && !collection?.space}
+          />
+        ) : null}
         {startCount > 0 && (
           <Typography variant="body2">
             Starts with {startCount} {startCount === 1 ? "share" : "shares"}.
