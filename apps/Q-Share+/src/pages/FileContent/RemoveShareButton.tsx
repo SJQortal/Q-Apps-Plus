@@ -87,10 +87,12 @@ export function RemoveShareButton({ share, compact }: { share: any; compact?: bo
     <>
       <Button
         variant="outlined"
-        color="error"
-        startIcon={<DeleteOutlineOutlinedIcon />}
+        color="inherit"
+        startIcon={<DeleteOutlineOutlinedIcon sx={{ color: "error.main" }} />}
         aria-label="Remove from QDN"
         onClick={() => setConfirming(true)}
+        // Text in the normal colour: error red on the card is under 4.5:1 in some themes.
+        sx={{ borderColor: "error.main" }}
       >
         {compact ? "Remove" : "Remove from QDN"}
       </Button>
