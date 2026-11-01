@@ -800,6 +800,22 @@ export default {
       await d.getByRole('textbox', { name: 'Tracking number (optional)' }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
     } },
+    // Saved as Shipped: the Q-Mail to the buyer, ready to send or change.
+    { key: 'seller-order-shipped-mail', path: `/product-manager/q-store-general-my-shop?tab=orders`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^All · / }).click({ timeout: 8000 });
+      await page.getByRole('list', { name: 'Orders received' }).getByRole('button').first().click({ timeout: 8000 });
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Shipped', exact: true }).click({ timeout: 8000 });
+      await d.getByRole('combobox', { name: 'Carrier (optional)' }).fill('DHL');
+      await d.getByRole('textbox', { name: 'Tracking number (optional)' }).fill('00340434161234567890');
+      await d.getByRole('textbox', { name: 'Note for the buyer' }).fill('Well packed, should arrive within a week.');
+      // This mock Hub declines publishes; here it accepts the status, so the question follows.
+      await page.evaluate(() => { window.qortalRequestWithTimeout = async () => true; });
+      await d.getByRole('button', { name: 'Update status' }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: /it's shipped\?/ }).getByRole('textbox', { name: 'Message' }).waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
     { key: 'order-delivered-review', path: '/my-orders', overlay: true, after: async (page) => {
       await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Ålund Ceramics/ }).click({ timeout: 8000 });
       await page.getByRole('dialog').getByRole('button', { name: 'View review' }).scrollIntoViewIfNeeded({ timeout: 8000 });
