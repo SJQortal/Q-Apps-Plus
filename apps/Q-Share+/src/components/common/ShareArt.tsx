@@ -21,9 +21,9 @@ interface ShareFileLike {
   service?: string;
 }
 
-const thumbnailUrl = (t: ShareThumbnail) =>
+export const thumbnailUrl = (t: ShareThumbnail) =>
   `/arbitrary/THUMBNAIL/${encodeURIComponent(t.name)}/${encodeURIComponent(t.identifier)}`;
-const fileUrl = (f: Required<Pick<ShareFileLike, "name" | "identifier">>) =>
+export const fileUrl = (f: Required<Pick<ShareFileLike, "name" | "identifier">>) =>
   `/arbitrary/FILE/${encodeURIComponent(f.name)}/${encodeURIComponent(f.identifier)}`;
 
 /** The share's first small image, which a card may show when the share has no thumbnail. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector, useStore } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Box, Breadcrumbs, Button, CircularProgress, IconButton, Link, Skeleton, Tooltip, Typography } from "@mui/material";
@@ -28,6 +28,7 @@ import {
   MAX_FOLDER_DEPTH,
   collectionKey,
   collectionPath,
+  collectionSpace,
   deletedCollectionBody,
   editCollectionBody,
   fetchCollection,
@@ -35,7 +36,7 @@ import {
   type Collection,
   type CollectionBody,
 } from "../../utils/collections";
-import { avatarUrl, decodeParam, profilePath } from "../../utils/qortalLinks";
+import { avatarUrl, decodeParam, profilePath, sharePath } from "../../utils/qortalLinks";
 import { isHubDecline } from "../../utils/hubErrors";
 import { resourceStatus } from "../../utils/qdnResource";
 import { isNameHidden, useAppSettings } from "../../utils/settings";
@@ -59,6 +60,10 @@ import { MoveDialog } from "./MoveDialog";
 import { CopyCollectionDialog } from "./CopyCollectionDialog";
 import { useMyCollections } from "../../components/common/SaveToCollection/useMyCollections";
 import { CardList, InfoCard, ItemRow, ItemRows, Page, PhoneHeader, PublisherLink } from "./Collections-styles";
+import { SpaceSkeleton } from "./spaces/SpaceShell";
+
+/** Collections in the standard look never load it. */
+const SpaceView = lazy(() => import("./spaces/SpaceView"));
 
 /** "fetching": the node knows the collection but hasn't got its data yet; "unavailable": still not after the retries. */
 type Status = "loading" | "ready" | "error" | "missing" | "fetching" | "unavailable";
@@ -244,13 +249,17 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
     [container, settings]
   );
 
+  // The look this collection chose; its folders take the same one.
+  const space = collectionSpace(collection);
+
   // One FETCH per share body through the shared queue, never one another list
   // or an earlier visit already has queued; no search per item. With no search
   // to refresh, shares already marked unavailable are left alone (their rows
-  // still open the share page, which has Retry).
+  // still open the share page, which has Retry). A space queues its own, a
+  // page at a time (spaces/useSpaceItems.ts).
   useEffect(() => {
-    queueBodies(items, false);
-  }, [items, queueBodies]);
+    if (space === "standard") queueBodies(items, false);
+  }, [items, queueBodies, space]);
 
   const isOwner = Boolean(
     user && name && (user.name === name || (user.names ?? []).some((record) => record.name === name))
@@ -374,6 +383,8 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
     (video && heldShare({ hashMapFiles, reusedIdFiles }, video.user, video.id)?.title) || video?.id || "this share";
 
   let body: React.ReactNode;
+  // A space takes more of a wide screen than the standard page.
+  let inSpace = false;
   if (status === "loading" || (status === "ready" && !collection)) {
     body = (
       <>
@@ -452,7 +463,175 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
     const counts = contentsCount(container ?? { items: [] });
     const subfolders = container?.folders ?? [];
     const canAddFolder = folderCount(collection) < MAX_FOLDERS && (found?.path.length ?? 0) < MAX_FOLDER_DEPTH;
-    body = (
+    // The parts a space shows too, so it keeps every control the standard page has.
+    const trail = found
+      ? [
+          { id: null as string | null, title: collection.title || "Untitled collection" },
+          ...found.path.slice(0, -1).map((f) => ({ id: f.id as string | null, title: f.title || "Untitled folder" })),
+        ]
+      : [];
+    const breadcrumb = found ? (
+      <Breadcrumbs aria-label="Where this folder is" separator="›" sx={{ mb: 0.5, fontSize: 14, "& .MuiBreadcrumbs-ol": { flexWrap: "wrap" } }}>
+        {trail.map((crumb) => (
+          <Link
+            key={crumb.id ?? "root"}
+            component="button"
+            type="button"
+            underline="hover"
+            color="text.secondary"
+            onClick={() => navigate(collectionPath(name, id, crumb.id))}
+            sx={{ font: "inherit", minHeight: phone ? 44 : 28, textAlign: "left", wordBreak: "break-word" }}
+          >
+            {crumb.title}
+          </Link>
+        ))}
+      </Breadcrumbs>
+    ) : null;
+    const credit = collection.copiedFrom ? (
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, wordBreak: "break-word" }}>
+        Copy of{" "}
+        <Link
+          component="button"
+          type="button"
+          underline="hover"
+          color="inherit"
+          onClick={() => collection.copiedFrom && navigate(collectionPath(collection.copiedFrom.name, collection.copiedFrom.identifier))}
+          sx={creditLinkSx}
+        >
+          “{collection.copiedFrom.title || "a collection"}”
+        </Link>{" "}
+        by{" "}
+        <Link
+          component="button"
+          type="button"
+          underline="hover"
+          color="inherit"
+          onClick={() => collection.copiedFrom && navigate(profilePath(collection.copiedFrom.name))}
+          sx={creditLinkSx}
+        >
+          {collection.copiedFrom.name}
+        </Link>
+      </Typography>
+    ) : null;
+    const meta = (
+      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 1, color: "text.secondary", fontSize: 13 }}>
+        <PublisherLink onClick={() => navigate(profilePath(name))} aria-label={`Shares by ${name}`} style={{ marginLeft: 0 }}>
+          <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(name)} alt="" slotProps={{ img: { loading: "lazy" } }} />
+          <span>{name}</span>
+        </PublisherLink>
+        <span>· {countLabel(counts.shares)}</span>
+        {counts.folders > 0 ? <span>· {foldersLabel(counts.folders)}</span> : null}
+        {collection.updated ? <span>· updated {formatDate(collection.updated)}</span> : null}
+      </Box>
+    );
+    const copyAction =
+      !isOwner && myName && !here ? (
+        myCopy ? (
+          <Button variant="outlined" onClick={() => navigate(collectionPath(myCopy.name, myCopy.identifier))}>
+            Open your copy
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            startIcon={<LibraryAddOutlinedIcon />}
+            onClick={() => void startCopy()}
+            loading={checkingCopy}
+            loadingPosition="start"
+          >
+            Copy to my collections
+          </Button>
+        )
+      ) : null;
+    const actions = isOwner ? (
+      <Box
+        sx={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 1,
+          width: { xs: "100%", sm: "auto" },
+          "& .MuiButton-root": { minHeight: 44 },
+        }}
+      >
+        <Button
+          variant="outlined"
+          startIcon={<EditOutlinedIcon />}
+          onClick={() => (here ? setFolderDialog("edit") : setEditOpen(true))}
+        >
+          Edit
+        </Button>
+        {canAddFolder ? (
+          <Button variant="outlined" startIcon={<CreateNewFolderOutlinedIcon />} onClick={() => setFolderDialog("new")}>
+            New folder
+          </Button>
+        ) : null}
+        <Button variant="contained" color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setDeleteOpen(true)}>
+          Delete
+        </Button>
+      </Box>
+    ) : copyAction ? (
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, width: { xs: "100%", sm: "auto" }, "& .MuiButton-root": { minHeight: 44 } }}>
+        {copyAction}
+      </Box>
+    ) : null;
+    const foldersSection = subfolders.length > 0 ? (
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16 }}>
+          Folders
+        </Typography>
+        <FolderGrid name={name} identifier={id} folders={subfolders} />
+      </Box>
+    ) : null;
+    const emptyState =
+      items.length === 0 && subfolders.length === 0 ? (
+        <EmptyState
+          icon={here ? <FolderOutlinedIcon /> : <CollectionsBookmarkOutlinedIcon />}
+          title={here ? "This folder is empty" : "This collection is empty"}
+          description={
+            isOwner
+              ? `Add shares with the bookmark button on any share and pick ${here ? "this folder" : "this collection"}.`
+              : undefined
+          }
+        />
+      ) : null;
+    inSpace = space !== "standard";
+    body = space !== "standard" ? (
+      <Suspense fallback={<SpaceSkeleton />}>
+        {/* Keyed by the place, so each folder starts at its first page. */}
+        <SpaceView
+          key={folderId ?? ""}
+          space={space}
+          rows={items}
+          collection={collection}
+          folder={here}
+          trail={trail}
+          breadcrumb={breadcrumb}
+          title={placeTitle}
+          description={(here ? here.description : collection.description) || ""}
+          counts={counts}
+          cover={(here ? here.cover : collection.cover) ?? null}
+          subfolders={subfolders}
+          foldersSection={foldersSection}
+          emptyState={emptyState}
+          isOwner={isOwner}
+          onEdit={() => (here ? setFolderDialog("edit") : setEditOpen(true))}
+          onNewFolder={isOwner && canAddFolder ? () => setFolderDialog("new") : undefined}
+          onDelete={() => setDeleteOpen(true)}
+          onMove={isOwner && folderCount(collection) > 0 ? setMoveTarget : undefined}
+          onRemove={setRemoveTarget}
+          actions={actions}
+          copyAction={copyAction}
+          attribution={
+            <>
+              {credit}
+              {meta}
+            </>
+          }
+          openFolder={(folder) => navigate(collectionPath(name, id, folder))}
+          openShare={(share) => navigate(sharePath(share.user, share.identifier))}
+          openProfile={(profile) => navigate(profilePath(profile))}
+        />
+      </Suspense>
+    ) : (
       <>
         <InfoCard aria-label={here ? "About this folder" : "About this collection"}>
           <CollectionCover
@@ -461,124 +640,22 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
             size={phone ? 88 : 120}
           />
           <Box sx={{ flex: "1 1 200px", minWidth: 0 }}>
-            {found ? (
-              <Breadcrumbs aria-label="Where this folder is" separator="›" sx={{ mb: 0.5, fontSize: 14, "& .MuiBreadcrumbs-ol": { flexWrap: "wrap" } }}>
-                {[{ id: null as string | null, title: collection.title || "Untitled collection" }, ...found.path.slice(0, -1).map((f) => ({ id: f.id as string | null, title: f.title || "Untitled folder" }))].map(
-                  (crumb) => (
-                    <Link
-                      key={crumb.id ?? "root"}
-                      component="button"
-                      type="button"
-                      underline="hover"
-                      color="text.secondary"
-                      onClick={() => navigate(collectionPath(name, id, crumb.id))}
-                      sx={{ font: "inherit", minHeight: phone ? 44 : 28, textAlign: "left", wordBreak: "break-word" }}
-                    >
-                      {crumb.title}
-                    </Link>
-                  )
-                )}
-              </Breadcrumbs>
-            ) : null}
+            {breadcrumb}
             <Typography component="h1" variant="h5" sx={{ fontWeight: 700, wordBreak: "break-word" }}>
               {placeTitle}
             </Typography>
-            {collection.copiedFrom ? (
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25, wordBreak: "break-word" }}>
-                Copy of{" "}
-                <Link
-                  component="button"
-                  type="button"
-                  underline="hover"
-                  color="inherit"
-                  onClick={() => collection.copiedFrom && navigate(collectionPath(collection.copiedFrom.name, collection.copiedFrom.identifier))}
-                  sx={creditLinkSx}
-                >
-                  “{collection.copiedFrom.title || "a collection"}”
-                </Link>{" "}
-                by{" "}
-                <Link
-                  component="button"
-                  type="button"
-                  underline="hover"
-                  color="inherit"
-                  onClick={() => collection.copiedFrom && navigate(profilePath(collection.copiedFrom.name))}
-                  sx={creditLinkSx}
-                >
-                  {collection.copiedFrom.name}
-                </Link>
-              </Typography>
-            ) : null}
+            {credit}
             {(here ? here.description : collection.description) ? (
               <Typography sx={{ mt: 0.5, color: "text.secondary", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
                 {here ? here.description : collection.description}
               </Typography>
             ) : null}
-            <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 1, mt: 1, color: "text.secondary", fontSize: 13 }}>
-              <PublisherLink onClick={() => navigate(profilePath(name))} aria-label={`Shares by ${name}`} style={{ marginLeft: 0 }}>
-                <Avatar sx={{ width: 22, height: 22 }} src={avatarUrl(name)} alt="" slotProps={{ img: { loading: "lazy" } }} />
-                <span>{name}</span>
-              </PublisherLink>
-              <span>· {countLabel(counts.shares)}</span>
-              {counts.folders > 0 ? <span>· {foldersLabel(counts.folders)}</span> : null}
-              {collection.updated ? <span>· updated {formatDate(collection.updated)}</span> : null}
-            </Box>
+            {meta}
           </Box>
-          {isOwner ? (
-            <Box
-              sx={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 1,
-                width: { xs: "100%", sm: "auto" },
-                "& .MuiButton-root": { minHeight: 44 },
-              }}
-            >
-              <Button
-                variant="outlined"
-                startIcon={<EditOutlinedIcon />}
-                onClick={() => (here ? setFolderDialog("edit") : setEditOpen(true))}
-              >
-                Edit
-              </Button>
-              {canAddFolder ? (
-                <Button variant="outlined" startIcon={<CreateNewFolderOutlinedIcon />} onClick={() => setFolderDialog("new")}>
-                  New folder
-                </Button>
-              ) : null}
-              <Button variant="contained" color="error" startIcon={<DeleteOutlinedIcon />} onClick={() => setDeleteOpen(true)}>
-                Delete
-              </Button>
-            </Box>
-          ) : myName && !here ? (
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, width: { xs: "100%", sm: "auto" }, "& .MuiButton-root": { minHeight: 44 } }}>
-              {myCopy ? (
-                <Button variant="outlined" onClick={() => navigate(collectionPath(myCopy.name, myCopy.identifier))}>
-                  Open your copy
-                </Button>
-              ) : (
-                <Button
-                  variant="contained"
-                  startIcon={<LibraryAddOutlinedIcon />}
-                  onClick={() => void startCopy()}
-                  loading={checkingCopy}
-                  loadingPosition="start"
-                >
-                  Copy to my collections
-                </Button>
-              )}
-            </Box>
-          ) : null}
+          {actions}
         </InfoCard>
 
-        {subfolders.length > 0 ? (
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-            <Typography component="h2" sx={{ fontWeight: 700, fontSize: 16 }}>
-              Folders
-            </Typography>
-            <FolderGrid name={name} identifier={id} folders={subfolders} />
-          </Box>
-        ) : null}
+        {foldersSection}
 
         {items.length > 0 ? (
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1, mb: -1 }}>
@@ -590,17 +667,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
         ) : null}
 
         {items.length === 0 ? (
-          subfolders.length > 0 ? null : (
-            <EmptyState
-              icon={here ? <FolderOutlinedIcon /> : <CollectionsBookmarkOutlinedIcon />}
-              title={here ? "This folder is empty" : "This collection is empty"}
-              description={
-                isOwner
-                  ? `Add shares with the bookmark button on any share and pick ${here ? "this folder" : "this collection"}.`
-                  : undefined
-              }
-            />
-          )
+          emptyState
         ) : isOwner && grid ? (
           // Each card carries its own Move and Remove buttons; the rows keep theirs beside them.
           <FileList
@@ -645,7 +712,7 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
   }
 
   return (
-    <Page>
+    <Page sx={inSpace ? { maxWidth: 1200 } : undefined}>
       {phone ? (
         <PhoneHeader>
           <IconButton aria-label="Back" onClick={goBack} sx={{ minWidth: 44, minHeight: 44 }}>
