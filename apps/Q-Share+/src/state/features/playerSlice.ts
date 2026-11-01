@@ -15,6 +15,8 @@ export interface PlayerShare {
   name: string;
   identifier: string;
   title: string;
+  /** Where "Open" goes when the queue isn't one share's: a collection or folder. */
+  path?: string;
 }
 
 export type RepeatMode = "off" | "all" | "one";

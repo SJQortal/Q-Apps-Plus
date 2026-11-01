@@ -516,7 +516,7 @@ export function AudioPlayer() {
 
   const share = list.player.share;
   const openShare = () => {
-    if (share) navigate(sharePath(share.name, share.identifier));
+    if (share) navigate(share.path ?? sharePath(share.name, share.identifier));
     setSheetOpen(false);
     setQueueAnchor(null);
   };
@@ -568,7 +568,7 @@ export function AudioPlayer() {
             <Controls list={list} />
             <TrackList list={list} />
             <Box sx={{ display: "flex", gap: 1, justifyContent: "space-between", "& .MuiButton-root": { minHeight: 44 } }}>
-              <Button onClick={openShare}>Open share</Button>
+              <Button onClick={openShare}>{share?.path ? "Open collection" : "Open share"}</Button>
               <Button
                 color="inherit"
                 startIcon={<CloseRoundedIcon />}
