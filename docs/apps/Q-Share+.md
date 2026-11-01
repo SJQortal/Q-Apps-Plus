@@ -63,6 +63,8 @@ Read in full on 2026-09-29 (12.2k lines). Line numbers are from the branch after
 | THUMBNAIL (new in 1.0.1) | `qshare_thumb_<slug≤30>_<uid>` (a new identifier per image) | W (R via `/arbitrary/THUMBNAIL/<name>/<id>`) | a share's thumbnail, WebP or JPEG, fitted within 640 px and ≤200 KB, made on the device from an image (or a video frame at 1 s) or a picked picture; `filename: "thumbnail.webp"` (or `.jpg`), `title` and `description` as the share's, `tag1: "qshare_thumb_"`; published in the same PUBLISH_MULTIPLE request as the share details that name it, before them. Never searched. | utils/publishPayload.ts, utils/thumbnailImage.ts |
 | THUMBNAIL (new in 1.0.1) | `qshare_cover_<uid8>` (a new identifier per image) | W (R via `/arbitrary/THUMBNAIL/<name>/<id>`) | a square cover image, WebP or JPEG, ≤600 px and ≤450 KB, under the collection's name; `filename: "cover.webp"` (or `.jpg`), `title` = the collection's title, `tag1: "qshare_cover_"`; published in the same PUBLISH_MULTIPLE request as the collection that names it. Never searched. | utils/collections.ts, utils/coverImage.ts |
 
+Remove from QDN (1.0.1) republishes the share's own FILE and THUMBNAIL resources as a one-byte file and its DOCUMENT as `data64: "RA=="` ("D"), all with `title`, `description` and `tag1` `deleted`, under the same identifiers. Q-Share+ reads this as a deleted share; how the original Q-Share shows one hasn't been checked in Hub (Follow-up 29).
+
 Searches filter on the metadata description with `description=cat:N;sub:N` (category filter) and on `query=` (title/identifier substring). All of this stays as is. New data is additive only.
 
 Shares of more than 10 files (1.0.1) are the same FILE resources and the same share JSON with a longer `files` list (at most 300); they are published in several PUBLISH_MULTIPLE requests, the DOCUMENT in the last one. The original app lists every file of such a share.
@@ -467,6 +469,17 @@ Measured in Brave (Playwright pointed at a wrapper that drops `--hide-scrollbars
 
 After the fix the scrollbar is hidden while the menu is open and body padded by its 16 px, as MUI intends. Every screen in Hub 3.0 at all five sizes, with Brave (106 captures, 44 of them at 360×740 and 390×844): 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. (This branch's `scripts/screens.mjs` has no `--sizes` yet; it is on `q-mintership-plus/1.0.3`, so the run took all five sizes.)
 
+### Simon's requests from Hub: remove, compact rows, cover art, collection covers (1.0.1, 2026-11-01)
+
+From Simon's screenshots of two album shares.
+
+- **Remove from QDN** (owner only, `pages/FileContent/RemoveShareButton.tsx`, `buildShareRemoval`): QDN has no delete, so every resource becomes a delete marker (data contract above) through the publish dialog, files first, details last. The confirmation says it can't be undone, the publishes and fee, and that the chain record and others' saved copies stay. It leaves lists and goes Home on success. A stop keeps what was replaced; finishing sends only the rest. Comments on the share stay. Files another name published aren't touched. **Not yet run for real:** it publishes (Follow-up 29).
+- **Compact rows:** one line where there is room (about 62 px, was about 180), Download next to Play, 36 px buttons; phones two lines with two equal 44 px buttons; less padding and gap.
+- **Cover art** (`utils/audioCover.ts`, `hooks/useAudioCover.ts`, no dependency): ID3v2.2 to 2.4 (front cover preferred), MP4 `covr` (moov anywhere; only atom headers are read on the way) and FLAC PICTURE; only real JPEG, PNG, WebP or GIF bytes are accepted. On a page: only in view, with image previews on, only for a track the node holds (one status GET per track per session, shared with cards), then Range GETs with `async=true`, three tracks at a time, cached for the session. A track the node lacks is never fetched for art; rows show the share's thumbnail, and the track's art once it has been fetched. Publishing: an audio-only share's automatic thumbnail comes from the first track's art; no per-track covers are published (Follow-up 30). Core's CSP allows `blob:` images (`ArbitraryDataRenderer`, `DevProxyServerResource`).
+- **Collections on the share page** (`ShareCollections.tsx`): your collections holding the share, with cover, counts and folder; opens at the folder; Add cover or Change cover opens the collection's Edit. Only your own, since other people's holding a share can't be found without searching them all (Follow-up 31). No call of its own beyond the list the bookmark button loads.
+- **Screenshot check:** new screen share-remove, and tracks that serve a real ID3 tag by Range. share, share-remove, share-many, playlist in Hub 3.0, Classic and White at five sizes: 0 console errors, 0 overflow, 0 unlabelled buttons. Found and fixed: the red outlined Remove button was under 4.5:1 in Classic and White (now normal text with a red border and icon). One axe contrast note on the playlist screen at 360 px in Classic, on a button the harness's pointer was hovering; the same button elsewhere passes. Classic at 844×390 still counts 3 small targets, on these screens with comments (Next pass ideas, Classic's small buttons).
+- **Hub:** not checked by an agent; Simon's next look is the check.
+
 ## Follow-ups
 
 Questions for Simon (after pass 2):
@@ -510,7 +523,15 @@ Questions from the copies, thumbnails and grid round (2026-10-18):
 27. **Explore collections on phones** is in the Filters sheet, under the filters as asked. Put it on Home itself too (a chip beside Following and My shares), or on the Collections page?
 28. **The Collections page's All tab** lists the same collections without a search. Give it the same search bar, or let Explore replace the All tab?
 
+Questions from Simon's Hub round (2026-11-01):
+
+29. **A real Remove from QDN:** try it on a small test share (a few publishes, 0.01 QORT each), then check Home, the share link, and the original Q-Share. Removing a 300-file share costs about 3 QORT; should there be a cheaper "only the share, keep the files" choice?
+30. **Per-track covers:** tracks show their art only on nodes that hold them; others see the share's thumbnail. Publishing each distinct cover as its own THUMBNAIL would show them everywhere, at 0.01 QORT per distinct cover. Worth it?
+31. **Opened from someone else's collection:** the share page shows only your collections. Show the collection you came from as well?
+
 Next pass ideas:
+
+- The cover in the player bar and in Media Session (the lock screen).
 
 - Load the thumbnail maker (`utils/thumbnailImage.ts`, 1–2 kB) only when the Share form first holds a file; it is in the first-load chunk with the Share form.
 - Carry unknown share JSON fields through an edit, as collections do: an edit in Q-Share+ rebuilds the share's JSON from the fields it knows (it keeps `thumbnail` explicitly), so a field a later version adds would be lost by an edit in this one.
