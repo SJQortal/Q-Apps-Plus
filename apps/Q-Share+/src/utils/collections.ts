@@ -10,9 +10,10 @@
  * its own items and subfolders, utils/collectionFolders.ts) and a `cover`
  * (a THUMBNAIL `qshare_cover_<uid>` under the publisher's name), and folders
  * may have covers too. A copy of someone else's collection names its source
- * in `copiedFrom`, and its markers always name the source's owner. Both are left out when unused, so a collection
- * without them is stored exactly as before. Fields this version doesn't
- * know are kept through edits.
+ * in `copiedFrom`, and its markers always name the source's owner. A body may
+ * choose a `space` (the look it opens in; its folders take the same one). All
+ * are left out when unused, so a collection without them is stored exactly as
+ * before. Fields this version doesn't know are kept through edits.
  */
 import { QSHARE_COLLECTION_BASE } from "../constants/Identifiers";
 import { MAX_MARKERS, ownerAddress, stripRecipientMarkers, withRecipientMarkers } from "./recipientMarker";
@@ -48,6 +49,12 @@ export const MAX_FOLDER_DEPTH = 5;
 export const MAX_FOLDERS = 200;
 /** Qortal identifiers are limited to 64 characters. */
 export const QDN_IDENTIFIER_MAX = 64;
+
+/** The looks a collection can choose; `space` left out is the standard look. */
+export const COLLECTION_SPACES = ["music", "cinema", "library", "album"] as const;
+export type CollectionSpaceId = (typeof COLLECTION_SPACES)[number];
+/** A stored `space` longer than this isn't one. */
+export const COLLECTION_SPACE_MAX = 32;
 
 /** One share inside a collection: the publisher and the share's DOCUMENT metadata id. */
 export interface CollectionItem {
@@ -94,6 +101,12 @@ export interface CollectionBody {
   folders?: CollectionFolder[];
   /** Set on a copy: the collection it was copied from. */
   copiedFrom?: CollectionSource;
+  /**
+   * The look the collection opens in, at the root only: its folders inherit
+   * it. Any short string, so a look from a later version survives an edit in
+   * this one; collectionSpace() is what the app shows.
+   */
+  space?: string;
   /**
    * Set by Delete (QDN can't remove a resource, so it is republished empty).
    * Lists leave it out; any later edit drops the flag, so a collection that
@@ -197,6 +210,12 @@ export function toggleItem<T extends { items: CollectionItem[] }>(collection: T,
   return { ...collection, items };
 }
 
+/** The look to show: a space this version knows, or "standard" for none or any other. */
+export function collectionSpace(body: Pick<CollectionBody, "space"> | null | undefined): CollectionSpaceId | "standard" {
+  const space = body?.space;
+  return (COLLECTION_SPACES as readonly string[]).includes(space ?? "") ? (space as CollectionSpaceId) : "standard";
+}
+
 export function buildCollectionBody(input: {
   title: string;
   description?: string;
@@ -206,6 +225,7 @@ export function buildCollectionBody(input: {
   cover?: CollectionCover | null;
   folders?: CollectionFolder[];
   copiedFrom?: CollectionSource;
+  space?: string | null;
   deleted?: boolean;
   extra?: Record<string, unknown>;
 }): CollectionBody {
@@ -225,6 +245,7 @@ export function buildCollectionBody(input: {
   if (input.cover) body.cover = input.cover;
   if (input.folders && input.folders.length > 0) body.folders = input.folders;
   if (input.copiedFrom) body.copiedFrom = input.copiedFrom;
+  if (input.space) body.space = input.space;
   if (input.deleted) body.deleted = true;
   if (input.extra && Object.keys(input.extra).length > 0) body.extra = input.extra;
   return body;
@@ -232,11 +253,12 @@ export function buildCollectionBody(input: {
 
 /**
  * The next version of a collection: the same body with `changes`, its
- * folders, cover and unknown fields carried over, `updated` set to now.
+ * folders, cover, space and unknown fields carried over, `updated` set to now.
+ * A `cover` or `space` of null clears it.
  */
 export function editCollectionBody(
   current: CollectionBody,
-  changes: Partial<Pick<CollectionBody, "title" | "description" | "items" | "folders">> & { cover?: CollectionCover | null } = {},
+  changes: Partial<Pick<CollectionBody, "title" | "description" | "items" | "folders">> & { cover?: CollectionCover | null; space?: string | null } = {},
   now?: number
 ): CollectionBody {
   return buildCollectionBody({
@@ -248,14 +270,15 @@ export function editCollectionBody(
     cover: changes.cover === undefined ? current.cover : changes.cover,
     folders: changes.folders ?? current.folders,
     copiedFrom: current.copiedFrom,
+    space: changes.space === undefined ? current.space : changes.space,
     extra: current.extra,
   });
 }
 
 /**
  * A deleted collection: no shares, folders or cover, and `deleted`. Its
- * title, copy source and unknown fields stay, so a link to it can still say
- * what it was.
+ * title, copy source, space and unknown fields stay, so a link to it can still
+ * say what it was, and filling it again brings its look back.
  */
 export function deletedCollectionBody(current: CollectionBody, now?: number): CollectionBody {
   return buildCollectionBody({
@@ -267,6 +290,7 @@ export function deletedCollectionBody(current: CollectionBody, now?: number): Co
     cover: null,
     folders: [],
     copiedFrom: current.copiedFrom,
+    space: current.space,
     deleted: true,
     extra: current.extra,
   });
@@ -274,11 +298,11 @@ export function deletedCollectionBody(current: CollectionBody, now?: number): Co
 
 /**
  * A copy of someone's collection, to publish under the copier's name: its
- * shares, folders and covers (the covers stay the original's images), a
+ * shares, folders, covers (the covers stay the original's images) and look, a
  * title and description of the copier's choosing, and `copiedFrom`.
  */
 export function copyCollectionBody(
-  source: Pick<Collection, "name" | "identifier" | "title" | "items" | "folders" | "cover">,
+  source: Pick<Collection, "name" | "identifier" | "title" | "items" | "folders" | "cover" | "space">,
   input: { title: string; description: string; now?: number }
 ): CollectionBody {
   return buildCollectionBody({
@@ -288,19 +312,21 @@ export function copyCollectionBody(
     folders: source.folders,
     cover: source.cover ?? null,
     copiedFrom: { name: source.name, identifier: source.identifier, title: source.title },
+    space: source.space,
     now: input.now,
   });
 }
 
-/** The JSON stored on QDN: unknown fields first, then the known ones; empty folders and no cover are left out. */
+/** The JSON stored on QDN: unknown fields first, then the known ones; empty folders, no cover and no space are left out. */
 export function storedCollectionJson(body: CollectionBody): Record<string, unknown> {
-  const { extra, cover, folders, copiedFrom, deleted, ...known } = body;
+  const { extra, cover, folders, copiedFrom, space, deleted, ...known } = body;
   return {
     ...(extra ?? {}),
     ...known,
     ...(cover ? { cover } : {}),
     ...(folders && folders.length > 0 ? { folders } : {}),
     ...(copiedFrom ? { copiedFrom } : {}),
+    ...(space ? { space } : {}),
     ...(deleted ? { deleted: true } : {}),
   };
 }
@@ -381,7 +407,7 @@ export function parseFolders(raw: unknown, depth = 1, seen = new Set<string>()):
   return out;
 }
 
-const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders", "copiedFrom", "deleted"]);
+const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders", "copiedFrom", "space", "deleted"]);
 
 /** A copy's source read from QDN, or undefined for anything else. */
 export function parseSource(raw: unknown): CollectionSource | undefined {
@@ -431,6 +457,7 @@ export function parseCollection(raw: unknown): CollectionBody | null {
   if (folders.length > 0) body.folders = folders;
   const copiedFrom = parseSource(obj.copiedFrom);
   if (copiedFrom) body.copiedFrom = copiedFrom;
+  if (typeof obj.space === "string" && obj.space && obj.space.length <= COLLECTION_SPACE_MAX) body.space = obj.space;
   if (obj.deleted === true) body.deleted = true;
   const extra = Object.fromEntries(Object.entries(obj).filter(([key]) => !KNOWN_FIELDS.has(key)));
   if (Object.keys(extra).length > 0) body.extra = extra;

@@ -9,6 +9,7 @@ import {
   buildCollectionBody,
   buildCollectionIdentifier,
   buildCollectionPublish,
+  collectionSpace,
   copyCollectionBody,
   coverUrl,
   editCollectionBody,
@@ -412,6 +413,59 @@ describe('collection copies (1.0.1)', () => {
     await publishCollection({ name: 'alice', identifier: 'qshare_collection_my-music_zz99yy', body: copy, previous: null, previousItems: [] });
     const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
     expect(payload.description).toBe(`${recipientMarker(owners['dj b'])}${recipientMarker(owners.eve)}`);
+  });
+});
+
+describe('collection spaces (1.0.1)', () => {
+  const base = { version: 1, title: 'T', description: '', items: [], created: 1, updated: 2 };
+
+  it('is left out of the stored JSON when unset', () => {
+    const body = buildCollectionBody({ title: 'T', now: 5 });
+    expect(body.space).toBeUndefined();
+    expect('space' in storedCollectionJson(body)).toBe(false);
+    expect('space' in storedCollectionJson(buildCollectionBody({ title: 'T', space: null }))).toBe(false);
+  });
+
+  it('is stored when set and read back as a known field, not an unknown one', () => {
+    const stored = storedCollectionJson(buildCollectionBody({ title: 'T', space: 'music', now: 5 }));
+    expect(stored.space).toBe('music');
+    const parsed = parseCollection(stored);
+    expect(parsed?.space).toBe('music');
+    expect(parsed?.extra).toBeUndefined();
+  });
+
+  it('keeps a look from a later version through an edit, but shows it as standard', () => {
+    const parsed = parseCollection({ ...base, space: 'arcade' })!;
+    expect(parsed.space).toBe('arcade');
+    expect(collectionSpace(parsed)).toBe('standard');
+    expect(storedCollectionJson(editCollectionBody(parsed, { title: 'New' })).space).toBe('arcade');
+  });
+
+  it('ignores anything that is not a short string', () => {
+    for (const space of [7, null, {}, '', 'x'.repeat(33)]) {
+      expect(parseCollection({ ...base, space })?.space).toBeUndefined();
+    }
+  });
+
+  it('names the known spaces and calls everything else standard', () => {
+    for (const space of ['music', 'cinema', 'library', 'album']) expect(collectionSpace({ space })).toBe(space);
+    expect(collectionSpace({})).toBe('standard');
+    expect(collectionSpace(null)).toBe('standard');
+    expect(collectionSpace({ space: 'constructor' })).toBe('standard');
+  });
+
+  it('an edit keeps it, sets it, or clears it with null', () => {
+    const body = buildCollectionBody({ title: 'T', space: 'music' });
+    expect(editCollectionBody(body).space).toBe('music');
+    expect(editCollectionBody(body, { items: [{ name: 'a', identifier: 'b' }] }).space).toBe('music');
+    expect(editCollectionBody(body, { space: 'album' }).space).toBe('album');
+    expect(editCollectionBody(body, { space: null }).space).toBeUndefined();
+  });
+
+  it('a copy and a delete keep it', () => {
+    const source = { ...buildCollectionBody({ title: 'T', space: 'cinema' }), name: 'bob', identifier: 'qshare_collection_t_ab12cd' };
+    expect(copyCollectionBody(source, { title: 'Mine', description: '' }).space).toBe('cinema');
+    expect(deletedCollectionBody(source).space).toBe('cinema');
   });
 });
 
