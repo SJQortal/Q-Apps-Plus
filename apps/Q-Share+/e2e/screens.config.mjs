@@ -104,6 +104,14 @@ function silentWav(seconds) {
   return b;
 }
 const WAV = silentWav(200);
+/** An ID3v2.3 tag holding `image` as the front cover, for a Range read of a track's art. */
+function id3Cover(image) {
+  const safe = (n) => [(n >> 21) & 127, (n >> 14) & 127, (n >> 7) & 127, n & 127];
+  const be = (n) => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const body = Buffer.concat([Buffer.from([0]), Buffer.from('image/png\0'), Buffer.from([3, 0]), image]);
+  const frame = Buffer.concat([Buffer.from('APIC'), Buffer.from(be(body.length)), Buffer.from([0, 0]), body]);
+  return Buffer.concat([Buffer.from('ID3'), Buffer.from([3, 0, 0, ...safe(frame.length)]), frame]);
+}
 
 // Replaced in setup() by a visible 64×64 gradient, so avatars show in the shots.
 let PNG = Buffer.from(
@@ -205,7 +213,11 @@ export default {
     if (p.includes('/BLOG_COMMENT/')) return send('text/plain', 'A comment with enough words to wrap on a phone screen, and a qortal://APP/Q-Tube link.');
     if (p.includes('/FILE/')) {
       if (p.includes('_p_')) return send('image/png', PNG);
-      if (p.includes('_pl_t') || p.includes('_a_')) return send('audio/wav', WAV);
+      if (p.includes('_pl_t') || p.includes('_a_')) {
+        // Art comes by a closed Range; the player's is open-ended (bytes=0-).
+        if (/bytes=\d+-\d+/.test(route.request().headers().range ?? '')) return send('audio/mpeg', id3Cover(PNG));
+        return send('audio/wav', WAV);
+      }
       if (p.includes('_t_')) return send('text/plain', 'Line one of the notes.\nLine two.\n');
       // PDFs open in Hub's reader, which checks for a PDF header.
       if (p.includes('_d_')) return send('application/pdf', '%PDF-1.4\n%mock\n');
@@ -219,6 +231,7 @@ export default {
     { key: 'home', path: '/', after: async (page) => page.waitForSelector('li, [role=status]', { timeout: 8000 }).catch(() => {}) },
     { key: 'home-filters', path: '/', mobileOnly: true, overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Filters/ }).first().click({ timeout: 2500 }); await page.waitForTimeout(400); } },
     { key: 'share', path: `/share/${NAME}/${ID(1)}`, after: async (page) => page.waitForSelector('text=Share number 1', { timeout: 8000 }).catch(() => {}) },
+    { key: 'share-remove', path: `/share/${NAME}/${ID(1)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Remove from QDN' }).first().click({ timeout: 8000 }); await page.getByText(/in fees/).waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(400); } },
     { key: 'profile', path: `/channel/${encodeURIComponent('Alice Wonder')}`, after: async (page) => page.waitForSelector('li, [role=status]', { timeout: 8000 }).catch(() => {}) },
     { key: 'settings', path: '/settings' },
     { key: 'collections', path: '/collections', optional: true },
