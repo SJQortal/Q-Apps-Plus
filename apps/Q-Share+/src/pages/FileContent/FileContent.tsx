@@ -19,7 +19,11 @@ import { RootState } from "../../state/store";
 import { addToHashMap, heldShare, setEditFile, type Video } from "../../state/features/fileSlice.ts";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useAudioCover } from "../../hooks/useAudioCover";
+import { useQdnImage } from "../../hooks/useQdnImage";
 import { useSafeBack } from "../../hooks/useSafeBack";
+import { shareThumbnail } from "../../utils/publishPayload";
+import { useAppSettings } from "../../utils/settings";
 import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
@@ -38,6 +42,7 @@ import {
   AuthorLink,
   Card,
   CategoryIcon,
+  ShareCover,
   CompactActionRow,
   DescriptionFade,
   FileDescription,
@@ -297,6 +302,16 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
     [tracks, author, id, playlistTitle]
   );
 
+  // The share's picture at the top: its thumbnail, else the art inside its
+  // first track when the node holds it, else the category icon.
+  const settings = useAppSettings();
+  const artwork = useMemo(() => shareThumbnail(fileData), [fileData]);
+  const headerThumb = useQdnImage(
+    artwork ? `/arbitrary/THUMBNAIL/${encodeURIComponent(artwork.name)}/${encodeURIComponent(artwork.identifier)}` : null
+  );
+  const firstTrackArt = useAudioCover(!artwork ? tracks[0] : null, settings.autoPreviewImages);
+  const headerArt = headerThumb.src ?? firstTrackArt;
+
   // window.history is shared by every Hub tab, so Back follows the app's own stack.
   const goBack = useSafeBack("/");
   const title: string = fileData?.title || "";
@@ -453,7 +468,9 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
         <>
           <Card aria-labelledby="share-title">
             <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", minWidth: 0 }}>
-              {icon ? (
+              {headerArt ? (
+                <ShareCover src={headerArt} alt="" onError={headerThumb.onError} />
+              ) : icon ? (
                 <CategoryIcon src={icon} alt="" loading="lazy" />
               ) : (
                 <Box sx={{ width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary" }}>
@@ -544,6 +561,7 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
                       file={file}
                       jsonId={id}
                       playlist={playlist}
+                      shareArt={artwork}
                     />
                   ))}
                 </FileList>

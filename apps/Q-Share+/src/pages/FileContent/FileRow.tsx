@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { useInView } from "react-intersection-observer";
+import { useSelector } from "react-redux";
 import { Box, Button, Typography } from "@mui/material";
 import GraphicEqRoundedIcon from "@mui/icons-material/GraphicEqRounded";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
@@ -8,8 +10,12 @@ import { OpenPdfButton, PreviewPanel, PreviewToggleButton, previewKind, shouldAu
 import { formatBytes } from "../../utils/formatBytes";
 import { useAppSettings } from "../../utils/settings";
 import { fileKind, fileKindIconElement, fileKindLabel } from "../../utils/fileKind";
+import { useAudioCover } from "../../hooks/useAudioCover";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useQdnImage } from "../../hooks/useQdnImage";
+import type { ShareThumbnail } from "../../utils/publishPayload";
 import type { PlayerShare, Track } from "../../state/features/playerSlice";
+import type { RootState } from "../../state/store";
 import { usePlaylistControls } from "./PlaylistCard";
 
 /** One entry of a share's `files` array (docs/apps/Q-Share+.md, data contract). */
@@ -28,6 +34,59 @@ interface FileRowProps {
   jsonId: string;
   /** The share's playlist, when it has one: its audio rows play through the app's player. */
   playlist?: { share: PlayerShare; tracks: Track[] };
+  /** The share's thumbnail: an audio row without art of its own to show has this instead. */
+  shareArt?: ShareThumbnail | null;
+}
+
+/**
+ * A row's 44 px square. An audio file shows the cover art inside it, when the
+ * node holds the track, and otherwise the share's thumbnail, over the kind
+ * icon, which shows until a picture loads or if there is none.
+ */
+function FileArt({ file, audio, shareArt, icon }: { file: ShareFile; audio: boolean; shareArt?: ShareThumbnail | null; icon: ReactNode }) {
+  const settings = useAppSettings();
+  const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px" });
+  const fetched = useSelector((state: RootState) => state.global.downloads?.[file.identifier]?.status?.status === "READY");
+  const own = useAudioCover(
+    audio && file.name ? { name: file.name, identifier: file.identifier } : null,
+    inView && settings.autoPreviewImages,
+    fetched
+  );
+  const thumb = useQdnImage(
+    audio && !own && shareArt ? `/arbitrary/THUMBNAIL/${encodeURIComponent(shareArt.name)}/${encodeURIComponent(shareArt.identifier)}` : null
+  );
+  const src = own ?? thumb.src;
+  return (
+    <Box
+      ref={ref}
+      aria-hidden
+      sx={{
+        position: "relative",
+        overflow: "hidden",
+        width: 44,
+        height: 44,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: 1.5,
+        bgcolor: "action.hover",
+        color: "text.secondary",
+      }}
+    >
+      {icon}
+      {src ? (
+        <img
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={own ? undefined : thumb.onError}
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      ) : null}
+    </Box>
+  );
 }
 
 /** An audio row's Play in a playlist share: starts the playlist here, or pauses and resumes this track. */
@@ -79,7 +138,7 @@ function NowPlaying({ playlist, file }: { playlist: { share: PlayerShare; tracks
  * from that track. On one line where there is room; on phones the buttons
  * share a line under the name.
  */
-export const FileRow = ({ file, jsonId, playlist }: FileRowProps) => {
+export const FileRow = ({ file, jsonId, playlist, shareArt }: FileRowProps) => {
   const settings = useAppSettings();
   const kind = fileKind(file.mimetype, file.filename);
   const preview = previewKind(file);
@@ -122,22 +181,7 @@ export const FileRow = ({ file, jsonId, playlist }: FileRowProps) => {
         }}
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: 1 }}>
-          <Box
-            aria-hidden
-            sx={{
-              width: 40,
-              height: 40,
-              flexShrink: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 1.5,
-              bgcolor: "action.hover",
-              color: "text.secondary",
-            }}
-          >
-            {fileKindIconElement(kind)}
-          </Box>
+          <FileArt file={file} audio={kind === "audio"} shareArt={shareArt} icon={fileKindIconElement(kind)} />
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Typography
               component="h3"
