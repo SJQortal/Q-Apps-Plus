@@ -37,6 +37,7 @@ import { FileRow, type ShareFile } from "./FileRow";
 import { FETCH_ALL_AT_ONCE, useFetchAll } from "./useFetchAll";
 import { PLAYLIST_MIN_TRACKS, PlaylistCard, shareTracks } from "./PlaylistCard";
 import { RemoveShareButton } from "./RemoveShareButton";
+import { ShareCollections } from "./ShareCollections";
 import {
   ActionRow,
   AuthorLink,
@@ -512,6 +513,8 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
               </ActionRow>
             )}
           </Card>
+
+          <ShareCollections share={{ name: author, identifier: id }} />
 
           {(fileData.htmlDescription || fileData.fullDescription) && (
             <Card aria-label="Description">

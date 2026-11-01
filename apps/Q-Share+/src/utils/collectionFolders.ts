@@ -46,6 +46,16 @@ export function containsItem(body: Container, item: CollectionItem): boolean {
   return (body.folders ?? []).some((folder) => containsItem(folder, item));
 }
 
+/** The first folder holding `item` directly, or null when only the collection itself does (or nothing). */
+export function folderHolding(body: Container, item: CollectionItem): CollectionFolder | null {
+  for (const folder of body.folders ?? []) {
+    if (folder.items.some((existing) => sameItem(existing, item))) return folder;
+    const inner = folderHolding(folder, item);
+    if (inner) return inner;
+  }
+  return null;
+}
+
 /** The folder with `id` and the folders above it, outermost first (the folder itself last). */
 export function findFolder(body: Container, id: string): { folder: CollectionFolder; path: CollectionFolder[] } | null {
   const search = (folders: CollectionFolder[], above: CollectionFolder[]): { folder: CollectionFolder; path: CollectionFolder[] } | null => {
