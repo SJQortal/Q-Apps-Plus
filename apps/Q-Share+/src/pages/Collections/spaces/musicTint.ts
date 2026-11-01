@@ -1,7 +1,7 @@
 import { decomposeColor, getContrastRatio, recomposeColor } from "@mui/material/styles";
 
 /** How strongly a hero takes a colour, strongest first. */
-const WASH_STRENGTHS = [0.6, 0.5, 0.4, 0.3, 0.2, 0.12];
+const WASH_STRENGTHS = [0.6, 0.5, 0.4, 0.3, 0.2, 0.12, 0.08, 0.05];
 const MIN_CONTRAST = 4.5;
 /** The canvas a picture is shrunk to for its average: small is enough, and quick. */
 const SAMPLE_SIZE = 16;

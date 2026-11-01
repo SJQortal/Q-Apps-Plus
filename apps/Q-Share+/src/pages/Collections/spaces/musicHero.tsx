@@ -103,7 +103,23 @@ export function MusicHero({ folder, breadcrumb, title, description, attribution,
         px: { xs: 2, md: 3 },
         pt: { xs: 2, md: 4 },
         pb: { xs: 1, md: 2 },
-        background: `linear-gradient(180deg, ${wash} 0%, ${wash} 40%, ${base} 100%)`,
+        position: "relative",
+        // The wash runs the whole width of the window and on behind the controls; SpaceShell's isolation keeps it above the page.
+        "&::before": {
+          content: '""',
+          position: "absolute",
+          zIndex: -1,
+          top: 0,
+          bottom: -72,
+          left: "calc(50% - 50vw)",
+          width: "100vw",
+          pointerEvents: "none",
+          // Where the page goes on above it, it glows in rather than starting at a line.
+          background: {
+            xs: `linear-gradient(180deg, ${wash} 0%, ${wash} 35%, ${base} 100%)`,
+            md: `linear-gradient(180deg, ${base} 0%, ${wash} 88px, ${wash} 40%, ${base} 100%)`,
+          },
+        },
       }}
     >
       {breadcrumb}

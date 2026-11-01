@@ -1,7 +1,7 @@
 import { memo, useState, type ReactNode } from "react";
 import { useInView } from "react-intersection-observer";
 import { Box, Button, CircularProgress, IconButton, Skeleton, Tooltip, Typography } from "@mui/material";
-import { keyframes, styled } from "@mui/material/styles";
+import { alpha, keyframes, styled } from "@mui/material/styles";
 import DownloadOutlinedIcon from "@mui/icons-material/DownloadOutlined";
 import MusicNoteRoundedIcon from "@mui/icons-material/MusicNoteRounded";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
@@ -82,7 +82,9 @@ const Row = styled("tr")(({ theme }) => ({
   height: 56,
   transition: "background-color 120ms ease",
   "&:hover, &:focus-within": { backgroundColor: theme.palette.action.hover },
-  "&[aria-current='true']": { backgroundColor: theme.palette.action.selected },
+  "&[aria-current='true']": { backgroundColor: alpha(theme.palette.primary.main, 0.06) },
+  "& > td:first-of-type": { borderTopLeftRadius: theme.shape.borderRadius, borderBottomLeftRadius: theme.shape.borderRadius },
+  "& > td:last-of-type": { borderTopRightRadius: theme.shape.borderRadius, borderBottomRightRadius: theme.shape.borderRadius },
   [`@media ${PHONE_MEDIA}`]: { cursor: "pointer" },
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
   // The number gives way to a play icon when the row is pointed at or focused.
@@ -126,10 +128,16 @@ const artBox = {
   justifyContent: "center",
   borderRadius: 1,
   bgcolor: "action.hover",
-  color: "text.secondary",
+  color: "primary.main",
 } as const;
 
 const artImage = { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" } as const;
+
+/** A title without its file's "01 ", when that is just its place in the album. */
+export function shownTitle(title: string, position: number): string {
+  const match = /^(\d{1,3})[\s._-]+(.+)$/.exec(title);
+  return match && Number(match[1]) === position ? match[2] : title;
+}
 
 /** A track's square: the art inside the file once the node holds it (never fetched for this), else the share's thumbnail. */
 function TrackArt({ track, share, overlay }: { track: Track; share: SpaceShare; overlay?: ReactNode }) {
@@ -155,7 +163,7 @@ function TrackArt({ track, share, overlay }: { track: Track; share: SpaceShare; 
 function ShareArt({ share, fallback }: { share: SpaceShare; fallback: ReactNode }) {
   const { src, onError } = useQdnImage(share.thumbnailUrl);
   return (
-    <Box aria-hidden sx={{ ...artBox, width: 40, height: 40 }}>
+    <Box aria-hidden sx={{ ...artBox, width: 44, height: 44 }}>
       {fallback}
       {src ? <img src={src} alt="" loading="lazy" decoding="async" onError={onError} style={artImage} /> : null}
     </Box>
@@ -192,17 +200,21 @@ function TrackDownload({ track, jsonId, phone }: { track: Track; jsonId: string;
 interface TrackRowProps {
   track: Track;
   number: number;
+  /** Its place in its own album. */
+  position: number;
   share: SpaceShare;
   columns: TrackColumns;
   current: boolean;
   playing: boolean;
   onPlay: (track: Track) => void;
   onOpenShare: (share: SpaceShare) => void;
+  onOpenProfile: (name: string) => void;
 }
 
-function TrackRow({ track, number, share, columns, current, playing, onPlay, onOpenShare }: TrackRowProps) {
+function TrackRow({ track, number, position, share, columns, current, playing, onPlay, onOpenShare, onOpenProfile }: TrackRowProps) {
   const { phone, wide } = columns;
   const title = trackTitle(track);
+  const shown = shownTitle(title, position);
   const label = `${current ? (playing ? "Pause" : "Resume") : "Play"} ${title}`;
   const stateIcon = current && playing ? <PauseRoundedIcon fontSize="small" /> : <PlayArrowRoundedIcon fontSize="small" />;
   const equaliser = current ? <Equaliser moving={playing} /> : null;
@@ -251,14 +263,20 @@ function TrackRow({ track, number, share, columns, current, playing, onPlay, onO
         )}
       </Cell>
       <Cell>
-        <Typography title={title} sx={{ ...clipped, fontSize: 15, fontWeight: current ? 700 : 500, lineHeight: 1.3 }}>
-          {title}
+        <Typography title={title} sx={{ ...clipped, fontSize: 15, fontWeight: current ? 700 : 500, lineHeight: 1.3, color: current ? "primary.main" : "text.primary" }}>
+          {shown}
         </Typography>
         {phone ? (
           <Typography variant="body2" sx={{ ...clipped, color: "text.secondary", fontSize: 13 }}>
-            {[share.title, size].filter(Boolean).join(" · ")}
+            {[share.user, size].filter(Boolean).join(" · ")}
           </Typography>
-        ) : null}
+        ) : (
+          <Box sx={{ color: "text.secondary", fontSize: 13 }}>
+            <TextLink type="button" title={share.user} onClick={() => onOpenProfile(share.user)} aria-label={`Shares by ${share.user}, from ${shown}`}>
+              {share.user}
+            </TextLink>
+          </Box>
+        )}
       </Cell>
       {wide && !phone ? (
         <Cell>
@@ -272,7 +290,7 @@ function TrackRow({ track, number, share, columns, current, playing, onPlay, onO
       {phone ? null : (
         <Cell sx={{ textAlign: "right", color: "text.secondary", fontSize: 13, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{size}</Cell>
       )}
-      <Cell sx={{ textAlign: "right", px: 0 }}>
+      <Cell sx={{ textAlign: phone ? "right" : "center", px: 0 }}>
         <TrackDownload track={track} jsonId={share.identifier} phone={phone} />
       </Cell>
     </Row>
@@ -314,22 +332,24 @@ function ShareHead({ share, art, note, columns, isOwner, onMove, onRemove, onOpe
   note: string;
 } & Pick<AlbumProps, "columns" | "isOwner" | "onMove" | "onRemove" | "onOpenShare" | "onOpenProfile">) {
   const { phone } = columns;
+  const line = phone ? `${share.user} · ${note}` : note;
   const noteText = (
     <Typography component="span" variant="body2" sx={{ ...clipped, color: "text.secondary", fontSize: 13 }}>
-      {note}
+      {line}
     </Typography>
   );
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, minWidth: 0, py: 0.5 }}>
+    // The art and title line up with the tracks' art and titles below.
+    <Box sx={{ display: "flex", alignItems: "center", gap: phone ? 2.5 : 2, minWidth: 0, py: 0.5, pl: phone ? 0 : "52px" }}>
       {art}
       <Box sx={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-        <Box sx={{ fontSize: 14, fontWeight: 700, minHeight: phone ? 44 : undefined, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        <Box sx={{ fontSize: 15, fontWeight: 700, minHeight: phone ? 44 : undefined, display: "flex", flexDirection: "column", justifyContent: "center" }}>
           <TextLink
             type="button"
             title={share.title}
             onClick={() => onOpenShare(share)}
             // The note is inside this button on a phone, and a label would hide it.
-            aria-label={phone ? `Open ${share.title}, ${note}` : `Open ${share.title}`}
+            aria-label={phone ? `Open ${share.title}, ${line}` : `Open ${share.title}`}
             // On a phone the note joins the button, so the two lines are one 44 px target.
             style={phone ? { minHeight: 44 } : undefined}
           >
@@ -367,7 +387,7 @@ function AlbumGroupView({ share, numbers, columns, currentKey, playing, isOwner,
         <tr>
           <td colSpan={span}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, py: 1 }}>
-              <Skeleton variant="rounded" width={40} height={40} sx={{ flexShrink: 0 }} />
+              <Skeleton variant="rounded" width={44} height={44} sx={{ flexShrink: 0 }} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Skeleton width="45%" />
                 <Skeleton width="25%" />
@@ -386,7 +406,7 @@ function AlbumGroupView({ share, numbers, columns, currentKey, playing, isOwner,
     return (
       <tbody>
         <tr>
-          <td colSpan={span}>
+          <td colSpan={span} style={{ padding: 0 }}>
             <ShareHead {...head} art={<ShareArt share={share} fallback={fallback} />} note={shareNote(share)} />
           </td>
         </tr>
@@ -398,7 +418,7 @@ function AlbumGroupView({ share, numbers, columns, currentKey, playing, isOwner,
   return (
     <tbody>
       <tr>
-        <th scope="rowgroup" colSpan={span} style={{ fontWeight: "inherit", paddingTop: 8 }}>
+        <th scope="rowgroup" colSpan={span} style={{ fontWeight: "inherit", padding: "8px 0 0" }}>
           <ShareHead
             {...head}
             art={<ShareArt share={share} fallback={<MusicNoteRoundedIcon fontSize="small" />} />}
@@ -411,12 +431,14 @@ function AlbumGroupView({ share, numbers, columns, currentKey, playing, isOwner,
           key={`${trackKey(track)}/${index}`}
           track={track}
           number={numbers[index] + 1}
+          position={index + 1}
           share={share}
           columns={columns}
           current={currentKey === trackKey(track)}
           playing={playing}
           onPlay={onPlay}
           onOpenShare={onOpenShare}
+          onOpenProfile={onOpenProfile}
         />
       ))}
       {shown.length < tracks.length ? (

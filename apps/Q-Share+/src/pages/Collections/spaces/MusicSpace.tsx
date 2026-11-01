@@ -4,9 +4,8 @@ import { alpha, styled } from "@mui/material/styles";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import ShuffleRoundedIcon from "@mui/icons-material/ShuffleRounded";
-import { BOTTOM_NAV_HEIGHT, COMPACT_BOTTOM_NAV_HEIGHT } from "../../../components/layout/BottomNav/BottomNav";
-import { usePlayerBarHeight } from "../../../components/player/playerLayout";
-import { useLandscapePhone, usePhoneLayout } from "../../../hooks/usePhoneLayout";
+import AlbumRoundedIcon from "@mui/icons-material/AlbumRounded";
+import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import type { Track } from "../../../state/features/playerSlice";
 import { CollectionCover } from "../CollectionCover";
 import { folderCountLabel } from "../FolderGrid";
@@ -48,6 +47,30 @@ const AlbumTile = styled("button")(({ theme }) => ({
   },
 }));
 
+/** A folder's sleeve without a cover: one of the theme's colours, always the same one for the same name. */
+function FolderSleeve({ title }: { title: string }) {
+  const { palette } = useTheme();
+  const colours = [palette.primary, palette.secondary, palette.info, palette.success];
+  const hash = Array.from(title).reduce((sum, char) => (sum * 31 + (char.codePointAt(0) ?? 0)) % 9973, 0);
+  const colour = colours[hash % colours.length];
+  return (
+    <Box
+      aria-hidden
+      sx={{
+        aspectRatio: "1",
+        borderRadius: 1.5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: `linear-gradient(145deg, ${colour.main}, ${colour.dark})`,
+        color: colour.contrastText,
+      }}
+    >
+      <AlbumRoundedIcon sx={{ fontSize: 72, opacity: 0.85 }} />
+    </Box>
+  );
+}
+
 /** Folders as albums: a row to swipe on phones, a grid where there is room. */
 function AlbumTiles({ subfolders, openFolder }: Pick<SpaceProps, "subfolders" | "openFolder">) {
   const phone = usePhoneLayout();
@@ -75,7 +98,7 @@ function AlbumTiles({ subfolders, openFolder }: Pick<SpaceProps, "subfolders" | 
             <Box component="li" key={folder.id} sx={phone ? { flex: "0 0 148px", scrollSnapAlign: "start", minWidth: 0 } : { minWidth: 0 }}>
               <AlbumTile type="button" onClick={() => openFolder(folder.id)} aria-label={`Open folder ${title}`}>
                 <Box sx={{ position: "relative", width: "100%", boxShadow: `0 8px 24px ${alpha(theme.palette.common.black, 0.3)}`, borderRadius: 1.5 }}>
-                  <CollectionCover cover={folder.cover} kind="folder" />
+                  {folder.cover ? <CollectionCover cover={folder.cover} kind="folder" /> : <FolderSleeve title={title} />}
                   <Box
                     className="album-play"
                     aria-hidden
@@ -112,7 +135,7 @@ function AlbumTiles({ subfolders, openFolder }: Pick<SpaceProps, "subfolders" | 
                 >
                   {title}
                 </Typography>
-                <Typography component="span" variant="body2" color="text.secondary">
+                <Typography component="span" variant="body2" sx={{ color: "text.secondary" }}>
                   {folderCountLabel(folder)}
                 </Typography>
               </AlbumTile>
@@ -137,6 +160,13 @@ const roundPlay = (size: number) =>
     "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { bgcolor: "primary.dark", transform: "none" } },
   }) as const;
 
+/** Edit, New folder and Delete stay out of Play's way: quiet until pointed at. */
+const quietActions = {
+  "& .MuiButton-root": { bgcolor: "transparent", color: "text.secondary", borderColor: "transparent", boxShadow: "none" },
+  "& .MuiButton-root:hover": { bgcolor: "action.hover", color: "text.primary" },
+  "& .MuiButton-colorError:hover": { color: "error.main" },
+} as const;
+
 /** What the Play button covers, while that is less than the whole place. */
 function queueNote(trackCount: number, items: SpaceProps["items"]): string | null {
   const tracks = `${trackCount} ${trackCount === 1 ? "track" : "tracks"}`;
@@ -158,9 +188,7 @@ export default function MusicSpace(props: SpaceProps) {
   const { items, title, isOwner, onMove, onRemove, subfolders, openFolder, openShare, openProfile, folder, cover, breadcrumb, description, attribution, actions, emptyState } = props;
   const theme = useTheme();
   const phone = usePhoneLayout();
-  const landscape = useLandscapePhone();
   const wide = useMediaQuery(theme.breakpoints.up("md"));
-  const playerBar = usePlayerBarHeight();
   const queue = useMusicQueue(items.shares, title, collectionPath(props.collection.name, props.collection.identifier, folder?.id));
 
   // Rows keep one set of callbacks, so a body landing only redraws its own album.
@@ -198,17 +226,18 @@ export default function MusicSpace(props: SpaceProps) {
     </Tooltip>
   );
 
-  const navHeight = landscape ? COMPACT_BOTTOM_NAV_HEIGHT : BOTTOM_NAV_HEIGHT;
   const hasControls = showPlay || Boolean(actions);
 
   return (
     <SpaceShell
       space={props.space}
+      sx={{ isolation: "isolate" }}
       hero={<MusicHero folder={folder} breadcrumb={breadcrumb} title={title} description={description} attribution={attribution} cover={cover} thumbnails={thumbnails} summary={summary} />}
     >
       {hasControls ? (
         <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1.5 }}>
-          {showPlay && !phone ? mainButton(56) : null}
+          {/* Play stays on the left: on a phone the Share button floats at the right. */}
+          {showPlay ? mainButton(56) : null}
           {showPlay && tracks.length > 1 ? (
             <Tooltip title="Shuffle">
               <IconButton aria-label="Shuffle" onClick={queue.shuffleAll} sx={{ width: 48, height: 48, color: "text.secondary", "&:hover": { color: "text.primary" } }}>
@@ -216,7 +245,7 @@ export default function MusicSpace(props: SpaceProps) {
               </IconButton>
             </Tooltip>
           ) : null}
-          {actions ? <Box sx={{ ml: { sm: "auto" }, minWidth: 0, width: { xs: "100%", sm: "auto" } }}>{actions}</Box> : null}
+          {actions ? <Box sx={{ ml: { sm: phone ? 0 : "auto" }, minWidth: 0, width: phone ? "100%" : { xs: "100%", sm: "auto" }, ...quietActions, ...(phone ? { mx: -1, "& .MuiButton-root": { ...quietActions["& .MuiButton-root"], px: 1, minWidth: 0 } } : null) }}>{actions}</Box> : null}
         </Box>
       ) : null}
       {note ? (
@@ -255,23 +284,6 @@ export default function MusicSpace(props: SpaceProps) {
       ) : null}
       <SpaceShowMore items={items} />
 
-      {/* Phones: Play floats at the thumb, on the left because the Share button floats on the right. */}
-      {showPlay && phone ? (
-        <Box
-          sx={{
-            position: "sticky",
-            bottom: `calc(${navHeight + playerBar + 12}px + env(safe-area-inset-bottom, 0px))`,
-            height: 0,
-            zIndex: 3,
-            display: "flex",
-            alignItems: "flex-end",
-            pointerEvents: "none",
-            "& > *": { pointerEvents: "auto", borderRadius: "50%", boxShadow: 6 },
-          }}
-        >
-          {mainButton(landscape ? 48 : 56)}
-        </Box>
-      ) : null}
     </SpaceShell>
   );
 }

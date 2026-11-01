@@ -8,6 +8,7 @@ import { fetchCalls, mockFetch, qortalCallsFor } from "../../../test/setup";
 import { QDN_PAGE } from "../../../utils/qdnSearch";
 import { averageColor, heroWash } from "./musicTint";
 import { buildQueue, queueOwner } from "./musicQueue";
+import { shownTitle } from "./musicTracks";
 import { SPACE_BODIES, SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, type SpaceBodies } from "./testUtils";
 import { toSpaceShare } from "./useSpaceItems";
 import { getContrastRatio } from "@mui/material/styles";
@@ -278,6 +279,12 @@ describe("music space helpers", () => {
   it("heroWash counts a text colour's own alpha", () => {
     // A 0.2 wash would leave this grey at 4.4:1.
     expect(heroWash("#ffffff", "#000000", ["rgba(255, 255, 255, 0.5)"])).toBe("rgb(31, 31, 31)");
+  });
+
+  it("drops a file's number only when it is the track's place in the album", () => {
+    expect(shownTitle("01 Harbour lights", 1)).toBe("Harbour lights");
+    expect(shownTitle("99 Luftballons", 3)).toBe("99 Luftballons");
+    expect(shownTitle("7", 7)).toBe("7");
   });
 
   it("heroWash gives up on colours it can't read", () => {
