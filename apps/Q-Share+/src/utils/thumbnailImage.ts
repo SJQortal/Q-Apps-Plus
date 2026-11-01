@@ -1,9 +1,11 @@
 /**
  * Share thumbnails, made on the device when a share is published: the first
- * image scaled to fit 640 px, or a frame from a video, as WebP (JPEG where
+ * image scaled to fit 640 px, a frame from a video, or the cover art inside
+ * the first audio file (utils/audioCover.ts), as WebP (JPEG where
  * the browser can't write WebP) of at most 200 KB. Only the small result is
  * published (utils/publishPayload.ts, THUMBNAIL `qshare_thumb_…`).
  */
+import { blobReader, readEmbeddedCover } from "./audioCover";
 import { decodeImage, drawnCanvas, encodeCanvas } from "./coverImage";
 import { fileKind } from "./fileKind";
 
@@ -78,16 +80,28 @@ export async function makeVideoThumbnail(file: Blob, timeoutMs = VIDEO_FRAME_TIM
   }
 }
 
-/** What a thumbnail can be made from: the first image, else the first video. */
-export function thumbnailSource<T extends { name: string; mimetype?: string; size?: number }>(files: T[]): { file: T; kind: "image" | "video" } | null {
+/** A thumbnail of the cover art inside an audio file; rejects when it has none. */
+export async function makeAudioThumbnail(file: Blob): Promise<File> {
+  const cover = await readEmbeddedCover(blobReader(file));
+  if (!cover) throw new Error("No cover art in this file");
+  return makeImageThumbnail(new Blob([cover.bytes as BlobPart], { type: cover.type }));
+}
+
+export type ThumbnailKind = "image" | "video" | "audio";
+
+/** What a thumbnail can be made from: the first image, else the first video, else the art in the first audio file. */
+export function thumbnailSource<T extends { name: string; mimetype?: string; size?: number }>(files: T[]): { file: T; kind: ThumbnailKind } | null {
   const usable = (f: T) => (f.size ?? 0) <= THUMBNAIL_SOURCE_MAX_BYTES;
   const image = files.find((f) => fileKind(f.mimetype, f.name) === "image" && usable(f));
   if (image) return { file: image, kind: "image" };
   const video = files.find((f) => fileKind(f.mimetype, f.name) === "video");
-  return video ? { file: video, kind: "video" } : null;
+  if (video) return { file: video, kind: "video" };
+  const audio = files.find((f) => fileKind(f.mimetype, f.name) === "audio");
+  return audio ? { file: audio, kind: "audio" } : null;
 }
 
 /** A thumbnail of `blob` made the way its kind needs. */
-export function makeThumbnail(blob: Blob, kind: "image" | "video"): Promise<File> {
+export function makeThumbnail(blob: Blob, kind: ThumbnailKind): Promise<File> {
+  if (kind === "audio") return makeAudioThumbnail(blob);
   return kind === "image" ? makeImageThumbnail(blob) : makeVideoThumbnail(blob);
 }

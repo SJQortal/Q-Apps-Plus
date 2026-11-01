@@ -229,6 +229,8 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
   } else if (choice.kind === "auto" && source && !autoFailed) {
     previewUrl = autoReady?.url ?? null;
     label = autoReady ? `Made from ${source.file.name}.` : `Making one from ${source.file.name}…`;
+    // Most audio files hold no art: nothing to announce until one does.
+    if (source.kind === "audio" && !autoReady) label = "None: the category icon shows.";
   } else {
     label = "None: the category icon shows.";
   }
@@ -237,7 +239,8 @@ export function useShareThumbnail(files: DraftFile[], initial: ThumbnailChoice):
     choice,
     previewUrl,
     label,
-    publishesNew: choice.kind === "file" || (choice.kind === "auto" && Boolean(source) && !autoFailed),
+    // Audio counts once its art is found: most files have none, and the fee line shouldn't flicker.
+    publishesNew: choice.kind === "file" || (choice.kind === "auto" && Boolean(source) && !autoFailed && (source?.kind !== "audio" || Boolean(autoReady))),
     suggestion: suggestion && candidates.length > 0 ? suggestion : null,
     busy,
     problem,

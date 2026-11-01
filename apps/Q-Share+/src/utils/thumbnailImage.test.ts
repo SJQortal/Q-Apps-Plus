@@ -13,10 +13,12 @@ describe("thumbnail sizes", () => {
 describe("thumbnailSource", () => {
   const f = (name: string, mimetype: string, size = 1000) => ({ name, mimetype, size });
 
-  it("takes the first image, else the first video, else nothing", () => {
+  it("takes the first image, else the first video, else the first audio file, else nothing", () => {
     expect(thumbnailSource([f("a.zip", "application/zip"), f("b.png", "image/png"), f("c.jpg", "image/jpeg")])?.file.name).toBe("b.png");
     expect(thumbnailSource([f("a.zip", "application/zip"), f("clip.mp4", "video/mp4")])).toMatchObject({ kind: "video" });
-    expect(thumbnailSource([f("a.mp3", "audio/mpeg"), f("b.pdf", "application/pdf")])).toBeNull();
+    expect(thumbnailSource([f("b.pdf", "application/pdf"), f("a.mp3", "audio/mpeg")])).toMatchObject({ kind: "audio", file: { name: "a.mp3" } });
+    expect(thumbnailSource([f("clip.mp4", "video/mp4"), f("a.mp3", "audio/mpeg")])).toMatchObject({ kind: "video" });
+    expect(thumbnailSource([f("b.pdf", "application/pdf")])).toBeNull();
   });
 
   it("skips images too big to read on a phone", () => {

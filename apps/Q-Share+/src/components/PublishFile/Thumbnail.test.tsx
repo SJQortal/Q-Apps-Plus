@@ -78,6 +78,30 @@ describe("share thumbnails", { timeout: 20_000 }, () => {
     expect(details().thumbnail).toEqual({ service: "THUMBNAIL", name: "alice", identifier: thumb.identifier });
   });
 
+  it("makes one from the cover art in an audio file", async () => {
+    renderWithProviders(<PublishFile />);
+    fireEvent.click(screen.getByRole("button", { name: "Share files" }));
+    await screen.findByRole("dialog", { name: "Share files" });
+    fireEvent.change(screen.getByTestId("share-file-input"), {
+      target: { files: [new File(["x"], "01 Song.mp3", { type: "audio/mpeg" })] },
+    });
+    expect(await screen.findByText("Made from 01 Song.mp3.")).toBeInTheDocument();
+    expect(makeThumbnail).toHaveBeenCalledWith(expect.any(File), "audio");
+    expect(await screen.findByText("3 publishes, 0.03 QORT in fees")).toBeInTheDocument();
+  });
+
+  it("counts nothing for an audio file without art", async () => {
+    vi.mocked(makeThumbnail).mockRejectedValueOnce(new Error("No cover art in this file"));
+    renderWithProviders(<PublishFile />);
+    fireEvent.click(screen.getByRole("button", { name: "Share files" }));
+    await screen.findByRole("dialog", { name: "Share files" });
+    fireEvent.change(screen.getByTestId("share-file-input"), {
+      target: { files: [new File(["x"], "01 Song.mp3", { type: "audio/mpeg" })] },
+    });
+    expect(await screen.findByText("None: the category icon shows.")).toBeInTheDocument();
+    expect(await screen.findByText("2 publishes, 0.02 QORT in fees")).toBeInTheDocument();
+  });
+
   it("publishes once on a double tap, with the thumbnail that was being made", async () => {
     let finish!: (file: File) => void;
     vi.mocked(makeThumbnail).mockImplementationOnce(() => new Promise<File>((resolve) => (finish = resolve)));
