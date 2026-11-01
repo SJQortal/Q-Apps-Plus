@@ -46,7 +46,7 @@ function TrackButton({ playlist, file }: { playlist: { share: PlayerShare; track
         controls.playOrToggle(index);
       }}
       aria-label={`${label} ${file.filename || "track"}`}
-      sx={{ minHeight: phone ? 48 : 40, width: phone ? "100%" : "auto", flexShrink: 0 }}
+      sx={{ minHeight: phone ? 44 : 36, width: phone ? "100%" : "auto", flexShrink: 0 }}
     >
       {label}
     </Button>
@@ -58,7 +58,11 @@ function NowPlaying({ playlist, file }: { playlist: { share: PlayerShare; tracks
   const controls = usePlaylistControls(playlist.share, playlist.tracks);
   if (controls.current?.identifier !== file.identifier) return null;
   return (
-    <Typography variant="body2" sx={{ color: "primary.main", display: "flex", alignItems: "center", gap: 0.5, fontWeight: 600 }}>
+    <Typography
+      component="span"
+      variant="body2"
+      sx={{ color: "primary.main", display: "inline-flex", alignItems: "center", gap: 0.5, fontWeight: 600 }}
+    >
       <GraphicEqRoundedIcon fontSize="small" aria-hidden />
       {controls.playing ? "Playing" : "Paused"}
     </Typography>
@@ -66,12 +70,14 @@ function NowPlaying({ playlist, file }: { playlist: { share: PlayerShare; tracks
 }
 
 /**
- * One attachment on the share page: kind icon, a filename that wraps, the
- * size, the download control (Download → progress → Save) and, when the
- * file can be shown inline, a preview toggle with the preview below ("Play
- * audio" / "Play video" for media; PDFs: "Open PDF", which uses Hub's reader).
- * In a share with a playlist, audio rows have Play instead, which plays
- * through the app's player from that track.
+ * One attachment on the share page, kept short so a long album fits: kind
+ * icon, a filename that wraps and the size, then side by side the download
+ * control (Download → progress → Save) and, when the file can be shown
+ * inline, a preview toggle with the preview below ("Play audio" / "Play video"
+ * for media; PDFs: "Open PDF", which uses Hub's reader). In a share with a
+ * playlist, audio rows have Play instead, which plays through the app's player
+ * from that track. On one line where there is room; on phones the buttons
+ * share a line under the name.
  */
 export const FileRow = ({ file, jsonId, playlist }: FileRowProps) => {
   const settings = useAppSettings();
@@ -96,47 +102,16 @@ export const FileRow = ({ file, jsonId, playlist }: FileRowProps) => {
         listStyle: "none",
         display: "flex",
         flexDirection: "column",
-        gap: 1.5,
+        gap: 1,
         width: "100%",
         minWidth: 0,
-        padding: { xs: 1.5, sm: 2 },
+        padding: { xs: 1, sm: "8px 12px" },
         border: 1,
         borderColor: "divider",
         borderRadius: 2,
         bgcolor: "background.paper",
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0 }}>
-        <Box
-          aria-hidden
-          sx={{
-            width: 40,
-            height: 40,
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: 1.5,
-            bgcolor: "action.hover",
-            color: "text.secondary",
-          }}
-        >
-          {fileKindIconElement(kind)}
-        </Box>
-        <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography
-            component="h3"
-            sx={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, overflowWrap: "anywhere", wordBreak: "break-word" }}
-          >
-            {file.filename}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ marginTop: 0.25 }}>
-            {fileKindLabel(kind)} · {formatBytes(file.size || 0)}
-          </Typography>
-          {inPlaylist && playlist ? <NowPlaying playlist={playlist} file={file} /> : null}
-        </Box>
-      </Box>
-
       <Box
         sx={{
           display: "flex",
@@ -146,23 +121,68 @@ export const FileRow = ({ file, jsonId, playlist }: FileRowProps) => {
           minWidth: 0,
         }}
       >
-        <Box sx={{ flex: 1, minWidth: 0, display: "flex" }}>
-          <FileElement fileInfo={fileInfo} jsonId={jsonId} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: 1 }}>
+          <Box
+            aria-hidden
+            sx={{
+              width: 40,
+              height: 40,
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: 1.5,
+              bgcolor: "action.hover",
+              color: "text.secondary",
+            }}
+          >
+            {fileKindIconElement(kind)}
+          </Box>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography
+              component="h3"
+              sx={{ fontSize: 14, fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere", wordBreak: "break-word" }}
+            >
+              {file.filename}
+            </Typography>
+            <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 1 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: 13 }}>
+                {fileKindLabel(kind)} · {formatBytes(file.size || 0)}
+              </Typography>
+              {inPlaylist && playlist ? <NowPlaying playlist={playlist} file={file} /> : null}
+            </Box>
+          </Box>
         </Box>
-        {inPlaylist && playlist ? (
-          <TrackButton playlist={playlist} file={file} />
-        ) : preview === "pdf" ? (
-          <OpenPdfButton file={file} jsonId={jsonId} />
-        ) : (
-          preview && (
-            <PreviewToggleButton
-              kind={preview}
-              open={previewOpen}
-              onToggle={() => setPreviewOpen((o) => !o)}
-              filename={file.filename}
-            />
-          )
-        )}
+
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            minWidth: 0,
+            flexShrink: 0,
+            // Phones: two equal buttons on one line.
+            "& > *": { flex: { xs: "1 1 0", sm: "0 0 auto" }, minWidth: 0 },
+          }}
+        >
+          <Box sx={{ minWidth: 0, display: "flex" }}>
+            <FileElement fileInfo={fileInfo} jsonId={jsonId} />
+          </Box>
+          {inPlaylist && playlist ? (
+            <TrackButton playlist={playlist} file={file} />
+          ) : preview === "pdf" ? (
+            <OpenPdfButton file={file} jsonId={jsonId} />
+          ) : (
+            preview && (
+              <PreviewToggleButton
+                kind={preview}
+                open={previewOpen}
+                onToggle={() => setPreviewOpen((o) => !o)}
+                filename={file.filename}
+              />
+            )
+          )}
+        </Box>
       </Box>
 
       {preview && preview !== "pdf" && !inPlaylist && (

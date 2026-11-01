@@ -166,7 +166,7 @@ export const FileList = styled("ul")(({ theme }) => ({
   padding: 0,
   display: "flex",
   flexDirection: "column",
-  gap: theme.spacing(1.5),
+  gap: theme.spacing(1),
   width: "100%",
   minWidth: 0,
 }));
