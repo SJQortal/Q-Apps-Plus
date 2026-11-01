@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSharePublish,
+  buildShareRemoval,
   shareSlug,
   shareThumbnail,
   toMultiplePublish,
@@ -279,5 +280,40 @@ describe("share thumbnails (1.0.1)", () => {
     expect(shareThumbnail({ thumbnail: { service: "THUMBNAIL", name: "", identifier: "b" } })).toBeNull();
     expect(shareThumbnail({})).toBeNull();
     expect(shareThumbnail(null)).toBeNull();
+  });
+});
+
+describe("removing a share from QDN", () => {
+  const files = [
+    { filename: "a.mp3", identifier: "qshare_file_x_f1", name: "alice" },
+    { filename: "b.mp3", identifier: "qshare_file_x_f2", name: "alice" },
+    { filename: "c.mp3", identifier: "qshare_file_x_f3", name: "bob" },
+  ];
+  const thumbnail = { service: "THUMBNAIL" as const, name: "alice", identifier: "qshare_thumb_x_t1" };
+
+  it("replaces own files and thumbnail with a one-byte marker, then the details, under the same identifiers", async () => {
+    const resources = buildShareRemoval({ name: "alice", identifier: "qshare_file_x_abc_metadata", files, thumbnail });
+    expect(resources.map((r) => [r.service, r.identifier])).toEqual([
+      ["FILE", "qshare_file_x_f1"],
+      ["FILE", "qshare_file_x_f2"],
+      ["THUMBNAIL", "qshare_thumb_x_t1"],
+      ["DOCUMENT", "qshare_file_x_abc_metadata"],
+    ]);
+    for (const r of resources) expect(r).toMatchObject({ name: "alice", title: "deleted", tag1: "deleted" });
+    const details = resources.at(-1) as any;
+    expect(atob(details.data64)).toBe("D");
+    expect((resources[0] as any).file.size).toBe(1);
+    expect(resources[0].filename).toBe("a.mp3");
+  });
+
+  it("leaves out what an earlier try replaced", () => {
+    const resources = buildShareRemoval({
+      name: "alice",
+      identifier: "qshare_file_x_abc_metadata",
+      files,
+      thumbnail,
+      done: new Set(["qshare_file_x_f1", "qshare_thumb_x_t1"]),
+    });
+    expect(resources.map((r) => r.identifier)).toEqual(["qshare_file_x_f2", "qshare_file_x_abc_metadata"]);
   });
 });

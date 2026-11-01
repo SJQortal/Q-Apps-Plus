@@ -32,6 +32,7 @@ import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions
 import { FileRow, type ShareFile } from "./FileRow";
 import { FETCH_ALL_AT_ONCE, useFetchAll } from "./useFetchAll";
 import { PLAYLIST_MIN_TRACKS, PlaylistCard, shareTracks } from "./PlaylistCard";
+import { RemoveShareButton } from "./RemoveShareButton";
 import {
   ActionRow,
   AuthorLink,
@@ -336,14 +337,17 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
         compact={phone}
       />
       {author === username ? (
-        <Button
-          variant="outlined"
-          startIcon={<EditOutlinedIcon />}
-          aria-label="Edit share"
-          onClick={() => dispatch(setEditFile(fileData))}
-        >
-          {phone ? "Edit" : "Edit share"}
-        </Button>
+        <>
+          <Button
+            variant="outlined"
+            startIcon={<EditOutlinedIcon />}
+            aria-label="Edit share"
+            onClick={() => dispatch(setEditFile(fileData))}
+          >
+            {phone ? "Edit" : "Edit share"}
+          </Button>
+          <RemoveShareButton share={fileData} compact={phone} />
+        </>
       ) : (
         <FollowButton followerName={author} compact={phone} />
       )}

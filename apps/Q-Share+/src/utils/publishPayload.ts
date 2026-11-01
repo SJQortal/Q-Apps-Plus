@@ -286,6 +286,54 @@ export async function buildSharePublish({
 }
 
 /** The request MultiplePublish sends through qortalRequestWithTimeout. */
+/** What a resource is republished as to delete it: one byte, "D" (base64 "RA=="), as Torq and qapp-core do. */
+export const DELETED_DATA64 = "RA==";
+export const DELETED_TITLE = "deleted";
+
+export interface ShareRemovalArgs {
+  /** The publishing name; only its own resources can be replaced. */
+  name: string;
+  /** The share's DOCUMENT identifier. */
+  identifier: string;
+  files: Array<{ filename?: string; identifier?: string; name?: string }>;
+  thumbnail?: ShareThumbnail | null;
+  /** Identifiers already replaced by an earlier try, not sent (and paid for) again. */
+  done?: ReadonlySet<string>;
+}
+
+/**
+ * Removing a share from QDN. QDN keeps no way to erase a resource, so each one
+ * is republished as a one-byte delete marker: nodes then drop the old data,
+ * and lists and share pages treat the share as deleted (FileContent,
+ * fetchVideos.notShareFlags). Files first, the DOCUMENT last, as in a publish,
+ * so a stopped removal leaves the share there to finish from. A file another
+ * name published isn't ours to replace, and stays.
+ */
+export function buildShareRemoval({ name, identifier, files, thumbnail, done }: ShareRemovalArgs): PublishResource[] {
+  const marker = {
+    action: "PUBLISH_QDN_RESOURCE" as const,
+    name,
+    title: DELETED_TITLE,
+    description: DELETED_TITLE,
+    tag1: DELETED_TITLE,
+  };
+  const file = (filename: string, type = "text/plain") => new File(["D"], filename, { type });
+  const seen = new Set<string>(done ?? []);
+  const resources: PublishResource[] = [];
+  for (const f of files) {
+    if (!f?.identifier || f.name !== name || seen.has(f.identifier)) continue;
+    seen.add(f.identifier);
+    // The file's own name, so the publish dialog can say which one it is on.
+    const filename = f.filename || "deleted";
+    resources.push({ ...marker, service: "FILE", identifier: f.identifier, filename, file: file(filename) });
+  }
+  if (thumbnail && thumbnail.name === name && !seen.has(thumbnail.identifier)) {
+    resources.push({ ...marker, service: "THUMBNAIL", identifier: thumbnail.identifier, filename: "deleted", file: file("deleted") });
+  }
+  resources.push({ ...marker, service: "DOCUMENT", identifier, filename: METADATA_FILENAME, data64: DELETED_DATA64 });
+  return resources;
+}
+
 export function toMultiplePublish(resources: PublishResource[]): MultiplePublishRequest {
   return { action: "PUBLISH_MULTIPLE_QDN_RESOURCES", resources };
 }
