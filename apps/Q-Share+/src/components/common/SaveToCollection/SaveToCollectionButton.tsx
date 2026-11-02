@@ -1,6 +1,7 @@
-import { useMemo, useState, type MouseEvent } from "react";
+import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
 import {
+  Box,
   Button,
   CircularProgress,
   Divider,
@@ -17,6 +18,7 @@ import BookmarkAddOutlinedIcon from "@mui/icons-material/BookmarkAddOutlined";
 import BookmarkAddedIcon from "@mui/icons-material/BookmarkAdded";
 import BookmarkBorderOutlinedIcon from "@mui/icons-material/BookmarkBorderOutlined";
 import CheckIcon from "@mui/icons-material/Check";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import { BottomSheet } from "../mobile/BottomSheet";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
@@ -30,7 +32,7 @@ import {
   publishCollection,
   type CollectionSummary,
 } from "../../../utils/collections";
-import { containerOptions, containsItem, findFolder, hasItemIn, toggleItemIn } from "../../../utils/collectionFolders";
+import { containsItem, findFolder, hasItemIn, toggleItemIn, type Container } from "../../../utils/collectionFolders";
 import { isHubDecline } from "../../../utils/hubErrors";
 import { useMyCollections } from "./useMyCollections";
 
@@ -46,7 +48,9 @@ const LABEL = "Add to collection";
 
 /**
  * Add a share to one of the signed-in name's collections, or to a folder in
- * one: each collection is listed with its folders below it. Opens a bottom
+ * one: each collection is listed with its folders below it, folded until
+ * opened with its arrow (or the Right key), except where the share already
+ * sits in a folder, so a tick is never hidden. Opens a bottom
  * sheet on phones and a menu on wider screens; each toggle republishes that
  * collection (one Hub confirmation). Renders nothing when not signed in.
  * Called "Add to collection", not "Save": on the share page "Save" is the
@@ -58,6 +62,15 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
   const { myName, mine, loading, error, byKey, reload } = useMyCollections();
   const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // Places opened or closed against their default (folded, or open when the share is below them).
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(() => new Set());
+  const flip = (placeKey: string) =>
+    setFlipped((prev) => {
+      const next = new Set(prev);
+      if (next.has(placeKey)) next.delete(placeKey);
+      else next.add(placeKey);
+      return next;
+    });
   const [dialogOpen, setDialogOpen] = useState(false);
   // The dialog mounts on first use: one per row would otherwise run its hooks for nothing.
   const [dialogMounted, setDialogMounted] = useState(false);
@@ -89,6 +102,7 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
   const closePicker = () => {
     setAnchor(null);
     setSheetOpen(false);
+    setFlipped(new Set());
   };
 
   const toggle = async (row: CollectionSummary, folderId: string | null = null) => {
@@ -153,40 +167,88 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
       {(mine ?? []).flatMap((row) => {
         const key = collectionKey(row.name, row.identifier);
         const collection = byKey[key];
-        // The collection itself, then its folders in tree order, indented.
-        const places = collection ? containerOptions(collection) : [{ id: null, title: row.title, depth: 0 }];
-        return places.map((place) => {
-          const checked = collection ? hasItemIn(collection, place.id, item) : false;
-          const container = collection ? (place.id ? findFolder(collection, place.id)?.folder : collection) : null;
+        const collectionTitle = row.title || collection?.title || row.identifier;
+        const out: ReactNode[] = [];
+        // The collection itself, then its folders in tree order, indented, each under an open parent only.
+        const visit = (container: Container | null, id: string | null, title: string, depth: number) => {
+          const placeKey = `${key}/${id ?? ""}`;
+          const folders = container?.folders ?? [];
+          const below = folders.some((folder) => containsItem(folder, item));
+          const expanded = folders.length > 0 && below !== flipped.has(placeKey);
+          const checked = container ? hasItemIn(container, null, item) : false;
           const count = container?.items.length ?? 0;
-          const label =
-            place.id === null ? row.title || collection?.title || row.identifier : place.title || "Untitled folder";
-          return (
+          const label = id === null ? title : title || "Untitled folder";
+          const counts = container
+            ? [
+                count === 0 ? "Empty" : `${count} ${count === 1 ? "share" : "shares"}`,
+                ...(folders.length > 0 && !expanded ? [`${folders.length} ${folders.length === 1 ? "folder" : "folders"}`] : []),
+              ].join(" · ")
+            : undefined;
+          const onKeyDown = (event: KeyboardEvent) => {
+            if (folders.length === 0) return;
+            if ((event.key === "ArrowRight" && !expanded) || (event.key === "ArrowLeft" && expanded)) {
+              event.preventDefault();
+              event.stopPropagation();
+              flip(placeKey);
+            }
+          };
+          out.push(
             <MenuItem
-              key={`${key}/${place.id ?? ""}`}
+              key={placeKey}
               role="menuitemcheckbox"
               aria-checked={checked}
-              aria-label={place.id === null ? label : `${label}, in ${row.title || collection?.title || "collection"}`}
-              onClick={() => toggle(row, place.id)}
-              sx={{ minHeight: 48, pl: 2 + Math.min(place.depth, 4) * 2 }}
+              aria-expanded={folders.length > 0 ? expanded : undefined}
+              aria-label={id === null ? label : `${label}, in ${collectionTitle}`}
+              onClick={() => toggle(row, id)}
+              onKeyDown={onKeyDown}
+              sx={{ minHeight: 48, pl: 2 + Math.min(depth, 4) * 2, pr: folders.length > 0 ? 0.5 : undefined }}
             >
               <ListItemIcon sx={{ minWidth: 36 }}>
                 {checked ? (
                   <CheckIcon color="primary" />
-                ) : place.id === null ? (
+                ) : id === null ? (
                   <BookmarkBorderOutlinedIcon sx={{ opacity: 0.6 }} />
                 ) : (
                   <FolderOutlinedIcon sx={{ opacity: 0.6 }} />
                 )}
               </ListItemIcon>
-              <ListItemText
-                primary={label}
-                secondary={container ? (count === 0 ? "Empty" : `${count} ${count === 1 ? "share" : "shares"}`) : undefined}
-                slotProps={{ primary: { noWrap: true } }}
-              />
+              <ListItemText primary={label} secondary={counts} slotProps={{ primary: { noWrap: true } }} />
+              {folders.length > 0 ? (
+                // Opens or folds the folders without adding the share; keyboards use Right and Left.
+                <Box
+                  component="span"
+                  aria-hidden
+                  // A plain hover hint: a tooltip would open outside the menu.
+                  title={expanded ? "Hide folders" : "Show folders"}
+                  data-testid={`folders-${placeKey}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    flip(placeKey);
+                  }}
+                  sx={{
+                    flexShrink: 0,
+                    ml: 1,
+                    width: 44,
+                    height: 44,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "50%",
+                    color: "text.secondary",
+                    "&:hover": { bgcolor: "action.hover", color: "text.primary" },
+                  }}
+                >
+                  <ChevronRightRoundedIcon
+                    sx={{ transform: expanded ? "rotate(90deg)" : "none", transition: "transform 150ms", "@media (prefers-reduced-motion: reduce)": { transition: "none" } }}
+                  />
+                </Box>
+              ) : null}
             </MenuItem>
           );
-        });
+          if (expanded) for (const folder of folders) visit(folder, folder.id, folder.title, depth + 1);
+        };
+        visit(collection ?? null, null, collectionTitle, 0);
+        return out;
       })}
       <Divider />
       <MenuItem
@@ -259,7 +321,12 @@ export function SaveToCollectionButton({ share, size = "small", variant = "icon"
           open={Boolean(anchor)}
           anchorEl={anchor}
           onClose={closePicker}
-          slotProps={{ list: { "aria-label": LABEL, dense: false }, paper: { sx: { minWidth: 240, maxWidth: 320 } } }}
+          slotProps={{ list: { "aria-label": LABEL, dense: false }, paper: {
+              // A landmark of its own: the menu opens outside the page's main region.
+              role: "region",
+              "aria-label": LABEL,
+              sx: { minWidth: 240, maxWidth: 320 },
+            }, }}
         >
           {rows}
         </Menu>
