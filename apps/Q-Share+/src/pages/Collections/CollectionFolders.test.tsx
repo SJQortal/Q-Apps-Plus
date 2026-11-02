@@ -97,6 +97,9 @@ describe("folders in a collection", { timeout: 20_000 }, () => {
     fireEvent.click(within(screen.getByRole("list", { name: "Folders" })).getByRole("button", { name: "Open folder Tokyo" }));
     const crumbs = within(await screen.findByRole("navigation", { name: "Where this folder is" }));
     expect(crumbs.getByRole("button", { name: "Music" })).toBeInTheDocument();
+    // Where you are ends the trail, not as a link.
+    expect(crumbs.getByText("Tokyo")).toHaveAttribute("aria-current", "page");
+    expect(crumbs.queryByRole("button", { name: "Tokyo" })).not.toBeInTheDocument();
     fireEvent.click(crumbs.getByRole("button", { name: "Live" }));
     expect(screen.getByTestId("where")).toHaveTextContent(`/collection/alice/${ID}/folder/live01`);
   });

@@ -490,6 +490,10 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
             {crumb.title}
           </Link>
         ))}
+        {/* Where you are, last: not a link. */}
+        <Typography component="span" aria-current="page" sx={{ font: "inherit", color: "text.primary", wordBreak: "break-word" }}>
+          {found.path[found.path.length - 1].title || "Untitled folder"}
+        </Typography>
       </Breadcrumbs>
     ) : null;
     const credit = collection.copiedFrom ? (
