@@ -52,6 +52,9 @@ const initialState: PlayerState = {
   restart: 0,
 };
 
+/** One file, wherever it appears: the player tells tracks apart this way. */
+export const trackKey = (track: Pick<Track, "name" | "identifier">) => `${track.name}/${track.identifier}`;
+
 const inOrder = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 /** `first`, then the other indices below `n` in a random order (Fisher–Yates). */
@@ -98,6 +101,23 @@ export const playerSlice = createSlice({
           },
         };
       },
+    },
+    /**
+     * The place this queue plays has more tracks now: take its order, and keep
+     * what plays playing. Tracks it no longer lists stay at the end, and a
+     * shuffled queue plays the new ones after the rest.
+     */
+    syncQueue: (state, action: PayloadAction<Track[]>) => {
+      if (state.order.length === 0) return;
+      const listed = new Set(action.payload.map(trackKey));
+      const tracks = [...action.payload, ...state.tracks.filter((track) => !listed.has(trackKey(track)))];
+      const indexOf = new Map(tracks.map((track, index) => [trackKey(track), index]));
+      const moved = state.order.map((index) => indexOf.get(trackKey(state.tracks[index])) ?? 0);
+      const current = moved[state.position];
+      const held = new Set(moved);
+      state.tracks = tracks;
+      state.order = state.shuffle ? [...moved, ...inOrder(tracks.length).filter((index) => !held.has(index))] : inOrder(tracks.length);
+      state.position = Math.max(0, state.order.indexOf(current));
     },
     /** Jump to a track of the current queue (an index into `tracks`). */
     playTrack: (state, action: PayloadAction<number>) => {
@@ -167,7 +187,7 @@ export const playerSlice = createSlice({
   },
 });
 
-export const { playQueue, playTrack, nextTrack, previousTrack, setPlaying, toggleShuffle, cycleRepeat, closePlayer } =
+export const { playQueue, syncQueue, playTrack, nextTrack, previousTrack, setPlaying, toggleShuffle, cycleRepeat, closePlayer } =
   playerSlice.actions;
 
 /** The track playing now, if any. */

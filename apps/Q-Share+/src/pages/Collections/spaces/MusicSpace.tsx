@@ -201,7 +201,7 @@ export default function MusicSpace(props: SpaceProps) {
   const onOpenProfile = useCallback((name: string) => latest.current.openProfile(name), []);
 
   const columns = useMemo<TrackColumns>(() => ({ phone, wide }), [phone, wide]);
-  const { tracks, indexOf, queued, playing, currentKey } = queue;
+  const { tracks, indexOf, queued, playing, ended, currentKey } = queue;
 
   const thumbnails = useMemo(
     () => Array.from(new Set(items.shares.flatMap((share) => (share.thumbnailUrl && !share.deleted ? [share.thumbnailUrl] : [])))),
@@ -213,8 +213,9 @@ export default function MusicSpace(props: SpaceProps) {
   const note = queueNote(tracks.length, items);
   const showPlay = tracks.length > 0 || items.pending > 0;
 
-  const mainLabel = queued ? (playing ? "Pause" : "Resume") : "Play all";
-  const onMain = queued ? queue.toggle : queue.playAll;
+  const active = queued && !ended;
+  const mainLabel = active ? (playing ? "Pause" : "Resume") : "Play all";
+  const onMain = active ? queue.toggle : queue.playAll;
   const mainIcon = playing ? <PauseRoundedIcon sx={{ fontSize: 32 }} /> : <PlayArrowRoundedIcon sx={{ fontSize: 32 }} />;
   const mainButton = (size: number) => (
     <Tooltip title={mainLabel}>

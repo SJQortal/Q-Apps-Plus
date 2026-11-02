@@ -1,11 +1,11 @@
+import { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { unlockAudio } from "../../../components/player/audioElement";
-import { currentTrack, playQueue, playTrack, setPlaying, type PlayerShare, type PlayerState, type Track } from "../../../state/features/playerSlice";
+import { currentTrack, playQueue, playTrack, setPlaying, syncQueue, trackKey, type PlayerShare, type PlayerState, type Track } from "../../../state/features/playerSlice";
 import type { RootState } from "../../../state/store";
 import type { SpaceShare } from "./useSpaceItems";
 
-/** One file, wherever it appears: the player tells tracks apart the same way. */
-export const trackKey = (track: Pick<Track, "name" | "identifier">) => `${track.name}/${track.identifier}`;
+export { trackKey };
 
 /** A share's tracks can be played unless it is gone. */
 export const playableTracks = (share: SpaceShare): Track[] => (share.deleted || share.unreadable ? [] : share.audio);
@@ -36,10 +36,10 @@ export function queueOwner(shares: SpaceShare[], title: string, path?: string): 
   return first ? { name: first.user, identifier: first.identifier, title, ...(path ? { path } : {}) } : null;
 }
 
-/** The player holds this place's queue: its title, from one of its shares (the first with audio can change as bodies land). */
-export function isThisQueue(player: Pick<PlayerState, "share">, shares: SpaceShare[], title: string): boolean {
+/** The player holds this place's queue: its path and title, from one of its shares (the first with audio can change as bodies land). */
+export function isThisQueue(player: Pick<PlayerState, "share">, shares: SpaceShare[], title: string, path?: string): boolean {
   const held = player.share;
-  if (!held || held.title !== title) return false;
+  if (!held || held.title !== title || held.path !== path) return false;
   return shares.some((share) => share.user === held.name && share.identifier === held.identifier);
 }
 
@@ -47,9 +47,20 @@ export function isThisQueue(player: Pick<PlayerState, "share">, shares: SpaceSha
 export function useMusicQueue(shares: SpaceShare[], title: string, path?: string) {
   const dispatch = useDispatch();
   const player = useSelector((state: RootState) => state.player);
-  const { tracks, indexOf } = buildQueue(shares);
-  const queued = isThisQueue(player, shares, title);
+  const { tracks, indexOf } = useMemo(() => buildQueue(shares), [shares]);
+  const queued = isThisQueue(player, shares, title, path);
   const current = queued ? currentTrack(player) : null;
+
+  // Bodies land and Show more adds shares after Play: the queue keeps up with the page.
+  const held = queued ? player.tracks : null;
+  const behind = useMemo(() => {
+    if (!held) return false;
+    const keys = new Set(held.map(trackKey));
+    return tracks.some((track) => !keys.has(trackKey(track)));
+  }, [held, tracks]);
+  useEffect(() => {
+    if (behind) dispatch(syncQueue(tracks));
+  }, [behind, tracks, dispatch]);
 
   const start = (from: { index?: number; shuffle?: boolean }) => {
     const share = queueOwner(shares, title, path);
@@ -68,6 +79,8 @@ export function useMusicQueue(shares: SpaceShare[], title: string, path?: string
     indexOf,
     queued,
     playing: queued && player.playing,
+    /** This queue played to its end: the main button starts it again. */
+    ended: queued && player.ended,
     currentKey: current ? trackKey(current) : null,
     playAll: () => start({ index: 0 }),
     shuffleAll: () => start({ shuffle: true }),

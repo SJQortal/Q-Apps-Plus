@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { resetAudioCovers } from "../../../hooks/useAudioCover";
-import { closePlayer } from "../../../state/features/playerSlice";
+import { closePlayer, currentTrack, nextTrack, playQueue, setPlaying, syncQueue, type Track } from "../../../state/features/playerSlice";
 import { store } from "../../../state/store";
 import { readOncePerObserve } from "../../../test/intersection";
 import { fetchCalls, mockFetch, qortalCallsFor } from "../../../test/setup";
@@ -9,7 +9,7 @@ import { QDN_PAGE } from "../../../utils/qdnSearch";
 import { averageColor, heroWash } from "./musicTint";
 import { buildQueue, queueOwner } from "./musicQueue";
 import { shownTitle } from "./musicTracks";
-import { SPACE_BODIES, SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, type SpaceBodies } from "./testUtils";
+import { SPACE_BODIES, SPACE_COLLECTION_ID, SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, type SpaceBodies } from "./testUtils";
 import { toSpaceShare } from "./useSpaceItems";
 import { getContrastRatio } from "@mui/material/styles";
 
@@ -217,6 +217,37 @@ describe("music space", { timeout: 20_000 }, () => {
     resetSpaceTest(bodies);
   });
 
+  const placePath = `/collection/alice/${SPACE_COLLECTION_ID}`;
+  const songs = spaceFile("one.mp3", "audio/mpeg");
+  const heldTrack = (file: typeof songs): Track => ({ ...file });
+
+  it("brings tracks found after Play into the queue, without restarting what plays", async () => {
+    store.dispatch(
+      playQueue({ tracks: [heldTrack(songs)], share: { name: "bob", identifier: "qshare_file_songs_aaa111_metadata", title: "My space", path: placePath }, start: 0 })
+    );
+    const restart = player().restart;
+    renderSpace();
+    await waitFor(() => expect(player().tracks.map((track) => track.filename)).toEqual(["one.mp3", "two.mp3"]));
+    expect(currentTrack(player())?.filename).toBe("one.mp3");
+    expect(player().restart).toBe(restart);
+    expect(screen.getByRole("button", { name: "Pause" })).toBeInTheDocument();
+  });
+
+  it("starts over with every track once the queue has ended", async () => {
+    store.dispatch(
+      playQueue({ tracks: [heldTrack(songs)], share: { name: "bob", identifier: "qshare_file_songs_aaa111_metadata", title: "My space", path: placePath }, start: 0 })
+    );
+    store.dispatch(nextTrack({ auto: true }));
+    expect(player().ended).toBe(true);
+    renderSpace();
+    await waitFor(() => expect(player().tracks).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: "Play all" }));
+    expect(player().playing).toBe(true);
+    expect(player().ended).toBe(false);
+    expect(currentTrack(player())?.filename).toBe("one.mp3");
+    store.dispatch(setPlaying(false));
+  });
+
   it("copes with long titles and names with + and spaces", async () => {
     const long = "A very long album title ".repeat(10).trim();
     const bodies: SpaceBodies = { qshare_file_a_aaa111_metadata: { title: long, files: [spaceFile("x.mp3", "audio/mpeg")] } };
@@ -256,6 +287,24 @@ describe("music space helpers", () => {
       { name: "bob", identifier: "id_a", title: "a" },
       { name: "bob", identifier: "id_b", title: "b" },
     ]);
+  });
+
+  it("syncQueue keeps the current track, and a shuffled order, as tracks arrive", () => {
+    const [a, b, c] = ["a", "b", "c"].map((name) => ({ name: "bob", service: "FILE", identifier: name, filename: `${name}.mp3` }));
+    const share = { name: "bob", identifier: "s", title: "T" };
+    store.dispatch(playQueue({ tracks: [b, c], share, start: 1 }));
+    store.dispatch(syncQueue([a, b, c]));
+    expect(currentTrack(player())).toEqual(c);
+    expect(player().order).toEqual([0, 1, 2]);
+    expect(player().position).toBe(2);
+
+    store.dispatch(playQueue({ tracks: [b, c], share, start: 0, shuffle: true }));
+    store.dispatch(syncQueue([a, b, c]));
+    expect(currentTrack(player())).toEqual(b);
+    expect(player().position).toBe(0);
+    expect([...player().order].sort()).toEqual([0, 1, 2]);
+    expect(player().order[2]).toBe(0);
+    store.dispatch(closePlayer());
   });
 
   it("queueOwner is the first share that has audio", () => {
