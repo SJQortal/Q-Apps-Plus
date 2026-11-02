@@ -61,6 +61,7 @@ import { CopyCollectionDialog } from "./CopyCollectionDialog";
 import { useMyCollections } from "../../components/common/SaveToCollection/useMyCollections";
 import { CardList, InfoCard, ItemRow, ItemRows, Page, PhoneHeader, PublisherLink } from "./Collections-styles";
 import { SpaceSkeleton } from "./spaces/SpaceShell";
+import { ErrorBoundary } from "../../components/common/ErrorBoundary";
 
 /** Collections in the standard look never load it. */
 const SpaceView = lazy(() => import("./spaces/SpaceView"));
@@ -249,8 +250,12 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
     [container, settings]
   );
 
-  // The look this collection chose; its folders take the same one.
-  const space = collectionSpace(collection);
+  // The look this collection chose; its folders take the same one. If a space
+  // can't draw (a share's body it couldn't cope with), the standard page can,
+  // and it still has Remove.
+  const place = `${name}/${id}`;
+  const [brokenSpace, setBrokenSpace] = useState<string | null>(null);
+  const space = brokenSpace === place ? "standard" : collectionSpace(collection);
 
   // One FETCH per share body through the shared queue, never one another list
   // or an earlier visit already has queued; no search per item. With no search
@@ -595,42 +600,44 @@ function CollectionView({ name, id, folderId }: { name: string; id: string; fold
       ) : null;
     inSpace = space !== "standard";
     body = space !== "standard" ? (
-      <Suspense fallback={<SpaceSkeleton />}>
-        {/* Keyed by the place, so each folder starts at its first page. */}
-        <SpaceView
-          key={folderId ?? ""}
-          space={space}
-          rows={items}
-          collection={collection}
-          folder={here}
-          trail={trail}
-          breadcrumb={breadcrumb}
-          title={placeTitle}
-          description={(here ? here.description : collection.description) || ""}
-          counts={counts}
-          cover={(here ? here.cover : collection.cover) ?? null}
-          subfolders={subfolders}
-          foldersSection={foldersSection}
-          emptyState={emptyState}
-          isOwner={isOwner}
-          onEdit={() => (here ? setFolderDialog("edit") : setEditOpen(true))}
-          onNewFolder={isOwner && canAddFolder ? () => setFolderDialog("new") : undefined}
-          onDelete={() => setDeleteOpen(true)}
-          onMove={isOwner && folderCount(collection) > 0 ? setMoveTarget : undefined}
-          onRemove={setRemoveTarget}
-          actions={actions}
-          copyAction={copyAction}
-          attribution={
-            <>
-              {credit}
-              {meta}
-            </>
-          }
-          openFolder={(folder) => navigate(collectionPath(name, id, folder))}
-          openShare={(share) => navigate(sharePath(share.user, share.identifier))}
-          openProfile={(profile) => navigate(profilePath(profile))}
-        />
-      </Suspense>
+      <ErrorBoundary fallback={null} onError={() => setBrokenSpace(place)}>
+        <Suspense fallback={<SpaceSkeleton />}>
+          {/* Keyed by the place, so each folder starts at its first page. */}
+          <SpaceView
+            key={folderId ?? ""}
+            space={space}
+            rows={items}
+            collection={collection}
+            folder={here}
+            trail={trail}
+            breadcrumb={breadcrumb}
+            title={placeTitle}
+            description={(here ? here.description : collection.description) || ""}
+            counts={counts}
+            cover={(here ? here.cover : collection.cover) ?? null}
+            subfolders={subfolders}
+            foldersSection={foldersSection}
+            emptyState={emptyState}
+            isOwner={isOwner}
+            onEdit={() => (here ? setFolderDialog("edit") : setEditOpen(true))}
+            onNewFolder={isOwner && canAddFolder ? () => setFolderDialog("new") : undefined}
+            onDelete={() => setDeleteOpen(true)}
+            onMove={isOwner && folderCount(collection) > 0 ? setMoveTarget : undefined}
+            onRemove={setRemoveTarget}
+            actions={actions}
+            copyAction={copyAction}
+            attribution={
+              <>
+                {credit}
+                {meta}
+              </>
+            }
+            openFolder={(folder) => navigate(collectionPath(name, id, folder))}
+            openShare={(share) => navigate(sharePath(share.user, share.identifier))}
+            openProfile={(profile) => navigate(profilePath(profile))}
+          />
+        </Suspense>
+      </ErrorBoundary>
     ) : (
       <>
         <InfoCard aria-label={here ? "About this folder" : "About this collection"}>

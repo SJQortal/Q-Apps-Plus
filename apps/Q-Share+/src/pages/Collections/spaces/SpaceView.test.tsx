@@ -7,6 +7,7 @@ import { QDN_PAGE } from "../../../utils/qdnSearch";
 import { writeSettings, resetSettingsCache } from "../../../utils/settings";
 import type { Video } from "../../../state/features/fileSlice";
 import { SPACE_COLLECTION_ID, SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, type SpaceBodies } from "./testUtils";
+import { suggestSpace } from "./suggestSpace";
 import { toSpaceShare } from "./useSpaceItems";
 
 configure({ asyncUtilTimeout: 5_000 });
@@ -34,6 +35,39 @@ describe("collection spaces", { timeout: 20_000 }, () => {
     const css = Array.from(document.querySelectorAll("style")).map((style) => style.textContent).join("");
     expect(css).toMatch(/\.MuiButton-root\{[^}]*background-image:none/);
     expect(css).toMatch(/\.MuiButton-root:hover\{[^}]*background-image:none/);
+  });
+
+  describe("a share with odd JSON", () => {
+    const odd: SpaceBodies = {
+      qshare_file_odd_aaa111_metadata: {
+        title: { not: "text" },
+        files: [{ mimetype: 5 }, { filename: 5 }, { filename: "ok.mp3", mimetype: "audio/mpeg", name: 7, identifier: "ok_file", size: "big", service: 1 }, null, "x"],
+      },
+      qshare_file_fine_bbb222_metadata: { title: "Fine", files: [spaceFile("fine.mp3", "audio/mpeg")] },
+    };
+
+    it("doesn't stop the Edit dialog's suggestion", () => {
+      expect(suggestSpace([{ mimetype: 5, filename: 5 } as never, { filename: "a.mp3" }])).toBe(null);
+    });
+
+    it("keeps only fields of the right type", () => {
+      const share = toSpaceShare({ id: "x", user: "bob" } as Video, odd.qshare_file_odd_aaa111_metadata as unknown as Video, false);
+      expect(share.title).toBe("X");
+      expect(share.files).toEqual([
+        { filename: "", identifier: "", name: "" },
+        { filename: "", identifier: "", name: "" },
+        { filename: "ok.mp3", identifier: "ok_file", name: "", mimetype: "audio/mpeg" },
+      ]);
+    });
+
+    it.each(COLLECTION_SPACES)("doesn't stop %s", async (id) => {
+      resetSpaceTest(odd);
+      renderSpace({ space: id, bodies: odd });
+      expect(await screen.findAllByText("Fine")).not.toHaveLength(0);
+      expect(space(id)).not.toBeNull();
+      if (id === "music") expect(screen.getByRole("button", { name: "Remove Odd from collection" })).toBeInTheDocument();
+      resetSpaceTest(odd);
+    });
   });
 
   it("gives a folder the collection's space", async () => {

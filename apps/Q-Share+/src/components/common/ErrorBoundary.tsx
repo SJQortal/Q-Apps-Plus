@@ -5,6 +5,9 @@ import { EmptyState } from "./EmptyState";
 
 interface Props {
   children: ReactNode;
+  /** Draw this instead of the message, for a part of a page with something to fall back on. */
+  fallback?: ReactNode;
+  onError?: () => void;
 }
 
 interface State {
@@ -24,6 +27,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error("Q-Share+ crashed while rendering:", error, info.componentStack);
+    this.props.onError?.();
   }
 
   private reload = () => {
@@ -32,6 +36,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   render(): ReactNode {
     if (this.state.hasError) {
+      if (this.props.fallback !== undefined) return this.props.fallback;
       return (
         <Box sx={{ maxWidth: 520, mx: "auto", p: 2, pt: 6 }}>
           <EmptyState

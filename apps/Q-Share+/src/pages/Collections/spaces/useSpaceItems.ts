@@ -61,12 +61,37 @@ export interface SpaceItems {
 
 const DOCUMENT_KINDS = new Set(["pdf", "text", "document"]);
 
+/**
+ * A share's files as spaces can trust them. Bodies are other people's JSON, and
+ * one number where a filename belongs would otherwise throw while drawing the
+ * whole collection, whose page is also where the owner would remove that share.
+ */
+export function cleanFiles(raw: unknown): ShareFile[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((file): file is Record<string, unknown> => Boolean(file) && typeof file === "object")
+    .map((file) => {
+      const text = (key: string) => (typeof file[key] === "string" ? (file[key] as string) : undefined);
+      const { service: _service, mimetype: _mimetype, size: _size, ...rest } = file;
+      const service = text("service");
+      const mimetype = text("mimetype");
+      return {
+        ...rest,
+        filename: text("filename") ?? "",
+        identifier: text("identifier") ?? "",
+        name: text("name") ?? "",
+        ...(service === undefined ? {} : { service }),
+        ...(mimetype === undefined ? {} : { mimetype }),
+        ...(typeof file.size === "number" && Number.isFinite(file.size) ? { size: file.size } : {}),
+      };
+    });
+}
+
 /** A share's row and held body in the shape spaces read. Pure, for tests. */
 export function toSpaceShare(row: Video, body: Video | undefined, unavailable: boolean): SpaceShare {
   const gone = body?.isValid === false;
-  const raw = (body as { files?: unknown } | undefined)?.files;
-  const files = Array.isArray(raw) ? (raw as ShareFile[]).filter((file) => file && typeof file === "object") : [];
-  const held = body?.title ?? "";
+  const files = cleanFiles((body as { files?: unknown } | undefined)?.files);
+  const held = typeof body?.title === "string" ? body.title : "";
   // Some deletes also retitle the share "deleted".
   const title = gone && /^deleted$/i.test(held) ? "" : held;
   const thumbnail = gone ? null : shareThumbnail(body);
