@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { createTheme, getContrastRatio } from "@mui/material/styles";
+import { createTheme, decomposeColor, getContrastRatio } from "@mui/material/styles";
 import { fetchCallsMatching, mockQortalAction, qortalCallsFor } from "../../../test/setup";
+import { WORDS_SCRIM } from "./CinemaSpace";
 import { cinemaTheme } from "./cinemaTheme";
 import { cinemaQueue, entryKey, episodeName, upNext } from "./cinemaPlayer";
 import { posterNote } from "./cinemaPosters";
@@ -48,6 +49,25 @@ describe("the cinema", { timeout: 20_000 }, () => {
     // Its thumbnail is the backdrop, asked for without holding the node.
     const pictures = Array.from(document.querySelectorAll("img")).map((img) => img.getAttribute("src"));
     expect(pictures).toContain("/arbitrary/THUMBNAIL/bob/qshare_thumb_film?async=true");
+  });
+
+  it("lays a scrim under the billboard's words at every width, not only side by side", async () => {
+    renderSpace({ space: "cinema" });
+    const heading = await screen.findByRole("heading", { level: 1, name: "My space" });
+    const words = Array.from(heading.parentElement!.classList).find((name) => name.startsWith("css-"));
+    const css = Array.from(document.querySelectorAll("style")).map((style) => style.textContent).join("");
+    const outsideMedia = css.replace(/@media[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, "");
+    expect(outsideMedia).toMatch(new RegExp(`\\.${words}::before\\{[^}]*z-index:-1`));
+  });
+
+  it.each(["light", "dark"] as const)("keeps the words at 4.5:1 over a white picture on a %s app theme", (mode) => {
+    const { palette } = cinemaTheme(createTheme({ palette: { mode } }));
+    const over = (top: string, under: number[], opacity = decomposeColor(top).values[3] ?? 1) =>
+      decomposeColor(top).values.slice(0, 3).map((value, channel) => value * opacity + under[channel] * (1 - opacity));
+    const stage = over(palette.background.default, [255, 255, 255], WORDS_SCRIM);
+    const css = (channels: number[]) => `rgb(${channels.map(Math.round).join(", ")})`;
+    expect(getContrastRatio(css(over(palette.text.secondary, stage)), css(stage))).toBeGreaterThanOrEqual(4.5);
+    expect(getContrastRatio(palette.text.primary, css(stage))).toBeGreaterThanOrEqual(4.5);
   });
 
   it("asks for no file until someone taps Play", async () => {

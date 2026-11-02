@@ -18,6 +18,8 @@ const LANDSCAPE_PHONE = "@media (pointer: coarse) and (max-height: 500px)";
 const SIDE_BY_SIDE = "@media (min-width: 900px), (pointer: coarse) and (max-height: 500px)";
 /** At most this much of the billboard holds words: the rest of the picture stays clear. */
 const WORDS_WIDTH = "min(600px, 56%)";
+/** How much of the stage's colour lies between the billboard's words and the picture. */
+export const WORDS_SCRIM = 0.86;
 
 interface BillboardProps {
   props: SpaceProps;
@@ -102,6 +104,16 @@ function Billboard({ props, featured, onPlay }: BillboardProps) {
           mt: url ? -5 : -2,
           pb: { xs: 2, md: 3 },
           // The scrim is on the words' own box, so it covers them however many lines they take.
+          // Under the picture only its last stretch needs it: it fades in just above the words.
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            zIndex: -1,
+            inset: "-32px 0 0",
+            background: alpha(theme.palette.background.default, WORDS_SCRIM),
+            maskImage: "linear-gradient(to bottom, transparent, black 32px)",
+            pointerEvents: "none",
+          },
           [SIDE_BY_SIDE]: {
             mt: 0,
             pt: 4,
@@ -109,14 +121,9 @@ function Billboard({ props, featured, onPlay }: BillboardProps) {
             boxSizing: "content-box",
             maxWidth: "calc(100% - 64px)",
             "&::before": {
-              content: '""',
-              position: "absolute",
-              zIndex: -1,
               inset: "-160px -40% -48px 0",
-              background: alpha(theme.palette.background.default, 0.86),
               maskImage: "linear-gradient(to right, black 62%, transparent), linear-gradient(to bottom, transparent, black 160px, black calc(100% - 48px), transparent)",
               maskComposite: "intersect",
-              pointerEvents: "none",
             },
           },
           [LANDSCAPE_PHONE]: { pt: 2, pb: 1 },
