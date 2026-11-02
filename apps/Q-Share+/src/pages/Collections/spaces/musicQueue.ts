@@ -19,7 +19,7 @@ export function buildQueue(shares: SpaceShare[]): { tracks: Track[]; indexOf: Ma
       const key = trackKey(track);
       if (indexOf.has(key)) continue;
       indexOf.set(key, tracks.length);
-      tracks.push(track);
+      tracks.push({ ...track, from: { name: share.user, identifier: share.identifier, title: share.title } });
     }
   }
   return { tracks, indexOf };

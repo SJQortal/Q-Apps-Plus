@@ -8,6 +8,8 @@ export interface Track {
   filename: string;
   mimetype?: string;
   size?: number;
+  /** The share it comes from, when a queue mixes shares; otherwise it is the queue's own share. */
+  from?: { name: string; identifier: string; title: string };
 }
 
 /** The share a playlist comes from. */

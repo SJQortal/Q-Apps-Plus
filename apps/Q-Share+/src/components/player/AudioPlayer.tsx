@@ -107,9 +107,9 @@ function usePlaylist() {
   const player = useSelector((state: RootState) => state.player);
   const track = currentTrack(player);
   const upcoming = upcomingTrack(player);
-  const jsonId = player.share?.identifier;
-  const node = useFileOnNode(track ?? EMPTY_TRACK, jsonId);
-  const nextNode = useFileOnNode(upcoming ?? EMPTY_TRACK, jsonId);
+  // The downloads list links each file back to its own share, which in a collection's queue isn't the queue's.
+  const node = useFileOnNode(track ?? EMPTY_TRACK, (track?.from ?? player.share)?.identifier);
+  const nextNode = useFileOnNode(upcoming ?? EMPTY_TRACK, (upcoming?.from ?? player.share)?.identifier);
   const { ensure } = node;
   const ensureNext = nextNode.ensure;
   const [time, setTime] = useState({ current: 0, duration: Number.NaN });
@@ -274,8 +274,8 @@ function usePlaylist() {
       if (typeof MediaMetadata === "function") {
         session.metadata = new MediaMetadata({
           title: trackTitle(track),
-          artist: player.share?.name ?? "",
-          album: player.share?.title ?? "",
+          artist: (track.from ?? player.share)?.name ?? "",
+          album: (track.from ?? player.share)?.title ?? "",
         });
       }
       session.setActionHandler("play", () => dispatch(setPlaying(true)));

@@ -3,7 +3,7 @@ import { act, configure, fireEvent, screen, waitFor } from "@testing-library/rea
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { mockQortalAction, qortalCallsFor } from "../../test/setup";
 import { store } from "../../state/store";
-import { closePlayer, playQueue } from "../../state/features/playerSlice";
+import { closePlayer, nextTrack, playQueue } from "../../state/features/playerSlice";
 import { removeDownload, updateDownloads } from "../../state/features/globalSlice";
 import { AudioPlayer, SKIP_AFTER_MS, STUCK_SKIP_MS, formatTime, trackTitle } from "./AudioPlayer";
 import { playerAudio, resetPlayerAudio, unlockAudio } from "./audioElement";
@@ -65,6 +65,37 @@ describe("AudioPlayer", () => {
     expect(formatTime(187.9)).toBe("3:07");
     expect(formatTime(3723)).toBe("1:02:03");
     expect(formatTime(Number.NaN)).toBe("–:––");
+  });
+
+  it("files each track of a mixed queue under its own share, for the downloads list and the lock screen", async () => {
+    const metadata = vi.fn();
+    vi.stubGlobal("MediaMetadata", function (this: object, init: object) {
+      metadata(init);
+    });
+    Object.defineProperty(navigator, "mediaSession", { configurable: true, value: { setActionHandler: vi.fn(), playbackState: "none" } });
+    mockNode([]);
+    const mixed = [
+      { ...tracks[0], name: "alice", from: { name: "alice", identifier: "share_a", title: "A" } },
+      { ...tracks[1], name: "bob", from: { name: "bob", identifier: "share_b", title: "B" } },
+    ];
+    renderWithProviders(
+      <DownloadWrapper>
+        <AudioPlayer />
+      </DownloadWrapper>
+    );
+    act(() => {
+      store.dispatch(playQueue({ tracks: mixed, share: { name: "alice", identifier: "share_a", title: "Mix", path: "/collection/x/y" }, start: 0 }));
+    });
+    await waitFor(() => expect(store.getState().global.downloads[tracks[0].identifier]?.properties?.jsonId).toBe("share_a"));
+    expect(metadata).toHaveBeenLastCalledWith(expect.objectContaining({ artist: "alice", album: "A" }));
+
+    act(() => {
+      store.dispatch(nextTrack({}));
+    });
+    await waitFor(() => expect(store.getState().global.downloads[tracks[1].identifier]?.properties?.jsonId).toBe("share_b"));
+    expect(metadata).toHaveBeenLastCalledWith(expect.objectContaining({ artist: "bob", album: "B" }));
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(navigator, "mediaSession");
   });
 
   it("shows nothing until a playlist starts", () => {

@@ -250,6 +250,14 @@ describe("music space helpers", () => {
     expect(indexOf.size).toBe(1);
   });
 
+  it("buildQueue tells each track which share it is from", () => {
+    const { tracks } = buildQueue([row("a"), row("b")]);
+    expect(tracks.map((track) => track.from)).toEqual([
+      { name: "bob", identifier: "id_a", title: "a" },
+      { name: "bob", identifier: "id_b", title: "b" },
+    ]);
+  });
+
   it("queueOwner is the first share that has audio", () => {
     const silent = { ...row("a"), audio: [] };
     expect(queueOwner([silent, row("b")], "T")).toEqual({ name: "bob", identifier: "id_b", title: "T" });
