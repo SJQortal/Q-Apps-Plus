@@ -32,8 +32,9 @@ Changes since the published 1.0.0:
 - **Compact file rows:** one line where there is room, Download next to Play; on phones the two buttons share a line.
 - **Cover art:** audio rows show the art inside the track (ID3v2, M4A `covr`, FLAC PICTURE) when the node holds it, read by Range, else the share's thumbnail. Audio-only shares get their automatic thumbnail from the first track's art. The top of a share page shows its picture at 112 px (72 on phones).
 - **Collections on share pages:** a share in one of your collections shows it with its cover, counts and folder, with Add cover or Change cover through the collection's Edit.
+- **Collection spaces:** a collection can choose the look it opens in, in its Edit dialog, and its folders take the same one. **Music** plays like a streaming app: a colour wash, album sleeves, track rows, Play and Shuffle, and the whole collection as one queue in the player bar. **Cinema** is a dark room: a billboard with Now showing, rows of posters, series with their episodes, and a player with Up next. **Library** is a reading room: books with cloth and foil covers on shelves, a book panel and a catalogue view. **Album** is a photo album: a large title picture, chapters per share, a justified wall of pictures and a full-screen viewer. Each space's code loads only when one is opened, and nothing is fetched from peers until you tap it. Stored as an optional `space` field on the collection (additive); a collection without one looks as before, copies keep it, and an unknown value shows the standard page.
 - Card images only ever read FILE resources, and status URLs refuse anything that isn't a Core service name (a crafted share could otherwise point a viewer's browser at another path on their node).
-- 700 tests; lint clean.
+- 853 tests; lint clean.
 
 ## 1.0.0 (2026-09-30)
 

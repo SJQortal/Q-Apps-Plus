@@ -32,6 +32,7 @@ export const CHANGELOG: Release[] = [
       "File rows are compact, with Download next to Play.",
       "Audio shows the cover art inside its files, and a share of audio gets its thumbnail from it.",
       "A share in one of your collections shows that collection and its cover on its page, with Add or Change cover.",
+      "A collection can choose a space, the look it and its folders open in: Music, Cinema, Library or Album.",
       "Opening a menu, a list or a dialog no longer moves the page sideways or hides the header.",
       "A bell at the top tells you when someone comments on your shares, replies to your comments, adds your share to a collection or copies one of your collections.",
       "Turn on Hub alerts in Settings → Notifications, and Qortal Hub tells you about new comments even while Q-Share+ is closed.",

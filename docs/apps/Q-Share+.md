@@ -4,7 +4,7 @@ Share files and documents on QDN, with categories, comments and lists.
 
 **Published:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
 
-**Version on the branch:** `1.0.1`, not published yet: notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists; of 2026-10-18: collections as a grid, share thumbnails, and copies of other people's collections; and of 2026-10-21: Explore collections (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
+**Version on the branch:** `1.0.1`, not published yet: notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists; of 2026-10-18: collections as a grid, share thumbnails, and copies of other people's collections; of 2026-10-21: Explore collections; and of 2026-11-01: Remove from QDN, compact rows, cover art, and collection spaces (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
 
 ## Baseline at import
 
@@ -59,7 +59,7 @@ Read in full on 2026-09-29 (12.2k lines). Line numbers are from the branch after
 | localStorage | `qshareplus-settings` (new), synced by Settings → Save | R/W | since 1.0.1 also `collectionView: "grid" \| "list"` (collections and folders; a grid unless set) | utils/settings.ts, utils/settingsQdn.ts |
 | localStorage | `qshareplus-notifications-<address>`, `qshareplus-hub-alerts-<address>` (new in 1.0.1) | R/W | the notification list (≤100), read state, what was already seen, the last check; whether Hub alerts are on and which rules Hub has | utils/notifications |
 | Hub notification rules (new in 1.0.1, kept by Hub, not on QDN) | `qshare-c-<share key>`, `qshare-r-<last 6 of a comment>` | W (NOTIFICATION_ADD / REMOVE / MARK_SEEN) | BLOG_COMMENT filters: identifier `qcomment_v1_qshare_<key>_` as a prefix; identifier containing `_reply_<last 6>_` | utils/notifications/hubAlerts.ts |
-| DOCUMENT (new in Q-Share+) | `qshare_collection_<slug≤30>_<uid6>` | R/W | JSON `{ version: 1, title, description, items: [{ name, identifier }], created, updated }`, `tag1: "qshare_collection_"`, `filename: "collection.json"`. Since 1.0.1 the QDN metadata `description` is the collection's description (≤150) followed by up to four recipient markers `~qsn-<last 12 characters of the owner's address>~` for the owners of its newest shares (newly added first, never the publisher); the JSON body never carries them, and the app strips them wherever it shows a description. Since 1.0.1 the JSON may also hold `cover: { service: "THUMBNAIL", name, identifier }` and `folders: [{ id (6 chars, unique in the collection), title (≤50), description (≤150), cover?, items: [{ name, identifier }], folders: [...] }]`, at most 5 deep and 200 folders in all, and `copiedFrom: { name, identifier, title }` on a copy of someone else's collection (its owner's name then leads the recipient markers, so they hear of the copy), and `deleted: true` on a collection deleted with Delete (republished with no shares, folders or cover, title kept; any later edit drops it, and only an empty collection with it counts as deleted); all four are left out when unused, so a collection without them is stored exactly as in 1.0.0, and fields the app doesn't know are written back unchanged. Shares inside folders count for markers and notifications. The original app never reads collections. | utils/collections.ts, utils/collectionFolders.ts, utils/recipientMarker.ts |
+| DOCUMENT (new in Q-Share+) | `qshare_collection_<slug≤30>_<uid6>` | R/W | JSON `{ version: 1, title, description, items: [{ name, identifier }], created, updated }`, `tag1: "qshare_collection_"`, `filename: "collection.json"`. Since 1.0.1 the QDN metadata `description` is the collection's description (≤150) followed by up to four recipient markers `~qsn-<last 12 characters of the owner's address>~` for the owners of its newest shares (newly added first, never the publisher); the JSON body never carries them, and the app strips them wherever it shows a description. Since 1.0.1 the JSON may also hold `cover: { service: "THUMBNAIL", name, identifier }` and `folders: [{ id (6 chars, unique in the collection), title (≤50), description (≤150), cover?, items: [{ name, identifier }], folders: [...] }]`, at most 5 deep and 200 folders in all, and `copiedFrom: { name, identifier, title }` on a copy of someone else's collection (its owner's name then leads the recipient markers, so they hear of the copy), and `deleted: true` on a collection deleted with Delete (republished with no shares, folders or cover, title kept; any later edit drops it, and only an empty collection with it counts as deleted); all four are left out when unused, so a collection without them is stored exactly as in 1.0.0, and fields the app doesn't know are written back unchanged. Since 1.0.1 the JSON may also hold `space: "music" | "cinema" | "library" | "album"` on the collection root only, so folders inherit it; left out it is the standard page, copies keep it, and an unknown value is written back unchanged and shown as the standard page. Shares inside folders count for markers and notifications. The original app never reads collections. | utils/collections.ts, utils/collectionFolders.ts, utils/recipientMarker.ts |
 | THUMBNAIL (new in 1.0.1) | `qshare_thumb_<slug≤30>_<uid>` (a new identifier per image) | W (R via `/arbitrary/THUMBNAIL/<name>/<id>`) | a share's thumbnail, WebP or JPEG, fitted within 640 px and ≤200 KB, made on the device from an image (or a video frame at 1 s) or a picked picture; `filename: "thumbnail.webp"` (or `.jpg`), `title` and `description` as the share's, `tag1: "qshare_thumb_"`; published in the same PUBLISH_MULTIPLE request as the share details that name it, before them. Never searched. | utils/publishPayload.ts, utils/thumbnailImage.ts |
 | THUMBNAIL (new in 1.0.1) | `qshare_cover_<uid8>` (a new identifier per image) | W (R via `/arbitrary/THUMBNAIL/<name>/<id>`) | a square cover image, WebP or JPEG, ≤600 px and ≤450 KB, under the collection's name; `filename: "cover.webp"` (or `.jpg`), `title` = the collection's title, `tag1: "qshare_cover_"`; published in the same PUBLISH_MULTIPLE request as the collection that names it. Never searched. | utils/collections.ts, utils/coverImage.ts |
 
@@ -469,6 +469,35 @@ Measured in Brave (Playwright pointed at a wrapper that drops `--hide-scrollbars
 
 After the fix the scrollbar is hidden while the menu is open and body padded by its 16 px, as MUI intends. Every screen in Hub 3.0 at all five sizes, with Brave (106 captures, 44 of them at 360×740 and 390×844): 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations. (This branch's `scripts/screens.mjs` has no `--sizes` yet; it is on `q-mintership-plus/1.0.3`, so the run took all five sizes.)
 
+### Collection spaces (1.0.1, 2026-11-01)
+
+Simon asked for collections that feel like dedicated places, with a look to choose that applies to subfolders too. The collection's Edit dialog has a picker (`SpacePicker.tsx`), with a suggestion from the share bodies already held (60% of files of one kind; it never fetches). `CollectionPage` lazy-loads `spaces/SpaceView.tsx`, which loads one chunk per space, so a standard collection loads none of this. An error boundary falls back to the standard page.
+
+- **Music** (`MusicSpace.tsx`): full-width colour wash from the cover, album sleeves for folders, track rows with artist lines, Play and Shuffle, the whole collection as one queue in the player bar.
+- **Cinema** (`CinemaSpace.tsx`): always dark. Billboard with Now showing, poster rows, series with episode badges, title cards for shares with no picture, a player with Up next. No autoplay, because each fetch must be a tap.
+- **Library** (`LibrarySpace.tsx`): serif reading room, cloth and foil covers made from the title, shelves, folders as little shelves, a book panel, a catalogue view, empty places for deleted books.
+- **Album** (`AlbumSpace.tsx`): title picture, one chapter per share, a justified wall with print mounts for pictures not on the node, a full-screen viewer that fetches only the picture on screen and stops that fetch's polling when it leaves.
+
+Added JS, gzip, loaded only when a space opens: frame 1.8 kB, Music 8.2 kB, Cinema 8.7 kB, Library 7.7 kB, Album 9.1 kB.
+
+Calls at 390x844 in the screenshot harness (mock data, not a real node; share bodies are one fetch each):
+
+| Screen | Searches | Hub calls | of which FETCH_QDN_RESOURCE |
+|---|---|---|---|
+| Standard collection | 1 | 7 | 3 |
+| Music, 6 shares | 0 | 10 | 6 |
+| Cinema, 7 shares | 0 | 12 | 8 |
+| Library, 9 shares | 0 | 14 | 10 |
+| Album, 13 shares | 0 | 18 | 14 |
+
+A space asks for share bodies 20 at a time with Show more, through the same queue as the standard page, so the counts differ only by fixture size.
+
+**Screenshot check**, after every fix: 18 screens (all `space-*`, `collection`, `collections`, `explore`) x 5 sizes x hub30, hub20, white = 270 captures, in Hub's dark mode: 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations, no small targets at the three phone sizes. The Black theme and Hub's light mode were not in this run. Desktop and 700 px sizes still report small targets, up to 85 on `explore` and 55 on `space-music`; they were not examined.
+
+**Review:** six dimensions, 14 findings each checked by two agents trying to refute them, 8 confirmed and fixed, one commit each (`6fdbedc9`, `b4bba909`, `3dd3e9d1`, `b4b2bcc2`, `18fba5c4`, `6cc7be3a`, `bcbdba3f`, `c877299f`): queue tracks filed under the wrong share, a collection queue taken for a share's own playlist, a stale queue, an unstoppable viewer poll, unreadable Copy on Hub 3.0, billboard words on bright pictures, poster labels, and crafted share JSON that could break a space. 853 tests; lint, build and theme check pass.
+
+**Not checked in Hub or on a phone:** everything here ran in tests and the harness with gradient fixtures. Real covers, film stills and playback in a space are unseen. Publishing a `space` hasn't been run.
+
 ### Simon's requests from Hub: remove, compact rows, cover art, collection covers (1.0.1, 2026-11-01)
 
 From Simon's screenshots of two album shares.
@@ -529,7 +558,16 @@ Questions from Simon's Hub round (2026-11-01):
 30. **Per-track covers:** tracks show their art only on nodes that hold them; others see the share's thumbnail. Publishing each distinct cover as its own THUMBNAIL would show them everywhere, at 0.01 QORT per distinct cover. Worth it?
 31. **Opened from someone else's collection:** the share page shows only your collections. Show the collection you came from as well?
 
+Questions from collection spaces (2026-11-01):
+
+32. **Hub check of the spaces:** quit the normal Hub and unlock Tester Hub, and it can be run read-only on your own collections, except that a collection only opens in a space once `space` is published (1 publish, 0.01 QORT, on a test collection, for your OK).
+33. **Music has no track lengths:** Size stands where Spotify has time, because a length needs the file and nothing is fetched without a tap. Keep it?
+34. **Cinema's player uses the browser's video controls.** A custom control bar would suit the room better. Worth a round?
+35. **Album, mostly unloaded pictures:** a page of pictures the node lacks is a long run of empty mounts, each a tap. Add "Load all in this section" (fetches many at once)?
+
 Next pass ideas:
+
+- Spaces, small things the polish passes left: dates in the album hero (`CollectionPage` drops `created` from its rows), the Library's plain search bar and phone sheet, a serif font bundled for the Library, the folder page's repeated back link and breadcrumb, the red Delete in Album under Hub 2.0.
 
 - The cover in the player bar and in Media Session (the lock screen).
 
