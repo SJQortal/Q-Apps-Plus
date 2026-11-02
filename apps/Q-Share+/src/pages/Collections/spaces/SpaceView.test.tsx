@@ -28,6 +28,14 @@ describe("collection spaces", { timeout: 20_000 }, () => {
     expect(space(id)).not.toBeNull();
   });
 
+  it.each(["music", "library"])("takes Hub 3.0's painted fill off the quiet buttons in %s", async (id) => {
+    renderSpace({ space: id });
+    await screen.findByRole("button", { name: "Edit" });
+    const css = Array.from(document.querySelectorAll("style")).map((style) => style.textContent).join("");
+    expect(css).toMatch(/\.MuiButton-root\{[^}]*background-image:none/);
+    expect(css).toMatch(/\.MuiButton-root:hover\{[^}]*background-image:none/);
+  });
+
   it("gives a folder the collection's space", async () => {
     renderSpace({ space: "album", folderId: SPACE_FOLDER_ID, folders: [spaceFolder({ description: "On stage" })] });
     expect(await screen.findByRole("heading", { level: 1, name: "Live" })).toBeInTheDocument();

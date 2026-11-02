@@ -630,10 +630,10 @@ function SectionHead({ id, title, note, look }: { id: string; title: string; not
   );
 }
 
-/** The collection's buttons, in the room's ink; Delete keeps quiet until it's pointed at. */
+/** The collection's buttons, in the room's ink; Delete keeps quiet until it's pointed at. Hub 3.0 paints its main button with an image. */
 const quietActions = (look: LibraryLook) => ({
-  "& .MuiButton-root": { bgcolor: "transparent", color: look.ink, borderColor: alpha(look.rule, 0.7), boxShadow: "none" },
-  "& .MuiButton-root:hover": { bgcolor: alpha(look.board, 0.2), borderColor: look.rule, boxShadow: "none" },
+  "& .MuiButton-root": { bgcolor: "transparent", backgroundImage: "none", color: look.ink, borderColor: alpha(look.rule, 0.7), boxShadow: "none" },
+  "& .MuiButton-root:hover": { bgcolor: alpha(look.board, 0.2), backgroundImage: "none", borderColor: look.rule, boxShadow: "none" },
   "& .MuiButton-colorError": { color: look.quiet, borderColor: "transparent" },
   "& .MuiButton-colorError:hover": { bgcolor: "transparent", color: "error.main", borderColor: "transparent" },
 });

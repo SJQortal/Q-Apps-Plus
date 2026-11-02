@@ -160,10 +160,10 @@ const roundPlay = (size: number) =>
     "@media (prefers-reduced-motion: reduce)": { transition: "none", "&:hover": { bgcolor: "primary.dark", transform: "none" } },
   }) as const;
 
-/** Edit, New folder and Delete stay out of Play's way: quiet until pointed at. */
+/** Edit, New folder and Delete stay out of Play's way: quiet until pointed at. Hub 3.0 paints its main button with an image. */
 const quietActions = {
-  "& .MuiButton-root": { bgcolor: "transparent", color: "text.secondary", borderColor: "transparent", boxShadow: "none" },
-  "& .MuiButton-root:hover": { bgcolor: "action.hover", color: "text.primary" },
+  "& .MuiButton-root": { bgcolor: "transparent", backgroundImage: "none", color: "text.secondary", borderColor: "transparent", boxShadow: "none" },
+  "& .MuiButton-root:hover": { bgcolor: "action.hover", backgroundImage: "none", color: "text.primary", boxShadow: "none" },
   "& .MuiButton-colorError:hover": { color: "error.main" },
 } as const;
 
