@@ -8,6 +8,8 @@ import { QDN_PAGE } from "../../../utils/qdnSearch";
 import { SPACE_COLLECTION_ID, SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, type SpaceBodies } from "./testUtils";
 import { bookCloth, bookFormats, filterBooks, formatBadge, libraryLook, sortBooks } from "./libraryShelf";
 import { toSpaceShare, type SpaceShare } from "./useSpaceItems";
+import { store } from "../../../state/store";
+import { removeDownload, setAddToDownloads } from "../../../state/features/globalSlice";
 import type { Video } from "../../../state/features/fileSlice";
 
 configure({ asyncUtilTimeout: 5_000 });
@@ -64,6 +66,18 @@ describe("LibrarySpace", { timeout: 20_000 }, () => {
 
     fireEvent.click(panel.getByRole("button", { name: "Open share" }));
     expect(await screen.findByText("Share page")).toBeInTheDocument();
+  });
+
+  it("gives a file being fetched a line of its own, so its progress never runs under Open PDF", async () => {
+    renderSpace({ space: "library", bodies: BODIES });
+    const panel = within(await openBook(/^Zeta guide by bob/));
+    const open = panel.getByRole("button", { name: /Open PDF/ });
+    expect(panel.getByRole("button", { name: "Download zeta.pdf" }).closest(".book-file-fetching")).toBeNull();
+    store.dispatch(setAddToDownloads({ identifier: "file_zeta", name: "bob", service: "FILE", status: { status: "DOWNLOADING", percentLoaded: 0 } }));
+    const progress = await panel.findByRole("progressbar", { name: "zeta.pdf download progress" });
+    expect(progress.closest(".book-file-fetching")).not.toBeNull();
+    expect(progress.closest(".book-file-fetching")?.contains(open)).toBe(false);
+    store.dispatch(removeDownload("file_zeta"));
   });
 
   it("goes to the publisher from the panel, and closes", async () => {

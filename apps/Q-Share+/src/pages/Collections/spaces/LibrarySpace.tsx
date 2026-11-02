@@ -16,6 +16,7 @@ import {
   useTheme,
 } from "@mui/material";
 import { alpha, lighten, type Theme } from "@mui/material/styles";
+import { useSelector } from "react-redux";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -28,6 +29,7 @@ import { ShareCardArt } from "../../../components/common/ShareArt";
 import { BottomSheet } from "../../../components/common/mobile/BottomSheet";
 import { DisplayHtml } from "../../../components/common/TextEditor/DisplayHtml";
 import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
+import type { RootState } from "../../../state/store";
 import { formatBytes } from "../../../utils/formatBytes";
 import type { CollectionFolder } from "../../../utils/collections";
 import type { ShareFile } from "../../FileContent/FileRow";
@@ -365,6 +367,11 @@ const CatalogueRow = memo(
 function BookFile({ file, jsonId, look }: { file: ShareFile; jsonId: string; look: LibraryLook }) {
   const [open, setOpen] = useState(false);
   const preview = previewKind(file);
+  // While the node fetches the file, its progress and words take the whole line, under nothing.
+  const fetching = useSelector((state: RootState) => {
+    const download = state.global?.downloads?.[file.identifier];
+    return Boolean(download) && download?.status?.status !== "READY";
+  });
   return (
     <Box component="li" sx={{ listStyle: "none", py: 1.25, borderTop: `1px solid ${alpha(look.rule, 0.5)}`, minWidth: 0 }}>
       <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, minWidth: 0 }}>
@@ -395,8 +402,8 @@ function BookFile({ file, jsonId, look }: { file: ShareFile; jsonId: string; loo
           </Typography>
         </Box>
       </Box>
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1, "& > *": { flex: "1 1 120px", minWidth: 0 } }}>
-        <Box sx={{ display: "flex", minWidth: 0 }}>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1, "& > *": { flex: "1 1 120px", minWidth: 0 }, "& > .book-file-fetching": { flexBasis: "100%" } }}>
+        <Box className={fetching ? "book-file-fetching" : undefined} sx={{ display: "flex", minWidth: 0 }}>
           <FileElement
             fileInfo={{
               name: file.name,
