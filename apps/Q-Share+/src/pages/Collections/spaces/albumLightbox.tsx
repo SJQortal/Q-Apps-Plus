@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
-import { useDispatch } from "react-redux";
+import { useCallback, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
+import { useDispatch, useStore } from "react-redux";
 import { Box, Button, CircularProgress, Dialog, IconButton, LinearProgress, Tooltip, Typography, useMediaQuery } from "@mui/material";
 import { alpha, useTheme, type Theme } from "@mui/material/styles";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
@@ -14,7 +14,9 @@ import { useFileOnNode } from "../../../hooks/useFileOnNode";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { QDN_IMAGE_RETRY_MS, useQdnImage } from "../../../hooks/useQdnImage";
 import { setNotification } from "../../../state/features/notificationsSlice";
+import type { RootState } from "../../../state/store";
 import { isHubDecline } from "../../../utils/hubErrors";
+import { MyContext, isFailedStatus } from "../../../wrappers/DownloadWrapper";
 import type { AlbumPhoto } from "./albumModel";
 import type { SpaceItems, SpaceShare } from "./useSpaceItems";
 
@@ -24,7 +26,9 @@ const visuallyHidden = { position: "absolute", width: "1px", height: "1px", marg
 const SWIPE_PX = 60;
 /**
  * Stepping to a picture asks for it only if it stays on screen this long, so
- * flicking through a share doesn't start a fetch for each picture passed.
+ * flicking through a share doesn't start a fetch for each picture passed. A
+ * fetch the viewer started stops when its picture leaves the screen, so at
+ * most one runs however many pictures are looked at.
  */
 export const STEP_SETTLE_MS = 350;
 
@@ -53,18 +57,42 @@ function LightboxPhoto({ photo, settle, onShown, onOpenShare, onOpenProfile }: {
   const node = useFileOnNode(file, share.identifier);
   const { ensure } = node;
   const asked = useRef(false);
+  const store = useStore<RootState>();
+  const { cancelDownload } = useContext(MyContext);
+  const { identifier } = file;
+  // The fetch running is this viewer's, not one the file's Download started.
+  const ours = useRef(false);
+  const left = useRef(false);
   const [misses, setMisses] = useState(0);
   const [drawn, setDrawn] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const fetchHere = useCallback(async () => {
+    const entry = () => store.getState().global?.downloads?.[identifier];
+    const before = entry();
+    await ensure();
+    const after = entry();
+    if (after && after !== before && (!before || isFailedStatus(before.status?.status))) ours.current = true;
+    // The status answer came after the viewer moved on.
+    if (left.current && ours.current) cancelDownload(identifier);
+  }, [ensure, store, identifier, cancelDownload]);
+
+  useEffect(() => {
+    left.current = false;
+    return () => {
+      left.current = true;
+      if (ours.current) cancelDownload(identifier);
+    };
+  }, [cancelDownload, identifier]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       if (asked.current) return;
       asked.current = true;
-      void ensure();
+      void fetchHere();
     }, settle);
     return () => clearTimeout(timer);
-  }, [ensure, settle]);
+  }, [fetchHere, settle]);
 
   const ready = node.state === "ready";
   const full = useQdnImage(ready ? fileUrl(file) : null);
@@ -133,7 +161,7 @@ function LightboxPhoto({ photo, settle, onShown, onOpenShare, onOpenProfile }: {
                   {gaveUp ? "Couldn't show this photo. Download it instead." : node.statusText}
                 </Typography>
                 {failed ? (
-                  <Button startIcon={<RefreshOutlinedIcon />} onClick={() => void ensure()} sx={lightButton}>
+                  <Button startIcon={<RefreshOutlinedIcon />} onClick={() => void fetchHere()} sx={lightButton}>
                     Try again
                   </Button>
                 ) : null}

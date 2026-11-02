@@ -7,9 +7,10 @@ import { renderWithProviders } from "../../../test/renderWithProviders";
 import { store } from "../../../state/store";
 import { removeDownload, setAddToDownloads, updateDownloads } from "../../../state/features/globalSlice";
 import { resetSettingsCache, writeSettings } from "../../../utils/settings";
-import { MyContext } from "../../../wrappers/DownloadWrapper";
+import DownloadWrapper, { MyContext } from "../../../wrappers/DownloadWrapper";
 import type { Video } from "../../../state/features/fileSlice";
 import AlbumSpace from "./AlbumSpace";
+import { AlbumLightbox } from "./albumLightbox";
 import { albumDates, albumLayout, heroSummary } from "./albumModel";
 import { SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, type SpaceBodies } from "./testUtils";
 import type { SpaceProps } from "./types";
@@ -351,7 +352,7 @@ describe("album viewer past the page", () => {
       const showMore = useCallback(() => setMore(true), []);
       const page1: SpaceItems = { shares: page2.shares.slice(0, 1), total: 2, pending: 0, hasMore: true, showMore };
       return (
-        <MyContext.Provider value={{ downloadVideo: vi.fn(), retryDownload: vi.fn() }}>
+        <MyContext.Provider value={{ downloadVideo: vi.fn(), retryDownload: vi.fn(), cancelDownload: vi.fn() }}>
           <AlbumSpace {...props(more ? page2 : page1)} />
         </MyContext.Provider>
       );
@@ -363,6 +364,81 @@ describe("album viewer past the page", () => {
     expect(within(viewer).getByText("1 of 1+")).toBeInTheDocument();
     fireEvent.click(within(viewer).getByRole("button", { name: "Next photo" }));
     expect(await within(viewer).findByText("2 of 2")).toBeInTheDocument();
+  });
+});
+
+describe("the viewer's fetches", { timeout: 20_000 }, () => {
+  const photoShare = (id: string, ...names: string[]) =>
+    toSpaceShare(
+      { id, user: "bob" } as Video,
+      { id, user: "bob", title: id, files: names.map((name) => spaceFile(name, "image/jpeg", name)) } as unknown as Video,
+      false
+    );
+  const openViewer = (...shares: ReturnType<typeof photoShare>[]) => {
+    const { photos } = albumLayout(shares);
+    return renderWithProviders(
+      <DownloadWrapper>
+        <AlbumLightbox
+          photos={photos}
+          startKey={photos[0].key}
+          items={{ hasMore: false, pending: 0, showMore: vi.fn(), shares }}
+          onClose={vi.fn()}
+          onShown={vi.fn()}
+          openShare={vi.fn()}
+          openProfile={vi.fn()}
+        />
+      </DownloadWrapper>
+    );
+  };
+  const held = (identifier: string) => store.getState().global.downloads[identifier];
+  const names = ["v1.jpg", "v2.jpg", "v3.jpg"];
+
+  beforeEach(() => {
+    for (const name of names) store.dispatch(removeDownload(name));
+    mockQortalAction("GET_QDN_RESOURCE_PROPERTIES", {});
+  });
+
+  it("fetches only the picture on screen, and stops when it steps away or closes", async () => {
+    mockQortalAction("GET_QDN_RESOURCE_STATUS", { status: "MISSING_DATA", percentLoaded: 0 });
+    const { unmount } = openViewer(photoShare("v", ...names));
+    await waitFor(() => expect(held("v1.jpg")).toBeDefined());
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    expect(held("v1.jpg")).toBeUndefined();
+    await waitFor(() => expect(held("v2.jpg")).toBeDefined());
+    unmount();
+    expect(held("v2.jpg")).toBeUndefined();
+    expect(held("v3.jpg")).toBeUndefined();
+  });
+
+  it("stops a fetch whose status answer came after the picture left", async () => {
+    let answer: (value: unknown) => void = () => {};
+    mockQortalAction("GET_QDN_RESOURCE_STATUS", () => new Promise((resolve) => (answer = resolve)));
+    const { unmount } = openViewer(photoShare("v", ...names));
+    await waitFor(() => expect(qortalCallsFor("GET_QDN_RESOURCE_STATUS")).toHaveLength(1));
+    unmount();
+    await act(async () => {
+      answer({ status: "MISSING_DATA", percentLoaded: 0 });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(held("v1.jpg")).toBeUndefined();
+  });
+
+  it("leaves alone a download someone asked for, and a file that arrived", async () => {
+    store.dispatch(setAddToDownloads({ name: "bob", service: "FILE", identifier: "v1.jpg", properties: {} }));
+    store.dispatch(updateDownloads({ identifier: "v1.jpg", status: { status: "DOWNLOADING", percentLoaded: 40 } }));
+    mockQortalAction("GET_QDN_RESOURCE_STATUS", { status: "MISSING_DATA", percentLoaded: 0 });
+    const first = openViewer(photoShare("v", "v1.jpg"));
+    await screen.findByRole("progressbar", { name: "v1.jpg loading progress" });
+    first.unmount();
+    expect(held("v1.jpg")).toBeDefined();
+
+    const second = openViewer(photoShare("v", "v2.jpg"));
+    await waitFor(() => expect(held("v2.jpg")).toBeDefined());
+    act(() => {
+      store.dispatch(updateDownloads({ identifier: "v2.jpg", status: { status: "READY", percentLoaded: 100 } }));
+    });
+    second.unmount();
+    expect(held("v2.jpg")?.status?.status).toBe("READY");
   });
 });
 
