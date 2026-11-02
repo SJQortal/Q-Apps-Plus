@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
-import { Box, IconButton, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Box, IconButton, ListItemIcon, Menu, MenuItem, Tooltip, Typography, useMediaQuery, useTheme } from "@mui/material";
 import { alpha, styled } from "@mui/material/styles";
 import PauseRoundedIcon from "@mui/icons-material/PauseRounded";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import ShuffleRoundedIcon from "@mui/icons-material/ShuffleRounded";
 import AlbumRoundedIcon from "@mui/icons-material/AlbumRounded";
+import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined";
+import MoreHorizRoundedIcon from "@mui/icons-material/MoreHorizRounded";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import RemoveCircleOutlinedIcon from "@mui/icons-material/RemoveCircleOutlined";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import type { Track } from "../../../state/features/playerSlice";
 import { CollectionCover } from "../CollectionCover";
@@ -180,6 +184,52 @@ function queueNote(trackCount: number, items: SpaceProps["items"]): string | nul
 }
 
 /**
+ * The one share of a place that holds just one, as an album: its own header row
+ * would only repeat the hero, so what it offered (open it, and the owner's
+ * Move and Remove) waits in a menu right of the page's Edit.
+ */
+function SoloShareMenu({ share, isOwner, onMove, onRemove, openShare }: {
+  share: SpaceShare;
+} & Pick<SpaceProps, "isOwner" | "onMove" | "onRemove" | "openShare">) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const phone = usePhoneLayout();
+  const title = share.title || share.identifier;
+  const close = () => setAnchor(null);
+  const item = (label: string, icon: ReactNode, act: () => void) => (
+    <MenuItem
+      onClick={() => {
+        close();
+        act();
+      }}
+      sx={{ minHeight: phone ? 44 : undefined }}
+    >
+      <ListItemIcon>{icon}</ListItemIcon>
+      {label}
+    </MenuItem>
+  );
+  return (
+    <>
+      <Tooltip title="More">
+        <IconButton
+          aria-label={`More for ${title}`}
+          aria-haspopup="menu"
+          aria-expanded={anchor ? "true" : undefined}
+          onClick={(event) => setAnchor(event.currentTarget)}
+          sx={{ width: 48, height: 48, color: "text.secondary", "&:hover": { color: "text.primary" } }}
+        >
+          <MoreHorizRoundedIcon />
+        </IconButton>
+      </Tooltip>
+      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={close}>
+        {item(`Open ${title}`, <OpenInNewRoundedIcon fontSize="small" />, () => openShare(share))}
+        {isOwner && onMove ? item("Move to a folder", <DriveFileMoveOutlinedIcon fontSize="small" />, () => onMove(share.row)) : null}
+        {isOwner ? item("Remove from collection", <RemoveCircleOutlinedIcon fontSize="small" />, () => onRemove(share.row)) : null}
+      </Menu>
+    </>
+  );
+}
+
+/**
  * The music space: a hero in the cover's colours, Play and Shuffle through the
  * app's player, and a real track table grouped by share. Folders are its
  * albums. A file is only ever asked for by a tap on Play or Download.
@@ -200,7 +250,10 @@ export default function MusicSpace(props: SpaceProps) {
   const onOpenShare = useCallback((share: SpaceShare) => latest.current.openShare(share), []);
   const onOpenProfile = useCallback((name: string) => latest.current.openProfile(name), []);
 
-  const columns = useMemo<TrackColumns>(() => ({ phone, wide }), [phone, wide]);
+  // A place of one share with tracks is that album: no header row repeating the hero, and no Album column.
+  const only = items.shares.length === 1 && !items.hasMore ? items.shares[0] : null;
+  const solo = only && only.loaded && !only.deleted && !only.unreadable && only.audio.length > 0 ? only : null;
+  const columns = useMemo<TrackColumns>(() => ({ phone, wide: wide && !solo }), [phone, wide, solo]);
   const { tracks, indexOf, queued, playing, ended, currentKey } = queue;
 
   const thumbnails = useMemo(
@@ -246,7 +299,25 @@ export default function MusicSpace(props: SpaceProps) {
               </IconButton>
             </Tooltip>
           ) : null}
-          {actions ? <Box sx={{ ml: { sm: phone ? 0 : "auto" }, minWidth: 0, width: phone ? "100%" : { xs: "100%", sm: "auto" }, ...quietActions, ...(phone ? { mx: -1, "& .MuiButton-root": { ...quietActions["& .MuiButton-root"], px: 1, minWidth: 0 } } : null) }}>{actions}</Box> : null}
+          {actions || solo ? (
+            <Box
+              sx={{
+                ml: { sm: phone ? 0 : "auto" },
+                minWidth: 0,
+                width: phone ? "100%" : { xs: "100%", sm: "auto" },
+                // The one share's menu sits right of Edit, New folder and Delete, on the same line.
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                "& > :first-of-type:not(:last-child)": { width: "auto", flex: "0 1 auto", minWidth: 0 },
+                ...quietActions,
+                ...(phone ? { mx: -1, "& .MuiButton-root": { ...quietActions["& .MuiButton-root"], px: 1, minWidth: 0 } } : null),
+              }}
+            >
+              {actions}
+              {solo ? <SoloShareMenu share={solo} isOwner={isOwner} onMove={onMove} onRemove={onRemove} openShare={openShare} /> : null}
+            </Box>
+          ) : null}
         </Box>
       ) : null}
       {note ? (
@@ -270,6 +341,7 @@ export default function MusicSpace(props: SpaceProps) {
                 share={share}
                 numbers={numbers}
                 columns={columns}
+                headless={Boolean(solo)}
                 currentKey={holdsCurrent ? currentKey : null}
                 playing={holdsCurrent && playing}
                 isOwner={isOwner}

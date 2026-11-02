@@ -127,6 +127,37 @@ describe("music space", { timeout: 20_000 }, () => {
     expect(await screen.findByText("Share page")).toBeInTheDocument();
   });
 
+  it("plays a place of one share as that album: no header row, no Album column, its actions in More", async () => {
+    const bodies: SpaceBodies = { qshare_file_songs_aaa111_metadata: SPACE_BODIES.qshare_file_songs_aaa111_metadata };
+    resetSpaceTest(bodies);
+    renderSpace({ bodies, folders: [spaceFolder()] });
+    const table = await screen.findByRole("table", { name: "Tracks" });
+    await within(table).findByText("two");
+    expect(within(table).queryByRole("button", { name: "Open Songs" })).not.toBeInTheDocument();
+    expect(within(table).queryByRole("rowheader")).not.toBeInTheDocument();
+    expect(within(table).queryByRole("columnheader", { name: "Album" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "More for Songs" }));
+    const menu = within(await screen.findByRole("menu"));
+    expect(menu.getByRole("menuitem", { name: "Move to a folder" })).toBeInTheDocument();
+    fireEvent.click(menu.getByRole("menuitem", { name: "Remove from collection" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    resetSpaceTest(bodies);
+  });
+
+  it("lets a visitor open the one share from More, with no owner actions", async () => {
+    const bodies: SpaceBodies = { qshare_file_songs_aaa111_metadata: SPACE_BODIES.qshare_file_songs_aaa111_metadata };
+    resetSpaceTest(bodies);
+    renderSpace({ bodies, signedInAs: "carol" });
+    await screen.findByText("two");
+    fireEvent.click(screen.getByRole("button", { name: "More for Songs" }));
+    const menu = within(await screen.findByRole("menu"));
+    expect(menu.queryByRole("menuitem", { name: "Remove from collection" })).not.toBeInTheDocument();
+    fireEvent.click(menu.getByRole("menuitem", { name: "Open Songs" }));
+    expect(await screen.findByText("Share page")).toBeInTheDocument();
+    resetSpaceTest(bodies);
+  });
+
   it("opens the album from its header", async () => {
     renderSpace();
     fireEvent.click(await screen.findByRole("button", { name: "Open Songs" }));
@@ -254,7 +285,9 @@ describe("music space", { timeout: 20_000 }, () => {
     resetSpaceTest(bodies);
     renderSpace({ bodies, items: [{ name: "Big + Bold name", identifier: "qshare_file_a_aaa111_metadata" }] });
     await screen.findByText("x");
-    fireEvent.click(screen.getByRole("button", { name: "Shares by Big + Bold name" }));
+    // A place of one share has no header row: the track's own name link opens the profile.
+    expect(screen.getByRole("button", { name: `More for ${long}` })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Shares by Big + Bold name, from x" }));
     expect(await screen.findByText("Profile page")).toBeInTheDocument();
     resetSpaceTest(bodies);
   });

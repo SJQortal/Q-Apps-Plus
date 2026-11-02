@@ -313,6 +313,8 @@ interface AlbumProps {
   /** Each of the share's tracks' place in the queue. */
   numbers: number[];
   columns: TrackColumns;
+  /** The place's only share: its tracks without a header row of their own. */
+  headless?: boolean;
   /** The current track's key when it is in this share, or null. */
   currentKey: string | null;
   /** Whether that track is playing. */
@@ -376,7 +378,7 @@ function ShareHead({ share, art, note, columns, isOwner, onMove, onRemove, onOpe
   );
 }
 
-function AlbumGroupView({ share, numbers, columns, currentKey, playing, isOwner, onMove, onRemove, onPlay, onOpenShare, onOpenProfile }: AlbumProps) {
+function AlbumGroupView({ share, numbers, columns, headless, currentKey, playing, isOwner, onMove, onRemove, onPlay, onOpenShare, onOpenProfile }: AlbumProps) {
   const [all, setAll] = useState(false);
   const span = columnCount(columns);
   const head = { share, columns, isOwner, onMove, onRemove, onOpenShare, onOpenProfile };
@@ -417,15 +419,17 @@ function AlbumGroupView({ share, numbers, columns, currentKey, playing, isOwner,
   const shown = all ? tracks : tracks.slice(0, ALBUM_TRACKS_SHOWN);
   return (
     <tbody>
-      <tr>
-        <th scope="rowgroup" colSpan={span} style={{ fontWeight: "inherit", padding: "8px 0 0" }}>
-          <ShareHead
-            {...head}
-            art={<ShareArt share={share} fallback={<MusicNoteRoundedIcon fontSize="small" />} />}
-            note={`${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`}
-          />
-        </th>
-      </tr>
+      {headless ? null : (
+        <tr>
+          <th scope="rowgroup" colSpan={span} style={{ fontWeight: "inherit", padding: "8px 0 0" }}>
+            <ShareHead
+              {...head}
+              art={<ShareArt share={share} fallback={<MusicNoteRoundedIcon fontSize="small" />} />}
+              note={`${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`}
+            />
+          </th>
+        </tr>
+      )}
       {shown.map((track, index) => (
         <TrackRow
           key={`${trackKey(track)}/${index}`}
@@ -476,6 +480,7 @@ export const AlbumGroup = memo(
     a.numbers.join() === b.numbers.join() &&
     a.columns.phone === b.columns.phone &&
     a.columns.wide === b.columns.wide &&
+    a.headless === b.headless &&
     a.currentKey === b.currentKey &&
     a.playing === b.playing &&
     a.isOwner === b.isOwner &&

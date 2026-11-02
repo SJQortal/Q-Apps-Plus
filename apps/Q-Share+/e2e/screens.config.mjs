@@ -401,6 +401,8 @@ export default {
     { key: 'space-music', path: `/collection/${NAME}/${SPACE_MUSIC}`, after: async (page) => { await page.waitForSelector('text=Tidal hours', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     // In a folder, playing: the player bar over the page.
     { key: 'space-music-folder', path: `/collection/${NAME}/${SPACE_MUSIC}/folder/sm_demos`, after: async (page) => { await page.getByRole('button', { name: 'Play all' }).first().click({ timeout: 8000 }); await page.getByRole('region', { name: 'Player' }).waitFor({ timeout: 4000 }).catch(() => {}); await page.mouse.move(1, 1); await page.waitForTimeout(800); } },
+    // A folder two deep holding one album: the trail ends with it, no header row repeats the hero, and its menu sits right of Edit.
+    { key: 'space-music-solo', path: `/collection/${NAME}/${SPACE_MUSIC}/folder/sm_older`, after: async (page) => { await page.getByRole('table', { name: 'Tracks' }).waitFor({ timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     // By bob+builder: Copy to my collections, no owner's buttons.
     { key: 'space-visitor', path: `/collection/${encodeURIComponent('bob+builder')}/${SPACE_VISITOR}`, after: async (page) => { await page.waitForSelector('text=Tidal hours', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-cinema', path: `/collection/${NAME}/${SPACE_CINEMA}`, after: async (page) => { await page.waitForSelector('text=Salt roads', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
