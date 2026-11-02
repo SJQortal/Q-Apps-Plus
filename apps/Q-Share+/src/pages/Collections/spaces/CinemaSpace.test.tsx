@@ -44,7 +44,7 @@ describe("the cinema", { timeout: 20_000 }, () => {
     expect(await within(billboard).findByText("Film")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Play Film" })).toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "Open Songs" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Open Songs. 2 files" })).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: "Also here" })).getByText("Deleted by its publisher")).toBeInTheDocument();
     // Its thumbnail is the backdrop, asked for without holding the node.
     const pictures = Array.from(document.querySelectorAll("img")).map((img) => img.getAttribute("src"));
@@ -68,6 +68,15 @@ describe("the cinema", { timeout: 20_000 }, () => {
     const css = (channels: number[]) => `rgb(${channels.map(Math.round).join(", ")})`;
     expect(getContrastRatio(css(over(palette.text.secondary, stage)), css(stage))).toBeGreaterThanOrEqual(4.5);
     expect(getContrastRatio(palette.text.primary, css(stage))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("says a poster's status and details to screen readers", async () => {
+    const bodies: SpaceBodies = { ...SERIES };
+    resetSpaceTest(bodies);
+    renderSpace({ space: "cinema", bodies, items: [...Object.keys(SERIES), "qshare_file_lost_ccc333_metadata"].map((identifier) => ({ name: "bob", identifier })) });
+    expect(await screen.findByRole("button", { name: "More about The Show. 2 episodes · 4 KB" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /^Open .*\. Not available right now$/ }, { timeout: 15_000 })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^More about .*\. Not available right now$/ })).toBeInTheDocument();
   });
 
   it("asks for no file until someone taps Play", async () => {
@@ -120,7 +129,7 @@ describe("the cinema", { timeout: 20_000 }, () => {
 
   it("opens a share without video on its page", async () => {
     renderSpace({ space: "cinema" });
-    fireEvent.click(await screen.findByRole("button", { name: "Open Book" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Book. 1 file" }));
     expect(await screen.findByText("Share page")).toBeInTheDocument();
     noFileAsked();
   });

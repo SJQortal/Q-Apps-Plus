@@ -107,6 +107,8 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
   const playable = !gone && share.videos.length > 0;
   const series = playable && share.videos.length > 1;
   const note = posterNote(share);
+  // A button's label replaces the words inside it, so it has to say them too.
+  const spokenNote = note ? `. ${note}` : "";
   const placeholderIcon = gone ? <HideImageOutlinedIcon /> : playable ? <MovieOutlinedIcon /> : <InsertDriveFileOutlinedIcon />;
   const placeholder = <FilmPlaceholder seed={share.key} title={gone ? undefined : share.title} icon={placeholderIcon} dim={gone} />;
 
@@ -233,7 +235,7 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
           <Box
             component="button"
             type="button"
-            aria-label={playable ? `Play ${share.title}` : `Open ${share.title}`}
+            aria-label={playable ? `Play ${share.title}` : `Open ${share.title}${spokenNote}`}
             onClick={() => (playable ? handlers.play(share) : handlers.open(share))}
             sx={{
               ...artSx,
@@ -268,7 +270,7 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
           : {
               component: "button" as const,
               type: "button" as const,
-              "aria-label": `More about ${share.title}`,
+              "aria-label": `More about ${share.title}${spokenNote}`,
               onClick: () => handlers.open(share),
             })}
         sx={{
