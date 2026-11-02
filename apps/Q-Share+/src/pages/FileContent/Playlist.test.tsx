@@ -6,7 +6,7 @@ import { renderWithProviders } from "../../test/renderWithProviders";
 import { mockFetch, mockQortalAction } from "../../test/setup";
 import { store } from "../../state/store";
 import { addToHashMap } from "../../state/features/fileSlice";
-import { closePlayer, currentTrack } from "../../state/features/playerSlice";
+import { closePlayer, currentTrack, playQueue } from "../../state/features/playerSlice";
 import { resetQdnSearchCache } from "../../utils/qdnSearch";
 import { resetPlayerAudio } from "../../components/player/audioElement";
 import { shareTracks } from "./PlaylistCard";
@@ -58,6 +58,22 @@ afterEach(() => {
 describe("a share with several audio files", () => {
   it("keeps the playable audio files, in the share's order", () => {
     expect(shareTracks(album).map((t) => t.filename)).toEqual(["01 Intro.mp3", "02 Song.flac", "03 Outro.m4a"]);
+  });
+
+  it("doesn't take a collection's queue for this share's playlist", async () => {
+    const id = "qshare_file_album_cccccc_metadata";
+    const tracks = shareTracks(album);
+    const other = { ...tracks[0], identifier: "other_share_file", filename: "Other.mp3" };
+    act(() => {
+      store.dispatch(playQueue({ tracks: [tracks[0], other], share: { name: NAME, identifier: id, title: "Mix", path: "/collection/x/y" }, start: 1 }));
+    });
+    renderShare(id, album);
+    const card = within(await screen.findByRole("region", { name: "Playlist" }));
+    expect(card.queryByText(/^Playing:/)).not.toBeInTheDocument();
+    fireEvent.click(card.getByRole("button", { name: "Play all" }));
+    expect(store.getState().player.share?.path).toBeUndefined();
+    expect(store.getState().player.tracks.map((t) => t.filename)).toEqual(tracks.map((t) => t.filename));
+    expect(currentTrack(store.getState().player)?.filename).toBe("01 Intro.mp3");
   });
 
   it("plays as a playlist from Play all, or from any track's Play", async () => {

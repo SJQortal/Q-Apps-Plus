@@ -40,6 +40,8 @@ export function shareTracks(files: ShareFile[]): Track[] {
 }
 
 function isQueued(player: PlayerState, share: PlayerShare): boolean {
+  // A queue with a path is a collection's: it only names this share as its first, and isn't this playlist.
+  if (player.share?.path) return false;
   return player.share?.name === share.name && player.share?.identifier === share.identifier;
 }
 
