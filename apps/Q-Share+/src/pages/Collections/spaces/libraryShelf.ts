@@ -1,4 +1,4 @@
-import { darken, decomposeColor, getContrastRatio, lighten, recomposeColor, type Theme } from "@mui/material/styles";
+import { alpha, darken, decomposeColor, getContrastRatio, lighten, recomposeColor, type Theme } from "@mui/material/styles";
 import { fileKind, fileKindLabel } from "../../../utils/fileKind";
 import type { ShareFile } from "../../FileContent/FileRow";
 import type { SpaceShare } from "./useSpaceItems";
@@ -98,30 +98,41 @@ function readable(preferred: string, fallback: string, surface: string): string 
 export interface LibraryLook {
   /** The reading room's warm surface. */
   room: string;
+  /** The pool of lamplight at the top of the room, over `room`. */
+  lamp: string;
   /** Headings and titles on `room`. */
   ink: string;
-  /** Quieter text on `room`, at 4.5:1. */
+  /** Quieter text on `room` and under the lamp, at 4.5:1. */
   quiet: string;
   /** The thin rules. */
   rule: string;
   /** The shelf board's top and its dark front. */
   board: string;
   boardEdge: string;
+  /** The block of pages seen at a book's edge. */
+  pages: string;
 }
+
+/** How strong the lamp is at its brightest. */
+const LAMP = 0.06;
 
 /** The library's colours, all drawn from the theme and warmed with its warning hue. */
 export function libraryLook(theme: Theme): LibraryLook {
-  const { background, warning, text, mode } = theme.palette;
+  const { background, warning, text, mode, common } = theme.palette;
   const paper = flatten(background.paper, flatten(background.default, mode === "dark" ? theme.palette.common.black : theme.palette.common.white));
   const room = mix(paper, warning.main, mode === "dark" ? 0.05 : 0.06);
   const board = mix(room, warning.main, mode === "dark" ? 0.3 : 0.34);
+  const lit = mix(room, warning.main, LAMP);
+  const paperWhite = mix(common.white, warning.main, 0.14);
   return {
     room,
-    ink: readable(text.primary, mode === "dark" ? theme.palette.common.white : theme.palette.common.black, room),
-    quiet: readable(text.secondary, text.primary, room),
+    lamp: alpha(warning.main, LAMP),
+    ink: readable(text.primary, mode === "dark" ? common.white : common.black, lit),
+    quiet: readable(text.secondary, text.primary, lit),
     rule: mix(room, warning.main, 0.4),
     board,
     boardEdge: darken(board, 0.32),
+    pages: mode === "dark" ? mix(paperWhite, room, 0.3) : paperWhite,
   };
 }
 
@@ -142,8 +153,24 @@ export function bookCloth(theme: Theme, seed: string): BookCloth {
   const { primary, secondary, success, error, warning, info, common } = theme.palette;
   const hues = [primary.main, success.main, error.main, warning.main, info.main, secondary.main];
   let cloth = hues[hash(seed) % hues.length];
-  for (let amount = 0.3; getContrastRatio(common.white, cloth) < 7 && amount < 1; amount += 0.08) {
+  for (let amount = 0.3; getContrastRatio(common.white, cloth) < 9 && amount < 1; amount += 0.08) {
     cloth = darken(hues[hash(seed) % hues.length], amount);
   }
   return { cloth, foil: readable(lighten(warning.main, 0.65), common.white, cloth) };
+}
+
+export interface ShelfSpine extends BookCloth {
+  /** Share of the shelf's height, in percent. */
+  height: number;
+  /** Width in px. */
+  width: number;
+}
+
+/** A few spines for a folder's little shelf: the same for the same folder, none alike. */
+export function shelfSpines(theme: Theme, seed: string, count = 6): ShelfSpine[] {
+  return Array.from({ length: count }, (_, i) => {
+    const key = `${seed}/${i}`;
+    const turn = hash(`${key}#`);
+    return { ...bookCloth(theme, key), height: 70 + (turn % 31), width: 8 + ((turn >> 5) % 5) };
+  });
 }

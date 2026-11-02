@@ -15,7 +15,7 @@ import {
   useMediaQuery,
   useTheme,
 } from "@mui/material";
-import { alpha, type Theme } from "@mui/material/styles";
+import { alpha, lighten, type Theme } from "@mui/material/styles";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -27,7 +27,7 @@ import { OpenPdfButton, PreviewPanel, PreviewToggleButton, previewKind } from ".
 import { ShareCardArt } from "../../../components/common/ShareArt";
 import { BottomSheet } from "../../../components/common/mobile/BottomSheet";
 import { DisplayHtml } from "../../../components/common/TextEditor/DisplayHtml";
-import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
+import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { formatBytes } from "../../../utils/formatBytes";
 import type { CollectionFolder } from "../../../utils/collections";
 import type { ShareFile } from "../../FileContent/FileRow";
@@ -43,6 +43,7 @@ import {
   formatBadge,
   libraryLook,
   readLibraryView,
+  shelfSpines,
   sortBooks,
   totalBytes,
   writeLibraryView,
@@ -57,6 +58,7 @@ import type { SpaceShare } from "./useSpaceItems";
 /** Files a book's panel lists at a time: each row is a download control. */
 const FILE_PAGE = 20;
 const STILL = "@media (prefers-reduced-motion: reduce)";
+const LANDSCAPE = `@media ${LANDSCAPE_PHONE_MEDIA}`;
 
 const twoLines = (lines: number) => ({
   display: "-webkit-box",
@@ -66,10 +68,11 @@ const twoLines = (lines: number) => ({
   overflowWrap: "anywhere",
 });
 
-/** A cover for a book without a picture: its title and author stamped on cloth. */
+/** A cover for a book without a picture: its title and author stamped in foil on woven cloth. */
 function ClothCover({ share }: { share: SpaceShare }) {
   const theme = useTheme();
   const { cloth, foil } = useMemo(() => bookCloth(theme, share.key), [theme, share.key]);
+  const { black, white } = theme.palette.common;
   return (
     <Box
       sx={{
@@ -77,6 +80,11 @@ function ClothCover({ share }: { share: SpaceShare }) {
         inset: 0,
         containerType: "inline-size",
         bgcolor: cloth,
+        backgroundImage: [
+          `linear-gradient(115deg, ${alpha(white, 0.08)}, transparent 45%, ${alpha(black, 0.16)})`,
+          `repeating-linear-gradient(0deg, ${alpha(white, 0.025)} 0 1px, transparent 1px 3px)`,
+          `repeating-linear-gradient(90deg, ${alpha(black, 0.04)} 0 1px, transparent 1px 3px)`,
+        ].join(","),
         color: foil,
         fontFamily: LIBRARY_SERIF,
       }}
@@ -84,21 +92,25 @@ function ClothCover({ share }: { share: SpaceShare }) {
       <Box
         sx={{
           position: "absolute",
-          inset: "6% 7% 6% 13%",
+          inset: "5% 5% 5% 12%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
-          gap: "4cqw",
-          padding: "7cqw 5cqw",
-          border: `1px solid ${alpha(foil, 0.55)}`,
+          alignItems: "center",
+          gap: "5cqw",
+          padding: "9cqw 3cqw 6cqw",
+          border: `1px solid ${alpha(foil, 0.6)}`,
+          boxShadow: `inset 0 0 0 2px ${cloth}, inset 0 0 0 3px ${alpha(foil, 0.28)}`,
           textAlign: "center",
           overflow: "hidden",
+          // Too small to read on a catalogue line: the frame is enough there.
+          "@container (max-width: 72px)": { boxShadow: "none", "& > *": { display: "none" } },
         }}
       >
-        <Box component="span" sx={{ ...twoLines(5), fontSize: "clamp(11px, 11cqw, 22px)", lineHeight: 1.2, fontWeight: 600 }}>
+        <Box component="span" sx={{ ...twoLines(5), overflowWrap: "break-word", width: "100%", fontSize: "clamp(11px, 10.5cqw, 22px)", lineHeight: 1.2, fontWeight: 600 }}>
           {share.title}
         </Box>
-        <Box component="span" sx={{ ...twoLines(1), flexShrink: 0, fontSize: "clamp(9px, 7cqw, 13px)", letterSpacing: "0.04em" }}>
+        <Box aria-hidden sx={{ flexShrink: 0, width: "4cqw", height: "4cqw", minWidth: 4, minHeight: 4, bgcolor: alpha(foil, 0.75), transform: "rotate(45deg)" }} />
+        <Box component="span" sx={{ ...twoLines(1), width: "100%", mt: "auto", flexShrink: 0, fontSize: "clamp(9px, 7cqw, 13px)", letterSpacing: "0.04em" }}>
           {share.user}
         </Box>
       </Box>
@@ -106,14 +118,20 @@ function ClothCover({ share }: { share: SpaceShare }) {
   );
 }
 
-/** The cover for a book that isn't there: blank paper and a dashed frame. */
+/** The place of a book that isn't there: an outline on the shelf. */
 function MissingCover({ look }: { look: LibraryLook }) {
-  return <Box sx={{ position: "absolute", inset: "6%", border: `1px dashed ${look.quiet}`, opacity: 0.6 }} />;
+  return <Box sx={{ position: "absolute", inset: 0, border: `1px dashed ${look.quiet}`, borderRadius: "inherit", opacity: 0.55 }} />;
 }
 
-/** A book's face at 2:3: picture or cloth, the highlight down its spine, and the edge of its pages. */
+/** A book's face at 2:3: picture or cloth, the crease down its spine, and the edge of its pages. */
 function BookCover({ share, look }: { share: SpaceShare; look: LibraryLook }) {
-  const missing = bookStatus(share) !== null;
+  if (bookStatus(share) !== null) {
+    return (
+      <Box className="library-book" aria-hidden sx={{ position: "relative", width: "calc(100% - 4px)", aspectRatio: "2 / 3", borderRadius: "2px 3px 3px 2px", bgcolor: alpha(look.board, 0.1) }}>
+        <MissingCover look={look} />
+      </Box>
+    );
+  }
   return (
     <Box
       className="library-book"
@@ -123,9 +141,8 @@ function BookCover({ share, look }: { share: SpaceShare; look: LibraryLook }) {
         width: "calc(100% - 4px)",
         aspectRatio: "2 / 3",
         transition: "transform 180ms ease, box-shadow 180ms ease",
-        boxShadow: `0 6px 14px ${alpha(theme.palette.common.black, 0.3)}`,
+        boxShadow: `3px 2px 10px ${alpha(theme.palette.common.black, 0.38)}`,
         borderRadius: "2px 3px 3px 2px",
-        bgcolor: missing ? look.board : "transparent",
         [STILL]: { transition: "none" },
         // The block of pages, seen from the side.
         "&::after": {
@@ -134,21 +151,23 @@ function BookCover({ share, look }: { share: SpaceShare; look: LibraryLook }) {
           top: 3,
           bottom: 3,
           left: "100%",
-          width: 4,
+          width: 3,
           borderRadius: "0 1px 1px 0",
-          background: `repeating-linear-gradient(to bottom, ${alpha(theme.palette.common.white, 0.9)} 0 1px, ${alpha(theme.palette.common.black, 0.18)} 1px 2px)`,
+          bgcolor: look.pages,
+          backgroundImage: `repeating-linear-gradient(to bottom, ${alpha(theme.palette.common.black, 0.1)} 0 1px, transparent 1px 3px)`,
+          boxShadow: `inset 1px 0 1px ${alpha(theme.palette.common.black, 0.3)}`,
         },
       })}
     >
       <Box sx={{ position: "absolute", inset: 0, overflow: "hidden", borderRadius: "inherit" }}>
-        {missing ? <MissingCover look={look} /> : <ShareCardArt share={share.body} fallback={<ClothCover share={share} />} />}
+        <ShareCardArt share={share.body} fallback={<ClothCover share={share} />} />
         <Box
           sx={(theme: Theme) => ({
             position: "absolute",
             inset: "0 auto 0 0",
-            width: "11%",
+            width: "9%",
             pointerEvents: "none",
-            background: `linear-gradient(to right, ${alpha(theme.palette.common.black, 0.3)}, ${alpha(theme.palette.common.white, 0.2)} 40%, ${alpha(theme.palette.common.black, 0.14)} 75%, transparent)`,
+            background: `linear-gradient(to right, ${alpha(theme.palette.common.black, 0.22)}, ${alpha(theme.palette.common.white, 0.12)} 45%, ${alpha(theme.palette.common.black, 0.2)} 80%, transparent)`,
           })}
         />
       </Box>
@@ -156,20 +175,32 @@ function BookCover({ share, look }: { share: SpaceShare; look: LibraryLook }) {
   );
 }
 
-/** The shelf board under a row: each book draws its part, and the last runs on to the end of the row. */
+/**
+ * The shelf under a row and the shadow on the wall behind it. Each book draws its own stretch and the
+ * gap after it, so they don't overlap and darken, and the last runs on to the end of the row.
+ */
 const boardSx = (look: LibraryLook, theme: Theme) => ({
+  "&::before": {
+    content: '""',
+    position: "absolute",
+    top: "-14px",
+    bottom: 0,
+    left: 0,
+    right: "calc(-1 * var(--shelf-gap))",
+    background: `linear-gradient(to top, ${theme.palette.mode === "dark" ? alpha(look.boardEdge, 0.4) : alpha(look.board, 0.3)}, transparent 40%)`,
+    zIndex: 0,
+  },
   "&::after": {
     content: '""',
     position: "absolute",
     top: "100%",
-    left: "calc(-1 * var(--shelf-gap))",
+    left: 0,
     right: "calc(-1 * var(--shelf-gap))",
-    height: 9,
-    background: `linear-gradient(to bottom, ${look.board} 0 5px, ${look.boardEdge} 5px)`,
-    boxShadow: `0 7px 10px -3px ${alpha(theme.palette.common.black, 0.35)}`,
+    height: 20,
+    background: `linear-gradient(to bottom, ${lighten(look.board, 0.14)} 0 1px, ${look.board} 1px 7px, ${look.boardEdge} 7px 11px, ${alpha(theme.palette.common.black, 0.2)} 11px, transparent)`,
     zIndex: 0,
   },
-  "li:last-of-type > &::after": { right: "-100vw" },
+  "li:last-of-type > &::before, li:last-of-type > &::after": { right: "-100vw" },
 });
 
 interface BookProps {
@@ -196,9 +227,9 @@ const ShelfBook = memo(
       return (
         <Box component="li" sx={{ position: "relative", minWidth: 0 }}>
           <Box sx={(theme: Theme) => ({ position: "relative", ...boardSx(look, theme) })}>
-            <Skeleton variant="rectangular" sx={{ width: "calc(100% - 4px)", height: "auto", aspectRatio: "2 / 3" }} />
+            <Skeleton variant="rectangular" sx={{ position: "relative", zIndex: 1, width: "calc(100% - 4px)", height: "auto", aspectRatio: "2 / 3" }} />
           </Box>
-          <Skeleton sx={{ mt: 2.5, width: "80%" }} />
+          <Skeleton sx={{ mt: 3.25, width: "80%" }} />
         </Box>
       );
     }
@@ -219,7 +250,7 @@ const ShelfBook = memo(
             <BookCover share={share} look={look} />
           </Box>
         </Box>
-        <Box sx={{ pt: 2.5, minWidth: 0 }}>
+        <Box sx={{ pt: 3.25, minWidth: 0 }}>
           <Typography component="p" sx={{ ...twoLines(2), fontFamily: LIBRARY_SERIF, fontSize: 15, lineHeight: 1.25, fontWeight: 600, color: look.ink }}>
             {share.title}
           </Typography>
@@ -317,7 +348,7 @@ const CatalogueRow = memo(
             <Skeleton sx={{ flex: 1 }} />
           </Box>
         )}
-        {isOwner ? <ShareOwnerActions share={share} onMove={onMove} onRemove={onRemove} /> : null}
+        {isOwner ? <ShareOwnerActions share={share} onMove={onMove} onRemove={onRemove} sx={{ color: look.quiet }} /> : null}
       </Box>
     );
   },
@@ -410,27 +441,30 @@ function BookDetails({ share, look, phone, titleId, onClose, isOwner, onMove, on
   const body = share.body as { htmlDescription?: unknown; fullDescription?: unknown; description?: unknown } | undefined;
   const html = typeof body?.htmlDescription === "string" ? body.htmlDescription : "";
   const plain = [body?.fullDescription, body?.description].find((text) => typeof text === "string" && text) as string | undefined;
+  const facts = [bookFormats(share).join(", "), share.files.length ? formatBytes(totalBytes(share.files), 1) : ""].filter(Boolean).join(" · ");
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", flexDirection: phone ? "row" : "column", position: "relative" }}>
         <Box sx={{ width: phone ? 96 : 176, flexShrink: 0, alignSelf: phone ? "flex-start" : "center" }}>
           <BookCover share={share} look={look} />
         </Box>
-        <Box sx={{ minWidth: 0, flex: 1, pr: phone ? 5 : 0, alignSelf: "stretch" }}>
-          <Typography id={titleId} component="h2" sx={{ fontFamily: LIBRARY_SERIF, fontSize: phone ? 20 : 24, lineHeight: 1.2, fontWeight: 600, overflowWrap: "anywhere" }}>
+        <Box sx={{ minWidth: 0, flex: 1, pr: phone ? 5 : 0, alignSelf: "stretch", textAlign: phone ? "left" : "center" }}>
+          <Typography id={titleId} component="h2" sx={{ fontFamily: LIBRARY_SERIF, fontSize: phone ? 20 : 26, lineHeight: 1.2, fontWeight: 600, color: look.ink, overflowWrap: "anywhere" }}>
             {share.title}
           </Typography>
           <Button
             onClick={() => openProfile(share.user)}
             aria-label={`Published by ${share.user}`}
-            sx={{ mt: 0.5, ml: -1, minHeight: 44, justifyContent: "flex-start", textAlign: "left", overflowWrap: "anywhere" }}
+            sx={{ mt: 0.25, ml: phone ? -1 : 0, minHeight: 44, justifyContent: "flex-start", textAlign: "left", overflowWrap: "anywhere" }}
           >
             {share.user}
           </Button>
           {status ? (
-            <Typography role="status" sx={{ color: "text.secondary", fontSize: 14 }}>
+            <Typography role="status" sx={{ color: look.quiet, fontSize: 14 }}>
               {status}
             </Typography>
+          ) : facts ? (
+            <Typography sx={{ color: look.quiet, fontSize: 13, letterSpacing: "0.02em" }}>{facts}</Typography>
           ) : null}
         </Box>
       </Box>
@@ -440,7 +474,7 @@ function BookDetails({ share, look, phone, titleId, onClose, isOwner, onMove, on
           <DisplayHtml html={html} />
         </Box>
       ) : plain ? (
-        <Typography sx={{ color: "text.secondary", whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{plain}</Typography>
+        <Typography sx={{ fontFamily: LIBRARY_SERIF, fontSize: 16, lineHeight: 1.55, color: look.quiet, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{plain}</Typography>
       ) : null}
 
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
@@ -504,7 +538,7 @@ function BookPanel({ open, share, ...panel }: Omit<PanelProps, "share" | "phone"
           role: "dialog",
           "aria-modal": true,
           "aria-labelledby": titleId,
-          sx: { width: "min(440px, 100%)", p: 3, backgroundImage: "none", bgcolor: "background.paper" },
+          sx: { width: "min(440px, 100%)", p: 3, bgcolor: panel.look.room, backgroundImage: `radial-gradient(ellipse 100% 340px at 50% 0, ${panel.look.lamp}, transparent)` },
         },
       }}
     >
@@ -513,11 +547,11 @@ function BookPanel({ open, share, ...panel }: Omit<PanelProps, "share" | "phone"
   );
 }
 
-/** A folder as a book lying on its side, spine out, with its name on it. */
-function FolderSpine({ folder, onOpen }: { folder: CollectionFolder; onOpen: (id: string) => void }) {
+/** A folder as a little shelf of its own: a row of spines, or its cover, on a board, beside its name. */
+function ShelfTile({ folder, look, onOpen }: { folder: CollectionFolder; look: LibraryLook; onOpen: (id: string) => void }) {
   const theme = useTheme();
   const title = folder.title || "Untitled folder";
-  const { cloth, foil } = useMemo(() => bookCloth(theme, folder.id), [theme, folder.id]);
+  const spines = useMemo(() => shelfSpines(theme, folder.id), [theme, folder.id]);
   return (
     <li style={{ minWidth: 0 }}>
       <Box
@@ -529,32 +563,52 @@ function FolderSpine({ folder, onOpen }: { folder: CollectionFolder; onOpen: (id
           appearance: "none",
           width: "100%",
           height: "100%",
-          minHeight: 64,
+          minHeight: 84,
           display: "flex",
           alignItems: "center",
-          gap: 1.25,
-          px: 2,
-          py: 1,
-          border: 0,
-          borderRadius: "3px",
-          bgcolor: cloth,
-          color: foil,
+          gap: 1.75,
+          px: 1.75,
+          py: 1.25,
+          border: `1px solid ${alpha(look.rule, 0.45)}`,
+          borderRadius: 1,
+          backgroundColor: alpha(look.board, 0.08),
+          color: look.ink,
           font: "inherit",
           textAlign: "left",
           cursor: "pointer",
-          boxShadow: `inset 10px 0 0 ${alpha(foil, 0.14)}, inset -10px 0 0 ${alpha(foil, 0.14)}, 0 4px 10px ${alpha(theme.palette.common.black, 0.25)}`,
-          transition: "transform 160ms ease",
+          transition: "background-color 160ms ease, border-color 160ms ease",
           [STILL]: { transition: "none" },
-          "&:hover": { transform: "translateY(-2px)", [STILL]: { transform: "none" } },
+          "&:hover": { backgroundColor: alpha(look.board, 0.2), borderColor: look.rule },
           "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
         }}
       >
-        {folder.cover ? <CollectionCover cover={folder.cover} kind="folder" size={44} /> : null}
+        <Box aria-hidden sx={{ flexShrink: 0, width: 76 }}>
+          <Box sx={{ height: 54, display: "flex", alignItems: "flex-end", justifyContent: "center", gap: "1px", overflow: "hidden" }}>
+            {folder.cover ? (
+              <CollectionCover cover={folder.cover} kind="folder" size={50} />
+            ) : (
+              spines.map((spine, index) => (
+                <Box
+                  key={index}
+                  sx={{
+                    flexShrink: 0,
+                    width: spine.width,
+                    height: `${spine.height}%`,
+                    borderRadius: "1px 1px 0 0",
+                    bgcolor: spine.cloth,
+                    backgroundImage: `linear-gradient(to bottom, transparent 14%, ${alpha(spine.foil, 0.75)} 14% 17%, transparent 17% 78%, ${alpha(spine.foil, 0.75)} 78% 81%, transparent 81%)`,
+                  }}
+                />
+              ))
+            )}
+          </Box>
+          <Box sx={{ height: 6, background: `linear-gradient(to bottom, ${look.board} 0 3px, ${look.boardEdge} 3px)`, borderRadius: "0 0 1px 1px" }} />
+        </Box>
         <Box component="span" sx={{ minWidth: 0, flex: 1 }}>
-          <Box component="span" sx={{ ...twoLines(2), fontFamily: LIBRARY_SERIF, fontSize: 16, lineHeight: 1.2, fontWeight: 600 }}>
+          <Box component="span" sx={{ ...twoLines(2), fontFamily: LIBRARY_SERIF, fontSize: 16, lineHeight: 1.25, fontWeight: 600 }}>
             {title}
           </Box>
-          <Box component="span" sx={{ ...twoLines(1), mt: 0.25, fontSize: 12 }}>
+          <Box component="span" sx={{ ...twoLines(1), mt: 0.25, fontSize: 13, color: look.quiet }}>
             {folderCountLabel(folder)}
           </Box>
         </Box>
@@ -563,17 +617,36 @@ function FolderSpine({ folder, onOpen }: { folder: CollectionFolder; onOpen: (id
   );
 }
 
+/** A section's name, a rule running out from it, and what it holds. */
+function SectionHead({ id, title, note, look }: { id: string; title: string; note?: string; look: LibraryLook }) {
+  return (
+    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 1.5, minWidth: 0 }}>
+      <Typography id={id} component="h2" sx={{ fontFamily: LIBRARY_SERIF, fontWeight: 600, fontSize: 20, color: look.ink, flexShrink: 0 }}>
+        {title}
+      </Typography>
+      <Box aria-hidden sx={{ flex: 1, minWidth: 12, height: "1px", bgcolor: alpha(look.rule, 0.55) }} />
+      {note ? <Typography sx={{ flexShrink: 0, fontSize: 13, letterSpacing: "0.02em", color: look.quiet }}>{note}</Typography> : null}
+    </Box>
+  );
+}
+
+/** The collection's buttons, in the room's ink; Delete keeps quiet until it's pointed at. */
+const quietActions = (look: LibraryLook) => ({
+  "& .MuiButton-root": { bgcolor: "transparent", color: look.ink, borderColor: alpha(look.rule, 0.7), boxShadow: "none" },
+  "& .MuiButton-root:hover": { bgcolor: alpha(look.board, 0.2), borderColor: look.rule, boxShadow: "none" },
+  "& .MuiButton-colorError": { color: look.quiet, borderColor: "transparent" },
+  "& .MuiButton-colorError:hover": { bgcolor: "transparent", color: "error.main", borderColor: "transparent" },
+});
+
 /** The top of the room, set like a book's title page. */
 function TitlePage({ props, look }: { props: SpaceProps; look: LibraryLook }) {
-  const { cover, folder, breadcrumb, title, description, attribution, actions, items, subfolders } = props;
-  const counts = [countLabel(items.total, "book", "books")];
-  if (subfolders.length > 0) counts.push(countLabel(subfolders.length, "shelf", "shelves"));
+  const { cover, folder, breadcrumb, title, description, attribution, actions } = props;
   return (
     <Box component="section" aria-label={folder ? "About this folder" : "About this collection"} sx={{ minWidth: 0 }}>
       {breadcrumb}
-      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 1.5, pt: { xs: 1.5, sm: 4 }, pb: { xs: 1, sm: 2 } }}>
+      <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 1.5, pt: { xs: 1.5, sm: 4 }, pb: { xs: 1, sm: 2 }, [LANDSCAPE]: { pt: 0.5, pb: 0, gap: 0.75, "& .library-flourish": { display: "none" } } }}>
         {cover ? <CollectionCover cover={cover} kind={folder ? "folder" : "collection"} size={96} /> : null}
-        <Typography component="p" sx={{ fontSize: 12, letterSpacing: "0.22em", textTransform: "uppercase", color: look.quiet }}>
+        <Typography className="library-flourish" component="p" sx={{ fontSize: 12, letterSpacing: "0.22em", textTransform: "uppercase", color: look.quiet }}>
           {folder ? "A shelf" : "A library"}
         </Typography>
         <Typography
@@ -582,6 +655,7 @@ function TitlePage({ props, look }: { props: SpaceProps; look: LibraryLook }) {
             fontFamily: LIBRARY_SERIF,
             fontWeight: 500,
             fontSize: "clamp(28px, 5vw, 48px)",
+            [LANDSCAPE]: { fontSize: 26 },
             lineHeight: 1.12,
             letterSpacing: "-0.005em",
             maxWidth: "20em",
@@ -592,15 +666,14 @@ function TitlePage({ props, look }: { props: SpaceProps; look: LibraryLook }) {
         >
           {title}
         </Typography>
-        <Box aria-hidden sx={{ width: 72, height: "1px", bgcolor: look.rule, my: 0.5 }} />
+        <Box aria-hidden className="library-flourish" sx={{ width: 72, height: "1px", bgcolor: look.rule, my: 0.5 }} />
         {description ? (
           <Typography sx={{ fontFamily: LIBRARY_SERIF, fontSize: { xs: 16, sm: 18 }, lineHeight: 1.5, maxWidth: "36em", color: look.quiet, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
             {description}
           </Typography>
         ) : null}
-        <Typography sx={{ fontSize: 13, letterSpacing: "0.04em", color: look.quiet }}>{counts.join(" · ")}</Typography>
         <Box sx={{ color: look.quiet, minWidth: 0, maxWidth: "100%", "& > *": { justifyContent: "center" } }}>{attribution}</Box>
-        {actions ? <Box sx={{ display: "flex", justifyContent: "center", width: "100%", "& > *": { justifyContent: "center" } }}>{actions}</Box> : null}
+        {actions ? <Box sx={{ display: "flex", justifyContent: "center", width: "100%", "& > *": { justifyContent: "center" }, ...quietActions(look) }}>{actions}</Box> : null}
       </Box>
     </Box>
   );
@@ -705,6 +778,7 @@ export default function LibrarySpace(props: SpaceProps) {
       hero={<TitlePage props={props} look={look} />}
       sx={{
         bgcolor: look.room,
+        backgroundImage: `radial-gradient(ellipse 80% 460px at 50% 0, ${look.lamp}, transparent)`,
         color: look.ink,
         gap: 3,
         p: { xs: 1.5, sm: 3, md: 4 },
@@ -714,16 +788,14 @@ export default function LibrarySpace(props: SpaceProps) {
     >
       {subfolders.length > 0 ? (
         <Box component="section" aria-labelledby="library-shelves" sx={{ minWidth: 0 }}>
-          <Typography id="library-shelves" component="h2" sx={{ fontFamily: LIBRARY_SERIF, fontWeight: 600, fontSize: 20, mb: 1.25, color: look.ink }}>
-            Shelves
-          </Typography>
+          <SectionHead id="library-shelves" title="Shelves" note={countLabel(subfolders.length, "shelf", "shelves")} look={look} />
           <Box
             component="ul"
             aria-label="Folders"
-            sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gap: 1, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 1fr))" }}
+            sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gap: 1, gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 264px), 1fr))" }}
           >
             {subfolders.map((folder) => (
-              <FolderSpine key={folder.id} folder={folder} onOpen={openFolder} />
+              <ShelfTile key={folder.id} folder={folder} look={look} onOpen={openFolder} />
             ))}
           </Box>
         </Box>
@@ -731,19 +803,24 @@ export default function LibrarySpace(props: SpaceProps) {
 
       {emptyState}
 
-      {items.total > 1 ? (
-        <Toolbar
-          query={query}
-          onQuery={setQuery}
-          sort={sort}
-          onSort={setSort}
-          view={view}
-          onView={(next) => {
-            setView(next);
-            writeLibraryView(next);
-          }}
-          phone={phone}
-        />
+      {items.total > 0 ? (
+        <Box sx={{ minWidth: 0 }}>
+          <SectionHead id="library-books" title="Books" note={countLabel(items.total, "book", "books")} look={look} />
+          {items.total > 1 ? (
+            <Toolbar
+              query={query}
+              onQuery={setQuery}
+              sort={sort}
+              onSort={setSort}
+              view={view}
+              onView={(next) => {
+                setView(next);
+                writeLibraryView(next);
+              }}
+              phone={phone}
+            />
+          ) : null}
+        </Box>
       ) : null}
 
       {searching ? (
@@ -762,7 +839,7 @@ export default function LibrarySpace(props: SpaceProps) {
             "--shelf-gap": { xs: "14px", sm: "28px" },
             listStyle: "none",
             m: 0,
-            pt: 1,
+            pt: 2,
             px: 0,
             pb: 0,
             display: "grid",
