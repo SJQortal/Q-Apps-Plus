@@ -20,7 +20,7 @@ export const CHANGELOG: Release[] = [
     notes: [
       "Share up to 300 files at once. Big shares go out in batches of 20 that the network accepts, the share itself once all its files are there, and you can let Hub approve every batch at once.",
       "If publishing stops halfway, the files already on QDN stay in your draft, so publishing again sends only the rest.",
-      "Collections can have folders (and folders inside folders) and covers. Move a share between folders, or add it straight to one.",
+      "Collections can have folders (and folders inside folders) and covers. Move a share between folders, or add it straight to one: Add to collection keeps each collection's folders folded until you open them.",
       "Shares with several audio files play as a playlist, in a player that keeps going while you browse.",
       "Sort by name in the Share form puts numbered tracks in order.",
       "Collections show their shares as a grid of cards, with a List/Grid switch of their own.",
