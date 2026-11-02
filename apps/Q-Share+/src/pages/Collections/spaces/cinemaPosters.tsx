@@ -17,7 +17,7 @@ import { coverUrl, type CollectionFolder } from "../../../utils/collections";
 import { formatBytes } from "../../../utils/formatBytes";
 import { folderCountLabel } from "../FolderGrid";
 import { ShareOwnerActions } from "./SpaceShell";
-import { filmFrame, REDUCED_MOTION } from "./cinemaTheme";
+import { filmFrame, POINTER, REDUCED_MOTION, TOUCH } from "./cinemaTheme";
 import type { SpaceShare } from "./useSpaceItems";
 
 /** What a poster can do. Stable across renders, so a body landing redraws only its own poster. */
@@ -28,39 +28,33 @@ export interface PosterHandlers {
   remove: (share: Video) => void;
 }
 
-/** "2 videos · 1.4 GB", or "" with nothing to say. */
-export function videosLabel(share: Pick<SpaceShare, "videos">): string {
-  const count = share.videos.length;
-  if (count === 0) return "";
-  const bytes = share.videos.reduce((sum, file) => sum + (file.size ?? 0), 0);
-  const videos = `${count} ${count === 1 ? "video" : "videos"}`;
-  return bytes > 0 ? `${videos} · ${formatBytes(bytes, 1)}` : videos;
-}
-
-function posterNote(share: SpaceShare): string {
+/** A poster's second line: who and how big for a film, how many for a series, or what's wrong. */
+export function posterNote(share: SpaceShare): string {
   if (share.deleted) return "Deleted by its publisher";
   if (share.unreadable) return "This share can't be read";
   if (share.unavailable) return "Not available right now";
-  const videos = videosLabel(share);
-  if (videos) return videos;
-  const count = share.files.length;
-  return count > 0 ? `${count} ${count === 1 ? "file" : "files"}` : "";
+  const count = share.videos.length;
+  const bytes = share.videos.reduce((sum, file) => sum + (file.size ?? 0), 0);
+  const size = bytes > 0 ? ` · ${formatBytes(bytes, 1)}` : "";
+  if (count > 1) return `${count} episodes${size}`;
+  if (count === 1) return `${share.user}${size}`;
+  const files = share.files.length;
+  return files > 0 ? `${files} ${files === 1 ? "file" : "files"}` : "";
 }
 
-/** The title drawn on the art itself: from an attribute, so it isn't read out twice. */
+/** The title card of a share with no picture: from an attribute, so it isn't read out twice. */
 const artTitleSx = {
   content: "attr(data-title)",
-  position: "absolute",
-  left: 12,
-  right: 12,
-  bottom: 14,
+  px: 2,
   color: "common.white",
   fontWeight: 700,
-  fontSize: 14,
+  fontSize: 17,
   lineHeight: 1.25,
+  letterSpacing: "-0.01em",
+  textAlign: "center",
   display: "-webkit-box",
   WebkitBoxOrient: "vertical",
-  WebkitLineClamp: 2,
+  WebkitLineClamp: 3,
   overflow: "hidden",
   overflowWrap: "anywhere",
 } as const;
@@ -79,7 +73,8 @@ function FilmPlaceholder({ seed, title, icon, dim }: { seed: string; title?: str
           justifyContent: "center",
           color: "text.secondary",
           opacity: dim ? 0.55 : 1,
-          "& svg": { fontSize: 36, mb: title ? 3 : 0 },
+          // With a title the icon is a small mark in the corner, and the title is the card.
+          "& svg": title ? { position: "absolute", top: 10, left: 10, fontSize: 20 } : { fontSize: 32 },
           ...(title ? { "&::after": artTitleSx } : {}),
         },
         filmFrame(seed) as never,
@@ -122,7 +117,6 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
         <Box
           aria-hidden
           className="poster-glass"
-          data-title={share.title}
           sx={(theme) => ({
             position: "absolute",
             inset: 0,
@@ -131,25 +125,60 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
             justifyContent: "center",
             opacity: 0,
             transition: "opacity 160ms ease",
-            background: `linear-gradient(to top, ${alpha(theme.palette.common.black, 0.9)}, ${alpha(theme.palette.common.black, 0.2)} 70%)`,
-            "&::after": artTitleSx,
+            background: alpha(theme.palette.common.black, 0.42),
             [REDUCED_MOTION]: { transition: "none" },
           })}
         >
           <Box
             sx={{
               display: "flex",
-              p: 1,
-              mb: 3,
+              p: 1.25,
               borderRadius: "50%",
               bgcolor: "common.white",
               color: "common.black",
             }}
           >
-            {playable ? <PlayArrowRoundedIcon /> : <OpenInNewRoundedIcon />}
+            {playable ? <PlayArrowRoundedIcon sx={{ fontSize: 30 }} /> : <OpenInNewRoundedIcon />}
           </Box>
         </Box>
       )}
+      {series ? (
+        <Box
+          aria-hidden
+          sx={(theme) => ({
+            position: "absolute",
+            left: 8,
+            bottom: 8,
+            px: 1,
+            py: 0.25,
+            borderRadius: 1,
+            fontSize: 12.5,
+            fontWeight: 700,
+            color: "common.white",
+            bgcolor: alpha(theme.palette.common.black, 0.76),
+          })}
+        >
+          {share.videos.length} episodes
+        </Box>
+      ) : null}
+      {playable ? (
+        <Box
+          aria-hidden
+          sx={(theme) => ({
+            display: "none",
+            position: "absolute",
+            right: 8,
+            bottom: 8,
+            p: 0.5,
+            borderRadius: "50%",
+            color: "common.white",
+            bgcolor: alpha(theme.palette.common.black, 0.76),
+            [TOUCH]: { display: "flex" },
+          })}
+        >
+          <PlayArrowRoundedIcon sx={{ fontSize: 20 }} />
+        </Box>
+      ) : null}
     </>
   );
 
@@ -177,10 +206,12 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
           // A share with several videos reads as a small stack of them.
           ...(series
             ? {
-                boxShadow: `0 -4px 0 -2px ${alpha(theme.palette.common.white, 0.34)}, 0 -8px 0 -4px ${alpha(theme.palette.common.white, 0.16)}`,
+                "&::before, &::after": { content: '""', position: "absolute", height: 4, borderRadius: "4px 4px 0 0" },
+                "&::before": { top: -4, left: 8, right: 8, bgcolor: alpha(theme.palette.common.white, 0.36) },
+                "&::after": { top: -8, left: 16, right: 16, bgcolor: alpha(theme.palette.common.white, 0.18) },
               }
             : {}),
-          "@media (hover: hover)": {
+          [POINTER]: {
             "&:hover, &:focus-within": {
               transform: "scale(1.04)",
               zIndex: 2,
@@ -317,7 +348,7 @@ function FolderTile({ folder, onOpen }: { folder: CollectionFolder; onOpen: (id:
           justifyContent: "flex-end",
           width: "100%",
           aspectRatio: "16 / 9",
-          minHeight: 92,
+          minHeight: 100,
           p: 0,
           border: 1,
           borderColor: "divider",
@@ -329,14 +360,16 @@ function FolderTile({ folder, onOpen }: { folder: CollectionFolder; onOpen: (id:
           textAlign: "left",
           bgcolor: "background.paper",
           transition: "transform 200ms ease, border-color 200ms ease",
-          "@media (hover: hover)": {
+          [POINTER]: {
             "&:hover": { transform: "scale(1.03)", borderColor: alpha(theme.palette.common.white, 0.5) },
           },
           "&:focus-visible": { outline: "2px solid", outlineColor: "common.white", outlineOffset: 2 },
           [REDUCED_MOTION]: { transition: "none", "&:hover": { transform: "none" } },
         })}
       >
-        <FilmPlaceholder seed={folder.id} icon={<FolderOutlinedIcon />} />
+        <Box sx={{ position: "absolute", inset: 0, "& svg": { mb: 4 } }}>
+          <FilmPlaceholder seed={folder.id} icon={<FolderOutlinedIcon />} />
+        </Box>
         {src ? (
           <img
             src={src}
@@ -351,12 +384,24 @@ function FolderTile({ folder, onOpen }: { folder: CollectionFolder; onOpen: (id:
           sx={(theme) => ({
             position: "relative",
             px: 1.5,
-            pt: 3,
+            pt: 3.5,
             pb: 1,
-            background: `linear-gradient(to top, ${alpha(theme.palette.common.black, 0.9)} 70%, transparent)`,
+            background: `linear-gradient(to top, ${alpha(theme.palette.common.black, 0.88)} calc(100% - 28px), transparent)`,
           })}
         >
-          <Typography component="span" noWrap sx={{ display: "block", fontWeight: 700, fontSize: 15 }}>
+          <Typography
+            component="span"
+            sx={{
+              display: "-webkit-box",
+              WebkitBoxOrient: "vertical",
+              WebkitLineClamp: 2,
+              overflow: "hidden",
+              overflowWrap: "anywhere",
+              fontWeight: 700,
+              fontSize: 15,
+              lineHeight: 1.25,
+            }}
+          >
             {title}
           </Typography>
           <Typography component="span" noWrap sx={{ display: "block", fontSize: 13, color: "text.secondary" }}>
@@ -373,8 +418,15 @@ export const RAIL_MAX = 12;
 
 const GUTTER = { xs: 2, md: 4 };
 
+/** The widths of a row: posters, or the smaller tiles of folders. */
+const RAIL_SIZES = {
+  poster: { column: "280px", phone: "min(68vw, 250px)", arrowTop: 68 },
+  tile: { column: "220px", phone: "min(52vw, 190px)", arrowTop: 50 },
+};
+
 /** Posters in one row to swipe, with arrows where there's a mouse. */
-function Rail({ label, busy, children }: { label: string; busy: boolean; children: ReactNode }) {
+function Rail({ label, busy, size, children }: { label: string; busy: boolean; size: keyof typeof RAIL_SIZES; children: ReactNode }) {
+  const { column, phone: phoneColumn, arrowTop } = RAIL_SIZES[size];
   const phone = usePhoneLayout();
   const list = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ left: false, right: false });
@@ -404,24 +456,40 @@ function Rail({ label, busy, children }: { label: string; busy: boolean; childre
     el.scrollBy({ left: direction * el.clientWidth * 0.85, behavior: still ? "auto" : "smooth" });
   };
 
+  // The row dims away under its arrow, so the arrow doesn't sit on a poster's picture.
   const arrow = (direction: 1 | -1) => (
-    <IconButton
-      aria-label={`Scroll ${label} ${direction > 0 ? "right" : "left"}`}
-      onClick={() => scroll(direction)}
-      sx={(theme) => ({
-        position: "absolute",
-        zIndex: 3,
-        top: "calc(50% - 44px)",
-        [direction > 0 ? "right" : "left"]: 8,
-        width: 44,
-        height: 44,
-        color: "common.white",
-        bgcolor: alpha(theme.palette.common.black, 0.76),
-        "&:hover": { bgcolor: theme.palette.common.black },
-      })}
-    >
-      {direction > 0 ? <ChevronRightRoundedIcon /> : <ChevronLeftRoundedIcon />}
-    </IconButton>
+    <>
+      <Box
+        aria-hidden
+        sx={(theme) => ({
+          position: "absolute",
+          zIndex: 3,
+          top: 0,
+          bottom: 0,
+          [direction > 0 ? "right" : "left"]: 0,
+          width: 96,
+          pointerEvents: "none",
+          background: `linear-gradient(${direction > 0 ? "to left" : "to right"}, ${theme.palette.background.default}, transparent)`,
+        })}
+      />
+      <IconButton
+        aria-label={`Scroll ${label} ${direction > 0 ? "right" : "left"}`}
+        onClick={() => scroll(direction)}
+        sx={(theme) => ({
+          position: "absolute",
+          zIndex: 3,
+          top: arrowTop,
+          [direction > 0 ? "right" : "left"]: 8,
+          width: 44,
+          height: 44,
+          color: "common.white",
+          bgcolor: alpha(theme.palette.common.black, 0.76),
+          "&:hover": { bgcolor: theme.palette.common.black },
+        })}
+      >
+        {direction > 0 ? <ChevronRightRoundedIcon /> : <ChevronLeftRoundedIcon />}
+      </IconButton>
+    </>
   );
 
   return (
@@ -441,7 +509,7 @@ function Rail({ label, busy, children }: { label: string; busy: boolean; childre
           pb: 1.5,
           display: "grid",
           gridAutoFlow: "column",
-          gridAutoColumns: "280px",
+          gridAutoColumns: column,
           gap: 2,
           overflowX: "auto",
           overflowY: "hidden",
@@ -450,7 +518,7 @@ function Rail({ label, busy, children }: { label: string; busy: boolean; childre
           scrollbarWidth: "none",
           "&::-webkit-scrollbar": { display: "none" },
           "& > li": { scrollSnapAlign: "start" },
-          [`@media ${PHONE_MEDIA}`]: { gridAutoColumns: "min(68vw, 250px)", gap: 1.5 },
+          [`@media ${PHONE_MEDIA}`]: { gridAutoColumns: phoneColumn, gap: 1.5 },
         }}
       >
         {children}
@@ -483,19 +551,36 @@ function PosterGrid({ label, busy, children }: { label: string; busy: boolean; c
   );
 }
 
+/** A row of one or two posters, sized to them, so two such rows can share a line. */
+function ShortRow({ label, busy, children }: { label: string; busy: boolean; children: ReactNode }) {
+  return (
+    <Box
+      component="ul"
+      aria-label={label}
+      aria-busy={busy || undefined}
+      sx={{ listStyle: "none", m: 0, p: 0, pt: 1.5, pb: 1.5, display: "grid", gridAutoFlow: "column", gridAutoColumns: "280px", gap: 2 }}
+    >
+      {children}
+    </Box>
+  );
+}
+
 /** One titled row or grid of the stage. */
-export function CinemaSection({ id, title, count, rail, busy = false, children }: {
+export function CinemaSection({ id, title, count, layout, busy = false, children }: {
   id: string;
   title: string;
   count?: number;
-  rail: boolean;
+  layout: "rail" | "tiles" | "grid" | "short";
   busy?: boolean;
   children: ReactNode;
 }) {
-  const Layout = rail ? Rail : PosterGrid;
   return (
-    <Box component="section" aria-labelledby={id} sx={{ minWidth: 0 }}>
-      <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: rail ? 0 : 0.5 }}>
+    <Box
+      component="section"
+      aria-labelledby={id}
+      sx={layout === "short" ? { minWidth: 0, maxWidth: "100%", flex: "0 1 auto" } : { minWidth: 0, flex: "1 1 100%" }}
+    >
+      <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mb: layout === "grid" ? 0.5 : 0 }}>
         <Typography id={id} component="h2" sx={{ fontWeight: 800, fontSize: { xs: 18, md: 21 }, letterSpacing: "-0.01em" }}>
           {title}
         </Typography>
@@ -505,18 +590,28 @@ export function CinemaSection({ id, title, count, rail, busy = false, children }
           </Typography>
         ) : null}
       </Box>
-      <Layout label={title} busy={busy}>
-        {children}
-      </Layout>
+      {layout === "grid" ? (
+        <PosterGrid label={title} busy={busy}>
+          {children}
+        </PosterGrid>
+      ) : layout === "short" ? (
+        <ShortRow label={title} busy={busy}>
+          {children}
+        </ShortRow>
+      ) : (
+        <Rail label={title} busy={busy} size={layout === "tiles" ? "tile" : "poster"}>
+          {children}
+        </Rail>
+      )}
     </Box>
   );
 }
 
-/** The folders of this place, as a section of wide tiles. */
+/** The folders of this place, as a section of small wide tiles. */
 export function CinemaFolders({ folders, onOpen }: { folders: CollectionFolder[]; onOpen: (id: string) => void }) {
   if (folders.length === 0) return null;
   return (
-    <CinemaSection id="cinema-folders" title="Folders" count={folders.length} rail={folders.length <= RAIL_MAX}>
+    <CinemaSection id="cinema-folders" title="Folders" count={folders.length} layout={folders.length <= RAIL_MAX ? "tiles" : "grid"}>
       {folders.map((folder) => (
         <FolderTile key={folder.id} folder={folder} onOpen={onOpen} />
       ))}

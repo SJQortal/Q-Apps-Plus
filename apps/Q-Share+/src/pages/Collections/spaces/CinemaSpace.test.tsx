@@ -3,8 +3,8 @@ import { configure, fireEvent, screen, waitFor, within } from "@testing-library/
 import { createTheme, getContrastRatio } from "@mui/material/styles";
 import { fetchCallsMatching, mockQortalAction, qortalCallsFor } from "../../../test/setup";
 import { cinemaTheme } from "./cinemaTheme";
-import { cinemaQueue, entryKey } from "./cinemaPlayer";
-import { videosLabel } from "./cinemaPosters";
+import { cinemaQueue, entryKey, episodeName, upNext } from "./cinemaPlayer";
+import { posterNote } from "./cinemaPosters";
 import { renderSpace, resetSpaceTest, spaceFile, spaceFolder, SPACE_FOLDER_ID, type SpaceBodies } from "./testUtils";
 import { toSpaceShare } from "./useSpaceItems";
 import type { Video } from "../../../state/features/fileSlice";
@@ -38,7 +38,9 @@ describe("the cinema", { timeout: 20_000 }, () => {
   it("puts a billboard over rows sorted by what the shares are", async () => {
     renderSpace({ space: "cinema" });
     expect(await screen.findByRole("heading", { level: 1, name: "My space" })).toBeInTheDocument();
-    expect(await screen.findByText("Featured: Film")).toBeInTheDocument();
+    const billboard = screen.getByRole("region", { name: "About this collection" });
+    expect(within(billboard).getByText("Now showing")).toBeInTheDocument();
+    expect(await within(billboard).findByText("Film")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Play Film" })).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Open Songs" })).toBeInTheDocument();
@@ -85,11 +87,11 @@ describe("the cinema", { timeout: 20_000 }, () => {
     expect(within(player).getByRole("button", { name: "Previous video" })).toBeDisabled();
     expect(within(player).getByText("Video 1 of 3")).toBeInTheDocument();
     expect(within(player).getByRole("heading", { name: "Episodes · 2" })).toBeInTheDocument();
-    expect(within(player).getByRole("button", { name: /ep1\.mp4/ })).toHaveAttribute("aria-current", "true");
+    expect(within(player).getByRole("button", { name: /Ep1/ })).toHaveAttribute("aria-current", "true");
 
-    fireEvent.click(within(player).getByRole("button", { name: /ep2\.mp4/ }));
+    fireEvent.click(within(player).getByRole("button", { name: /Ep2/ }));
     expect(await within(player).findByText("Video 2 of 3")).toBeInTheDocument();
-    expect(within(player).getByRole("button", { name: /ep2\.mp4/ })).toHaveAttribute("aria-current", "true");
+    expect(within(player).getByRole("button", { name: /Ep2/ })).toHaveAttribute("aria-current", "true");
 
     fireEvent.click(within(player).getByRole("button", { name: "Next video" }));
     expect(await screen.findByRole("dialog", { name: "Film" })).toBeInTheDocument();
@@ -197,9 +199,26 @@ describe("cinema helpers", () => {
     expect(new Set(queue.map(entryKey)).size).toBe(3);
   });
 
-  it("says how many videos and how big", () => {
-    expect(videosLabel(share("a", { files: [spaceFile("1.mp4", "video/mp4", "i", 1024)] }))).toBe("1 video · 1 KB");
-    expect(videosLabel(share("a", { files: [] }))).toBe("");
+  it("says a file's name the way a person would", () => {
+    expect(episodeName("episode-2-the-depot.webm")).toBe("Episode 2 the depot");
+    expect(episodeName("my_film.final.mp4")).toBe("My film final");
+    expect(episodeName("---.mp4")).toBe("---.mp4");
+  });
+
+  it("lists the next shares once each, not this share's own episodes", () => {
+    const queue = cinemaQueue([
+      share("a", { title: "A", files: [spaceFile("1.mp4", "video/mp4", "a1"), spaceFile("2.mp4", "video/mp4", "a2")] }),
+      share("b", { title: "B", files: [spaceFile("3.mp4", "video/mp4", "b1"), spaceFile("4.mp4", "video/mp4", "b2")] }),
+      share("c", { title: "C", files: [spaceFile("5.mp4", "video/mp4", "c1")] }),
+    ]);
+    expect(upNext(queue, 0).map((entry) => entry.file.filename)).toEqual(["3.mp4", "5.mp4"]);
+    expect(upNext(queue, 4)).toEqual([]);
+  });
+
+  it("says who and how big for a film, how many for a series", () => {
+    expect(posterNote(share("a", { files: [spaceFile("1.mp4", "video/mp4", "i", 1024)] }))).toBe("bob · 1 KB");
+    expect(posterNote(share("a", { files: [spaceFile("1.mp4", "video/mp4", "i", 1024), spaceFile("2.mp4", "video/mp4", "j", 1024)] }))).toBe("2 episodes · 2 KB");
+    expect(posterNote(share("a", { files: [spaceFile("n.pdf", "application/pdf")] }))).toBe("1 file");
   });
 
   it.each(["light", "dark"] as const)("stays dark and readable over a %s app theme", (mode) => {

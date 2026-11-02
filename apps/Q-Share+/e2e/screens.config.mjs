@@ -176,6 +176,7 @@ Object.assign(collections, {
     folders: [
       { id: 'sc_docs', title: 'Documentaries', description: '', items: itemsOf(FILM_SHARES.slice(1, 2)), folders: [] },
       { id: 'sc_short', title: 'Short films with a long folder name that wraps', description: '', cover: spaceCover('short'), items: itemsOf(FILM_SHARES.slice(3, 4)), folders: [] },
+      { id: 'sc_soon', title: 'Coming soon', description: '', items: [], folders: [] },
     ],
   },
   [SPACE_LIBRARY]: {
@@ -404,6 +405,9 @@ export default {
     { key: 'space-visitor', path: `/collection/${encodeURIComponent('bob+builder')}/${SPACE_VISITOR}`, after: async (page) => { await page.waitForSelector('text=Tidal hours', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-cinema', path: `/collection/${NAME}/${SPACE_CINEMA}`, after: async (page) => { await page.waitForSelector('text=Salt roads', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-cinema-player', path: `/collection/${NAME}/${SPACE_CINEMA}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Play Station eleven nights' }).first().click({ timeout: 8000 }); await page.getByRole('dialog').waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(1500); } },
+    { key: 'space-cinema-film', path: `/collection/${NAME}/${SPACE_CINEMA}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Play Salt roads' }).first().click({ timeout: 8000 }); await page.getByRole('dialog').waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(1500); } },
+    // A folder with nothing in it: the stage with no picture, and the empty state.
+    { key: 'space-cinema-empty', path: `/collection/${NAME}/${SPACE_CINEMA}/folder/sc_soon`, after: async (page) => { await page.waitForSelector('h1', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(600); } },
     { key: 'space-library', path: `/collection/${NAME}/${SPACE_LIBRARY}`, after: async (page) => { await page.waitForSelector('text=Keeping bees', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-library-book', path: `/collection/${NAME}/${SPACE_LIBRARY}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Keeping bees by/ }).first().click({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'space-album', path: `/collection/${NAME}/${SPACE_ALBUM}`, after: async (page) => { await page.waitForSelector('text=Coast walk', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(1000); } },

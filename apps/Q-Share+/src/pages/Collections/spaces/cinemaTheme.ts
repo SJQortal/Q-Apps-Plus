@@ -56,19 +56,20 @@ function tintOf(seed: string): (typeof TINTS)[number] {
   return TINTS[sum % TINTS.length];
 }
 
-/** Where a picture is missing: a strip of film, a soft colour and a sprocket row along each edge. */
+/** Where a picture is missing: a dark screen, lit softly from the projector in one steady colour. */
 export function filmFrame(seed: string): SxProps<Theme> {
   return (theme) => {
-    const { black, white } = theme.palette.common;
-    const holes = `repeating-linear-gradient(90deg, ${alpha(white, 0.2)} 0 8px, transparent 8px 20px)`;
+    const base = lighten(theme.palette.common.black, 0.08);
     return {
-      backgroundColor: lighten(black, 0.08),
-      backgroundImage: `${holes}, ${holes}, linear-gradient(135deg, ${alpha(theme.palette[tintOf(seed)].main, 0.34)}, ${lighten(black, 0.08)} 72%)`,
-      backgroundSize: "100% 6px, 100% 6px, 100% 100%",
-      backgroundPosition: "0 6px, 0 calc(100% - 6px), 0 0",
-      backgroundRepeat: "no-repeat",
+      backgroundColor: base,
+      backgroundImage: `radial-gradient(120% 110% at 50% -15%, ${alpha(theme.palette[tintOf(seed)].main, 0.5)}, transparent 72%)`,
     };
   };
 }
+
+/** Pointing with a mouse: everywhere else, what hover would reveal has to show already. */
+export const POINTER = "@media (hover: hover) and (pointer: fine)";
+/** A finger: the same test turned round. */
+export const TOUCH = "@media (hover: none), (pointer: coarse)";
 
 export const REDUCED_MOTION = "@media (prefers-reduced-motion: reduce)";

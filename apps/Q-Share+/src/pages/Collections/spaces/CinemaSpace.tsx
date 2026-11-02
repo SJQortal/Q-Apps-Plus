@@ -3,17 +3,21 @@ import { Box, Button, Typography, useTheme } from "@mui/material";
 import { alpha, ThemeProvider } from "@mui/material/styles";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
-import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
+import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { useQdnImage } from "../../../hooks/useQdnImage";
 import { coverUrl } from "../../../utils/collections";
 import { SpaceShell, SpaceShowMore } from "./SpaceShell";
 import { CinemaPlayer, cinemaQueue, entryKey } from "./cinemaPlayer";
-import { CinemaFolders, CinemaSection, Poster, RAIL_MAX, type PosterHandlers } from "./cinemaPosters";
+import { CinemaFolders, CinemaSection, Poster, RAIL_MAX, posterNote, type PosterHandlers } from "./cinemaPosters";
 import { cinemaTheme, filmFrame, REDUCED_MOTION } from "./cinemaTheme";
 import type { SpaceProps } from "./types";
 import type { SpaceShare } from "./useSpaceItems";
 
 const LANDSCAPE_PHONE = "@media (pointer: coarse) and (max-height: 500px)";
+/** Wide enough for the words to sit beside the picture's subject; narrower, they go under it. */
+const SIDE_BY_SIDE = "@media (min-width: 900px), (pointer: coarse) and (max-height: 500px)";
+/** At most this much of the billboard holds words: the rest of the picture stays clear. */
+const WORDS_WIDTH = "min(600px, 56%)";
 
 interface BillboardProps {
   props: SpaceProps;
@@ -21,7 +25,10 @@ interface BillboardProps {
   onPlay: (share: SpaceShare) => void;
 }
 
-/** The top of the stage: a wide backdrop, and what's on over a scrim that grows with the words. */
+/**
+ * The top of the stage: the picture as a screen in a dark room, its colour
+ * spilling onto the walls behind everything.
+ */
 function Billboard({ props, featured, onPlay }: BillboardProps) {
   const { title, description, breadcrumb, cover, openShare } = props;
   const url = featured?.thumbnailUrl ?? (cover ? coverUrl(cover) : null);
@@ -37,15 +44,33 @@ function Billboard({ props, featured, onPlay }: BillboardProps) {
       sx={{
         position: "relative",
         display: "grid",
-        minHeight: 300,
-        overflow: "hidden",
-        // The wide shape is a floor: the words stack over it and may grow past it.
-        "&::before": { content: '""', gridArea: "1 / 1", aspectRatio: "21 / 9" },
-        [`@media ${PHONE_MEDIA}`]: { minHeight: 240, "&::before": { aspectRatio: "4 / 3" } },
-        [LANDSCAPE_PHONE]: { minHeight: 0, "&::before": { display: "none" } },
+        minWidth: 0,
+        [SIDE_BY_SIDE]: { minHeight: url ? 500 : 300, alignContent: "end" },
+        [LANDSCAPE_PHONE]: { minHeight: 0 },
       }}
     >
-      <Box aria-hidden sx={[{ position: "absolute", inset: 0 }, filmFrame(props.collection.title) as never]}>
+      {src ? (
+        // A quarter of the size, scaled up: the blur costs a phone little that way.
+        <Box aria-hidden sx={{ position: "absolute", zIndex: -1, inset: "0 0 -180px", overflow: "hidden", maskImage: "linear-gradient(to bottom, black 55%, transparent)", pointerEvents: "none" }}>
+          <img
+            src={src}
+            alt=""
+            decoding="async"
+            style={{ display: "block", width: "25%", height: "25%", objectFit: "cover", transform: "scale(4)", transformOrigin: "0 0", filter: "blur(20px)", opacity: 0.2 }}
+          />
+        </Box>
+      ) : null}
+      <Box
+        aria-hidden
+        sx={{
+          position: "relative",
+          overflow: "hidden",
+          ...(url ? { aspectRatio: "16 / 9", maxHeight: "50vh" } : { height: 88 }),
+          maskImage: "linear-gradient(to top, transparent, black 30%)",
+          [SIDE_BY_SIDE]: { position: "absolute", inset: 0, aspectRatio: "auto", height: "auto", maxHeight: "none" },
+        }}
+      >
+        <Box sx={[{ position: "absolute", inset: 0 }, filmFrame(props.collection.title) as never]} />
         {src ? (
           <Box
             component="img"
@@ -54,10 +79,13 @@ function Billboard({ props, featured, onPlay }: BillboardProps) {
             decoding="async"
             onError={onError}
             sx={{
+              position: "absolute",
+              inset: 0,
               display: "block",
               width: "100%",
               height: "100%",
               objectFit: "cover",
+              objectPosition: "center 30%",
               animation: "cinema-fade 500ms ease both",
               "@keyframes cinema-fade": { from: { opacity: 0 }, to: { opacity: 1 } },
               [REDUCED_MOTION]: { animation: "none" },
@@ -65,76 +93,101 @@ function Billboard({ props, featured, onPlay }: BillboardProps) {
           />
         ) : null}
       </Box>
-      {/* The scrim is on the words' own box, so it covers them however many lines they take. */}
       <Box
         sx={(theme) => ({
           position: "relative",
-          gridArea: "1 / 1",
-          alignSelf: "end",
+          zIndex: 1,
           minWidth: 0,
           px: { xs: 2, md: 4 },
-          pt: 7,
+          mt: url ? -5 : -2,
           pb: { xs: 2, md: 3 },
-          background: `linear-gradient(to top, ${theme.palette.background.default} 0, ${alpha(theme.palette.common.black, 0.82)} 45%, ${alpha(theme.palette.common.black, 0.78)} calc(100% - 56px), transparent 100%)`,
-          [LANDSCAPE_PHONE]: { pt: 3 },
+          // The scrim is on the words' own box, so it covers them however many lines they take.
+          [SIDE_BY_SIDE]: {
+            mt: 0,
+            pt: 4,
+            width: WORDS_WIDTH,
+            boxSizing: "content-box",
+            maxWidth: "calc(100% - 64px)",
+            "&::before": {
+              content: '""',
+              position: "absolute",
+              zIndex: -1,
+              inset: "-160px -40% -48px 0",
+              background: alpha(theme.palette.background.default, 0.86),
+              maskImage: "linear-gradient(to right, black 62%, transparent), linear-gradient(to bottom, transparent, black 160px, black calc(100% - 48px), transparent)",
+              maskComposite: "intersect",
+              pointerEvents: "none",
+            },
+          },
+          [LANDSCAPE_PHONE]: { pt: 2, pb: 1 },
         })}
       >
-        <Box sx={{ maxWidth: 720 }}>
-          {breadcrumb}
-          <Typography
-            component="h1"
-            sx={{
-              fontWeight: 800,
-              lineHeight: 1.08,
-              letterSpacing: "-0.02em",
-              fontSize: "clamp(1.75rem, 1.2rem + 3vw, 3.25rem)",
-              overflowWrap: "anywhere",
-              [LANDSCAPE_PHONE]: { fontSize: "1.5rem" },
-            }}
-          >
-            {title}
-          </Typography>
-          {featured ? (
-            <Typography noWrap sx={{ mt: 0.75, fontSize: 14, fontWeight: 600, color: "text.secondary" }}>
-              Featured: {featured.title}
+        {breadcrumb}
+        <Typography
+          component="h1"
+          sx={{
+            fontWeight: 800,
+            lineHeight: 1.05,
+            letterSpacing: "-0.025em",
+            fontSize: "clamp(2rem, 1.3rem + 3vw, 3.5rem)",
+            overflowWrap: "anywhere",
+            [LANDSCAPE_PHONE]: { fontSize: "1.625rem" },
+          }}
+        >
+          {title}
+        </Typography>
+        {description ? (
+          <>
+            <Typography
+              sx={{
+                mt: 1,
+                fontSize: "1rem",
+                lineHeight: 1.5,
+                color: "text.secondary",
+                whiteSpace: "pre-wrap",
+                overflowWrap: "anywhere",
+                ...(wholeDescription
+                  ? {}
+                  : { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 4, overflow: "hidden" }),
+                [LANDSCAPE_PHONE]: wholeDescription ? {} : { WebkitLineClamp: 1, mt: 0.5 },
+              }}
+            >
+              {description}
             </Typography>
-          ) : null}
-          {description ? (
-            <>
-              <Typography
-                sx={{
-                  mt: 1,
-                  color: "text.secondary",
-                  whiteSpace: "pre-wrap",
-                  overflowWrap: "anywhere",
-                  ...(wholeDescription
-                    ? {}
-                    : { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 4, overflow: "hidden" }),
-                  [LANDSCAPE_PHONE]: wholeDescription ? {} : { WebkitLineClamp: 2 },
-                }}
+            {longDescription ? (
+              <Button
+                size="small"
+                aria-expanded={wholeDescription}
+                onClick={() => setWholeDescription((whole) => !whole)}
+                sx={{ px: 0, minHeight: 44, minWidth: 0 }}
               >
-                {description}
+                {wholeDescription ? "Show less" : "Show all"}
+              </Button>
+            ) : null}
+          </>
+        ) : null}
+        {featured ? (
+          <>
+            <Box sx={{ mt: 2, minWidth: 0, [LANDSCAPE_PHONE]: { mt: 1 } }}>
+              <Typography
+                sx={{ fontSize: 12.5, fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", color: "warning.light" }}
+              >
+                Now showing
               </Typography>
-              {longDescription ? (
-                <Button
-                  size="small"
-                  aria-expanded={wholeDescription}
-                  onClick={() => setWholeDescription((whole) => !whole)}
-                  sx={{ px: 0, minHeight: 44, minWidth: 0 }}
-                >
-                  {wholeDescription ? "Show less" : "Show all"}
-                </Button>
-              ) : null}
-            </>
-          ) : null}
-          {featured ? (
-            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 2 }}>
+              <Typography noWrap sx={{ mt: 0.25, fontSize: 17, fontWeight: 700 }}>
+                {featured.title}
+              </Typography>
+              <Typography noWrap sx={{ fontSize: 13.5, color: "text.secondary" }}>
+                {posterNote(featured)}
+              </Typography>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1.5 }}>
               <Button
                 variant="contained"
                 size="large"
                 startIcon={<PlayArrowRoundedIcon />}
                 onClick={() => onPlay(featured)}
-                sx={{ minHeight: 48, minWidth: 128, fontSize: 16 }}
+                sx={{ minHeight: 48, minWidth: 136, fontSize: 16 }}
               >
                 Play
               </Button>
@@ -144,17 +197,24 @@ function Billboard({ props, featured, onPlay }: BillboardProps) {
                 startIcon={<InfoOutlinedIcon />}
                 aria-label={`More info about ${featured.title}`}
                 onClick={() => openShare(featured)}
-                sx={(theme) => ({ minHeight: 48, fontSize: 16, bgcolor: alpha(theme.palette.common.white, 0.1) })}
+                sx={(theme) => ({ minHeight: 48, fontSize: 16, color: "common.white", borderColor: alpha(theme.palette.common.white, 0.4), bgcolor: alpha(theme.palette.common.white, 0.1) })}
               >
                 More info
               </Button>
             </Box>
-          ) : null}
-        </Box>
+          </>
+        ) : null}
       </Box>
     </Box>
   );
 }
+
+/** Edit, New folder and Delete stay out of Play's way: quiet until pointed at. */
+const quietActions = {
+  "& .MuiButton-root": { bgcolor: "transparent", color: "text.secondary", borderColor: "transparent", boxShadow: "none", px: 1.25 },
+  "& .MuiButton-root:hover": { bgcolor: "action.hover", color: "text.primary", boxShadow: "none" },
+  "& .MuiButton-colorError:hover": { color: "error.light" },
+} as const;
 
 /**
  * The cinema: a dark stage of its own in every theme, a billboard, rows of
@@ -166,6 +226,7 @@ export default function CinemaSpace(props: SpaceProps) {
   const theme = useMemo(() => cinemaTheme(outer), [outer]);
   const { items, isOwner, onMove, subfolders, attribution, actions, openFolder, openProfile, openShare, emptyState } = props;
   const [playing, setPlaying] = useState<string | null>(null);
+  const phone = usePhoneLayout();
 
   // The page's callbacks change with each of its renders; the posters' must not.
   const latest = useRef({ onMove, onRemove: props.onRemove, openShare });
@@ -206,6 +267,8 @@ export default function CinemaSpace(props: SpaceProps) {
   const featured = withVideo.find((share) => share.thumbnailUrl) ?? withVideo[0] ?? null;
   // Decided on the total, so a page doesn't change layout while its bodies land.
   const rail = items.total <= RAIL_MAX;
+  // One or two posters don't fill a row: on a wide screen such rows share a line.
+  const layoutFor = (count: number) => (!rail ? "grid" : !phone && count <= 2 ? "short" : "rail");
 
   const posters = (shares: SpaceShare[]) =>
     shares.map((share) => (
@@ -221,13 +284,14 @@ export default function CinemaSpace(props: SpaceProps) {
           gap: 0,
           color: "text.primary",
           bgcolor: "background.default",
-          backgroundImage: `radial-gradient(90% 420px at 50% 100%, ${alpha(t.palette.secondary.main, 0.1)}, transparent)`,
+          isolation: "isolate",
           overflow: "clip",
           borderRadius: { md: 3 },
           boxShadow: { md: `0 18px 50px ${alpha(t.palette.common.black, 0.36)}` },
           // Edge to edge below the desktop's padding, up to the header on a phone.
           mx: { xs: -2, md: 0 },
-          [`@media ${PHONE_MEDIA}`]: { mt: -2, mb: -3 },
+          // A shadow, so the dark runs on under the bottom bar without making the page longer.
+          [`@media ${PHONE_MEDIA}`]: { mt: -2, mb: -3, boxShadow: `0 240px 0 ${t.palette.background.default}` },
         })}
       >
         <Box
@@ -237,12 +301,15 @@ export default function CinemaSpace(props: SpaceProps) {
             alignItems: "center",
             justifyContent: "space-between",
             gap: 1.5,
+            // Above the end of the billboard's scrim.
+            position: "relative",
+            zIndex: 2,
             px: { xs: 2, md: 4 },
             pb: 1,
           }}
         >
           <Box sx={{ flex: "1 1 240px", minWidth: 0 }}>{attribution}</Box>
-          {actions}
+          {actions ? <Box sx={{ ...quietActions, mx: -1.25, minWidth: 0 }}>{actions}</Box> : null}
         </Box>
         <Box sx={{ display: "flex", flexDirection: "column", gap: { xs: 3, md: 4 }, px: { xs: 2, md: 4 }, pt: 2, pb: { xs: 3, md: 5 } }}>
           <CinemaFolders folders={subfolders} onOpen={openFolder} />
@@ -252,21 +319,25 @@ export default function CinemaSpace(props: SpaceProps) {
               id="cinema-videos"
               title="Videos"
               count={films.length - items.pending || undefined}
-              rail={rail}
+              layout={rail ? "rail" : "grid"}
               busy={items.pending > 0}
             >
               {posters(films)}
             </CinemaSection>
           ) : null}
-          {series.length > 0 ? (
-            <CinemaSection id="cinema-series" title="Series" count={series.length} rail={rail}>
-              {posters(series)}
-            </CinemaSection>
-          ) : null}
-          {others.length > 0 ? (
-            <CinemaSection id="cinema-others" title="Also here" count={others.length} rail={rail}>
-              {posters(others)}
-            </CinemaSection>
+          {series.length > 0 || others.length > 0 ? (
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: { xs: 3, md: 4 }, minWidth: 0 }}>
+              {series.length > 0 ? (
+                <CinemaSection id="cinema-series" title="Series" count={series.length} layout={layoutFor(series.length)}>
+                  {posters(series)}
+                </CinemaSection>
+              ) : null}
+              {others.length > 0 ? (
+                <CinemaSection id="cinema-others" title="Also here" count={others.length} layout={layoutFor(others.length)}>
+                  {posters(others)}
+                </CinemaSection>
+              ) : null}
+            </Box>
           ) : null}
           <SpaceShowMore items={items} />
         </Box>
