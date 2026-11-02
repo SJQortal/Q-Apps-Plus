@@ -10,7 +10,7 @@ const Grid = styled("ul")(({ theme }) => ({
   padding: 0,
   display: "grid",
   gap: theme.spacing(2),
-  gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fill, minmax(190px, 240px))",
   [theme.breakpoints.down("sm")]: {
     gap: theme.spacing(1),
     gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
@@ -76,6 +76,7 @@ export function AlbumFolders({ folders, openFolder }: { folders: CollectionFolde
                     aspectRatio: "4 / 3",
                     borderRadius: 0.5,
                     bgcolor: "background.paper",
+                    backgroundImage: `linear-gradient(160deg, ${alpha(theme.palette.primary.main, 0.14)}, transparent 80%)`,
                     border: `4px solid ${theme.palette.background.paper}`,
                     outline: `1px solid ${theme.palette.divider}`,
                   })}

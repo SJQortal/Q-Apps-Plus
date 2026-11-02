@@ -21,6 +21,9 @@ const SECTION_PAGE = 40;
 /** This few pictures on the page are drawn large. */
 const FEW_PHOTOS = 2;
 
+/** A quiet small heading: Folders, Other shares. The pictures' own sections speak louder. */
+const LABEL_SX = { fontSize: 13, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "text.secondary" } as const;
+
 const HeroFrame = styled("section")(({ theme }) => ({
   position: "relative",
   display: "flex",
@@ -40,18 +43,24 @@ const HeroFrame = styled("section")(({ theme }) => ({
 const HeroWords = styled("div")(({ theme }) => ({
   position: "relative",
   width: "100%",
-  padding: theme.spacing(8, 2, 2),
+  "--album-fade": theme.spacing(10),
+  padding: `var(--album-fade) ${theme.spacing(2)} ${theme.spacing(2)}`,
   color: theme.palette.common.white,
-  // The scrim travels with the words, so a long title is covered all the way up.
-  backgroundImage: `linear-gradient(to top, ${alpha(theme.palette.common.black, 0.8)}, ${alpha(theme.palette.common.black, 0.62)} calc(100% - ${theme.spacing(6)}), ${alpha(theme.palette.common.black, 0)})`,
-  [theme.breakpoints.up("md")]: { padding: theme.spacing(10, 4, 3.5) },
+  // The scrim travels with the words, so a long title is covered all the way up, and fades above them with no edge.
+  backgroundImage: `linear-gradient(to top, ${alpha(theme.palette.common.black, 0.8)}, ${alpha(theme.palette.common.black, 0.62)} calc(100% - var(--album-fade)), ${alpha(theme.palette.common.black, 0.28)} calc(100% - var(--album-fade) * 0.5), ${alpha(theme.palette.common.black, 0)})`,
+  [theme.breakpoints.up("md")]: {
+    "--album-fade": theme.spacing(14),
+    padding: `var(--album-fade) ${theme.spacing(4)} ${theme.spacing(3.5)}`,
+  },
 }));
 
 /** The big picture: the cover, or else one of the album's own that the node can show. */
-function AlbumHero({ cover, title, summary, photo, flush }: {
+function AlbumHero({ cover, title, kicker, summary, description, photo, flush }: {
   cover: SpaceProps["cover"];
   title: string;
+  kicker: string;
   summary: string;
+  description: string;
   photo: AlbumPhoto | null;
   /** Nothing above it: meet the phone's sub-header. */
   flush: boolean;
@@ -83,6 +92,7 @@ function AlbumHero({ cover, title, summary, photo, flush }: {
         />
       ) : null}
       <HeroWords>
+        <Typography sx={{ ...LABEL_SX, color: "inherit", mb: 0.75, fontSize: 13 }}>{kicker}</Typography>
         <Typography
           component="h1"
           sx={{
@@ -96,7 +106,12 @@ function AlbumHero({ cover, title, summary, photo, flush }: {
         >
           {title}
         </Typography>
-        {summary ? <Typography sx={{ mt: 0.75, color: "inherit", fontSize: 14 }}>{summary}</Typography> : null}
+        {description ? (
+          <Typography sx={{ mt: 1, color: "inherit", fontSize: "clamp(0.95rem, 0.9rem + 0.3vw, 1.125rem)", lineHeight: 1.45, maxWidth: 680, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+            {description}
+          </Typography>
+        ) : null}
+        {summary ? <Typography sx={{ mt: 1, color: "inherit", fontSize: 14 }}>{summary}</Typography> : null}
       </HeroWords>
     </HeroFrame>
   );
@@ -145,11 +160,11 @@ const AlbumSection = memo(function AlbumSection({ share, photos, few, revealed, 
   const title = share.title || share.identifier;
   const left = photos.length - limit;
   return (
-    <Box component="section" aria-label={title} sx={{ display: "flex", flexDirection: "column", gap: 0.5, minWidth: 0 }}>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 44 }}>
+    <Box component="section" aria-label={title} sx={{ display: "flex", flexDirection: "column", gap: 1.25, minWidth: 0, mt: { xs: 1, md: 2 }, pt: 2, borderTop: 1, borderColor: "divider" }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1, minHeight: 44 }}>
         {/* The title's button stretches over the small print too, for a 44 px target. */}
         <Box sx={{ position: "relative", flex: 1, minWidth: 0 }}>
-          <Typography component="h2" sx={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>
+          <Typography component="h2" sx={{ fontSize: "clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem)", fontWeight: 600, lineHeight: 1.2, letterSpacing: "-0.01em" }}>
             <Box
               component="button"
               type="button"
@@ -157,7 +172,11 @@ const AlbumSection = memo(function AlbumSection({ share, photos, few, revealed, 
               sx={{
                 appearance: "none",
                 border: 0,
-                p: 0,
+                display: "inline-block",
+                // Padding given back in margin: a 44 px target that takes a line's room.
+                py: "10px",
+                px: 0,
+                my: "-10px",
                 background: "transparent",
                 font: "inherit",
                 color: "inherit",
@@ -172,11 +191,11 @@ const AlbumSection = memo(function AlbumSection({ share, photos, few, revealed, 
               {title}
             </Box>
           </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>
+          <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: 0.5 }}>
             {sectionSummary(share, photos.length)} · {share.user}
           </Typography>
         </Box>
-        {isOwner ? <ShareOwnerActions share={share} onMove={onMove} onRemove={onRemove} /> : null}
+        {isOwner ? <ShareOwnerActions share={share} onMove={onMove} onRemove={onRemove} sx={{ color: "text.secondary", "&:hover": { color: "text.primary" } }} /> : null}
       </Box>
       <JustifiedRows data-few={few || undefined} aria-label={`Photos in ${title}`}>
         {photos.slice(0, limit).map((photo) => (
@@ -234,7 +253,9 @@ export default function AlbumSpace(props: SpaceProps) {
       <AlbumHero
         cover={cover}
         title={title}
+        kicker={props.folder ? "Album folder" : "Photo album"}
         summary={heroSummary(photos, items, counts)}
+        description={description}
         photo={heroPhoto(photos)}
         flush={phone && !breadcrumb}
       />
@@ -243,11 +264,6 @@ export default function AlbumSpace(props: SpaceProps) {
 
   return (
     <SpaceShell space={props.space} hero={hero} sx={{ gap: 2.5 }}>
-      {description ? (
-        <Typography sx={{ color: "text.secondary", whiteSpace: "pre-wrap", wordBreak: "break-word", maxWidth: 720 }}>
-          {description}
-        </Typography>
-      ) : null}
       {attribution || actions ? (
         <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 1.5 }}>
           <Box sx={{ flex: "1 1 220px", minWidth: 0 }}>{attribution}</Box>
@@ -256,7 +272,7 @@ export default function AlbumSpace(props: SpaceProps) {
       ) : null}
       {subfolders.length > 0 ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <Typography component="h2" sx={{ fontWeight: 600, fontSize: 16 }}>
+          <Typography component="h2" sx={LABEL_SX}>
             Folders
           </Typography>
           <AlbumFolders folders={subfolders} openFolder={openFolder} />
@@ -281,7 +297,7 @@ export default function AlbumSpace(props: SpaceProps) {
       )}
       {others.length > 0 ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-          <Typography component="h2" sx={{ fontWeight: 600, fontSize: 16 }}>
+          <Typography component="h2" sx={LABEL_SX}>
             {photos.length > 0 ? "Other shares" : "Shares"}
           </Typography>
           <Box

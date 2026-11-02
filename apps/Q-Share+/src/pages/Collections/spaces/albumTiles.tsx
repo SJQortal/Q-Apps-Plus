@@ -8,7 +8,7 @@ import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { useQdnImage } from "../../../hooks/useQdnImage";
 import { fileKind, fileKindIconElement } from "../../../utils/fileKind";
 import { formatBytes } from "../../../utils/formatBytes";
-import { otherShareNote, type AlbumPhoto } from "./albumModel";
+import { guessedRatio, otherShareNote, photoCaption, type AlbumPhoto } from "./albumModel";
 import { useAlbumPicture } from "./albumPicture";
 import type { SpaceShare } from "./useSpaceItems";
 
@@ -28,10 +28,14 @@ export const JustifiedRows = styled("ul")(({ theme }) => ({
   flexWrap: "wrap",
   alignItems: "flex-start",
   gap: theme.spacing(0.5),
-  "&::after": { content: '""', flexGrow: 10000 },
+  // About what the full rows grow by, so a last short row keeps their height, near enough.
+  "&::after": { content: '""', flexGrow: 12 },
   "&[data-few]": { "--album-row": "420px" },
+  [theme.breakpoints.up("md")]: { gap: theme.spacing(0.75) },
   [`@media ${PHONE_MEDIA}`]: {
-    "--album-row": "120px",
+    "--album-row": "108px",
+    gap: theme.spacing(0.5),
+    "&::after": { content: '""', flexGrow: 3 },
     "&[data-few]": { "--album-row": "240px" },
   },
 }));
@@ -64,7 +68,8 @@ const TileButton = styled("button")(({ theme }) => ({
   textAlign: "left",
   cursor: "zoom-in",
   overflow: "hidden",
-  borderRadius: Number(theme.shape.borderRadius) / 2,
+  containerType: "inline-size",
+  borderRadius: Number(theme.shape.borderRadius) / 4,
   backgroundColor: theme.palette.action.hover,
   "&:focus-visible": { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 1 },
 }));
@@ -87,9 +92,19 @@ const Placeholder = styled("span")(({ theme }) => ({
   flexDirection: "column",
   justifyContent: "flex-end",
   gap: 2,
-  padding: theme.spacing(1),
+  padding: theme.spacing(1.5),
   overflow: "hidden",
-  backgroundImage: `linear-gradient(145deg, ${alpha(theme.palette.primary.main, 0.08)}, transparent 70%)`,
+  backgroundImage: `linear-gradient(160deg, ${alpha(theme.palette.primary.main, 0.1)}, transparent 75%)`,
+  // A print's mount: a fine line inside the edge, waiting for its picture.
+  "&::before": {
+    content: '""',
+    position: "absolute",
+    inset: theme.spacing(0.75),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: 1,
+    pointerEvents: "none",
+  },
+  "@container (max-width: 150px)": { "& .album-size": { display: "none" } },
 }));
 
 const Caption = styled("span")(({ theme }) => ({
@@ -121,9 +136,9 @@ const MenuSpot = styled(IconButton)(({ theme }) => ({
   opacity: 0,
   color: theme.palette.common.white,
   // Drawn as a dot inside the 44 px target, so it stays small on the picture.
-  background: `radial-gradient(circle, ${alpha(theme.palette.common.black, 0.62)} 15px, transparent 16px)`,
+  background: `radial-gradient(circle, ${alpha(theme.palette.common.black, 0.5)} 13px, transparent 14px)`,
   transition: "opacity 160ms ease",
-  "&:hover": { background: `radial-gradient(circle, ${alpha(theme.palette.common.black, 0.8)} 15px, transparent 16px)` },
+  "&:hover": { background: `radial-gradient(circle, ${alpha(theme.palette.common.black, 0.74)} 13px, transparent 14px)` },
   '&[aria-expanded="true"], &:focus-visible': { opacity: 1 },
   "&:focus-visible": { outline: `2px solid ${theme.palette.common.white}`, outlineOffset: -4 },
   "@media (prefers-reduced-motion: reduce)": { transition: "none" },
@@ -165,7 +180,7 @@ export const PhotoTile = memo(
     const { file, share } = photo;
     const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px" });
     const { src, onError } = useAlbumPicture(photo, inView, revealed);
-    const [ratio, setRatio] = useState(() => ratios.get(file.identifier) ?? 1);
+    const [ratio, setRatio] = useState(() => ratios.get(file.identifier) ?? guessedRatio(file.identifier));
     const [shownSrc, setShownSrc] = useState<string | null>(null);
     const name = file.filename || "Photo";
     const title = share.title || share.identifier;
@@ -175,15 +190,15 @@ export const PhotoTile = memo(
         <TileButton type="button" onClick={() => onOpen(photo.key)} aria-label={`Open ${name}, from ${title}`}>
           {src ? null : (
             <Placeholder>
-              <ImageOutlinedIcon sx={{ color: "text.secondary", fontSize: 22, mb: "auto" }} />
+              <ImageOutlinedIcon sx={{ color: "text.secondary", fontSize: 28, m: "auto", opacity: 0.7 }} />
               <Typography
                 component="span"
                 sx={{ fontSize: 13, lineHeight: 1.3, fontWeight: 600, overflow: "hidden", wordBreak: "break-word", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}
               >
-                {captioned ? title : name}
+                {captioned ? title : photoCaption(file.filename)}
               </Typography>
-              <Typography component="span" noWrap sx={{ fontSize: 12, color: "text.secondary" }}>
-                Tap to load{file.size ? ` · ${formatBytes(file.size, 1)}` : ""}
+              <Typography component="span" noWrap sx={{ fontSize: 13, color: "text.secondary" }}>
+                Tap to load{file.size ? <span className="album-size"> · {formatBytes(file.size, 1)}</span> : null}
               </Typography>
             </Placeholder>
           )}
@@ -245,7 +260,7 @@ function TileMenuButton({ share, onMenu, overlay }: { share: SpaceShare; onMenu:
 /** A share whose body is still on its way, about the size of a picture. */
 export function PendingTile() {
   return (
-    <TileRoot aria-hidden style={tileStyle({ ratio: 1 })}>
+    <TileRoot aria-hidden style={tileStyle({ ratio: 1.5 })}>
       <Skeleton variant="rounded" sx={{ width: "100%", height: "100%" }} />
     </TileRoot>
   );

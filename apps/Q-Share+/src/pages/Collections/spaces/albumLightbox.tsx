@@ -197,6 +197,8 @@ function LightboxPhoto({ photo, settle, onShown, onOpenShare, onOpenProfile }: {
                 cursor: "pointer",
                 p: 0,
                 minHeight: phone ? 44 : undefined,
+                minWidth: phone ? 44 : undefined,
+                textAlign: "left",
                 maxWidth: "60%",
                 flexShrink: 0,
                 overflow: "hidden",

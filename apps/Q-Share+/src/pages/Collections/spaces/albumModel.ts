@@ -92,6 +92,23 @@ export function sectionSummary(share: SpaceShare, photos: number): string {
   return plural(photos, "photo") + (rest > 0 ? `, ${plural(rest, "other file")}` : "");
 }
 
+/** A file's name as a caption: no extension, no dashes. */
+export function photoCaption(filename: string | undefined): string {
+  const words = (filename ?? "").replace(/\.[a-z0-9]{1,5}$/i, "").replace(/[-_]+/g, " ").trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : "Photo";
+}
+
+// Until a picture is seen its shape isn't known: mostly landscape, with a few
+// uprights, so a page of unloaded pictures still reads as an album and not a grid.
+const GUESSED_SHAPES = [1.5, 1.5, 0.8, 1.5, 1.25, 1.5, 0.8];
+
+/** The shape a picture's tile takes before the picture is seen; the same every time for one file. */
+export function guessedRatio(identifier: string): number {
+  let sum = 0;
+  for (let i = 0; i < identifier.length; i += 1) sum = (sum * 31 + identifier.charCodeAt(i)) % 9973;
+  return GUESSED_SHAPES[sum % GUESSED_SHAPES.length];
+}
+
 /** What a share without pictures says under its title. */
 export function otherShareNote(share: SpaceShare): string {
   if (share.deleted) return "Deleted by its publisher";
