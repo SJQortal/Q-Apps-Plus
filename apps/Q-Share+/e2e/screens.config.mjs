@@ -173,6 +173,11 @@ Object.assign(collections, {
   [SPACE_CINEMA]: {
     version: 1, title: 'Film club', description: 'What we are watching this winter, one film a fortnight.', created: now - 100 * DAY, updated: now - DAY, space: 'cinema',
     items: itemsOf([...FILM_SHARES, GONE]),
+    // Covers the owner chose: a horizontal still for one film, a vertical poster for another.
+    itemCovers: [
+      { name: FILM_SHARES[0].user, identifier: FILM_SHARES[0].id, cover: spaceCover('wide_north'), shape: 'landscape' },
+      { name: FILM_SHARES[3].user, identifier: FILM_SHARES[3].id, cover: spaceCover('tall_orchard'), shape: 'portrait' },
+    ],
     folders: [
       { id: 'sc_docs', title: 'Documentaries', description: '', items: itemsOf(FILM_SHARES.slice(1, 2)), folders: [] },
       { id: 'sc_short', title: 'Short films with a long folder name that wraps', description: '', cover: spaceCover('short'), items: itemsOf(FILM_SHARES.slice(3, 4)), folders: [] },
@@ -349,6 +354,9 @@ export default {
     // Cards ask the node whether a share's first image is there before showing it.
     if (p.includes('/arbitrary/resource/status/')) return json(route, { status: 'READY', percentLoaded: 100 }).then(() => true);
     const send = (contentType, body) => route.fulfill({ status: 200, contentType, body }).then(() => true);
+    // Covers chosen in a space say their shape: 2:3 and 16:9 pictures.
+    if (p.includes('_sp_tall')) return send('image/png', PICS[1 % PICS.length]);
+    if (p.includes('_sp_wide')) return send('image/png', PICS[2 % PICS.length]);
     if (p.includes('_sp_')) return send('image/png', picFor(p));
     if (p.includes('/THUMBNAIL/')) return send('image/png', PNG);
     if (p.includes('/BLOG_COMMENT/')) return send('text/plain', 'A comment with enough words to wrap on a phone screen, and a qortal://APP/Q-Tube link.');
@@ -413,6 +421,7 @@ export default {
     { key: 'space-cinema-player', path: `/collection/${NAME}/${SPACE_CINEMA}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Play Station eleven nights' }).first().click({ timeout: 8000 }); await page.getByRole('dialog').waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(1500); } },
     { key: 'space-cinema-film', path: `/collection/${NAME}/${SPACE_CINEMA}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Play Salt roads' }).first().click({ timeout: 8000 }); await page.getByRole('dialog').waitFor({ timeout: 4000 }).catch(() => {}); await page.waitForTimeout(1500); } },
     // A folder with nothing in it: the stage with no picture, and the empty state.
+    { key: 'space-cinema-cover', path: `/collection/${NAME}/${SPACE_CINEMA}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Change the cover of Orchard' }).first().click({ timeout: 8000 }); await page.getByRole('dialog', { name: 'Video cover' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(600); } },
     { key: 'space-cinema-empty', path: `/collection/${NAME}/${SPACE_CINEMA}/folder/sc_soon`, after: async (page) => { await page.waitForSelector('h1', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(600); } },
     { key: 'space-library', path: `/collection/${NAME}/${SPACE_LIBRARY}`, after: async (page) => { await page.waitForSelector('text=Keeping bees', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-library-book', path: `/collection/${NAME}/${SPACE_LIBRARY}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Keeping bees by/ }).first().click({ timeout: 8000 }); await page.waitForTimeout(600); } },
