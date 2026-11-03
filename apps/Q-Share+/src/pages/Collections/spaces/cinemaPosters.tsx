@@ -107,7 +107,8 @@ function ChosenStill({ url, portrait, placeholder }: { url: string; portrait: bo
           aria-hidden
           loading="lazy"
           decoding="async"
-          sx={{ ...fill, objectFit: "cover", transform: "scale(1.2)", filter: "blur(18px) brightness(0.5)" }}
+          // Past the frame on every side: a blur fades a picture's edges, and the title card would show through.
+          sx={{ ...fill, inset: -40, width: "calc(100% + 80px)", height: "calc(100% + 80px)", objectFit: "cover", filter: "blur(18px) brightness(0.5)" }}
         />
       ) : null}
       {src ? (
