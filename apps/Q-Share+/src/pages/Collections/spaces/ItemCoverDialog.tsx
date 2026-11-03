@@ -1,12 +1,20 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
-import { Alert, Box, Button, CircularProgress, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, ToggleButton, ToggleButtonGroup, Typography } from "@mui/material";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import RestoreOutlinedIcon from "@mui/icons-material/RestoreOutlined";
 import { ResponsiveDialog } from "../../../components/common/mobile/ResponsiveDialog";
 import { upsertCollection } from "../../../state/features/collectionsSlice";
 import { setNotification } from "../../../state/features/notificationsSlice";
-import { editCollectionBody, itemCoverOf, publishCollection, withItemCover, type Collection, type CollectionCover } from "../../../utils/collections";
+import {
+  editCollectionBody,
+  itemCoverEntry,
+  publishCollection,
+  withItemCover,
+  type Collection,
+  type CollectionCover,
+  type ItemCoverShape,
+} from "../../../utils/collections";
 import { ImageTooBigError, makeBookCoverFile, makeFilmCoverFile } from "../../../utils/coverImage";
 import { isHubDecline } from "../../../utils/hubErrors";
 import { KEEP_COVER, coverChange, type CoverChoice } from "../CoverPicker";
@@ -19,14 +27,16 @@ export const ITEM_COVER_FAILED = "Saved, but the cover image wasn't published. C
 const SHAPES = {
   book: {
     title: "Book cover",
-    make: makeBookCoverFile,
+    make: (file: Blob) => makeBookCoverFile(file),
+    shapes: ["portrait"] as ItemCoverShape[],
     note: "Shown on this collection's shelves in place of the share's own picture, cut to a book's shape.",
     previewWidth: 112,
   },
   film: {
     title: "Video cover",
     make: makeFilmCoverFile,
-    note: "Shown on this collection's posters and in its player in place of the share's own picture, cut to 16:9.",
+    shapes: ["landscape", "portrait"] as ItemCoverShape[],
+    note: "Shown on this collection's posters and in its player in place of the share's own picture: a horizontal still cut to 16:9, or a vertical poster cut to 2:3, shown whole.",
     previewWidth: 192,
   },
 } as const;
@@ -36,9 +46,10 @@ interface ItemCoverDialogProps {
   onClose: () => void;
   collection: Collection;
   share: SpaceShare;
-  shape: keyof typeof SHAPES;
-  /** The share as the look shows it, with `src` (a picture not published yet) or `cover` (the one chosen now), or neither for its own. */
-  preview: (choice: { src: string | null; cover: CollectionCover | null | undefined }) => ReactNode;
+  /** Which look asks: its shapes, words and preview size. */
+  look: keyof typeof SHAPES;
+  /** The share as the look shows it, with `src` (a picture not published yet) or `cover` (the one chosen now), or neither for its own, cut to `shape`. */
+  preview: (choice: { src: string | null; cover: CollectionCover | null | undefined; shape: ItemCoverShape }) => ReactNode;
 }
 
 /**
@@ -47,13 +58,18 @@ interface ItemCoverDialogProps {
  * the share's own picture. It is stored in the collection (`itemCovers`), so
  * saving republishes it with the image: one Hub confirmation.
  */
-export function ItemCoverDialog({ open, onClose, collection, share, shape, preview }: ItemCoverDialogProps) {
-  const kind = SHAPES[shape];
+export function ItemCoverDialog({ open, onClose, collection, share, look, preview }: ItemCoverDialogProps) {
+  const kind = SHAPES[look];
   const dispatch = useDispatch();
   const input = useRef<HTMLInputElement>(null);
   const item = { name: share.user, identifier: share.identifier };
-  const current = itemCoverOf(collection, item);
+  const entry = itemCoverEntry(collection, item);
+  const current = entry?.cover;
+  const currentShape: ItemCoverShape = entry?.shape ?? kind.shapes[0];
   const [choice, setChoice] = useState<CoverChoice>(KEEP_COVER);
+  const [shape, setShape] = useState<ItemCoverShape>(currentShape);
+  // The picture as picked, so a change of shape cuts it again.
+  const [original, setOriginal] = useState<File | null>(null);
   const [working, setWorking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -66,6 +82,8 @@ export function ItemCoverDialog({ open, onClose, collection, share, shape, previ
     setSeededOpen(open);
     if (open) {
       setChoice(KEEP_COVER);
+      setShape(currentShape);
+      setOriginal(null);
       setProblem(null);
       setError(null);
       setBusy(false);
@@ -78,12 +96,13 @@ export function ItemCoverDialog({ open, onClose, collection, share, shape, previ
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
-  const pick = async (file: File | undefined) => {
+  const pick = async (file: File | undefined, cut: ItemCoverShape = shape) => {
     if (!file) return;
     setProblem(null);
     setWorking(true);
     try {
-      const cover = await kind.make(file);
+      const cover = await kind.make(file, cut);
+      setOriginal(file);
       setChoice({ kind: "new", file: cover, url: URL.createObjectURL(cover) });
     } catch (error) {
       setProblem(
@@ -107,7 +126,7 @@ export function ItemCoverDialog({ open, onClose, collection, share, shape, previ
       const saved = await publishCollection({
         name: collection.name,
         identifier: collection.identifier,
-        body: editCollectionBody(collection, { itemCovers: withItemCover(collection.itemCovers, item, cover ?? null) }),
+        body: editCollectionBody(collection, { itemCovers: withItemCover(collection.itemCovers, item, cover ?? null, shape) }),
         previous: collection,
         covers,
         onCoversFailed: () => (coverFailed = true),
@@ -132,6 +151,12 @@ export function ItemCoverDialog({ open, onClose, collection, share, shape, previ
   };
 
   const shown = choice.kind === "keep" ? current : null;
+  // The current cover keeps the shape it was cut to; a new picture takes the one chosen.
+  const previewShape = choice.kind === "keep" && current ? currentShape : shape;
+  const changeShape = (next: ItemCoverShape) => {
+    setShape(next);
+    if (original && choice.kind === "new") void pick(original, next);
+  };
   const hasOwn = choice.kind === "new" || Boolean(shown);
   const title = share.title || "Untitled";
 
@@ -154,17 +179,33 @@ export function ItemCoverDialog({ open, onClose, collection, share, shape, previ
       }
     >
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", pt: 0.5 }}>
-        <Box sx={{ width: kind.previewWidth, maxWidth: "45%", flexShrink: 0 }}>{preview({ src: previewUrl, cover: shown })}</Box>
+        <Box sx={{ width: kind.previewWidth, maxWidth: "45%", flexShrink: 0 }}>{preview({ src: previewUrl, cover: shown, shape: previewShape })}</Box>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, alignItems: "flex-start" }}>
           <Typography component="p" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
             {title}
           </Typography>
+          {kind.shapes.length > 1 ? (
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={shape}
+              aria-label="Shape of the cover"
+              onChange={(_, next: ItemCoverShape | null) => {
+                if (next) changeShape(next);
+              }}
+              disabled={busy || working}
+              sx={{ "& .MuiToggleButton-root": { minHeight: 44, px: 1.5, textTransform: "none" } }}
+            >
+              <ToggleButton value="landscape">Horizontal</ToggleButton>
+              <ToggleButton value="portrait">Vertical</ToggleButton>
+            </ToggleButtonGroup>
+          ) : null}
           <input
             ref={input}
             type="file"
             accept="image/*"
             hidden
-            data-testid="book-cover-input"
+            data-testid="item-cover-input"
             onChange={(e) => void pick(e.target.files?.[0])}
           />
           <Button

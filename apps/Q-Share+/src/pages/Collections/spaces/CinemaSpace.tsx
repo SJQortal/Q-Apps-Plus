@@ -5,10 +5,12 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { useQdnImage } from "../../../hooks/useQdnImage";
+import { shareKey } from "../../../state/features/fileSlice";
 import { coverUrl } from "../../../utils/collections";
 import { SpaceShell, SpaceShowMore } from "./SpaceShell";
 import { CinemaPlayer, cinemaQueue, entryKey } from "./cinemaPlayer";
-import { CinemaFolders, CinemaSection, Poster, RAIL_MAX, posterNote, type PosterHandlers } from "./cinemaPosters";
+import { CinemaFolders, CinemaSection, FilmCoverPreview, Poster, RAIL_MAX, posterNote, type PosterHandlers } from "./cinemaPosters";
+import { ItemCoverDialog } from "./ItemCoverDialog";
 import { cinemaTheme, filmFrame, REDUCED_MOTION } from "./cinemaTheme";
 import type { SpaceProps } from "./types";
 import type { SpaceShare } from "./useSpaceItems";
@@ -24,6 +26,8 @@ export const WORDS_SCRIM = 0.86;
 interface BillboardProps {
   props: SpaceProps;
   featured: SpaceShare | null;
+  /** The featured share's picture is a vertical poster the owner chose: shown whole, beside the words. */
+  portrait: boolean;
   onPlay: (share: SpaceShare) => void;
 }
 
@@ -31,7 +35,7 @@ interface BillboardProps {
  * The top of the stage: the picture as a screen in a dark room, its colour
  * spilling onto the walls behind everything.
  */
-function Billboard({ props, featured, onPlay }: BillboardProps) {
+function Billboard({ props, featured, portrait, onPlay }: BillboardProps) {
   const { title, description, breadcrumb, cover, openShare } = props;
   const url = featured?.thumbnailUrl ?? (cover ? coverUrl(cover) : null);
   const { src, onError } = useQdnImage(url);
@@ -86,8 +90,9 @@ function Billboard({ props, featured, onPlay }: BillboardProps) {
               display: "block",
               width: "100%",
               height: "100%",
-              objectFit: "cover",
-              objectPosition: "center 30%",
+              objectFit: portrait ? "contain" : "cover",
+              objectPosition: portrait ? "center" : "center 30%",
+              [SIDE_BY_SIDE]: portrait ? { objectPosition: "right 10% center" } : {},
               animation: "cinema-fade 500ms ease both",
               "@keyframes cinema-fade": { from: { opacity: 0 }, to: { opacity: 1 } },
               [REDUCED_MOTION]: { animation: "none" },
@@ -231,8 +236,9 @@ const quietActions = {
 export default function CinemaSpace(props: SpaceProps) {
   const outer = useTheme();
   const theme = useMemo(() => cinemaTheme(outer), [outer]);
-  const { items, isOwner, onMove, subfolders, attribution, actions, openFolder, openProfile, openShare, emptyState } = props;
+  const { collection, items, isOwner, onMove, subfolders, attribution, actions, openFolder, openProfile, openShare, emptyState } = props;
   const [playing, setPlaying] = useState<string | null>(null);
+  const [covering, setCovering] = useState<string | null>(null);
   const phone = usePhoneLayout();
 
   // The page's callbacks change with each of its renders; the posters' must not.
@@ -240,7 +246,22 @@ export default function CinemaSpace(props: SpaceProps) {
   useEffect(() => {
     latest.current = { onMove, onRemove: props.onRemove, openShare };
   });
-  const queue = useMemo(() => cinemaQueue(items.shares), [items.shares]);
+  // The covers the owner chose, by share: each stands in for the share's own picture on its poster, the billboard and in the player.
+  const chosen = useMemo(
+    () =>
+      new Map(
+        (collection.itemCovers ?? []).map((entry) => [shareKey(entry.name, entry.identifier), { url: coverUrl(entry.cover), portrait: entry.shape === "portrait" }])
+      ),
+    [collection.itemCovers]
+  );
+  const shares = useMemo(
+    () => items.shares.map((share) => {
+      const cover = chosen.get(share.key);
+      return cover ? { ...share, thumbnailUrl: cover.url } : share;
+    }),
+    [items.shares, chosen]
+  );
+  const queue = useMemo(() => cinemaQueue(shares), [shares]);
   const queueRef = useRef(queue);
   useEffect(() => {
     queueRef.current = queue;
@@ -255,6 +276,7 @@ export default function CinemaSpace(props: SpaceProps) {
       open: (share) => latest.current.openShare(share),
       move: (row) => latest.current.onMove?.(row),
       remove: (row) => latest.current.onRemove(row),
+      cover: (share) => setCovering(share.key),
     }),
     []
   );
@@ -262,7 +284,7 @@ export default function CinemaSpace(props: SpaceProps) {
   const films: SpaceShare[] = [];
   const series: SpaceShare[] = [];
   const others: SpaceShare[] = [];
-  for (const share of items.shares) {
+  for (const share of shares) {
     const gone = share.deleted || share.unreadable;
     // A share on its way waits with the videos, where most of them will land.
     if (!share.loaded && !share.unavailable) films.push(share);
@@ -270,23 +292,34 @@ export default function CinemaSpace(props: SpaceProps) {
     else if (share.videos.length > 1) series.push(share);
     else films.push(share);
   }
-  const withVideo = items.shares.filter((share) => queue.some((entry) => entry.share.key === share.key));
+  const withVideo = shares.filter((share) => queue.some((entry) => entry.share.key === share.key));
   const featured = withVideo.find((share) => share.thumbnailUrl) ?? withVideo[0] ?? null;
   // Decided on the total, so a page doesn't change layout while its bodies land.
   const rail = items.total <= RAIL_MAX;
   // One or two posters don't fill a row: on a wide screen such rows share a line.
   const layoutFor = (count: number) => (!rail ? "grid" : !phone && count <= 2 ? "short" : "rail");
 
-  const posters = (shares: SpaceShare[]) =>
-    shares.map((share) => (
-      <Poster key={share.key} share={share} isOwner={isOwner} canMove={Boolean(onMove)} handlers={handlers} />
+  // Found by key, so the dialog closes itself when the share is removed.
+  const coveringShare = covering && isOwner ? shares.find((share) => share.key === covering) : undefined;
+
+  const posters = (list: SpaceShare[]) =>
+    list.map((share) => (
+      <Poster
+        key={share.key}
+        share={share}
+        chosen={chosen.get(share.key)?.url}
+        portrait={chosen.get(share.key)?.portrait}
+        isOwner={isOwner}
+        canMove={Boolean(onMove)}
+        handlers={handlers}
+      />
     ));
 
   return (
     <ThemeProvider theme={theme}>
       <SpaceShell
         space={props.space}
-        hero={<Billboard props={props} featured={featured} onPlay={handlers.play} />}
+        hero={<Billboard props={props} featured={featured} portrait={Boolean(featured && chosen.get(featured.key)?.portrait)} onPlay={handlers.play} />}
         sx={(t) => ({
           gap: 0,
           color: "text.primary",
@@ -349,6 +382,16 @@ export default function CinemaSpace(props: SpaceProps) {
           <SpaceShowMore items={items} />
         </Box>
       </SpaceShell>
+      {coveringShare ? (
+        <ItemCoverDialog
+          open={Boolean(covering)}
+          onClose={() => setCovering(null)}
+          collection={collection}
+          share={coveringShare}
+          look="film"
+          preview={({ src, cover, shape }) => <FilmCoverPreview share={coveringShare} src={src} cover={cover} portrait={shape === "portrait"} />}
+        />
+      ) : null}
       {playing ? (
         <CinemaPlayer
           queue={queue}

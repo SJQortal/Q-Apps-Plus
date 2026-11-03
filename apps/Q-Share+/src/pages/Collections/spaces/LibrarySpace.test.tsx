@@ -155,9 +155,9 @@ describe("LibrarySpace", { timeout: 20_000 }, () => {
       fireEvent.click(panel.getByRole("button", { name: "Add a cover" }));
       const dialog = within(await screen.findByRole("dialog", { name: "Book cover" }));
       expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
-      fireEvent.change(dialog.getByTestId("book-cover-input"), { target: { files: [new File(["x"], "notes.txt")] } });
+      fireEvent.change(dialog.getByTestId("item-cover-input"), { target: { files: [new File(["x"], "notes.txt")] } });
       expect(await dialog.findByText(/Couldn't use that image/)).toBeInTheDocument();
-      fireEvent.change(dialog.getByTestId("book-cover-input"), { target: { files: [picture()] } });
+      fireEvent.change(dialog.getByTestId("item-cover-input"), { target: { files: [picture()] } });
       expect(await dialog.findByRole("button", { name: "Change image" })).toBeInTheDocument();
       expect(document.querySelector('img[src="blob:book-cover-preview"]')).not.toBeNull();
       fireEvent.click(dialog.getByRole("button", { name: "Save" }));
@@ -168,7 +168,7 @@ describe("LibrarySpace", { timeout: 20_000 }, () => {
       expect(thumb).toMatchObject({ service: "THUMBNAIL", name: "alice", filename: "book-cover.webp", tag1: "qshare_cover_" });
       expect(String(thumb.identifier)).toMatch(/^qshare_cover_[a-z0-9]{8}$/);
       const stored = JSON.parse(atob(String(doc.data64)));
-      expect(stored.itemCovers).toEqual([{ name: "bob", identifier: ALPHA, cover: { service: "THUMBNAIL", name: "alice", identifier: thumb.identifier } }]);
+      expect(stored.itemCovers).toEqual([{ name: "bob", identifier: ALPHA, cover: { service: "THUMBNAIL", name: "alice", identifier: thumb.identifier }, shape: "portrait" }]);
       // The shares and the look are as they were.
       expect(stored.items.map((item: { identifier: string }) => item.identifier)).toEqual(Object.keys(BODIES));
       expect(stored.space).toBe("library");
@@ -201,7 +201,7 @@ describe("LibrarySpace", { timeout: 20_000 }, () => {
       const panel = within(await openBook(/^Alpha reader by bob/));
       fireEvent.click(panel.getByRole("button", { name: "Add a cover" }));
       const dialog = within(await screen.findByRole("dialog", { name: "Book cover" }));
-      fireEvent.change(dialog.getByTestId("book-cover-input"), { target: { files: [picture()] } });
+      fireEvent.change(dialog.getByTestId("item-cover-input"), { target: { files: [picture()] } });
       fireEvent.click(await dialog.findByRole("button", { name: "Save" }));
       await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1));
       await waitFor(() => expect(dialog.getByRole("button", { name: "Save" })).not.toBeDisabled());

@@ -9,6 +9,13 @@ import { posterNote } from "./cinemaPosters";
 import { renderSpace, resetSpaceTest, spaceFile, spaceFolder, SPACE_FOLDER_ID, type SpaceBodies } from "./testUtils";
 import { toSpaceShare } from "./useSpaceItems";
 import type { Video } from "../../../state/features/fileSlice";
+import { makeFilmCoverFile } from "../../../utils/coverImage";
+
+// jsdom has no canvas: the cover is "made" from the picked file as it is, named after the shape asked for.
+vi.mock("../../../utils/coverImage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../utils/coverImage")>()),
+  makeFilmCoverFile: vi.fn(async (file: File, shape = "landscape") => new File([file], `video-cover-${shape}.webp`, { type: "image/webp" })),
+}));
 
 configure({ asyncUtilTimeout: 5_000 });
 
@@ -154,6 +161,66 @@ describe("the cinema", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Move / })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  describe("covers the owner chooses", () => {
+    const FILM = "qshare_file_film_bbb222_metadata";
+    const still = { service: "THUMBNAIL", name: "alice", identifier: "qshare_cover_film0001" };
+    const imgs = (identifier: string) => Array.from(document.querySelectorAll<HTMLImageElement>(`img[src="/arbitrary/THUMBNAIL/alice/${identifier}?async=true"]`));
+
+    beforeEach(() => {
+      vi.mocked(makeFilmCoverFile).mockClear();
+      mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", true);
+      URL.createObjectURL = vi.fn(() => "blob:video-cover-preview");
+      URL.revokeObjectURL = vi.fn();
+    });
+
+    it("puts the chosen still on the poster, the billboard and the player in place of the share's thumbnail, for visitors too", async () => {
+      renderSpace({ space: "cinema", signedInAs: "dave", body: { itemCovers: [{ name: "bob", identifier: FILM, cover: still }] } });
+      await screen.findByRole("button", { name: "Play Film" });
+      // Poster, and the billboard's picture and its glow.
+      await waitFor(() => expect(imgs(still.identifier).length).toBeGreaterThanOrEqual(2));
+      expect(document.querySelector('img[src="/arbitrary/THUMBNAIL/bob/qshare_thumb_film?async=true"]')).toBeNull();
+      expect(screen.queryByRole("button", { name: /cover/ })).not.toBeInTheDocument();
+      // A horizontal still fills its frame.
+      expect(imgs(still.identifier).every((img) => img.style.objectFit !== "contain")).toBe(true);
+    });
+
+    it("lets the owner publish a horizontal or a vertical cover, cutting the picked picture again on a change", async () => {
+      renderSpace({ space: "cinema" });
+      fireEvent.click(await screen.findByRole("button", { name: "Add a cover to Film" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Video cover" }));
+      expect(dialog.getByRole("button", { name: "Horizontal" })).toHaveAttribute("aria-pressed", "true");
+      const picture = new File([new Uint8Array([1, 2, 3])], "poster.jpg", { type: "image/jpeg" });
+      fireEvent.change(dialog.getByTestId("item-cover-input"), { target: { files: [picture] } });
+      await dialog.findByRole("button", { name: "Change image" });
+      expect(vi.mocked(makeFilmCoverFile)).toHaveBeenLastCalledWith(picture, "landscape");
+
+      fireEvent.click(dialog.getByRole("button", { name: "Vertical" }));
+      await waitFor(() => expect(vi.mocked(makeFilmCoverFile)).toHaveBeenLastCalledWith(picture, "portrait"));
+      // The preview shows it as the poster will: whole.
+      await waitFor(() => expect(document.querySelector<HTMLImageElement>('img[src="blob:video-cover-preview"]:not([aria-hidden])')?.style.objectFit).toBe("contain"));
+      fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+      await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1));
+      const [thumb, doc] = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as unknown as { resources: Array<Record<string, unknown>> }).resources;
+      expect(thumb).toMatchObject({ service: "THUMBNAIL", name: "alice", filename: "video-cover-portrait.webp", tag1: "qshare_cover_" });
+      const stored = JSON.parse(atob(String(doc.data64)));
+      expect(stored.itemCovers).toEqual([{ name: "bob", identifier: FILM, cover: { service: "THUMBNAIL", name: "alice", identifier: thumb.identifier }, shape: "portrait" }]);
+      expect(stored.space).toBe("cinema");
+
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Video cover" })).not.toBeInTheDocument());
+      // On the poster now, whole, over a blur of itself.
+      await waitFor(() => expect(imgs(String(thumb.identifier)).some((img) => img.style.objectFit === "contain")).toBe(true));
+      expect(screen.getByRole("button", { name: "Change the cover of Film" })).toBeInTheDocument();
+    });
+
+    it("opens on the shape the cover was cut to", async () => {
+      renderSpace({ space: "cinema", body: { itemCovers: [{ name: "bob", identifier: FILM, cover: still, shape: "portrait" }] } });
+      fireEvent.click(await screen.findByRole("button", { name: "Change the cover of Film" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Video cover" }));
+      expect(dialog.getByRole("button", { name: "Vertical" })).toHaveAttribute("aria-pressed", "true");
+    });
   });
 
   it("opens folders from tiles, and looks the same inside them", async () => {

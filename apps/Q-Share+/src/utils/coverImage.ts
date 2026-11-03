@@ -195,7 +195,9 @@ export function makeBookCoverFile(file: Blob): Promise<File> {
   return makeShapedCoverFile(file, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT, "book-cover");
 }
 
-/** A video's cover file for `file`: its centred 16:9, at most 960 × 540. */
-export function makeFilmCoverFile(file: Blob): Promise<File> {
-  return makeShapedCoverFile(file, FILM_COVER_WIDTH, FILM_COVER_HEIGHT, "video-cover");
+/** A video's cover file for `file`: its centred 16:9, at most 960 × 540, or as a vertical poster its centred 2:3, at most 400 × 600. */
+export function makeFilmCoverFile(file: Blob, shape: "landscape" | "portrait" = "landscape"): Promise<File> {
+  return shape === "portrait"
+    ? makeShapedCoverFile(file, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT, "video-cover")
+    : makeShapedCoverFile(file, FILM_COVER_WIDTH, FILM_COVER_HEIGHT, "video-cover");
 }

@@ -400,7 +400,7 @@ function BookDetails({ share, look, collection, cover, phone, titleId, onClose, 
             onClose={() => setCoverOpen(false)}
             collection={collection}
             share={share}
-            shape="book"
+            look="book"
             preview={({ src, cover: chosen }) => <BookCover share={share} look={look} cover={chosen} src={src} />}
           />
         </>

@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Box, IconButton, Skeleton, Typography } from "@mui/material";
+import { Box, IconButton, Skeleton, Tooltip, Typography } from "@mui/material";
 import { alpha } from "@mui/material/styles";
+import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
 import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
@@ -13,7 +14,7 @@ import { ShareCardArt } from "../../../components/common/ShareArt";
 import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { useQdnImage } from "../../../hooks/useQdnImage";
 import type { Video } from "../../../state/features/fileSlice";
-import { coverUrl, type CollectionFolder } from "../../../utils/collections";
+import { coverUrl, type CollectionCover, type CollectionFolder } from "../../../utils/collections";
 import { formatBytes } from "../../../utils/formatBytes";
 import { folderCountLabel } from "../FolderGrid";
 import { ShareOwnerActions } from "./SpaceShell";
@@ -26,6 +27,8 @@ export interface PosterHandlers {
   open: (share: SpaceShare) => void;
   move: (share: Video) => void;
   remove: (share: Video) => void;
+  /** Owner only: choose or change the share's cover in this collection. */
+  cover: (share: SpaceShare) => void;
 }
 
 /** A poster's second line: who and how big for a film, how many for a series, or what's wrong. */
@@ -85,6 +88,51 @@ function FilmPlaceholder({ seed, title, icon, dim }: { seed: string; title?: str
   );
 }
 
+/**
+ * The picture the collection's owner chose, over the title card, which shows
+ * until it loads or if the node can't serve it. A vertical poster stands whole
+ * in the frame, on a dimmed blur of itself, so a row keeps one height.
+ */
+function ChosenStill({ url, portrait, placeholder }: { url: string; portrait: boolean; placeholder: ReactNode }) {
+  const { src, onError } = useQdnImage(url);
+  const fill = { position: "absolute", inset: 0, display: "block", width: "100%", height: "100%" } as const;
+  return (
+    <>
+      {placeholder}
+      {src && portrait ? (
+        <Box
+          component="img"
+          src={src}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          decoding="async"
+          sx={{ ...fill, objectFit: "cover", transform: "scale(1.2)", filter: "blur(18px) brightness(0.5)" }}
+        />
+      ) : null}
+      {src ? (
+        <img src={src} alt="" loading="lazy" decoding="async" onError={onError} style={{ ...fill, objectFit: portrait ? "contain" : "cover" }} />
+      ) : null}
+    </>
+  );
+}
+
+/** A share's picture on a poster: the owner's chosen cover, else its own, else its title card. */
+function PosterPicture({ share, chosen, portrait = false, placeholder }: { share: SpaceShare; chosen: string | null | undefined; portrait?: boolean; placeholder: ReactNode }) {
+  if (chosen) return <ChosenStill url={chosen} portrait={portrait} placeholder={placeholder} />;
+  return share.body ? <ShareCardArt share={share.body} fallback={placeholder} /> : <>{placeholder}</>;
+}
+
+/** The cover dialog's preview: the poster's picture alone, at 16:9. */
+export function FilmCoverPreview({ share, src, cover, portrait }: { share: SpaceShare; src: string | null; cover: CollectionCover | null | undefined; portrait: boolean }) {
+  const placeholder = <FilmPlaceholder seed={share.key} title={share.title} icon={<MovieOutlinedIcon />} />;
+  return (
+    <Box aria-hidden sx={{ position: "relative", width: "100%", aspectRatio: "16 / 9", borderRadius: 1.5, overflow: "hidden", bgcolor: "background.paper" }}>
+      <PosterPicture share={share} chosen={src ?? (cover ? coverUrl(cover) : null)} portrait={portrait} placeholder={placeholder} />
+    </Box>
+  );
+}
+
 const SKELETON = (
   <li aria-hidden>
     <Skeleton variant="rounded" sx={{ width: "100%", height: "auto", aspectRatio: "16 / 9" }} />
@@ -95,12 +143,16 @@ const SKELETON = (
 
 interface PosterProps {
   share: SpaceShare;
+  /** The URL of the cover the collection's owner chose for it, if any. */
+  chosen?: string | null;
+  /** The chosen cover is a vertical poster. */
+  portrait?: boolean;
   isOwner: boolean;
   canMove: boolean;
   handlers: PosterHandlers;
 }
 
-function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
+function PosterView({ share, chosen, portrait, isOwner, canMove, handlers }: PosterProps) {
   if (!share.loaded && !share.unavailable) return SKELETON;
 
   const gone = share.deleted || share.unreadable;
@@ -114,7 +166,7 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
 
   const art = (
     <>
-      {share.body && !gone ? <ShareCardArt share={share.body} fallback={placeholder} /> : placeholder}
+      {gone ? placeholder : <PosterPicture share={share} chosen={chosen} portrait={portrait} placeholder={placeholder} />}
       {gone ? null : (
         <Box
           aria-hidden
@@ -260,6 +312,17 @@ function PosterView({ share, isOwner, canMove, handlers }: PosterProps) {
               "& .MuiIconButton-root": { color: "common.white" },
             })}
           >
+            {gone ? null : (
+              <Tooltip title={chosen ? "Change cover" : "Add a cover"}>
+                <IconButton
+                  aria-label={`${chosen ? "Change the cover of" : "Add a cover to"} ${share.title || share.identifier}`}
+                  onClick={() => handlers.cover(share)}
+                  sx={{ minWidth: 44, minHeight: 44 }}
+                >
+                  <AddPhotoAlternateOutlinedIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <ShareOwnerActions share={share} onMove={canMove ? handlers.move : undefined} onRemove={handlers.remove} />
           </Box>
         ) : null}
@@ -327,6 +390,8 @@ export const Poster = memo(
     a.share.body === b.share.body &&
     a.share.row === b.share.row &&
     a.share.unavailable === b.share.unavailable &&
+    a.chosen === b.chosen &&
+    a.portrait === b.portrait &&
     a.isOwner === b.isOwner &&
     a.canMove === b.canMove &&
     a.handlers === b.handlers
