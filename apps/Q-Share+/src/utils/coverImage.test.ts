@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BOOK_COVER_HEIGHT, BOOK_COVER_WIDTH, COVER_SIZE, ImageTooBigError, MAX_SOURCE_PIXELS, bookCrop, decodeImage, squareCrop } from "./coverImage";
+import { BOOK_COVER_HEIGHT, BOOK_COVER_WIDTH, COVER_SIZE, FILM_COVER_HEIGHT, FILM_COVER_WIDTH, ImageTooBigError, MAX_SOURCE_PIXELS, bookCrop, decodeImage, filmCrop, squareCrop } from "./coverImage";
 import { fitWithin } from "./thumbnailImage";
 
 describe("squareCrop", () => {
@@ -27,6 +27,20 @@ describe("bookCrop", () => {
   it("never scales a small image up", () => {
     expect(bookCrop(200, 300)).toMatchObject({ outWidth: 200, outHeight: 300 });
     expect(bookCrop(1, 1)).toMatchObject({ outWidth: 1, outHeight: 1 });
+  });
+});
+
+describe("filmCrop", () => {
+  it("takes the centred 16:9 and scales it down to the video cover's size", () => {
+    expect(filmCrop(1920, 1080)).toEqual({ sx: 0, sy: 0, sw: 1920, sh: 1080, outWidth: FILM_COVER_WIDTH, outHeight: FILM_COVER_HEIGHT });
+    // A portrait phone photo: a band across its middle.
+    expect(filmCrop(1080, 1920)).toEqual({ sx: 0, sy: 656, sw: 1080, sh: 608, outWidth: 960, outHeight: 540 });
+    // Wider than 16:9: the sides go.
+    expect(filmCrop(3000, 1000)).toMatchObject({ sx: 611, sy: 0, sw: 1778, sh: 1000, outWidth: 960, outHeight: 540 });
+  });
+
+  it("never scales a small image up", () => {
+    expect(filmCrop(320, 180)).toMatchObject({ outWidth: 320, outHeight: 180 });
   });
 });
 

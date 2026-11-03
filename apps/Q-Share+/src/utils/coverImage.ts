@@ -1,6 +1,6 @@
 /**
  * Covers for collections and folders: the picked image cut to a centred
- * square and scaled to at most 600 px (a book's cover: 2:3, at most 400 × 600), as WebP (JPEG where the browser
+ * square and scaled to at most 600 px (a book's cover: 2:3, at most 400 × 600; a video's: 16:9, at most 960 × 540), as WebP (JPEG where the browser
  * can't write WebP), well under Core's 500 KB limit for a THUMBNAIL. Done on
  * the device, so nothing but the small result is published.
  */
@@ -24,13 +24,17 @@ export function squareCrop(width: number, height: number, max = COVER_SIZE) {
 export const BOOK_COVER_WIDTH = 400;
 export const BOOK_COVER_HEIGHT = 600;
 
-/** The centred 2:3 portrait of a width × height image, and the size to draw it at. */
-export function bookCrop(width: number, height: number) {
-  // Wider than 2:3 loses its sides, taller loses its top and bottom.
-  const wide = width * 3 > height * 2;
-  const sw = wide ? Math.max(1, Math.round((height * 2) / 3)) : width;
-  const sh = wide ? height : Math.max(1, Math.round((width * 3) / 2));
-  const scale = Math.min(1, BOOK_COVER_WIDTH / sw);
+/** A video's cover is a 16:9 still, at most this wide and high. */
+export const FILM_COVER_WIDTH = 960;
+export const FILM_COVER_HEIGHT = 540;
+
+/** The centred part of a width × height image in the shape of outWidth × outHeight, and the size to draw it at. */
+function shapeCrop(width: number, height: number, outWidth: number, outHeight: number) {
+  // Wider than the shape loses its sides, taller loses its top and bottom.
+  const wide = width * outHeight > height * outWidth;
+  const sw = wide ? Math.max(1, Math.round((height * outWidth) / outHeight)) : width;
+  const sh = wide ? height : Math.max(1, Math.round((width * outHeight) / outWidth));
+  const scale = Math.min(1, outWidth / sw);
   return {
     sx: Math.round((width - sw) / 2),
     sy: Math.round((height - sh) / 2),
@@ -40,6 +44,12 @@ export function bookCrop(width: number, height: number) {
     outHeight: Math.max(1, Math.round(sh * scale)),
   };
 }
+
+/** The centred 2:3 portrait of a width × height image, and the size to draw it at. */
+export const bookCrop = (width: number, height: number) => shapeCrop(width, height, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT);
+
+/** The centred 16:9 of a width × height image, and the size to draw it at. */
+export const filmCrop = (width: number, height: number) => shapeCrop(width, height, FILM_COVER_WIDTH, FILM_COVER_HEIGHT);
 
 /** A decoded image ready to draw; `close` frees it. */
 export interface DecodedImage {
@@ -162,20 +172,30 @@ export async function makeCoverFile(file: Blob): Promise<File> {
   }
 }
 
-/** A book's cover file for `file`: its centred 2:3 portrait, at most 400 × 600. */
-export async function makeBookCoverFile(file: Blob): Promise<File> {
+/** A cover of outWidth × outHeight's shape for `file`, at most that size. */
+async function makeShapedCoverFile(file: Blob, outWidth: number, outHeight: number, base: string): Promise<File> {
   // Decoded with the side the crop keeps whole at the cover's size.
   const image = await decodeImage(file, (width, height) => {
-    const wide = width * 3 > height * 2;
-    const scale = Math.min(1, wide ? BOOK_COVER_HEIGHT / height : BOOK_COVER_WIDTH / width);
+    const wide = width * outHeight > height * outWidth;
+    const scale = Math.min(1, wide ? outHeight / height : outWidth / width);
     return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
   });
   try {
     if (!image.width || !image.height) throw new Error("The image is empty");
-    const { sx, sy, sw, sh, outWidth, outHeight } = bookCrop(image.width, image.height);
-    const canvas = drawnCanvas(outWidth, outHeight, (context) => context.drawImage(image.source, sx, sy, sw, sh, 0, 0, outWidth, outHeight));
-    return await encodeCanvas(canvas, "book-cover", COVER_MAX_BYTES);
+    const { sx, sy, sw, sh, outWidth: w, outHeight: h } = shapeCrop(image.width, image.height, outWidth, outHeight);
+    const canvas = drawnCanvas(w, h, (context) => context.drawImage(image.source, sx, sy, sw, sh, 0, 0, w, h));
+    return await encodeCanvas(canvas, base, COVER_MAX_BYTES);
   } finally {
     image.close();
   }
+}
+
+/** A book's cover file for `file`: its centred 2:3 portrait, at most 400 × 600. */
+export function makeBookCoverFile(file: Blob): Promise<File> {
+  return makeShapedCoverFile(file, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT, "book-cover");
+}
+
+/** A video's cover file for `file`: its centred 16:9, at most 960 × 540. */
+export function makeFilmCoverFile(file: Blob): Promise<File> {
+  return makeShapedCoverFile(file, FILM_COVER_WIDTH, FILM_COVER_HEIGHT, "video-cover");
 }
