@@ -30,6 +30,9 @@ import {
   toggleItem,
   type Collection,
   deletedCollectionBody,
+  itemCoverOf,
+  withItemCover,
+  MAX_ITEM_COVERS,
 } from './collections';
 import { isDeletedCollection } from './collectionFolders';
 
@@ -466,6 +469,86 @@ describe('collection spaces (1.0.1)', () => {
     const source = { ...buildCollectionBody({ title: 'T', space: 'cinema' }), name: 'bob', identifier: 'qshare_collection_t_ab12cd' };
     expect(copyCollectionBody(source, { title: 'Mine', description: '' }).space).toBe('cinema');
     expect(deletedCollectionBody(source).space).toBe('cinema');
+  });
+});
+
+describe('item covers (1.0.1)', () => {
+  const cover = (identifier: string) => ({ service: 'THUMBNAIL' as const, name: 'alice', identifier });
+  const book = { name: 'bob', identifier: 'qshare_file_book_ab12_metadata' };
+  const deep = { name: 'carol', identifier: 'qshare_file_deep_cd34_metadata' };
+  const folders = [{ id: 'f1', title: 'Shelf', description: '', items: [deep], folders: [] }];
+  const withCovers = () =>
+    buildCollectionBody({
+      title: 'T',
+      items: [book],
+      folders,
+      itemCovers: [
+        { ...book, cover: cover('qshare_cover_aaaaaaaa') },
+        { ...deep, cover: cover('qshare_cover_bbbbbbbb') },
+      ],
+      now: 5,
+    });
+
+  it('is left out of the stored JSON when there are none', () => {
+    const body = buildCollectionBody({ title: 'T', items: [book], itemCovers: [], now: 5 });
+    expect(body.itemCovers).toBeUndefined();
+    expect('itemCovers' in storedCollectionJson(body)).toBe(false);
+  });
+
+  it('stores each as the share plus a cover, for shares in folders too, and reads them back as known', () => {
+    const stored = storedCollectionJson(withCovers());
+    expect(stored.itemCovers).toEqual([
+      { name: 'bob', identifier: 'qshare_file_book_ab12_metadata', cover: cover('qshare_cover_aaaaaaaa') },
+      { name: 'carol', identifier: 'qshare_file_deep_cd34_metadata', cover: cover('qshare_cover_bbbbbbbb') },
+    ]);
+    // The items themselves stay plain, as the original shape.
+    expect(stored.items).toEqual([book]);
+    const parsed = parseCollection(JSON.parse(JSON.stringify(stored)))!;
+    expect(parsed.extra).toBeUndefined();
+    expect(itemCoverOf(parsed, deep)?.identifier).toBe('qshare_cover_bbbbbbbb');
+    expect(itemCoverOf(parsed, { name: 'bob', identifier: 'other' })).toBeUndefined();
+  });
+
+  it('reads only entries with a share and a THUMBNAIL cover, one per share, at most the limit', () => {
+    const base = { version: 1, title: 'T', description: '', items: [book], created: 1, updated: 2 };
+    const parsed = parseCollection({
+      ...base,
+      itemCovers: [
+        { ...book, cover: cover('qshare_cover_first000') },
+        { ...book, cover: cover('qshare_cover_second00') },
+        { name: 'bob', cover: cover('x') },
+        { ...book, cover: { service: 'IMAGE', name: 'alice', identifier: 'x' } },
+        'nonsense',
+      ],
+    })!;
+    expect(parsed.itemCovers).toEqual([{ ...book, cover: cover('qshare_cover_first000') }]);
+    expect(parseCollection({ ...base, itemCovers: 'x' })?.itemCovers).toBeUndefined();
+    const many = Array.from({ length: MAX_ITEM_COVERS + 5 }, (_, i) => ({ name: 'n', identifier: `i${i}`, cover: cover('c') }));
+    expect(parseCollection({ ...base, itemCovers: many })?.itemCovers).toHaveLength(MAX_ITEM_COVERS);
+  });
+
+  it('an edit keeps them, and drops the cover of a share that leaves the collection', () => {
+    const body = withCovers();
+    expect(editCollectionBody(body, { title: 'New' }).itemCovers).toHaveLength(2);
+    const removed = editCollectionBody(body, { items: [] });
+    expect(removed.itemCovers?.map((entry) => entry.name)).toEqual(['carol']);
+    // Moved into a folder: still held, so still covered.
+    const moved = editCollectionBody(body, { items: [], folders: [{ ...folders[0], items: [deep, book] }] });
+    expect(moved.itemCovers).toHaveLength(2);
+  });
+
+  it('sets, replaces and takes away one share\'s cover', () => {
+    const body = withCovers();
+    const replaced = withItemCover(body.itemCovers, book, cover('qshare_cover_cccccccc'));
+    expect(replaced.filter((entry) => entry.name === 'bob')).toEqual([{ ...book, cover: cover('qshare_cover_cccccccc') }]);
+    expect(withItemCover(body.itemCovers, book, null).map((entry) => entry.name)).toEqual(['carol']);
+    expect(withItemCover(undefined, book, cover('c'))).toEqual([{ ...book, cover: cover('c') }]);
+  });
+
+  it('a copy keeps them (the images stay the original owner\'s); a delete drops them', () => {
+    const source = { ...withCovers(), name: 'alice', identifier: 'qshare_collection_t_ab12cd' };
+    expect(copyCollectionBody(source, { title: 'Mine', description: '' }).itemCovers).toEqual(source.itemCovers);
+    expect(deletedCollectionBody(source).itemCovers).toBeUndefined();
   });
 });
 

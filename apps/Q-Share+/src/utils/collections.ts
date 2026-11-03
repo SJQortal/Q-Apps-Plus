@@ -11,7 +11,9 @@
  * (a THUMBNAIL `qshare_cover_<uid>` under the publisher's name), and folders
  * may have covers too. A copy of someone else's collection names its source
  * in `copiedFrom`, and its markers always name the source's owner. A body may
- * choose a `space` (the look it opens in; its folders take the same one). All
+ * choose a `space` (the look it opens in; its folders take the same one), and
+ * `itemCovers`: pictures the owner chose for some of its shares, shown in
+ * place of each share's own (the Library's book covers). All
  * are left out when unused, so a collection without them is stored exactly as
  * before. Fields this version doesn't know are kept through edits.
  */
@@ -69,6 +71,18 @@ export interface CollectionCover {
   identifier: string;
 }
 
+/**
+ * A picture the collection's owner chose for one of its shares, shown in this
+ * collection in place of the share's own (a book's cover in the Library).
+ * The image is a cover like any other: a THUMBNAIL under the owner's name.
+ */
+export interface ItemCover extends CollectionItem {
+  cover: CollectionCover;
+}
+
+/** Item covers read from one collection, at most. */
+export const MAX_ITEM_COVERS = 1000;
+
 /** A folder inside a collection: its own shares and subfolders. */
 export interface CollectionFolder {
   /** Unique within the collection; never reused for another folder. */
@@ -107,6 +121,8 @@ export interface CollectionBody {
    * this one; collectionSpace() is what the app shows.
    */
   space?: string;
+  /** At the root, for shares anywhere in the collection; one per share, only for shares it holds. */
+  itemCovers?: ItemCover[];
   /**
    * Set by Delete (QDN can't remove a resource, so it is republished empty).
    * Lists leave it out; any later edit drops the flag, so a collection that
@@ -226,6 +242,7 @@ export function buildCollectionBody(input: {
   folders?: CollectionFolder[];
   copiedFrom?: CollectionSource;
   space?: string | null;
+  itemCovers?: ItemCover[];
   deleted?: boolean;
   extra?: Record<string, unknown>;
 }): CollectionBody {
@@ -246,19 +263,47 @@ export function buildCollectionBody(input: {
   if (input.folders && input.folders.length > 0) body.folders = input.folders;
   if (input.copiedFrom) body.copiedFrom = input.copiedFrom;
   if (input.space) body.space = input.space;
+  const itemCovers = keptItemCovers(input.itemCovers, body);
+  if (itemCovers.length > 0) body.itemCovers = itemCovers;
   if (input.deleted) body.deleted = true;
   if (input.extra && Object.keys(input.extra).length > 0) body.extra = input.extra;
   return body;
 }
 
+/** One cover per share, the first given, and only for shares the body holds. */
+function keptItemCovers(covers: ItemCover[] | undefined, body: Pick<CollectionBody, "items" | "folders">): ItemCover[] {
+  if (!covers || covers.length === 0) return [];
+  const held = new Set(allCollectionItems(body).map((item) => collectionKey(item.name, item.identifier)));
+  const out: ItemCover[] = [];
+  for (const entry of covers) {
+    const key = collectionKey(entry.name, entry.identifier);
+    if (!held.has(key)) continue;
+    held.delete(key);
+    out.push({ name: entry.name, identifier: entry.identifier, cover: entry.cover });
+  }
+  return out;
+}
+
+/** The picture the owner chose for this share, if any. */
+export function itemCoverOf(body: Pick<CollectionBody, "itemCovers">, item: CollectionItem): CollectionCover | undefined {
+  return body.itemCovers?.find((entry) => sameItem(entry, item))?.cover;
+}
+
+/** The covers with this share's set to `cover`, or taken away with null. */
+export function withItemCover(covers: ItemCover[] | undefined, item: CollectionItem, cover: CollectionCover | null): ItemCover[] {
+  const others = (covers ?? []).filter((entry) => !sameItem(entry, item));
+  return cover ? [...others, { name: item.name, identifier: item.identifier, cover }] : others;
+}
+
 /**
  * The next version of a collection: the same body with `changes`, its
- * folders, cover, space and unknown fields carried over, `updated` set to now.
- * A `cover` or `space` of null clears it.
+ * folders, cover, space, item covers and unknown fields carried over,
+ * `updated` set to now. A `cover` or `space` of null clears it. Item covers
+ * for shares no longer in it are dropped.
  */
 export function editCollectionBody(
   current: CollectionBody,
-  changes: Partial<Pick<CollectionBody, "title" | "description" | "items" | "folders">> & { cover?: CollectionCover | null; space?: string | null } = {},
+  changes: Partial<Pick<CollectionBody, "title" | "description" | "items" | "folders" | "itemCovers">> & { cover?: CollectionCover | null; space?: string | null } = {},
   now?: number
 ): CollectionBody {
   return buildCollectionBody({
@@ -271,6 +316,7 @@ export function editCollectionBody(
     folders: changes.folders ?? current.folders,
     copiedFrom: current.copiedFrom,
     space: changes.space === undefined ? current.space : changes.space,
+    itemCovers: changes.itemCovers ?? current.itemCovers,
     extra: current.extra,
   });
 }
@@ -298,11 +344,11 @@ export function deletedCollectionBody(current: CollectionBody, now?: number): Co
 
 /**
  * A copy of someone's collection, to publish under the copier's name: its
- * shares, folders, covers (the covers stay the original's images) and look, a
+ * shares, folders, covers and item covers (they stay the original's images) and look, a
  * title and description of the copier's choosing, and `copiedFrom`.
  */
 export function copyCollectionBody(
-  source: Pick<Collection, "name" | "identifier" | "title" | "items" | "folders" | "cover" | "space">,
+  source: Pick<Collection, "name" | "identifier" | "title" | "items" | "folders" | "cover" | "space" | "itemCovers">,
   input: { title: string; description: string; now?: number }
 ): CollectionBody {
   return buildCollectionBody({
@@ -313,13 +359,14 @@ export function copyCollectionBody(
     cover: source.cover ?? null,
     copiedFrom: { name: source.name, identifier: source.identifier, title: source.title },
     space: source.space,
+    itemCovers: source.itemCovers,
     now: input.now,
   });
 }
 
-/** The JSON stored on QDN: unknown fields first, then the known ones; empty folders, no cover and no space are left out. */
+/** The JSON stored on QDN: unknown fields first, then the known ones; empty folders, no cover, no space and no item covers are left out. */
 export function storedCollectionJson(body: CollectionBody): Record<string, unknown> {
-  const { extra, cover, folders, copiedFrom, space, deleted, ...known } = body;
+  const { extra, cover, folders, copiedFrom, space, itemCovers, deleted, ...known } = body;
   return {
     ...(extra ?? {}),
     ...known,
@@ -327,6 +374,7 @@ export function storedCollectionJson(body: CollectionBody): Record<string, unkno
     ...(folders && folders.length > 0 ? { folders } : {}),
     ...(copiedFrom ? { copiedFrom } : {}),
     ...(space ? { space } : {}),
+    ...(itemCovers && itemCovers.length > 0 ? { itemCovers } : {}),
     ...(deleted ? { deleted: true } : {}),
   };
 }
@@ -407,7 +455,24 @@ export function parseFolders(raw: unknown, depth = 1, seen = new Set<string>()):
   return out;
 }
 
-const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders", "copiedFrom", "space", "deleted"]);
+/** Item covers read from QDN: entries with a share and a cover, one per share, at most MAX_ITEM_COVERS. */
+export function parseItemCovers(raw: unknown): ItemCover[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ItemCover[] = [];
+  const seen = new Set<string>();
+  for (const value of raw) {
+    if (out.length >= MAX_ITEM_COVERS) break;
+    if (!isItem(value)) continue;
+    const cover = parseCover((value as { cover?: unknown }).cover);
+    const key = collectionKey(value.name, value.identifier);
+    if (!cover || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: value.name, identifier: value.identifier, cover });
+  }
+  return out;
+}
+
+const KNOWN_FIELDS = new Set(["version", "title", "description", "items", "created", "updated", "cover", "folders", "copiedFrom", "space", "itemCovers", "deleted"]);
 
 /** A copy's source read from QDN, or undefined for anything else. */
 export function parseSource(raw: unknown): CollectionSource | undefined {
@@ -458,6 +523,9 @@ export function parseCollection(raw: unknown): CollectionBody | null {
   const copiedFrom = parseSource(obj.copiedFrom);
   if (copiedFrom) body.copiedFrom = copiedFrom;
   if (typeof obj.space === "string" && obj.space && obj.space.length <= COLLECTION_SPACE_MAX) body.space = obj.space;
+  // Read as stored: an entry for a share since removed is dropped on the next edit.
+  const itemCovers = parseItemCovers(obj.itemCovers);
+  if (itemCovers.length > 0) body.itemCovers = itemCovers;
   if (obj.deleted === true) body.deleted = true;
   const extra = Object.fromEntries(Object.entries(obj).filter(([key]) => !KNOWN_FIELDS.has(key)));
   if (Object.keys(extra).length > 0) body.extra = extra;
