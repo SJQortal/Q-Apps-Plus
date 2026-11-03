@@ -54,7 +54,7 @@ import {
   type LibraryView,
 } from "./libraryShelf";
 import { BookCover, STILL, twoLines } from "./bookCover";
-import { BookCoverDialog } from "./BookCoverDialog";
+import { ItemCoverDialog } from "./ItemCoverDialog";
 import { ShareOwnerActions, SpaceShell, SpaceShowMore } from "./SpaceShell";
 import type { SpaceProps } from "./types";
 import type { SpaceShare } from "./useSpaceItems";
@@ -395,7 +395,14 @@ function BookDetails({ share, look, collection, cover, phone, titleId, onClose, 
           >
             {cover ? "Change cover" : "Add a cover"}
           </Button>
-          <BookCoverDialog open={coverOpen} onClose={() => setCoverOpen(false)} collection={collection} share={share} look={look} />
+          <ItemCoverDialog
+            open={coverOpen}
+            onClose={() => setCoverOpen(false)}
+            collection={collection}
+            share={share}
+            shape="book"
+            preview={({ src, cover: chosen }) => <BookCover share={share} look={look} cover={chosen} src={src} />}
+          />
         </>
       ) : null}
 

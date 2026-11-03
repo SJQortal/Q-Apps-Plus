@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useDispatch } from "react-redux";
 import { Alert, Box, Button, CircularProgress, Typography } from "@mui/material";
 import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
@@ -6,32 +6,49 @@ import RestoreOutlinedIcon from "@mui/icons-material/RestoreOutlined";
 import { ResponsiveDialog } from "../../../components/common/mobile/ResponsiveDialog";
 import { upsertCollection } from "../../../state/features/collectionsSlice";
 import { setNotification } from "../../../state/features/notificationsSlice";
-import { editCollectionBody, itemCoverOf, publishCollection, withItemCover, type Collection } from "../../../utils/collections";
-import { ImageTooBigError, makeBookCoverFile } from "../../../utils/coverImage";
+import { editCollectionBody, itemCoverOf, publishCollection, withItemCover, type Collection, type CollectionCover } from "../../../utils/collections";
+import { ImageTooBigError, makeBookCoverFile, makeFilmCoverFile } from "../../../utils/coverImage";
 import { isHubDecline } from "../../../utils/hubErrors";
 import { KEEP_COVER, coverChange, type CoverChoice } from "../CoverPicker";
-import { BookCover } from "./bookCover";
-import type { LibraryLook } from "./libraryShelf";
 import type { SpaceShare } from "./useSpaceItems";
 
-/** Hub published the collection but not the book's new cover. */
-export const BOOK_COVER_FAILED = "Saved, but the cover image wasn't published. Choose it again.";
+/** Hub published the collection but not the share's new cover. */
+export const ITEM_COVER_FAILED = "Saved, but the cover image wasn't published. Choose it again.";
 
-interface BookCoverDialogProps {
+/** The shapes a cover comes in: a book's 2:3, or a video's 16:9 still. */
+const SHAPES = {
+  book: {
+    title: "Book cover",
+    make: makeBookCoverFile,
+    note: "Shown on this collection's shelves in place of the share's own picture, cut to a book's shape.",
+    previewWidth: 112,
+  },
+  film: {
+    title: "Video cover",
+    make: makeFilmCoverFile,
+    note: "Shown on this collection's posters and in its player in place of the share's own picture, cut to 16:9.",
+    previewWidth: 192,
+  },
+} as const;
+
+interface ItemCoverDialogProps {
   open: boolean;
   onClose: () => void;
   collection: Collection;
   share: SpaceShare;
-  look: LibraryLook;
+  shape: keyof typeof SHAPES;
+  /** The share as the look shows it, with `src` (a picture not published yet) or `cover` (the one chosen now), or neither for its own. */
+  preview: (choice: { src: string | null; cover: CollectionCover | null | undefined }) => ReactNode;
 }
 
 /**
- * The collection owner's cover for one book: a picture of their own, cut to
- * 2:3 on the device, shown on this collection's shelves in place of the
- * share's own picture. It is stored in the collection (`itemCovers`), so
+ * The collection owner's cover for one of its shares: a picture of their own,
+ * cut to the look's shape on the device, shown in this collection in place of
+ * the share's own picture. It is stored in the collection (`itemCovers`), so
  * saving republishes it with the image: one Hub confirmation.
  */
-export function BookCoverDialog({ open, onClose, collection, share, look }: BookCoverDialogProps) {
+export function ItemCoverDialog({ open, onClose, collection, share, shape, preview }: ItemCoverDialogProps) {
+  const kind = SHAPES[shape];
   const dispatch = useDispatch();
   const input = useRef<HTMLInputElement>(null);
   const item = { name: share.user, identifier: share.identifier };
@@ -66,7 +83,7 @@ export function BookCoverDialog({ open, onClose, collection, share, look }: Book
     setProblem(null);
     setWorking(true);
     try {
-      const cover = await makeBookCoverFile(file);
+      const cover = await kind.make(file);
       setChoice({ kind: "new", file: cover, url: URL.createObjectURL(cover) });
     } catch (error) {
       setProblem(
@@ -98,7 +115,7 @@ export function BookCoverDialog({ open, onClose, collection, share, look }: Book
       dispatch(upsertCollection(saved));
       dispatch(
         coverFailed
-          ? setNotification({ msg: BOOK_COVER_FAILED, alertType: "info" })
+          ? setNotification({ msg: ITEM_COVER_FAILED, alertType: "info" })
           : setNotification({ msg: cover ? "Cover saved" : "Cover removed", alertType: "success" })
       );
       onClose();
@@ -116,14 +133,14 @@ export function BookCoverDialog({ open, onClose, collection, share, look }: Book
 
   const shown = choice.kind === "keep" ? current : null;
   const hasOwn = choice.kind === "new" || Boolean(shown);
-  const title = share.title || "this book";
+  const title = share.title || "Untitled";
 
   return (
     <ResponsiveDialog
       open={open}
       onClose={close}
       dismissible={!busy}
-      title="Book cover"
+      title={kind.title}
       maxWidth="xs"
       actions={
         <>
@@ -137,9 +154,7 @@ export function BookCoverDialog({ open, onClose, collection, share, look }: Book
       }
     >
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", pt: 0.5 }}>
-        <Box sx={{ width: 112, flexShrink: 0 }}>
-          <BookCover share={share} look={look} cover={shown} src={previewUrl} />
-        </Box>
+        <Box sx={{ width: kind.previewWidth, maxWidth: "45%", flexShrink: 0 }}>{preview({ src: previewUrl, cover: shown })}</Box>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1, minWidth: 0, alignItems: "flex-start" }}>
           <Typography component="p" sx={{ fontWeight: 600, overflowWrap: "anywhere" }}>
             {title}
@@ -178,7 +193,7 @@ export function BookCoverDialog({ open, onClose, collection, share, look }: Book
       </Box>
       <Typography variant="body2" color="text.secondary" role={problem ? "alert" : undefined} sx={{ mt: 2 }}>
         {problem ??
-          "Shown on this collection's shelves in place of the share's own picture, cut to a book's shape. Published with the collection, for one more small QDN fee."}
+          `${kind.note} Published with the collection, for one more small QDN fee.`}
       </Typography>
       {error ? (
         <Alert severity="error" sx={{ mt: 2 }}>
