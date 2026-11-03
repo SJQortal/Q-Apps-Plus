@@ -146,6 +146,8 @@ const ALBUM_SHARES = [
   spaceShare('walk', 'Coast walk, three days from the headland to the harbour and back again', NAME, 22, Array.from({ length: 14 }, (_, i) => photo(`coast-walk-${i + 1}`)), true),
   spaceShare('wed', 'Wedding', 'bob+builder', 300, [...Array.from({ length: 5 }, (_, i) => photo(`wedding-${i + 1}`)), { filename: 'running-order.txt', mimetype: 'text/plain', size: 1_400, mark: '_t_' }], false),
   spaceShare('zip', 'Originals', NAME, 340, [{ filename: 'originals.zip', mimetype: 'application/zip', size: 90_000_000, mark: '_z_' }], false),
+  // A PDF the owner gave a cover, so it stands among the photos.
+  spaceShare('tides', 'Tide tables for the bay, 2026', 'Alice Wonder', 12, [pdf('tide-tables-2026', 2_400_000)], false),
 ];
 const spaceBy = (list) => Object.fromEntries(list.map((s) => [s.id, s.body]));
 const itemsOf = (list) => list.map((s) => ({ name: s.user, identifier: s.id }));
@@ -197,6 +199,7 @@ Object.assign(collections, {
   [SPACE_ALBUM]: {
     version: 1, title: 'The coast', description: 'Two years along the same few miles of shore.', created: now - 400 * DAY, updated: now - DAY, space: 'album', cover: spaceCover('album'),
     items: itemsOf([...ALBUM_SHARES, GONE]),
+    itemCovers: [{ name: ALBUM_SHARES.at(-1).user, identifier: ALBUM_SHARES.at(-1).id, cover: spaceCover('tall_tides') }],
     folders: [
       { id: 'sa_walk', title: 'Coast walk', description: '', items: itemsOf(ALBUM_SHARES.slice(9, 10)), folders: [] },
       { id: 'sa_people', title: 'People', description: '', cover: spaceCover('people'), items: itemsOf(ALBUM_SHARES.slice(10, 11)), folders: [] },
@@ -429,6 +432,8 @@ export default {
     { key: 'space-library-catalogue', path: `/collection/${NAME}/${SPACE_LIBRARY}`, after: async (page) => { await page.getByRole('button', { name: 'Catalogue' }).click({ timeout: 8000 }); await page.getByRole('heading', { name: 'Books' }).scrollIntoViewIfNeeded(); await page.evaluate(() => { localStorage.removeItem('qshareplus-library-view'); window.scrollBy(0, 200); }); await page.mouse.move(1, 1); await page.waitForTimeout(600); } },
     { key: 'space-library-folder', path: `/collection/${NAME}/${SPACE_LIBRARY}/folder/sl_nature`, after: async (page) => { await page.waitForSelector('text=Common trees', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-album', path: `/collection/${NAME}/${SPACE_ALBUM}`, after: async (page) => { await page.waitForSelector('text=Coast walk', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(1000); } },
+    { key: 'space-album-cover', path: `/collection/${NAME}/${SPACE_ALBUM}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Options for Originals' }).first().click({ timeout: 8000 }); await page.getByRole('menuitem', { name: 'Add a cover' }).click({ timeout: 4000 }); await page.getByRole('dialog', { name: 'Gallery cover' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(600); } },
+    { key: 'space-album-pdf', path: `/collection/${NAME}/${SPACE_ALBUM}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Open Tide tables/ }).first().scrollIntoViewIfNeeded({ timeout: 8000 }); await page.waitForTimeout(1200); } },
     { key: 'space-album-folder', path: `/collection/${NAME}/${SPACE_ALBUM}/folder/sa_people`, after: async (page) => { await page.waitForSelector('text=Wedding', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-album-lightbox', path: `/collection/${NAME}/${SPACE_ALBUM}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Open .*from Morning at the pier/ }).first().click({ timeout: 8000 }); await page.waitForTimeout(1200); } },
     { key: 'space-picker', path: `/collection/${NAME}/${SPACE_MUSIC}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Edit' }).first().click({ timeout: 8000 }); await page.getByRole('radiogroup', { name: 'Space' }).scrollIntoViewIfNeeded({ timeout: 4000 }); await page.waitForTimeout(400); } },
