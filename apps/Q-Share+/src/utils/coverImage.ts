@@ -28,6 +28,20 @@ export const BOOK_COVER_HEIGHT = 600;
 export const FILM_COVER_WIDTH = 960;
 export const FILM_COVER_HEIGHT = 540;
 
+/** A picture for a gallery keeps its own shape, between these, at most this long on its longer side. */
+export const GALLERY_RATIO_MIN = 0.6;
+export const GALLERY_RATIO_MAX = 2.2;
+export const GALLERY_COVER_LONG = 960;
+
+/** The size a gallery's cover is drawn at: the picture's shape, kept within the gallery's, and its longer side at most 960 px. */
+export function galleryCoverSize(width: number, height: number): { width: number; height: number } {
+  const ratio = Math.min(GALLERY_RATIO_MAX, Math.max(GALLERY_RATIO_MIN, width / Math.max(1, height)));
+  // The size the crop to that shape keeps, never grown.
+  const keptWidth = Math.min(width, height * ratio);
+  const scale = Math.min(1, GALLERY_COVER_LONG / Math.max(keptWidth, keptWidth / ratio));
+  return { width: Math.max(1, Math.round(keptWidth * scale)), height: Math.max(1, Math.round((keptWidth / ratio) * scale)) };
+}
+
 /** The centred part of a width × height image in the shape of outWidth × outHeight, and the size to draw it at. */
 function shapeCrop(width: number, height: number, outWidth: number, outHeight: number) {
   // Wider than the shape loses its sides, taller loses its top and bottom.
@@ -193,6 +207,14 @@ async function makeShapedCoverFile(file: Blob, outWidth: number, outHeight: numb
 /** A book's cover file for `file`: its centred 2:3 portrait, at most 400 × 600. */
 export function makeBookCoverFile(file: Blob): Promise<File> {
   return makeShapedCoverFile(file, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT, "book-cover");
+}
+
+/** A gallery's cover file for `file`: its own shape (within the gallery's), at most 960 px on its longer side. */
+export async function makeGalleryCoverFile(file: Blob): Promise<File> {
+  const { width, height } = await imageSize(file);
+  if (width * height > MAX_SOURCE_PIXELS) throw new ImageTooBigError();
+  const out = galleryCoverSize(width, height);
+  return makeShapedCoverFile(file, out.width, out.height, "gallery-cover");
 }
 
 /** A video's cover file for `file`: its centred 16:9, at most 960 × 540, or as a vertical poster its centred 2:3, at most 400 × 600. */

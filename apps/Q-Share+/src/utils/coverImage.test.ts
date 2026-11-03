@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { BOOK_COVER_HEIGHT, BOOK_COVER_WIDTH, COVER_SIZE, FILM_COVER_HEIGHT, FILM_COVER_WIDTH, ImageTooBigError, MAX_SOURCE_PIXELS, bookCrop, decodeImage, filmCrop, squareCrop } from "./coverImage";
+import { galleryCoverSize, BOOK_COVER_HEIGHT, BOOK_COVER_WIDTH, COVER_SIZE, FILM_COVER_HEIGHT, FILM_COVER_WIDTH, ImageTooBigError, MAX_SOURCE_PIXELS, bookCrop, decodeImage, filmCrop, squareCrop } from "./coverImage";
 import { fitWithin } from "./thumbnailImage";
 
 describe("squareCrop", () => {
@@ -41,6 +41,20 @@ describe("filmCrop", () => {
 
   it("never scales a small image up", () => {
     expect(filmCrop(320, 180)).toMatchObject({ outWidth: 320, outHeight: 180 });
+  });
+});
+
+describe("galleryCoverSize", () => {
+  it("keeps the picture's shape, its longer side at most 960 px", () => {
+    expect(galleryCoverSize(4000, 3000)).toEqual({ width: 960, height: 720 });
+    expect(galleryCoverSize(3000, 4000)).toEqual({ width: 720, height: 960 });
+    expect(galleryCoverSize(500, 400)).toEqual({ width: 500, height: 400 });
+  });
+
+  it("cuts a very tall or very wide picture to the gallery's limits", () => {
+    // A page scan is fine; a long strip becomes 0.6 or 2.2.
+    expect(galleryCoverSize(1000, 3000)).toEqual({ width: 576, height: 960 });
+    expect(galleryCoverSize(5000, 1000)).toEqual({ width: 960, height: 436 });
   });
 });
 
