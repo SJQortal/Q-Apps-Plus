@@ -78,7 +78,12 @@ export interface CollectionCover {
  */
 export interface ItemCover extends CollectionItem {
   cover: CollectionCover;
+  /** How the picture was cut: a book's cover or a vertical poster, or a horizontal still. Left out, the look's own shape. */
+  shape?: ItemCoverShape;
 }
+
+export const ITEM_COVER_SHAPES = ["portrait", "landscape"] as const;
+export type ItemCoverShape = (typeof ITEM_COVER_SHAPES)[number];
 
 /** Item covers read from one collection, at most. */
 export const MAX_ITEM_COVERS = 1000;
@@ -279,20 +284,30 @@ function keptItemCovers(covers: ItemCover[] | undefined, body: Pick<CollectionBo
     const key = collectionKey(entry.name, entry.identifier);
     if (!held.has(key)) continue;
     held.delete(key);
-    out.push({ name: entry.name, identifier: entry.identifier, cover: entry.cover });
+    out.push({ name: entry.name, identifier: entry.identifier, cover: entry.cover, ...(entry.shape ? { shape: entry.shape } : {}) });
   }
   return out;
 }
 
 /** The picture the owner chose for this share, if any. */
 export function itemCoverOf(body: Pick<CollectionBody, "itemCovers">, item: CollectionItem): CollectionCover | undefined {
-  return body.itemCovers?.find((entry) => sameItem(entry, item))?.cover;
+  return itemCoverEntry(body, item)?.cover;
 }
 
-/** The covers with this share's set to `cover`, or taken away with null. */
-export function withItemCover(covers: ItemCover[] | undefined, item: CollectionItem, cover: CollectionCover | null): ItemCover[] {
+/** The owner's cover for this share with its shape, if any. */
+export function itemCoverEntry(body: Pick<CollectionBody, "itemCovers">, item: CollectionItem): ItemCover | undefined {
+  return body.itemCovers?.find((entry) => sameItem(entry, item));
+}
+
+/** The covers with this share's set to `cover` (cut to `shape`), or taken away with null. */
+export function withItemCover(
+  covers: ItemCover[] | undefined,
+  item: CollectionItem,
+  cover: CollectionCover | null,
+  shape?: ItemCoverShape
+): ItemCover[] {
   const others = (covers ?? []).filter((entry) => !sameItem(entry, item));
-  return cover ? [...others, { name: item.name, identifier: item.identifier, cover }] : others;
+  return cover ? [...others, { name: item.name, identifier: item.identifier, cover, ...(shape ? { shape } : {}) }] : others;
 }
 
 /**
@@ -467,7 +482,13 @@ export function parseItemCovers(raw: unknown): ItemCover[] {
     const key = collectionKey(value.name, value.identifier);
     if (!cover || seen.has(key)) continue;
     seen.add(key);
-    out.push({ name: value.name, identifier: value.identifier, cover });
+    const shape = (value as { shape?: unknown }).shape;
+    out.push({
+      name: value.name,
+      identifier: value.identifier,
+      cover,
+      ...((ITEM_COVER_SHAPES as readonly unknown[]).includes(shape) ? { shape: shape as ItemCoverShape } : {}),
+    });
   }
   return out;
 }

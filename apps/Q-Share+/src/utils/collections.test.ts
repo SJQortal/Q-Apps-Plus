@@ -537,6 +537,21 @@ describe('item covers (1.0.1)', () => {
     expect(moved.itemCovers).toHaveLength(2);
   });
 
+  it('keeps the shape a cover was cut to, and reads only the two it knows', () => {
+    const body = buildCollectionBody({ title: 'T', items: [book, deep], itemCovers: withItemCover(undefined, book, cover('c1'), 'portrait'), now: 5 });
+    expect(storedCollectionJson(body).itemCovers).toEqual([{ ...book, cover: cover('c1'), shape: 'portrait' }]);
+    const base = { version: 1, title: 'T', description: '', items: [book, deep], created: 1, updated: 2 };
+    const parsed = parseCollection({
+      ...base,
+      itemCovers: [
+        { ...book, cover: cover('c1'), shape: 'landscape' },
+        { ...deep, cover: cover('c2'), shape: 'round' },
+      ],
+    })!;
+    expect(parsed.itemCovers).toEqual([{ ...book, cover: cover('c1'), shape: 'landscape' }, { ...deep, cover: cover('c2') }]);
+    expect(editCollectionBody(parsed, { title: 'New' }).itemCovers?.[0].shape).toBe('landscape');
+  });
+
   it('sets, replaces and takes away one share\'s cover', () => {
     const body = withCovers();
     const replaced = withItemCover(body.itemCovers, book, cover('qshare_cover_cccccccc'));
