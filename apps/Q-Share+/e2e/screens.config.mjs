@@ -182,6 +182,8 @@ Object.assign(collections, {
   [SPACE_LIBRARY]: {
     version: 1, title: 'The reading room', description: 'Books worth keeping, as PDF and EPUB.', created: now - 150 * DAY, updated: now - DAY, space: 'library',
     items: itemsOf([...BOOK_SHARES, GONE]),
+    // Covers the owner chose: one for a book with no picture of its own, one in place of a share's.
+    itemCovers: [1, 2].map((i) => ({ name: BOOK_SHARES[i].user, identifier: BOOK_SHARES[i].id, cover: spaceCover(`book${i}`) })),
     folders: [
       { id: 'sl_nature', title: 'Nature', description: 'Field notes', items: itemsOf(BOOK_SHARES.slice(5, 6)), folders: [] },
       { id: 'sl_craft', title: 'Craft and making things by hand', description: '', items: itemsOf(BOOK_SHARES.slice(4, 5)), folders: [] },
@@ -414,6 +416,7 @@ export default {
     { key: 'space-cinema-empty', path: `/collection/${NAME}/${SPACE_CINEMA}/folder/sc_soon`, after: async (page) => { await page.waitForSelector('h1', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(600); } },
     { key: 'space-library', path: `/collection/${NAME}/${SPACE_LIBRARY}`, after: async (page) => { await page.waitForSelector('text=Keeping bees', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-library-book', path: `/collection/${NAME}/${SPACE_LIBRARY}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Keeping bees by/ }).first().click({ timeout: 8000 }); await page.waitForTimeout(600); } },
+    { key: 'space-library-cover', path: `/collection/${NAME}/${SPACE_LIBRARY}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: /^Keeping bees by/ }).first().click({ timeout: 8000 }); await page.getByRole('button', { name: 'Change cover' }).click({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'space-library-catalogue', path: `/collection/${NAME}/${SPACE_LIBRARY}`, after: async (page) => { await page.getByRole('button', { name: 'Catalogue' }).click({ timeout: 8000 }); await page.getByRole('heading', { name: 'Books' }).scrollIntoViewIfNeeded(); await page.evaluate(() => { localStorage.removeItem('qshareplus-library-view'); window.scrollBy(0, 200); }); await page.mouse.move(1, 1); await page.waitForTimeout(600); } },
     { key: 'space-library-folder', path: `/collection/${NAME}/${SPACE_LIBRARY}/folder/sl_nature`, after: async (page) => { await page.waitForSelector('text=Common trees', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(800); } },
     { key: 'space-album', path: `/collection/${NAME}/${SPACE_ALBUM}`, after: async (page) => { await page.waitForSelector('text=Coast walk', { timeout: 8000 }).catch(() => {}); await page.waitForTimeout(1000); } },
