@@ -6,7 +6,7 @@ import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
 import MoreVertRoundedIcon from "@mui/icons-material/MoreVertRounded";
 import { PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
 import { useQdnImage } from "../../../hooks/useQdnImage";
-import { fileKind, fileKindIconElement } from "../../../utils/fileKind";
+import { fileKind, fileKindIconElement, fileKindLabel } from "../../../utils/fileKind";
 import { formatBytes } from "../../../utils/formatBytes";
 import { guessedRatio, otherShareNote, photoCaption, type AlbumPhoto } from "./albumModel";
 import { useAlbumPicture } from "./albumPicture";
@@ -263,6 +263,115 @@ export function PendingTile() {
     <TileRoot aria-hidden style={tileStyle({ ratio: 1.5 })}>
       <Skeleton variant="rounded" sx={{ width: "100%", height: "100%" }} />
     </TileRoot>
+  );
+}
+
+/** What kind a cover tile's share is, on the picture: "PDF". */
+const KindBadge = styled("span")(({ theme }) => ({
+  position: "absolute",
+  top: theme.spacing(0.75),
+  left: theme.spacing(0.75),
+  padding: theme.spacing(0.25, 0.75),
+  borderRadius: 4,
+  fontSize: 12,
+  fontWeight: 700,
+  lineHeight: 1.5,
+  letterSpacing: "0.03em",
+  color: theme.palette.common.white,
+  backgroundColor: alpha(theme.palette.common.black, 0.72),
+}));
+
+interface CoverTileProps {
+  share: SpaceShare;
+  url: string;
+  menu: boolean;
+  onOpenShare: (key: string) => void;
+  onMenu: OpenAlbumMenu;
+}
+
+/**
+ * A share without pictures that the collection's owner gave a cover: the
+ * cover in the flow, in its own shape, with what kind the share is on it. It
+ * opens the share, not the viewer.
+ */
+export const CoverTile = memo(
+  function CoverTile({ share, url, menu, onOpenShare, onMenu }: CoverTileProps) {
+    const { ref, inView } = useInView({ triggerOnce: true, rootMargin: "200px" });
+    const { src, onError } = useQdnImage(inView ? url : null);
+    const [ratio, setRatio] = useState(() => ratios.get(url) ?? 0.75);
+    const [shownSrc, setShownSrc] = useState<string | null>(null);
+    const first = share.files[0];
+    const kind = first ? fileKind(first.mimetype, first.filename) : "other";
+    const title = share.title || share.identifier;
+    const shown = src !== null && shownSrc === src;
+    return (
+      <TileRoot ref={ref} style={tileStyle({ ratio })}>
+        <TileButton type="button" onClick={() => onOpenShare(share.key)} aria-label={`Open ${title}. ${otherShareNote(share)}`} style={{ cursor: "pointer" }}>
+          {shown ? null : (
+            <Placeholder>
+              <Box component="span" sx={{ m: "auto", color: "text.secondary", opacity: 0.7, display: "flex", "& svg": { fontSize: 28 } }}>
+                {fileKindIconElement(kind)}
+              </Box>
+              <Typography
+                component="span"
+                sx={{ fontSize: 13, lineHeight: 1.3, fontWeight: 600, overflow: "hidden", wordBreak: "break-word", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 2 }}
+              >
+                {title}
+              </Typography>
+            </Placeholder>
+          )}
+          {src ? (
+            <TileImage
+              src={src}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              onError={onError}
+              onLoad={(event) => {
+                const { naturalWidth, naturalHeight } = event.currentTarget;
+                setShownSrc(src);
+                if (naturalWidth > 0 && naturalHeight > 0) {
+                  const next = Math.min(RATIO_MAX, Math.max(RATIO_MIN, naturalWidth / naturalHeight));
+                  ratios.set(url, next);
+                  setRatio(next);
+                }
+              }}
+              style={{ opacity: shown ? 1 : 0 }}
+            />
+          ) : null}
+          <KindBadge aria-hidden>{fileKindLabel(kind)}</KindBadge>
+          {shown ? <Caption className="album-caption">{title}</Caption> : null}
+        </TileButton>
+        {menu ? <TileMenuButton overlay share={share} onMenu={onMenu} /> : null}
+      </TileRoot>
+    );
+  },
+  (a, b) =>
+    a.url === b.url &&
+    a.share.key === b.share.key &&
+    a.share.title === b.share.title &&
+    a.share.files === b.share.files &&
+    a.menu === b.menu &&
+    a.onOpenShare === b.onOpenShare &&
+    a.onMenu === b.onMenu
+);
+
+/** The cover dialog's preview: the picture in its own shape, or the kind's icon until there is one. */
+export function GalleryCoverPreview({ share, src }: { share: SpaceShare; src: string | null }) {
+  const image = useQdnImage(src);
+  const first = share.files[0];
+  const kind = first ? fileKind(first.mimetype, first.filename) : "other";
+  return (
+    <Box aria-hidden sx={{ position: "relative", width: "100%", borderRadius: 1, overflow: "hidden", bgcolor: "action.hover" }}>
+      {image.src ? (
+        <img src={image.src} alt="" onError={image.onError} style={{ display: "block", width: "100%", height: "auto", maxHeight: 260, objectFit: "contain" }} />
+      ) : (
+        <Box sx={{ aspectRatio: "3 / 4", display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary", "& svg": { fontSize: 36 } }}>
+          {fileKindIconElement(kind)}
+        </Box>
+      )}
+      <KindBadge>{fileKindLabel(kind)}</KindBadge>
+    </Box>
   );
 }
 

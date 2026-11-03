@@ -1,17 +1,20 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { Box, Button, ListItemIcon, Menu, MenuItem, Typography } from "@mui/material";
 import { alpha, darken, styled } from "@mui/material/styles";
+import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import RemoveCircleOutlinedIcon from "@mui/icons-material/RemoveCircleOutlined";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
 import { useQdnImage } from "../../../hooks/useQdnImage";
+import { shareKey } from "../../../state/features/fileSlice";
 import { coverUrl } from "../../../utils/collections";
 import { AlbumFolders } from "./albumFolders";
 import { AlbumLightbox } from "./albumLightbox";
-import { albumLayout, heroPhoto, heroSummary, sectionSummary, type AlbumEntry, type AlbumPhoto } from "./albumModel";
+import { albumLayout, albumPhotos, heroPhoto, heroSummary, sectionSummary, type AlbumEntry, type AlbumPhoto } from "./albumModel";
 import { useAlbumPicture } from "./albumPicture";
-import { JustifiedRows, OtherTile, PendingTile, PhotoTile, type OpenAlbumMenu } from "./albumTiles";
+import { CoverTile, GalleryCoverPreview, JustifiedRows, OtherTile, PendingTile, PhotoTile, type OpenAlbumMenu } from "./albumTiles";
+import { ItemCoverDialog } from "./ItemCoverDialog";
 import { ShareOwnerActions, SpaceShell, SpaceShowMore } from "./SpaceShell";
 import type { SpaceProps } from "./types";
 import type { SpaceShare } from "./useSpaceItems";
@@ -125,12 +128,14 @@ interface FlowProps {
 }
 
 /** Pictures with no heading: each carries its share's title and the owner's menu. */
-function AlbumRun({ entries, few, revealed, onOpen, onMenu, isOwner }: FlowProps & { entries: AlbumEntry[]; few: boolean }) {
+function AlbumRun({ entries, few, revealed, onOpen, onMenu, isOwner, onOpenShare }: FlowProps & { entries: AlbumEntry[]; few: boolean; onOpenShare: (key: string) => void }) {
   return (
     <JustifiedRows data-few={few || undefined} aria-label="Photos">
       {entries.map((entry) =>
         entry.type === "pending" ? (
           <PendingTile key={entry.key} />
+        ) : entry.type === "cover" ? (
+          <CoverTile key={entry.key} share={entry.share} url={entry.url} menu={isOwner} onOpenShare={onOpenShare} onMenu={onMenu} />
         ) : (
           <PhotoTile
             key={entry.photo.key}
@@ -221,11 +226,21 @@ const AlbumSection = memo(function AlbumSection({ share, photos, few, revealed, 
   );
 });
 
+/** A share the owner can give a cover here: one with no pictures of its own, still there. */
+const coverable = (share: SpaceShare) =>
+  share.loaded && !share.deleted && !share.unreadable && !share.unavailable && albumPhotos(share).length === 0;
+
 /** The album space: a big cover, then the page's pictures edge to edge, and a dark room to see them in. */
 export default function AlbumSpace(props: SpaceProps) {
-  const { items, isOwner, onMove, onRemove, openShare, openProfile, openFolder, subfolders, cover, title, description, counts, breadcrumb, attribution, actions, emptyState } = props;
+  const { collection, items, isOwner, onMove, onRemove, openShare, openProfile, openFolder, subfolders, cover, title, description, counts, breadcrumb, attribution, actions, emptyState } = props;
   const phone = usePhoneLayout();
-  const { blocks, photos, others } = useMemo(() => albumLayout(items.shares), [items.shares]);
+  // The covers the owner chose, by share: a share without pictures that has one joins the pictures.
+  const covers = useMemo(
+    () => new Map((collection.itemCovers ?? []).map((entry) => [shareKey(entry.name, entry.identifier), coverUrl(entry.cover)])),
+    [collection.itemCovers]
+  );
+  const { blocks, photos, others } = useMemo(() => albumLayout(items.shares, covers), [items.shares, covers]);
+  const [covering, setCovering] = useState<string | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<ReadonlySet<string>>(() => new Set());
   const [menu, setMenu] = useState<{ anchor: HTMLElement; key: string } | null>(null);
@@ -247,6 +262,8 @@ export default function AlbumSpace(props: SpaceProps) {
   const closeViewer = useCallback(() => setViewing(null), []);
 
   const flow = { revealed, onOpen: setViewing, onMenu, isOwner };
+  // Found by key, so the dialog closes itself when the share is removed.
+  const coveringShare = covering && isOwner ? items.shares.find((share) => share.key === covering) : undefined;
   const hero = (
     <>
       {breadcrumb}
@@ -281,7 +298,7 @@ export default function AlbumSpace(props: SpaceProps) {
       {emptyState}
       {blocks.map((block) =>
         block.type === "run" ? (
-          <AlbumRun key={block.key} entries={block.entries} few={few} {...flow} />
+          <AlbumRun key={block.key} entries={block.entries} few={few} onOpenShare={onOpenShare} {...flow} />
         ) : (
           <AlbumSection
             key={block.key}
@@ -313,6 +330,21 @@ export default function AlbumSpace(props: SpaceProps) {
       ) : null}
       <SpaceShowMore items={items} />
       <Menu anchorEl={menu?.anchor} open={Boolean(menu && menuShare)} onClose={() => setMenu(null)}>
+        {/* A share without pictures can have a cover of the owner's, and then stands among them. */}
+        {menuShare && coverable(menuShare) ? (
+          <MenuItem
+            onClick={() => {
+              setMenu(null);
+              setCovering(menuShare.key);
+            }}
+            sx={{ minHeight: 44 }}
+          >
+            <ListItemIcon>
+              <AddPhotoAlternateOutlinedIcon />
+            </ListItemIcon>
+            {covers.has(menuShare.key) ? "Change cover" : "Add a cover"}
+          </MenuItem>
+        ) : null}
         {menuShare && onMove ? (
           <MenuItem
             aria-label={`Move ${menuShare.title || menuShare.identifier}`}
@@ -344,6 +376,16 @@ export default function AlbumSpace(props: SpaceProps) {
           </MenuItem>
         ) : null}
       </Menu>
+      {coveringShare ? (
+        <ItemCoverDialog
+          open={Boolean(covering)}
+          onClose={() => setCovering(null)}
+          collection={collection}
+          share={coveringShare}
+          look="album"
+          preview={({ src, cover: chosen }) => <GalleryCoverPreview share={coveringShare} src={src ?? (chosen ? coverUrl(chosen) : null)} />}
+        />
+      ) : null}
       {viewing ? (
         <AlbumLightbox
           photos={photos}

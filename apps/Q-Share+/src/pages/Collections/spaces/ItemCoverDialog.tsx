@@ -15,7 +15,7 @@ import {
   type CollectionCover,
   type ItemCoverShape,
 } from "../../../utils/collections";
-import { ImageTooBigError, makeBookCoverFile, makeFilmCoverFile } from "../../../utils/coverImage";
+import { ImageTooBigError, makeBookCoverFile, makeFilmCoverFile, makeGalleryCoverFile } from "../../../utils/coverImage";
 import { isHubDecline } from "../../../utils/hubErrors";
 import { KEEP_COVER, coverChange, type CoverChoice } from "../CoverPicker";
 import type { SpaceShare } from "./useSpaceItems";
@@ -23,7 +23,7 @@ import type { SpaceShare } from "./useSpaceItems";
 /** Hub published the collection but not the share's new cover. */
 export const ITEM_COVER_FAILED = "Saved, but the cover image wasn't published. Choose it again.";
 
-/** The shapes a cover comes in: a book's 2:3, or a video's 16:9 still. */
+/** The shapes a cover comes in: a book's 2:3, a video's 16:9 still or 2:3 poster, or a gallery picture's own shape (no shape stored). */
 const SHAPES = {
   book: {
     title: "Book cover",
@@ -39,6 +39,13 @@ const SHAPES = {
     note: "Shown on this collection's posters and in its player in place of the share's own picture: a horizontal still cut to 16:9, or a vertical poster cut to 2:3, shown whole.",
     previewWidth: 192,
   },
+  album: {
+    title: "Gallery cover",
+    make: (file: Blob) => makeGalleryCoverFile(file),
+    shapes: [] as ItemCoverShape[],
+    note: "Shown among this collection's photos in place of the share's own picture, in the picture's own shape.",
+    previewWidth: 176,
+  },
 } as const;
 
 interface ItemCoverDialogProps {
@@ -49,7 +56,7 @@ interface ItemCoverDialogProps {
   /** Which look asks: its shapes, words and preview size. */
   look: keyof typeof SHAPES;
   /** The share as the look shows it, with `src` (a picture not published yet) or `cover` (the one chosen now), or neither for its own, cut to `shape`. */
-  preview: (choice: { src: string | null; cover: CollectionCover | null | undefined; shape: ItemCoverShape }) => ReactNode;
+  preview: (choice: { src: string | null; cover: CollectionCover | null | undefined; shape: ItemCoverShape | undefined }) => ReactNode;
 }
 
 /**
@@ -65,9 +72,9 @@ export function ItemCoverDialog({ open, onClose, collection, share, look, previe
   const item = { name: share.user, identifier: share.identifier };
   const entry = itemCoverEntry(collection, item);
   const current = entry?.cover;
-  const currentShape: ItemCoverShape = entry?.shape ?? kind.shapes[0];
+  const currentShape: ItemCoverShape | undefined = entry?.shape ?? kind.shapes[0];
   const [choice, setChoice] = useState<CoverChoice>(KEEP_COVER);
-  const [shape, setShape] = useState<ItemCoverShape>(currentShape);
+  const [shape, setShape] = useState<ItemCoverShape | undefined>(currentShape);
   // The picture as picked, so a change of shape cuts it again.
   const [original, setOriginal] = useState<File | null>(null);
   const [working, setWorking] = useState(false);
@@ -96,7 +103,7 @@ export function ItemCoverDialog({ open, onClose, collection, share, look, previe
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
-  const pick = async (file: File | undefined, cut: ItemCoverShape = shape) => {
+  const pick = async (file: File | undefined, cut: ItemCoverShape | undefined = shape) => {
     if (!file) return;
     setProblem(null);
     setWorking(true);

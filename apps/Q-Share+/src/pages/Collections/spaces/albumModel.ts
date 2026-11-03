@@ -15,8 +15,15 @@ export interface AlbumPhoto {
   previewable: boolean;
 }
 
-/** Something drawn in the flow of pictures: a picture, or a share whose body is on its way. */
-export type AlbumEntry = { type: "photo"; photo: AlbumPhoto } | { type: "pending"; key: string };
+/**
+ * Something drawn in the flow of pictures: a picture, a share whose body is on
+ * its way, or a share without pictures (a PDF, say) given a cover by the
+ * collection's owner, which opens the share.
+ */
+export type AlbumEntry =
+  | { type: "photo"; photo: AlbumPhoto }
+  | { type: "pending"; key: string }
+  | { type: "cover"; key: string; share: SpaceShare; url: string };
 
 export type AlbumBlock =
   /** Shares with one picture each (and bodies still coming), side by side with no heading. */
@@ -28,7 +35,7 @@ export interface AlbumLayout {
   blocks: AlbumBlock[];
   /** Every picture in the order drawn: what the lightbox walks through. */
   photos: AlbumPhoto[];
-  /** Shares with no picture to show, deleted ones among them. */
+  /** Shares with no picture to show and no cover, deleted ones among them. */
   others: SpaceShare[];
 }
 
@@ -52,8 +59,12 @@ export function albumPhotos(share: SpaceShare): AlbumPhoto[] {
   return photos;
 }
 
-/** This place's shares as an album: runs of single pictures, sections, and the shares without pictures. */
-export function albumLayout(shares: SpaceShare[]): AlbumLayout {
+/**
+ * This place's shares as an album: runs of single pictures, sections, and the
+ * shares without pictures. One of those with a cover from `covers` (by share
+ * key, the image's URL) stands in the runs as its cover.
+ */
+export function albumLayout(shares: SpaceShare[], covers: ReadonlyMap<string, string> = new Map()): AlbumLayout {
   const blocks: AlbumBlock[] = [];
   const photos: AlbumPhoto[] = [];
   const others: SpaceShare[] = [];
@@ -72,7 +83,10 @@ export function albumLayout(shares: SpaceShare[]): AlbumLayout {
     }
     const own = albumPhotos(share);
     photos.push(...own);
-    if (own.length === 0) {
+    const cover = covers.get(share.key);
+    if (own.length === 0 && cover && !share.deleted && !share.unreadable && !share.unavailable) {
+      addToRun({ type: "cover", key: share.key, share, url: cover }, share.key);
+    } else if (own.length === 0) {
       others.push(share);
     } else if (own.length === 1) {
       addToRun({ type: "photo", photo: own[0] }, share.key);

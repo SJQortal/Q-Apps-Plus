@@ -16,6 +16,14 @@ import { SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, t
 import type { SpaceProps } from "./types";
 import { toSpaceShare, type SpaceItems } from "./useSpaceItems";
 
+import { makeGalleryCoverFile } from "../../../utils/coverImage";
+
+// jsdom has no canvas: the cover is "made" from the picked file as it is.
+vi.mock("../../../utils/coverImage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../utils/coverImage")>()),
+  makeGalleryCoverFile: vi.fn(async (file: File) => new File([file], "gallery-cover.webp", { type: "image/webp" })),
+}));
+
 configure({ asyncUtilTimeout: 5_000 });
 
 const PHOTO_BODIES: SpaceBodies = {
@@ -308,6 +316,68 @@ describe("album space", { timeout: 20_000 }, () => {
   });
 });
 
+describe("album covers the owner chooses", { timeout: 20_000 }, () => {
+  const MANUAL = "qshare_file_manual_eee555_metadata";
+  const BODIES: SpaceBodies = { ...PHOTO_BODIES, [MANUAL]: { title: "Manual", files: [spaceFile("manual.pdf", "application/pdf", "file_manual")] } };
+  const picture = { service: "THUMBNAIL", name: "alice", identifier: "qshare_cover_manual01" };
+  const withCover = { itemCovers: [{ name: "bob", identifier: MANUAL, cover: picture }] };
+
+  beforeEach(() => {
+    resetSpaceTest(BODIES);
+    mockQortalAction("GET_QDN_RESOURCE_STATUS", { status: "MISSING_DATA" });
+    mockFetch("/arbitrary/resource/status", { status: "NOT_PUBLISHED" });
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", true);
+    URL.createObjectURL = vi.fn(() => "blob:gallery-cover-preview");
+    URL.revokeObjectURL = vi.fn();
+    vi.mocked(makeGalleryCoverFile).mockClear();
+  });
+
+  it("puts a PDF share with a cover among the photos, saying what it is, and it opens the share", async () => {
+    renderSpace({ space: "album", bodies: BODIES, signedInAs: "dave", body: withCover });
+    const tile = await screen.findByRole("button", { name: "Open Manual. PDF, by bob" });
+    expect(tile.closest('[aria-label="Photos"]')).not.toBeNull();
+    expect(within(tile).getByText("PDF")).toBeInTheDocument();
+    mockAllIsIntersecting(true);
+    await waitFor(() => expect(images()).toContain(`/arbitrary/THUMBNAIL/alice/${picture.identifier}?async=true`));
+    // Not in the small list, and not a picture the viewer walks through.
+    expect(within(screen.getByRole("list", { name: "Shares without photos" })).queryByText("Manual")).not.toBeInTheDocument();
+    fireEvent.click(tile);
+    expect(await screen.findByText("Share page")).toBeInTheDocument();
+  });
+
+  it("lets the owner give a share without pictures a cover from its menu, in the picture's own shape", async () => {
+    renderSpace({ space: "album", bodies: BODIES });
+    fireEvent.click(await screen.findByRole("button", { name: "Options for Manual" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Add a cover" }));
+    const dialog = within(await screen.findByRole("dialog", { name: "Gallery cover" }));
+    // No shape to choose: it keeps the picture's.
+    expect(dialog.queryByRole("button", { name: "Vertical" })).not.toBeInTheDocument();
+    const scan = new File([new Uint8Array([1, 2, 3])], "scan.jpg", { type: "image/jpeg" });
+    fireEvent.change(dialog.getByTestId("item-cover-input"), { target: { files: [scan] } });
+    await dialog.findByRole("button", { name: "Change image" });
+    expect(vi.mocked(makeGalleryCoverFile)).toHaveBeenCalledWith(scan);
+    fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1));
+    const [thumb, doc] = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as unknown as { resources: Array<Record<string, unknown>> }).resources;
+    expect(thumb).toMatchObject({ service: "THUMBNAIL", name: "alice", filename: "gallery-cover.webp", tag1: "qshare_cover_" });
+    const stored = JSON.parse(atob(String(doc.data64)));
+    expect(stored.itemCovers).toEqual([{ name: "bob", identifier: MANUAL, cover: { service: "THUMBNAIL", name: "alice", identifier: thumb.identifier } }]);
+    expect(stored.space).toBe("album");
+    // Among the photos now.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Open Manual. PDF, by bob" }).closest('[aria-label="Photos"]')).not.toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Options for Manual" }));
+    expect(await screen.findByRole("menuitem", { name: "Change cover" })).toBeInTheDocument();
+  });
+
+  it("offers no cover for a share that has pictures of its own", async () => {
+    renderSpace({ space: "album", bodies: BODIES });
+    fireEvent.click(await screen.findByRole("button", { name: "Options for One photo" }));
+    expect(await screen.findByRole("menuitem", { name: "Remove One photo from collection" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /cover/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("album viewer past the page", () => {
   const video = (id: string, title: string, identifier: string): { row: Video; body: Video } => {
     const row = { id, user: "bob" } as Video;
@@ -452,6 +522,16 @@ describe("album model", () => {
     ]);
     expect(photos).toEqual([]);
     expect(others.length).toBe(1);
+  });
+
+  it("puts a share without pictures in the flow when it has a cover, unless it is gone", () => {
+    const pdf = share([spaceFile("a.pdf", "application/pdf")]);
+    const gone = { ...share([]), deleted: true };
+    const covers = new Map([[pdf.key, "/arbitrary/THUMBNAIL/alice/c"]]);
+    expect(albumLayout([pdf], covers).blocks).toEqual([{ type: "run", key: pdf.key, entries: [{ type: "cover", key: pdf.key, share: pdf, url: "/arbitrary/THUMBNAIL/alice/c" }] }]);
+    expect(albumLayout([pdf], covers).others).toEqual([]);
+    expect(albumLayout([pdf]).others).toEqual([pdf]);
+    expect(albumLayout([gone], covers).others).toEqual([gone]);
   });
 
   it("says when the photos are from only if all are known", () => {
