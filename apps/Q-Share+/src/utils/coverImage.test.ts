@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { COVER_SIZE, ImageTooBigError, MAX_SOURCE_PIXELS, decodeImage, squareCrop } from "./coverImage";
+import { BOOK_COVER_HEIGHT, BOOK_COVER_WIDTH, COVER_SIZE, ImageTooBigError, MAX_SOURCE_PIXELS, bookCrop, decodeImage, squareCrop } from "./coverImage";
 import { fitWithin } from "./thumbnailImage";
 
 describe("squareCrop", () => {
@@ -11,6 +11,22 @@ describe("squareCrop", () => {
   it("never scales a small image up", () => {
     expect(squareCrop(300, 200)).toEqual({ sx: 50, sy: 0, side: 200, out: 200 });
     expect(squareCrop(1, 1).out).toBe(1);
+  });
+});
+
+describe("bookCrop", () => {
+  it("takes the centred 2:3 portrait and scales it down to the book cover's size", () => {
+    // Landscape: the sides go.
+    expect(bookCrop(1920, 1080)).toEqual({ sx: 600, sy: 0, sw: 720, sh: 1080, outWidth: BOOK_COVER_WIDTH, outHeight: BOOK_COVER_HEIGHT });
+    // A tall phone photo: top and bottom go.
+    expect(bookCrop(1000, 2000)).toEqual({ sx: 0, sy: 250, sw: 1000, sh: 1500, outWidth: BOOK_COVER_WIDTH, outHeight: BOOK_COVER_HEIGHT });
+    // Already 2:3.
+    expect(bookCrop(800, 1200)).toMatchObject({ sx: 0, sy: 0, sw: 800, sh: 1200, outWidth: 400, outHeight: 600 });
+  });
+
+  it("never scales a small image up", () => {
+    expect(bookCrop(200, 300)).toMatchObject({ outWidth: 200, outHeight: 300 });
+    expect(bookCrop(1, 1)).toMatchObject({ outWidth: 1, outHeight: 1 });
   });
 });
 
