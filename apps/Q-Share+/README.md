@@ -12,7 +12,7 @@ What it adds:
 - the Hub 3.0 look with four themes (Hub 3.0, Q-Share Classic, Black, White) and a Settings page;
 - the current stack: React 19.3, MUI 9.4, Vite 8, with a vitest harness and an ESLint 9 config;
 - a Quill 2 description editor that keeps the stored format readable in the original app;
-- collection spaces: a collection and its folders can open as Music, Cinema, Library or Album (an optional `space` field in the collection's JSON; the original Q-Share never reads collections)
+- collection spaces: a collection and its folders can open as Music, Cinema, Library or Album, and a Library's owner can give books covers of their own (optional `space` and `itemCovers` fields in the collection's JSON; the original Q-Share never reads collections)
 - notifications: a bell for comments on your shares, replies to your comments, your shares added to collections and your collections copied, and optional Qortal Hub alerts while the app is closed.
 
 See `CHANGELOG.md` for versions and `docs/apps/Q-Share+.md` in the monorepo for the audit, plan and status.
