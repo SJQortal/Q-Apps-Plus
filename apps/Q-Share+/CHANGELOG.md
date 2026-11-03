@@ -2,9 +2,9 @@
 
 Newest first. The in-app copy lives in `src/constants/changelog.ts` (Settings → About → What's new).
 
-## 1.0.1 (not published yet)
+## 1.0.1 (2026-11-03)
 
-Changes since the published 1.0.0:
+Published on QDN as `Q-Share+` on 2026-11-03, built from commit `84d27a2c`. Changes since 1.0.0:
 
 - **Notifications:** a bell in the header (on phones too) lists comments on your shares, replies to your comments, your shares added to someone's collection and your collections copied, with the commenter, the share, the comment's opening words and the time. A comment opens its share scrolled to the comments. Comments written in the original Q-Share count too. Q-Share+ checks while it is open: 4 s after start, every 2 minutes, backing off to 15 while nothing happens, paused while out of sight (another Hub tab, minimised), and at once when you come back or open the list. Each check is usually a comment search, a collection search and a look at the node's last block, so comments a syncing or offline node indexes late are still found. Settings → Notifications switches each kind on and off.
 - **Alerts from Qortal Hub while Q-Share+ is closed** (Settings → Notifications, off by default): Hub's own notifications (`NOTIFICATION_*`) for new comments on your 30 newest shares and replies to your 20 newest comments, after Hub's permission banner. Collection adds can't raise Hub alerts (Hub only matches brand-new resources, and adding to a collection re-publishes it), so they wait for the bell.

@@ -2,9 +2,11 @@
 
 Share files and documents on QDN, with categories, comments and lists.
 
-**Published:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
+**Published:** `1.0.1` on 2026-11-03, built from commit `84d27a2c`. Checked the same day: the live resource's 67 files (`/arbitrary/metadata/APP/Q-Share%2B/default`) have the same paths and content-hashed names as `release/Q-Share+.zip` from that commit.
 
-**Version on the branch:** `1.0.1`, not published yet: notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists; of 2026-10-18: collections as a grid, share thumbnails, and copies of other people's collections; of 2026-10-21: Explore collections; and of 2026-11-01: Remove from QDN, compact rows, cover art, and collection spaces, with book covers in the Library (2026-11-03) (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
+**Earlier:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
+
+**Version on the branch:** `1.0.1`, published 2026-11-03 (the next update is 1.0.2): notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists; of 2026-10-18: collections as a grid, share thumbnails, and copies of other people's collections; of 2026-10-21: Explore collections; and of 2026-11-01: Remove from QDN, compact rows, cover art, and collection spaces, with book covers in the Library (2026-11-03) (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
 
 ## Baseline at import
 
