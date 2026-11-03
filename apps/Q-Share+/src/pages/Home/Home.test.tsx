@@ -205,20 +205,23 @@ describe('Home filters on a phone', { timeout: 15_000 }, () => {
     expect(minHeight(within(sheet).getByRole('button', { name: 'Oldest' }))).toBe('44px');
   });
 
-  it('Explore collections sits under the filters in the sheet, and opens its window as the sheet closes', async () => {
+  it('Explore collections stands where the heading was, first in the row above the list, and not in the sheet', async () => {
     mockFetch('/arbitrary/resources/search', []);
     renderHome();
     expect(await screen.findByText('No shares yet')).toBeInTheDocument();
+    const explore = screen.getByRole('button', { name: 'Explore collections' });
+    // The heading is still there for screen readers, just before it.
+    const heading = screen.getByRole('heading', { level: 1, name: 'Latest shares' });
+    expect(heading.nextElementSibling).toBe(explore);
+    expect(explore.compareDocumentPosition(screen.getByRole('button', { name: 'Filters' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(getComputedStyle(explore).minHeight).toBe('44px');
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }));
     const sheet = await screen.findByRole('dialog', { name: 'Filters and sort' });
-    const explore = within(sheet).getByRole('button', { name: 'Explore collections' });
-    // Below the filter form's Apply and Reset.
-    const reset = within(sheet).getByRole('button', { name: 'Reset' });
-    expect(reset.compareDocumentPosition(explore) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(getComputedStyle(explore).minHeight).toBe('44px');
+    expect(within(sheet).queryByRole('button', { name: 'Explore collections' })).not.toBeInTheDocument();
+    fireEvent.keyDown(sheet, { key: 'Escape' });
+    await waitFor(() => expect(sheet).not.toBeVisible());
     fireEvent.click(explore);
     expect(await screen.findByRole('dialog', { name: 'Explore collections' })).toBeInTheDocument();
-    await waitFor(() => expect(sheet).not.toBeVisible());
   });
 
   it('a publisher suggested in the sheet is applied at once and closes the sheet; its list sits above the sheet', async () => {

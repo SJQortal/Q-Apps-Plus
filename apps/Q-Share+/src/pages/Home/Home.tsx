@@ -36,6 +36,9 @@ import { QDN_PAGE } from "../../utils/qdnSearch.ts";
 import { isNameHidden, useAppSettings } from "../../utils/settings.ts";
 import { requestOpenPublish } from "../../constants/events.ts";
 
+/** Read by screen readers, not shown. */
+const visuallyHidden = { position: "absolute", width: "1px", height: "1px", margin: "-1px", p: 0, border: 0, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
+
 export type { SortOrder } from "../../utils/settings.ts";
 import type { SortOrder } from "../../utils/settings.ts";
 
@@ -293,18 +296,18 @@ export const Home = () => {
     </ToggleButtonGroup>
   );
 
-  // Under the filters: other people's collections, in a window of their own.
+  // Other people's collections, in a window of their own: under the filters, or on phones first in the row above the list.
   const exploreButton = (
     <Button
       variant="outlined"
-      fullWidth
+      fullWidth={!phone}
+      size={phone ? "small" : "medium"}
       startIcon={<TravelExploreOutlinedIcon />}
       onClick={() => {
-        if (phone) setFiltersOpen(false);
         setExploreMounted(true);
         setExploreOpen(true);
       }}
-      sx={{ minHeight: 44 }}
+      sx={{ minHeight: 44, ...(phone ? { flex: "0 1 auto", minWidth: 0, whiteSpace: "nowrap" } : {}) }}
     >
       Explore collections
     </Button>
@@ -447,8 +450,6 @@ export const Home = () => {
         // page, refresh and chip reads them through categoryListRef.
         <BottomSheet open={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters and sort" keepMounted>
           {filterForm}
-          <Divider sx={{ my: 2 }} />
-          {exploreButton}
         </BottomSheet>
       ) : (
         <FiltersRail>
@@ -478,9 +479,15 @@ export const Home = () => {
             "& .MuiChip-root": phone ? { minHeight: 44, fontSize: 14, px: 0.5 } : { minHeight: 36 },
           }}
         >
-          <Typography component="h1" variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
+          {/* Phones: Explore collections stands where the heading was; the heading stays for screen readers, and Filters on says when it isn't the latest shares. */}
+          <Typography
+            component="h1"
+            variant="h6"
+            sx={phone ? visuallyHidden : { fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}
+          >
             {heading}
           </Typography>
+          {phone && exploreButton}
           {phone && (
             <Button
               variant={activeFilters ? "contained" : "outlined"}
