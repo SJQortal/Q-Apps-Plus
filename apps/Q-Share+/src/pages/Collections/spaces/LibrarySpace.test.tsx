@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { configure, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { getContrastRatio } from "@mui/material/styles";
 import { createAppTheme } from "../../../hub-theme";
 import { themeConfig } from "../../../theme/qplus-theme";
-import { mockFetch, qortalCallsFor } from "../../../test/setup";
+import { mockFetch, mockQortalAction, qortalCallsFor } from "../../../test/setup";
 import { QDN_PAGE } from "../../../utils/qdnSearch";
 import { SPACE_COLLECTION_ID, SPACE_FOLDER_ID, renderSpace, resetSpaceTest, spaceFile, spaceFolder, type SpaceBodies } from "./testUtils";
 import { bookCloth, bookFormats, filterBooks, formatBadge, libraryLook, sortBooks } from "./libraryShelf";
@@ -11,6 +11,15 @@ import { toSpaceShare, type SpaceShare } from "./useSpaceItems";
 import { store } from "../../../state/store";
 import { removeDownload, setAddToDownloads } from "../../../state/features/globalSlice";
 import type { Video } from "../../../state/features/fileSlice";
+
+// jsdom has no canvas: the cover is "made" from the picked file as it is.
+vi.mock("../../../utils/coverImage", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../utils/coverImage")>()),
+  makeBookCoverFile: vi.fn(async (file: File) => {
+    if (file.name.endsWith(".txt")) throw new Error("not an image");
+    return new File([file], "book-cover.webp", { type: "image/webp" });
+  }),
+}));
 
 configure({ asyncUtilTimeout: 5_000 });
 
@@ -114,6 +123,90 @@ describe("LibrarySpace", { timeout: 20_000 }, () => {
     fireEvent.click(screen.getByRole("button", { name: "Catalogue" }));
     expect(screen.queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy to my collections" })).toBeInTheDocument();
+  });
+
+  describe("covers the owner chooses", () => {
+    const ZETA = "qshare_file_zeta_aaa111_metadata";
+    const ALPHA = "qshare_file_alpha_bbb222_metadata";
+    const chosen = { service: "THUMBNAIL", name: "alice", identifier: "qshare_cover_zeta0001" };
+    const withCover = { itemCovers: [{ name: "bob", identifier: ZETA, cover: chosen }] };
+    const coverImg = (container: HTMLElement, identifier: string) =>
+      container.querySelectorAll(`img[src="/arbitrary/THUMBNAIL/alice/${identifier}?async=true"]`);
+    const picture = () => new File([new Uint8Array([1, 2, 3])], "scan.jpg", { type: "image/jpeg" });
+
+    beforeEach(() => {
+      mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", true);
+      URL.createObjectURL = vi.fn(() => "blob:book-cover-preview");
+      URL.revokeObjectURL = vi.fn();
+    });
+
+    it("shows the chosen cover on the shelf and in the panel, to visitors too, with no cover button for them", async () => {
+      const { container } = renderSpace({ space: "library", signedInAs: "dave", bodies: BODIES, body: withCover });
+      await screen.findByRole("button", { name: "Zeta guide by bob" });
+      expect(coverImg(container, chosen.identifier).length).toBe(1);
+      const panel = within(await openBook(/^Zeta guide by bob/));
+      expect(panel.queryByRole("button", { name: /cover/i })).not.toBeInTheDocument();
+      expect(coverImg(document.body, chosen.identifier).length).toBe(2);
+    });
+
+    it("lets the owner add a cover: the image and the collection in one publish, and the shelf shows it", async () => {
+      const { container } = renderSpace({ space: "library", bodies: BODIES });
+      const panel = within(await openBook(/^Alpha reader by bob/));
+      fireEvent.click(panel.getByRole("button", { name: "Add a cover" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Book cover" }));
+      expect(dialog.getByRole("button", { name: "Save" })).toBeDisabled();
+      fireEvent.change(dialog.getByTestId("book-cover-input"), { target: { files: [new File(["x"], "notes.txt")] } });
+      expect(await dialog.findByText(/Couldn't use that image/)).toBeInTheDocument();
+      fireEvent.change(dialog.getByTestId("book-cover-input"), { target: { files: [picture()] } });
+      expect(await dialog.findByRole("button", { name: "Change image" })).toBeInTheDocument();
+      expect(document.querySelector('img[src="blob:book-cover-preview"]')).not.toBeNull();
+      fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+
+      await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1));
+      expect(qortalCallsFor("PUBLISH_QDN_RESOURCE").length).toBe(0);
+      const [thumb, doc] = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as unknown as { resources: Array<Record<string, unknown>> }).resources;
+      expect(thumb).toMatchObject({ service: "THUMBNAIL", name: "alice", filename: "book-cover.webp", tag1: "qshare_cover_" });
+      expect(String(thumb.identifier)).toMatch(/^qshare_cover_[a-z0-9]{8}$/);
+      const stored = JSON.parse(atob(String(doc.data64)));
+      expect(stored.itemCovers).toEqual([{ name: "bob", identifier: ALPHA, cover: { service: "THUMBNAIL", name: "alice", identifier: thumb.identifier } }]);
+      // The shares and the look are as they were.
+      expect(stored.items.map((item: { identifier: string }) => item.identifier)).toEqual(Object.keys(BODIES));
+      expect(stored.space).toBe("library");
+
+      await waitFor(() => expect(screen.queryByRole("dialog", { name: "Book cover" })).not.toBeInTheDocument());
+      await waitFor(() => expect(coverImg(container, String(thumb.identifier)).length).toBeGreaterThan(0));
+      expect(panel.getByRole("button", { name: "Change cover" })).toBeInTheDocument();
+    });
+
+    it("goes back to the share's own picture with a plain republish", async () => {
+      const { container } = renderSpace({ space: "library", bodies: BODIES, body: withCover });
+      const panel = within(await openBook(/^Zeta guide by bob/));
+      fireEvent.click(panel.getByRole("button", { name: "Change cover" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Book cover" }));
+      fireEvent.click(dialog.getByRole("button", { name: "Use the share's own picture" }));
+      expect(dialog.getByRole("button", { name: "Choose image" })).toBeInTheDocument();
+      fireEvent.click(dialog.getByRole("button", { name: "Save" }));
+      await waitFor(() => expect(qortalCallsFor("PUBLISH_QDN_RESOURCE").length).toBe(1));
+      expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(0);
+      const stored = JSON.parse(atob(String(qortalCallsFor("PUBLISH_QDN_RESOURCE")[0].data64)));
+      expect("itemCovers" in stored).toBe(false);
+      await waitFor(() => expect(coverImg(container, chosen.identifier).length).toBe(0));
+    });
+
+    it("keeps the dialog open, with no error, when Hub is told no", async () => {
+      mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", () => {
+        throw new Error("User declined request");
+      });
+      renderSpace({ space: "library", bodies: BODIES });
+      const panel = within(await openBook(/^Alpha reader by bob/));
+      fireEvent.click(panel.getByRole("button", { name: "Add a cover" }));
+      const dialog = within(await screen.findByRole("dialog", { name: "Book cover" }));
+      fireEvent.change(dialog.getByTestId("book-cover-input"), { target: { files: [picture()] } });
+      fireEvent.click(await dialog.findByRole("button", { name: "Save" }));
+      await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(1));
+      await waitFor(() => expect(dialog.getByRole("button", { name: "Save" })).not.toBeDisabled());
+      expect(dialog.queryByRole("alert")).not.toBeInTheDocument();
+    });
   });
 
   it("fetches no file before a tap, not even with the panel open", async () => {

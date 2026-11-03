@@ -17,6 +17,7 @@ import {
 } from "@mui/material";
 import { alpha, lighten, type Theme } from "@mui/material/styles";
 import { useSelector } from "react-redux";
+import AddPhotoAlternateOutlinedIcon from "@mui/icons-material/AddPhotoAlternateOutlined";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
@@ -28,9 +29,10 @@ import { OpenPdfButton, PreviewPanel, PreviewToggleButton, previewKind } from ".
 import { BottomSheet } from "../../../components/common/mobile/BottomSheet";
 import { DisplayHtml } from "../../../components/common/TextEditor/DisplayHtml";
 import { LANDSCAPE_PHONE_MEDIA, PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
+import { shareKey } from "../../../state/features/fileSlice";
 import type { RootState } from "../../../state/store";
 import { formatBytes } from "../../../utils/formatBytes";
-import type { CollectionFolder } from "../../../utils/collections";
+import type { Collection, CollectionCover as Cover, CollectionFolder } from "../../../utils/collections";
 import type { ShareFile } from "../../FileContent/FileRow";
 import { CollectionCover } from "../CollectionCover";
 import { folderCountLabel } from "../FolderGrid";
@@ -52,6 +54,7 @@ import {
   type LibraryView,
 } from "./libraryShelf";
 import { BookCover, STILL, twoLines } from "./bookCover";
+import { BookCoverDialog } from "./BookCoverDialog";
 import { ShareOwnerActions, SpaceShell, SpaceShowMore } from "./SpaceShell";
 import type { SpaceProps } from "./types";
 import type { SpaceShare } from "./useSpaceItems";
@@ -91,8 +94,12 @@ const boardSx = (look: LibraryLook, theme: Theme) => ({
 interface BookProps {
   share: SpaceShare;
   look: LibraryLook;
+  /** The cover the collection's owner chose for it, if any. */
+  cover: Cover | undefined;
   onOpen: (key: string) => void;
 }
+
+const sameCover = (a: Cover | undefined, b: Cover | undefined) => a?.name === b?.name && a?.identifier === b?.identifier;
 
 const sameBook = (a: SpaceShare, b: SpaceShare) =>
   a.key === b.key &&
@@ -106,7 +113,7 @@ const sameBook = (a: SpaceShare, b: SpaceShare) =>
 
 /** One book on a shelf. The whole place is its button, so the tap reaches the caption too. */
 const ShelfBook = memo(
-  function ShelfBook({ share, look, onOpen }: BookProps) {
+  function ShelfBook({ share, look, cover, onOpen }: BookProps) {
     const status = bookStatus(share);
     if (!share.title) {
       return (
@@ -132,7 +139,7 @@ const ShelfBook = memo(
       >
         <Box sx={(theme: Theme) => ({ position: "relative", ...boardSx(look, theme) })}>
           <Box sx={{ position: "relative", zIndex: 1 }}>
-            <BookCover share={share} look={look} />
+            <BookCover share={share} look={look} cover={cover} />
           </Box>
         </Box>
         <Box sx={{ pt: 3.25, minWidth: 0 }}>
@@ -165,7 +172,7 @@ const ShelfBook = memo(
       </Box>
     );
   },
-  (a, b) => a.look === b.look && a.onOpen === b.onOpen && sameBook(a.share, b.share)
+  (a, b) => a.look === b.look && a.onOpen === b.onOpen && sameCover(a.cover, b.cover) && sameBook(a.share, b.share)
 );
 
 interface CatalogueProps extends BookProps {
@@ -176,7 +183,7 @@ interface CatalogueProps extends BookProps {
 
 /** One line of the catalogue: a small cover, title, author, formats and size, and the owner's buttons. */
 const CatalogueRow = memo(
-  function CatalogueRow({ share, look, onOpen, isOwner, onMove, onRemove }: CatalogueProps) {
+  function CatalogueRow({ share, look, cover, onOpen, isOwner, onMove, onRemove }: CatalogueProps) {
     const status = bookStatus(share);
     const details = status ?? [bookFormats(share).join(", "), share.files.length ? formatBytes(totalBytes(share.files), 1) : ""].filter(Boolean).join(" · ");
     return (
@@ -211,7 +218,7 @@ const CatalogueRow = memo(
             })}
           >
             <Box sx={{ width: 40, flexShrink: 0 }}>
-              <BookCover share={share} look={look} />
+              <BookCover share={share} look={look} cover={cover} />
             </Box>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography component="span" sx={{ ...twoLines(2), fontFamily: LIBRARY_SERIF, fontSize: 16, lineHeight: 1.25, fontWeight: 600, color: look.ink }}>
@@ -243,6 +250,7 @@ const CatalogueRow = memo(
     a.isOwner === b.isOwner &&
     a.onMove === b.onMove &&
     a.onRemove === b.onRemove &&
+    sameCover(a.cover, b.cover) &&
     sameBook(a.share, b.share)
 );
 
@@ -314,6 +322,8 @@ function BookFile({ file, jsonId, look }: { file: ShareFile; jsonId: string; loo
 interface PanelProps {
   share: SpaceShare;
   look: LibraryLook;
+  collection: Collection;
+  cover: Cover | undefined;
   phone: boolean;
   titleId: string;
   onClose: () => void;
@@ -325,8 +335,9 @@ interface PanelProps {
 }
 
 /** What a book's panel holds, in the side panel or the phone's sheet. */
-function BookDetails({ share, look, phone, titleId, onClose, isOwner, onMove, onRemove, openShare, openProfile }: PanelProps) {
+function BookDetails({ share, look, collection, cover, phone, titleId, onClose, isOwner, onMove, onRemove, openShare, openProfile }: PanelProps) {
   const [fileCount, setFileCount] = useState(FILE_PAGE);
+  const [coverOpen, setCoverOpen] = useState(false);
   const status = bookStatus(share);
   const body = share.body as { htmlDescription?: unknown; fullDescription?: unknown; description?: unknown } | undefined;
   const html = typeof body?.htmlDescription === "string" ? body.htmlDescription : "";
@@ -336,7 +347,7 @@ function BookDetails({ share, look, phone, titleId, onClose, isOwner, onMove, on
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
       <Box sx={{ display: "flex", gap: 2, alignItems: "flex-start", flexDirection: phone ? "row" : "column", position: "relative" }}>
         <Box sx={{ width: phone ? 96 : 176, flexShrink: 0, alignSelf: phone ? "flex-start" : "center" }}>
-          <BookCover share={share} look={look} />
+          <BookCover share={share} look={look} cover={cover} />
         </Box>
         <Box sx={{ minWidth: 0, flex: 1, pr: phone ? 5 : 0, alignSelf: "stretch", textAlign: phone ? "left" : "center" }}>
           <Typography id={titleId} component="h2" sx={{ fontFamily: LIBRARY_SERIF, fontSize: phone ? 20 : 26, lineHeight: 1.2, fontWeight: 600, color: look.ink, overflowWrap: "anywhere" }}>
@@ -373,6 +384,20 @@ function BookDetails({ share, look, phone, titleId, onClose, isOwner, onMove, on
         </Button>
         {isOwner ? <ShareOwnerActions share={share} onMove={onMove} onRemove={onRemove} /> : null}
       </Box>
+      {/* The owner's own cover for this book, on this collection's shelves. */}
+      {isOwner && !status ? (
+        <>
+          <Button
+            variant="outlined"
+            startIcon={<AddPhotoAlternateOutlinedIcon />}
+            onClick={() => setCoverOpen(true)}
+            sx={{ minHeight: 44, alignSelf: phone ? "stretch" : "flex-start", mt: -1 }}
+          >
+            {cover ? "Change cover" : "Add a cover"}
+          </Button>
+          <BookCoverDialog open={coverOpen} onClose={() => setCoverOpen(false)} collection={collection} share={share} look={look} />
+        </>
+      ) : null}
 
       {status || share.files.length === 0 ? null : (
         <Box component="section" aria-label="Files">
@@ -641,7 +666,7 @@ function Toolbar({
 
 /** The library space: a warm reading room with books on shelves. */
 export default function LibrarySpace(props: SpaceProps) {
-  const { items, isOwner, onMove, onRemove, openFolder, openShare, openProfile, subfolders, foldersSection, emptyState } = props;
+  const { collection, items, isOwner, onMove, onRemove, openFolder, openShare, openProfile, subfolders, foldersSection, emptyState } = props;
   const theme = useTheme();
   const phone = usePhoneLayout();
   const look = useMemo(() => libraryLook(theme), [theme]);
@@ -652,6 +677,11 @@ export default function LibrarySpace(props: SpaceProps) {
   const [panelOpen, setPanelOpen] = useState(false);
 
   const books = useMemo(() => sortBooks(filterBooks(items.shares, query), sort), [items.shares, query, sort]);
+  // The covers the owner chose, by share.
+  const covers = useMemo(
+    () => new Map((collection.itemCovers ?? []).map((entry) => [shareKey(entry.name, entry.identifier), entry.cover])),
+    [collection.itemCovers]
+  );
   // Found by key, so the panel follows a body landing and closes itself when the share is removed.
   const selectedShare = useMemo(() => items.shares.find((share) => share.key === selected), [items.shares, selected]);
   const searching = query.trim().length > 0;
@@ -741,13 +771,13 @@ export default function LibrarySpace(props: SpaceProps) {
           }}
         >
           {books.map((share) => (
-            <ShelfBook key={share.key} share={share} look={look} onOpen={openBook} />
+            <ShelfBook key={share.key} share={share} look={look} cover={covers.get(share.key)} onOpen={openBook} />
           ))}
         </Box>
       ) : (
         <Box component="ul" aria-label="Books" aria-busy={items.pending > 0} sx={{ listStyle: "none", m: 0, p: 0, borderTop: `1px solid ${alpha(look.rule, 0.5)}` }}>
           {books.map((share) => (
-            <CatalogueRow key={share.key} share={share} look={look} onOpen={openBook} isOwner={isOwner} onMove={onMove} onRemove={onRemove} />
+            <CatalogueRow key={share.key} share={share} look={look} cover={covers.get(share.key)} onOpen={openBook} isOwner={isOwner} onMove={onMove} onRemove={onRemove} />
           ))}
         </Box>
       )}
@@ -758,6 +788,8 @@ export default function LibrarySpace(props: SpaceProps) {
         open={panelOpen && Boolean(selectedShare)}
         share={selectedShare}
         look={look}
+        collection={collection}
+        cover={selectedShare ? covers.get(selectedShare.key) : undefined}
         onClose={closeBook}
         isOwner={isOwner}
         onMove={onMove}
