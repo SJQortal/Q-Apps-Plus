@@ -10,6 +10,7 @@
   --qp-on-primary: rgba(10, 18, 30, 0.92);
   --qp-secondary: #6FA3F0;
   --qp-success: rgb(94, 176, 73);
+  --qp-warning: #ffa726;
   --qp-error: rgb(224, 108, 108);
   --qp-bg: #0E0F14;
   --qp-paper: #1D1F27;
@@ -44,7 +45,8 @@
   --qp-primary-light: #84AFF0;
   --qp-on-primary: #FFFFFF;
   --qp-secondary: #2A56A5;
-  --qp-success: rgb(94, 176, 73);
+  --qp-success: rgb(36, 98, 28);
+  --qp-warning: rgb(128, 72, 8);
   --qp-error: rgb(158, 43, 43);
   --qp-bg: #DDD6CA;
   --qp-paper: #F6F2EA;
@@ -80,6 +82,7 @@
   --qp-on-primary: #000000;
   --qp-secondary: #e7e9ea;
   --qp-success: #00ba7c;
+  --qp-warning: #ffa726;
   --qp-error: #f91880;
   --qp-bg: #000000;
   --qp-paper: #000000;
@@ -115,6 +118,7 @@
   --qp-on-primary: #ffffff;
   --qp-secondary: #5f6b76;
   --qp-success: #067d52;
+  --qp-warning: #a35200;
   --qp-error: #d01268;
   --qp-bg: #ffffff;
   --qp-paper: #ffffff;

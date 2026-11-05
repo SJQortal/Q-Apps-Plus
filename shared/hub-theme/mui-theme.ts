@@ -69,6 +69,7 @@ function paletteOptions(t: ThemeTokens): ThemeOptions['palette'] {
     primary: p.primary,
     secondary: { main: p.secondary },
     success: { main: p.success },
+    warning: { main: p.warning },
     error: { main: p.error },
     background: p.background,
     text: p.text,
@@ -285,6 +286,7 @@ export function tokensFromTheme(theme: Theme): Omit<ThemeTokens, 'id' | 'mode'> 
       },
       secondary: p.secondary.main,
       success: p.success.main,
+      warning: p.warning.main,
       error: p.error.main,
       background: {
         default: p.background.default,

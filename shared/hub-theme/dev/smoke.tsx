@@ -27,7 +27,7 @@ if (gradients < 1) throw new Error('Hub 3.0 contained button is missing its grad
 console.log(`Button styles ok: gradient on contained primary (${gradients} style rules)`);
 
 // The default avatar (a letter on a grey disc) reads at 4.5:1 in every theme, and the
-// theme's override reaches the rendered styles. Hub 3.0's error red reads as text.
+// theme's override reaches the rendered styles. The kit's status colours read as text.
 for (const id of UI_THEME_IDS) for (const mode of ['light', 'dark'] as const) {
   const t = createAppTheme(id, mode, config);
   const a = avatarDefaultColors(t);
@@ -35,14 +35,16 @@ for (const id of UI_THEME_IDS) for (const mode of ['light', 'dark'] as const) {
   if (ratio < 4.5) throw new Error(`avatar ${id}/${mode} reads at ${ratio.toFixed(2)}:1`);
   const avatarHtml = renderToString(<ThemeProvider theme={t}><Avatar>S</Avatar></ThemeProvider>);
   if (!avatarHtml.includes(`background-color:${a.background}`)) throw new Error(`avatar ${id}/${mode} override not applied`);
-  if (id === 'hub30') {
+  if (id !== 'hub20') {
     for (const bg of [t.palette.background.default, t.palette.background.paper]) {
-      const r = getContrastRatio(t.palette.error.main, bg);
-      if (r < 4.5) throw new Error(`hub30/${mode} error.main reads at ${r.toFixed(2)}:1 on ${bg}`);
+      for (const status of ['success', 'warning', 'error'] as const) {
+        const r = getContrastRatio(t.palette[status].main, bg);
+        if (r < 4.5) throw new Error(`${id}/${mode} ${status}.main reads at ${r.toFixed(2)}:1 on ${bg}`);
+      }
     }
   }
 }
-console.log('Avatar and error contrast ok (4.5:1 in every theme)');
+console.log('Avatar and status colour contrast ok (4.5:1 in every theme)');
 const captionHtml = renderToString(<HubThemeProvider storageKey="smoke-ui-theme" config={config}><ThemePicker /></HubThemeProvider>);
 if (/font-size:0\.75rem/.test(captionHtml)) throw new Error('ThemePicker still renders 12 px captions');
 
