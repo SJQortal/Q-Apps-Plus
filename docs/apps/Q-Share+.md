@@ -6,6 +6,8 @@ Share files and documents on QDN, with categories, comments and lists.
 
 **Earlier:** `1.0.0` on 2026-09-30, as the QDN `APP` resource `Q-Share+`, built from commit `2bc12cc`. Checked on 2026-10-01: the live bundle's 17 JavaScript chunks have the same content-hashed names as a build of that commit.
 
+**Upstream:** 1.0.0 went to Qortal as Q-Share 2.0.0 ([Qortal/q-share#9](https://github.com/Qortal/q-share/pull/9), merged 2026-10-07 as a merge commit). 1.0.1 is offered as Q-Share 2.1.0 in [Qortal/q-share#10](https://github.com/Qortal/q-share/pull/10) (opened 2026-11-05, see Upstream PR 2.1.0 below).
+
 **Version on the branch:** `1.0.1`, published 2026-11-03 (the next update is 1.0.2): notifications (a bell, and optional Hub alerts), Play audio / Play video, more file types, the description placeholder fix, a dark Hub's mode kept across a refresh on a deep page, and Simon's requests of 2026-10-17: shares of up to 300 files (published in batches), folders and covers in collections, and playlists; of 2026-10-18: collections as a grid, share thumbnails, and copies of other people's collections; of 2026-10-21: Explore collections; and of 2026-11-01: Remove from QDN, compact rows, cover art, and collection spaces, with book covers in the Library (2026-11-03) (CHANGELOG.md). The work below was drafted in six rounds numbered `1.0.0-plus.1` … `plus.6`; under the plain-version rule (qplus-app skill) they are all part of `1.0.0`.
 
 ## Baseline at import
@@ -519,6 +521,22 @@ From Simon's screenshots of two album shares.
 - **Collections on the share page** (`ShareCollections.tsx`): your collections holding the share, with cover, counts and folder; opens at the folder; Add cover or Change cover opens the collection's Edit. Only your own, since other people's holding a share can't be found without searching them all (Follow-up 31). No call of its own beyond the list the bookmark button loads.
 - **Screenshot check:** new screen share-remove, and tracks that serve a real ID3 tag by Range. share, share-remove, share-many, playlist in Hub 3.0, Classic and White at five sizes: 0 console errors, 0 overflow, 0 unlabelled buttons. Found and fixed: the red outlined Remove button was under 4.5:1 in Classic and White (now normal text with a red border and icon). One axe contrast note on the playlist screen at 360 px in Classic, on a button the harness's pointer was hovering; the same button elsewhere passes. Classic at 844×390 still counts 3 small targets, on these screens with comments (Next pass ideas, Classic's small buttons).
 - **Hub:** not checked by an agent; Simon's next look is the check.
+
+### Upstream PR: Q-Share 2.1.0 (2026-11-05)
+
+[Qortal/q-share#10](https://github.com/Qortal/q-share/pull/10), from `SJQortal/q-share` branch `q-share-2.1.0` (local branch `q-share-upstream/2.1.0`, worktree `.worktrees/upstream-q-share`).
+
+- **Branch:** `apps/Q-Share+` split from `main` after #25 (`e83852b4`). Qortal merged #9 as a merge commit, so the split shares history with their `main` up to `20af4de4`, but not their "Ship as 2.0.0" commit. One merge commit (`95672090`) brings in Qortal's `main` (`5c42ac2b`), which makes the PR a fast-forward. Its five conflicts kept the 1.0.1 code with Q-Share's names; the changelog and README were taken from 2.0.0. 147 commits on top, 173 files.
+- **Version 2.1.0,** not the script's default 3.0.0: this round adds features to 2.0's data, with no redesign.
+- **"Ship as Q-Share 2.1.0" (`46c2910a`):**
+  - the name in 1.0.1's new text (notifications, Hub alerts, batch publishing, collection copies), and `HUB_APP_NAME` → `Q-Share`;
+  - the keys and events new in 1.0.1, `qshareplus-*` → `qshare-*` (notifications, hub alerts, library view, check event), none used by 1.0 or 2.0;
+  - a 2.1.0 changelog entry without the three items 2.0.0 already listed (Play audio, file types, the placeholder), and a "What's new in 2.1" section and the new data fields in the README;
+  - `e2e/screens.mjs` brought up to the shared runner (`expectErrors`, `/polls` and Core `/assets` routes).
+  - Left as they were: the tests about `+` in names and links, and the kit's `qplus-hub-mode`, one key for every app by design.
+- **Checks on the final build:** 881 tests, lint and build pass; `node e2e/screens.mjs --themes hub30,white`, 442 captures, 0 console errors, 0 overflow, 0 unlabelled buttons, 0 axe violations.
+- **The PR text** says what has no Hub check yet (notifications and Hub alerts; a real batch, thumbnail, copy or removal publish) and lists the GO phone checks as still to do.
+- **Later rounds:** Qortal's `main` now holds the 2.0 "Ship as" commit that `main` here never will, so each later split needs the same merge of their `main`. Its conflicts will be the lines either "Ship as" commit renamed.
 
 ## Follow-ups
 
