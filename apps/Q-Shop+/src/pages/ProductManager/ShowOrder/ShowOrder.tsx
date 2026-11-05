@@ -54,6 +54,7 @@ import type { ShopCoinSettings } from "../../../money/coins";
 import { OrderStatusChip } from "../../../orders/components/OrderStatusChip";
 import { PaymentDetails } from "./PaymentDetails";
 import { StatusEditor, type StatusDraft } from "./StatusEditor";
+import { ShippedMailDialog } from "./ShippedMailDialog";
 import { AddReview } from "../../Store/StoreReviews/AddReview/AddReview";
 import { StoreReviewCard } from "../../Store/StoreReviews/StoreReviewCard";
 import { useMyShopReview, useShopReviews } from "../../Store/useShopData";
@@ -239,6 +240,8 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         ? { status: normalizeStatus(status.status) ?? "Received", note: status.note, carrier: status.tracking?.carrier ?? "", trackingNumber: status.tracking?.number ?? "" }
         : { status: "", note: "", carrier: "", trackingNumber: "" };
   const setDraft = (next: StatusDraft) => setDraftState({ key: draftKey, orderId: order?.id ?? "", draft: next });
+  // Saved as Shipped: asks whether to tell the buyer by Q-Mail (ShippedMailDialog.tsx).
+  const [shippedAsk, setShippedAsk] = useState<{ orderId: string; tracking: Tracking | null; note: string } | null>(null);
   const [retrying, setRetrying] = useState(false);
 
   // The seller sees the buyer's review of the shop, from the shop's shared review search.
@@ -276,16 +279,19 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
 
   const update = async () => {
     if (sending || !me?.name || !me.publicKey || normalizeStatus(draft.status) === null) return;
+    const tracking: Tracking | null = draft.trackingNumber.trim() ? { number: draft.trackingNumber.trim(), ...(draft.carrier.trim() && { carrier: draft.carrier.trim() }) } : null;
     const result = await sendOrderStatus(store, {
       order,
       seller: me.name,
       sellerPublicKey: me.publicKey,
       status: draft.status,
       note: draft.note,
-      tracking: draft.trackingNumber.trim() ? { number: draft.trackingNumber.trim(), ...(draft.carrier.trim() && { carrier: draft.carrier.trim() }) } : null,
+      tracking,
     });
-    if (result === "sent") dispatch(setNotification({ alertType: "success", msg: "Status updated" }));
-    else if (result === "timeout") {
+    if (result === "sent") {
+      dispatch(setNotification({ alertType: "success", msg: "Status updated" }));
+      if (normalizeStatus(draft.status) === "Shipped") setShippedAsk({ orderId: order.id, tracking, note: draft.note });
+    } else if (result === "timeout") {
       dispatch(
         setNotification({
           alertType: "info",
@@ -313,6 +319,7 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
     role === "seller" && !!status && !sending && normalizeStatus(draft.status) !== null && !sameDraft(draft, status);
 
   return (
+    <>
     <ResponsiveDialog
       open={open}
       onClose={onClose}
@@ -545,6 +552,17 @@ export function ShowOrder({ open, onClose, order, role }: ShowOrderProps) {
         </Typography>
       </Box>
     </ResponsiveDialog>
+    {shippedAsk?.orderId === order.id && me?.name && me.publicKey && (
+      <ShippedMailDialog
+        order={order}
+        seller={me.name}
+        sellerPublicKey={me.publicKey}
+        tracking={shippedAsk.tracking}
+        note={shippedAsk.note}
+        onClose={() => setShippedAsk(null)}
+      />
+    )}
+    </>
   );
 }
 

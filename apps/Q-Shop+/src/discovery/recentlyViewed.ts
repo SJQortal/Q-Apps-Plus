@@ -1,7 +1,9 @@
 /**
  * The products someone opened lately, newest first, so they find them again
  * (the Products page's Recently viewed). On this device only: never
- * published, not in Settings → Sync. At most 12; Clear forgets them.
+ * published, not in Settings → Sync. At most 12; Clear forgets them. A
+ * product in variants is there once, as the item seen last (Simon,
+ * 2026-10-29: "if recently viewed was the same product, do not repeat it").
  */
 import { useSyncExternalStore } from "react";
 import { STORAGE_PREFIX } from "../constants/plus";
@@ -14,6 +16,8 @@ export interface ViewedProduct {
   storeId: string;
   productId: string;
   catalogueId: string;
+  /** Its variant group (variants/model.ts), when it is an item of a product in variants. */
+  group?: string;
   at: number;
 }
 
@@ -22,7 +26,15 @@ let cache: ViewedProduct[] | null = null;
 
 function isViewed(value: unknown): value is ViewedProduct {
   const v = value as Partial<ViewedProduct> | null;
-  return !!v && typeof v.owner === "string" && typeof v.storeId === "string" && typeof v.productId === "string" && typeof v.catalogueId === "string" && typeof v.at === "number";
+  return (
+    !!v &&
+    typeof v.owner === "string" &&
+    typeof v.storeId === "string" &&
+    typeof v.productId === "string" &&
+    typeof v.catalogueId === "string" &&
+    typeof v.at === "number" &&
+    (v.group === undefined || typeof v.group === "string")
+  );
 }
 
 export function recentlyViewed(): ViewedProduct[] {
@@ -47,11 +59,19 @@ function save(list: ViewedProduct[]): void {
   for (const listener of [...listeners]) listener();
 }
 
-/** Puts the product first (once). */
+/** The same product: the same item, or another item of the same product in variants. */
+export function sameViewedProduct(a: Pick<ViewedProduct, "owner" | "productId" | "group">, b: Pick<ViewedProduct, "owner" | "productId" | "group">): boolean {
+  return a.owner === b.owner && (a.productId === b.productId || (!!a.group && a.group === b.group));
+}
+
+/** Puts the product first (once, a product in variants as the item seen last). */
 export function rememberViewed(item: Omit<ViewedProduct, "at">, now = Date.now()): void {
-  const rest = recentlyViewed().filter((v) => !(v.owner === item.owner && v.productId === item.productId));
-  if (recentlyViewed()[0]?.owner === item.owner && recentlyViewed()[0]?.productId === item.productId) return;
-  save([{ ...item, at: now }, ...rest].slice(0, MAX_RECENTLY_VIEWED));
+  const first = recentlyViewed()[0];
+  if (first && first.owner === item.owner && first.productId === item.productId && first.group === item.group) return;
+  const rest = recentlyViewed().filter((v) => !sameViewedProduct(v, item));
+  const entry: ViewedProduct = { ...item, at: now };
+  if (!item.group) delete entry.group;
+  save([entry, ...rest].slice(0, MAX_RECENTLY_VIEWED));
 }
 
 export function clearRecentlyViewed(): void {

@@ -163,6 +163,16 @@ describe("the products tab", () => {
     expect(within(await screen.findByRole("list", { name: "Products" })).getAllByRole("listitem")).toHaveLength(3);
   });
 
+  it("opens a product's form from its page's Edit product (?edit=), once", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    setup({}, `/product-manager/${STORE_ID}?tab=products&edit=${encodeURIComponent(poster.id)}`);
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    expect(within(dialog).getByRole("textbox", { name: /^Title/ })).toHaveValue("Poster");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit product" })).toBeNull());
+  });
+
   it("an edit starts from the product's prices and keeps the ARRR price (bug 3)", async () => {
     installVisibleIntersectionObserver();
     stubNode();
@@ -878,6 +888,39 @@ describe("sorting the products by their columns", () => {
     expect(within(list).getAllByText(/in shop order/).map((el) => el.parentElement?.textContent)).toEqual(["1 in shop order", "2 in shop order", "3 in shop order"]);
   });
 
+  it("puts a product in collections from its form, and takes it out: the change waits with the unpublished collections", async () => {
+    installVisibleIntersectionObserver();
+    const collectionsId = `q-store-collections-${SHORT_STORE_ID}`;
+    stubNode({
+      served: new Map([
+        [collectionsId, { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id, poster.id] }, { id: "ARTxxxxxx1", title: "Art", products: [] }] }],
+      ]),
+    });
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    store.dispatch(setDataContainer({ ...dataContainer, collectionsId }));
+    const list = await screen.findByRole("list", { name: "Products" });
+    await waitFor(() => expect(within(list).getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toContain("Mugs"));
+    fireEvent.click(within(list).getByRole("button", { name: /^Edit.*\bPoster\b/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    const field = await within(dialog).findByRole("combobox", { name: "Collections" });
+    await waitFor(() => expect(field).not.toBeDisabled());
+    // In Mugs now; out of Mugs, into Art.
+    const chips = () => within(dialog).getAllByRole("button").map((b) => b.textContent).filter((t) => t === "Mugs" || t === "Art");
+    await waitFor(() => expect(chips()).toEqual(["Mugs"]));
+    fireEvent.keyDown(field, { key: "Backspace" });
+    fireEvent.mouseDown(field);
+    fireEvent.click(await screen.findByRole("option", { name: "Art" }));
+    expect(chips()).toEqual(["Art"]);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Edit product" })).toBeNull());
+    // Nothing else changed, so the product itself has no draft; the collections do.
+    expect(store.getState().global.productsToSave[poster.id]).toBeUndefined();
+    expect(collectionDrafts.get(collectionsDraftKey(SELLER, STORE_ID))?.map((c) => [c.title, c.products])).toEqual([
+      ["Mugs", [mug.id]],
+      ["Art", [poster.id]],
+    ]);
+  });
+
   it("arranges a collection from its line: the new order waits with the unpublished collections, and the list shows it", async () => {
     const collectionsId = `q-store-collections-${SHORT_STORE_ID}`;
     stubNode({ served: new Map([[collectionsId, { storeId: STORE_ID, collections: [{ id: "MUGSxxxxx1", title: "Mugs", products: [mug.id, poster.id, "gone-product"] }] }]]) });
@@ -930,6 +973,31 @@ describe("sorting the products by their columns", () => {
 });
 
 
+describe("giving a saved product variants", () => {
+  it("makes the product the first item, keeping its id, and the others new products in its group", async () => {
+    installVisibleIntersectionObserver();
+    stubNode();
+    const { store } = setup({}, `/product-manager/${STORE_ID}?tab=products`);
+    fireEvent.click(await screen.findByRole("button", { name: /^Edit Poster\b/ }));
+    const dialog = await screen.findByRole("dialog", { name: "Edit product" });
+    const variants = within(dialog).getByRole("region", { name: "Variants" });
+    fireEvent.click(within(variants).getByRole("switch", { name: /It comes in variants/ }));
+    expect(within(variants).getByText(/This product becomes the first item/)).toBeInTheDocument();
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 1" }), { target: { value: "A3" } });
+    fireEvent.click(within(variants).getByRole("button", { name: "Add another variant" }));
+    fireEvent.change(within(variants).getByRole("textbox", { name: "Variant 2" }), { target: { value: "A2" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save to drafts" }));
+
+    await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(2));
+    const drafts = Object.values(store.getState().global.productsToSave) as any[];
+    const first = store.getState().global.productsToSave[poster.id] as any;
+    expect(first).toMatchObject({ title: "Poster | A3", isUpdate: true, variant: { values: ["A3"], lead: poster.id } });
+    const other = drafts.find((d) => d.id !== poster.id);
+    expect(other).toMatchObject({ title: "Poster | A2", variant: { values: ["A2"], lead: poster.id, group: first.variant.group } });
+    expect(other.isUpdate ?? false).toBe(false);
+  });
+});
+
 describe("adding a product in variants", () => {
   it("makes a draft per item (each variant's own values), and publishes the group on the product list", async () => {
     installVisibleIntersectionObserver();
@@ -964,9 +1032,9 @@ describe("adding a product in variants", () => {
     await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(3));
     const drafts = Object.values(store.getState().global.productsToSave) as any[];
     expect(drafts.map((d) => [d.title, d.price[0].value])).toEqual([
-      ["Glasses — Round / Orange", 10],
-      ["Glasses — Round / Pale", 10],
-      ["Glasses — Square", 12],
+      ["Glasses | Round / Orange", 10],
+      ["Glasses | Round / Pale", 10],
+      ["Glasses | Square", 12],
     ]);
     expect(within(screen.getByRole("region", { name: "Unpublished changes" })).getByText("3 products")).toBeInTheDocument();
 
@@ -980,7 +1048,7 @@ describe("adding a product in variants", () => {
     });
     expect(list_.products[drafts[2].id]).toMatchObject({ priceQort: 12, status: "AVAILABLE", variant: { group, values: ["Square"] } });
     const catalogue = decodeData64(call.resources[0].data64);
-    expect(catalogue.products[drafts[0].id]).toMatchObject({ title: "Glasses — Round / Orange", variant: { group, values: ["Round", "Orange"], lead: drafts[0].id } });
+    expect(catalogue.products[drafts[0].id]).toMatchObject({ title: "Glasses | Round / Orange", variant: { group, values: ["Round", "Orange"], lead: drafts[0].id } });
   });
 });
 
@@ -1062,8 +1130,8 @@ describe("editing a product in variants", () => {
     await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(3));
     const saved = store.getState().global.productsToSave as Record<string, any>;
     const [pale, orange, square] = g.products.map((p) => saved[p.id]);
-    expect([pale.title, pale.status, pale.isUpdate, pale.images]).toEqual(["Blue-light glasses — Oval / Pale", "AVAILABLE", true, g.products[0].images]);
-    expect([square.title, square.status, square.images]).toEqual(["Blue-light glasses — Square / Pale", "OUT_OF_STOCK", g.products[2].images]);
+    expect([pale.title, pale.status, pale.isUpdate, pale.images]).toEqual(["Blue-light glasses | Oval / Pale", "AVAILABLE", true, g.products[0].images]);
+    expect([square.title, square.status, square.images]).toEqual(["Blue-light glasses | Square / Pale", "OUT_OF_STOCK", g.products[2].images]);
     expect(square.variant).toMatchObject({ group: "GLASSES001", title: "Blue-light glasses", values: ["Square", "Pale"], display: "separate", lead: g.products[0].id });
     expect(square.variant.options).toEqual([
       { name: "Oval", values: [{ name: "Pale" }] },
@@ -1101,8 +1169,8 @@ describe("variants in a shop that prices in a currency", () => {
     await waitFor(() => expect(Object.keys(store.getState().global.productsToSave)).toHaveLength(2));
     const drafts = Object.values(store.getState().global.productsToSave) as any[];
     expect(drafts.map((d) => [d.title, d.fiatPrice?.value, d.price[0].value])).toEqual([
-      ["Glasses — Round / Pale", 4, 20],
-      ["Glasses — Round / Orange", 5, 25],
+      ["Glasses | Round / Pale", 4, 20],
+      ["Glasses | Round / Orange", 5, 25],
     ]);
   });
 });

@@ -4,6 +4,8 @@
  * after Q-Share+'s TextEditorQuill (Quill 2, react-quill-new). Loaded with
  * the product form only (React.lazy), never for buyers.
  *
+ * - Pasted text written with Markdown comes in formatted (richtext/markdown.ts),
+ *   when the paste carries no formatting of its own (a text editor's copy).
  * - Pasted rich text keeps its formatting: headings, bold, lists, links…
  *   Colours, pictures and other embeds in a paste are dropped (a description
  *   is read in four themes; a pasted picture could load from outside Qortal).
@@ -28,6 +30,7 @@ import "react-quill-new/dist/quill.snow.css";
 import { usePhoneLayout } from "../hooks/usePhoneLayout";
 import { EMBED_CLASS, embedData, embedFromData, embedLabel, type QortalEmbed } from "./embeds";
 import { QORTAL_URL } from "./sanitize";
+import { hasFormatting, looksLikeMarkdown, markdownToHtml } from "./markdown";
 
 // ---------------------------------------------------------------- Quill setup (once)
 
@@ -165,6 +168,26 @@ export default function DescriptionEditor({ value, onChange, placeholder, labelI
     return () => {
       quill.off("text-change", onText as never);
     };
+  }, [phone]);
+
+  // Pasted Markdown as its formatting, through Quill's own paste of HTML (its formats and matchers).
+  useEffect(() => {
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData("text/plain") ?? "";
+      if (!looksLikeMarkdown(text) || hasFormatting(e.clipboardData?.getData("text/html"))) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const range = quill.getSelection(true);
+      const Delta = Quill.import("delta") as unknown as new () => { retain(n: number): { delete(n: number): { concat(d: unknown): unknown } } };
+      const pasted = quill.clipboard.convert({ html: markdownToHtml(text), text });
+      quill.updateContents(new Delta().retain(range.index).delete(range.length).concat(pasted) as never, "user");
+      quill.setSelection(range.index + pasted.length(), 0, "silent");
+      quill.scrollSelectionIntoView();
+    };
+    quill.root.addEventListener("paste", onPaste, true);
+    return () => quill.root.removeEventListener("paste", onPaste, true);
   }, [phone]);
 
   // Names for the buttons and pickers, and the editor named by the field's label.

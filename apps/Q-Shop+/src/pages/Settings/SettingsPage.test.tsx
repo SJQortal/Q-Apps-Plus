@@ -58,7 +58,7 @@ describe("SettingsPage", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     const sections = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
     expect(sections).toEqual(["Account", "Appearance", "Shopping", "Sync", "About"]);
-    expect(screen.getByText("Q-Shop+ 1.0.0")).toBeInTheDocument();
+    expect(screen.getByText("Q-Shop+ 1.0.1")).toBeInTheDocument();
   });
 
   it("switches theme from the picker and saves it", () => {
@@ -94,7 +94,7 @@ describe("SettingsPage", () => {
     renderSettings();
     fireEvent.click(screen.getByRole("button", { name: /What's new/ }));
     expect(screen.getByRole("dialog")).toHaveTextContent("Q-Shop+ 1.0");
-    expect(screen.getByRole("dialog")).toHaveTextContent("Latest · 1.0.0");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Latest · 1.0.1");
   });
 
   describe("Account", () => {

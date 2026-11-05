@@ -7,7 +7,7 @@
  * An edited group (`group`) is always in variants; each item has its stock,
  * a new one says so, and those taken out are listed.
  */
-import { useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   Box,
   Button,
@@ -35,6 +35,7 @@ import { priceDecimals, sanitizeFiatInput } from "../money/fiatPricing";
 import { MAX_OPTION_TEXT, MAX_OPTION_VALUES, MAX_VARIANTS, MAX_VARIANT_OPTIONS, itemCount, variantLabel, type VariantDisplay, type VariantValue } from "./model";
 import { NO_ROW, formItems, newFormOption, usedOptions, type VariantFormOption, type VariantFormValues } from "./drafts";
 import { SWATCHES } from "./swatches";
+import { usePointerReorder } from "../hooks/usePointerReorder";
 
 export const EMPTY_VARIANTS: VariantFormValues = { options: [{ id: "v0", name: "", values: [], picture: null }], display: "bundle", rows: {} };
 
@@ -58,30 +59,6 @@ export function moved<T>(list: T[], from: number, to: number): T[] {
  * Drag to reorder a list: the dragged item takes the place of the one it is
  * dragged over. `kind` keeps one list's drags out of another's.
  */
-function useReorder(kind: string, onMove: (from: number, to: number) => void) {
-  const dragging = useRef<number | null>(null);
-  return (index: number) => ({
-    onDragStart: (e: DragEvent) => {
-      e.stopPropagation();
-      dragging.current = index;
-      e.dataTransfer.effectAllowed = "move";
-      e.dataTransfer.setData("text/plain", `${kind}:${index}`);
-    },
-    onDragOver: (e: DragEvent) => {
-      if (dragging.current === null) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (dragging.current !== index) {
-        onMove(dragging.current, index);
-        dragging.current = index;
-      }
-    },
-    onDragEnd: () => {
-      dragging.current = null;
-    },
-  });
-}
-
 /** Alt + ← / → (or ↑ / ↓) moves the focused item; the keyboard's way to drag. */
 function moveKeys(index: number, count: number, onMove: (from: number, to: number) => void, vertical = false) {
   return (e: KeyboardEvent) => {
@@ -220,7 +197,8 @@ function ColorPicker({ value, label, onChange }: { value: string | undefined; la
 function ValuesField({ label, values, onChange }: { label: string; values: VariantValue[]; onChange: (values: VariantValue[]) => void }) {
   const [text, setText] = useState("");
   const move = (from: number, to: number) => onChange(moved(values, from, to));
-  const drag = useReorder(`values-${label}`, move);
+  // Drag a value to move it: a mouse, or a finger pressed and held (hooks/usePointerReorder.ts).
+  const drag = usePointerReorder(move);
   const add = () => {
     const next = [...values];
     for (const part of text
@@ -240,9 +218,8 @@ function ValuesField({ label, values, onChange }: { label: string; values: Varia
             <Box
               component="li"
               key={v.name}
-              draggable
-              {...drag(i)}
-              sx={{ display: "inline-flex", alignItems: "center", gap: 0.25, pl: 0.5, pr: 0.25, minHeight: 36, borderRadius: 999, border: 1, borderColor: "divider", bgcolor: "action.hover", cursor: "grab" }}
+              {...drag.itemProps(i)}
+              sx={{ opacity: drag.dragging === i ? 0.6 : 1, userSelect: "none", WebkitTouchCallout: "none", display: "inline-flex", alignItems: "center", gap: 0.25, pl: 0.5, pr: 0.25, minHeight: 36, borderRadius: 999, border: 1, borderColor: "divider", bgcolor: "action.hover", cursor: "grab" }}
             >
               <ColorPicker value={v.color} label={v.name} onChange={(color) => onChange(values.map((x, j) => (j === i ? (color ? { ...x, color } : { name: x.name }) : x)))} />
               <Typography
@@ -304,6 +281,7 @@ export function VariantsEditor({
   unit,
   basePrice,
   onImageError,
+  onAddImage,
   group = null,
   extraCoins = [],
   stock = null,
@@ -318,6 +296,8 @@ export function VariantsEditor({
   /** The product's price as typed ("12", or "12 QORT" when it isn't in the items' unit), each item's when it has none of its own. */
   basePrice: string;
   onImageError?: (message: string) => void;
+  /** A picture added for a variant or an item: also one of the product's, to move or star (Simon, 2026-10-28). */
+  onAddImage?: (image: string) => void;
   /** Editing a published group: the products taken out of it so far. */
   group?: { removed: RemovedItem[] } | null;
   /** The shop's other coins an item can have its own price in (variants/drafts.ts itemExtraCoins), with the product's price in each. */
@@ -330,7 +310,8 @@ export function VariantsEditor({
   const set = (patch: Partial<VariantFormValues>) => onChange({ ...form, ...patch });
   const setOption = (i: number, patch: Partial<VariantFormOption>) => set({ options: form.options.map((o, j) => (j === i ? { ...o, ...patch } : o)) });
   const moveOption = (from: number, to: number) => set({ options: moved(form.options, from, to) });
-  const dragOption = useReorder("variants", moveOption);
+  // A variant moves by its handle, so its fields type and select as usual.
+  const dragOption = usePointerReorder(moveOption, { handle: true });
   const used = usedOptions(form);
   const total = itemCount(used);
   const items = formItems(form);
@@ -375,11 +356,11 @@ export function VariantsEditor({
                 <Box
                   component="li"
                   key={i}
-                  {...dragOption(i)}
-                  sx={{ display: "grid", gap: 1.5, alignItems: "start", gridTemplateColumns: { xs: "28px minmax(0, 1fr) 44px 44px", sm: "28px 200px minmax(0, 1fr) 44px 44px" } }}
+                  {...dragOption.itemProps(i)}
+                  sx={{ opacity: dragOption.dragging === i ? 0.6 : 1, display: "grid", gap: 1.5, alignItems: "start", gridTemplateColumns: { xs: "28px minmax(0, 1fr) 44px 44px", sm: "28px 200px minmax(0, 1fr) 44px 44px" } }}
                 >
                   <Box
-                    draggable
+                    {...dragOption.handleProps}
                     tabIndex={0}
                     role="button"
                     aria-label={`Move ${name}: drag, or Alt and the up or down arrow`}
@@ -398,7 +379,15 @@ export function VariantsEditor({
                   <Box sx={{ gridColumn: { xs: "2 / -1", sm: "3" }, gridRow: { xs: "2", sm: "1" }, minWidth: 0 }}>
                     <ValuesField label={name} values={option.values} onChange={(values) => setOption(i, { values })} />
                   </Box>
-                  <PictureButton picture={option.picture} label={name} onPick={(picture) => setOption(i, { picture })} onError={onImageError} />
+                  <PictureButton
+                    picture={option.picture}
+                    label={name}
+                    onPick={(picture) => {
+                      setOption(i, { picture });
+                      if (picture) onAddImage?.(picture);
+                    }}
+                    onError={onImageError}
+                  />
                   <IconButton
                     aria-label={`Remove ${name}`}
                     onClick={() => (form.options.length === 1 ? onChange(null) : set({ options: form.options.filter((_, j) => j !== i) }))}
@@ -418,8 +407,8 @@ export function VariantsEditor({
             </Button>
           )}
           <Typography variant="body2" color="text.secondary">
-            A variant without values is one item (a gift box, say). A variant&apos;s picture is its items&apos;, unless an item has its own below. Drag a
-            value or a variant to move it.
+            A variant without values is one item (a gift box, say). A variant&apos;s picture is its items&apos;, unless an item has its own below. A picture added
+            here is also added to the product&apos;s pictures (while there are fewer than 10), to move or star as the main one. Drag a value or a variant to move it.
           </Typography>
 
           {section(
@@ -520,7 +509,15 @@ export function VariantsEditor({
                             ))}
                           </ToggleButtonGroup>
                         )}
-                        <PictureButton picture={own} label={label} onPick={(picture) => setRow(key, { picture })} onError={onImageError} />
+                        <PictureButton
+                          picture={own}
+                          label={label}
+                          onPick={(picture) => {
+                            setRow(key, { picture });
+                            if (picture) onAddImage?.(picture);
+                          }}
+                          onError={onImageError}
+                        />
                       </Box>
                       {stock && (
                         <TextField

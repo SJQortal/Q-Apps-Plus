@@ -51,6 +51,7 @@ export function AuctionPanel({
   storeId,
   shop,
   isOwner,
+  preview = false,
 }: {
   terms: AuctionTerms;
   product: Record<string, unknown>;
@@ -61,6 +62,8 @@ export function AuctionPanel({
   storeId: string;
   shop: unknown;
   isOwner: boolean;
+  /** The seller looking as a buyer would (the product page's View as customer): the bid form shows but doesn't work. */
+  preview?: boolean;
 }) {
   const navigate = useNavigate();
   const user = useSelector((state: RootState) => state.auth.user);
@@ -402,7 +405,7 @@ export function AuctionPanel({
         </Typography>
       )}
 
-      {action}
+      {preview ? <Box inert>{action}</Box> : action}
 
       {auction.placed.map((bid) => (
         <Typography key={bid.id} role="status" variant="body2" color="text.secondary">

@@ -27,7 +27,8 @@
 import { shortStoreIdOf } from "../qdn/identifiers";
 import { stockOf } from "../stock/model";
 import { useStockLeft } from "../stock/notes";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ProductImage } from "../components/common/ProductImage";
 import { useSelector } from "react-redux";
 import {
@@ -324,6 +325,26 @@ export function ProductsTab({ onAdd, onEdit, ready, loading = false, onDelete }:
     if (load === "failed") retry(row.catalogueId);
     else if (load !== "ready") request([row.catalogueId]);
   };
+
+  // `?edit=<product id>` (a product page's Edit product): open that product's form once the list is in, as a tap on its row does.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editParam = searchParams.get("edit");
+  const editFromLink = useEffectEvent((row: SellerRow) => edit(row));
+  useEffect(() => {
+    if (!editParam || !ready) return;
+    setSearchParams(
+      (now) => {
+        const next = new URLSearchParams(now);
+        next.delete("edit");
+        return next;
+      },
+      { replace: true }
+    );
+    const row = rows.find((r) => r.productId === editParam);
+    // Once per link, as a tap on the row: the form opens (or its catalogue is read first).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (row) editFromLink(row);
+  }, [editParam, ready, rows, setSearchParams]);
 
   // Open the form once the catalogue of the product the seller tapped lands:
   // from its entry there, or from its index row if it isn't there.

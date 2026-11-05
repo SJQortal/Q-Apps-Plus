@@ -36,9 +36,17 @@ export function RecentlyViewedStrip({ onShown }: { onShown?: (shown: boolean) =>
       alive = false;
     };
   }, [wanted]);
+  // One tile per product: a product in variants as its item seen last, also for items saved before
+  // their group was (their catalogue says it).
+  const groupsShown = new Set<string>();
   const items: NewProduct[] = viewed.flatMap((v: ViewedProduct) => {
     const product = catalogues[`${v.owner}\n${v.catalogueId}`]?.products?.[v.productId];
     if (!product || typeof product.title !== "string" || product.status === "RETIRED") return [];
+    const group = (product.variant as { group?: unknown } | undefined)?.group;
+    if (typeof group === "string" && group) {
+      if (groupsShown.has(`${v.owner}\n${group}`)) return [];
+      groupsShown.add(`${v.owner}\n${group}`);
+    }
     const images = Array.isArray(product.images) ? (product.images as unknown[]).filter((i): i is string => typeof i === "string") : [];
     const main = typeof product.mainImageIndex === "number" ? product.mainImageIndex : 0;
     return [{ key: `${v.owner}\n${v.catalogueId}\n${v.productId}`, owner: v.owner, storeId: v.storeId, catalogueId: v.catalogueId, product: { ...product, id: v.productId } as never, image: images[main] ?? images[0] ?? "" }];

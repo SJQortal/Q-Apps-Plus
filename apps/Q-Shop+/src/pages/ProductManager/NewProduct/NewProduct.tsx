@@ -30,11 +30,15 @@ import { fiatPricingOf } from "../../../money/fiatPricing";
 import { needsMorePictures } from "../../../qdn/productPictures";
 import { auctionTermsOf } from "../../../auctions/rules";
 import { useMorePictures } from "../../../hooks/useMorePictures";
-import { groupEditDrafts, groupFormValues, removedMembers, variantDrafts, variantFormProblem } from "../../../variants/drafts";
+import { NO_ROW, formItems, groupEditDrafts, groupFormValues, removedMembers, variantDrafts, variantFormProblem } from "../../../variants/drafts";
 import { variantLabel, variantOf, type ProductVariant } from "../../../variants/model";
 import { useVariantGroup } from "../../../variants/useVariantGroup";
 import { sameContent } from "../../../seller/sameContent";
 import { usePhoneLayout } from "../../../hooks/usePhoneLayout";
+import { useShopCollections } from "../../Store/useShopCollections";
+import { collectionDrafts, collectionsDraftKey } from "../../../seller/useCollections";
+import { collectionsWith, placeInCollections } from "../../../seller/productCollections";
+import { CollectionsField } from "../../../seller/CollectionsField";
 import {
   editedProductDraft,
   formValuesFor,
@@ -177,6 +181,30 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
   const dataContainer = useSelector((state: RootState) => state.global.dataContainer);
   const productsToSave = useSelector((state: RootState) => state.global.productsToSave);
   const phone = usePhoneLayout();
+  // Its collections (the Collections field): the shop's, with any unpublished change to them, as the Products tab has them.
+  const publishedCollections = useShopCollections(currentStore?.owner || name || "", currentStore?.id ?? "", dataContainer);
+  const collectionsKey = collectionsDraftKey(name, currentStore?.id);
+  const collectionsDraft = collectionDrafts.useDraft(collectionsKey);
+  const collections = collectionsDraft ?? publishedCollections.collections;
+  const collectionsStatus =
+    collectionsDraft || publishedCollections.status === "ready" || publishedCollections.status === "none"
+      ? "ready"
+      : publishedCollections.status === "unavailable"
+        ? "unavailable"
+        : "loading";
+  const memberIds = useMemo(() => (group ? group.members.map((m) => m.id) : product ? [product.id] : []), [group, product]);
+  const inCollections = useMemo(() => collectionsWith(collections, memberIds), [collections, memberIds]);
+  // null until the seller changes it: the collections it's in now.
+  const [pickedCollections, setPickedCollections] = useState<string[] | null>(null);
+  const chosenCollections = pickedCollections ?? inCollections;
+  const collectionsChanged = pickedCollections !== null && [...pickedCollections].sort().join("\n") !== [...inCollections].sort().join("\n");
+  /** Puts the saved product's ids (a group's items) in the chosen collections, in the collections draft. */
+  const saveCollections = (ids: string[]) => {
+    if (collectionsStatus !== "ready" || !collectionsKey) return;
+    const next = placeInCollections(collections, ids, chosenCollections, Date.now());
+    if (next.every((c, i) => c === collections[i])) return;
+    collectionDrafts.set(collectionsKey, JSON.stringify(next) === JSON.stringify(publishedCollections.collections) ? null : next);
+  };
 
   const coins = useMemo(() => shopCoins(currentStore) as string[], [currentStore]);
   // Prices in a currency at the seller's rates (Shop tab → Prices), when the shop uses them.
@@ -236,7 +264,7 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
   );
 
   const requestClose = () => {
-    if (!sameValues(values, initial)) setConfirmDiscard(true);
+    if (!sameValues(values, initial) || collectionsChanged) setConfirmDiscard(true);
     else onClose();
   };
 
@@ -247,7 +275,7 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
       return setError("Your shop's product list isn't loaded yet. Close this and try again in a moment.");
     }
     const now = Date.now();
-    const inVariants = (!product || !!group) && !!values.variants && values.sale !== "auction";
+    const inVariants = !!values.variants && values.sale !== "auction";
     const invalid = validateProductForm(values, coins, { oldCategory, pricing, wholeOnly, now, savedAuction: auctionTermsOf(product), imagesOptional: inVariants, priceOptional: inVariants });
     if (invalid) return setError(invalid);
     const { variants, ...form } = values;
@@ -272,6 +300,24 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
       });
       for (const id of dropped) dispatch(removeFromProductsToSave(id));
       for (const draft of drafts) dispatch(setProductsToSave(draft));
+      // The items still in the group (one taken out is retired, and left where it was).
+      saveCollections(drafts.filter((d) => !!(d as { variant?: unknown }).variant).map((d) => d.id));
+      onClose();
+      return;
+    }
+    // A saved product given variants: it becomes the first item, keeping its id (its link, reviews,
+    // favourites, collections and orders), and the other items are new (variants/drafts.ts groupEditDrafts).
+    if (product && inVariants && variants) {
+      if (picturesPending) return setError("The product's pictures are still being read from your node. Save once they are in.");
+      const problem = variantFormProblem(variants, trimmed, pricing, coinChecks);
+      if (problem) return setError(problem);
+      const first = formItems(variants)[0]?.key;
+      const form = first
+        ? { ...variants, rows: { ...variants.rows, [first]: { ...(variants.rows[first] ?? NO_ROW), productId: product.id, status: variants.rows[first]?.status ?? product.status } } }
+        : variants;
+      const { drafts } = groupEditDrafts({ values: trimmed, form, group: uid(), members: [product], coins, storeId: currentStore.id, name, uid: () => uid(), now, pricing });
+      for (const draft of drafts) dispatch(setProductsToSave(draft));
+      saveCollections(drafts.filter((d) => !!(d as { variant?: unknown }).variant).map((d) => d.id));
       onClose();
       return;
     }
@@ -279,9 +325,9 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
     if (inVariants && variants) {
       const problem = variantFormProblem(variants, trimmed, pricing, coinChecks);
       if (problem) return setError(problem);
-      for (const draft of variantDrafts({ values: trimmed, form: variants, coins, storeId: currentStore.id, name, uid: () => uid(), now, pricing })) {
-        dispatch(setProductsToSave(draft));
-      }
+      const drafts = variantDrafts({ values: trimmed, form: variants, coins, storeId: currentStore.id, name, uid: () => uid(), now, pricing });
+      for (const draft of drafts) dispatch(setProductsToSave(draft));
+      saveCollections(drafts.map((d) => d.id));
       onClose();
       return;
     }
@@ -289,6 +335,7 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
       ? editedProductDraft({ base: product, values: trimmed, coins, name, pricing, picturesKept: picturesPending, now })
       : newProductDraft({ values: trimmed, coins, storeId: currentStore.id, name, uid: uid(), now, pricing });
     // A published product saved as it is (changed and put back, say): no draft, so nothing waits to be published.
+    saveCollections([draft.id]);
     if (product && !productsToSave[product.id] && sameContent(withoutStamps(draft), withoutStamps(product))) return onClose();
     dispatch(setProductsToSave(draft));
     onClose();
@@ -365,6 +412,7 @@ function ProductEditor({ open, onClose, product, onDelete, initialValues = null,
                 : null
             }
             variantGroup={group && { removed }}
+            collectionsField={<CollectionsField collections={collections} value={chosenCollections} onChange={setPickedCollections} status={collectionsStatus} />}
           />
           <FormError message={error} />
         </Box>

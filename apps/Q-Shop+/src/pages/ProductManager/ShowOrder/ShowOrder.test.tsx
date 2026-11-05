@@ -379,6 +379,54 @@ describe("the rest of the order", () => {
     expect(node.q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(0);
   });
 
+  it("asks to tell the buyer by Q-Mail once saved as Shipped, with the tracking and note, and sends it only when asked", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+    const q = installQortalMock({
+      GET_NAME_DATA: async () => ({ owner: BUYER_ADDRESS }),
+      GET_ACCOUNT_DATA: async () => ({ publicKey: "BuyerPK" }),
+      PUBLISH_QDN_RESOURCE: async () => true,
+    });
+    const { store } = setup("seller", orderJson(), { status: "Received" });
+    fireEvent.click(screen.getByRole("button", { name: "Shipped" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Tracking number (optional)" }), { target: { value: "RR123" } });
+    fireEvent.change(screen.getByLabelText("Note for the buyer"), { target: { value: "Well packed." } });
+    fireEvent.click(screen.getByRole("button", { name: "Update status" }));
+    const ask = await screen.findByRole("dialog", { name: `Tell ${BUYER} it's shipped?` });
+    // Only the status so far: the mail waits for the seller.
+    expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1);
+    const message = within(ask).getByRole("textbox", { name: "Message" }) as HTMLTextAreaElement;
+    expect(message.value).toContain("Tracking number: RR123");
+    expect(message.value).toContain("Well packed.");
+    fireEvent.change(message, { target: { value: `${message.value}\n\nThank you!` } });
+    fireEvent.click(within(ask).getByRole("button", { name: "Send Q-Mail" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: `Tell ${BUYER} it's shipped?` })).toBeNull());
+    const calls = q.callsFor("PUBLISH_QDN_RESOURCE") as any[];
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toMatchObject({ service: "MAIL_PRIVATE", name: SELLER, encrypt: true, publicKeys: ["BuyerPK", SELLER_PK] });
+    expect(store.getState().notifications.alertTypes.alertSuccess).toBe(`Q-Mail sent to ${BUYER}`);
+  });
+
+  it("Not now sends nothing, and a status other than Shipped doesn't ask", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+    const q = installQortalMock({
+      GET_NAME_DATA: async () => ({ owner: BUYER_ADDRESS }),
+      GET_ACCOUNT_DATA: async () => ({ publicKey: "BuyerPK" }),
+      PUBLISH_QDN_RESOURCE: async () => true,
+    });
+    const { store } = setup("seller", orderJson(), { status: "Received" });
+    fireEvent.click(screen.getByRole("button", { name: "Refunded" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update status" }));
+    await waitFor(() => expect(store.getState().order.statuses[ID]?.status).toBe("Refunded"));
+    await waitFor(() => expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(1));
+    expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Shipped" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update status" }));
+    const ask = await screen.findByRole("dialog", { name: `Tell ${BUYER} it's shipped?` });
+    fireEvent.click(within(ask).getByRole("button", { name: "Not now" }));
+    await waitFor(() => expect(screen.queryByRole("textbox", { name: "Message" })).toBeNull());
+    expect(q.callsFor("PUBLISH_QDN_RESOURCE")).toHaveLength(2);
+  });
+
   it("stays quiet and keeps the old status when the seller declines in Hub", async () => {
     vi.stubGlobal(
       "fetch",

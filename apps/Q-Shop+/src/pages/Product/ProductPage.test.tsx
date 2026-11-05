@@ -5,7 +5,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { renderWithProviders } from "../../test/renderWithProviders";
 import { installMockNode, makeWorld, type World } from "../../test/mockNode";
 import { addUser } from "../../state/features/authSlice";
@@ -33,6 +33,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function Here() {
+  const { pathname, search } = useLocation();
+  return <div>{`At ${pathname}${search}`}</div>;
+}
+
 function renderProduct(
   world: World,
   path: string,
@@ -55,6 +60,7 @@ function renderProduct(
       <Route path="/:user/:store/:product/:catalogue" element={<ProductPage />} />
       <Route path="/:user/:store" element={<div>Shop page</div>} />
       <Route path="/cart" element={<div>Cart page</div>} />
+      <Route path="/product-manager/:store" element={<Here />} />
     </Routes>,
     { initialEntries: [path], store }
   );
@@ -238,11 +244,24 @@ describe("product page", { timeout: 20_000 }, () => {
     expect(screen.queryByRole("button", { name: "Add to cart" })).toBeNull();
   });
 
-  it("tells the owner it's their product", async () => {
+  it("tells the owner it's their product, with Edit product and View as customer", async () => {
     renderProduct(makeWorld(), pathOf(P11), "Seller Name");
     expect(await screen.findByText("This is your product.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add to cart" })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Cart/ })).toBeNull();
+
+    // As a buyer sees it: their buttons show, but don't work (inert), until Back to your view.
+    fireEvent.click(screen.getByRole("button", { name: "View as customer" }));
+    expect(await screen.findByText(/This is how buyers see your product/)).toBeInTheDocument();
+    expect(screen.queryByText("This is your product.")).toBeNull();
+    const add = screen.getByText("Add to cart").closest("button")!;
+    expect(add.closest("[inert]")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Back to your view" }));
+    expect(await screen.findByText("This is your product.")).toBeInTheDocument();
+
+    // Edit product opens the product's form on the seller page.
+    fireEvent.click(screen.getByRole("button", { name: "Edit product" }));
+    expect(await screen.findByText(`At /product-manager/${STORE_ID}?tab=products&edit=${P11}`)).toBeInTheDocument();
   });
 
   it("keeps the page when the product's data can't be shown (it crashed the whole app)", async () => {

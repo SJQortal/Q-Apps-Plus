@@ -2,7 +2,7 @@
  * The version shown in Settings → About and the changelog dialog. Keep it in
  * step with package.json's "version" (a test checks).
  */
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "1.0.1";
 
 export interface Release {
   version: string;
@@ -13,6 +13,22 @@ export interface Release {
 
 /** Newest first. */
 export const CHANGELOG: Release[] = [
+  {
+    version: "1.0.1",
+    date: "2026-11-01",
+    title: "Easier selling, and a Q-Mail when an order ships",
+    notes: [
+      "Marking an order Shipped now asks whether to tell the buyer by Q-Mail, with what shipped, the carrier, the tracking number and your note, ready to change or send.",
+      "On your own product's page, Edit product opens its form, and View as customer shows the page as buyers see it (their buttons show, but don't work there).",
+      "The product form has Collections: put a product in your collections, or take it out, as you add or edit it. A product with variants goes in with all its items.",
+      "A product you've already saved can now be given variants. It becomes the first item and keeps its link, reviews and favourites; the others are added as new products.",
+      "Drag a product's pictures, variants and values into order, with a mouse, or on a phone by pressing and holding first (a variant by its handle).",
+      "A picture added for a variant or item also joins the product's pictures (up to 10), to move or star as the main one. A product listed as one shows its starred picture on its card.",
+      "Variant items are named with a bar, \"Glasses | Round / Pale\", instead of a dash. Items already published keep theirs until their product is saved again.",
+      "Markdown in descriptions: pasted from a notes app, it comes into a product's description formatted, and a product's or shop's plain description written with it shows formatted.",
+      "Recently viewed shows a product with variants once, as the one you looked at last.",
+    ],
+  },
   {
     version: "1.0.0",
     date: "2026-10-25",

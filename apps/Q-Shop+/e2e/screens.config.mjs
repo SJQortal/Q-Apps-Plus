@@ -38,6 +38,9 @@ const TITLES = [
   'Garden Seeds',
   'Knitting Club',
 ];
+// A product described with Markdown, as pasted from a notes app into the original Q-Shop.
+const MARKDOWN_PRODUCT = '## Ceremonial matcha\nStone-ground in **Uji**, *first harvest*.\n### In the tin\n- 30 g\n- A bamboo scoop\n  - and a whisk with the 100 g\n1. Sift it\n2. Whisk in hot water\n> Smooth, not bitter. — a buyer';
+
 const shops = OWNERS.map((owner, i) => {
   const short = i === 0 ? 'my-shop' : `shop-${i}`;
   return {
@@ -45,7 +48,8 @@ const shops = OWNERS.map((owner, i) => {
     short,
     id: `q-store-general-${short}`,
     title: TITLES[i],
-    description: i === 4 ? 'A description long enough to need two lines on a phone and a fold on the card, with a few more words.' : `Everything ${TITLES[i]} sells, made with care.`,
+    // Shop 2 wrote its description with Markdown (richtext/markdown.ts).
+    description: i === 2 ? '## Knitted by hand\n**Wool from Iceland**, spun on the farm.\n- Hats and scarves\n- Kits to [knit your own](qortal://APP/Q-Blog/Knitting)' : i === 4 ? 'A description long enough to need two lines on a phone and a fold on the card, with a few more words.' : `Everything ${TITLES[i]} sells, made with care.`,
     created: now - i * DAY * 3,
     updated: now - i * DAY * 2,
     arrr: i % 3 === 0,
@@ -71,7 +75,7 @@ const catalogueId = (s, c) => `q-store-catalogue-${s.short}-CAT${String(c).padSt
 function product(s, p) {
   return {
     title: p === 0 ? 'Hand-thrown mug with a long product title that wraps over two lines' : ['Poster', 'Notebook', 'Scarf', 'Ebook', 'Sticker pack', 'Lamp'][p % 6] + ` ${p}`,
-    description: p === 0 ? 'A mug.\nGlazed by hand, so every one is different.\n\nHolds 350 ml.' : `Description of product ${p}.`,
+    description: p === 0 ? 'A mug.\nGlazed by hand, so every one is different.\n\nHolds 350 ml.' : p === 1 && s.short === 'shop-3' ? MARKDOWN_PRODUCT : `Description of product ${p}.`,
     created: s.created + p * 60_000,
     version: 1,
     images: p === 0 ? [CUTOUT, IMG2, IMG] : p === 3 ? [CUTOUT] : p % 4 === 0 ? [IMG, IMG2, IMG] : [p % 2 ? IMG2 : IMG],
@@ -90,8 +94,8 @@ function product(s, p) {
     ...(s.short === 'shop-3' && p === 0 && RICH),
     // The seller's own product with a video and a PDF (the product form shows them under its pictures).
     ...(s.short === 'my-shop' && p === 2 && MY_MEDIA),
-    ...(variantOfFixture(s, p) && { title: `Hand-thrown mug — ${VARIANT_COMBOS[p].join(' / ')}`, type: 'physical', price: [{ currency: 'qort', value: 18 + p * 2 }], status: p === 3 ? 'OUT_OF_STOCK' : 'AVAILABLE', variant: variantOfFixture(s, p) }),
-    ...(apronOf(s, p) && { title: `Linen apron — ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
+    ...(variantOfFixture(s, p) && { title: `Hand-thrown mug | ${VARIANT_COMBOS[p].join(' / ')}`, type: 'physical', price: [{ currency: 'qort', value: 18 + p * 2 }], status: p === 3 ? 'OUT_OF_STOCK' : 'AVAILABLE', variant: variantOfFixture(s, p) }),
+    ...(apronOf(s, p) && { title: `Linen apron | ${apronOf(s, p).values.join(' / ')}`, type: 'physical', images: apronPictures(p), variant: apronOf(s, p) }),
     // Auctions (auctions/rules.ts): stored out of stock at the starting bid, for the original app.
     ...(AUCTIONS[s.short]?.[p] && { status: 'OUT_OF_STOCK', price: [{ currency: 'qort', value: AUCTIONS[s.short][p].startingBid }], auction: AUCTIONS[s.short][p] }),
     // A big price (Simon's phone, 2026-10-27: "12,800.00 BHC Coin each" squeezed the cart line's title to a sliver).
@@ -653,14 +657,14 @@ export default {
     } },
     { key: 'seller-edit-variants', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
       await page.getByRole('searchbox', { name: 'Search your products' }).fill('apron', { timeout: 8000 });
-      await page.getByRole('button', { name: /^Edit\b.*Linen apron — Small \/ Indigo\b/ }).click({ timeout: 10000 });
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron \| Small \/ Indigo\b/ }).click({ timeout: 10000 });
       const d = page.getByRole('dialog', { name: 'Edit product' });
       await d.getByRole('list', { name: 'Items' }).scrollIntoViewIfNeeded({ timeout: 10000 });
       await page.waitForTimeout(400);
     } },
     { key: 'seller-edit-variants-removed', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
       await page.getByRole('searchbox', { name: 'Search your products' }).fill('apron', { timeout: 8000 });
-      await page.getByRole('button', { name: /^Edit\b.*Linen apron — Large \/ Natural\b/ }).click({ timeout: 10000 });
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron \| Large \/ Natural\b/ }).click({ timeout: 10000 });
       const d = page.getByRole('dialog', { name: 'Edit product' });
       await d.getByRole('button', { name: 'Remove Indigo' }).click({ timeout: 10000 });
       await d.getByRole('switch', { name: 'In stock: Large / Natural' }).click();
@@ -721,6 +725,12 @@ export default {
       await page.waitForTimeout(800);
     } },
     { key: 'product', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, after: async (page) => page.waitForTimeout(900) },
+    // Your own product: Edit product and View as customer, then the buyer's view of it.
+    { key: 'product-own', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop/${productId(shops[0], 0)}/${catalogueId(shops[0], 0)}`, after: async (page) => { await page.getByText('This is your product.').waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'product-own-customer', path: `/${encodeURIComponent(ME)}/q-store-general-my-shop/${productId(shops[0], 0)}/${catalogueId(shops[0], 0)}?view=customer`, after: async (page) => { await page.getByText(/This is how buyers see your product/).waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    // Plain descriptions written with Markdown show formatted: a product's and a shop's.
+    { key: 'product-markdown', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 1)}/${catalogueId(shops[3], 0)}`, after: async (page) => { await page.getByRole('heading', { name: 'Ceremonial matcha' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(500); } },
+    { key: 'shop-markdown', path: `/${encodeURIComponent(shops[2].owner)}/q-store-general-shop-2`, after: async (page) => { await page.getByRole('heading', { name: 'Knitted by hand' }).waitFor({ timeout: 8000 }); await page.waitForTimeout(600); } },
     { key: 'product-pdf', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.waitForTimeout(1000); } },
     { key: 'product-pdf-smart', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.getByRole('button', { name: 'Smart' }).click({ timeout: 4000 }); await page.waitForTimeout(1200); } },
     { key: 'product-pdf-full', path: `/${encodeURIComponent('Seller 3')}/q-store-general-shop-3/${productId(shops[3], 0)}/${catalogueId(shops[3], 0)}`, overlay: true, after: async (page) => { await page.getByRole('button', { name: 'Preview Mug care guide' }).click({ timeout: 8000 }); await page.getByText(/^Page 1 of/).waitFor({ state: 'attached', timeout: 20000 }); await page.getByRole('button', { name: 'Full screen' }).click({ timeout: 4000 }); await page.waitForTimeout(1200); } },
@@ -790,6 +800,22 @@ export default {
       await d.getByRole('textbox', { name: 'Tracking number (optional)' }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(400);
     } },
+    // Saved as Shipped: the Q-Mail to the buyer, ready to send or change.
+    { key: 'seller-order-shipped-mail', path: `/product-manager/q-store-general-my-shop?tab=orders`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^All · / }).click({ timeout: 8000 });
+      await page.getByRole('list', { name: 'Orders received' }).getByRole('button').first().click({ timeout: 8000 });
+      const d = page.getByRole('dialog');
+      await d.getByRole('button', { name: 'Shipped', exact: true }).click({ timeout: 8000 });
+      await d.getByRole('combobox', { name: 'Carrier (optional)' }).fill('DHL');
+      await d.getByRole('textbox', { name: 'Tracking number (optional)' }).fill('00340434161234567890');
+      await d.getByRole('textbox', { name: 'Note for the buyer' }).fill('Well packed, should arrive within a week.');
+      // This mock Hub declines publishes; here it accepts the status, so the question follows.
+      await page.evaluate(() => { window.qortalRequestWithTimeout = async () => true; });
+      await d.getByRole('button', { name: 'Update status' }).click({ timeout: 8000 });
+      await page.getByRole('dialog', { name: /it's shipped\?/ }).getByRole('textbox', { name: 'Message' }).waitFor({ timeout: 8000 });
+      await page.waitForTimeout(500);
+    } },
     { key: 'order-delivered-review', path: '/my-orders', overlay: true, after: async (page) => {
       await page.getByRole('list', { name: 'Your orders' }).getByRole('button', { name: /Ålund Ceramics/ }).click({ timeout: 8000 });
       await page.getByRole('dialog').getByRole('button', { name: 'View review' }).scrollIntoViewIfNeeded({ timeout: 8000 });
@@ -844,6 +870,75 @@ export default {
     { key: 'seller-asset-suggest', path: `/product-manager/q-store-general-my-shop?tab=shop`, overlay: true, optional: true, expectErrors: /404|Failed to load resource/, after: async (page) => { await page.waitForTimeout(700); await page.getByRole('button', { name: 'Edit payments' }).click({ timeout: 2500 }); const box = page.getByRole('combobox', { name: /Asset name or id/ }); await box.scrollIntoViewIfNeeded({ timeout: 4000 }); await box.fill('gold'); await page.getByRole('listbox').waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
     { key: 'shop-deleted', path: `/${encodeURIComponent('Gone Seller')}/q-store-general-gone`, after: async (page) => page.waitForTimeout(900) },
     { key: 'seller-product-form', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, optional: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page, 2500); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Delete' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(500); } },
+    // The form's pictures move by dragging (hooks/usePointerReorder.ts): the first dragged onto the third.
+    { key: 'seller-product-drag', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^Edit\b.*Hand-thrown mug\b/ }).first().click({ timeout: 10000 });
+      const pics = page.getByRole('dialog', { name: 'Edit product' }).getByRole('list', { name: /^Pictures/ }).getByRole('img');
+      await pics.nth(2).waitFor({ timeout: 8000 });
+      const before = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      const from = await pics.nth(0).boundingBox();
+      const to = await pics.nth(2).boundingBox();
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(from.x + from.width / 2 + 10, from.y + from.height / 2, { steps: 3 });
+      await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+      await page.mouse.up();
+      const after = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      if (JSON.stringify(after) !== JSON.stringify([before[1], before[2], before[0]])) throw new Error(`drag didn't move the picture: ${JSON.stringify(after.map((a) => a?.slice(-12)))}`);
+      await page.waitForTimeout(300);
+    } },
+    // The same with a finger (GO): press and hold, then drag, as touch events.
+    { key: 'seller-product-drag-touch', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^Edit\b.*Hand-thrown mug\b/ }).first().click({ timeout: 10000 });
+      const pics = page.getByRole('dialog', { name: 'Edit product' }).getByRole('list', { name: /^Pictures/ }).getByRole('img');
+      await pics.nth(2).waitFor({ timeout: 8000 });
+      await pics.nth(2).scrollIntoViewIfNeeded();
+      const before = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      const from = await pics.nth(0).boundingBox();
+      const to = await pics.nth(2).boundingBox();
+      const cdp = await page.context().newCDPSession(page);
+      const at = (box) => [{ x: box.x + box.width / 2, y: box.y + box.height / 2 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(from) });
+      await page.waitForTimeout(450);
+      for (let i = 1; i <= 8; i++) {
+        const box = { x: from.x + ((to.x - from.x) * i) / 8, y: from.y + ((to.y - from.y) * i) / 8, width: from.width, height: from.height };
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(box) });
+        await page.waitForTimeout(30);
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      const after = await pics.evaluateAll((els) => els.map((el) => el.getAttribute('src')));
+      if (JSON.stringify(after) !== JSON.stringify([before[1], before[2], before[0]])) throw new Error(`touch drag didn't move the picture: ${JSON.stringify(after.map((a) => a?.slice(-12)))}`);
+      await page.waitForTimeout(300);
+    } },
+    // A variant's values move by a finger too: the first value held and dragged onto the last.
+    { key: 'seller-variants-drag-touch', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => {
+      await page.waitForTimeout(700);
+      await page.getByRole('button', { name: /^Edit\b.*Linen apron\b/ }).first().click({ timeout: 10000 });
+      const dialog = page.getByRole('dialog', { name: 'Edit product' });
+      const list = dialog.getByRole('list', { name: /: values$/ }).first();
+      const chips = list.getByRole('listitem');
+      await chips.nth(1).waitFor({ timeout: 10000 });
+      await list.scrollIntoViewIfNeeded();
+      const names = () => chips.evaluateAll((els) => els.map((el) => el.textContent));
+      const before = await names();
+      const last = before.length - 1;
+      const from = await chips.nth(0).locator('span[tabindex="0"]').boundingBox();
+      const to = await chips.nth(last).locator('span[tabindex="0"]').boundingBox();
+      const cdp = await page.context().newCDPSession(page);
+      const at = (x, y) => [{ x, y }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at(from.x + from.width / 2, from.y + from.height / 2) });
+      await page.waitForTimeout(450);
+      for (let i = 1; i <= 8; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: at(from.x + from.width / 2 + ((to.x - from.x) * i) / 8, from.y + from.height / 2 + ((to.y - from.y) * i) / 8) });
+        await page.waitForTimeout(30);
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      const after = await names();
+      if (after[last] !== before[0]) throw new Error(`touch drag didn't move the value: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+      await page.waitForTimeout(300);
+    } },
     { key: 'seller-add-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); await page.getByRole('dialog', { name: 'Add a video' }).waitFor({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-publish-video', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a video' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a video' }); await d.getByRole('tab', { name: 'Publish' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },
     { key: 'seller-add-file', path: `/product-manager/q-store-general-my-shop?tab=products`, overlay: true, after: async (page) => { await page.waitForTimeout(700); await editLamp11(page); await page.getByRole('dialog', { name: 'Edit product' }).getByRole('button', { name: 'Add a PDF or file' }).click({ timeout: 10000 }); const d = page.getByRole('dialog', { name: 'Add a file' }); await d.getByRole('tab', { name: 'Publish a PDF' }).click({ timeout: 4000 }); await page.waitForTimeout(400); } },

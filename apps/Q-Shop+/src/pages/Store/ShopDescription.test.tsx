@@ -19,6 +19,20 @@ describe("ShopDescription", () => {
     expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
   });
 
+  it("shows one written with Markdown formatted, its links opening in a new Hub tab, and Show more when long", async () => {
+    sizes(600, 160);
+    const request = vi.fn(async () => true);
+    vi.stubGlobal("qortalRequest", request);
+    render(<ShopDescription text={"## Biohackers Corner\n**Icelandic** supplements\n- Lion's Mane\n- Matcha\n\nOur [blog](qortal://APP/Q-Blog/Biohackers)"} />);
+    expect(screen.getByRole("heading", { level: 2, name: "Biohackers Corner" })).toBeInTheDocument();
+    expect(screen.getByText("Icelandic").tagName).toBe("STRONG");
+    expect(screen.getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Lion's Mane", "Matcha"]);
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: "blog" }));
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: "Show more" })).toBeInTheDocument();
+  });
+
   it("shows a long one's first lines, with Show more and Show less", () => {
     sizes(600, 160);
     render(<ShopDescription text={"A long story about the shop. ".repeat(40)} />);
