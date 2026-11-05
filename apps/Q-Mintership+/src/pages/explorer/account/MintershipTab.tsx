@@ -25,7 +25,11 @@
  * nominations, as Home reads them) or is the Explorer's own (`x…`); none
  * polls.
  */
+import { useMemo } from 'react';
 import { Typography } from '@mui/material';
+import { FALLBACK_MS_PER_BLOCK } from '../../../data/constants';
+import { inviteProposers } from '../../../data/nominations';
+import { waitingWindowBlocks } from '../../../rules/timing';
 import { Section } from '../../../components/common/Section';
 import {
   EmptyState,
@@ -62,7 +66,17 @@ export interface MintershipTabProps {
 }
 
 function Timeline({ story, self }: { story: MinterStory; self: boolean }) {
-  const { history, about, chain } = story;
+  const { history, about, chain, nominations, group } = story;
+  // An invite that answered a nomination says its nominator proposed it.
+  const proposerOf = useMemo(
+    () =>
+      inviteProposers(
+        nominations.data,
+        waitingWindowBlocks(group.data ?? { minimumBlockDelay: 0, maximumBlockDelay: 10_080 }) *
+          (chain.data?.msPerBlock ?? FALLBACK_MS_PER_BLOCK)
+      ),
+    [nominations.data, group.data, chain.data]
+  );
   return (
     <Section title="MINTER timeline" id="explorer-mintership-timeline">
       {history.isError && !history.data ? (
@@ -78,6 +92,7 @@ function Timeline({ story, self }: { story: MinterStory; self: boolean }) {
         <TimelineList
           groupAlike
           events={about}
+          proposerOf={proposerOf}
           nowMs={chain.data?.timestamp ?? Date.now()}
           label="Their MINTER events, newest first"
         />

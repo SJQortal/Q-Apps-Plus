@@ -20,6 +20,7 @@ import {
   pickRound,
   waitingEndsAt,
   type NominationState,
+  nominationAnswered,
 } from '../rules/nomination';
 import { waitingWindowBlocks } from '../rules/timing';
 import { getAccount, getNameOwner, getPrimaryName, primeNames } from './accounts';
@@ -90,6 +91,11 @@ export interface Nomination {
   decision: Decision | null;
   /** The newest decided invite in this round. */
   latestInvite: TxRow | null;
+  /**
+   * Every valid nomination record about them, any round, oldest first: which
+   * one an invite answered (nominationBehind).
+   */
+  records: NominationEntry[];
   hasJoinRequest: boolean;
   hasStoredInvite: boolean;
 }
@@ -303,6 +309,9 @@ async function assemble(
         state === 'waiting' ? waitingEndsAt(publishedAt, now.msPerBlock, windowBlocks) : null,
       decision,
       latestInvite: decided,
+      records: [...(nominationsBy.get(nominee) ?? [])].sort(
+        (a, b) => a.publishedAt - b.publishedAt
+      ),
       hasJoinRequest: facts.hasJoinRequest,
       hasStoredInvite: facts.hasStoredInvite,
     });
@@ -455,6 +464,37 @@ export function loadNominationsFor(
     },
     { ttlMs: 60_000, force: options.force }
   );
+}
+
+/**
+ * The nomination a MINTER invite of `invitee` made at `invitedAt` answered
+ * (rules/nomination.ts nominationAnswered), from a nominations read; null
+ * when it answered none, or the read hasn't come in.
+ */
+export function nominationBehind(
+  nominations: ReadonlyArray<Pick<Nomination, 'nominee' | 'records'>> | undefined,
+  invitee: string | null,
+  invitedAt: number,
+  windowMs: number
+): NominationEntry | null {
+  if (!invitee || !nominations) return null;
+  const nomination = nominations.find((n) => n.nominee === invitee);
+  return nomination ? nominationAnswered(nomination.records, invitedAt, windowMs) : null;
+}
+
+/**
+ * For a timeline: who proposed each MINTER invite, its nominator when it
+ * answered a nomination (nominationBehind); null leaves the invite's creator.
+ */
+export function inviteProposers(
+  nominations: ReadonlyArray<Pick<Nomination, 'nominee' | 'records'>> | undefined,
+  windowMs: number
+): (event: { kind: string; subject: string | null; proposedAt: number }) => string | null {
+  return (event) =>
+    event.kind === 'invite'
+      ? (nominationBehind(nominations, event.subject, event.proposedAt, windowMs)?.publisher
+          .address ?? null)
+      : null;
 }
 
 /** The open nomination for `address`, if any. */

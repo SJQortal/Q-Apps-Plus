@@ -60,7 +60,11 @@ describe('the rule', () => {
   });
 });
 
-async function account(persona: string, tab?: 'connections', setup?: RenderPageOptions['setup']) {
+async function account(
+  persona: string,
+  tab?: 'connections' | 'trades',
+  setup?: RenderPageOptions['setup']
+) {
   const rendered = await renderPage(
     <>
       <AccountPage />
@@ -77,7 +81,7 @@ const tabNames = () =>
     .map((t) => t.textContent);
 
 describe('an account, for a viewer who doesn’t see the detailed parts', () => {
-  it('has no Connections tab, no Compare, and an Overview without its direct links, chart or QORT facts, read for none of them', async () => {
+  it('has no Connections or Trades tab, no Compare, and an Overview without its direct links, chart or QORT facts, read for none of them', async () => {
     await account('learner');
     // The status is read first, then nothing about the detailed parts.
     await screen.findByRole('region', { name: 'At a glance' }, T);
@@ -109,10 +113,18 @@ describe('an account, for a viewer who doesn’t see the detailed parts', () => 
     expect(fetchCallsFor('/transactions/payments/between')).toEqual([]);
   });
 
+  it('a link to Trades opens the Overview, in place, and reads no trades', async () => {
+    await account('learner', 'trades');
+    await waitFor(() => expect(at()).toBe(explorerAccountPath(ADDR.kicked, 'overview')), T);
+    expect(await screen.findByRole('tabpanel', { name: 'Overview' }, T)).toBeVisible();
+    expect(fetchCallsFor('/crosschain/trades')).toEqual([]);
+  });
+
   it('signed out: the same', async () => {
     await account('signedOut');
     await screen.findByRole('region', { name: 'At a glance' }, T);
     expect(tabNames()).not.toContain('Connections');
+    expect(tabNames()).not.toContain('Trades');
   });
 });
 
@@ -124,6 +136,7 @@ describe('an account, for a viewer who sees them', () => {
         'Overview',
         'Connections',
         'Transactions',
+        'Trades',
         'Assets',
         'Minter Profile',
         'Names',

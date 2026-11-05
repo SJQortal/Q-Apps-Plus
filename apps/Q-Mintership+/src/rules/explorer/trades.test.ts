@@ -4,6 +4,8 @@ import { recordedFindings } from './findings';
 import { partsText } from './findings';
 import {
   fillParts,
+  qortPerUnit,
+  summariseAssetTrades,
   tradeParts,
   tradesByAccount,
   tradesCoverage,
@@ -119,5 +121,42 @@ describe('trades among the findings and on the circle', () => {
       assets: [{ asset: 'igorcoin', atomic: 2_700_000_000n }],
     });
     expect(node.split?.out).toMatchObject({ count: 2, qort: 62_900_000_000n, assets: [] });
+  });
+});
+
+describe('an account’s asset trades added up (the Trades tab)', () => {
+  it('by asset: units each way, the QORT for them, most trades first', () => {
+    const summary = summariseAssetTrades([
+      trade({}),
+      trade({
+        gave: QORT('100.00000000'),
+        got: IGOR('4.00000000'),
+        timestamp: Date.UTC(2026, 7, 1),
+      }),
+      trade({ gave: IGOR('2.00000000'), got: QORT('50.00000000'), other: C }),
+      // Two assets: one bought, one sold, no QORT.
+      trade({ gave: GBC('5.00000000'), got: IGOR('1.00000000') }),
+    ]);
+    expect(summary.count).toBe(4);
+    expect(summary.partners).toBe(2);
+    expect(summary.qortPaid).toBe(62_900_000_000n);
+    expect(summary.qortGot).toBe(5_000_000_000n);
+    expect(summary.assets.map((asset) => [asset.asset, asset.count])).toEqual([
+      ['igorcoin', 4],
+      ['GBC', 1],
+    ]);
+    expect(summary.assets[0]).toMatchObject({
+      bought: 2_800_000_000n,
+      sold: 200_000_000n,
+      qortPaid: 62_900_000_000n,
+      qortGot: 5_000_000_000n,
+      last: Date.UTC(2026, 7, 1),
+    });
+    expect(summary.assets[1]).toMatchObject({ sold: 500_000_000n, qortGot: 0n });
+  });
+
+  it('the QORT per unit, to 4 significant digits', () => {
+    expect(qortPerUnit(62_900_000_000n, 2_700_000_000n)).toBe('23.3');
+    expect(qortPerUnit(0n, 100n)).toBeNull();
   });
 });

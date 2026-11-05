@@ -5,6 +5,8 @@ export const TAB_LABEL: Record<ExplorerTab, string> = {
   overview: 'Overview',
   connections: 'Connections',
   transactions: 'Transactions',
+  // Q-Trade and Q-Asset trades (Simon, 2026-10-26: "in between Transactions and Assets").
+  trades: 'Trades',
   // The Q-Assets it holds (Simon, 2026-10-21: "In between transactions and minter profile").
   assets: 'Assets',
   // An account's Minter Profile, its one place (Simon, 2026-10-17: "I want it to be called :
@@ -18,6 +20,7 @@ export const ACCOUNT_TABS: readonly ExplorerTab[] = [
   'overview',
   'connections',
   'transactions',
+  'trades',
   'assets',
   'mintership',
   'names',
@@ -25,10 +28,10 @@ export const ACCOUNT_TABS: readonly ExplorerTab[] = [
 
 /**
  * The tabs for a viewer who doesn't see the Explorer's detailed parts
- * (rules/explorer/access.ts): all but Connections.
+ * (rules/explorer/access.ts): all but Connections and Trades.
  */
 export const BASIC_ACCOUNT_TABS: readonly ExplorerTab[] = ACCOUNT_TABS.filter(
-  (tab) => tab !== 'connections'
+  (tab) => tab !== 'connections' && tab !== 'trades'
 );
 
 /** An AT (automated contract) has transactions only. */

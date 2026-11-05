@@ -183,6 +183,31 @@ export function pickRound<T extends { publishedAt: number }>(
   return { entries: sorted.filter((e) => e.publishedAt <= end), fresh: false };
 }
 
+/** A record's time is its publisher's clock: a few minutes either way of the chain's. */
+const RECORD_CLOCK_SLACK_MS = 10 * 60_000;
+
+/**
+ * The nomination a MINTER invite answered: the first record about its invitee
+ * published in the waiting window before the invite, since a Minter Admin's
+ * first approval answers a waiting nomination. Null when it answered none: a
+ * Minter Admin invited them directly, or Q-Mintership 3's process did. So a
+ * decided invite says who proposed the nomination, not the first approver
+ * (Simon, 2026-10-26: "it should say proposed by iffi").
+ */
+export function nominationAnswered<T extends { publishedAt: number }>(
+  entries: readonly T[],
+  invitedAt: number,
+  windowMs: number
+): T | null {
+  let first: T | null = null;
+  for (const entry of entries) {
+    if (entry.publishedAt > invitedAt + RECORD_CLOCK_SLACK_MS) continue;
+    if (entry.publishedAt < invitedAt - windowMs) continue;
+    if (!first || entry.publishedAt < first.publishedAt) first = entry;
+  }
+  return first;
+}
+
 /** When a waiting nomination drops off the open list (ms). */
 export function waitingEndsAt(
   publishedAt: number,

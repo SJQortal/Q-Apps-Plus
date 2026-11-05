@@ -21,10 +21,13 @@ import { CardSkeleton, EmptyState, ErrorState } from '../../components/common/st
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { loadDecisionLink, type DecisionLink } from '../../data/decisionLink';
+import { nominationBehind } from '../../data/nominations';
+import { waitingWindowBlocks } from '../../rules/timing';
 import { getMembership } from '../../data/group';
 import {
   useAdmins,
   useChainNow,
+  useGroupInfo,
   useDecisions,
   useMembers,
   useNominationsFor,
@@ -231,6 +234,20 @@ function LinkView({
   const session = useSession();
   const admins = useAdmins();
   const chain = useChainNow();
+  const group = useGroupInfo();
+  // A decided invite: the nomination it answered, whose nominator proposed it (DecidedCard).
+  const decidedInvite = link.kind === 'decided' && link.tx.type === 'GROUP_INVITE';
+  const invitee = decidedInvite ? decisionSubject(link.tx) : null;
+  const inviteeNominations = useNominationsFor(invitee);
+  const answered =
+    decidedInvite && group.data && chain.data
+      ? nominationBehind(
+          inviteeNominations.data,
+          invitee,
+          link.tx.timestamp,
+          waitingWindowBlocks(group.data) * chain.data.msPerBlock
+        )
+      : null;
   // The dialogs live here, not with the waiting card: a decision decided while
   // one is open swaps the card out, and the dialog (maybe mid-way) stays.
   const [signTarget, setSignTarget] = useState<SignTarget | null>(null);
@@ -316,12 +333,17 @@ function LinkView({
       <>
         <Section title="Decided" id="decision-card">
           {chain.data ? (
-            <DecidedCard link={link} now={chain.data} adminNames={adminNames} />
+            <DecidedCard
+              link={link}
+              now={chain.data}
+              adminNames={adminNames}
+              nomination={answered}
+            />
           ) : (
             <CardSkeleton lines={4} />
           )}
         </Section>
-        <MoreLinks tx={link.tx} />
+        <MoreLinks tx={link.tx} nominator={answered?.publisher.address ?? null} />
         <Section title="Comments" id="decision-comments">
           <CommentsSection
             target={commentTarget('decision', signature, link.tx.timestamp - 60_000)}

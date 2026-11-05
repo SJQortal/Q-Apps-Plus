@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { IconButton, Tooltip } from '@mui/material';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import { PageBody } from '../../components/layout/PageBody';
+import { SECTION_COLUMN } from '../../components/layout/flowColumns';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { useNavHas } from '../../components/layout/useNavHas';
 import { NominationCard } from '../../components/nomination/NominationCard';
@@ -24,7 +25,7 @@ import { displayName } from '../../utils/format';
 import { AdminRoleAction } from '../decisions/AdminRoleAction';
 import { AdminSection } from './AdminSection';
 import { HowItWorks } from './HowItWorks';
-import { MintingGuide } from './MintingGuide';
+import { MintingGuide, MintingLinks } from './MintingGuide';
 import { LiveStats } from './LiveStats';
 import { MemberSection } from './MemberSection';
 import { AdminHero } from './heroes/AdminHero';
@@ -103,6 +104,7 @@ function StatusView({
           <AdminHero status={status} publicKey={publicKey} needed={needed} />
           <AdminSection publicKey={publicKey} />
           <MemberSection status={status} />
+          <MintingLinks />
         </>
       );
     case 'memberNominator':
@@ -111,6 +113,7 @@ function StatusView({
           <NominatorHero status={status} needed={needed.needed} welcome={welcome} />
           <MemberSection status={status} />
           <AdminRoleAction status={status} layout="section" />
+          <MintingLinks />
         </>
       );
     case 'member':
@@ -118,6 +121,7 @@ function StatusView({
         <>
           <LearnerHero status={status} welcome={welcome} />
           <AdminRoleAction status={status} layout="section" />
+          <MintingLinks />
         </>
       );
     case 'nominated':
@@ -153,6 +157,7 @@ function StatusView({
         <>
           <FormerHero status={status} needed={needed.needed} />
           <HowItWorks needed={needed.needed} />
+          <MintingLinks />
         </>
       );
     case 'newcomer':
@@ -162,6 +167,7 @@ function StatusView({
     <>
       <NewcomerHero status={status} needed={needed.needed} />
       <HowItWorks needed={needed.needed} />
+      <MintingLinks />
     </>
   );
 }
@@ -210,7 +216,8 @@ export default function HomePage() {
           </>
         }
       />
-      <PageBody>
+      {/* Full window on a big screen: its sections side by side. */}
+      <PageBody $flow={SECTION_COLUMN}>
         {status && my.isError ? (
           <ErrorState
             compact
