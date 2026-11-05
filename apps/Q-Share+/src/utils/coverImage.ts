@@ -1,0 +1,225 @@
+/**
+ * Covers for collections and folders: the picked image cut to a centred
+ * square and scaled to at most 600 px (a book's cover: 2:3, at most 400 × 600; a video's: 16:9, at most 960 × 540), as WebP (JPEG where the browser
+ * can't write WebP), well under Core's 500 KB limit for a THUMBNAIL. Done on
+ * the device, so nothing but the small result is published.
+ */
+export const COVER_SIZE = 600;
+/** Core takes THUMBNAILs up to 500 KB; leave room. */
+export const COVER_MAX_BYTES = 450 * 1024;
+const QUALITIES = [0.85, 0.7, 0.55, 0.4];
+
+/** The centred square of a width × height image, and the side to draw it at. */
+export function squareCrop(width: number, height: number, max = COVER_SIZE) {
+  const side = Math.min(width, height);
+  return {
+    sx: Math.round((width - side) / 2),
+    sy: Math.round((height - side) / 2),
+    side,
+    out: Math.max(1, Math.min(side, max)),
+  };
+}
+
+/** A book's cover is 2:3, portrait, at most this wide and high. */
+export const BOOK_COVER_WIDTH = 400;
+export const BOOK_COVER_HEIGHT = 600;
+
+/** A video's cover is a 16:9 still, at most this wide and high. */
+export const FILM_COVER_WIDTH = 960;
+export const FILM_COVER_HEIGHT = 540;
+
+/** A picture for a gallery keeps its own shape, between these, at most this long on its longer side. */
+export const GALLERY_RATIO_MIN = 0.6;
+export const GALLERY_RATIO_MAX = 2.2;
+export const GALLERY_COVER_LONG = 960;
+
+/** The size a gallery's cover is drawn at: the picture's shape, kept within the gallery's, and its longer side at most 960 px. */
+export function galleryCoverSize(width: number, height: number): { width: number; height: number } {
+  const ratio = Math.min(GALLERY_RATIO_MAX, Math.max(GALLERY_RATIO_MIN, width / Math.max(1, height)));
+  // The size the crop to that shape keeps, never grown.
+  const keptWidth = Math.min(width, height * ratio);
+  const scale = Math.min(1, GALLERY_COVER_LONG / Math.max(keptWidth, keptWidth / ratio));
+  return { width: Math.max(1, Math.round(keptWidth * scale)), height: Math.max(1, Math.round((keptWidth / ratio) * scale)) };
+}
+
+/** The centred part of a width × height image in the shape of outWidth × outHeight, and the size to draw it at. */
+function shapeCrop(width: number, height: number, outWidth: number, outHeight: number) {
+  // Wider than the shape loses its sides, taller loses its top and bottom.
+  const wide = width * outHeight > height * outWidth;
+  const sw = wide ? Math.max(1, Math.round((height * outWidth) / outHeight)) : width;
+  const sh = wide ? height : Math.max(1, Math.round((width * outHeight) / outWidth));
+  const scale = Math.min(1, outWidth / sw);
+  return {
+    sx: Math.round((width - sw) / 2),
+    sy: Math.round((height - sh) / 2),
+    sw,
+    sh,
+    outWidth: Math.max(1, Math.round(sw * scale)),
+    outHeight: Math.max(1, Math.round(sh * scale)),
+  };
+}
+
+/** The centred 2:3 portrait of a width × height image, and the size to draw it at. */
+export const bookCrop = (width: number, height: number) => shapeCrop(width, height, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT);
+
+/** The centred 16:9 of a width × height image, and the size to draw it at. */
+export const filmCrop = (width: number, height: number) => shapeCrop(width, height, FILM_COVER_WIDTH, FILM_COVER_HEIGHT);
+
+/** A decoded image ready to draw; `close` frees it. */
+export interface DecodedImage {
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  close: () => void;
+}
+
+/**
+ * Images up to this many pixels are read on the device (a 50 MP photo). A
+ * 200 MP photo would take about 800 MB to decode whole, enough to end a
+ * phone's WebView.
+ */
+export const MAX_SOURCE_PIXELS = 50_000_000;
+
+export class ImageTooBigError extends Error {
+  constructor() {
+    super("The image is too big to read on this device");
+    this.name = "ImageTooBigError";
+  }
+}
+
+/** The image's width and height, known from its header once loaded, before it is decoded. */
+export function imageSize(file: Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    const done = () => URL.revokeObjectURL(url);
+    image.onload = () => {
+      done();
+      resolve({ width: image.naturalWidth, height: image.naturalHeight });
+    };
+    image.onerror = () => {
+      done();
+      reject(new Error("The image can't be read"));
+    };
+    image.src = url;
+  });
+}
+
+/**
+ * The image decoded at the size `fit` picks for its width and height, where
+ * the browser can scale while decoding (so a big photo is never held whole),
+ * else at full size. Rejects with ImageTooBigError past MAX_SOURCE_PIXELS.
+ */
+export async function decodeImage(
+  file: Blob,
+  fit?: (width: number, height: number) => { width: number; height: number }
+): Promise<DecodedImage> {
+  const size = await imageSize(file);
+  if (size.width * size.height > MAX_SOURCE_PIXELS) throw new ImageTooBigError();
+  if (typeof createImageBitmap === "function") {
+    const target = fit?.(size.width, size.height);
+    const bitmap = target
+      ? await createImageBitmap(file, { resizeWidth: target.width, resizeHeight: target.height, resizeQuality: "high" }).catch(
+          () => createImageBitmap(file)
+        )
+      : await createImageBitmap(file);
+    return { source: bitmap, width: bitmap.width, height: bitmap.height, close: () => bitmap.close() };
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    return { source: image, width: image.naturalWidth, height: image.naturalHeight, close: () => {} };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function toBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
+}
+
+/**
+ * The canvas as a WebP (JPEG where the browser can't write WebP) of at most
+ * `maxBytes`, trying lower qualities in turn; named `<base>.webp` or `.jpg`.
+ */
+export async function encodeCanvas(canvas: HTMLCanvasElement, base: string, maxBytes: number): Promise<File> {
+  for (const quality of QUALITIES) {
+    let blob = await toBlob(canvas, "image/webp", quality);
+    if (!blob || blob.type !== "image/webp") blob = await toBlob(canvas, "image/jpeg", quality);
+    if (!blob) break;
+    if (blob.size <= maxBytes) {
+      const extension = blob.type === "image/webp" ? "webp" : "jpg";
+      return new File([blob], `${base}.${extension}`, { type: blob.type });
+    }
+  }
+  throw new Error("The image is too large");
+}
+
+/** A canvas of `width` × `height` with `draw` done on it. */
+export function drawnCanvas(width: number, height: number, draw: (context: CanvasRenderingContext2D) => void): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("No canvas");
+  context.imageSmoothingQuality = "high";
+  draw(context);
+  return canvas;
+}
+
+/** The cover file for `file`; rejects when the image can't be read or made small enough. */
+export async function makeCoverFile(file: Blob): Promise<File> {
+  // Decoded with its shorter side at the cover size; the square is cut below.
+  const image = await decodeImage(file, (width, height) => {
+    const scale = Math.min(1, COVER_SIZE / Math.min(width, height));
+    return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+  });
+  try {
+    if (!image.width || !image.height) throw new Error("The image is empty");
+    const { sx, sy, side, out } = squareCrop(image.width, image.height);
+    const canvas = drawnCanvas(out, out, (context) => context.drawImage(image.source, sx, sy, side, side, 0, 0, out, out));
+    return await encodeCanvas(canvas, "cover", COVER_MAX_BYTES);
+  } finally {
+    image.close();
+  }
+}
+
+/** A cover of outWidth × outHeight's shape for `file`, at most that size. */
+async function makeShapedCoverFile(file: Blob, outWidth: number, outHeight: number, base: string): Promise<File> {
+  // Decoded with the side the crop keeps whole at the cover's size.
+  const image = await decodeImage(file, (width, height) => {
+    const wide = width * outHeight > height * outWidth;
+    const scale = Math.min(1, wide ? outHeight / height : outWidth / width);
+    return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+  });
+  try {
+    if (!image.width || !image.height) throw new Error("The image is empty");
+    const { sx, sy, sw, sh, outWidth: w, outHeight: h } = shapeCrop(image.width, image.height, outWidth, outHeight);
+    const canvas = drawnCanvas(w, h, (context) => context.drawImage(image.source, sx, sy, sw, sh, 0, 0, w, h));
+    return await encodeCanvas(canvas, base, COVER_MAX_BYTES);
+  } finally {
+    image.close();
+  }
+}
+
+/** A book's cover file for `file`: its centred 2:3 portrait, at most 400 × 600. */
+export function makeBookCoverFile(file: Blob): Promise<File> {
+  return makeShapedCoverFile(file, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT, "book-cover");
+}
+
+/** A gallery's cover file for `file`: its own shape (within the gallery's), at most 960 px on its longer side. */
+export async function makeGalleryCoverFile(file: Blob): Promise<File> {
+  const { width, height } = await imageSize(file);
+  if (width * height > MAX_SOURCE_PIXELS) throw new ImageTooBigError();
+  const out = galleryCoverSize(width, height);
+  return makeShapedCoverFile(file, out.width, out.height, "gallery-cover");
+}
+
+/** A video's cover file for `file`: its centred 16:9, at most 960 × 540, or as a vertical poster its centred 2:3, at most 400 × 600. */
+export function makeFilmCoverFile(file: Blob, shape: "landscape" | "portrait" = "landscape"): Promise<File> {
+  return shape === "portrait"
+    ? makeShapedCoverFile(file, BOOK_COVER_WIDTH, BOOK_COVER_HEIGHT, "video-cover")
+    : makeShapedCoverFile(file, FILM_COVER_WIDTH, FILM_COVER_HEIGHT, "video-cover");
+}

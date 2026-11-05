@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -41,6 +41,8 @@ import { PHONE_MEDIA, usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { BottomSheet } from "../../components/common/mobile/BottomSheet";
 import { NameAvatar } from "../../components/common/NameAvatar";
 import { NameSwitcher } from "../../components/common/NameSwitcher";
+import { HubAlertsSetting } from "../../components/common/Notifications/HubAlertsSetting";
+import { useLocation } from "react-router-dom";
 
 const Page = styled("div")(({ theme }) => ({
   width: "100%",
@@ -113,6 +115,11 @@ export const Settings = () => {
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const settings = useAppSettings();
+  const { hash } = useLocation();
+  // "Notification settings" in the bell's list opens /settings#notifications.
+  useEffect(() => {
+    if (hash.length > 1) document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
+  }, [hash]);
   const [hiddenInput, setHiddenInput] = useState("");
   const addHidden = () => {
     const names = hiddenInput.split(",").map((n) => n.trim()).filter(Boolean);
@@ -171,6 +178,7 @@ export const Settings = () => {
         hiddenNames: snap.hiddenNames,
         followingFeed: snap.followingFeed,
         listView: snap.listView,
+        collectionView: snap.collectionView,
       });
       if (snap.uiTheme) setUiTheme(snap.uiTheme);
       setSyncNote(snap.updatedAt ? `Restored the settings saved ${formatDate(snap.updatedAt)}.` : "Settings restored.");
@@ -286,7 +294,7 @@ export const Settings = () => {
               Layout
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Shares on Home, profiles and collections as rows or as a grid of cards.
+              Shares on Home and profiles as rows or as a grid of cards.
             </Typography>
           </Box>
           {/* The same setting as the toggle above each list, with its words spelled out. */}
@@ -296,6 +304,43 @@ export const Settings = () => {
             value={settings.listView}
             onChange={(_e, next: ListView | null) => next && writeSettings({ listView: next })}
             aria-labelledby="layout-title"
+            sx={{
+              "& .MuiToggleButton-root": {
+                gap: 0.75,
+                minHeight: 40,
+                px: 1.5,
+                fontSize: 14,
+                textTransform: "none",
+                [`@media ${PHONE_MEDIA}`]: { minHeight: 44 },
+              },
+            }}
+          >
+            <ToggleButton value="list">
+              <ViewAgendaOutlinedIcon fontSize="small" />
+              List
+            </ToggleButton>
+            <ToggleButton value="grid">
+              <GridViewOutlinedIcon fontSize="small" />
+              Grid
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Row>
+        <Row sx={{ mt: 1.5 }}>
+          <Box>
+            <Typography id="collection-layout-title" sx={{ fontWeight: 700 }}>
+              Collections layout
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Shares in collections and folders: a grid with their thumbnails, or rows.
+            </Typography>
+          </Box>
+          {/* The same setting as the toggle above each list, with its words spelled out. */}
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={settings.collectionView}
+            onChange={(_e, next: ListView | null) => next && writeSettings({ collectionView: next })}
+            aria-labelledby="collection-layout-title"
             sx={{
               "& .MuiToggleButton-root": {
                 gap: 0.75,
@@ -428,6 +473,45 @@ export const Settings = () => {
             Manage
           </Button>
         </Row>
+      </Section>
+
+      <Section
+        id="notifications"
+        aria-labelledby="notifications-section-title"
+        sx={{ scrollMarginTop: "calc(var(--qshare-header-offset, 0px) + 64px)" }}
+      >
+        <SectionTitle id="notifications-section-title">Notifications</SectionTitle>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+          The bell at the top lists them. Q-Share+ checks while it is open: every couple of minutes while you use
+          it, less often when nothing happens, and as soon as you come back to it.
+        </Typography>
+        <Row>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Comments and replies</Typography>
+            <Typography variant="body2" color="text.secondary">
+              When someone comments on one of your shares or replies to your comment, in Q-Share+ or in Q-Share.
+            </Typography>
+          </Box>
+          <Switch
+            checked={settings.notifyComments}
+            onChange={(e) => writeSettings({ notifyComments: e.target.checked })}
+            slotProps={{ input: { "aria-label": "Comments and replies" } }}
+          />
+        </Row>
+        <Row>
+          <Box>
+            <Typography sx={{ fontWeight: 700 }}>Added to a collection</Typography>
+            <Typography variant="body2" color="text.secondary">
+              When someone adds one of your shares to their collection, or copies one of your collections, in Q-Share+.
+            </Typography>
+          </Box>
+          <Switch
+            checked={settings.notifyCollections}
+            onChange={(e) => writeSettings({ notifyCollections: e.target.checked })}
+            slotProps={{ input: { "aria-label": "Added to a collection" } }}
+          />
+        </Row>
+        <HubAlertsSetting row={Row} />
       </Section>
 
       <Section>

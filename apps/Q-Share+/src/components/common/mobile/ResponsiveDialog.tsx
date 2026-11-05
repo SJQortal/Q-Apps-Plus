@@ -17,6 +17,10 @@ export interface ResponsiveDialogProps {
   keepMounted?: boolean;
   /** Let clicks outside / Escape close it (default true). */
   dismissible?: boolean;
+  /** Stays put above the scrolling content, under the title (e.g. a search field). */
+  header?: ReactNode;
+  /** On wider screens, the full height available, so the dialog doesn't change size as its content does. */
+  tall?: boolean;
 }
 
 /**
@@ -34,6 +38,8 @@ export function ResponsiveDialog({
   maxWidth = "sm",
   keepMounted,
   dismissible = true,
+  header,
+  tall,
 }: ResponsiveDialogProps) {
   const phone = usePhoneLayout();
   // Listeners only while a phone dialog is open: closed dialogs cost nothing.
@@ -89,6 +95,9 @@ export function ResponsiveDialog({
             {title}
           </Typography>
         </Box>
+        {header ? (
+          <Box sx={{ flexShrink: 0, px: 2, py: 1.5, borderBottom: 1, borderColor: "divider" }}>{header}</Box>
+        ) : null}
         <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", overscrollBehavior: "contain", p: 2 }}>{children}</Box>
         {actions ? (
           <Box
@@ -114,7 +123,15 @@ export function ResponsiveDialog({
   }
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth={maxWidth} keepMounted={keepMounted} aria-labelledby={titleId}>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      fullWidth
+      maxWidth={maxWidth}
+      keepMounted={keepMounted}
+      aria-labelledby={titleId}
+      slotProps={tall ? { paper: { sx: { height: "min(760px, calc(100% - 64px))" } } } : undefined}
+    >
       <DialogTitle id={titleId} sx={{ display: "flex", alignItems: "center", gap: 1, pr: 1 }}>
         <Box component="span" sx={{ flex: 1, minWidth: 0, fontWeight: 700 }}>
           {title}
@@ -123,6 +140,7 @@ export function ResponsiveDialog({
           <CloseIcon />
         </IconButton>
       </DialogTitle>
+      {header ? <Box sx={{ px: 3, pb: 2 }}>{header}</Box> : null}
       <DialogContent dividers>{children}</DialogContent>
       {actions ? <DialogActions sx={{ p: 2 }}>{actions}</DialogActions> : null}
     </Dialog>

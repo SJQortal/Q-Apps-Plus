@@ -42,6 +42,12 @@ interface QortalRequestOptions {
   location?: { service: string; name: string; identifier?: string }
   /** GET_QDN_RESOURCE_STATUS: ask the node to build a downloaded resource. */
   build?: boolean
+  /** NOTIFICATION_ADD: Hub alert rules (utils/notifications/hubAlerts.ts). */
+  notifications?: unknown[]
+  /** NOTIFICATION_REMOVE / NOTIFICATION_MARK_SEEN. */
+  notificationIds?: Array<string | { notificationId: string; identifier?: string }>
+  /** SESSION_PERMISSIONS: requests Hub grants for the rest of the tab's session. */
+  permissions?: string[]
 }
 
 declare function qortalRequest(options: QortalRequestOptions): Promise<any>

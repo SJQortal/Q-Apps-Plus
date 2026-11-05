@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from "../test/setup";
-import { resourceProperties, resourceStatus } from "./qdnResource";
+import { resourceProperties, resourceStatus, resourceStatusDirect } from "./qdnResource";
 
 const plain = { service: "FILE", name: "Simon James", identifier: "qshare_file_readme_0284a8" };
 const slashed = { service: "FILE", name: "Vallot-/8/", identifier: "qshare_file_x_f1" };
@@ -30,5 +30,15 @@ describe("resource status and properties", () => {
   it("rejects a Core error body, as q-apps.js does", async () => {
     mockFetch("/arbitrary/resource/status/", { error: 401, message: "Name not found" });
     await expect(resourceStatus(slashed)).rejects.toMatchObject({ error: 401 });
+  });
+
+  it("refuses a service that isn't one, without asking the node", async () => {
+    // A service read from someone's share JSON, made to leave /arbitrary.
+    const odd = { ...plain, service: "../../../admin/stop?" };
+    await expect(resourceStatusDirect(odd)).rejects.toThrow(/Not a QDN service/);
+    await expect(resourceStatus({ ...odd, name: "Vallot-/8/" })).rejects.toThrow(/Not a QDN service/);
+    await expect(resourceProperties({ ...odd, name: "Vallot-/8/" })).rejects.toThrow(/Not a QDN service/);
+    expect(fetchCallsMatching("/admin")).toEqual([]);
+    expect(fetchCallsMatching("/arbitrary/resource/")).toEqual([]);
   });
 });

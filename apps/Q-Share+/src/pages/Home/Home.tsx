@@ -1,11 +1,12 @@
 import { ClearFieldButton } from "../../components/common/ClearFieldButton";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Box,
   Button,
   Chip,
   CircularProgress,
+  Divider,
   Skeleton,
   TextField,
   ToggleButton,
@@ -13,6 +14,7 @@ import {
   Typography,
 } from "@mui/material";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import TravelExploreOutlinedIcon from "@mui/icons-material/TravelExploreOutlined";
 import VisibilityOffOutlinedIcon from "@mui/icons-material/VisibilityOffOutlined";
 import { useNavigate } from "react-router-dom";
 import { BottomSheet } from "../../components/common/mobile/BottomSheet";
@@ -34,8 +36,14 @@ import { QDN_PAGE } from "../../utils/qdnSearch.ts";
 import { isNameHidden, useAppSettings } from "../../utils/settings.ts";
 import { requestOpenPublish } from "../../constants/events.ts";
 
+/** Read by screen readers, not shown. */
+const visuallyHidden = { position: "absolute", width: "1px", height: "1px", margin: "-1px", p: 0, border: 0, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
+
 export type { SortOrder } from "../../utils/settings.ts";
 import type { SortOrder } from "../../utils/settings.ts";
+
+// Loads with the first Explore collections, not with Home.
+const ExploreCollectionsDialog = lazy(() => import("../Collections/ExploreCollectionsDialog.tsx"));
 
 /** The filters a search ran with; the form fields may have changed since. */
 interface AppliedFilters {
@@ -99,6 +107,9 @@ export const Home = () => {
   const [sort, setSort] = useState<SortOrder>(restored?.sort ?? settings.defaultSort);
   const [following, setFollowing] = useState(restored?.following ?? false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Explore collections: mounted from its first opening, so its search and list stay while Home does.
+  const [exploreOpen, setExploreOpen] = useState(false);
+  const [exploreMounted, setExploreMounted] = useState(false);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   // A next page failed: the rows stay, with a Retry for that page.
@@ -285,6 +296,23 @@ export const Home = () => {
     </ToggleButtonGroup>
   );
 
+  // Other people's collections, in a window of their own: under the filters, or on phones first in the row above the list.
+  const exploreButton = (
+    <Button
+      variant="outlined"
+      fullWidth={!phone}
+      size={phone ? "small" : "medium"}
+      startIcon={<TravelExploreOutlinedIcon />}
+      onClick={() => {
+        setExploreMounted(true);
+        setExploreOpen(true);
+      }}
+      sx={{ minHeight: 44, ...(phone ? { flex: "0 1 auto", minWidth: 0, whiteSpace: "nowrap" } : {}) }}
+    >
+      Explore collections
+    </Button>
+  );
+
   const filterForm = (
     <Box
       component="form"
@@ -429,8 +457,15 @@ export const Home = () => {
             Filters
           </Typography>
           {filterForm}
+          <Divider />
+          {exploreButton}
         </FiltersRail>
       )}
+      {exploreMounted ? (
+        <Suspense fallback={null}>
+          <ExploreCollectionsDialog open={exploreOpen} onClose={() => setExploreOpen(false)} />
+        </Suspense>
+      ) : null}
 
       <Box ref={listColumn} sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 1.5 }}>
         <Box
@@ -444,9 +479,15 @@ export const Home = () => {
             "& .MuiChip-root": phone ? { minHeight: 44, fontSize: 14, px: 0.5 } : { minHeight: 36 },
           }}
         >
-          <Typography component="h1" variant="h6" sx={{ fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}>
+          {/* Phones: Explore collections stands where the heading was; the heading stays for screen readers, and Filters on says when it isn't the latest shares. */}
+          <Typography
+            component="h1"
+            variant="h6"
+            sx={phone ? visuallyHidden : { fontWeight: 700, flex: "1 1 160px", minWidth: 0, wordBreak: "break-word" }}
+          >
             {heading}
           </Typography>
+          {phone && exploreButton}
           {phone && (
             <Button
               variant={activeFilters ? "contained" : "outlined"}

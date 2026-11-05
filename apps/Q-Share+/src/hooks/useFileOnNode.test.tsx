@@ -32,7 +32,7 @@ function renderProbe(file: NodeFileRef, { ensure = true } = {}) {
   const downloadVideo = vi.fn();
   const retryDownload = vi.fn();
   const view = renderWithProviders(
-    <MyContext.Provider value={{ downloadVideo, retryDownload }}>
+    <MyContext.Provider value={{ downloadVideo, retryDownload, cancelDownload: vi.fn() }}>
       <Probe file={file} />
     </MyContext.Provider>
   );

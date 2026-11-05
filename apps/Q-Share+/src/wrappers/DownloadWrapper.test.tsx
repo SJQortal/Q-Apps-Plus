@@ -16,6 +16,11 @@ function StartButton({ target }: { target: typeof ref }) {
   return <button onClick={() => downloadVideo({ ...target, properties: { ...target, filename: "big.iso" } })}>Start</button>;
 }
 
+function CancelButton({ target }: { target: typeof ref }) {
+  const { cancelDownload } = useContext(MyContext);
+  return <button onClick={() => cancelDownload(target.identifier)}>Cancel</button>;
+}
+
 function RetryButton({ target }: { target: typeof ref }) {
   const { retryDownload } = useContext(MyContext);
   return <button onClick={() => retryDownload(target)}>Retry</button>;
@@ -54,6 +59,30 @@ describe("DownloadWrapper", () => {
   afterEach(() => {
     vi.useRealTimers();
     delete (document as any).visibilityState;
+  });
+
+  it("cancelling stops the polling and drops the entry, but keeps a file that arrived", async () => {
+    const view = renderWithProviders(
+      <DownloadWrapper>
+        <StartButton target={ref} />
+        <CancelButton target={ref} />
+      </DownloadWrapper>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await wait(POLL_MS);
+    expect(pollCalls().length).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(statusOf()).toBeUndefined();
+    expect(store.getState().global.downloads[ref.identifier]).toBeUndefined();
+    await wait(POLL_MS * 3);
+    expect(pollCalls().length).toBe(1);
+
+    mockQortalAction("GET_QDN_RESOURCE_STATUS", { status: "READY" });
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await wait(POLL_MS);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(statusOf()).toBe("READY");
+    view.unmount();
   });
 
   it("asks the node for the file once and starts polling, with no unused URL call", async () => {

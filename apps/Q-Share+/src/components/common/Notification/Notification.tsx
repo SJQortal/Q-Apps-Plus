@@ -57,7 +57,9 @@ const Notification = () => {
           padding: '0 calc(12px + env(safe-area-inset-right, 0px)) 0 calc(12px + env(safe-area-inset-left, 0px))',
         }
       : {}),
-  } as CSSProperties
+    // Above the playlist player.
+    ...(!phone && bottomChrome ? { bottom: `calc(${bottomChrome + 16}px + env(safe-area-inset-bottom, 0px))` } : {}),
+  } as unknown as CSSProperties
 
   return (
     <ToastContainer

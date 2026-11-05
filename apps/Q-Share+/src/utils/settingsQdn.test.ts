@@ -25,6 +25,9 @@ describe("settings sync to QDN", () => {
       hiddenNames: ["spammer", "Bob"],
       followingFeed: true,
       listView: "list",
+      collectionView: "grid",
+      notifyComments: true,
+      notifyCollections: true,
       uiTheme: "black",
       updatedAt: 1700000000000,
     });

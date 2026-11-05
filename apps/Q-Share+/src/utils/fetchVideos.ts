@@ -61,10 +61,12 @@ export interface ShareRow {
  * is never fetched again. Q-Share bodies carry none of these fields.
  */
 export function shareFromBody<Row extends ShareRow>(row: Row, body: Record<string, unknown>) {
-  const { deleted: _deleted, isValid: _isValid, ...fields } = body
+  const { deleted: _deleted, isValid: _isValid, title, ...fields } = body
   return {
     ...row,
     ...fields,
+    // Drawn as text everywhere, so anything else in it would stop the page.
+    ...(typeof title === 'string' ? { title } : {}),
     id: row.id,
     user: row.user,
     created: row.created,

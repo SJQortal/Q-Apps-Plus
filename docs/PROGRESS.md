@@ -8,8 +8,8 @@ Each app moves through the stages in docs/RELEASE.md: **build** (local, the roun
 
 | App | Stage | Branch · PR | Rounds done | Published as + | Upstream PR | Next |
 |---|---|---|---|---|---|---|
-| Q-Share+ | upstream | merged (#7); 1.0.1 in #17 (`Desktop/Q-Apps+-QShare`) | 1–5, release | **1.0.0** (2026-09-30) | [Qortal/q-share#9](https://github.com/Qortal/q-share/pull/9) (2.0.0, 2026-10-07) | answer review on #9; 1.0.1 notifications (#17), publish, then a follow-up PR |
-| Q-Mail+ | upstream | merged (#15); 1.0.1 and 1.0.2 merged (#21) (`Desktop/Q-Apps+-QMail`) | 1–5, release | **1.0.2** (2026-10-12, `a0af8e4b`) | [Qortal/q-mail#7](https://github.com/Qortal/q-mail/pull/7) (4.0.0, 2026-10-12) | answer review on #7; drafts in the published mail state (an idea from community testing) |
+| Q-Share+ | upstream | merged (#7); 1.0.1 in #17 (`Desktop/Q-Apps+-QShare`) | 1–5, release | **1.0.0** (2026-09-30) | [Qortal/q-share#9](https://github.com/Qortal/q-share/pull/9) (2.0.0, merged) | 1.0.1 also keeps a dark Hub's mode after a refresh (`repo/hub-mode-after-reload`); notifications (#17) join 1.0.1; publish, then one follow-up PR once more fixes gather (Simon, 2026-10-15) |
+| Q-Mail+ | upstream | merged (#15); 1.0.1 and 1.0.2 merged (#21) (`Desktop/Q-Apps+-QMail`) | 1–5, release | **1.0.2** (2026-10-12, `a0af8e4b`) | [Qortal/q-mail#7](https://github.com/Qortal/q-mail/pull/7) (4.0.0, merged 2026-10-13) | 1.0.3 keeps a dark Hub's mode after a refresh (`repo/hub-mode-after-reload`), not published; one follow-up PR once more fixes gather (Simon, 2026-10-15); drafts in the published mail state (an idea from community testing) |
 | Names+ | build | `names-plus/pass-1` · #5 | 1 checkpoint (29 Sep cloud night) | – | – | rounds 1–4 |
 | Q-Tube+ | build | `q-tube-plus/pass-1` · #6 | 1 checkpoint | – | – | rounds 1–4 (keep the vendored qapp-core 1.0.80) |
 | Q-Shop+ | build | `q-shop-plus/pass-1` · #8 | 1 checkpoint | – | – | replace the audio player that blanks React 19, then rounds 1–4 |

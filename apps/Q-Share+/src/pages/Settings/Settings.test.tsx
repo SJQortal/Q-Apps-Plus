@@ -57,6 +57,7 @@ describe('Settings → Sync', () => {
       followingFeed: false,
       hiddenNames: ['x'],
       listView: 'grid',
+      collectionView: 'list',
       uiTheme: 'black',
       updatedAt: 1700000000000,
     });
@@ -67,7 +68,11 @@ describe('Settings → Sync', () => {
     expect(readSettings().followingFeed).toBe(false);
     expect(readSettings().hiddenNames).toEqual(['x']);
     expect(readSettings().listView).toBe('grid');
-    expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+    expect(readSettings().collectionView).toBe('list');
+    expect(within(screen.getByRole('group', { name: 'Layout' })).getByRole('button', { name: 'Grid' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
     expect(JSON.parse(localStorage.getItem('qshareplus-ui-theme') || '""')).toBe('black');
     expect(await screen.findByRole('status')).toHaveTextContent(/Restored the settings saved/);
 
@@ -123,7 +128,48 @@ describe('Settings → Layout', () => {
   it('shows a choice made elsewhere (the toggle on a list)', () => {
     writeSettings({ listView: 'grid' });
     renderWithProviders(<Settings />);
-    expect(screen.getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(screen.getByRole('group', { name: 'Layout' })).getByRole('button', { name: 'Grid' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  it('keeps a layout of its own for collections, a grid unless chosen otherwise', () => {
+    renderWithProviders(<Settings />);
+    const collections = screen.getByRole('group', { name: 'Collections layout' });
+    expect(within(collections).getByRole('button', { name: 'Grid' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(collections).getByRole('button', { name: 'List' }));
+    expect(readSettings().collectionView).toBe('list');
+    expect(readSettings().listView).toBe('list');
+  });
+});
+
+describe('Settings → Notifications', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    resetSettingsCache();
+  });
+
+  it('switches comment and collection notifications on and off', () => {
+    renderWithProviders(<Settings />);
+    const section = screen.getByRole('region', { name: 'Notifications' });
+    const comments = within(section).getByRole('switch', { name: 'Comments and replies' });
+    const collections = within(section).getByRole('switch', { name: 'Added to a collection' });
+    expect(comments).toBeChecked();
+    expect(collections).toBeChecked();
+    fireEvent.click(comments);
+    expect(readSettings().notifyComments).toBe(false);
+    fireEvent.click(collections);
+    expect(readSettings().notifyCollections).toBe(false);
+  });
+
+  it('scrolls to the section from the link in the notification list', () => {
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id);
+    };
+    renderWithProviders(<Settings />, { initialEntries: ['/settings#notifications'] });
+    expect(scrolled).toEqual(['notifications']);
   });
 });
 

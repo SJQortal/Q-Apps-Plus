@@ -187,7 +187,7 @@ export default function FileElement({ fileInfo, jsonId, disable }: FileElementPr
   const phone = usePhoneLayout();
   const { phase, percent, statusText, start, retry, save, saving } = useFileDownload(fileInfo, jsonId);
   const label = fileInfo.filename || "file";
-  const bigButton = { minHeight: phone ? 48 : 40, width: phone ? "100%" : "auto" };
+  const bigButton = { minHeight: phone ? 44 : 36, width: phone ? "100%" : "auto", whiteSpace: "nowrap" };
 
   if (phase === "idle") {
     return (
@@ -233,7 +233,7 @@ export default function FileElement({ fileInfo, jsonId, disable }: FileElementPr
   }
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, width: "100%" }}>
+    <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75, width: "100%", minWidth: phone ? 0 : 200 }}>
       <LinearProgress
         variant={phase === "building" ? "indeterminate" : "determinate"}
         value={percent}

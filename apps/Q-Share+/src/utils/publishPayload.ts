@@ -10,6 +10,12 @@
  *   (carried over from Q-Tube; it is stored data, so it stays);
  * - QDN `title` ≤ 50 chars, `description` = `**cat:N;sub:N**` + the first 150
  *   chars of the plain-text description, `tag1: qshare_file_`.
+ *
+ * Since 1.0.1 a share may have a thumbnail (additive): a THUMBNAIL
+ * `qshare_thumb_<slug>_<uid>` under the same name, published before the
+ * DOCUMENT, whose JSON then names it in `thumbnail`. The original app never
+ * reads it (it searches `service=DOCUMENT`), and a share without one is
+ * stored exactly as before.
  */
 import ShortUniqueId from "short-unique-id";
 import { QSHARE_FILE_BASE } from "../constants/Identifiers";
@@ -30,6 +36,28 @@ export interface FileRef {
 
 export type ShareFileInput = { file: File } | { existing: FileRef };
 
+export const THUMBNAIL_BASE = "qshare_thumb_";
+export const THUMBNAIL_FILENAME = "thumbnail.webp";
+
+/** A share's thumbnail, as its JSON names it. */
+export interface ShareThumbnail {
+  service: "THUMBNAIL";
+  name: string;
+  identifier: string;
+}
+
+/** A new image to publish as the thumbnail, or the one the share already has. */
+export type ThumbnailInput = { file: File } | { existing: ShareThumbnail };
+
+/** The thumbnail a share's JSON names, or null when it has none (or the field isn't one). */
+export function shareThumbnail(body: unknown): ShareThumbnail | null {
+  const raw = (body as { thumbnail?: unknown } | null)?.thumbnail as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== "object") return null;
+  if (raw.service !== "THUMBNAIL" || typeof raw.name !== "string" || !raw.name) return null;
+  if (typeof raw.identifier !== "string" || !raw.identifier || raw.identifier.length > 64) return null;
+  return { service: "THUMBNAIL", name: raw.name, identifier: raw.identifier };
+}
+
 /** What CategoryList.categoriesToObject() returns; empty strings mean "not set". */
 export interface CategoriesObject {
   category?: string;
@@ -44,6 +72,7 @@ export interface ShareMetadata extends CategoriesObject {
   htmlDescription: string;
   commentsId: string;
   files: FileRef[];
+  thumbnail?: ShareThumbnail;
 }
 
 interface PublishResourceBase {
@@ -66,7 +95,12 @@ export interface DocumentPublishResource extends PublishResourceBase {
   data64: string;
 }
 
-export type PublishResource = FilePublishResource | DocumentPublishResource;
+export interface ThumbnailPublishResource extends PublishResourceBase {
+  service: "THUMBNAIL";
+  file: File;
+}
+
+export type PublishResource = FilePublishResource | ThumbnailPublishResource | DocumentPublishResource;
 
 export interface MultiplePublishRequest {
   action: "PUBLISH_MULTIPLE_QDN_RESOURCES";
@@ -84,6 +118,8 @@ export interface BuildSharePublishArgs {
   /** `{ category, subcategory, subcategory2 }` from CategoryList.categoriesToObject(). */
   categoriesObject: CategoriesObject;
   files: ShareFileInput[];
+  /** The share's thumbnail: a new image to publish, the one it has, or none. */
+  thumbnail?: ThumbnailInput | null;
   /** Set when updating an existing share: its identifier, version and comments id are kept. */
   edit?: { identifier: string; version: number; commentsId: string };
   /** Id generator, 6 alphanumeric chars by default; tests inject a fixed one. */
@@ -91,7 +127,7 @@ export interface BuildSharePublishArgs {
 }
 
 export interface SharePublish {
-  /** FILE resources first, in the order given, then the DOCUMENT. */
+  /** FILE resources first, in the order given, then a new THUMBNAIL, then the DOCUMENT. */
   resources: PublishResource[];
   fileObject: ShareMetadata;
   metadataIdentifier: string;
@@ -137,6 +173,7 @@ export async function buildSharePublish({
   categoryFetchString,
   categoriesObject,
   files,
+  thumbnail,
   edit,
   uid = () => defaultUid.randomUUID(),
 }: BuildSharePublishArgs): Promise<SharePublish> {
@@ -148,6 +185,18 @@ export async function buildSharePublish({
 
   const resources: PublishResource[] = [];
   const fileReferences: FileRef[] = [];
+  // A share holds up to 300 files: no two may get the same identifier.
+  const used = new Set(files.flatMap((input) => ("existing" in input ? [input.existing.identifier] : [])));
+  const fileIdentifier = () => {
+    for (let tries = 0; tries < 20; tries++) {
+      const identifier = `${QSHARE_FILE_BASE}${slug}_${uid()}`;
+      if (!used.has(identifier)) {
+        used.add(identifier);
+        return identifier;
+      }
+    }
+    throw new Error("Could not make a unique identifier for every file");
+  };
 
   for (const input of files) {
     if ("existing" in input) {
@@ -155,7 +204,7 @@ export async function buildSharePublish({
       continue;
     }
     const { file } = input;
-    const identifier = `${QSHARE_FILE_BASE}${slug}_${uid()}`;
+    const identifier = fileIdentifier();
     resources.push({
       action: "PUBLISH_QDN_RESOURCE",
       name,
@@ -191,6 +240,25 @@ export async function buildSharePublish({
     commentsId = `${QSHARE_FILE_BASE}_cm_${idMeta}`;
   }
 
+  let thumbnailRef: ShareThumbnail | undefined;
+  if (thumbnail && "existing" in thumbnail) {
+    thumbnailRef = thumbnail.existing;
+  } else if (thumbnail && "file" in thumbnail) {
+    const identifier = `${THUMBNAIL_BASE}${slug}_${uid()}`;
+    thumbnailRef = { service: "THUMBNAIL", name, identifier };
+    resources.push({
+      action: "PUBLISH_QDN_RESOURCE",
+      name,
+      service: "THUMBNAIL",
+      file: thumbnail.file,
+      title: qdnTitle,
+      description,
+      identifier,
+      filename: thumbnail.file.name || THUMBNAIL_FILENAME,
+      tag1: THUMBNAIL_BASE,
+    });
+  }
+
   const fileObject: ShareMetadata = {
     title,
     version,
@@ -199,6 +267,7 @@ export async function buildSharePublish({
     commentsId,
     ...categoriesObject,
     files: fileReferences,
+    ...(thumbnailRef ? { thumbnail: thumbnailRef } : {}),
   };
 
   resources.push({
@@ -217,6 +286,54 @@ export async function buildSharePublish({
 }
 
 /** The request MultiplePublish sends through qortalRequestWithTimeout. */
+/** What a resource is republished as to delete it: one byte, "D" (base64 "RA=="), as Torq and qapp-core do. */
+export const DELETED_DATA64 = "RA==";
+export const DELETED_TITLE = "deleted";
+
+export interface ShareRemovalArgs {
+  /** The publishing name; only its own resources can be replaced. */
+  name: string;
+  /** The share's DOCUMENT identifier. */
+  identifier: string;
+  files: Array<{ filename?: string; identifier?: string; name?: string }>;
+  thumbnail?: ShareThumbnail | null;
+  /** Identifiers already replaced by an earlier try, not sent (and paid for) again. */
+  done?: ReadonlySet<string>;
+}
+
+/**
+ * Removing a share from QDN. QDN keeps no way to erase a resource, so each one
+ * is republished as a one-byte delete marker: nodes then drop the old data,
+ * and lists and share pages treat the share as deleted (FileContent,
+ * fetchVideos.notShareFlags). Files first, the DOCUMENT last, as in a publish,
+ * so a stopped removal leaves the share there to finish from. A file another
+ * name published isn't ours to replace, and stays.
+ */
+export function buildShareRemoval({ name, identifier, files, thumbnail, done }: ShareRemovalArgs): PublishResource[] {
+  const marker = {
+    action: "PUBLISH_QDN_RESOURCE" as const,
+    name,
+    title: DELETED_TITLE,
+    description: DELETED_TITLE,
+    tag1: DELETED_TITLE,
+  };
+  const file = (filename: string, type = "text/plain") => new File(["D"], filename, { type });
+  const seen = new Set<string>(done ?? []);
+  const resources: PublishResource[] = [];
+  for (const f of files) {
+    if (!f?.identifier || f.name !== name || seen.has(f.identifier)) continue;
+    seen.add(f.identifier);
+    // The file's own name, so the publish dialog can say which one it is on.
+    const filename = f.filename || "deleted";
+    resources.push({ ...marker, service: "FILE", identifier: f.identifier, filename, file: file(filename) });
+  }
+  if (thumbnail && thumbnail.name === name && !seen.has(thumbnail.identifier)) {
+    resources.push({ ...marker, service: "THUMBNAIL", identifier: thumbnail.identifier, filename: "deleted", file: file("deleted") });
+  }
+  resources.push({ ...marker, service: "DOCUMENT", identifier, filename: METADATA_FILENAME, data64: DELETED_DATA64 });
+  return resources;
+}
+
 export function toMultiplePublish(resources: PublishResource[]): MultiplePublishRequest {
   return { action: "PUBLISH_MULTIPLE_QDN_RESOURCES", resources };
 }

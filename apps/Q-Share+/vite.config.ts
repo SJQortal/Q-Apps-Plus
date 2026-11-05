@@ -10,5 +10,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // The flow tests drive whole dialogs; under a busy machine the 5 s default flakes.
+    testTimeout: 15_000,
   },
 })

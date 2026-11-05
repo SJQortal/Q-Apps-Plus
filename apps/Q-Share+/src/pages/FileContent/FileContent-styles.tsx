@@ -67,6 +67,16 @@ export const CategoryIcon = styled("img")(({ theme }) => ({
   objectFit: "cover",
 }));
 
+/** A share's own picture beside its title. */
+export const ShareCover = styled("img")(({ theme }) => ({
+  width: 72,
+  height: 72,
+  flexShrink: 0,
+  borderRadius: Number(theme.shape.borderRadius) * 1.5,
+  objectFit: "cover",
+  [theme.breakpoints.up("sm")]: { width: 112, height: 112 },
+}));
+
 /** "by <name>" with the avatar, as a real button so it is focusable and 44 px tall. */
 export const AuthorLink = styled("button")(({ theme }) => ({
   appearance: "none",
@@ -166,7 +176,7 @@ export const FileList = styled("ul")(({ theme }) => ({
   padding: 0,
   display: "flex",
   flexDirection: "column",
-  gap: theme.spacing(1.5),
+  gap: theme.spacing(1),
   width: "100%",
   minWidth: 0,
 }));

@@ -4,24 +4,27 @@ import GridViewOutlinedIcon from "@mui/icons-material/GridViewOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
 import { useAppSettings, writeSettings, type ListView } from "../../utils/settings";
 
+/** Which layout setting a list follows: Home and profiles, or collections (a grid by default). */
+export type LayoutSetting = "listView" | "collectionView";
+
 /** The list layout the user chose (Settings, or this toggle on a list). */
-export function useListView(): ListView {
-  return useAppSettings().listView;
+export function useListView(setting: LayoutSetting = "listView"): ListView {
+  return useAppSettings()[setting];
 }
 
 /**
- * Switches every share list between rows and a grid of cards. The choice is
- * a setting, so Home, profiles and collections follow it together.
+ * Switches share lists between rows and a grid of cards. The choice is a
+ * setting: Home and profiles follow one, collections and folders another.
  */
-export function ListViewToggle() {
+export function ListViewToggle({ setting = "listView" }: { setting?: LayoutSetting }) {
   const phone = usePhoneLayout();
-  const view = useListView();
+  const view = useListView(setting);
   return (
     <ToggleButtonGroup
       size="small"
       exclusive
       value={view}
-      onChange={(_e, next: ListView | null) => next && writeSettings({ listView: next })}
+      onChange={(_e, next: ListView | null) => next && writeSettings({ [setting]: next })}
       aria-label="Layout"
       sx={{ "& .MuiToggleButton-root": { minHeight: phone ? 44 : 40, minWidth: phone ? 44 : 40, px: 1 } }}
     >
