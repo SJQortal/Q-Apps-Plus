@@ -1,13 +1,10 @@
-import React from "react";
-import { Dialog, DialogActions, DialogContent, Button } from "@mui/material";
-import {
-  DialogContentTextStyled,
-  DialogTitleStyled
-} from "./ConfirmationModal-styles";
-import {
-  CancelButton,
-  CreateButton
-} from "../../modals/CreateStoreModal-styles";
+/**
+ * Asks before something that can't be taken back (DESIGN.md → Dialogs): what
+ * will happen, Cancel, and a button that says what it does. Full screen on
+ * phones, like every dialog.
+ */
+import { Button, Typography } from "@mui/material";
+import { ResponsiveDialog } from "../mobile";
 
 export interface ModalProps {
   open: boolean;
@@ -15,36 +12,31 @@ export interface ModalProps {
   message: string;
   handleConfirm: () => void;
   handleCancel: () => void;
+  /** The confirm button's text (default "Continue"). */
+  confirmLabel?: string;
+  /** Paint the confirm button as destructive. */
+  destructive?: boolean;
 }
 
-const ConfirmationModal: React.FC<ModalProps> = ({
-  open,
-  title,
-  message,
-  handleConfirm,
-  handleCancel
-}) => {
-  return (
-    <Dialog
-      open={open}
-      onClose={handleCancel}
-      aria-labelledby="alert-dialog-title"
-      aria-describedby="alert-dialog-description"
-    >
-      <DialogTitleStyled id="alert-dialog-title">{title}</DialogTitleStyled>
-      <DialogContent>
-        <DialogContentTextStyled id="alert-dialog-description">
-          {message}
-        </DialogContentTextStyled>
-      </DialogContent>
-      <DialogActions>
-        <CancelButton variant="outlined" onClick={handleCancel} color="error">
+const ConfirmationModal = ({ open, title, message, handleConfirm, handleCancel, confirmLabel, destructive }: ModalProps) => (
+  <ResponsiveDialog
+    open={open}
+    onClose={handleCancel}
+    title={title}
+    maxWidth="xs"
+    actions={
+      <>
+        <Button color="inherit" onClick={handleCancel}>
           Cancel
-        </CancelButton>
-        <CreateButton onClick={handleConfirm}>Proceed</CreateButton>
-      </DialogActions>
-    </Dialog>
-  );
-};
+        </Button>
+        <Button variant="contained" color={destructive ? "error" : "primary"} onClick={handleConfirm}>
+          {confirmLabel ?? "Continue"}
+        </Button>
+      </>
+    }
+  >
+    <Typography>{message}</Typography>
+  </ResponsiveDialog>
+);
 
 export default ConfirmationModal;

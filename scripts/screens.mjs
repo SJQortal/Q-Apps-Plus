@@ -8,7 +8,7 @@
  * tap targets and text, Qortal call counts, and axe-core (WCAG 2.1 A/AA and
  * best practices) violations.
  *
- *   scripts/screens.mjs <App+> [--only home,share] [--themes hub30] [--mode light] [--build] [--port 4173]
+ *   scripts/screens.mjs <App+> [--only home,share] [--themes hub30] [--mode light] [--build] [--port 4173] [--config e2e/other.config.mjs]
  *
  * The app describes itself in apps/<App+>/e2e/screens.config.mjs (see
  * apps/Q-Share+/e2e/screens.config.mjs): its name, theme storage key, mock
@@ -38,14 +38,16 @@ const opt = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : fallback;
 };
-const VALUED = ['only', 'themes', 'mode', 'port'];
+const VALUED = ['only', 'themes', 'mode', 'port', 'config'];
 const appName = args.find((a, i) => !a.startsWith('--') && !VALUED.includes(args[i - 1]?.slice(2)));
 if (!appName) {
   console.error('Usage: scripts/screens.mjs <App+> [--only a,b] [--themes hub30,black] [--mode light] [--build]');
   process.exit(1);
 }
 const app = path.join(root, 'apps', appName);
-const configFile = path.join(app, 'e2e', 'screens.config.mjs');
+// --config picks another screen set (e.g. one that reads a real node); its report gets the file's name.
+const configArg = opt('config', '');
+const configFile = configArg ? path.resolve(app, configArg) : path.join(app, 'e2e', 'screens.config.mjs');
 if (!existsSync(configFile)) {
   console.error(`No ${path.relative(root, configFile)}. Copy apps/Q-Share+/e2e/screens.config.mjs and adapt it.`);
   process.exit(1);
@@ -196,7 +198,7 @@ try {
         await page.route(/^https?:\/\/[^/]+\/assets(?:\/[^/?.]+(?:\/[^?]*)?)?(?:\?.*)?$/, answerCore);
         let ok = true;
         try {
-          await page.goto(`http://127.0.0.1:${PORT}${screen.path}?theme=${MODE}`, { waitUntil: 'load', timeout: 12000 });
+          await page.goto(`http://127.0.0.1:${PORT}${screen.path}${screen.path.includes("?") ? "&" : "?"}theme=${MODE}`, { waitUntil: 'load', timeout: 12000 });
           await page.waitForSelector('#root > *', { timeout: 8000 }).catch(() => {});
           for (const label of config.dismiss ?? []) {
             const b = page.getByRole('button', { name: label });
@@ -287,7 +289,8 @@ for (const [id, e] of [...byRule.entries()].sort((a, b) => b[1].nodes - a[1].nod
 // report.json, so none is written).
 const ALL_THEMES = ['hub30', 'hub20', 'black', 'white'];
 const themeTag = themes.length === ALL_THEMES.length && ALL_THEMES.every((t) => themes.includes(t)) ? 'all' : themes.join(',');
-const reportFile = path.join(shots, `report-${themeTag}-${MODE}.json`);
+const configTag = configArg ? `${path.basename(configArg).replace(/\.config\.mjs$|\.mjs$/, '')}-` : '';
+const reportFile = path.join(shots, `report-${configTag}${themeTag}-${MODE}.json`);
 writeFileSync(reportFile, JSON.stringify(report, null, 1));
 lines.push(`Report: ${path.relative(root, reportFile)}`);
 console.log(lines.join('\n'));

@@ -1,82 +1,58 @@
-import * as React from "react";
-import Menu from "@mui/material/Menu";
-import MenuItem from "@mui/material/MenuItem";
-import Typography from "@mui/material/Typography";
-import { CopyToClipboard } from "react-copy-to-clipboard";
+/**
+ * Right-click (or long-press, where the browser sends `contextmenu`) on a
+ * shop or product card: Copy link. A desktop extra; pages also have a
+ * visible Share button, so nothing depends on it.
+ */
+import { useState, type MouseEvent, type ReactNode } from "react";
+import { Menu, MenuItem } from "@mui/material";
+import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import { useDispatch } from "react-redux";
 import { setNotification } from "../../../state/features/notificationsSlice";
-import { Box } from "@mui/material";
+import { copyText } from "../../../utils/clipboard";
+import { dropdownPaperSx } from "../menuStyle";
 
 export default function ContextMenuResource({
   children,
-  name,
-  service,
-  identifier,
-  link
-}: any) {
-  const [contextMenu, setContextMenu] = React.useState<{
-    mouseX: number;
-    mouseY: number;
-  } | null>(null);
+  link,
+}: {
+  children: ReactNode;
+  /** The `qortal://APP/…` link to copy. */
+  link: string;
+  /** Unused; kept so older callers still type-check. */
+  name?: string;
+  service?: string;
+  identifier?: string;
+}) {
   const dispatch = useDispatch();
-  const handleContextMenu = (event: React.MouseEvent) => {
+  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+
+  const open = (event: MouseEvent) => {
     event.preventDefault();
-    setContextMenu(
-      contextMenu === null
-        ? {
-            mouseX: event.clientX + 2,
-            mouseY: event.clientY - 6
-          }
-        : // repeated contextmenu when it is already open closes it with Chrome 84 on Ubuntu
-          // Other native context menus might behave different.
-          // With this behavior we prevent contextmenu from the backdrop to re-locale existing context menus.
-          null
+    // A second right-click while open closes it (as the native menu does).
+    setPosition((current) => (current ? null : { top: event.clientY - 6, left: event.clientX + 2 }));
+  };
+
+  const copy = async () => {
+    setPosition(null);
+    const ok = await copyText(link);
+    dispatch(
+      setNotification(
+        ok ? { msg: "Link copied", alertType: "success" } : { msg: "Copying isn't allowed here. Use the Share button instead.", alertType: "error" }
+      )
     );
   };
 
-  const handleClose = () => {
-    setContextMenu(null);
-  };
-
   return (
-    <div
-      onContextMenu={handleContextMenu}
-      style={{ cursor: "context-menu", width: "100%", height: "100%" }}
-    >
+    <div onContextMenu={open} style={{ width: "100%", height: "100%" }}>
       {children}
-      <Menu
-        open={contextMenu !== null}
-        onClose={handleClose}
-        anchorReference="anchorPosition"
-        anchorPosition={
-          contextMenu !== null
-            ? { top: contextMenu.mouseY, left: contextMenu.mouseX }
-            : undefined
-        }
-      >
-        <MenuItem>
-          <CopyToClipboard
-            text={link}
-            onCopy={() => {
-              handleClose();
-              dispatch(
-                setNotification({
-                  msg: "Copied to clipboard!",
-                  alertType: "success"
-                })
-              );
-            }}
-          >
-            <Box
-              sx={{
-                fontSize: "16px"
-              }}
-            >
-              Copy Link
-            </Box>
-          </CopyToClipboard>
-        </MenuItem>
-      </Menu>
+      {position && (
+        <Menu open onClose={() => setPosition(null)} anchorReference="anchorPosition" anchorPosition={position} slotProps={{ paper: { sx: dropdownPaperSx } }}>
+          <MenuItem onClick={copy} sx={{ gap: 1, minHeight: 44 }}>
+            <LinkOutlinedIcon fontSize="small" />
+            Copy link
+          </MenuItem>
+        </Menu>
+      )}
     </div>
   );
 }

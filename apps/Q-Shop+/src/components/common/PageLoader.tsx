@@ -1,43 +1,23 @@
-import React from "react";
-import CircularProgress from "@mui/material/CircularProgress";
-import Box from "@mui/system/Box";
-import { useTheme } from "@mui/material";
+import LinearProgress from "@mui/material/LinearProgress";
 
-interface PageLoaderProps {
-  size?: number;
-  thickness?: number;
-}
-
-const PageLoader: React.FC<PageLoaderProps> = ({
-  size = 40,
-  thickness = 5
-}) => {
-  const theme = useTheme();
-
+/**
+ * A thin progress line along the bottom edge of the header while something
+ * app-wide loads (`global.isLoadingGlobal`). The original covered the whole
+ * page with a spinner instead, so every page went blank meanwhile; the page
+ * stays readable now, with its own skeletons.
+ */
+export default function PageLoader({ label = "Loading" }: { label?: string }) {
   return (
-    <Box
+    <LinearProgress
+      aria-label={label}
       sx={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        height: "100vh",
-        width: "100%",
-        position: "fixed",
-        top: 0,
+        position: "absolute",
         left: 0,
-        backgroundColor: theme.palette.background.default,
-        zIndex: 10000
+        right: 0,
+        bottom: -1,
+        height: 3,
+        bgcolor: "transparent",
       }}
-    >
-      <CircularProgress
-        size={size}
-        thickness={thickness}
-        sx={{
-          color: theme.palette.secondary.main
-        }}
-      />
-    </Box>
+    />
   );
-};
-
-export default PageLoader;
+}

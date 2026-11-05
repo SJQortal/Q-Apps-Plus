@@ -1,0 +1,759 @@
+/**
+ * Pins what the original checkout sends, before any of it is touched:
+ * the coin, the amount (as text), the recipient, the encrypted publish of the
+ * order and the seller's mail, the public keys, the identifiers and the order
+ * JSON. Written against the upstream Cart component (docs/apps/Q-Shop+.md →
+ * Money code), and ported unchanged to the cart page and checkout dialog that
+ * replaced it: only the clicks that reach Pay differ, never an expectation.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { createAppStore } from "../../state/store";
+import { addUser } from "../../state/features/authSlice";
+import {
+  addToHashMapStores,
+  setCurrentViewedStore,
+  setPreferredCoin,
+  setStoreId,
+  setStoreOwner,
+} from "../../state/features/storeSlice";
+import { setCatalogueHashMap } from "../../state/features/globalSlice";
+import { setIsOpen, setProductToCart } from "../../state/features/cartSlice";
+import { installQortalMock, type QortalMock } from "../../test/qortalMock";
+import { renderWithProviders } from "../../test/renderWithProviders";
+import {
+  ARRR_ADDRESS,
+  BUYER,
+  BUYER_ADDRESS,
+  BUYER_PK,
+  CATALOGUE_ID,
+  SELLER,
+  SELLER_ADDRESS,
+  SELLER_PK,
+  SHORT_STORE_ID,
+  STORE_ID,
+  STORE_TITLE,
+  catalogue,
+  chair,
+  decodeData64,
+  mug,
+  poster,
+  viewedStore,
+} from "../../test/fixtures/shop";
+import { CartPage } from "./CartPage";
+import { resourcePath } from "../../qdn/search";
+import { dataContainerIdentifier, deliveryIdentifier, discountsIdentifier } from "../../qdn/identifiers";
+import { codeHash, nameHash } from "../../discounts/model";
+
+vi.mock("short-unique-id", () => ({
+  default: class {
+    constructor(opts?: { length?: number }) {
+      return () => (opts?.length === 10 ? "ORDERxxxx1" : "MAILx1");
+    }
+  },
+}));
+
+const NOW = 1761000000000;
+const DELIVERY_ID = deliveryIdentifier(SHORT_STORE_ID);
+const DISCOUNTS_ID = discountsIdentifier(SHORT_STORE_ID);
+
+function setup(opts: {
+  coin?: "QORT" | "ARRR";
+  items: { product: any; qty: number }[];
+  rate?: string;
+  shop?: Record<string, unknown>;
+  /** The shop's delivery prices (delivery/model.ts), and its product list when they're in a currency. */
+  delivery?: { doc: unknown; productList?: unknown };
+  /** Holds the delivery prices' search until it resolves. */
+  deliveryGate?: Promise<void>;
+  /** The shop's discount codes (discounts/model.ts): none unless the test gives some. */
+  discounts?: { doc: unknown };
+  /** Holds the discount codes' read until it resolves. */
+  discountsGate?: Promise<void>;
+}) {
+  const store = createAppStore();
+  store.dispatch(addUser({ address: BUYER_ADDRESS, publicKey: BUYER_PK, name: BUYER }));
+  store.dispatch(setStoreId(STORE_ID));
+  store.dispatch(setStoreOwner(SELLER));
+  store.dispatch(setCurrentViewedStore(viewedStore));
+  store.dispatch(addToHashMapStores({ ...viewedStore, ...opts.shop, owner: SELLER, isValid: true }));
+  store.dispatch(setCatalogueHashMap({ ...catalogue, user: SELLER, isValid: true }));
+  for (const { product, qty } of opts.items) {
+    for (let i = 0; i < qty; i++) {
+      store.dispatch(
+        setProductToCart({ productId: product.id, catalogueId: CATALOGUE_ID, storeId: STORE_ID, storeOwner: SELLER })
+      );
+    }
+  }
+  store.dispatch(setPreferredCoin(opts.coin ?? "QORT"));
+  store.dispatch(setIsOpen(true));
+
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (String(url).startsWith("/crosschain/price/PIRATECHAIN")) {
+        return { ok: true, status: 200, text: async () => opts.rate ?? "0", json: async () => Number(opts.rate) };
+      }
+      // The + app's delivery prices (delivery/deliveryDoc.ts): none unless the test gives some, as in the original.
+      const json = (body: unknown) => ({ ok: true, status: 200, text: async () => JSON.stringify(body), json: async () => body });
+      if (String(url).startsWith("/arbitrary/resources/search?") && String(url).includes(`identifier=${DELIVERY_ID}`)) {
+        await opts.deliveryGate;
+        return json(opts.delivery ? [{ name: SELLER, service: "DOCUMENT", identifier: DELIVERY_ID }] : []);
+      }
+      if (opts.delivery && url === resourcePath("DOCUMENT", SELLER, DELIVERY_ID)) return json(opts.delivery.doc);
+      if (String(url).startsWith("/arbitrary/resources/search?") && String(url).includes(`identifier=${DISCOUNTS_ID}`)) {
+        return json(opts.discounts ? [{ name: SELLER, service: "DOCUMENT", identifier: DISCOUNTS_ID }] : []);
+      }
+      if (opts.discounts && url === resourcePath("DOCUMENT", SELLER, DISCOUNTS_ID)) {
+        await opts.discountsGate;
+        return json(opts.discounts.doc);
+      }
+      if (opts.delivery?.productList && url === resourcePath("DOCUMENT", SELLER, dataContainerIdentifier(STORE_ID))) {
+        return json(opts.delivery.productList);
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    })
+  );
+
+  const q: QortalMock = installQortalMock({
+    GET_NAME_DATA: async (p) => {
+      expect(p.name).toBe(SELLER);
+      return { name: SELLER, owner: SELLER_ADDRESS };
+    },
+    GET_ACCOUNT_DATA: async (p) => {
+      expect(p.address).toBe(SELLER_ADDRESS);
+      return { address: SELLER_ADDRESS, publicKey: SELLER_PK };
+    },
+    SEND_COIN: async (p) => (p.coin === "QORT" ? { signature: "PAYMENTSIG" } : "arrr-txid"),
+    PUBLISH_MULTIPLE_QDN_RESOURCES: async () => true,
+  });
+
+  renderWithProviders(<CartPage />, { store, initialEntries: ["/cart"] });
+  return { store, q };
+}
+
+/** Presses a dialog button once it is enabled (prices may wait for the coin's rate). */
+async function press(name: string | RegExp) {
+  const dialog = await screen.findByRole("dialog");
+  const button = await within(dialog).findByRole("button", { name });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+}
+
+async function openCheckout() {
+  const button = await screen.findByRole("button", { name: `Check out ${STORE_TITLE}` });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+}
+
+/** Digital orders: Check out → Review → Confirm → Pay (the original: Purchase → Confirm). */
+async function purchaseDigital() {
+  await openCheckout();
+  await press("Continue");
+  await press(/^Pay /);
+}
+
+function mailIdentifier() {
+  return `qortal_qmail_${SELLER.slice(0, 20)}_${SELLER_ADDRESS.slice(-6)}_mail_MAILx1`;
+}
+
+beforeEach(() => {
+  vi.spyOn(Date, "now").mockReturnValue(NOW);
+});
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
+
+describe("checkout (pinned)", () => {
+  it("pays a QORT digital order to the seller's address and publishes the order and mail encrypted", async () => {
+    const { q, store } = setup({ items: [{ product: mug, qty: 2 }, { product: poster, qty: 1 }] });
+    await purchaseDigital();
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+
+    // Seller lookup, then exactly one payment.
+    expect(q.calls.map((c) => c.action).slice(0, 3)).toEqual(["GET_NAME_DATA", "GET_ACCOUNT_DATA", "SEND_COIN"]);
+    expect(q.callsFor("SEND_COIN")).toEqual([
+      { action: "SEND_COIN", coin: "QORT", destinationAddress: SELLER_ADDRESS, amount: "3.10000000" },
+    ]);
+
+    const pub = q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any;
+    expect(pub.encrypt).toBe(true);
+    expect(pub.publicKeys).toEqual([SELLER_PK, BUYER_PK]);
+    expect(pub.resources).toHaveLength(2);
+    const [orderRes, mailRes] = pub.resources;
+    expect(orderRes).toMatchObject({
+      action: "PUBLISH_QDN_RESOURCE",
+      identifier: `q-store-order-${SHORT_STORE_ID}-ORDERxxxx1`,
+      name: BUYER,
+      service: "DOCUMENT_PRIVATE",
+    });
+    expect(Object.keys(orderRes).sort()).toEqual(["action", "data64", "identifier", "name", "service"]);
+    expect(mailRes).toMatchObject({
+      action: "PUBLISH_QDN_RESOURCE",
+      name: BUYER,
+      service: "MAIL_PRIVATE",
+      identifier: mailIdentifier(),
+    });
+
+    const order = decodeData64(orderRes.data64);
+    expect(order).toEqual({
+      created: NOW,
+      version: 1,
+      details: {
+        totalPrice: "3.10000000",
+        [mug.id]: { product: mug, catalogueId: CATALOGUE_ID, quantity: 2, pricePerUnit: 1.5, totalProductPrice: 3 },
+        [poster.id]: { product: poster, catalogueId: CATALOGUE_ID, quantity: 1, pricePerUnit: 0.1, totalProductPrice: 0.1 },
+      },
+      storeName: STORE_TITLE,
+      sellerName: SELLER,
+      delivery: {
+        customerName: BUYER,
+        shippingAddress: { streetAddress: "", city: "", region: "", country: "", zipCode: "", deliveryNote: "" },
+      },
+      payment: { total: "3.10000000", currency: "QORT", transactionSignature: "PAYMENTSIG", arrrAddressUsed: "" },
+      communicationMethod: ["Q-Mail"],
+    });
+    // Key order of the details as the original writes them: total first, then the cart's order.
+    expect(Object.keys(order.details)).toEqual(["totalPrice", mug.id, poster.id]);
+
+    const mail = decodeData64(mailRes.data64);
+    expect(mail).toMatchObject({
+      title: `Order for shop ${SHORT_STORE_ID} from ${BUYER}`,
+      // Q-Shop+ (Simon, 2026-10-23): the subject names the shop and the buyer; the original's was "New order".
+      subject: `New order at ${STORE_TITLE} from ${BUYER}`,
+      createdAt: NOW,
+      version: 1,
+      attachments: [],
+      textContent: "",
+      generalData: { thread: [] },
+      recipient: SELLER,
+    });
+    // Q-Shop+'s mail (Simon, 2026-10-23: "nicer, more easy to read, professional"): who, when, the items
+    // with prices and the total, the payment, and the delivery. Typed text is HTML-escaped (night 1).
+    expect(mail.htmlContent).toContain("New order · Seller&#39;s Shop");
+    expect(mail.htmlContent).toContain(`${BUYER} ordered 3 items`);
+    expect(mail.htmlContent).toContain("Order ORDERxxxx1");
+    expect(mail.htmlContent).toMatch(/<strong>Mug<\/strong><\/td>\s*<td[^>]*>2<\/td>\s*<td[^>]*>1\.50 QORT<\/td>\s*<td[^>]*>3\.00 QORT<\/td>/);
+    expect(mail.htmlContent).toContain("<strong>3.10 QORT</strong>");
+    expect(mail.htmlContent).toContain("PAYMENTSIG");
+    // Digital orders carry no address.
+    expect(mail.htmlContent).toContain("Digital order: nothing to ship.");
+    expect(mail.htmlContent).not.toContain("Ship to");
+
+    // Success empties this store's cart.
+    await waitFor(() => expect(store.getState().cart.carts[STORE_ID]).toBeUndefined());
+  });
+
+  it("pays in ARRR with the product's own ARRR price, to the store's trimmed ARRR address", async () => {
+    const { q } = setup({ coin: "ARRR", items: [{ product: poster, qty: 3 }], rate: "250000000" });
+    await purchaseDigital();
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+
+    expect(q.callsFor("SEND_COIN")).toEqual([
+      { action: "SEND_COIN", coin: "ARRR", destinationAddress: ARRR_ADDRESS, amount: "0.75000000" },
+    ]);
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details[poster.id]).toEqual({
+      product: poster,
+      catalogueId: CATALOGUE_ID,
+      quantity: 3,
+      pricePerUnit: 0.25,
+      totalProductPrice: 0.75,
+    });
+    // ARRR payments keep no signature; the address paid is recorded instead.
+    expect(order.payment).toEqual({
+      total: "0.75000000",
+      currency: "ARRR",
+      transactionSignature: null,
+      arrrAddressUsed: ARRR_ADDRESS,
+    });
+  });
+
+  it("converts a QORT-only price to ARRR with the node's rate (raw float per unit, total rounded to 8 places)", async () => {
+    // inverse=true price 0.3 ARRR per QORT; 1.5 * 0.3 = 0.44999999999999996 in floating point.
+    const { q } = setup({ coin: "ARRR", items: [{ product: mug, qty: 3 }], rate: "30000000" });
+    await waitFor(() => expect((globalThis.fetch as any).mock.calls.length).toBeGreaterThan(0));
+    await act(async () => {});
+    await purchaseDigital();
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+
+    expect((globalThis.fetch as any).mock.calls[0][0]).toBe("/crosschain/price/PIRATECHAIN?maxtrades=10&inverse=true");
+    expect(q.callsFor("SEND_COIN")).toEqual([
+      { action: "SEND_COIN", coin: "ARRR", destinationAddress: ARRR_ADDRESS, amount: "1.35000000" },
+    ]);
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details[mug.id].pricePerUnit).toBe(1.5 * 0.3);
+    expect(order.details[mug.id].totalProductPrice).toBe(1.5 * 0.3 * 3);
+    expect(order.details.totalPrice).toBe("1.35000000");
+  });
+
+  it("asks for the delivery address on physical orders and writes `state` for the United States", async () => {
+    const { q } = setup({ items: [{ product: chair, qty: 1 }] });
+    await openCheckout();
+    await press("Continue");
+
+    const type = (label: RegExp, value: string) =>
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    // The form loads on demand (digital orders never fetch it).
+    await screen.findByLabelText(/Customer name/i);
+    type(/Customer name/i, "Ann Buyer");
+    type(/Street address/i, "1 Main St");
+    type(/^City/, "Springfield");
+    // Country, then State (both lists of the original's values).
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Oregon" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
+    type(/Zip code/i, "97001");
+    type(/Delivery note/i, "Leave at the door");
+    await press("Continue");
+    await press(/^Pay /);
+
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")[0]).toEqual({
+      action: "SEND_COIN",
+      coin: "QORT",
+      destinationAddress: SELLER_ADDRESS,
+      amount: "12.00000000",
+    });
+    const [orderRes, mailRes] = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    expect(decodeData64(orderRes.data64).delivery).toEqual({
+      customerName: "Ann Buyer",
+      shippingAddress: {
+        streetAddress: "1 Main St",
+        city: "Springfield",
+        state: "Oregon",
+        country: "United States",
+        zipCode: "97001",
+        deliveryNote: "Leave at the door",
+      },
+    });
+    const html = decodeData64(mailRes.data64).htmlContent;
+    expect(html).toContain("Ship to");
+    expect(html).toContain(`Qortal name: <strong>${BUYER}</strong>`);
+    expect(html).toContain("Ann Buyer<br>1 Main St<br>Springfield, Oregon 97001<br>United States");
+    expect(html).toContain("<strong>Note from the buyer:</strong> Leave at the door");
+  });
+
+  /** The delivery step filled in for Oregon, United States. */
+  async function deliverToOregon() {
+    const type = (label: RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    await screen.findByLabelText(/Customer name/i);
+    type(/Customer name/i, "Ann Buyer");
+    type(/Street address/i, "1 Main St");
+    type(/^City/, "Springfield");
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Oregon" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
+    type(/Zip code/i, "97001");
+  }
+
+  const zone = (over: Record<string, unknown>) => ({ id: "zone1", countries: ["US"], first: 3, ...over });
+
+  it("adds the shop's delivery fee for the address as one more line of the order, paid with it", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ states: ["OR"], extra: 1 })] }, profiles: [], updated: 1 };
+    const { q } = setup({ items: [{ product: chair, qty: 2 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    // Confirm names the fee: 3 for the first chair, 1 for the second.
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Delivery to United States (Oregon)")).toBeInTheDocument();
+    await press(/^Pay /);
+
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")[0]).toEqual({ action: "SEND_COIN", coin: "QORT", destinationAddress: SELLER_ADDRESS, amount: "28.00000000" });
+    const [orderRes, mailRes] = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    const order = decodeData64(orderRes.data64);
+    // The chairs as before, then the fee, priced like a product so the original shows it as a line of the total.
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id, "q-store-delivery"]);
+    expect(order.details[chair.id].totalProductPrice).toBe(24);
+    expect(order.details["q-store-delivery"]).toEqual({
+      product: {
+        id: "q-store-delivery",
+        title: "Delivery to United States (Oregon)",
+        type: "delivery",
+        price: [{ currency: "qort", value: 4 }],
+        delivery: { currency: "QORT", value: 4, parts: [{ profile: "Delivery", zone: "", items: 2, fee: 4 }] },
+      },
+      catalogueId: "",
+      quantity: 1,
+      pricePerUnit: 4,
+      totalProductPrice: 4,
+    });
+    expect(order.details.totalPrice).toBe("28.00000000");
+    const html = decodeData64(mailRes.data64).htmlContent;
+    expect(html).toContain("ordered 2 items");
+    expect(html).toContain("<strong>Delivery to United States (Oregon)</strong>");
+  });
+
+  it("lets the buyer pick the shop's delivery option at Confirm, and tells the seller which (+ app)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({ rates: { exp: { first: 9 }, pick: { first: 0 } } })] },
+      profiles: [],
+      updated: 1,
+      options: [
+        { id: "exp", name: "Express", note: "1–3 days" },
+        { id: "pick", name: "Local pickup", note: "Portland, Saturdays" },
+      ],
+    };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    const options = await within(dialog).findByRole("radiogroup", { name: "Delivery" });
+    expect(within(options).getByRole("radio", { name: /Standard/ })).toBeChecked();
+    expect(within(dialog).getByText("Delivery to United States (Oregon), Standard")).toBeInTheDocument();
+    fireEvent.click(within(options).getByRole("radio", { name: /Express/ }));
+    expect(await within(dialog).findByText("Delivery to United States (Oregon), Express")).toBeInTheDocument();
+    await press(/^Pay 21\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ amount: "21.00000000" });
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details["q-store-delivery"].product).toMatchObject({ title: "Delivery to United States (Oregon), Express", delivery: { value: 9, option: { id: "exp", name: "Express" } } });
+    expect(order.delivery.shippingAddress.deliveryNote).toBe("Delivery: Express.");
+  });
+
+  it("lists every delivery option for the buyer's place before the address is done, each priced, and keeps the pick", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({ rates: { exp: { first: 9 }, trk: { first: 5 } } })] },
+      profiles: [],
+      updated: 1,
+      options: [
+        { id: "exp", name: "Express", note: "1–3 days" },
+        { id: "trk", name: "Tracked" },
+      ],
+    };
+    setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    const ways = await screen.findByRole("radiogroup", { name: "How it comes" });
+    expect(within(ways).getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual([
+      expect.stringMatching(/^Standard.*3\.00/),
+      expect.stringMatching(/^Express1–3 days.*9\.00/),
+      expect.stringMatching(/^Tracked.*5\.00/),
+    ]);
+    fireEvent.click(within(ways).getByRole("radio", { name: /Express/ }));
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    expect(within(await within(dialog).findByRole("radiogroup", { name: "Delivery" })).getByRole("radio", { name: /Express/ })).toBeChecked();
+    expect(within(dialog).getByText("Delivery to United States (Oregon), Express")).toBeInTheDocument();
+  });
+
+  it("a free delivery option adds no line, and the seller still reads it in the order's note (+ app)", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ rates: { pick: { first: 0 } } })] }, profiles: [], updated: 1, options: [{ id: "pick", name: "Local pickup" }] };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(await within(dialog).findByRole("radiogroup", { name: "Delivery" })).getByRole("radio", { name: /Local pickup/ }));
+    expect(await within(dialog).findByText("Delivery, Local pickup")).toBeInTheDocument();
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
+    expect(order.delivery.shippingAddress.deliveryNote).toBe("Delivery: Local pickup.");
+  });
+
+  it("a pickup asks who collects it and how to reach them, no address, and the order says so (+ app)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({ rates: { pick: { first: 0 } } })] },
+      profiles: [],
+      updated: 1,
+      options: [{ id: "pick", name: "Local pickup", note: "Portland, Saturdays", pickup: true }],
+    };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    // The country first: it decides whether the shop offers a pickup there.
+    fireEvent.change(await screen.findByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Oregon" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
+    // Every way it comes there is listed, priced, before the address: the delivery, and the pickup.
+    const ways = await screen.findByRole("radiogroup", { name: "How it comes" });
+    expect(within(ways).getAllByRole("radio")).toHaveLength(2);
+    fireEvent.click(within(ways).getByRole("radio", { name: /Local pickup/ }));
+    expect(screen.queryByLabelText(/Street address/i)).toBeNull();
+    // How the seller reaches the buyer starts as their Q-Mail name.
+    expect(screen.getByLabelText(/How the seller can reach you/)).toHaveValue(`Q-Mail: ${BUYER}`);
+    fireEvent.change(screen.getByLabelText(/Who collects it/), { target: { value: "Ann Buyer" } });
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Collected by")).toBeInTheDocument();
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    // No address (a digital order's empty one, which the original reads), and how to reach the buyer.
+    expect(order.delivery).toEqual({
+      customerName: "Ann Buyer",
+      shippingAddress: { streetAddress: "", city: "", state: "Oregon", country: "United States", zipCode: "", deliveryNote: `Delivery: Local pickup. Contact: Q-Mail: ${BUYER}.` },
+    });
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
+  });
+
+  it("a pickup point is offered free in its own country, even one the zones don't deliver to (+ app)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      general: { zones: [zone({})] },
+      profiles: [],
+      updated: 1,
+      options: [{ id: "shop", name: "Pick up", pickup: true, place: { country: "PT", address: "Rua Augusta 10, Lisbon", days: [1, 2, 3, 4, 5], from: "10:00", to: "18:00" } }],
+    };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    fireEvent.change(await screen.findByRole("combobox", { name: /Country/ }), { target: { value: "Portugal" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Portugal" }));
+    // Nothing else reaches Portugal, so the buyer collects it, told where and when.
+    expect(await screen.findByText(/you collect it \(Pick up: Rua Augusta 10, Lisbon, Portugal · Mon–Fri 10:00–18:00\)/)).toBeInTheDocument();
+    await press("Continue");
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id]);
+    expect(order.delivery.shippingAddress).toMatchObject({ streetAddress: "", country: "Portugal", deliveryNote: `Delivery: Pick up. Contact: Q-Mail: ${BUYER}.` });
+  });
+
+  it("Pay waits while a code is checked, and an answer for an order already paid is dropped (review)", async () => {
+    let open = () => {};
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts: [{ id: "half", code: await codeHash(STORE_ID, "HALF"), percent: 50 }] };
+    const { q } = setup({ items: [{ product: mug, qty: 2 }], discounts: { doc }, discountsGate: gate });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Have a discount code?" }));
+    fireEvent.change(within(dialog).getByLabelText(/Discount code/), { target: { value: "HALF" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
+    expect(await within(dialog).findByRole("button", { name: /^Pay / })).toBeDisabled();
+    open();
+    expect(await within(dialog).findByText("Discount HALF: 50% off")).toBeInTheDocument();
+    await press(/^Pay 1\.50 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")).toHaveLength(1);
+  });
+
+  it("a shop whose only delivery reaching the buyer is a pickup makes them collect it (review)", async () => {
+    const doc = {
+      v: 1,
+      storeId: STORE_ID,
+      currency: "QORT",
+      base: { name: "Local pickup", pickup: true },
+      options: [{ id: "courier", name: "Courier" }],
+      general: { zones: [zone({ first: 0 })] },
+      profiles: [],
+      updated: 1,
+    };
+    setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    fireEvent.change(await screen.findByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    // Courier isn't priced in the zone: nothing delivers, so no "Deliver it to me".
+    expect(await screen.findByText(/doesn't deliver: you collect it \(Local pickup\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: "Deliver it to me" })).toBeNull();
+    expect(screen.queryByLabelText(/Street address/i)).toBeNull();
+  });
+
+  const discountsDoc = (discounts: unknown[]) => ({ v: 1, storeId: STORE_ID, currency: "QORT", updated: 1, discounts });
+
+  /** At Confirm: "Have a discount code?", the code, Apply. */
+  async function enterCode(code: string) {
+    const dialog = await screen.findByRole("dialog");
+    if (!within(dialog).queryByLabelText(/Discount code/)) await press("Have a discount code?");
+    fireEvent.change(within(dialog).getByLabelText(/Discount code/), { target: { value: code } });
+    await press("Apply");
+    return dialog;
+  }
+
+  it("takes a discount code's percentage off at Confirm, as one more line of the order (+ app)", async () => {
+    const doc = discountsDoc([{ id: "spr", code: await codeHash(STORE_ID, "SPRING10"), percent: 10 }]);
+    const { q } = setup({ items: [{ product: mug, qty: 2 }, { product: poster, qty: 1 }], discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await enterCode("spring10");
+    expect(await within(dialog).findByText("Discount SPRING10: 10% off")).toBeInTheDocument();
+    expect(within(dialog).getByText("−0.31 QORT")).toBeInTheDocument();
+    expect(within(dialog).getByText("Code SPRING10")).toBeInTheDocument();
+    await press(/^Pay 2\.79 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ amount: "2.79000000" });
+    const [orderRes, mailRes] = (q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources;
+    const order = decodeData64(orderRes.data64);
+    expect(order.details.totalPrice).toBe("2.79000000");
+    // Priced like a product, so the original shows it as a line of the total; "digital" in an all-digital order.
+    expect(order.details["q-store-discount"]).toEqual({
+      product: {
+        id: "q-store-discount",
+        title: "Discount SPRING10: 10% off",
+        type: "digital",
+        price: [{ currency: "qort", value: -0.31 }],
+        discount: { id: "spr", code: "SPRING10", percent: 10, value: 0.31, coin: "QORT" },
+      },
+      catalogueId: "",
+      quantity: 1,
+      pricePerUnit: -0.31,
+      totalProductPrice: -0.31,
+    });
+    const html = decodeData64(mailRes.data64).htmlContent;
+    expect(html).toContain("<strong>Discount SPRING10: 10% off</strong>");
+    expect(html).toContain("ordered 3 items");
+  });
+
+  it("says why a code doesn't apply: not this shop's, ended, or for other products", async () => {
+    const doc = discountsDoc([
+      { id: "old", code: await codeHash(STORE_ID, "SUMMER"), percent: 20, ends: NOW - 86_400_000 },
+      { id: "chairs", code: await codeHash(STORE_ID, "CHAIRS"), percent: 20, products: [chair.id] },
+    ]);
+    setup({ items: [{ product: mug, qty: 1 }], discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await enterCode("nope10");
+    expect(await within(dialog).findByText(`NOPE10 isn't a code at ${STORE_TITLE}.`)).toBeInTheDocument();
+    await enterCode("summer");
+    expect(await within(dialog).findByText(/^This code ended on /)).toBeInTheDocument();
+    await enterCode("chairs");
+    expect(await within(dialog).findByText("This code is for other products of this shop.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /^Pay 1\.50 QORT$/ })).toBeInTheDocument();
+  });
+
+  it("applies a discount for the buyer's own name by itself, and Remove takes it off (+ app)", async () => {
+    const doc = discountsDoc([{ id: "vip", forName: await nameHash(STORE_ID, BUYER), percent: 15 }]);
+    setup({ items: [{ product: mug, qty: 2 }], discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Your discount: 15% off")).toBeInTheDocument();
+    expect(within(dialog).getByText(`Your discount from ${STORE_TITLE}`)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /^Pay 2\.55 QORT$/ })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove" }));
+    expect(await within(dialog).findByRole("button", { name: /^Pay 3\.00 QORT$/ })).toBeInTheDocument();
+    expect(within(dialog).queryByText("Your discount: 15% off")).toBeNull();
+  });
+
+  it("a free-delivery code takes the delivery fee off (+ app)", async () => {
+    const delivery = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({})] }, profiles: [], updated: 1 };
+    const doc = discountsDoc([{ id: "ship", code: await codeHash(STORE_ID, "FREESHIP"), percent: 0, freeDelivery: true }]);
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc: delivery }, discounts: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    const dialog = await enterCode("FREESHIP");
+    expect(await within(dialog).findByText("Discount FREESHIP: free delivery")).toBeInTheDocument();
+    await press(/^Pay 12\.00 QORT$/);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(Object.keys(order.details)).toEqual(["totalPrice", chair.id, "q-store-delivery", "q-store-discount"]);
+    expect(order.details["q-store-discount"]).toMatchObject({ totalProductPrice: -3, product: { type: "discount" } });
+    expect(order.details.totalPrice).toBe("12.00000000");
+  });
+
+  it("prices a delivery fee set in USD in QORT from the shop's rates", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "USD", general: { zones: [zone({ first: 7 })] }, profiles: [], updated: 1 };
+    const productList = { storeId: STORE_ID, products: {}, fiatPricing: { currency: "USD", rates: { QORT: 0.18 }, updated: 1 } };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc, productList } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    expect(await within(await screen.findByRole("dialog")).findByText("$7.00")).toBeInTheDocument();
+    await press(/^Pay /);
+    await waitFor(() => expect(q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")).toHaveLength(1));
+    // 7 USD at 0.18 USD a QORT: 38.89 QORT, on top of the chair's 12.
+    expect(q.callsFor("SEND_COIN")[0]).toMatchObject({ coin: "QORT", amount: "50.89000000" });
+    const order = decodeData64((q.callsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0].data64);
+    expect(order.details["q-store-delivery"].product.delivery).toMatchObject({ currency: "USD", value: 7, qort: 38.89 });
+  });
+
+  it("stops at the address when the shop doesn't deliver there", async () => {
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ countries: ["PL"] })] }, profiles: [], updated: 1 };
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], delivery: { doc } });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    await press("Continue");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      `${STORE_TITLE} doesn't deliver ${chair.title} to Oregon, United States. Remove it from your cart, pick another address, or ask the seller.`
+    );
+    expect(screen.queryByRole("button", { name: /^Pay / })).not.toBeInTheDocument();
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
+  it("drops delivery prices worked out for an address the buyer changed meanwhile", async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const doc = { v: 1, storeId: STORE_ID, currency: "QORT", general: { zones: [zone({ first: 3 })] }, profiles: [], updated: 1 };
+    setup({ items: [{ product: chair, qty: 1 }], delivery: { doc }, deliveryGate: gate });
+    await openCheckout();
+    await press("Continue");
+    await deliverToOregon();
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("button", { name: "Working out delivery…" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Zip code/i), { target: { value: "97002" } });
+    await act(async () => open());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled());
+    expect(screen.queryByText("Confirm and pay")).not.toBeInTheDocument();
+    await press("Continue");
+    expect(await screen.findByText("Confirm and pay")).toBeInTheDocument();
+  });
+
+  it("stops a physical order to a US state the shop doesn't ship to, and lets one it does through", async () => {
+    const { q } = setup({
+      items: [{ product: chair, qty: 1 }],
+      shop: { shippingCountries: ["US"], shippingStates: ["OR", "WA"], shipsTo: "the United States: Oregon and Washington" },
+    });
+    await openCheckout();
+    await press("Continue");
+    await screen.findByLabelText(/Customer name/i);
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "United States" } });
+    fireEvent.click(await screen.findByRole("option", { name: "United States" }));
+    fireEvent.change(await screen.findByRole("combobox", { name: /State/ }), { target: { value: "Alaska" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Alaska" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(`${STORE_TITLE} doesn't ship to Alaska, United States: it ships to the United States: Oregon and Washington.`);
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" })).toBeDisabled();
+    const state = screen.getByRole("combobox", { name: /State/ });
+    fireEvent.change(state, { target: { value: "" } });
+    fireEvent.change(state, { target: { value: "Oreg" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Oregon" }));
+    await waitFor(() => expect(screen.queryByText(/doesn't ship to/)).toBeNull());
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+
+  it("stops a physical order to a country the shop doesn't ship to, before anything is paid (constants/shipping.ts)", async () => {
+    const { q } = setup({ items: [{ product: chair, qty: 1 }], shop: { shippingCountries: ["IS", "NO"], shipsTo: "Iceland and Norway" } });
+    await openCheckout();
+    await press("Continue");
+    await screen.findByLabelText(/Customer name/i);
+    fireEvent.change(screen.getByRole("combobox", { name: /Country/ }), { target: { value: "Germany" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Germany" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(`${STORE_TITLE} doesn't ship to Germany: it ships to Iceland and Norway.`);
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Continue" })).toBeDisabled();
+    const country = screen.getByRole("combobox", { name: /Country/ });
+    fireEvent.change(country, { target: { value: "" } });
+    fireEvent.change(country, { target: { value: "Icel" } });
+    fireEvent.click(await screen.findByRole("option", { name: "Iceland" }));
+    await waitFor(() => expect(screen.queryByText(/doesn't ship to/)).toBeNull());
+    expect(q.callsFor("SEND_COIN")).toHaveLength(0);
+  });
+});

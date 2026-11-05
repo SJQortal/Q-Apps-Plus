@@ -1,0 +1,249 @@
+/**
+ * A product's pictures (up to 10, as the seller tools allow): the main one,
+ * arrows and thumbnails, swipe on touch screens, ← and → keys, and a full
+ * screen viewer (full-screen on phones) with the same controls and Esc, where
+ * pictures zoom (ZoomableImage).
+ * A variant's page passes the index (`index`, `onIndexChange`): its group's
+ * pictures choose its item (variants/gallery.ts), and each says what it is
+ * of (`captions`).
+ * Replaces the original's TabImageList, whose thumbnails were clickable
+ * images with no keyboard access.
+ */
+import { useEffect, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
+import { Box, ButtonBase, IconButton, Typography } from "@mui/material";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import ImageOutlinedIcon from "@mui/icons-material/ImageOutlined";
+import { ResponsiveDialog } from "../mobile";
+import { LANDSCAPE_PHONE_MEDIA } from "../../../hooks/usePhoneLayout";
+import { useLoadedPictures } from "../useLoadedPictures";
+import { ProductImage } from "../ProductImage";
+import { ZoomableImage } from "./ZoomableImage";
+
+export const MAX_GALLERY_IMAGES = 10;
+const SWIPE_PX = 40;
+
+/**
+ * The gallery's width (and so its square's height) on a phone held
+ * sideways: the app frame's height less the header and bar, so the whole
+ * picture fits one frame (about 148 px in Hub's 266 px frame), at most 42 %
+ * of the width, never under 148 px. Full width it was a square of about
+ * 800 px.
+ */
+export const GALLERY_LANDSCAPE_WIDTH = "min(42vw, max(148px, calc(var(--qshare-app-height, 100dvh) - 120px)))";
+const LANDSCAPE = `@media ${LANDSCAPE_PHONE_MEDIA}`;
+
+const arrowSx = (side: "left" | "right") =>
+  ({
+    position: "absolute",
+    top: "50%",
+    [side]: 8,
+    transform: "translateY(-50%)",
+    width: 44,
+    height: 44,
+    bgcolor: "background.paper",
+    color: "text.primary",
+    border: 1,
+    borderColor: "divider",
+    "&:hover": { bgcolor: "background.paper" },
+  }) as const;
+
+function useSwipe(onSwipe: (direction: 1 | -1) => void) {
+  const start = useRef<{ x: number; y: number } | null>(null);
+  return {
+    onTouchStart: (event: TouchEvent) => {
+      const touch = event.touches[0];
+      // Two fingers pinch; they never swipe.
+      start.current = touch && event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null;
+    },
+    onTouchEnd: (event: TouchEvent) => {
+      const from = start.current;
+      const touch = event.changedTouches[0];
+      start.current = null;
+      if (!from || !touch) return;
+      const dx = touch.clientX - from.x;
+      const dy = touch.clientY - from.y;
+      if (Math.abs(dx) > SWIPE_PX && Math.abs(dx) > Math.abs(dy)) onSwipe(dx < 0 ? 1 : -1);
+    },
+  };
+}
+
+export function ImageGallery({
+  images,
+  title,
+  initialIndex = 0,
+  index: shownIndex,
+  onIndexChange,
+  captions,
+  max = MAX_GALLERY_IMAGES,
+}: {
+  images: string[] | undefined;
+  title: string;
+  initialIndex?: number;
+  /** The picture shown, when the page decides it: every change goes to onIndexChange. */
+  index?: number;
+  onIndexChange?: (index: number) => void;
+  /** What each picture is of ("Round / Pale"), when they differ. */
+  captions?: (string | undefined)[];
+  max?: number;
+}) {
+  const list = (images ?? []).filter((src) => typeof src === "string" && src).slice(0, max);
+  const count = list.length;
+  const [ownIndex, setOwnIndex] = useState(() => (initialIndex >= 0 && initialIndex < count ? initialIndex : 0));
+  const index = shownIndex ?? ownIndex;
+  const [viewerOpen, setViewerOpen] = useState(false);
+  // A zoomed picture is dragged, not swiped to the next one.
+  const [viewerZoomed, setViewerZoomed] = useState(false);
+  // Once a picture is in, no backdrop behind it: a transparent background shows the page.
+  const pictures = useLoadedPictures();
+  const at = count ? Math.min(Math.max(index, 0), count - 1) : 0;
+  const show = (i: number) => {
+    if (shownIndex === undefined) setOwnIndex(i);
+    onIndexChange?.(i);
+  };
+  const go = (delta: number) => {
+    if (count > 1) show((at + delta + count) % count);
+  };
+  const swipe = useSwipe(go);
+  const latestGo = useRef(go);
+  useEffect(() => {
+    latestGo.current = go;
+  });
+
+  // ← and → in the viewer, wherever focus is inside it.
+  useEffect(() => {
+    if (!viewerOpen || count < 2) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "ArrowLeft") latestGo.current(-1);
+      if (event.key === "ArrowRight") latestGo.current(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewerOpen, count]);
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    // The viewer's keys bubble here through its portal; the window listener has them.
+    if (viewerOpen) return;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      go(-1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      go(1);
+    }
+  };
+
+  if (count === 0) {
+    return (
+      <Box
+        sx={{
+          aspectRatio: "1 / 1",
+          borderRadius: 2,
+          bgcolor: "action.hover",
+          color: "text.secondary",
+          display: "grid",
+          placeItems: "center",
+          alignContent: "center",
+          gap: 1,
+          [LANDSCAPE]: { width: GALLERY_LANDSCAPE_WIDTH },
+        }}
+      >
+        <ImageOutlinedIcon sx={{ fontSize: 48 }} />
+        <Typography variant="body2">No pictures</Typography>
+      </Box>
+    );
+  }
+
+  const caption = (i: number) => captions?.[i];
+  const label = (i: number) => (caption(i) ? `${title}, ${caption(i)}, picture ${i + 1} of ${count}` : `${title}, picture ${i + 1} of ${count}`);
+
+  return (
+    <Box
+      role="region"
+      aria-roledescription="carousel"
+      aria-label={`${title}: pictures`}
+      onKeyDown={onKeyDown}
+      sx={{ minWidth: 0, [LANDSCAPE]: { width: GALLERY_LANDSCAPE_WIDTH } }}
+    >
+      <Box
+        {...swipe}
+        sx={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 2, overflow: "hidden", bgcolor: pictures.isLoaded(list[at]) ? "transparent" : "action.hover", touchAction: "pan-y" }}
+      >
+        <ButtonBase
+          onClick={() => setViewerOpen(true)}
+          aria-label={`Open picture ${at + 1} of ${count} full screen`}
+          sx={{ width: "100%", height: "100%", display: "block", "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: -2 } }}
+        >
+          <Box component="img" src={list[at]} alt={label(at)} onLoad={pictures.onLoad(list[at])} sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+        </ButtonBase>
+        {count > 1 && (
+          <>
+            <IconButton aria-label="Previous picture" onClick={() => go(-1)} sx={arrowSx("left")}>
+              <ChevronLeftIcon />
+            </IconButton>
+            <IconButton aria-label="Next picture" onClick={() => go(1)} sx={arrowSx("right")}>
+              <ChevronRightIcon />
+            </IconButton>
+            <Typography
+              aria-hidden
+              variant="caption"
+              sx={{ position: "absolute", bottom: 8, right: 8, px: 1, py: 0.25, borderRadius: 4, bgcolor: "background.paper", color: "text.primary", fontWeight: 600 }}
+            >
+              {at + 1} / {count}
+            </Typography>
+          </>
+        )}
+      </Box>
+      {count > 1 && (
+        <Box role="group" aria-label="Pictures" sx={{ display: "flex", flexWrap: "wrap", gap: 1, mt: 1 }}>
+          {list.map((src, i) => (
+            <ButtonBase
+              key={i}
+              onClick={() => show(i)}
+              aria-label={caption(i) ? `Show picture ${i + 1} of ${count}: ${caption(i)}` : `Show picture ${i + 1} of ${count}`}
+              aria-current={i === at ? "true" : undefined}
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: 1.5,
+                overflow: "hidden",
+                border: 2,
+                borderColor: i === at ? "text.primary" : "divider",
+                bgcolor: pictures.isLoaded(src) ? "transparent" : "action.hover",
+                "&:focus-visible": { outline: 2, outlineColor: "text.primary", outlineOffset: 2 },
+                // They wrap under the smaller picture, still 44 px targets.
+                [LANDSCAPE]: { width: 44, height: 44 },
+              }}
+            >
+              <ProductImage src={src} alt="" onLoad={pictures.onLoad(src)} />
+            </ButtonBase>
+          ))}
+        </Box>
+      )}
+      {viewerOpen && (
+        <ResponsiveDialog
+          open
+          onClose={() => setViewerOpen(false)}
+          title={count > 1 ? `${caption(at) ? `${title}, ${caption(at)}` : title} (${at + 1} of ${count})` : title}
+          maxWidth="lg"
+        >
+          <Box {...(viewerZoomed ? {} : swipe)} sx={{ position: "relative", display: "flex", justifyContent: "center" }}>
+            <ZoomableImage key={list[at]} src={list[at]} alt={label(at)} onZoomedChange={setViewerZoomed} />
+            {count > 1 && (
+              <>
+                <IconButton aria-label="Previous picture" onClick={() => go(-1)} sx={arrowSx("left")}>
+                  <ChevronLeftIcon />
+                </IconButton>
+                <IconButton aria-label="Next picture" onClick={() => go(1)} sx={arrowSx("right")}>
+                  <ChevronRightIcon />
+                </IconButton>
+              </>
+            )}
+          </Box>
+        </ResponsiveDialog>
+      )}
+    </Box>
+  );
+}
+
+export default ImageGallery;
