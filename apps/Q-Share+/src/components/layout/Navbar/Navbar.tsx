@@ -20,6 +20,7 @@ import { BottomSheet } from "../../common/mobile/BottomSheet";
 import { NameAvatar } from "../../common/NameAvatar";
 import { NameSwitcher } from "../../common/NameSwitcher";
 import { DownloadTaskManager } from "../../common/DownloadTaskManager";
+import { NotificationsButton } from "../../common/Notifications/NotificationsButton";
 import { PublishFile } from "../../PublishFile/PublishFile.tsx";
 import QShareLogoSrc from "../../../assets/img/q-share-icon.webp";
 import { PHONE_MEDIA, usePhoneLayout } from "../../../hooks/usePhoneLayout";
@@ -200,6 +201,7 @@ const NavBar: React.FC<Props> = ({
             </Tooltip>
           )}
           <DownloadTaskManager hideButton={phone} />
+          <NotificationsButton sx={NAV_BUTTON_SX} />
           {!phone && (
             <Tooltip title="Settings">
               <IconButton

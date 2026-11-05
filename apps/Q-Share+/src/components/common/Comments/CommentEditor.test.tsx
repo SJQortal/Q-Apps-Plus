@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { onQdnSearchesInvalidated } from '../../../utils/qdnSearch';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { CommentEditor } from './CommentEditor';
 import { store } from '../../../state/store';
@@ -64,5 +65,17 @@ describe('CommentEditor', () => {
     expect(call.identifier).toMatch(new RegExp(`^qcomment_v1_qshare_${POST_ID.slice(-12)}_base_`));
     expect(call.service).toBe('BLOG_COMMENT');
     expect(alerts().alertSuccess).toBe('Comment published');
+  });
+
+  it('tells the comment searches (and so notifications) that there is a new comment', async () => {
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    const invalidated = vi.fn();
+    const stop = onQdnSearchesInvalidated(invalidated);
+    const onSubmit = vi.fn();
+    renderWithProviders(<CommentEditor postId={POST_ID} postName="bob" onSubmit={onSubmit} />);
+    writeAndSubmit('Nice share');
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(invalidated).toHaveBeenCalledTimes(1);
+    stop();
   });
 });

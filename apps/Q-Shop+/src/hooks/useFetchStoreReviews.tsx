@@ -1,55 +1,42 @@
-import React from "react";
+import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { addToHashMapStoreReviews } from "../state/features/storeSlice";
-import { RootState } from "../state/store";
-import { fetchAndEvaluateStoreReviews } from "../utils/fetchStoreReviews";
+import type { RootState } from "../state/store";
+import { fetchReview } from "../utils/fetchStoreReviews";
 
 interface Resource {
   id: string;
   updated?: number;
 }
 
+/**
+ * Full reviews by id (`store.hashMapStoreReviews`), read once each. The
+ * original also stored failed reads, which crashed the reducer on
+ * `undefined`; only real reviews are kept now.
+ */
 export const useFetchStoreReviews = () => {
   const dispatch = useDispatch();
-  const hashMapStoreReviews = useSelector(
-    (state: RootState) => state.store.hashMapStoreReviews
+  const hashMapStoreReviews = useSelector((state: RootState) => state.store.hashMapStoreReviews);
+
+  /** Reads the review's JSON and keeps it. Rejects when the node can't give it (yet); null when it isn't a review. */
+  const getReview = useCallback(
+    async (owner: string, reviewId: string) => {
+      const review = await fetchReview(owner, reviewId);
+      if (review) dispatch(addToHashMapStoreReviews(review));
+      return review;
+    },
+    [dispatch]
   );
 
-  // Get the review raw data from QDN
-  const getReview = async (owner: string, reviewId: string, content: any) => {
-    const res = await fetchAndEvaluateStoreReviews({
-      owner,
-      reviewId,
-      content
-    });
-
-    dispatch(addToHashMapStoreReviews(res));
-  };
-
-  // Make sure that raw data isn't already present in Redux hashmap
-  const checkAndUpdateResource = React.useCallback(
+  /** True when the review isn't kept yet, or the search says it changed since. */
+  const checkAndUpdateResource = useCallback(
     (resource: Resource) => {
-      // Check if the post exists in hashMapPosts
-      const existingResource = hashMapStoreReviews[resource.id];
-      if (!existingResource) {
-        // If the post doesn't exist, add it to hashMapPosts
-        return true;
-      } else if (
-        resource?.updated &&
-        existingResource?.updated &&
-        resource.updated > existingResource.updated
-      ) {
-        // If the post exists and its updated is more recent than the existing post's updated, update it in hashMapPosts
-        return true;
-      } else {
-        return false;
-      }
+      const existing = hashMapStoreReviews[resource.id];
+      if (!existing) return true;
+      return !!(resource.updated && existing.updated && resource.updated > existing.updated);
     },
     [hashMapStoreReviews]
   );
 
-  return {
-    getReview,
-    checkAndUpdateResource
-  };
+  return { getReview, checkAndUpdateResource, hashMapStoreReviews };
 };

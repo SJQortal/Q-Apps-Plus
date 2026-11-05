@@ -2,22 +2,39 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fetchCallsMatching, mockFetch, mockQortalAction, qortalCallsFor } from '../test/setup';
 import { QSHARE_COLLECTION_BASE } from '../constants/Identifiers';
 import { QDN_PAGE, resetQdnSearchCache } from './qdnSearch';
+import { recipientMarker, resetOwnerAddresses } from './recipientMarker';
 import {
   QDN_IDENTIFIER_MAX,
+  MAX_FOLDER_DEPTH,
   buildCollectionBody,
   buildCollectionIdentifier,
   buildCollectionPublish,
+  collectionSpace,
+  copyCollectionBody,
+  coverUrl,
+  editCollectionBody,
+  newCoverIdentifier,
+  parseFolders,
+  parseSource,
+  storedCollectionJson,
   fetchCollection,
   hasItem,
   newCollectionUid,
   parseCollection,
+  markedShareOwners,
   publishCollection,
   resetCollectionCaches,
   searchCollections,
+  summaryToCollection,
   slugifyCollectionTitle,
   toggleItem,
   type Collection,
+  deletedCollectionBody,
+  itemCoverOf,
+  withItemCover,
+  MAX_ITEM_COVERS,
 } from './collections';
+import { isDeletedCollection } from './collectionFolders';
 
 const decode = (data64: string) => JSON.parse(atob(data64));
 
@@ -86,6 +103,69 @@ describe('collection bodies and publish payload', () => {
   });
 });
 
+describe('recipient markers on publish', () => {
+  const ALICE = 'Q9aWbQnCZXmuNNkpg6t4sTCk8CRYoGF7Ce';
+  const BOB = 'QWEsSfJdVa1DR4HPDQ29iRXSNtDdZ9H8fZ';
+  const CAROL = 'QZ4gAsrEf1HaMz8HCJdQeyB6oDRSvJV6JS';
+  const OWNERS: Record<string, string> = { alice: ALICE, bob: BOB, carol: CAROL };
+
+  beforeEach(() => {
+    resetCollectionCaches();
+    resetOwnerAddresses();
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    mockFetch('/names/', (url: URL) => {
+      const owner = OWNERS[decodeURIComponent(url.pathname.slice('/names/'.length)).toLowerCase()];
+      return owner ? { name: 'x', owner } : { error: 401 };
+    });
+  });
+
+  it('names the owners of newly added shares first, then of the newest ones already there, never the publisher', async () => {
+    const before = [{ name: 'bob', identifier: 'b1' }];
+    await publishCollection({
+      name: 'alice',
+      identifier: 'qshare_collection_docs_ab12cd',
+      previousItems: before,
+      body: buildCollectionBody({
+        title: 'Docs',
+        description: 'Guides I like',
+        items: [...before, { name: 'alice', identifier: 'a1' }, { name: 'carol', identifier: 'c1' }],
+      }),
+    });
+    const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
+    expect(payload.description).toBe(`Guides I like ${recipientMarker(CAROL)}${recipientMarker(BOB)}`);
+    // The JSON body never carries markers.
+    expect(decode(String(payload.data64)).description).toBe('Guides I like');
+  });
+
+  it('keeps naming earlier owners on later publishes, so an owner whose app was closed still finds it', async () => {
+    const bobs = { name: 'bob', identifier: 'b1' };
+    const carols = { name: 'carol', identifier: 'c1' };
+    // bob's share was added first; carol's now: both stay marked.
+    expect(await markedShareOwners('alice', [bobs], [bobs, carols])).toEqual([CAROL, BOB]);
+    // A publish that adds nothing (a title edit) keeps them too, newest first.
+    expect(await markedShareOwners('alice', [bobs, carols], [bobs, carols])).toEqual([CAROL, BOB]);
+    // An emptied collection names no one; an owner Core doesn't know is skipped.
+    expect(await markedShareOwners('alice', [bobs], [])).toEqual([]);
+    expect(await markedShareOwners('alice', [], [{ name: 'ghost', identifier: 'g1' }])).toEqual([]);
+  });
+
+  it('stops at four owners, newest first', async () => {
+    for (const n of [1, 2, 3, 4, 5]) OWNERS[`owner${n}`] = `Q${String(n).repeat(33)}`;
+    const items = [1, 2, 3, 4, 5].map((n) => ({ name: `owner${n}`, identifier: `s${n}` }));
+    expect(await markedShareOwners('alice', items, items)).toEqual([5, 4, 3, 2].map((n) => `Q${String(n).repeat(33)}`));
+  });
+
+  it('keeps markers out of the descriptions the app shows', () => {
+    const summary = summaryToCollection({
+      name: 'alice',
+      service: 'DOCUMENT',
+      identifier: 'qshare_collection_docs_ab12cd',
+      metadata: { title: 'Docs', description: `Guides I like ${recipientMarker(BOB)}` },
+    });
+    expect(summary.description).toBe('Guides I like');
+  });
+});
+
 describe('parseCollection', () => {
   it('rejects junk and drops bad items', () => {
     expect(parseCollection(null)).toBeNull();
@@ -123,6 +203,367 @@ describe('parseCollection', () => {
   it('accepts JSON text and fills missing timestamps', () => {
     const parsed = parseCollection(JSON.stringify({ version: 1, title: 'T', description: 'D', items: [], updated: 5 }));
     expect(parsed).toMatchObject({ title: 'T', description: 'D', created: 5, updated: 5 });
+  });
+});
+
+describe('folders and covers (1.0.1)', () => {
+  const cover = { service: 'THUMBNAIL', name: 'dj', identifier: 'qshare_cover_abcd1234' };
+  const stored = {
+    version: 1,
+    title: 'Music',
+    description: 'Mixes',
+    items: [{ name: 'dj', identifier: 'qshare_file_m_1_metadata' }],
+    created: 1,
+    updated: 2,
+    cover,
+    folders: [
+      {
+        id: 'live01',
+        title: 'Live',
+        description: 'On stage',
+        cover: { ...cover, identifier: 'qshare_cover_live0001' },
+        items: [{ name: 'dj', identifier: 'qshare_file_l_2_metadata' }],
+        folders: [{ id: 'tokyo1', title: 'Tokyo', items: [], folders: [] }],
+      },
+    ],
+    // A field a later version might add.
+    sortOrder: 'manual',
+  };
+
+  it('reads folders, covers and fields it does not know, and writes them all back', async () => {
+    const parsed = parseCollection(stored)!;
+    expect(parsed.cover).toEqual(cover);
+    expect(parsed.folders?.[0]).toMatchObject({ id: 'live01', title: 'Live', description: 'On stage' });
+    expect(parsed.folders?.[0].folders[0]).toEqual({ id: 'tokyo1', title: 'Tokyo', description: '', items: [], folders: [] });
+    expect(parsed.extra).toEqual({ sortOrder: 'manual' });
+
+    const next = editCollectionBody(parsed, { title: 'Music 2' }, 9);
+    const payload = await buildCollectionPublish({ name: 'dj', identifier: 'qshare_collection_music_ab12cd', body: next });
+    const written = decode(payload.data64);
+    expect(written).toEqual({
+      ...stored,
+      title: 'Music 2',
+      updated: 9,
+      // Normalised on the way through: a missing description is written as "".
+      folders: [{ ...stored.folders[0], folders: [{ id: 'tokyo1', title: 'Tokyo', description: '', items: [], folders: [] }] }],
+    });
+  });
+
+  it('stores a collection without folders or cover exactly as 1.0.0 did', () => {
+    const body = editCollectionBody(buildCollectionBody({ title: 'Docs', now: 1 }), { folders: [], cover: null }, 2);
+    expect(Object.keys(storedCollectionJson(body))).toEqual(['version', 'title', 'description', 'items', 'created', 'updated']);
+  });
+
+  it('drops folders and covers that are not valid', () => {
+    expect(parseFolders('nope')).toEqual([]);
+    const folders = parseFolders([
+      { id: 'ok', title: 'A', items: [{ name: 'x', identifier: 'y' }, { name: '' }], cover: { service: 'IMAGE', name: 'a', identifier: 'b' } },
+      { id: 'ok', title: 'Repeated id' },
+      { title: 'No id' },
+      { id: 'n', title: 3 },
+      null,
+    ]);
+    expect(folders).toEqual([{ id: 'ok', title: 'A', description: '', items: [{ name: 'x', identifier: 'y' }], folders: [] }]);
+    // Deeper than MAX_FOLDER_DEPTH is cut off.
+    let deep: unknown[] = [];
+    for (let depth = MAX_FOLDER_DEPTH + 2; depth > 0; depth--) deep = [{ id: `d${depth}`, title: `D${depth}`, folders: deep }];
+    let level = parseFolders(deep);
+    let count = 0;
+    while (level.length) {
+      count += 1;
+      level = level[0].folders;
+    }
+    expect(count).toBe(MAX_FOLDER_DEPTH);
+    expect(parseCollection({ ...stored, cover: { service: 'THUMBNAIL', name: '', identifier: 'x' } })?.cover).toBeUndefined();
+  });
+
+  it('publishes a new cover with the collection in one Hub request, cover first', async () => {
+    resetCollectionCaches();
+    resetOwnerAddresses();
+    mockFetch('/names/', { error: 401 });
+    mockQortalAction('PUBLISH_MULTIPLE_QDN_RESOURCES', true);
+    const identifier = newCoverIdentifier();
+    expect(identifier).toMatch(/^qshare_cover_[a-z0-9]{8}$/);
+    const file = new File([new Uint8Array([1, 2, 3])], 'cover.webp', { type: 'image/webp' });
+    const body = buildCollectionBody({ title: 'Music', cover: { service: 'THUMBNAIL', name: 'dj', identifier }, now: 1 });
+    await publishCollection({ name: 'dj', identifier: 'qshare_collection_music_ab12cd', body, covers: [{ identifier, file }] });
+
+    const [request] = qortalCallsFor('PUBLISH_MULTIPLE_QDN_RESOURCES') as any[];
+    expect(request.resources.map((r: any) => r.service)).toEqual(['THUMBNAIL', 'DOCUMENT']);
+    expect(request.resources[0]).toMatchObject({
+      action: 'PUBLISH_QDN_RESOURCE',
+      name: 'dj',
+      identifier,
+      file,
+      filename: 'cover.webp',
+      title: 'Music',
+      tag1: 'qshare_cover_',
+    });
+    expect(decode(request.resources[1].data64).cover).toEqual({ service: 'THUMBNAIL', name: 'dj', identifier });
+    expect(coverUrl({ name: 'd j', identifier })).toBe(`/arbitrary/THUMBNAIL/d%20j/${identifier}`);
+  });
+
+  it('names the owners of shares added inside folders too', async () => {
+    resetCollectionCaches();
+    resetOwnerAddresses();
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    mockFetch('/names/', (url: URL) => (url.pathname.endsWith('/bob') ? { name: 'bob', owner: 'QBobAddress1234567890123456789012' } : { error: 401 }));
+    const previous = buildCollectionBody({ title: 'Music', folders: [{ id: 'f1', title: 'F', description: '', items: [], folders: [] }] });
+    const next = editCollectionBody(previous, {
+      folders: [{ id: 'f1', title: 'F', description: '', items: [{ name: 'bob', identifier: 'b1' }], folders: [] }],
+    });
+    await publishCollection({ name: 'dj', identifier: 'qshare_collection_music_ab12cd', body: next, previous });
+    const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
+    expect(payload.description).toBe(recipientMarker('QBobAddress1234567890123456789012'));
+  });
+});
+
+describe('deleted collections (1.0.1)', () => {
+  const held: Collection = {
+    version: 1,
+    name: 'alice',
+    identifier: 'qshare_collection_holiday_ab12cd',
+    title: 'Holiday',
+    description: 'Pics',
+    items: [{ name: 'alice', identifier: 'qshare_file_h_1_metadata' }],
+    folders: [{ id: 'f00001', title: 'Beach', description: '', items: [], folders: [] }],
+    cover: { service: 'THUMBNAIL', name: 'alice', identifier: 'qshare_cover_hol00001' },
+    created: 1,
+    updated: 2,
+    fetchedAt: 3,
+    extra: { theme: 'sea' },
+  };
+
+  it('stores a deleted collection empty, flagged, with its title and unknown fields', () => {
+    const body = deletedCollectionBody(held, 100);
+    const stored = storedCollectionJson(body);
+    expect(stored).toEqual({ theme: 'sea', version: 1, title: 'Holiday', description: 'Pics', items: [], created: 1, updated: 100, deleted: true });
+    const parsed = parseCollection(JSON.stringify(stored));
+    expect(parsed?.deleted).toBe(true);
+    expect(isDeletedCollection(parsed!)).toBe(true);
+    // A collection that was never deleted, empty or not, isn't.
+    expect(isDeletedCollection({ ...held, items: [], folders: [] })).toBe(false);
+    expect(storedCollectionJson(editCollectionBody(held))).not.toHaveProperty('deleted');
+  });
+
+  it('is a collection again once edited, and only a flag on an empty one counts', () => {
+    const deleted = { ...parseCollection(storedCollectionJson(deletedCollectionBody(held, 100)))!, name: held.name, identifier: held.identifier, fetchedAt: 4 };
+    const revived = editCollectionBody(deleted, { items: [{ name: 'bob', identifier: 'qshare_file_b_1_metadata' }] }, 200);
+    expect(revived.deleted).toBeUndefined();
+    expect(storedCollectionJson(revived)).not.toHaveProperty('deleted');
+    // A flag left on by an older version that added a share doesn't hide it.
+    expect(isDeletedCollection({ ...deleted, items: [{ name: 'bob', identifier: 'x' }] })).toBe(false);
+    // Anything but true is not the flag.
+    expect(parseCollection(JSON.stringify({ version: 1, title: 'T', items: [], deleted: 'yes' }))?.deleted).toBeUndefined();
+  });
+});
+
+describe('collection copies (1.0.1)', () => {
+  const source: Collection = {
+    version: 1,
+    name: 'dj b',
+    identifier: 'qshare_collection_music_ab12cd',
+    title: 'Music',
+    description: 'Mixes',
+    items: [{ name: 'dj b', identifier: 'qshare_file_m_1_metadata' }],
+    folders: [{ id: 'live01', title: 'Live', description: '', items: [{ name: 'eve', identifier: 'e1' }], folders: [] }],
+    cover: { service: 'THUMBNAIL', name: 'dj b', identifier: 'qshare_cover_music001' },
+    created: 1,
+    updated: 2,
+    fetchedAt: 3,
+  };
+
+  it('copies the shares, folders and cover, names the source, and keeps it through edits', async () => {
+    const copy = copyCollectionBody(source, { title: 'My music', description: 'From DJ B', now: 10 });
+    expect(copy).toMatchObject({
+      title: 'My music',
+      description: 'From DJ B',
+      items: source.items,
+      folders: source.folders,
+      cover: source.cover,
+      copiedFrom: { name: 'dj b', identifier: 'qshare_collection_music_ab12cd', title: 'Music' },
+      created: 10,
+      updated: 10,
+    });
+    const payload = await buildCollectionPublish({ name: 'alice', identifier: 'qshare_collection_my-music_zz99yy', body: copy });
+    const stored = decode(payload.data64);
+    expect(stored.copiedFrom).toEqual(copy.copiedFrom);
+    expect(parseCollection(stored)?.copiedFrom).toEqual(copy.copiedFrom);
+    expect(editCollectionBody(parseCollection(stored)!, { title: 'Renamed' }).copiedFrom).toEqual(copy.copiedFrom);
+  });
+
+  it('reads only a real source', () => {
+    expect(parseSource({ name: 'a', identifier: 'qshare_collection_x_ab12cd', title: 'X' })).toEqual({
+      name: 'a',
+      identifier: 'qshare_collection_x_ab12cd',
+      title: 'X',
+    });
+    expect(parseSource({ name: 'a', identifier: 'qshare_file_x_metadata' })).toBeUndefined();
+    expect(parseSource({ identifier: 'qshare_collection_x_ab12cd' })).toBeUndefined();
+    expect(parseSource('nope')).toBeUndefined();
+  });
+
+  it("marks the source's owner first on every publish of a copy", async () => {
+    resetCollectionCaches();
+    resetOwnerAddresses();
+    const owners: Record<string, string> = { 'dj b': 'Q0000000000000000000DJBADDRESS01', eve: 'Q0000000000000000000EVEADDRESS02' };
+    mockFetch('/names/', (url: URL) => {
+      const owner = owners[decodeURIComponent(url.pathname.slice('/names/'.length))];
+      return owner ? { name: 'x', owner } : { error: 401 };
+    });
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    const copy = copyCollectionBody(source, { title: 'My music', description: '' });
+    await publishCollection({ name: 'alice', identifier: 'qshare_collection_my-music_zz99yy', body: copy, previous: null, previousItems: [] });
+    const [payload] = qortalCallsFor('PUBLISH_QDN_RESOURCE');
+    expect(payload.description).toBe(`${recipientMarker(owners['dj b'])}${recipientMarker(owners.eve)}`);
+  });
+});
+
+describe('collection spaces (1.0.1)', () => {
+  const base = { version: 1, title: 'T', description: '', items: [], created: 1, updated: 2 };
+
+  it('is left out of the stored JSON when unset', () => {
+    const body = buildCollectionBody({ title: 'T', now: 5 });
+    expect(body.space).toBeUndefined();
+    expect('space' in storedCollectionJson(body)).toBe(false);
+    expect('space' in storedCollectionJson(buildCollectionBody({ title: 'T', space: null }))).toBe(false);
+  });
+
+  it('is stored when set and read back as a known field, not an unknown one', () => {
+    const stored = storedCollectionJson(buildCollectionBody({ title: 'T', space: 'music', now: 5 }));
+    expect(stored.space).toBe('music');
+    const parsed = parseCollection(stored);
+    expect(parsed?.space).toBe('music');
+    expect(parsed?.extra).toBeUndefined();
+  });
+
+  it('keeps a look from a later version through an edit, but shows it as standard', () => {
+    const parsed = parseCollection({ ...base, space: 'arcade' })!;
+    expect(parsed.space).toBe('arcade');
+    expect(collectionSpace(parsed)).toBe('standard');
+    expect(storedCollectionJson(editCollectionBody(parsed, { title: 'New' })).space).toBe('arcade');
+  });
+
+  it('ignores anything that is not a short string', () => {
+    for (const space of [7, null, {}, '', 'x'.repeat(33)]) {
+      expect(parseCollection({ ...base, space })?.space).toBeUndefined();
+    }
+  });
+
+  it('names the known spaces and calls everything else standard', () => {
+    for (const space of ['music', 'cinema', 'library', 'album']) expect(collectionSpace({ space })).toBe(space);
+    expect(collectionSpace({})).toBe('standard');
+    expect(collectionSpace(null)).toBe('standard');
+    expect(collectionSpace({ space: 'constructor' })).toBe('standard');
+  });
+
+  it('an edit keeps it, sets it, or clears it with null', () => {
+    const body = buildCollectionBody({ title: 'T', space: 'music' });
+    expect(editCollectionBody(body).space).toBe('music');
+    expect(editCollectionBody(body, { items: [{ name: 'a', identifier: 'b' }] }).space).toBe('music');
+    expect(editCollectionBody(body, { space: 'album' }).space).toBe('album');
+    expect(editCollectionBody(body, { space: null }).space).toBeUndefined();
+  });
+
+  it('a copy and a delete keep it', () => {
+    const source = { ...buildCollectionBody({ title: 'T', space: 'cinema' }), name: 'bob', identifier: 'qshare_collection_t_ab12cd' };
+    expect(copyCollectionBody(source, { title: 'Mine', description: '' }).space).toBe('cinema');
+    expect(deletedCollectionBody(source).space).toBe('cinema');
+  });
+});
+
+describe('item covers (1.0.1)', () => {
+  const cover = (identifier: string) => ({ service: 'THUMBNAIL' as const, name: 'alice', identifier });
+  const book = { name: 'bob', identifier: 'qshare_file_book_ab12_metadata' };
+  const deep = { name: 'carol', identifier: 'qshare_file_deep_cd34_metadata' };
+  const folders = [{ id: 'f1', title: 'Shelf', description: '', items: [deep], folders: [] }];
+  const withCovers = () =>
+    buildCollectionBody({
+      title: 'T',
+      items: [book],
+      folders,
+      itemCovers: [
+        { ...book, cover: cover('qshare_cover_aaaaaaaa') },
+        { ...deep, cover: cover('qshare_cover_bbbbbbbb') },
+      ],
+      now: 5,
+    });
+
+  it('is left out of the stored JSON when there are none', () => {
+    const body = buildCollectionBody({ title: 'T', items: [book], itemCovers: [], now: 5 });
+    expect(body.itemCovers).toBeUndefined();
+    expect('itemCovers' in storedCollectionJson(body)).toBe(false);
+  });
+
+  it('stores each as the share plus a cover, for shares in folders too, and reads them back as known', () => {
+    const stored = storedCollectionJson(withCovers());
+    expect(stored.itemCovers).toEqual([
+      { name: 'bob', identifier: 'qshare_file_book_ab12_metadata', cover: cover('qshare_cover_aaaaaaaa') },
+      { name: 'carol', identifier: 'qshare_file_deep_cd34_metadata', cover: cover('qshare_cover_bbbbbbbb') },
+    ]);
+    // The items themselves stay plain, as the original shape.
+    expect(stored.items).toEqual([book]);
+    const parsed = parseCollection(JSON.parse(JSON.stringify(stored)))!;
+    expect(parsed.extra).toBeUndefined();
+    expect(itemCoverOf(parsed, deep)?.identifier).toBe('qshare_cover_bbbbbbbb');
+    expect(itemCoverOf(parsed, { name: 'bob', identifier: 'other' })).toBeUndefined();
+  });
+
+  it('reads only entries with a share and a THUMBNAIL cover, one per share, at most the limit', () => {
+    const base = { version: 1, title: 'T', description: '', items: [book], created: 1, updated: 2 };
+    const parsed = parseCollection({
+      ...base,
+      itemCovers: [
+        { ...book, cover: cover('qshare_cover_first000') },
+        { ...book, cover: cover('qshare_cover_second00') },
+        { name: 'bob', cover: cover('x') },
+        { ...book, cover: { service: 'IMAGE', name: 'alice', identifier: 'x' } },
+        'nonsense',
+      ],
+    })!;
+    expect(parsed.itemCovers).toEqual([{ ...book, cover: cover('qshare_cover_first000') }]);
+    expect(parseCollection({ ...base, itemCovers: 'x' })?.itemCovers).toBeUndefined();
+    const many = Array.from({ length: MAX_ITEM_COVERS + 5 }, (_, i) => ({ name: 'n', identifier: `i${i}`, cover: cover('c') }));
+    expect(parseCollection({ ...base, itemCovers: many })?.itemCovers).toHaveLength(MAX_ITEM_COVERS);
+  });
+
+  it('an edit keeps them, and drops the cover of a share that leaves the collection', () => {
+    const body = withCovers();
+    expect(editCollectionBody(body, { title: 'New' }).itemCovers).toHaveLength(2);
+    const removed = editCollectionBody(body, { items: [] });
+    expect(removed.itemCovers?.map((entry) => entry.name)).toEqual(['carol']);
+    // Moved into a folder: still held, so still covered.
+    const moved = editCollectionBody(body, { items: [], folders: [{ ...folders[0], items: [deep, book] }] });
+    expect(moved.itemCovers).toHaveLength(2);
+  });
+
+  it('keeps the shape a cover was cut to, and reads only the two it knows', () => {
+    const body = buildCollectionBody({ title: 'T', items: [book, deep], itemCovers: withItemCover(undefined, book, cover('c1'), 'portrait'), now: 5 });
+    expect(storedCollectionJson(body).itemCovers).toEqual([{ ...book, cover: cover('c1'), shape: 'portrait' }]);
+    const base = { version: 1, title: 'T', description: '', items: [book, deep], created: 1, updated: 2 };
+    const parsed = parseCollection({
+      ...base,
+      itemCovers: [
+        { ...book, cover: cover('c1'), shape: 'landscape' },
+        { ...deep, cover: cover('c2'), shape: 'round' },
+      ],
+    })!;
+    expect(parsed.itemCovers).toEqual([{ ...book, cover: cover('c1'), shape: 'landscape' }, { ...deep, cover: cover('c2') }]);
+    expect(editCollectionBody(parsed, { title: 'New' }).itemCovers?.[0].shape).toBe('landscape');
+  });
+
+  it('sets, replaces and takes away one share\'s cover', () => {
+    const body = withCovers();
+    const replaced = withItemCover(body.itemCovers, book, cover('qshare_cover_cccccccc'));
+    expect(replaced.filter((entry) => entry.name === 'bob')).toEqual([{ ...book, cover: cover('qshare_cover_cccccccc') }]);
+    expect(withItemCover(body.itemCovers, book, null).map((entry) => entry.name)).toEqual(['carol']);
+    expect(withItemCover(undefined, book, cover('c'))).toEqual([{ ...book, cover: cover('c') }]);
+  });
+
+  it('a copy keeps them (the images stay the original owner\'s); a delete drops them', () => {
+    const source = { ...withCovers(), name: 'alice', identifier: 'qshare_collection_t_ab12cd' };
+    expect(copyCollectionBody(source, { title: 'Mine', description: '' }).itemCovers).toEqual(source.itemCovers);
+    expect(deletedCollectionBody(source).itemCovers).toBeUndefined();
   });
 });
 
@@ -186,6 +627,17 @@ describe('searchCollections and fetchCollection', () => {
     expect(second).toContain(`limit=${QDN_PAGE}`);
     expect(second).toContain('offset=20');
     expect(second).not.toContain('name=');
+  });
+
+  it('looks for words anywhere in a collection, never as a prefix, and leaves out an empty query', async () => {
+    mockFetch('/arbitrary/resources/search', []);
+    await searchCollections({ query: '  live music ' });
+    await searchCollections({ query: '   ' });
+    const [withWords, blank] = fetchCallsMatching('/arbitrary/resources/search');
+    expect(new URL(withWords, 'http://n').searchParams.get('query')).toBe('live music');
+    // Core makes `query` a prefix match when `prefix` is set (for the identifier too).
+    expect(withWords).not.toContain('prefix=');
+    expect(blank).not.toContain('query=');
   });
 
   it('fetches a body once per session and refreshes after a publish', async () => {

@@ -1,36 +1,52 @@
-import { useState } from "react";
-import ConfirmationModal, {
-  ModalProps
-} from "../components/common/ConfirmationModal/ConfirmationModal";
+/**
+ * `const { dialog, showModal } = useConfirmationModal({ title, message })`:
+ * render `dialog` once, and `await showModal()` resolves true on confirm and
+ * false on cancel. `showModal({ message })` changes the words for one ask,
+ * e.g. to name the item.
+ */
+import { useCallback, useRef, useState } from "react";
+import ConfirmationModal from "../components/common/ConfirmationModal/ConfirmationModal";
 
-const useConfirmationModal = (props: any) => {
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [resolvePromise, setResolvePromise] =
-    useState<(value: boolean) => void>();
+export interface ConfirmOptions {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  destructive?: boolean;
+}
 
-  const showModal = async () => {
-    setIsModalOpen(true);
-    return new Promise<boolean>((resolve) => {
-      setResolvePromise(() => resolve);
-    });
+const useConfirmationModal = (defaults: ConfirmOptions) => {
+  const [asking, setAsking] = useState<ConfirmOptions | null>(null);
+  const resolver = useRef<((value: boolean) => void) | null>(null);
+
+  const showModal = useCallback(
+    (override: Partial<ConfirmOptions> = {}) =>
+      new Promise<boolean>((resolve) => {
+        resolver.current?.(false);
+        resolver.current = resolve;
+        setAsking({ ...defaults, ...override });
+      }),
+    [defaults]
+  );
+
+  const settle = (confirmed: boolean) => {
+    resolver.current?.(confirmed);
+    resolver.current = null;
+    setAsking(null);
   };
 
-  const handleUserAction = (userConfirmed: boolean) => {
-    setIsModalOpen(false);
-    resolvePromise?.(userConfirmed);
-  };
-
-  const Modal = () => (
+  const dialog = (
     <ConfirmationModal
-      open={isModalOpen}
-      title={props.title}
-      message={props.message}
-      handleConfirm={() => handleUserAction(true)}
-      handleCancel={() => handleUserAction(false)}
+      open={asking !== null}
+      title={asking?.title ?? defaults.title}
+      message={asking?.message ?? defaults.message}
+      confirmLabel={asking?.confirmLabel ?? defaults.confirmLabel}
+      destructive={asking?.destructive ?? defaults.destructive}
+      handleConfirm={() => settle(true)}
+      handleCancel={() => settle(false)}
     />
   );
 
-  return { Modal, showModal };
+  return { dialog, showModal };
 };
 
 export default useConfirmationModal;

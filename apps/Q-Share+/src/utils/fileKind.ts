@@ -59,7 +59,8 @@ function extensionOf(filename: string): string {
  * hand over an empty type, and QDN file references may have none).
  */
 export function fileKind(mimetype?: string | null, filename?: string | null): FileKind {
-  const mime = (mimetype || "").toLowerCase().split(";")[0].trim();
+  // Both can come from other people's JSON, whatever the types say.
+  const mime = (typeof mimetype === "string" ? mimetype : "").toLowerCase().split(";")[0].trim();
   if (mime) {
     if (mime.startsWith("image/")) return "image";
     if (mime.startsWith("video/")) return "video";
@@ -71,7 +72,7 @@ export function fileKind(mimetype?: string | null, filename?: string | null): Fi
     if (mime.startsWith("application/vnd.oasis.opendocument.")) return "document";
     if (mime.startsWith("application/vnd.ms-")) return "document";
   }
-  const ext = extensionOf(filename || "");
+  const ext = extensionOf(typeof filename === "string" ? filename : "");
   if (ext) {
     for (const kind of Object.keys(EXTENSIONS) as FileKind[]) {
       if (EXTENSIONS[kind].includes(ext)) return kind;

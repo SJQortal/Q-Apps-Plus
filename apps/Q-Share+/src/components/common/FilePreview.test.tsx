@@ -40,7 +40,7 @@ function stoppableDownload(identifier: string) {
   const retryDownload = vi.fn(() => at({ status: 'REFETCHING' }));
   const giveUp = () => act(() => at({ status: 'REFETCHING', stopped: true }));
   const ready = () => act(() => at({ status: 'READY', percentLoaded: 100 }));
-  return { value: { downloadVideo, retryDownload }, retryDownload, giveUp, ready };
+  return { value: { downloadVideo, retryDownload, cancelDownload: () => {} }, retryDownload, giveUp, ready };
 }
 
 function setAutoPreview(on: boolean) {
@@ -199,7 +199,7 @@ describe('FilePreview', () => {
       mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'DOWNLOADING', percentLoaded: 20 });
       mockFetch('/arbitrary/FILE/', '%PDF-1.7 later');
       renderWithProviders(
-        <MyContext.Provider value={{ downloadVideo, retryDownload: () => {} }}>
+        <MyContext.Provider value={{ downloadVideo, retryDownload: () => {}, cancelDownload: () => {} }}>
           <FilePreview file={pdf} />
         </MyContext.Provider>
       );
@@ -351,7 +351,7 @@ describe('FilePreview', () => {
       const downloadVideo = vi.fn();
       mockQortalAction('GET_QDN_RESOURCE_STATUS', { status: 'PUBLISHED', percentLoaded: 0 });
       const { container } = renderWithProviders(
-        <MyContext.Provider value={{ downloadVideo, retryDownload: () => {} }}>
+        <MyContext.Provider value={{ downloadVideo, retryDownload: () => {}, cancelDownload: () => {} }}>
           <FilePreview file={audio} />
         </MyContext.Provider>
       );

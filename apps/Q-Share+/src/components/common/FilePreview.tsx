@@ -129,7 +129,7 @@ export function PreviewToggleButton({ kind, open, onToggle, filename }: PreviewT
           ? `${label.close} ${media ? "for" : "of"} ${filename || "file"}`
           : `${label.open} ${filename || ""}`.trim()
       }
-      sx={{ minHeight: phone ? 48 : 40, width: phone ? "100%" : "auto", flexShrink: 0 }}
+      sx={{ minHeight: phone ? 44 : 36, width: phone ? "100%" : "auto", flexShrink: 0 }}
     >
       {open ? label.close : label.open}
     </Button>
@@ -242,7 +242,7 @@ export function OpenPdfButton({ file, jsonId }: OpenPdfButtonProps) {
         onClick={open}
         disabled={busy}
         aria-label={`Open PDF ${file.filename || ""}`.trim()}
-        sx={{ minHeight: phone ? 48 : 40, width }}
+        sx={{ minHeight: phone ? 44 : 36, width }}
       >
         {!busy ? "Open PDF" : state === "fetching" ? "Opens when ready" : "Opening…"}
       </Button>

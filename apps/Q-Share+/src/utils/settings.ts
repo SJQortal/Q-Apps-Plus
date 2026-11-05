@@ -18,8 +18,14 @@ export interface AppSettings {
   hiddenNames: string[];
   /** Show the "Following" feed chip on Home. */
   followingFeed: boolean;
-  /** Share lists as rows or as a grid of cards. */
+  /** Share lists on Home and profiles as rows or as a grid of cards. */
   listView: ListView;
+  /** The shares in a collection or folder: a grid of cards by default. */
+  collectionView: ListView;
+  /** Notify about comments on your shares and replies to your comments. */
+  notifyComments: boolean;
+  /** Notify when someone adds one of your shares to a collection. */
+  notifyCollections: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -28,6 +34,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   hiddenNames: [],
   followingFeed: true,
   listView: "list",
+  collectionView: "grid",
+  notifyComments: true,
+  notifyCollections: true,
 };
 
 const listeners = new Set<() => void>();
@@ -44,6 +53,10 @@ export function sanitizeSettings(raw: unknown): AppSettings {
       : [],
     followingFeed: typeof r.followingFeed === "boolean" ? r.followingFeed : DEFAULT_SETTINGS.followingFeed,
     listView: r.listView === "grid" ? "grid" : "list",
+    collectionView: r.collectionView === "list" ? "list" : "grid",
+    notifyComments: typeof r.notifyComments === "boolean" ? r.notifyComments : DEFAULT_SETTINGS.notifyComments,
+    notifyCollections:
+      typeof r.notifyCollections === "boolean" ? r.notifyCollections : DEFAULT_SETTINGS.notifyCollections,
   };
 }
 

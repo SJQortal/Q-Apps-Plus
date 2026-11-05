@@ -1,10 +1,11 @@
 import { memo, useState } from "react";
-import { Avatar, IconButton, Skeleton, Tooltip } from "@mui/material";
+import { Avatar, IconButton, Skeleton, Tooltip, type Theme } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import BlockOutlinedIcon from "@mui/icons-material/BlockOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import AttachFileIcon from "@mui/icons-material/AttachFile";
 import RemoveCircleOutlinedIcon from "@mui/icons-material/RemoveCircleOutlined";
+import DriveFileMoveOutlinedIcon from "@mui/icons-material/DriveFileMoveOutlined";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
@@ -43,7 +44,8 @@ import { shareTitleFromIdentifier } from "../../hooks/useFetchFiles.tsx";
 import { copyText } from "../../utils/clipboard.ts";
 import { ManualCopyDialog } from "../../components/common/CopyLinkButton.tsx";
 import { isHubDecline } from "../../utils/hubErrors.ts";
-import { useListView } from "../../components/common/ListViewToggle.tsx";
+import { useListView, type LayoutSetting } from "../../components/common/ListViewToggle.tsx";
+import { ShareCardArt, ShareRowArt } from "../../components/common/ShareArt";
 
 interface FileListProps {
   files: Video[];
@@ -55,6 +57,10 @@ interface FileListProps {
    * function, such as a state setter, so the cards stay memoized.
    */
   onRemove?: (file: Video) => void;
+  /** Grid only: a Move button beside Remove, for a collection with folders. Stable, like `onRemove`. */
+  onMove?: (file: Video) => void;
+  /** Which layout setting to follow: collections have their own (a grid by default). */
+  layout?: LayoutSetting;
 }
 
 /**
@@ -83,10 +89,10 @@ export function FileGridSkeleton({ count, label }: { count: number; label?: stri
  * layout setting (useListView) turns the rows into a grid of cards with the
  * same states and actions.
  */
-export const FileList = ({ files, showPublisher = true, onRemove }: FileListProps) => {
+export const FileList = ({ files, showPublisher = true, onRemove, onMove, layout = "listView" }: FileListProps) => {
   const username = useSelector((state: RootState) => state.auth?.user?.name);
   const phone = usePhoneLayout();
-  const grid = useListView() === "grid";
+  const grid = useListView(layout) === "grid";
   const items = files.map((file) => (
     // Two names can publish under one identifier: each is its own row.
     <FileListRow
@@ -97,32 +103,51 @@ export const FileList = ({ files, showPublisher = true, onRemove }: FileListProp
       username={username}
       grid={grid}
       onRemove={grid ? onRemove : undefined}
+      onMove={grid ? onMove : undefined}
     />
   ));
   return grid ? <FileGrid>{items}</FileGrid> : <FileContainer>{items}</FileContainer>;
 };
 
-/** A card's Remove button, over its art, on a collection its owner opens. The page's dialog confirms. */
-function CardRemoveButton({ title, phone, onClick }: { title: string; phone: boolean; onClick: () => void }) {
+const cornerButtonSx = (phone: boolean) => ({
+  width: phone ? 44 : 36,
+  height: phone ? 44 : 36,
+  // Solid, so it reads on the tinted art in every theme.
+  bgcolor: "background.paper",
+  border: 1,
+  borderColor: "divider",
+  "&:hover": {
+    bgcolor: "background.paper",
+    backgroundImage: (theme: Theme) => `linear-gradient(${theme.palette.action.hover}, ${theme.palette.action.hover})`,
+  },
+});
+
+/**
+ * A card's Remove button (and Move, when the collection has folders), over
+ * its art, on a collection its owner opens. The page's dialogs confirm.
+ */
+function CardRemoveButton({
+  title,
+  phone,
+  onClick,
+  onMove,
+}: {
+  title: string;
+  phone: boolean;
+  onClick: () => void;
+  onMove?: () => void;
+}) {
   return (
-    <CardCorner className="row-actions">
+    <CardCorner className="row-actions" sx={{ display: "flex", gap: 0.75 }}>
+      {onMove && (
+        <Tooltip title="Move to a folder">
+          <IconButton aria-label={`Move ${title}`} onClick={onMove} sx={cornerButtonSx(phone)}>
+            <DriveFileMoveOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      )}
       <Tooltip title="Remove from collection">
-        <IconButton
-          aria-label={`Remove ${title} from collection`}
-          onClick={onClick}
-          sx={{
-            width: phone ? 44 : 36,
-            height: phone ? 44 : 36,
-            // Solid, so it reads on the tinted art in every theme.
-            bgcolor: "background.paper",
-            border: 1,
-            borderColor: "divider",
-            "&:hover": {
-              bgcolor: "background.paper",
-              backgroundImage: (theme) => `linear-gradient(${theme.palette.action.hover}, ${theme.palette.action.hover})`,
-            },
-          }}
-        >
+        <IconButton aria-label={`Remove ${title} from collection`} onClick={onClick} sx={cornerButtonSx(phone)}>
           <RemoveCircleOutlinedIcon fontSize="small" />
         </IconButton>
       </Tooltip>
@@ -138,9 +163,10 @@ interface FileListRowProps {
   /** A card in the grid layout instead of a row. */
   grid: boolean;
   onRemove?: (file: Video) => void;
+  onMove?: (file: Video) => void;
 }
 
-const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username, grid, onRemove }: FileListRowProps) {
+const FileListRow = memo(function FileListRow({ file, showPublisher, phone, username, grid, onRemove, onMove }: FileListRowProps) {
   // Only a body from this row's own name (another can reuse the identifier).
   const existingFile = useSelector((state: RootState) => heldShare(state.file, file.user, file.id));
   const isUnavailable = useSelector((state: RootState) => Boolean(state.file.unavailableFiles[shareKey(file.user, file.id)]));
@@ -205,7 +231,14 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
               </CardPublisher>
             </CardFooter>
           )}
-          {onRemove && <CardRemoveButton title={shownTitle} phone={phone} onClick={() => onRemove(file)} />}
+          {onRemove && (
+            <CardRemoveButton
+              title={shownTitle}
+              phone={phone}
+              onClick={() => onRemove(file)}
+              onMove={onMove ? () => onMove(file) : undefined}
+            />
+          )}
         </FileCard>
       );
     }
@@ -290,7 +323,12 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
     return (
       <FileCard className="share-card" aria-busy={pending}>
         <CardMain className="row-main" onClick={() => navigate(sharePath(fileObj.user, fileObj.id))} aria-label={openLabel}>
-          <CardArt>{icon ? <CardIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon fontSize="large" />}</CardArt>
+          <CardArt>
+            <ShareCardArt
+              share={fileObj}
+              fallback={icon ? <CardIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon fontSize="large" />}
+            />
+          </CardArt>
           <CardBody>
             {title ? <CardTitle>{title}</CardTitle> : <Skeleton variant="text" sx={{ fontSize: 15, width: "80%" }} />}
             <CardMeta>{meta}</CardMeta>
@@ -306,7 +344,12 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
           {actions}
         </CardFooter>
         {onRemove && (
-          <CardRemoveButton title={title || shareTitleFromIdentifier(fileObj.id)} phone={phone} onClick={() => onRemove(file)} />
+          <CardRemoveButton
+            title={title || shareTitleFromIdentifier(fileObj.id)}
+            phone={phone}
+            onClick={() => onRemove(file)}
+            onMove={onMove ? () => onMove(file) : undefined}
+          />
         )}
         {manualLink && <ManualCopyDialog open onClose={() => setManualLink(null)} link={manualLink} />}
       </FileCard>
@@ -319,7 +362,7 @@ const FileListRow = memo(function FileListRow({ file, showPublisher, phone, user
         onClick={() => navigate(sharePath(fileObj.user, fileObj.id))}
         aria-label={openLabel}
       >
-        {icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />}
+        <ShareRowArt share={fileObj} fallback={icon ? <RowIcon src={icon} alt="" loading="lazy" /> : <AttachFileIcon />} />
         <div style={{ minWidth: 0, flex: 1 }}>
           {title ? (
             <VideoCardTitle>{title}</VideoCardTitle>

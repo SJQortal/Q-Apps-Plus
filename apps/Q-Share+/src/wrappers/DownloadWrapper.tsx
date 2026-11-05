@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { useDispatch, useStore } from "react-redux";
-import { setAddToDownloads, updateDownloads } from "../state/features/globalSlice";
+import { removeDownload, setAddToDownloads, updateDownloads } from "../state/features/globalSlice";
 import { RootState } from "../state/store";
 import { needsEncodedFetch } from "../utils/fetchVideos";
 import { resourceProperties, resourceStatus } from "../utils/qdnResource";
@@ -30,6 +30,8 @@ import { resourceProperties, resourceStatus } from "../utils/qdnResource";
  * can be started again. Six consecutive status errors stop polling too, and leave
  * the entry at REFETCHING with `stopped: true` (nothing polls it any more).
  * `retryDownload` resumes a paused or stopped poller (and drops that marker).
+ * `cancelDownload` stops polling and drops an entry that isn't READY, for a
+ * fetch that only a glance asked for; the node itself may carry on.
  * Every timer is cleared on unmount.
  * Status and properties calls go through utils/qdnResource, so names such as
  * "Vallot-/8/" (which q-apps.js puts into the URL unencoded) work too.
@@ -111,11 +113,14 @@ interface MyContextInterface {
   downloadVideo: (params: IDownloadVideoParams) => void;
   /** Nudge a stalled or stopped download without adding a new entry. */
   retryDownload: (params: IResourceRef) => void;
+  /** Stop polling a file and take it off the downloads list, unless it is READY. */
+  cancelDownload: (identifier: string) => void;
 }
 
 const defaultValues: MyContextInterface = {
   downloadVideo: () => {},
   retryDownload: () => {},
+  cancelDownload: () => {},
 };
 export const MyContext = React.createContext<MyContextInterface>(defaultValues);
 
@@ -300,7 +305,16 @@ const DownloadWrapper: React.FC<Props> = ({ children }) => {
     [dispatch, fetchResource, startPolling, store]
   );
 
-  const value = useMemo(() => ({ downloadVideo, retryDownload }), [downloadVideo, retryDownload]);
+  const cancelDownload = useCallback(
+    (identifier: string) => {
+      pollers.current.get(identifier)?.stop();
+      const entry = store.getState().global?.downloads?.[identifier];
+      if (entry && entry.status?.status !== "READY") dispatch(removeDownload(identifier));
+    },
+    [dispatch, store]
+  );
+
+  const value = useMemo(() => ({ downloadVideo, retryDownload, cancelDownload }), [downloadVideo, retryDownload, cancelDownload]);
 
   return <MyContext.Provider value={value}>{children}</MyContext.Provider>;
 };

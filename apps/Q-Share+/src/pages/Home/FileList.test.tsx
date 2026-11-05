@@ -261,9 +261,10 @@ describe('FileList grid', () => {
     expect(icon['']).not.toMatch(/object-fit: cover/);
     expect(icon['']).toMatch(/width: 96px;.*height: 64px/);
     expect(icon[landscape]).toMatch(/width: 54px;.*height: 36px/);
+    // The art is wide enough for a thumbnail; the icon sits in its middle.
     const art = rulesFor(img.parentElement!);
-    expect(art['']).toMatch(/height: 96px/);
-    expect(art[landscape]).toMatch(/height: 48px/);
+    expect(art['']).toMatch(/aspect-ratio: 16 ?\/ ?10/);
+    expect(art[landscape]).toMatch(/height: 64px/);
   });
 
   it('shows the manual-copy dialog from a card when copying is blocked', async () => {

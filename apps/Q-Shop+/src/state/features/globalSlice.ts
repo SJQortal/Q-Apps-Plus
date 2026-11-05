@@ -1,3 +1,4 @@
+import type { ShopPolicies } from "../../shop/policies";
 import { createSlice } from "@reduxjs/toolkit";
 import { Product } from "./storeSlice";
 import { Order } from "./orderSlice";
@@ -17,6 +18,22 @@ interface ForeignCoins {
 }
 export interface CurrentStore {
   created: number;
+  /** + app, additive: Qortal assets the shop accepts. */
+  acceptedAssets?: { id: number; name: string }[];
+  /** + app, additive: the shop's short text for lists (qdn/payloads.ts StoreFields). */
+  metaDescription?: string;
+  /** + app, additive: the countries it ships to (constants/shipping.ts). */
+  shippingCountries?: string[];
+  /** + app, additive: the US states it ships to, when some only. */
+  shippingStates?: string[];
+  /** + app, additive: dispatch time, returns and terms (shop/policies.ts). */
+  policies?: ShopPolicies;
+  /** + app, additive: away until a day, with a note (shop/away.ts; read safely there). */
+  away?: unknown;
+  /** + app, additive: the languages the seller answers in (shop/languages.ts reads them safely). */
+  languages?: unknown;
+  /** + app, additive: the shop's qortal:// links (shop/links.ts reads them safely). */
+  links?: unknown;
   id: string;
   title: string;
   description: string;
@@ -47,7 +64,15 @@ export interface Catalogue {
   products: Record<string, Product>;
   user?: string;
 }
+/**
+ * Where loading the signed-in name's own shop stands (useOwnShops):
+ * none = no shop yet; container-missing = the shop has no product index on
+ * QDN (confirmed by a search); unavailable = it exists but couldn't be read.
+ */
+export type OwnShopStatus = "idle" | "loading" | "ready" | "none" | "container-missing" | "unavailable" | "error";
+
 interface GlobalState {
+  ownShopStatus: OwnShopStatus;
   isOpenCreateStoreModal: boolean;
   isLoadingCurrentBlog: boolean;
   isLoadingGlobal: boolean;
@@ -70,6 +95,7 @@ interface GlobalState {
 }
 
 const initialState: GlobalState = {
+  ownShopStatus: "idle",
   isOpenCreateStoreModal: false,
   isLoadingCurrentBlog: true,
   isLoadingGlobal: false,
@@ -95,6 +121,9 @@ export const globalSlice = createSlice({
   name: "global",
   initialState,
   reducers: {
+    setOwnShopStatus: (state, action) => {
+      state.ownShopStatus = action.payload;
+    },
     toggleCreateStoreModal: (state, action) => {
       state.isOpenCreateStoreModal = action.payload;
     },
@@ -107,7 +136,7 @@ export const globalSlice = createSlice({
     },
 
     setDataContainer: (state, action) => {
-      let categories: any = {};
+      const categories: any = {};
       state.dataContainer = action.payload;
       const mappedProducts = Object.keys(action.payload.products)
         .map((key) => {
@@ -147,6 +176,10 @@ export const globalSlice = createSlice({
       delete updatedProductsToSave[productId];
       // Return the updated state with the removed object
       state.productsToSave = updatedProductsToSave;
+    },
+    /** + app: drop the drafts one publish sent (other shops' drafts stay). */
+    removeManyFromProductsToSave: (state, action: { payload: string[] }) => {
+      for (const id of action.payload) delete state.productsToSave[id];
     },
     setProductsToSave: (state, action) => {
       const product = action.payload;
@@ -221,6 +254,7 @@ export const globalSlice = createSlice({
 });
 
 export const {
+  setOwnShopStatus,
   toggleCreateStoreModal,
   setCurrentStore,
   setDataContainer,
@@ -231,6 +265,7 @@ export const {
   updateDownloads,
   setUserAvatarHash,
   removeFromProductsToSave,
+  removeManyFromProductsToSave,
   setProductsToSave,
   setCatalogueHashMap,
   updateCatalogueHashMap,

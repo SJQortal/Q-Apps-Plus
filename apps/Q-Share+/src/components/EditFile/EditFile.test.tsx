@@ -89,6 +89,47 @@ describe("EditFile", () => {
     expect((store.getState().file.hashMapFiles[share.id] as any)?.updated).toBe((share as any).updated);
   }, FLOW_TIMEOUT_MS);
 
+  it("keeps a new file that landed in the draft when the details didn't, and doesn't send it again", async () => {
+    store.dispatch(addUser({ address: "Qalice", publicKey: "pk", name: "alice" }));
+    store.dispatch(setEditFile(share));
+    let call = 0;
+    mockQortalAction("PUBLISH_MULTIPLE_QDN_RESOURCES", (params: any) => {
+      call += 1;
+      if (call > 1) return true;
+      const details = params.resources.find((r: any) => r.service === "DOCUMENT");
+      throw { error: { unsuccessfulPublishes: [{ identifier: details.identifier }] }, message: "Some failed" };
+    });
+    mockFetch("/arbitrary/resources/search", []);
+    renderWithProviders(<EditFile />);
+
+    expect(await screen.findByRole("dialog", { name: "Update share" })).toBeInTheDocument();
+    fireEvent.change(screen.getByTestId("share-file-input"), {
+      target: { files: [new File(["more"], "appendix.txt", { type: "text/plain" })] },
+    });
+    expect(await screen.findByText("appendix.txt")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Publish update" }));
+    expect(await screen.findByText("1 of 2 published")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Close" }).at(-1)!);
+
+    await waitFor(() => expect(screen.queryByText("1 of 2 published")).not.toBeInTheDocument());
+    expect(store.getState().file.editFileProperties).not.toBeNull();
+    expect(screen.getAllByText(/already on QDN/).length).toBe(2);
+    expect(store.getState().notifications.alertTypes.alertInfo).toBe(
+      "The file is on QDN and stays in the draft: publishing again sends only the share details."
+    );
+    const added = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[0] as any).resources[0];
+
+    fireEvent.click(screen.getByRole("button", { name: "Publish update" }));
+    await waitFor(() => expect(qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES").length).toBe(2));
+    const resent = (qortalCallsFor("PUBLISH_MULTIPLE_QDN_RESOURCES")[1] as any).resources;
+    expect(resent.map((r: any) => r.service)).toEqual(["DOCUMENT"]);
+    expect(JSON.parse(atob(resent[0].data64)).files.map((f: any) => f.identifier)).toEqual([
+      "qshare_file_report_zzzzzz",
+      added.identifier,
+    ]);
+    await waitFor(() => expect(store.getState().file.editFileProperties).toBeNull());
+  }, FLOW_TIMEOUT_MS);
+
   it("checks an update against the node's time for the version on QDN, and stores the node's time after", async () => {
     // The node's clock is ten minutes behind the device's, and the stored
     // copy is ten seconds older than the version on QDN (an earlier update

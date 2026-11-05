@@ -6,6 +6,8 @@ export const CommentsPanel = styled("section")(({ theme }) => ({
   display: "flex",
   flexDirection: "column",
   width: "100%",
+  // Clear of the sticky header when a notification scrolls here.
+  scrollMarginTop: "calc(var(--qshare-header-offset, 0px) + 8px)",
   minWidth: 0,
   gap: theme.spacing(1.5),
   paddingBottom: theme.spacing(1),

@@ -10,12 +10,17 @@ import {
   COLLECTION_TITLE_MAX,
   buildCollectionBody,
   buildCollectionIdentifier,
+  collectionSpace,
+  editCollectionBody,
   newCollectionUid,
   publishCollection,
   type Collection,
   type CollectionItem,
 } from "../../utils/collections";
+import { allCollectionItems } from "../../utils/collectionFolders";
 import { isHubDecline } from "../../utils/hubErrors";
+import { COVER_FAILED, CoverPicker, KEEP_COVER, coverChange, type CoverChoice } from "./CoverPicker";
+import { SpacePicker, type SpaceChoice } from "./SpacePicker";
 
 export interface CollectionDialogProps {
   open: boolean;
@@ -27,7 +32,7 @@ export interface CollectionDialogProps {
   onSaved?: (collection: Collection) => void;
 }
 
-/** Create or edit a collection. One PUBLISH_QDN_RESOURCE, confirmed in Hub. */
+/** Create or edit a collection: one Hub confirmation, with a new cover image in the same request. */
 export function CollectionDialog({ open, onClose, collection, initialItems, onSaved }: CollectionDialogProps) {
   const dispatch = useDispatch();
   const myName = useSelector((state: RootState) => state.auth.user?.name);
@@ -37,6 +42,9 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coverChoice, setCoverChoice] = useState<CoverChoice>(KEEP_COVER);
+  // null until a tile is tapped: the stored space (even one this version doesn't know) stays as it is.
+  const [spaceChoice, setSpaceChoice] = useState<SpaceChoice | null>(null);
 
   // Seed the fields each time the dialog opens (state adjusted during render, no effect).
   const [seededOpen, setSeededOpen] = useState(false);
@@ -48,6 +56,8 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
       setTouched(false);
       setBusy(false);
       setError(null);
+      setCoverChoice(KEEP_COVER);
+      setSpaceChoice(null);
     }
   }
 
@@ -67,13 +77,21 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
     setError(null);
     try {
       const identifier = collection?.identifier ?? buildCollectionIdentifier(trimmedTitle, newCollectionUid());
-      const body = buildCollectionBody({
-        title: trimmedTitle,
-        description,
-        items: collection?.items ?? initialItems ?? [],
-        created: collection?.created,
+      const { cover, covers } = coverChange(coverChoice, name);
+      const space = spaceChoice === null ? undefined : spaceChoice === "standard" ? null : spaceChoice;
+      const body = collection
+        ? editCollectionBody(collection, { title: trimmedTitle, description, cover, space })
+        : buildCollectionBody({ title: trimmedTitle, description, items: initialItems ?? [], cover, space });
+      let coverFailed = false;
+      const saved = await publishCollection({
+        name,
+        identifier,
+        body,
+        previous: collection ?? null,
+        previousItems: [],
+        covers,
+        onCoversFailed: () => (coverFailed = true),
       });
-      const saved = await publishCollection({ name, identifier, body });
       dispatch(upsertCollection(saved));
       if (name === myName) {
         dispatch(
@@ -87,7 +105,11 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
           })
         );
       }
-      dispatch(setNotification({ msg: isEdit ? "Collection saved" : "Collection created", alertType: "success" }));
+      dispatch(
+        coverFailed
+          ? setNotification({ msg: COVER_FAILED, alertType: "info" })
+          : setNotification({ msg: isEdit ? "Collection saved" : "Collection created", alertType: "success" })
+      );
       onSaved?.(saved);
       onClose();
     } catch (error) {
@@ -147,6 +169,16 @@ export function CollectionDialog({ open, onClose, collection, initialItems, onSa
           helperText={`${description.length}/${COLLECTION_DESCRIPTION_MAX}`}
           slotProps={{ htmlInput: { maxLength: COLLECTION_DESCRIPTION_MAX } }}
         />
+        <CoverPicker current={collection?.cover} choice={coverChoice} onChange={setCoverChoice} kind="collection" disabled={busy} />
+        {open ? (
+          <SpacePicker
+            value={spaceChoice ?? collectionSpace(collection)}
+            onChange={setSpaceChoice}
+            disabled={busy}
+            items={collection ? allCollectionItems(collection) : initialItems}
+            suggest={spaceChoice === null && !collection?.space}
+          />
+        ) : null}
         {startCount > 0 && (
           <Typography variant="body2">
             Starts with {startCount} {startCount === 1 ? "share" : "shares"}.

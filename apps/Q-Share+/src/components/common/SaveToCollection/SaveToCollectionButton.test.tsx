@@ -47,6 +47,83 @@ describe('SaveToCollectionButton', () => {
     expect(screen.queryByRole('button', { name: 'Add to collection' })).not.toBeInTheDocument();
   });
 
+  it('lists each collection with its folders, and saves into a folder keeping the rest', async () => {
+    signIn('alice');
+    mockFetch('/names/', { error: 401 });
+    mockFetch('/arbitrary/resources/search', [
+      { name: 'alice', service: 'DOCUMENT', identifier: COLLECTION_ID, updated: 10, metadata: { title: 'My docs', description: '' } },
+    ]);
+    const other = { name: 'carol', identifier: 'qshare_file_other_q1w2e3_metadata' };
+    mockQortalAction('FETCH_QDN_RESOURCE', {
+      version: 1,
+      title: 'My docs',
+      description: '',
+      items: [other],
+      created: 5,
+      updated: 5,
+      folders: [
+        { id: 'work01', title: 'Work', description: '', items: [], folders: [{ id: 'tax001', title: 'Taxes', description: '', items: [], folders: [] }] },
+      ],
+    });
+    mockQortalAction('PUBLISH_QDN_RESOURCE', true);
+    renderWithProviders(<SaveToCollectionButton share={share} />);
+    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Add to collection' }));
+
+    // Folded at first: the collection alone, saying it has a folder.
+    const labels = () => screen.getAllByRole('menuitemcheckbox').map((row) => row.getAttribute('aria-label'));
+    const docs = await screen.findByRole('menuitemcheckbox', { name: 'My docs' });
+    expect(labels()).toEqual(['My docs']);
+    expect(docs).toHaveAttribute('aria-expanded', 'false');
+    expect(docs).toHaveTextContent('1 share · 1 folder');
+    // Its arrow opens it without saving; Right opens the folder below from the keyboard.
+    fireEvent.click(screen.getByTestId(`folders-alice/${COLLECTION_ID}/`));
+    expect(labels()).toEqual(['My docs', 'Work, in My docs']);
+    expect(qortalCallsFor('PUBLISH_QDN_RESOURCE')).toHaveLength(0);
+    fireEvent.keyDown(screen.getByRole('menuitemcheckbox', { name: 'Work, in My docs' }), { key: 'ArrowRight' });
+    expect(labels()).toEqual(['My docs', 'Work, in My docs', 'Taxes, in My docs']);
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Taxes, in My docs' }));
+
+    await waitFor(() => expect(qortalCallsFor('PUBLISH_QDN_RESOURCE').length).toBe(1));
+    const body = JSON.parse(atob(String(qortalCallsFor('PUBLISH_QDN_RESOURCE')[0].data64)));
+    expect(body.items).toEqual([other]);
+    expect(body.folders[0].items).toEqual([]);
+    expect(body.folders[0].folders[0].items).toEqual([{ name: 'bob', identifier: share.identifier }]);
+    await waitFor(() => expect(store.getState().notifications.alertTypes.alertSuccess).toBe('Added to Taxes'));
+    // Saved somewhere in the collection: the button says so.
+    expect(screen.getByRole('button', { name: 'Add to collection' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('opens the folders that hold the share, so its tick shows, and Left folds them again', async () => {
+    signIn('alice');
+    mockFetch('/names/', { error: 401 });
+    mockFetch('/arbitrary/resources/search', [
+      { name: 'alice', service: 'DOCUMENT', identifier: COLLECTION_ID, updated: 10, metadata: { title: 'My docs', description: '' } },
+    ]);
+    const mine = { name: 'bob', identifier: share.identifier };
+    mockQortalAction('FETCH_QDN_RESOURCE', {
+      version: 1,
+      title: 'My docs',
+      description: '',
+      items: [],
+      created: 5,
+      updated: 5,
+      folders: [
+        { id: 'work01', title: 'Work', description: '', items: [], folders: [{ id: 'tax001', title: 'Taxes', description: '', items: [mine], folders: [] }] },
+        { id: 'home01', title: 'Home', description: '', items: [], folders: [{ id: 'bills1', title: 'Bills', description: '', items: [], folders: [] }] },
+      ],
+    });
+    renderWithProviders(<SaveToCollectionButton share={share} />);
+    await waitFor(() => expect(qortalCallsFor('FETCH_QDN_RESOURCE').length).toBe(1), { timeout: 4000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Add to collection' }));
+    await screen.findByRole('menuitemcheckbox', { name: 'Taxes, in My docs' });
+    const labels = () => screen.getAllByRole('menuitemcheckbox').map((row) => row.getAttribute('aria-label'));
+    expect(labels()).toEqual(['My docs', 'Work, in My docs', 'Taxes, in My docs', 'Home, in My docs']);
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Taxes, in My docs' })).toHaveAttribute('aria-checked', 'true');
+    fireEvent.keyDown(screen.getByRole('menuitemcheckbox', { name: 'My docs' }), { key: 'ArrowLeft' });
+    expect(labels()).toEqual(['My docs']);
+  });
+
   it('saves the share into a collection with one PUBLISH_QDN_RESOURCE of the same identifier', async () => {
     signIn('alice');
     mockFetch('/arbitrary/resources/search', [

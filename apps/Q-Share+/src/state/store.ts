@@ -4,6 +4,7 @@ import authReducer from "./features/authSlice";
 import globalReducer from "./features/globalSlice";
 import fileReducer from "./features/fileSlice.ts";
 import collectionsReducer from "./features/collectionsSlice";
+import playerReducer from "./features/playerSlice";
 
 export const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ export const store = configureStore({
     global: globalReducer,
     file: fileReducer,
     collections: collectionsReducer,
+    player: playerReducer,
   },
   middleware: getDefaultMiddleware =>
     getDefaultMiddleware({

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Box, Button, IconButton, LinearProgress, Skeleton, Typography } from "@mui/material";
@@ -15,12 +15,15 @@ import { FollowButton } from "../../components/common/FollowButton.tsx";
 import { EmptyState } from "../../components/common/EmptyState.tsx";
 import { CommentSection } from "../../components/common/Comments/CommentSection";
 import { DisplayHtml } from "../../components/common/TextEditor/DisplayHtml";
-import { MyContext, isFailedStatus } from "../../wrappers/DownloadWrapper";
 import { RootState } from "../../state/store";
 import { addToHashMap, heldShare, setEditFile, type Video } from "../../state/features/fileSlice.ts";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { usePhoneLayout } from "../../hooks/usePhoneLayout";
+import { useAudioCover } from "../../hooks/useAudioCover";
+import { useQdnImage } from "../../hooks/useQdnImage";
 import { useSafeBack } from "../../hooks/useSafeBack";
+import { shareThumbnail } from "../../utils/publishPayload";
+import { useAppSettings } from "../../utils/settings";
 import { searchQdn, type QdnResourceSummary } from "../../utils/qdnSearch";
 import { avatarUrl, profilePath, shareLink, decodeParam } from "../../utils/qortalLinks";
 import { formatDate } from "../../utils/time";
@@ -31,11 +34,16 @@ import { allCategoryData } from "../../constants/Categories/1stCategories.ts";
 import { getCategoriesFromObject, type Category } from "../../components/common/CategoryList/CategoryList.tsx";
 import { getIconsFromObject } from "../../constants/Categories/CategoryFunctions.ts";
 import { FileRow, type ShareFile } from "./FileRow";
+import { FETCH_ALL_AT_ONCE, useFetchAll } from "./useFetchAll";
+import { PLAYLIST_MIN_TRACKS, PlaylistCard, shareTracks } from "./PlaylistCard";
+import { RemoveShareButton } from "./RemoveShareButton";
+import { ShareCollections } from "./ShareCollections";
 import {
   ActionRow,
   AuthorLink,
   Card,
   CategoryIcon,
+  ShareCover,
   CompactActionRow,
   DescriptionFade,
   FileDescription,
@@ -48,6 +56,8 @@ import {
 } from "./FileContent-styles.tsx";
 
 const DESCRIPTION_COLLAPSE_PX = 300;
+/** File rows shown at first, and added by each "Show more". */
+export const FILE_PAGE = 50;
 
 /**
  * - "fetching": the JSON is on the network but not on this node yet.
@@ -174,8 +184,6 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const phone = usePhoneLayout();
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { downloadVideo } = useContext(MyContext);
-  const downloads = useSelector((state: RootState) => state.global.downloads);
   const username = useSelector((state: RootState) => state.auth.user?.name);
   // A body another name published under this identifier is not this share.
   const cached = useSelector((state: RootState) => heldShare(state.file, name, id));
@@ -281,23 +289,29 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
   const files: ShareFile[] = useMemo(() => (Array.isArray(fileData?.files) ? fileData.files : []), [fileData]);
   const author: string = fileData?.user || name;
 
-  const pendingFiles = useMemo(
-    () => files.filter((f) => f?.identifier && (!downloads?.[f.identifier] || isFailedStatus(downloads[f.identifier]?.status?.status))),
-    [downloads, files]
+  const { fetchAll, pending: pendingFiles, readyCount, allReady, waiting } = useFetchAll(files, id);
+  // A share holds up to 300 files: show them a page at a time.
+  const [shownFiles, setShownFiles] = useState(FILE_PAGE);
+  // Two or more audio files play as a playlist through the app's player.
+  const tracks = useMemo(() => shareTracks(files), [files]);
+  const playlistTitle: string = fileData?.title || "";
+  const playlist = useMemo(
+    () =>
+      tracks.length >= PLAYLIST_MIN_TRACKS
+        ? { share: { name: author, identifier: id, title: playlistTitle }, tracks }
+        : undefined,
+    [tracks, author, id, playlistTitle]
   );
-  const allReady = files.length > 0 && files.every((f) => downloads?.[f.identifier]?.status?.status === "READY");
 
-  const fetchAll = () => {
-    for (const file of pendingFiles) {
-      const service = file.service || "FILE";
-      downloadVideo({
-        name: file.name,
-        service,
-        identifier: file.identifier,
-        properties: { ...file, service, mimeType: file.mimetype, jsonId: id },
-      });
-    }
-  };
+  // The share's picture at the top: its thumbnail, else the art inside its
+  // first track when the node holds it, else the category icon.
+  const settings = useAppSettings();
+  const artwork = useMemo(() => shareThumbnail(fileData), [fileData]);
+  const headerThumb = useQdnImage(
+    artwork ? `/arbitrary/THUMBNAIL/${encodeURIComponent(artwork.name)}/${encodeURIComponent(artwork.identifier)}` : null
+  );
+  const firstTrackArt = useAudioCover(!artwork ? tracks[0] : null, settings.autoPreviewImages);
+  const headerArt = headerThumb.src ?? firstTrackArt;
 
   // window.history is shared by every Hub tab, so Back follows the app's own stack.
   const goBack = useSafeBack("/");
@@ -309,8 +323,19 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
     files.length > 1 || extraActions ? (
       <>
         {files.length > 1 && (
-          <Button variant="contained" startIcon={<CloudDownloadOutlinedIcon />} onClick={fetchAll} disabled={pendingFiles.length === 0}>
-            {allReady ? "All files ready" : pendingFiles.length === 0 ? "Fetching…" : "Fetch all files"}
+          <Button
+            variant="contained"
+            startIcon={<CloudDownloadOutlinedIcon />}
+            onClick={fetchAll}
+            disabled={pendingFiles.length === 0 || waiting > 0}
+          >
+            {allReady
+              ? "All files ready"
+              : pendingFiles.length === 0 || waiting > 0
+                ? files.length > FETCH_ALL_AT_ONCE
+                  ? `Fetching… ${readyCount} of ${files.length} ready`
+                  : "Fetching…"
+                : "Fetch all files"}
           </Button>
         )}
         <SaveAllZipButton files={files} title={title} allReady={allReady} />
@@ -328,14 +353,17 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
         compact={phone}
       />
       {author === username ? (
-        <Button
-          variant="outlined"
-          startIcon={<EditOutlinedIcon />}
-          aria-label="Edit share"
-          onClick={() => dispatch(setEditFile(fileData))}
-        >
-          {phone ? "Edit" : "Edit share"}
-        </Button>
+        <>
+          <Button
+            variant="outlined"
+            startIcon={<EditOutlinedIcon />}
+            aria-label="Edit share"
+            onClick={() => dispatch(setEditFile(fileData))}
+          >
+            {phone ? "Edit" : "Edit share"}
+          </Button>
+          <RemoveShareButton share={fileData} compact={phone} />
+        </>
       ) : (
         <FollowButton followerName={author} compact={phone} />
       )}
@@ -441,7 +469,9 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
         <>
           <Card aria-labelledby="share-title">
             <Box sx={{ display: "flex", gap: 1.5, alignItems: "flex-start", minWidth: 0 }}>
-              {icon ? (
+              {headerArt ? (
+                <ShareCover src={headerArt} alt="" onError={headerThumb.onError} />
+              ) : icon ? (
                 <CategoryIcon src={icon} alt="" loading="lazy" />
               ) : (
                 <Box sx={{ width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", color: "text.secondary" }}>
@@ -484,6 +514,8 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
             )}
           </Card>
 
+          <ShareCollections share={{ name: author, identifier: id }} />
+
           {(fileData.htmlDescription || fileData.fullDescription) && (
             <Card aria-label="Description">
               <Box
@@ -515,6 +547,8 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
             </Card>
           )}
 
+          {playlist ? <PlaylistCard share={playlist.share} tracks={playlist.tracks} /> : null}
+
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
             <SectionTitle component="h2">
               {files.length === 1 ? "1 file" : `${files.length} files`}
@@ -522,11 +556,28 @@ const SharePage = ({ name, id, extraActions }: SharePageProps) => {
             {files.length === 0 ? (
               <EmptyState title="No files in this share" description="The publisher did not attach any files." />
             ) : (
-              <FileList>
-                {files.map((file, index) => (
-                  <FileRow key={`${file.identifier || file.filename}-${index}`} file={file} jsonId={id} />
-                ))}
-              </FileList>
+              <>
+                <FileList>
+                  {files.slice(0, shownFiles).map((file, index) => (
+                    <FileRow
+                      key={`${file.identifier || file.filename}-${index}`}
+                      file={file}
+                      jsonId={id}
+                      playlist={playlist}
+                      shareArt={artwork}
+                    />
+                  ))}
+                </FileList>
+                {files.length > shownFiles && (
+                  <Button
+                    variant="outlined"
+                    onClick={() => setShownFiles((n) => n + FILE_PAGE)}
+                    sx={{ alignSelf: "center", minHeight: 44 }}
+                  >
+                    Show {Math.min(FILE_PAGE, files.length - shownFiles)} more of {files.length - shownFiles}
+                  </Button>
+                )}
+              </>
             )}
           </Box>
 
