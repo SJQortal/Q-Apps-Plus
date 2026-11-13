@@ -6,10 +6,13 @@ import {
   capitalizeFirstWord,
 } from './processors';
 
-// Load all locale JSON files
+// Load all locale JSON files. `import: 'default'` asks the bundler for the
+// parsed JSON itself; the module namespace shape differs between dev and
+// production builds.
 const modules = import.meta.glob('./locales/**/*.json', {
   eager: true,
-}) as Record<string, any>;
+  import: 'default',
+}) as Record<string, Record<string, unknown>>;
 
 // Dynamically detect unique language codes
 export const supportedLanguages: string[] = Array.from(
@@ -24,7 +27,7 @@ export const supportedLanguages: string[] = Array.from(
 );
 
 // Construct i18n resources object
-const resources: Record<string, Record<string, any>> = {};
+const resources: Record<string, Record<string, Record<string, unknown>>> = {};
 
 for (const path in modules) {
   // Path format: './locales/en/core.json'
@@ -33,14 +36,14 @@ for (const path in modules) {
 
   const [, lang, ns] = match;
   resources[lang] = resources[lang] || {};
-  resources[lang][ns] = modules[path].default;
+  resources[lang][ns] = modules[path];
 }
 
 i18n
   .use(initReactI18next)
-  .use(capitalizeAll as any)
-  .use(capitalizeFirstChar as any)
-  .use(capitalizeFirstWord as any)
+  .use(capitalizeAll)
+  .use(capitalizeFirstChar)
+  .use(capitalizeFirstWord)
   .init({
     resources,
     fallbackLng: 'en',
