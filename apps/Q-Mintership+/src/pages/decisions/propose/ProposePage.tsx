@@ -154,7 +154,7 @@ export default function ProposePage() {
         subtitle={PROPOSE_SUBTITLE[kind]}
         back={decisionsViewPath('decisions')}
       />
-      <PageBody $maxWidth={680}>{body}</PageBody>
+      <PageBody $form>{body}</PageBody>
     </>
   );
 }

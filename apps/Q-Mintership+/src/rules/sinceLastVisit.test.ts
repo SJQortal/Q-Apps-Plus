@@ -87,6 +87,7 @@ function nomination(over: Partial<Nomination> = {}): Nomination {
     waitingEndsAt: null,
     decision: null,
     latestInvite: null,
+    records: [],
     hasJoinRequest: false,
     hasStoredInvite: false,
     ...over,

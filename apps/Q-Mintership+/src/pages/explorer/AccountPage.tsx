@@ -68,6 +68,7 @@ const TAB_PANELS: Record<ExplorerTab, ComponentType<{ address: string }>> = {
   overview: OverviewTab,
   connections: lazy(() => import('./account/ConnectionsTab')),
   transactions: lazy(() => import('./account/TransactionsTab')),
+  trades: lazy(() => import('./account/TradesTab')),
   assets: lazy(() => import('./account/AssetsTab')),
   mintership: lazy(() => import('./account/MintershipTab')),
   names: lazy(() => import('./account/NamesTab')),
@@ -202,7 +203,7 @@ export default function AccountPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened]);
 
-  // Connections only for those who see the Explorer's detailed parts (known once it is read).
+  // Connections and Trades only for those who see the Explorer's detailed parts (known once it is read).
   const full = useFullExplorer();
   const tab: ExplorerTab = kind === 'at' ? 'transactions' : explorerTabOf(params.tab);
   const tabs = kind === 'at' ? AT_TABS : full ? ACCOUNT_TABS : BASIC_ACCOUNT_TABS;

@@ -69,37 +69,34 @@ describe('Decisions → Minter Admin polls', () => {
   it('Hide already voted on leaves out the polls the admin voted on, with a note to show them', async () => {
     const u = userEvent.setup();
     await openDecisions();
-    await pollCard(CLOSED_Q);
+    await pollCard(VOTED_Q);
     const hide = screen.getByRole('switch', { name: 'Hide already voted on' });
     await u.click(hide);
     const section = await polls();
-    // Avery voted on the closed one and on one open one; the other open ones wait for a vote.
+    // Avery voted on one open poll; the other open ones wait for a vote.
     await waitFor(() =>
       expect(
-        within(section).queryByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` })
+        within(section).queryByRole('article', { name: `Minter Admin poll: ${VOTED_Q}` })
       ).toBeNull()
     );
     expect(
-      within(section).queryByRole('article', { name: `Minter Admin poll: ${VOTED_Q}` })
-    ).toBeNull();
-    expect(
       within(section).getByRole('article', { name: `Minter Admin poll: ${OPEN_Q}` })
     ).toBeVisible();
-    expect(within(section).getByText('2 polls you already voted on are hidden.')).toBeVisible();
+    expect(within(section).getByText('1 poll you already voted on is hidden.')).toBeVisible();
     await u.click(
       within(section).getByRole('button', { name: 'Show them: the polls you already voted on' })
     );
     expect(
-      await within(section).findByRole('article', { name: `Minter Admin poll: ${CLOSED_Q}` })
+      await within(section).findByRole('article', { name: `Minter Admin poll: ${VOTED_Q}` })
     ).toBeVisible();
     expect(hide).not.toBeChecked();
     expect(hide).toHaveFocus();
   });
 
-  it('lists the polls an admin can read: open first (soonest end), then closed', async () => {
+  it('lists the open polls an admin can read, the soonest end first; closed ones are in History', async () => {
     await openDecisions();
     const section = await polls();
-    expect(section).toHaveAccessibleName('Minter Admin polls · 4');
+    expect(section).toHaveAccessibleName('Minter Admin polls · 3');
     await within(section).findByRole('article', { name: `Minter Admin poll: ${OPEN_Q}` }, T);
     const order = within(section)
       .getAllByRole('article')
@@ -108,16 +105,20 @@ describe('Decisions → Minter Admin polls', () => {
       `Minter Admin poll: ${OPEN_Q}`,
       `Minter Admin poll: ${SHARED_Q}`,
       `Minter Admin poll: ${VOTED_Q}`,
-      `Minter Admin poll: ${CLOSED_Q}`,
     ]);
     // Said once above the list, and on every card.
     expect(
       within(section).getAllByText(/Advisory: nothing changes on chain from the result\./)
-    ).toHaveLength(5);
+    ).toHaveLength(4);
     // The one never encrypted to Avery, and a member's, aren't there.
     expect(within(section).queryByText(/never encrypted to Avery/)).toBeNull();
     expect(within(section).queryByText(/someone who is not a Minter Admin/)).toBeNull();
-    expect(within(section).getByText('1 poll closed in the last 31 days')).toBeVisible();
+    // Simon, 2026-10-23: "the closed minter admin polls should go into history".
+    expect(within(section).queryByText(CLOSED_Q)).toBeNull();
+    expect(within(section).getByRole('link', { name: 'Closed polls' })).toHaveAttribute(
+      'href',
+      '/history?type=polls&period=all'
+    );
   });
 
   it('a card: who asked, when it ends, the counts and who voted what; no pass or fail', async () => {
@@ -143,21 +144,13 @@ describe('Decisions → Minter Admin polls', () => {
     ).toBeVisible();
   });
 
-  it('a poll read from a share says whose copy; a closed one, the vote that came late', async () => {
+  it('a poll read from a share says whose copy', async () => {
     await openDecisions();
     const shared = await pollCard(SHARED_Q);
     expect(within(shared).getByText(/Shared by/)).toHaveTextContent(
       /Shared by\s*A?Admin D ΑΩ: you read their copy\./
     );
     expect(counts(shared)).toEqual(['Yes: 1', 'No: 1', 'Neutral: 1']);
-    const closed = await pollCard(CLOSED_Q);
-    expect(within(closed).getByText('Closed')).toBeVisible();
-    expect(within(closed).getByText(/^Ended 4 days ago · /)).toBeVisible();
-    expect(within(closed).getByText('1 vote came after the end and doesn’t count.')).toBeVisible();
-    expect(within(closed).getByText('You voted Neutral')).toBeVisible();
-    // Voting has ended: no buttons.
-    expect(within(closed).queryByRole('button', { name: /^Vote / })).toBeNull();
-    expect(within(closed).queryByRole('button', { name: /^Change your vote/ })).toBeNull();
   });
 
   it('a vote the viewer can’t read, and no share carries, is a vote, not in the counts', async () => {
@@ -307,9 +300,7 @@ describe('Decisions → Minter Admin polls', () => {
     const u = user();
     await openDecisions('admin', () => undefined);
     const section = await polls();
-    expect(
-      await within(section).findByText('No Minter Admin polls in the last 31 days', {}, T)
-    ).toBeVisible();
+    expect(await within(section).findByText('No open Minter Admin polls', {}, T)).toBeVisible();
     // Simon, 2026-10-18: every + Propose choice a page, Ask the Minter Admins too.
     await u.click(within(section).getByRole('button', { name: 'Ask the Minter Admins' }));
     expect(await screen.findByTestId('navigated-away', {}, T)).toBeInTheDocument();
@@ -332,7 +323,7 @@ describe('Decisions → Minter Admin polls', () => {
     expect(
       within(section).getByText(/If Hub is locked, unlock it, then try again\./)
     ).toBeVisible();
-    expect(within(section).queryByText('No Minter Admin polls in the last 31 days')).toBeNull();
+    expect(within(section).queryByText('No open Minter Admin polls')).toBeNull();
     walletLocked = false;
     await u.click(within(section).getByRole('button', { name: 'Retry' }));
     expect(

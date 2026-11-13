@@ -52,6 +52,7 @@ export function TypedHistory({
   longer,
   earliest,
   isNew,
+  proposerOf,
   onLonger,
 }: {
   anchor: HistoryAnchor;
@@ -67,6 +68,8 @@ export function TypedHistory({
   nowMs: number;
   /** New since this Minter Admin last looked: marked so (ChainHistory). */
   isNew?: (event: TimelineEvent) => boolean;
+  /** An invite's nominator, when it answered a nomination (TimelineList). */
+  proposerOf?: (event: TimelineEvent) => string | null;
   /** "Show the last 60 days": the next longer period, offered when this one is empty (none after a year). */
   longer: string | null;
   /** MINTER's creation: a period that starts there (Scan all History) has nothing earlier. */
@@ -170,6 +173,7 @@ export function TypedHistory({
           nowMs={nowMs}
           label={`MINTER events: ${label}, newest first`}
           isNew={isNew}
+          proposerOf={proposerOf}
         />
       ) : null}
       {rowsQ.data?.truncated ? <TruncatedNote what={`these ${label.toLowerCase()}`} /> : null}

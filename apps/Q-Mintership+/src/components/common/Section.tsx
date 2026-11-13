@@ -6,6 +6,7 @@ import { visuallyHidden } from '@mui/utils';
 import type { NominationState } from '../../rules/nomination';
 import type { DecisionPhase } from '../../rules/decision';
 import { formatCount } from '../../utils/format';
+import { flowColumns } from '../layout/flowColumns';
 import { readable, type Tone } from '../../utils/readable';
 import { ExplainTip } from './ExplainTip';
 import {
@@ -73,6 +74,10 @@ function markLater(section: HTMLElement) {
  * the left, its cards outlined in it, under a larger title with the icon in
  * the colour and the count in a pill. Its text stays the theme's text colour. On phones the panel reaches
  * a little into the page's margin, so the cards in it lose almost no width.
+ *
+ * With `flow` its cards (article, or [data-card]) sit side by side when the
+ * page is wide enough for two at that width (Full window on a big screen);
+ * everything else in it (title, notes, skeletons) spans the row.
  */
 export function Section({
   title,
@@ -82,6 +87,7 @@ export function Section({
   accent,
   icon,
   count,
+  flow,
 }: {
   title: string;
   action?: ReactNode;
@@ -93,6 +99,8 @@ export function Section({
   icon?: ReactNode;
   /** Shown after an accented title, in a pill; screen readers hear "Title · 4". */
   count?: number;
+  /** The narrowest a card may get beside another (layout/flowColumns.ts → CARD_COLUMN). */
+  flow?: number;
 }) {
   const headingId = id ? `${id}-title` : undefined;
   const ref = useRef<HTMLElement>(null);
@@ -124,6 +132,12 @@ export function Section({
                 borderColor: alpha(accent, theme.palette.mode === 'dark' ? 0.5 : 0.45),
               },
             })
+          : null,
+        flow
+          ? {
+              ...flowColumns(flow),
+              '& > :not(article):not([data-card])': { gridColumn: '1 / -1' },
+            }
           : null,
       ]}
     >

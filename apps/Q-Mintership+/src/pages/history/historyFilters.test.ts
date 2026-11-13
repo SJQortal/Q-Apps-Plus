@@ -118,6 +118,11 @@ describe('History: type filters', () => {
       historyFilterChoices([{ kind: 'other', decline: false, joinRequest: false }], 'all').at(-1)
         ?.label
     ).toBe('Other changes');
+    // Minter Admin polls, for a Minter Admin only, after Minter Admin changes.
+    expect(historyFilterChoices([], 'all', { polls: true }).at(-1)?.label).toBe(
+      'Minter Admin polls'
+    );
+    expect(searchTypesFor('polls')).toBeNull();
   });
 
   it('searches decision types across MINTER’s history; joins and leaves stay in windows', () => {

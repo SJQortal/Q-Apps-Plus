@@ -8,13 +8,6 @@
   --qp-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* `clip`, not `hidden`: `hidden` makes body a scroll container and sticky
-   headers then scroll away (docs/QORTAL.md, Hub & GO pitfall 2). */
-html,
-body {
-  overflow-x: clip;
-}
-
 /* Keep a focused control clear of the sticky header and the bars at the
    bottom (WCAG 2.4.11); the variables come from hooks/useOverlayPadding.ts. */
 html {
@@ -28,8 +21,16 @@ body {
   min-height: var(--qmp-app-height, 100dvh);
 }
 
+/* `clip`, not `hidden`: `hidden` makes a scroll container and sticky headers
+   then scroll away (docs/QORTAL.md, Hub & GO pitfall 2). On #root, not html
+   or body: while a menu or dialog is open, MUI hides the page's scrollbar
+   with overflow: hidden on body and pads body by the scrollbar's width. With
+   html clipped, body's overflow no longer reached the window: the scrollbar
+   stayed, the page moved sideways, and body became a scroll box of its own,
+   so the rail and the page header stuck to its top, scrolled out of view. */
 #root {
   min-height: var(--qmp-app-height, 100dvh);
+  overflow-x: clip;
 }
 
 /* The system setting (unless Settings → Appearance → Motion is Full), or

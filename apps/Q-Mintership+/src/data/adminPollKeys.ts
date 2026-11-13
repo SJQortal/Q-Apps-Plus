@@ -8,6 +8,16 @@ export function adminPollsKey(viewer: string): string {
   return `adminpolls:list:${viewer}`;
 }
 
+/** History's read: the polls that ended since `since` (ms), at most `count`. */
+export function closedPollsKey(viewer: string, since: number, count: number): string {
+  return `adminpolls:closed:${viewer}:${since}:${count}`;
+}
+
+/** One poll's own page, when the poll is no longer listed on Decisions. */
+export function onePollKey(viewer: string, id: string): string {
+  return `adminpolls:poll:${viewer}:${id}`;
+}
+
 let retries = 0;
 
 /**

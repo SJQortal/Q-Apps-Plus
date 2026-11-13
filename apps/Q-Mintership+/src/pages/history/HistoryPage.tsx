@@ -1,7 +1,8 @@
 /**
  * History (read-only): find a person, MINTER's on-chain changes 30 days at a
- * time, and the original app's cards with their polls and comments, so
- * nothing from before Q-Mintership+ is lost (plan §6).
+ * time (with the closed Minter Admin polls, for Minter Admins), and the
+ * original app's cards with their polls and comments, so nothing from before
+ * Q-Mintership+ is lost (plan §6).
  */
 import { PageHeader } from '../../components/layout/PageHeader';
 import { PageBody } from '../../components/layout/PageBody';

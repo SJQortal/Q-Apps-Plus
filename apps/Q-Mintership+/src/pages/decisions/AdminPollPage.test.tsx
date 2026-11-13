@@ -49,6 +49,18 @@ describe('a Minter Admin poll’s own page', () => {
     await expectNoAxeViolations(document.body);
   });
 
+  it('opens a poll that closed before Decisions’ two months, read on its own (from History)', async () => {
+    await openPoll(ADMIN_POLL_IDS.archived);
+    const question = 'Should the Minter Admins meet in Q-Chat once a quarter?';
+    const card = await screen.findByRole('article', { name: `Minter Admin poll: ${question}` }, T);
+    expect(within(card).getByText('Closed')).toBeVisible();
+    expect(within(card).getByText('You voted Yes')).toBeVisible();
+    // Decisions' read first, then this poll's own, of all time.
+    const searches = privateReads().filter((p) => p.includes('searchsimple'));
+    expect(searches.some((p) => p.includes('after='))).toBe(true);
+    expect(searches.some((p) => !p.includes('after='))).toBe(true);
+  });
+
   it('votes from the page like from Decisions', async () => {
     const u = userEvent.setup();
     await openPoll(ADMIN_POLL_IDS.open);
