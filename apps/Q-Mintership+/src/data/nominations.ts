@@ -18,6 +18,7 @@ import {
   isOpenState,
   nominationState,
   pickRound,
+  RECORD_CLOCK_SLACK_MS,
   waitingEndsAt,
   type NominationState,
   nominationAnswered,
@@ -272,19 +273,24 @@ async function assemble(
       : null;
     const round = pickRound(nominationsBy.get(nominee) ?? [], {
       decidedEnd,
-      hasPendingInvite: Boolean(decision),
+      pendingAt: decision?.createdAt ?? null,
       nowMs: now.timestamp,
       windowMs,
     });
     const entries = round.entries;
-    const supports = (supportsBy.get(nominee) ?? []).filter((s) =>
-      decidedEnd === null
-        ? true
-        : round.fresh
-          ? s.publishedAt > decidedEnd
-          : s.publishedAt <= decidedEnd
-    );
     const first = entries[0] ?? null;
+    // A new round's supports came after its first record: older ones were for an earlier round.
+    const roundStart =
+      round.fresh && first ? first.publishedAt - RECORD_CLOCK_SLACK_MS : Number.NEGATIVE_INFINITY;
+    const supports = (supportsBy.get(nominee) ?? []).filter(
+      (s) =>
+        s.publishedAt >= roundStart &&
+        (decidedEnd === null
+          ? true
+          : round.fresh
+            ? s.publishedAt > decidedEnd
+            : s.publishedAt <= decidedEnd)
+    );
     const publishedAt = first?.publishedAt ?? decision?.createdAt ?? 0;
     const state = nominationState({
       publishedAt,
