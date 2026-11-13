@@ -18,6 +18,21 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.5',
+    date: '2026-11-13',
+    title: 'A new nomination starts fresh',
+    summary:
+      'When someone is nominated again, the community votes and supports of their earlier nomination no longer show on the new one.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A re-nomination counts only its own community votes, supports and nominators. Once a Minter Admin’s invite was waiting, votes from an earlier nomination of the same person could show on the new one; they stay with the round they were cast in.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.4',
     date: '2026-10-26',
     title: 'Nominations credit their nominator',
