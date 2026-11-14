@@ -22,12 +22,12 @@ export const CHANGELOG: Release[] = [
     date: '2026-11-13',
     title: 'A new nomination starts fresh',
     summary:
-      'When someone is nominated again, the community votes and supports of their earlier nomination no longer show on the new one.',
+      'When someone is nominated again, the new nomination shows its own nominator, text and votes, not those of their earlier nomination.',
     sections: [
       {
         title: 'For everyone',
         notes: [
-          'A re-nomination counts only its own community votes, supports and nominators. Once a Minter Admin’s invite was waiting, votes from an earlier nomination of the same person could show on the new one; they stay with the round they were cast in.',
+          'A re-nomination shows only its own nominator, reason, community votes and supports. Once a Minter Admin’s invite was waiting, an earlier nomination of the same person could show instead (its nominator, its text and its votes); each now stays with its own round.',
         ],
       },
     ],
