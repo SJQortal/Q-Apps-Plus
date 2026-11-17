@@ -353,8 +353,24 @@ export function loadNominations(options: { force?: boolean } = {}): Promise<Nomi
         primary.set(m.primaryName, m.member);
         nameOf.set(m.member, m.primaryName);
       }
-      // Invites decided in the last two windows: enough to cover any open round.
-      const since = Math.max(1, now.height - 2 * decisions.group.maximumBlockDelay - 10);
+      // Invites decided since the oldest nomination record, the last two windows at least, so
+      // a round an invite answered long ago reads as decided, not lapsed, and a re-nomination
+      // knows where the earlier round ended (Simon, 2026-11-17: QQQ Test's October round read
+      // as lapsed). One typed search of MINTER's invites: a year is about 85, in 23 ms.
+      const oldest = nominationRows.rows.reduce(
+        (min, row) => Math.min(min, rowTime(row)),
+        now.timestamp
+      );
+      const recordBlocks = Math.ceil((now.timestamp - oldest) / now.msPerBlock);
+      const since = Math.max(
+        1,
+        now.height -
+          Math.max(
+            2 * decisions.group.maximumBlockDelay,
+            recordBlocks + decisions.group.maximumBlockDelay
+          ) -
+          10
+      );
       const recent = await getDecisionsInRange(['GROUP_INVITE'], since, now.height, {
         force,
         slot: 'nominations',
