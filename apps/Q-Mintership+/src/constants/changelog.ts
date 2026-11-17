@@ -28,6 +28,7 @@ export const CHANGELOG: Release[] = [
         title: 'For everyone',
         notes: [
           'History lists the nominations that lapsed: no Minter Admin signed them within the waiting window. Each says who was nominated, by whom and when it lapsed, and opens the nomination. They are among All, and Lapsed nominations shows them alone.',
+          'A nomination a Minter Admin’s invite answered weeks ago now shows how that invite ended (approved, rejected or expired), not Lapsed.',
         ],
       },
     ],
