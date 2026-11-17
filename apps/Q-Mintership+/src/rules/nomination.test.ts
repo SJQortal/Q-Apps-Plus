@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nominationAnswered, pickRound } from './nomination';
+import { lapsedRounds, nominationAnswered, pickRound } from './nomination';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -92,5 +92,52 @@ describe('pickRound: the records of the current round', () => {
   it('without a pending invite, lapsed records give way to newer ones', () => {
     expect(round([october, november], {})).toEqual(['igorcoin']);
     expect(round([october], {})).toEqual(['Simon James']);
+  });
+});
+
+describe('lapsedRounds: nominations no Minter Admin signed in time', () => {
+  const NOW = 300 * DAY;
+  const ctx = { windowMs: WINDOW, nowMs: NOW, from: 100 * DAY };
+  const who = (rounds: ReturnType<typeof lapsedRounds<ReturnType<typeof entry>>>) =>
+    rounds.map((r) => r.records.map((e) => e.who));
+
+  // Simon, 2026-11-17: igorcoin nominated Stone Golem on 9 Nov; nobody signed, it lapsed.
+  it('a round with no invite lapses a window after its record', () => {
+    const igorcoin = entry('igorcoin', NOW - 9 * DAY);
+    const rounds = lapsedRounds([igorcoin], [], ctx);
+    expect(who(rounds)).toEqual([['igorcoin']]);
+    expect(rounds[0].endedAt).toBe(igorcoin.publishedAt + WINDOW);
+  });
+
+  it('records a window or less apart wait together, until a window after the newest', () => {
+    const a = entry('Nora Nominator', NOW - 20 * DAY);
+    const b = entry('igorcoin', NOW - 15 * DAY);
+    const rounds = lapsedRounds([b, a], [], ctx);
+    expect(who(rounds)).toEqual([['Nora Nominator', 'igorcoin']]);
+    expect(rounds[0].endedAt).toBe(b.publishedAt + WINDOW);
+  });
+
+  it('an invite in the wait answers the round; a record while it was pending is in that round', () => {
+    const a = entry('Nora Nominator', NOW - 30 * DAY);
+    const during = entry('Kit Kicked', NOW - 27 * DAY);
+    const invite = { at: NOW - 28 * DAY, decidedAt: NOW - 24 * DAY };
+    expect(lapsedRounds([a, during], [invite], ctx)).toEqual([]);
+  });
+
+  it('a record after a decided invite starts a round of its own, which can lapse', () => {
+    const a = entry('Simon James', NOW - 40 * DAY);
+    const again = entry('igorcoin', NOW - 30 * DAY);
+    const invite = { at: NOW - 39 * DAY, decidedAt: NOW - 35 * DAY };
+    expect(who(lapsedRounds([a, again], [invite], ctx))).toEqual([['igorcoin']]);
+  });
+
+  it('not while it still waits, nor while an invite is pending', () => {
+    expect(lapsedRounds([entry('igorcoin', NOW - 2 * DAY)], [], ctx)).toEqual([]);
+    const a = entry('igorcoin', NOW - 20 * DAY);
+    expect(lapsedRounds([a], [{ at: NOW - 19 * DAY, decidedAt: null }], ctx)).toEqual([]);
+  });
+
+  it('only rounds that began after the invites read begin', () => {
+    expect(lapsedRounds([entry('igorcoin', 90 * DAY)], [], ctx)).toEqual([]);
   });
 });

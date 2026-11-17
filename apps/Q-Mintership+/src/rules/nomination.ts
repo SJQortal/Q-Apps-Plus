@@ -223,6 +223,68 @@ export function nominationAnswered<T extends { publishedAt: number }>(
   return first;
 }
 
+/** A MINTER invite of the nominee, as History read it: when it was made, and decided (null while pending). */
+export interface InviteSpan {
+  at: number;
+  decidedAt: number | null;
+}
+
+/** A round of a nominee's records that no invite answered, and when its wait ran out. */
+export interface LapsedRound<T> {
+  /** Oldest first: the first is its nominator. */
+  records: T[];
+  /** When the newest record's window ran out (ms). */
+  endedAt: number;
+}
+
+/**
+ * The rounds of one nominee's records that lapsed: nominated, and no Minter
+ * Admin signed in time (Simon, 2026-11-17: an expired nomination "should move
+ * to the regular app history"). Records a window or less apart wait together,
+ * until a window after the newest; a record published while an invite was
+ * pending belongs to that invite's round, and a record after an invite starts
+ * a new one. A round lapsed when no invite came from its first record (less
+ * the clock slack) until its wait ran out, before `nowMs`. Only rounds that
+ * began at or after `from`, when the invites read begin, are judged: an
+ * earlier one may have had an invite before that.
+ */
+export function lapsedRounds<T extends { publishedAt: number }>(
+  records: readonly T[],
+  invites: readonly InviteSpan[],
+  ctx: { windowMs: number; nowMs: number; from: number }
+): LapsedRound<T>[] {
+  const sorted = [...records].sort((a, b) => a.publishedAt - b.publishedAt);
+  const pendingAt = (t: number) =>
+    invites.some(
+      (i) => t >= i.at - RECORD_CLOCK_SLACK_MS && (i.decidedAt === null || t <= i.decidedAt)
+    );
+  const inviteBetween = (from: number, to: number) =>
+    invites.some((i) => i.at > from && i.at <= to);
+  const rounds: T[][] = [];
+  for (const record of sorted) {
+    if (pendingAt(record.publishedAt)) continue;
+    const current = rounds[rounds.length - 1];
+    const last = current?.[current.length - 1].publishedAt;
+    if (
+      current &&
+      last !== undefined &&
+      record.publishedAt <= last + ctx.windowMs &&
+      !inviteBetween(last, record.publishedAt)
+    )
+      current.push(record);
+    else rounds.push([record]);
+  }
+  const lapsed: LapsedRound<T>[] = [];
+  for (const round of rounds) {
+    const first = round[0].publishedAt;
+    const endedAt = round[round.length - 1].publishedAt + ctx.windowMs;
+    if (first - RECORD_CLOCK_SLACK_MS < ctx.from || endedAt > ctx.nowMs) continue;
+    if (inviteBetween(first - RECORD_CLOCK_SLACK_MS, endedAt)) continue;
+    lapsed.push({ records: round, endedAt });
+  }
+  return lapsed;
+}
+
 /** When a waiting nomination drops off the open list (ms). */
 export function waitingEndsAt(
   publishedAt: number,

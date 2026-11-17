@@ -24,6 +24,11 @@
  * For a Minter Admin, the Minter Admin polls that closed in the period are
  * rows among the events, by when voting ended, and a type of their own
  * (parts/ClosedPolls.tsx, loaded only for them; Simon, 2026-10-23).
+ *
+ * For everyone, the nominations that lapsed in the period (no Minter Admin
+ * signed within the waiting window) are rows too, by when their wait ran
+ * out, and a type of their own: from the nominations read (Home's) and the
+ * invites in the windows read (rules/nomination.ts lapsedRounds).
  */
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -47,6 +52,7 @@ import {
 } from '../../hooks/useData';
 import { inviteProposers } from '../../data/nominations';
 import { waitingWindowBlocks } from '../../rules/timing';
+import { lapsedRounds, type InviteSpan } from '../../rules/nomination';
 import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { markHistorySeen, readHistorySeen } from '../../data/historySeen';
 import { isHistoryNews } from '../../data/historyNews';
@@ -80,7 +86,7 @@ import {
   type HistoryPeriod,
 } from './historyFilters';
 import { HistoryFilterBar } from './parts/HistoryFilterBar';
-import { TimelineList, type TimelinePoll } from './parts/TimelineList';
+import { TimelineList, type TimelineLapsed, type TimelinePoll } from './parts/TimelineList';
 import type { ClosedPollsState } from './parts/ClosedPolls';
 import { TypedHistory } from './TypedHistory';
 
@@ -204,11 +210,21 @@ export function ChainHistory() {
     () => ({ msPerBlock, maximumBlockDelay }),
     [msPerBlock, maximumBlockDelay]
   );
+  const timeline = useMemo(
+    () =>
+      windows
+        ? buildTimeline(
+            windows.flatMap((w) => w.rows),
+            ctx
+          )
+        : [],
+    [windows, ctx]
+  );
   // Decided only: what is still collecting signatures lives in Nominations and Decisions.
   const events = useMemo(() => {
     if (!windows) return [];
     const rows = windows.flatMap((w) => w.rows);
-    const decided = buildTimeline(rows, ctx).filter((e) => e.outcome !== 'pending');
+    const decided = timeline.filter((e) => e.outcome !== 'pending');
     if (adminCount === undefined || !threshold || windows.some((w) => w.truncated)) return decided;
     // A change approved this long after the oldest window's start was confirmed inside the
     // windows read, so every change after it is in hand and its count is exact.
@@ -220,7 +236,7 @@ export function ChainHistory() {
       (step) => step.height >= exactFrom
     );
     return withTargetSteps(decided, steps);
-  }, [windows, ctx, maximumBlockDelay, adminCount, threshold, owner]);
+  }, [windows, timeline, maximumBlockDelay, adminCount, threshold, owner]);
 
   const choices = useMemo(
     () => historyFilterChoices(events, filter, { polls: admin }),
@@ -239,13 +255,65 @@ export function ChainHistory() {
     [pollsWanted, pollState]
   );
   const pollsLoading = pollsWanted && !pollState?.polls && !pollState?.error;
+
+  // Nominations no Minter Admin signed in time, among the events (All) or alone (Lapsed
+  // nominations), for everyone: from the nominations read and every invite read, pending
+  // ones too (Simon, 2026-11-17). Only rounds that began once the invites read begin.
+  const lapsedWanted = filter === 'all' || filter === 'lapsed';
+  const clockMs = chain.data?.timestamp;
+  const lapsed = useMemo<TimelineLapsed[]>(() => {
+    if (!lapsedWanted || !nominations.data || !windows?.length || clockMs === undefined) return [];
+    const invitesBy = new Map<string, InviteSpan[]>();
+    for (const e of timeline) {
+      if (e.kind !== 'invite' || !e.subject) continue;
+      const list = invitesBy.get(e.subject) ?? [];
+      list.push({ at: e.proposedAt, decidedAt: e.outcome === 'pending' ? null : e.at });
+      invitesBy.set(e.subject, list);
+    }
+    // A window cut short may lack an invite: what is read is whole only after it.
+    const cut = windows.filter((w) => w.truncated);
+    const from = cut.length
+      ? Math.max(...cut.map((w) => w.endMs))
+      : Math.min(...windows.map((w) => w.startMs));
+    const windowMs = waitingWindowBlocks({ minimumBlockDelay: 0, maximumBlockDelay }) * msPerBlock;
+    const rows: TimelineLapsed[] = [];
+    for (const n of nominations.data.all) {
+      const rounds = lapsedRounds(n.records, invitesBy.get(n.nominee) ?? [], {
+        windowMs,
+        nowMs: clockMs,
+        from,
+      });
+      for (const round of rounds) {
+        if (round.endedAt < startMs) continue;
+        rows.push({
+          nominee: n.nominee,
+          nominators: [...new Set(round.records.map((r) => r.publisher.address))],
+          nominatedAt: round.records[0].publishedAt,
+          at: round.endedAt,
+        });
+      }
+    }
+    return rows;
+  }, [
+    lapsedWanted,
+    nominations.data,
+    windows,
+    timeline,
+    clockMs,
+    maximumBlockDelay,
+    msPerBlock,
+    startMs,
+  ]);
+  const lapsedLoading = filter === 'lapsed' && !nominations.data && !nominations.isError;
+
   const items = useMemo(
     () =>
       [
-        ...filtered.map((event) => ({ at: event.at, event, poll: null })),
-        ...polls.map((poll) => ({ at: poll.at, event: null, poll })),
+        ...filtered.map((event) => ({ at: event.at, event, poll: null, lapsed: null })),
+        ...polls.map((poll) => ({ at: poll.at, event: null, poll, lapsed: null })),
+        ...lapsed.map((row) => ({ at: row.at, event: null, poll: null, lapsed: row })),
       ].sort((a, b) => b.at - a.at),
-    [filtered, polls]
+    [filtered, polls, lapsed]
   );
 
   const newCount = isNew ? filtered.filter(isNew).length : 0;
@@ -253,6 +321,9 @@ export function ChainHistory() {
   const shownItems = items.slice(0, limit);
   const shown = shownItems.flatMap((item) => (item.event ? [item.event] : []));
   const shownPolls = shownItems.flatMap((item): TimelinePoll[] => (item.poll ? [item.poll] : []));
+  const shownLapsed = shownItems.flatMap((item): TimelineLapsed[] =>
+    item.lapsed ? [item.lapsed] : []
+  );
   const hidden = items.length - shownItems.length;
   const label = historyFilterLabel(filter);
   const nowMs = chain.data?.timestamp ?? Date.now();
@@ -299,6 +370,7 @@ export function ChainHistory() {
           <TimelineList
             events={shown}
             polls={shownPolls}
+            lapsed={shownLapsed}
             showSubject
             nowMs={nowMs}
             isNew={isNew}
@@ -319,6 +391,19 @@ export function ChainHistory() {
                 longer || period.kind === 'all'
                   ? 'Open polls are in Decisions.'
                   : 'Open polls are in Decisions. Pick an earlier date in When to look further back.'
+              }
+            />
+          )
+        ) : filter === 'lapsed' ? (
+          lapsedLoading ? (
+            <ListSkeleton count={2} label="Loading the nominations" />
+          ) : (
+            <EmptyState
+              title={`No nomination lapsed ${scope}.`}
+              description={
+                longer || period.kind === 'all'
+                  ? 'A nomination lapses when no Minter Admin signs it within the waiting window.'
+                  : 'A nomination lapses when no Minter Admin signs it within the waiting window. Pick an earlier date in When to look further back.'
               }
             />
           )
@@ -368,7 +453,11 @@ export function ChainHistory() {
         ) : null}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 200px' }}>
-            {plural(items.length, filter === 'polls' ? 'poll' : 'event')} {scope}.
+            {plural(
+              items.length,
+              filter === 'polls' ? 'poll' : filter === 'lapsed' ? 'lapsed nomination' : 'event'
+            )}{' '}
+            {scope}.
           </Typography>
           {hidden > 0 ? (
             <Button
@@ -403,8 +492,8 @@ export function ChainHistory() {
     <Section title="On chain" id="history-chain">
       <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
         Who was added to MINTER, removed, banned or made a Minter Admin. Only approved changes
-        happened; proposals that expired or were rejected are marked. Open ones are in Nominations
-        and Decisions.
+        happened; proposals that expired or were rejected are marked, and so are nominations that
+        lapsed with no Minter Admin's signature. Open ones are in Nominations and Decisions.
         {admin
           ? ' The Minter Admin polls are here once they close, for Minter Admins only: encrypted to them, and advisory.'
           : null}

@@ -85,6 +85,49 @@ describe('History page: who proposed an invite', () => {
   });
 });
 
+describe('History page: nominations that lapsed', () => {
+  const T = { timeout: 8000 };
+  // Simon, 2026-11-17: a nomination no Minter Admin signed in time "should move to the
+  // regular app history". The mock's lapsed person was nominated 10 days ago, no invite.
+  it('lists a lapsed nomination among the events, with its nominator, for everyone', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history' });
+    const list = await eventsList();
+    const row = (await within(list).findByText(PEOPLE.lapsed.name as string, {}, T)).closest(
+      'li'
+    ) as HTMLElement;
+    expect(within(row).getByText('Nominated for MINTER')).toBeInTheDocument();
+    expect(within(row).getByText('Lapsed')).toBeInTheDocument();
+    expect(row).toHaveTextContent(/nominated by\s*N?Nora Nominator/);
+    expect(row).toHaveTextContent('No Minter Admin signed it within the waiting window.');
+    expect(within(row).getByRole('link', { name: 'Open the nomination' })).toHaveAttribute(
+      'href',
+      `/nominations/${ADDR.lapsed}`
+    );
+    // A nomination an invite answered isn't one: the expired round's has its invite.
+    const lapsedRows = within(list)
+      .getAllByText('Lapsed')
+      .map((chip) => chip.closest('li') as HTMLElement);
+    expect(lapsedRows.some((li) => li.textContent?.includes(PEOPLE.expired.name as string))).toBe(
+      false
+    );
+  });
+
+  it('has a type of its own', async () => {
+    await renderPage(<HistoryPage />, { persona: 'learner', path: '/history?type=lapsed' });
+    const list = await screen.findByRole(
+      'group',
+      { name: 'MINTER events: Lapsed nominations, newest first' },
+      T
+    );
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    for (const row of rows) expect(row).toHaveTextContent(/^Nominated for MINTERLapsed/);
+    expect(
+      await screen.findByText(/^\d+ lapsed nominations? in the last 30 days\.$/, {}, T)
+    ).toBeInTheDocument();
+  });
+});
+
 describe('History page: filters', () => {
   const INVITE_TITLES =
     /^(Approved for MINTER|Approved and added to MINTER|Invited to MINTER|Nominated for MINTER)$/;
@@ -105,6 +148,7 @@ describe('History page: filters', () => {
     ).toEqual([
       'All',
       'Invites',
+      'Lapsed nominations',
       'Join requests',
       'Joined MINTER',
       'Declined requests',

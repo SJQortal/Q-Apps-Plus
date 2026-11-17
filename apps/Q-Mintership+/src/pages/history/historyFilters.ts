@@ -11,7 +11,9 @@
  * stepping down share one. Decision types are searched by type over the
  * period (data/historySearch.ts); all types, joins, join requests and leaves
  * are read in 30-day windows. Minter Admin polls are a type too, for Minter
- * Admins only (parts/ClosedPolls.tsx reads them). Pure, so the order and the
+ * Admins only (parts/ClosedPolls.tsx reads them), and so are the nominations
+ * that lapsed with no Minter Admin's signature (from the nominations read).
+ * Pure, so the order and the
  * names are pinned by tests.
  */
 import { HISTORY_MAX_WINDOWS, HISTORY_WINDOW_DAYS, type TimelineEvent } from '../../data/timeline';
@@ -31,12 +33,14 @@ export type HistoryType =
   | 'cancelInvite'
   | 'admins'
   | 'polls'
+  | 'lapsed'
   | 'other';
 
 export type HistoryFilter = 'all' | HistoryType;
 
 export const HISTORY_TYPES: ReadonlyArray<{ key: HistoryType; label: string }> = [
   { key: 'invite', label: 'Invites' },
+  { key: 'lapsed', label: 'Lapsed nominations' },
   { key: 'joinRequest', label: 'Join requests' },
   { key: 'joined', label: 'Joined MINTER' },
   { key: 'declined', label: 'Declined requests' },

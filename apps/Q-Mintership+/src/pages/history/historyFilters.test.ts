@@ -103,6 +103,7 @@ describe('History: type filters', () => {
     expect(labels).toEqual([
       'All',
       'Invites',
+      'Lapsed nominations',
       'Join requests',
       'Joined MINTER',
       'Declined requests',

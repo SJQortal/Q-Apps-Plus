@@ -40,7 +40,7 @@ import { flowColumns, SECTION_COLUMN } from '../../../components/layout/flowColu
 import { alikeEvents } from './alikeEvents';
 import { ToneChip } from '../../../components/common/Section';
 import { useDisplayName } from '../../../hooks/useDisplayName';
-import { adminPollPath, decisionPath } from '../../../routes/paths';
+import { adminPollPath, decisionPath, nominationPath } from '../../../routes/paths';
 import { formatCount, formatDate, formatRelative } from '../../../utils/format';
 
 const ICON: Record<TimelineKind, SvgIconComponent> = {
@@ -449,10 +449,93 @@ function PollItem({ poll }: { poll: TimelinePoll }) {
   );
 }
 
+/**
+ * A Q-Mintership+ nomination no Minter Admin signed in time, as History's
+ * timeline shows it (ChainHistory; rules/nomination.ts lapsedRounds).
+ */
+export interface TimelineLapsed {
+  nominee: string;
+  /** Who nominated, the first first, then any others in the round. */
+  nominators: string[];
+  /** When it was nominated (its first record, ms). */
+  nominatedAt: number;
+  /** When its wait ran out (ms). */
+  at: number;
+}
+
+/**
+ * A lapsed nomination among the events, shaped like an invite's row: who it
+ * was for, when it lapsed and who nominated them, and the nomination's page.
+ */
+function LapsedItem({ lapsed }: { lapsed: TimelineLapsed }) {
+  const theme = useTheme();
+  const [first, ...others] = lapsed.nominators;
+  return (
+    <Box
+      component="li"
+      sx={{
+        display: 'flex',
+        gap: 1.5,
+        py: 1.5,
+        px: { xs: 1.5, sm: 2 },
+        '& + &': { borderTop: 1, borderColor: 'divider' },
+      }}
+    >
+      <Box
+        aria-hidden
+        sx={{
+          width: 36,
+          height: 36,
+          flexShrink: 0,
+          borderRadius: '50%',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: primarySoft(theme),
+          color: theme.palette.primary.main,
+        }}
+      >
+        <PersonAddAlt1OutlinedIcon sx={{ fontSize: 20 }} />
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1 }}>
+          <Typography sx={{ fontWeight: 600 }}>Nominated for MINTER</Typography>
+          <ToneChip size="small" label="Lapsed" color="default" variant="outlined" />
+        </Box>
+        <PersonChip address={lapsed.nominee} size={28} />
+        <Typography component="div" variant="body2" color="text.secondary">
+          Lapsed {formatDate(lapsed.at)}
+          {first ? (
+            <>
+              {' · nominated by '}
+              <PersonInline address={first} />
+              {others.length ? ` and ${formatCount(others.length)} more` : ''}
+            </>
+          ) : null}
+          {` on ${formatDate(lapsed.nominatedAt)}`}
+        </Typography>
+        <Typography variant="body2">
+          No Minter Admin signed it within the waiting window.
+        </Typography>
+        <Link
+          component={RouterLink}
+          to={nominationPath(lapsed.nominee)}
+          variant="body2"
+          sx={ROW_LINK_SX}
+        >
+          Open the nomination
+        </Link>
+      </Box>
+    </Box>
+  );
+}
+
 export interface TimelineListProps {
   events: TimelineEvent[];
   /** Closed Minter Admin polls among the events, by when voting ended (History). */
   polls?: readonly TimelinePoll[];
+  /** Nominations that lapsed, among the events, by when their wait ran out (History). */
+  lapsed?: readonly TimelineLapsed[];
   /** Show who each event is about (History); a person page leaves it out. */
   showSubject?: boolean;
   /** Show which Minter Admin proposed each (default true; off on an admin's own list). */
@@ -476,6 +559,7 @@ export interface TimelineListProps {
 export function TimelineList({
   events,
   polls = [],
+  lapsed = [],
   showSubject = false,
   showProposer = true,
   nowMs,
@@ -484,12 +568,18 @@ export function TimelineList({
   isNew,
   proposerOf,
 }: TimelineListProps) {
-  const items: Array<{ at: number; event?: TimelineEvent; poll?: TimelinePoll }> = [
+  const items: Array<{
+    at: number;
+    event?: TimelineEvent;
+    poll?: TimelinePoll;
+    lapsed?: TimelineLapsed;
+  }> = [
     ...events.map((event) => ({ at: event.at, event })),
     ...polls.map((poll) => ({ at: poll.at, poll })),
+    ...lapsed.map((row) => ({ at: row.at, lapsed: row })),
   ];
   // Newest first; events keep their own order among themselves.
-  if (polls.length) items.sort((a, b) => b.at - a.at);
+  if (polls.length || lapsed.length) items.sort((a, b) => b.at - a.at);
   const months: Array<{ month: string; items: typeof items }> = [];
   for (const item of items) {
     const month = MONTH.format(new Date(item.at));
@@ -549,6 +639,11 @@ export function TimelineList({
                 : list.map((item) =>
                     item.poll ? (
                       <PollItem key={`poll-${item.poll.id}`} poll={item.poll} />
+                    ) : item.lapsed ? (
+                      <LapsedItem
+                        key={`lapsed-${item.lapsed.nominee}-${item.lapsed.nominatedAt}`}
+                        lapsed={item.lapsed}
+                      />
                     ) : (
                       row(item.event as TimelineEvent)
                     )
