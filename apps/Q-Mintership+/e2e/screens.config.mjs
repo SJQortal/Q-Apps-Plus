@@ -1193,6 +1193,19 @@ export default {
         await page.waitForTimeout(300);
       }),
     },
+    // Nominations no Minter Admin signed in time, a type of their own (Simon, 2026-11-17).
+    {
+      key: 'history-lapsed',
+      path: '/history?as=learner&type=lapsed',
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('link', { name: 'Open the nomination' })
+          .first()
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
     {
       key: 'history-polls-only',
       path: '/history?as=admin&type=polls&period=all',
