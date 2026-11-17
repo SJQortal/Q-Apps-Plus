@@ -18,6 +18,21 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.6',
+    date: '2026-11-17',
+    title: 'Lapsed nominations in History',
+    summary:
+      'A nomination no Minter Admin signed within the waiting window now stays in History, as Lapsed.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'History lists the nominations that lapsed: no Minter Admin signed them within the waiting window. Each says who was nominated, by whom and when it lapsed, and opens the nomination. They are among All, and Lapsed nominations shows them alone.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.5',
     date: '2026-11-13',
     title: 'A new nomination starts fresh',
