@@ -1459,6 +1459,12 @@ Stage 4 of docs/RELEASE.md, after 1.0.0 was published and #23 merged. Nothing is
   - **Where it fits:** 802 commits beyond Gitea's `hub-notifications` (unchanged at `39153b85`), still a fast-forward.
   - **Checks on the branch:** `npm ci`, build, lint and every test (2,623). `node e2e/screens.mjs` on Decisions, a pending decision, a nomination's page and a nominee's Home: 20 captures, all 0, as Q-Mintership.
   - **Pushed:** the GitHub fork's `q-mintership-4.0.0` moved `8e295066` → `4b189bac`. Simon pushed it to his Gitea fork the same day: PR #2's head is `4b189bac` (Gitea updated it at 23:34 UTC), and it merges. The PR text (`.worktrees/pr-q-mintership-4.0.0-gitea.md`) says 1.0.5's fix, 802 commits and 2,623 tests; the PR's own description still ends at 1.0.4.
+- **Refreshed with 1.0.6 (2026-11-17; Simon: "republished on QDN lets make PR update"):**
+  - **The merge** (`dc4c3ef0`): a new split (7 commits on top of the 1.0.5 split: 1.0.5's reworded What's new, then items 150 and 151). It keeps version 4.0.0. In the one 4.0.0 entry, the re-nomination note takes 1.0.5's wording and lapsed nominations get a note under For everyone. Item 151 needs no note: its bug was only ever in the + build.
+  - **The "Ship as" commit** (`dc3a8871`): the README's History line has the lapsed nominations, and a comment in `TimelineList.tsx` no longer says "Q-Mintership+" (fixed on the + branch too, `b0c98f9b`, so later merges agree).
+  - **Where it fits:** 811 commits beyond Gitea's `hub-notifications` (unchanged at `39153b85`), still a fast-forward.
+  - **Checks on the branch:** `npm ci`, build, lint and every test (2,632). `node e2e/screens.mjs` on Lapsed nominations, History, Decisions and a nomination's page: 20 captures, all 0, as Q-Mintership.
+  - **Pushed:** the GitHub fork moved `4b189bac` → `dc3a8871`. Gitea PR #2 follows when Simon pushes the branch to his Gitea fork. The PR text's opening paragraph says 1.0.6, 811 commits and 2,632 tests.
 - **The PR text:** `.worktrees/pr-q-mintership-4.0.0.md` (from docs/templates/upstream-pr.md), opening with the process change and listing what was dropped and why.
 - **Every name in constants/plus.ts** (branch `q-mintership-plus/plus-names`), so the next upstream round's Ship-as edits values, not 140 files:
   - `APP_NAME` everywhere the screens said "Q-Mintership+";
