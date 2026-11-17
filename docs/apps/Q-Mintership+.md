@@ -1464,7 +1464,7 @@ Stage 4 of docs/RELEASE.md, after 1.0.0 was published and #23 merged. Nothing is
   - **The "Ship as" commit** (`dc3a8871`): the README's History line has the lapsed nominations, and a comment in `TimelineList.tsx` no longer says "Q-Mintership+" (fixed on the + branch too, `b0c98f9b`, so later merges agree).
   - **Where it fits:** 811 commits beyond Gitea's `hub-notifications` (unchanged at `39153b85`), still a fast-forward.
   - **Checks on the branch:** `npm ci`, build, lint and every test (2,632). `node e2e/screens.mjs` on Lapsed nominations, History, Decisions and a nomination's page: 20 captures, all 0, as Q-Mintership.
-  - **Pushed:** the GitHub fork moved `4b189bac` → `dc3a8871`. Gitea PR #2 follows when Simon pushes the branch to his Gitea fork. The PR text's opening paragraph says 1.0.6, 811 commits and 2,632 tests.
+  - **Pushed:** the GitHub fork moved `4b189bac` → `dc3a8871`. Simon pushed it to his Gitea fork the same day: PR #2's head is `dc3a8871`, and it merges. The PR text's opening paragraph says 1.0.6, 811 commits and 2,632 tests; the PR's own description still ends at 1.0.4.
 - **The PR text:** `.worktrees/pr-q-mintership-4.0.0.md` (from docs/templates/upstream-pr.md), opening with the process change and listing what was dropped and why.
 - **Every name in constants/plus.ts** (branch `q-mintership-plus/plus-names`), so the next upstream round's Ship-as edits values, not 140 files:
   - `APP_NAME` everywhere the screens said "Q-Mintership+";
