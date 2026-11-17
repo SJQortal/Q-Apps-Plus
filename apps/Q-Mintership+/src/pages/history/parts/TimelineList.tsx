@@ -450,7 +450,7 @@ function PollItem({ poll }: { poll: TimelinePoll }) {
 }
 
 /**
- * A Q-Mintership+ nomination no Minter Admin signed in time, as History's
+ * A nomination no Minter Admin signed in time, as History's
  * timeline shows it (ChainHistory; rules/nomination.ts lapsedRounds).
  */
 export interface TimelineLapsed {
