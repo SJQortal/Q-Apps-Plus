@@ -22,12 +22,21 @@ export const CHANGELOG: Release[] = [
     date: '2026-11-20',
     title: 'A decided nomination shows its own nominator',
     summary:
-      'Once a re-nomination is decided, its page shows who nominated in that round and their text, not an earlier nomination’s.',
+      'Once a re-nomination is decided, its page shows who nominated in that round and their text, not an earlier nomination’s. Comments and dates keep each round apart too.',
     sections: [
       {
         title: 'For everyone',
         notes: [
           'A nomination that was decided shows the nominator and text of the round its invite answered. After a re-nomination was approved or rejected, its page could show the earlier nomination’s nominator and text instead.',
+          'When someone is nominated again after an earlier nomination lapsed, the new one’s comments, and Minter Admins’ notes, start after the earlier one stopped counting.',
+          'A re-nomination that lapsed says when its own wait ended, not when an earlier round was decided.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'Connections, under In Q-Mintership, lists who nominated and supported someone in every round they were nominated in, each with its round. It showed only the latest round’s.',
         ],
       },
     ],
