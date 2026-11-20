@@ -83,6 +83,30 @@ describe('pickRound: the records of the current round', () => {
     ).toEqual(['igorcoin']);
   });
 
+  // Simon, 2026-11-20: once the November invite was rejected, Jonny's nomination showed
+  // October's nominator and text: the decided round took every record before its decision.
+  it('a decided round is the records its own invite answered, not an earlier round’s', () => {
+    expect(
+      pickRound([october, november], {
+        decidedEnd: NOW - DAY,
+        decidedAt: NOW - 3 * DAY,
+        pendingAt: null,
+        nowMs: NOW,
+        windowMs: WINDOW,
+      }).entries.map((e) => e.who)
+    ).toEqual(['igorcoin']);
+    // A re-invite after it carries that round over, not October's.
+    expect(
+      pickRound([october, november], {
+        decidedEnd: NOW - DAY,
+        decidedAt: NOW - 3 * DAY,
+        pendingAt: invitedToday,
+        nowMs: NOW,
+        windowMs: WINDOW,
+      }).entries.map((e) => e.who)
+    ).toEqual(['igorcoin']);
+  });
+
   it('a re-invite after a decided round carries that round over', () => {
     expect(round([october], { decidedEnd: NOW - 25 * DAY, pendingAt: invitedToday })).toEqual([
       'Simon James',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ADDR, MS_PER_BLOCK, NOW, TIP, installWorld } from '../test/world';
-import { loadNominations } from './nominations';
+import { loadNominations, loadNominationsFor } from './nominations';
 
 const DAY = 86_400_000;
 const DAY_BLOCKS = Math.round(DAY / MS_PER_BLOCK);
@@ -39,5 +39,52 @@ describe('the nominations read: rounds an older invite decided', () => {
     const n = data.all.find((x) => x.nominee === nominee);
     expect(n?.state).toBe('rejected');
     expect(n?.latestInvite?.approvalStatus).toBe('REJECTED');
+  });
+
+  // Simon, 2026-11-20: Jonny's November invite was rejected, and his nomination showed his
+  // October round's nominator and text again.
+  it('a decided round shows the nominator its own invite answered, not an earlier round’s', async () => {
+    const { world } = installWorld('learner');
+    const nominee = ADDR.lapsed;
+    const record = world.records.find(
+      (r: { identifier: string }) => r.identifier === `qmp-nomination-${nominee}`
+    );
+    if (!record) throw new Error('no record');
+    // Nora's record is the second round, 12 days ago; Avery's was the first, 40 days ago.
+    record.created = NOW - 12 * DAY;
+    (record.body as { created: number }).created = NOW - 12 * DAY;
+    world.records.push({
+      name: 'Avery Admin',
+      identifier: `qmp-nomination-${nominee}`,
+      created: NOW - 40 * DAY,
+      body: { ...(record.body as object), created: NOW - 40 * DAY, reason: 'The first round.' },
+    });
+    const invite = (daysAgo: number, decidedDaysAgo: number, id: string) => {
+      const h = TIP - daysAgo * DAY_BLOCKS;
+      world.decided.push({
+        type: 'GROUP_INVITE',
+        timestamp: NOW - daysAgo * DAY,
+        reference: `ref-${id}`,
+        fee: '0.01000000',
+        signature: `${id}InviteSignatureRejected${'1'.repeat(60)}`.slice(0, 88),
+        txGroupId: 694,
+        blockHeight: h,
+        approvalStatus: 'REJECTED',
+        approvalHeight: TIP - decidedDaysAgo * DAY_BLOCKS,
+        creatorAddress: ADDR.admin,
+        adminPublicKey: world.accounts.get(ADDR.admin)?.publicKey,
+        groupId: 694,
+        invitee: nominee,
+        timeToLive: 864_000,
+      });
+    };
+    invite(39, 37, 'first');
+    invite(11, 9, 'second');
+    for (const data of [await loadNominations(), { all: await loadNominationsFor(nominee) }]) {
+      const n = data.all.find((x) => x.nominee === nominee);
+      expect(n?.state).toBe('rejected');
+      expect(n?.nomination?.publisher.name).toBe('Nora Nominator');
+      expect(n?.publishedAt).toBe(NOW - 12 * DAY);
+    }
   });
 });

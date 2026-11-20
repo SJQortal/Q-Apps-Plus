@@ -273,15 +273,15 @@ async function assemble(
       : null;
     const round = pickRound(nominationsBy.get(nominee) ?? [], {
       decidedEnd,
+      decidedAt: decided?.timestamp ?? null,
       pendingAt: decision?.createdAt ?? null,
       nowMs: now.timestamp,
       windowMs,
     });
     const entries = round.entries;
     const first = entries[0] ?? null;
-    // A new round's supports came after its first record: older ones were for an earlier round.
-    const roundStart =
-      round.fresh && first ? first.publishedAt - RECORD_CLOCK_SLACK_MS : Number.NEGATIVE_INFINITY;
+    // A round's supports came after its first record: older ones were for an earlier round.
+    const roundStart = first ? first.publishedAt - RECORD_CLOCK_SLACK_MS : Number.NEGATIVE_INFINITY;
     const supports = (supportsBy.get(nominee) ?? []).filter(
       (s) =>
         s.publishedAt >= roundStart &&

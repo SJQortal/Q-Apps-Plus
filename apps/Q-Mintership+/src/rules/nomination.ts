@@ -180,25 +180,44 @@ export const RECORD_CLOCK_SLACK_MS = 10 * 60_000;
  * waiting round's does; with none after it either, a re-invite carries the
  * decided round over. With no pending invite and no newer records, the round
  * is the one the last invite decided.
+ *
+ * The decided round is the records the last decided invite (`decidedAt`, when
+ * it was made) answered, by the same window, up to its decision: not every
+ * record before it (Simon, 2026-11-20: once Jonny's November invite was
+ * rejected, his nomination showed October's nominator and text again). With
+ * none in that window it is the newest record before the decision.
  */
 export function pickRound<T extends { publishedAt: number }>(
   entries: T[],
-  ctx: { decidedEnd: number | null; pendingAt: number | null; nowMs: number; windowMs: number }
+  ctx: {
+    decidedEnd: number | null;
+    decidedAt?: number | null;
+    pendingAt: number | null;
+    nowMs: number;
+    windowMs: number;
+  }
 ): { entries: T[]; fresh: boolean } {
   const sorted = [...entries].sort((a, b) => a.publishedAt - b.publishedAt);
   const end = ctx.decidedEnd ?? Number.NEGATIVE_INFINITY;
   const fresh = sorted.filter((e) => e.publishedAt > end);
+  const decidedRound = (): T[] => {
+    const before = sorted.filter((e) => e.publishedAt <= end);
+    if (ctx.decidedAt === null || ctx.decidedAt === undefined) return before;
+    const from = ctx.decidedAt - ctx.windowMs - RECORD_CLOCK_SLACK_MS;
+    const answered = before.filter((e) => e.publishedAt >= from);
+    return answered.length ? answered : before.slice(-1);
+  };
   if (ctx.pendingAt !== null) {
     const from = ctx.pendingAt - ctx.windowMs - RECORD_CLOCK_SLACK_MS;
     const answered = fresh.filter((e) => e.publishedAt >= from);
     if (answered.length) return { entries: answered, fresh: true };
-    return { entries: fresh.length ? [fresh[fresh.length - 1]] : sorted, fresh: true };
+    return { entries: fresh.length ? [fresh[fresh.length - 1]] : decidedRound(), fresh: true };
   }
   if (fresh.length) {
     const active = fresh.filter((e) => ctx.nowMs - e.publishedAt <= ctx.windowMs);
     return { entries: active.length ? active : [fresh[fresh.length - 1]], fresh: true };
   }
-  return { entries: sorted.filter((e) => e.publishedAt <= end), fresh: false };
+  return { entries: decidedRound(), fresh: false };
 }
 
 /**
