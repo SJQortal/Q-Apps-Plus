@@ -106,6 +106,24 @@ describe('Nominations filters', () => {
     expect(endedAt(joined, now, group)).toBe(NOW - DAY);
   });
 
+  // Simon, 2026-11-20: "make sure there are no more mistakes like this": a re-nomination that
+  // lapsed keeps the earlier round's decided invite as its last; its own wait dates it.
+  it('a lapsed re-nomination ends with its own wait, not the earlier round’s invite', () => {
+    const earlier = {
+      timestamp: NOW - 40 * DAY,
+      blockHeight: 1_000,
+      approvalHeight: 1_500,
+      approvalStatus: 'REJECTED',
+    } as TxRow;
+    const again = nom({
+      nominee: ADDR.lapsed,
+      state: 'lapsed',
+      publishedAt: NOW - 10 * DAY,
+      latestInvite: earlier,
+    });
+    expect(endedAt(again, now, group)).toBe(NOW - 10 * DAY + 10_080 * MS_PER_BLOCK);
+  });
+
   it('offers Propose nomination again on rounds that ran out', () => {
     const again = (state: Nomination['state']) =>
       canNominateAgain(nom({ nominee: ADDR.lapsed, state }));
