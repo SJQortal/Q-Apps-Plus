@@ -17,6 +17,7 @@ import { getGroupInfo } from '../../../../data/group';
 import { loadNominationsFor } from '../../../../data/nominations';
 import { getAddressHistory } from '../../../../data/txs';
 import { useQuery } from '../../../../hooks/useQuery';
+import { FALLBACK_MS_PER_BLOCK } from '../../../../data/constants';
 import { isOpenState } from '../../../../rules/nomination';
 import { nominationRounds } from '../../../../rules/rounds';
 import { mintershipLinks, type MintershipLink } from './links';
@@ -71,6 +72,7 @@ export function useMintershipLinks(address: string, enabled = true): MintershipL
       rounds: rounds ?? [],
       made: made.data ?? null,
       votesOnThem: votes.data?.rows ?? [],
+      windowMs: (maxDelay ?? 10_080) * FALLBACK_MS_PER_BLOCK,
     }),
     failed,
     error: failedReads[0]?.error,

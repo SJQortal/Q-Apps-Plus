@@ -37,6 +37,9 @@ const nomination = (over: Partial<Nomination>): Nomination =>
     waitingEndsAt: null,
     decision: null,
     latestInvite: null,
+    records: [],
+    supportRecords: [],
+    earlierRoundEnd: null,
     hasJoinRequest: false,
     hasStoredInvite: false,
     ...over,
@@ -82,13 +85,15 @@ describe('mintershipLinks', () => {
       address: ME,
       nominations: [
         nomination({
-          nomination: {
-            publisher: publisher(NORA, 'Nora'),
-            publishedAt: 1_500,
-            identifier: `qmp-nomination-${ME}`,
-            record: {} as never,
-          },
-          supporters: [
+          records: [
+            {
+              publisher: publisher(NORA, 'Nora'),
+              publishedAt: 1_500,
+              identifier: `qmp-nomination-${ME}`,
+              record: {} as never,
+            },
+          ],
+          supportRecords: [
             // Nora again, under her second name: part of her nomination.
             { publisher: publisher(NORA, 'Spare Room'), publishedAt: 1_600, record: {} as never },
             { publisher: publisher(JUNE, 'June'), publishedAt: 1_700, record: {} as never },
@@ -98,6 +103,7 @@ describe('mintershipLinks', () => {
         }),
       ],
       rounds,
+      windowMs: 10_000,
       made: null,
       votesOnThem: [
         vote(BOB, 'Bob', 'yes', 10),
@@ -111,6 +117,42 @@ describe('mintershipLinks', () => {
       ['supportedThem', JUNE, 1, 2, null, 0],
       ['votedOnThem', BOB, 2, null, 'no', 2],
       ['votedOnThem', CAL, 1, null, 'yes', 1],
+    ]);
+  });
+
+  // Simon, 2026-11-20: rounds are kept apart now; the profile still lists every round's
+  // nominator, each with the round its invite answered (Jonny: Simon in October, igorcoin in
+  // November).
+  it('lists every round’s nominators, each with its own round', () => {
+    const DAY = 86_400_000;
+    const round = (number: number, startedAt: number): NominationRound => ({
+      signature: `invite-${number}`,
+      number,
+      outcome: 'rejected',
+      firstSigner: null,
+      startedAt,
+      startedHeight: null,
+      decidedHeight: null,
+    });
+    const entry = (address: string, name: string, publishedAt: number) => ({
+      publisher: publisher(address, name),
+      publishedAt,
+      identifier: `qmp-nomination-${ME}`,
+      record: {} as never,
+    });
+    const links = mintershipLinks({
+      address: ME,
+      nominations: [
+        nomination({ records: [entry(NORA, 'Nora', 10 * DAY), entry(JUNE, 'June', 40 * DAY)] }),
+      ],
+      rounds: [round(2, 42 * DAY), round(1, 10 * DAY + 3_600_000)],
+      windowMs: 7 * DAY,
+      made: null,
+      votesOnThem: [],
+    });
+    expect(links.map((l) => [l.kind, l.other, l.round])).toEqual([
+      ['nominatedThem', JUNE, 2],
+      ['nominatedThem', NORA, 1],
     ]);
   });
 
@@ -136,6 +178,7 @@ describe('mintershipLinks', () => {
         ],
       }),
       votesOnThem: [],
+      windowMs: 10_000,
     });
     expect(links.map((l) => [l.kind, l.other, l.names, l.vote])).toEqual([
       ['nominated', BOB, 2, null],
@@ -147,7 +190,14 @@ describe('mintershipLinks', () => {
 
   it('finds nothing for an account with no records either way', () => {
     expect(
-      mintershipLinks({ address: ME, nominations: [], rounds: [], made: made({}), votesOnThem: [] })
+      mintershipLinks({
+        address: ME,
+        nominations: [],
+        rounds: [],
+        made: made({}),
+        votesOnThem: [],
+        windowMs: 10_000,
+      })
     ).toEqual([]);
   });
 });

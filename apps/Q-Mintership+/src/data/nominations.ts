@@ -97,6 +97,8 @@ export interface Nomination {
    * one an invite answered (nominationBehind).
    */
   records: NominationEntry[];
+  /** Every valid support about them, any round, oldest first (the Minter Profile's links). */
+  supportRecords: SupportEntry[];
   /**
    * When an earlier round's records stopped counting (ms): its newest record a
    * window on, never after this round's first record; null with none earlier.
@@ -340,6 +342,9 @@ async function assemble(
       decision,
       latestInvite: decided,
       records: [...(nominationsBy.get(nominee) ?? [])].sort(
+        (a, b) => a.publishedAt - b.publishedAt
+      ),
+      supportRecords: [...(supportsBy.get(nominee) ?? [])].sort(
         (a, b) => a.publishedAt - b.publishedAt
       ),
       earlierRoundEnd: earlierEnd(nominationsBy.get(nominee) ?? [], first, windowMs),
