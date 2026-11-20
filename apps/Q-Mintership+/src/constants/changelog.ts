@@ -18,6 +18,21 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.7',
+    date: '2026-11-20',
+    title: 'A decided nomination shows its own nominator',
+    summary:
+      'Once a re-nomination is decided, its page shows who nominated in that round and their text, not an earlier nomination’s.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A nomination that was decided shows the nominator and text of the round its invite answered. After a re-nomination was approved or rejected, its page could show the earlier nomination’s nominator and text instead.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.6',
     date: '2026-11-17',
     title: 'Lapsed nominations in History',
