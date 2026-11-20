@@ -88,3 +88,43 @@ describe('the nominations read: rounds an older invite decided', () => {
     }
   });
 });
+
+// Simon, 2026-11-20: "make sure there are no more mistakes like this". Comments under a
+// nominee's address must stop where an earlier round that lapsed stopped counting.
+describe('the nominations read: where an earlier round ended', () => {
+  const WINDOW = 10_080 * MS_PER_BLOCK;
+
+  /** The lapsed person nominated by Nora `nowDaysAgo` days ago, and by Avery `earlierDaysAgo`. */
+  async function twoRecords(nowDaysAgo: number, earlierDaysAgo: number) {
+    const { world } = installWorld('learner');
+    const nominee = ADDR.lapsed;
+    const record = world.records.find(
+      (r: { identifier: string }) => r.identifier === `qmp-nomination-${nominee}`
+    );
+    if (!record) throw new Error('no record');
+    record.created = NOW - nowDaysAgo * DAY;
+    (record.body as { created: number }).created = NOW - nowDaysAgo * DAY;
+    world.records.push({
+      name: 'Avery Admin',
+      identifier: `qmp-nomination-${nominee}`,
+      created: NOW - earlierDaysAgo * DAY,
+      body: { ...(record.body as object), created: NOW - earlierDaysAgo * DAY, reason: 'Earlier.' },
+    });
+    return (await loadNominations()).all.find((x) => x.nominee === nominee);
+  }
+
+  it('an earlier round that lapsed ended a window after its last record', async () => {
+    const n = await twoRecords(3, 20);
+    expect(n?.nomination?.publisher.name).toBe('Nora Nominator');
+    expect(n?.earlierRoundEnd).toBe(NOW - 20 * DAY + WINDOW);
+  });
+
+  it('a record still waiting when the next came is the same round, so nothing ends before it', async () => {
+    // Avery's ran out of its window 1.5 days ago, but it was still waiting when Nora's came.
+    expect(10 * DAY - WINDOW).toBeGreaterThan(0);
+    expect(7 * DAY).toBeLessThan(WINDOW);
+    const n = await twoRecords(3, 10);
+    expect(n?.nomination?.publisher.name).toBe('Nora Nominator');
+    expect(n?.earlierRoundEnd).toBeNull();
+  });
+});

@@ -101,8 +101,10 @@ export interface Nomination {
   supportRecords: SupportEntry[];
   /**
    * When an earlier round's records stopped counting (ms): its newest record a
-   * window on, never after this round's first record; null with none earlier.
-   * Comments and notes under the nominee's address count only from then.
+   * window on; null with none earlier. Records less than a window apart are
+   * one round, as History's lapsed nominations group them (rules/nomination.ts
+   * lapsedRounds). Comments and notes under the nominee's address count only
+   * from then.
    */
   earlierRoundEnd: number | null;
   hasJoinRequest: boolean;
@@ -207,9 +209,10 @@ interface AssembleInput {
 }
 
 /**
- * When the round before `first` stopped counting: its newest record a window on,
- * never after `first` itself (a record still waiting when the next came shares
- * that time); null when no record came before `first`.
+ * When the round before `first`'s stopped counting: back from `first`, a record
+ * less than a window before the next is still `first`'s round (one still
+ * waiting when the next came, as lapsedRounds groups them); the first one
+ * further back ended its round a window on. Null when there is none.
  */
 function earlierEnd(
   records: readonly NominationEntry[],
@@ -217,11 +220,15 @@ function earlierEnd(
   windowMs: number
 ): number | null {
   if (!first) return null;
-  let last: number | null = null;
-  for (const record of records)
-    if (record.publishedAt < first.publishedAt && (last === null || record.publishedAt > last))
-      last = record.publishedAt;
-  return last === null ? null : Math.min(last + windowMs, first.publishedAt);
+  const before = records
+    .filter((record) => record.publishedAt < first.publishedAt)
+    .sort((a, b) => b.publishedAt - a.publishedAt);
+  let start = first.publishedAt;
+  for (const record of before) {
+    if (start - record.publishedAt > windowMs) return record.publishedAt + windowMs;
+    start = record.publishedAt;
+  }
+  return null;
 }
 
 async function assemble(
