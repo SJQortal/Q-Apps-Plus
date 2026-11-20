@@ -28,7 +28,9 @@ export const ROUND_SLACK_MS = 10 * 60_000;
 /**
  * Comments under a nominee's address count for a nomination from this long
  * before it was last published (a republish restarts its waiting window), and
- * never from before an earlier round's invite.
+ * never from before an earlier round's invite, nor while an earlier round
+ * that lapsed still counted (Simon, 2026-11-20: "make sure there are no more
+ * mistakes like this").
  */
 export const ADDRESS_LOOKBACK_MS = 30 * 86_400_000;
 
@@ -68,6 +70,8 @@ export interface NominationForComments {
   nomination: { publishedAt: number } | null;
   decision: Pick<Decision, 'signature' | 'createdAt'> | null;
   latestInvite: Pick<TxRow, 'signature' | 'timestamp'> | null;
+  /** When an earlier round's records stopped counting (data/nominations.ts). */
+  earlierRoundEnd?: number | null;
 }
 
 const DECIDED: ReadonlySet<NominationState> = new Set([
@@ -89,7 +93,12 @@ function addressSpan(
       : null;
   return {
     key: nominationCommentKey(n.nominee),
-    since: Math.max(published - ADDRESS_LOOKBACK_MS, earlierInvite ?? Number.NEGATIVE_INFINITY),
+    // Never from an earlier round: its invite, or, for one that lapsed, when it stopped counting.
+    since: Math.max(
+      published - ADDRESS_LOOKBACK_MS,
+      earlierInvite ?? Number.NEGATIVE_INFINITY,
+      n.earlierRoundEnd ?? Number.NEGATIVE_INFINITY
+    ),
   };
 }
 

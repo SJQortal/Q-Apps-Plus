@@ -123,7 +123,7 @@ export default function NominatePage() {
         subtitle="Pick the person, say why, add links."
         back={decisionsViewPath('nominations')}
       />
-      <PageBody $maxWidth={680}>{body}</PageBody>
+      <PageBody $form>{body}</PageBody>
     </>
   );
 }
@@ -607,6 +607,9 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
                 chainNow && group ? at + group.maximumBlockDelay * chainNow.msPerBlock : null,
               decision: null,
               latestInvite: null,
+              records: [],
+              supportRecords: [],
+              earlierRoundEnd: null,
               hasJoinRequest: Boolean(info?.hasJoinRequest),
               hasStoredInvite: false,
             },

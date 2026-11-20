@@ -66,5 +66,11 @@ export const STORAGE_PREFIX = 'qmintershipplus-';
 /** localStorage key for the chosen theme. Must match STORAGE_KEY in index.html. */
 export const THEME_STORAGE_KEY = `${STORAGE_PREFIX}ui-theme`;
 
-export const UPSTREAM_REPO = 'https://github.com/Qortal/Q-Mintership-Alpha';
-export const SOURCE_REPO = 'https://github.com/SJQortal/Q-Apps-Plus';
+/**
+ * The repository links in Settings → About, in order: this build's are the
+ * original's and the one where the + build is made.
+ */
+export const ABOUT_LINKS: ReadonlyArray<{ title: string; url: string }> = [
+  { title: 'Upstream source', url: 'https://github.com/Qortal/Q-Mintership-Alpha' },
+  { title: 'Q-Apps+ source', url: 'https://github.com/SJQortal/Q-Apps-Plus' },
+];

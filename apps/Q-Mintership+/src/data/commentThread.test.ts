@@ -54,6 +54,13 @@ describe('comment targets', () => {
     expect(target.keys).toEqual([{ key: NOMINEE, since: NOW - 20 * DAY }]);
   });
 
+  // Simon, 2026-11-20: "make sure there are no more mistakes like this": a round that lapsed
+  // has no invite to stop at, so a re-nomination within 30 days read its comments too.
+  it('nor into an earlier round that lapsed, while it still counted', () => {
+    const target = nominationCommentTarget(nomination({ earlierRoundEnd: NOW - 10 * DAY }));
+    expect(target.keys).toEqual([{ key: NOMINEE, since: NOW - 10 * DAY }]);
+  });
+
   it('once signing: posts under the decision, still reads the comments from before', () => {
     const target = nominationCommentTarget(
       nomination({ state: 'signing', decision: { signature: SIG, createdAt: NOW - DAY } })

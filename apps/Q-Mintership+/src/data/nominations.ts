@@ -18,8 +18,10 @@ import {
   isOpenState,
   nominationState,
   pickRound,
+  RECORD_CLOCK_SLACK_MS,
   waitingEndsAt,
   type NominationState,
+  nominationAnswered,
 } from '../rules/nomination';
 import { waitingWindowBlocks } from '../rules/timing';
 import { getAccount, getNameOwner, getPrimaryName, primeNames } from './accounts';
@@ -90,6 +92,21 @@ export interface Nomination {
   decision: Decision | null;
   /** The newest decided invite in this round. */
   latestInvite: TxRow | null;
+  /**
+   * Every valid nomination record about them, any round, oldest first: which
+   * one an invite answered (nominationBehind).
+   */
+  records: NominationEntry[];
+  /** Every valid support about them, any round, oldest first (the Minter Profile's links). */
+  supportRecords: SupportEntry[];
+  /**
+   * When an earlier round's records stopped counting (ms): its newest record a
+   * window on; null with none earlier. Records less than a window apart are
+   * one round, as History's lapsed nominations group them (rules/nomination.ts
+   * lapsedRounds). Comments and notes under the nominee's address count only
+   * from then.
+   */
+  earlierRoundEnd: number | null;
   hasJoinRequest: boolean;
   hasStoredInvite: boolean;
 }
@@ -191,6 +208,29 @@ interface AssembleInput {
   only?: string;
 }
 
+/**
+ * When the round before `first`'s stopped counting: back from `first`, a record
+ * less than a window before the next is still `first`'s round (one still
+ * waiting when the next came, as lapsedRounds groups them); the first one
+ * further back ended its round a window on. Null when there is none.
+ */
+function earlierEnd(
+  records: readonly NominationEntry[],
+  first: NominationEntry | null,
+  windowMs: number
+): number | null {
+  if (!first) return null;
+  const before = records
+    .filter((record) => record.publishedAt < first.publishedAt)
+    .sort((a, b) => b.publishedAt - a.publishedAt);
+  let start = first.publishedAt;
+  for (const record of before) {
+    if (start - record.publishedAt > windowMs) return record.publishedAt + windowMs;
+    start = record.publishedAt;
+  }
+  return null;
+}
+
 async function assemble(
   input: AssembleInput
 ): Promise<{ all: Nomination[]; ignored: IgnoredRecord[] }> {
@@ -266,19 +306,24 @@ async function assemble(
       : null;
     const round = pickRound(nominationsBy.get(nominee) ?? [], {
       decidedEnd,
-      hasPendingInvite: Boolean(decision),
+      decidedAt: decided?.timestamp ?? null,
+      pendingAt: decision?.createdAt ?? null,
       nowMs: now.timestamp,
       windowMs,
     });
     const entries = round.entries;
-    const supports = (supportsBy.get(nominee) ?? []).filter((s) =>
-      decidedEnd === null
-        ? true
-        : round.fresh
-          ? s.publishedAt > decidedEnd
-          : s.publishedAt <= decidedEnd
-    );
     const first = entries[0] ?? null;
+    // A round's supports came after its first record: older ones were for an earlier round.
+    const roundStart = first ? first.publishedAt - RECORD_CLOCK_SLACK_MS : Number.NEGATIVE_INFINITY;
+    const supports = (supportsBy.get(nominee) ?? []).filter(
+      (s) =>
+        s.publishedAt >= roundStart &&
+        (decidedEnd === null
+          ? true
+          : round.fresh
+            ? s.publishedAt > decidedEnd
+            : s.publishedAt <= decidedEnd)
+    );
     const publishedAt = first?.publishedAt ?? decision?.createdAt ?? 0;
     const state = nominationState({
       publishedAt,
@@ -303,6 +348,13 @@ async function assemble(
         state === 'waiting' ? waitingEndsAt(publishedAt, now.msPerBlock, windowBlocks) : null,
       decision,
       latestInvite: decided,
+      records: [...(nominationsBy.get(nominee) ?? [])].sort(
+        (a, b) => a.publishedAt - b.publishedAt
+      ),
+      supportRecords: [...(supportsBy.get(nominee) ?? [])].sort(
+        (a, b) => a.publishedAt - b.publishedAt
+      ),
+      earlierRoundEnd: earlierEnd(nominationsBy.get(nominee) ?? [], first, windowMs),
       hasJoinRequest: facts.hasJoinRequest,
       hasStoredInvite: facts.hasStoredInvite,
     });
@@ -338,8 +390,24 @@ export function loadNominations(options: { force?: boolean } = {}): Promise<Nomi
         primary.set(m.primaryName, m.member);
         nameOf.set(m.member, m.primaryName);
       }
-      // Invites decided in the last two windows: enough to cover any open round.
-      const since = Math.max(1, now.height - 2 * decisions.group.maximumBlockDelay - 10);
+      // Invites decided since the oldest nomination record, the last two windows at least, so
+      // a round an invite answered long ago reads as decided, not lapsed, and a re-nomination
+      // knows where the earlier round ended (Simon, 2026-11-17: QQQ Test's October round read
+      // as lapsed). One typed search of MINTER's invites: a year is about 85, in 23 ms.
+      const oldest = nominationRows.rows.reduce(
+        (min, row) => Math.min(min, rowTime(row)),
+        now.timestamp
+      );
+      const recordBlocks = Math.ceil((now.timestamp - oldest) / now.msPerBlock);
+      const since = Math.max(
+        1,
+        now.height -
+          Math.max(
+            2 * decisions.group.maximumBlockDelay,
+            recordBlocks + decisions.group.maximumBlockDelay
+          ) -
+          10
+      );
       const recent = await getDecisionsInRange(['GROUP_INVITE'], since, now.height, {
         force,
         slot: 'nominations',
@@ -455,6 +523,37 @@ export function loadNominationsFor(
     },
     { ttlMs: 60_000, force: options.force }
   );
+}
+
+/**
+ * The nomination a MINTER invite of `invitee` made at `invitedAt` answered
+ * (rules/nomination.ts nominationAnswered), from a nominations read; null
+ * when it answered none, or the read hasn't come in.
+ */
+export function nominationBehind(
+  nominations: ReadonlyArray<Pick<Nomination, 'nominee' | 'records'>> | undefined,
+  invitee: string | null,
+  invitedAt: number,
+  windowMs: number
+): NominationEntry | null {
+  if (!invitee || !nominations) return null;
+  const nomination = nominations.find((n) => n.nominee === invitee);
+  return nomination ? nominationAnswered(nomination.records, invitedAt, windowMs) : null;
+}
+
+/**
+ * For a timeline: who proposed each MINTER invite, its nominator when it
+ * answered a nomination (nominationBehind); null leaves the invite's creator.
+ */
+export function inviteProposers(
+  nominations: ReadonlyArray<Pick<Nomination, 'nominee' | 'records'>> | undefined,
+  windowMs: number
+): (event: { kind: string; subject: string | null; proposedAt: number }) => string | null {
+  return (event) =>
+    event.kind === 'invite'
+      ? (nominationBehind(nominations, event.subject, event.proposedAt, windowMs)?.publisher
+          .address ?? null)
+      : null;
 }
 
 /** The open nomination for `address`, if any. */

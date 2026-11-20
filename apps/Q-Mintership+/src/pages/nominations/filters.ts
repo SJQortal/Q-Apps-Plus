@@ -58,15 +58,20 @@ export function matchesSearch(
   return haystack.some((value) => typeof value === 'string' && value.toLowerCase().includes(q));
 }
 
-/** When a decided nomination ended (ms): its invite's decision block, or the end of its wait. */
+/**
+ * When a decided nomination ended (ms): the end of its wait when it lapsed,
+ * else its invite's decision block. A lapsed re-nomination's last decided
+ * invite is an earlier round's, so the wait is checked first (Simon,
+ * 2026-11-20: "make sure there are no more mistakes like this").
+ */
 export function endedAt(
   n: Nomination,
   now: Pick<ChainNow, 'msPerBlock'>,
   group: GroupDelays
 ): number {
-  if (n.latestInvite) return decidedAt(n.latestInvite, now.msPerBlock, group.maximumBlockDelay);
   if (n.state === 'lapsed')
     return waitingEndsAt(n.publishedAt, now.msPerBlock, waitingWindowBlocks(group));
+  if (n.latestInvite) return decidedAt(n.latestInvite, now.msPerBlock, group.maximumBlockDelay);
   return n.publishedAt;
 }
 

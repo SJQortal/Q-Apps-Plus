@@ -160,7 +160,15 @@ describe('an account in the Explorer', () => {
       within(tabs)
         .getAllByRole('tab')
         .map((t) => t.textContent)
-    ).toEqual(['Overview', 'Connections', 'Transactions', 'Assets', 'Minter Profile', 'Names']);
+    ).toEqual([
+      'Overview',
+      'Connections',
+      'Transactions',
+      'Trades',
+      'Assets',
+      'Minter Profile',
+      'Names',
+    ]);
     expect(within(tabs).getByRole('tab', { name: 'Overview' })).toHaveAttribute(
       'aria-selected',
       'true'

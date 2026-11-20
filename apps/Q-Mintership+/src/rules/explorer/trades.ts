@@ -161,3 +161,92 @@ export function tradesCoverage(read: { orders: number; truncated: boolean }): st
 
 /** "1 trade", "3 trades". */
 export const tradesWords = (n: number) => plural(n, 'trade');
+
+/** One Q-Asset's trades by an account, added up (Trades tab → Breakdown). */
+export interface AssetTradeTotals {
+  /** 0 never: QORT is the other side. */
+  assetId: number;
+  asset: string;
+  /** Units it bought and sold, atomic. */
+  bought: bigint;
+  sold: bigint;
+  /** QORT it paid for those it bought, and got for those it sold. */
+  qortPaid: bigint;
+  qortGot: bigint;
+  count: number;
+  last: number;
+}
+
+export interface AssetTradesSummary {
+  count: number;
+  /** Most trades first, then the latest. */
+  assets: AssetTradeTotals[];
+  qortPaid: bigint;
+  qortGot: bigint;
+  /** Accounts it traded with. */
+  partners: number;
+}
+
+/**
+ * An account's Q-Asset trades by asset. A trade of two assets counts for
+ * both (one bought, one sold), with no QORT.
+ */
+export function summariseAssetTrades(trades: readonly AssetTrade[]): AssetTradesSummary {
+  const by = new Map<string, AssetTradeTotals>();
+  const partners = new Set<string>();
+  let qortPaid = 0n;
+  let qortGot = 0n;
+  const totalsOf = (side: TradeSide, timestamp: number): AssetTradeTotals => {
+    const key = `${side.assetId}:${side.asset}`;
+    const totals = by.get(key) ?? {
+      assetId: side.assetId,
+      asset: side.asset,
+      bought: 0n,
+      sold: 0n,
+      qortPaid: 0n,
+      qortGot: 0n,
+      count: 0,
+      last: timestamp,
+    };
+    totals.count += 1;
+    totals.last = Math.max(totals.last, timestamp);
+    by.set(key, totals);
+    return totals;
+  };
+  for (const trade of trades) {
+    if (trade.other) partners.add(trade.other);
+    const gave = parseAtomic(trade.gave.amount) ?? 0n;
+    const got = parseAtomic(trade.got.amount) ?? 0n;
+    if (trade.got.assetId !== QORT) {
+      const totals = totalsOf(trade.got, trade.timestamp);
+      totals.bought += got;
+      if (trade.gave.assetId === QORT) {
+        totals.qortPaid += gave;
+        qortPaid += gave;
+      }
+    }
+    if (trade.gave.assetId !== QORT) {
+      const totals = totalsOf(trade.gave, trade.timestamp);
+      totals.sold += gave;
+      if (trade.got.assetId === QORT) {
+        totals.qortGot += got;
+        qortGot += got;
+      }
+    }
+  }
+  return {
+    count: trades.length,
+    assets: [...by.values()].sort((a, b) => b.count - a.count || b.last - a.last),
+    qortPaid,
+    qortGot,
+    partners: partners.size,
+  };
+}
+
+/** QORT per unit of an asset, to 4 significant digits; null when either is 0. */
+export function qortPerUnit(qort: bigint, units: bigint): string | null {
+  if (qort <= 0n || units <= 0n) return null;
+  return new Intl.NumberFormat('en-US', { maximumSignificantDigits: 4 }).format(
+    Number(qort) / Number(units)
+  );
+}

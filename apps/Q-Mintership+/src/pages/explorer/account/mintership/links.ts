@@ -13,6 +13,7 @@ import type { Nomination } from '../../../../data/nominations';
 import type { CommunityVoteValue } from '../../../../data/voteRecords';
 import type { VoteRow } from '../../../../rules/communityVotes';
 import type { NominationRound } from '../../../../rules/rounds';
+import { RECORD_CLOCK_SLACK_MS } from '../../../../rules/nomination';
 
 export type LinkKind =
   'nominatedThem' | 'supportedThem' | 'votedOnThem' | 'nominated' | 'supported' | 'votedOn';
@@ -53,11 +54,16 @@ export interface LinksInput {
   made: MadeBy | null;
   /** Community votes on their nomination, each voter resolved to its account. */
   votesOnThem: readonly VoteRow[];
+  /** MINTER's waiting window (ms): which round's invite answered a record. */
+  windowMs: number;
 }
 
-function roundOf(nomination: Nomination, rounds: readonly NominationRound[]): number | null {
-  const signature = nomination.decision?.signature ?? nomination.latestInvite?.signature;
-  return signature ? (rounds.find((r) => r.signature === signature)?.number ?? null) : null;
+/** The round whose invite answered something published at `at`: one made from then to a window on. */
+function roundAt(at: number, rounds: readonly NominationRound[], windowMs: number): number | null {
+  const round = [...rounds]
+    .sort((a, b) => a.startedAt - b.startedAt)
+    .find((r) => r.startedAt >= at - RECORD_CLOCK_SLACK_MS && r.startedAt <= at + windowMs);
+  return round?.number ?? null;
 }
 
 interface Acc {
@@ -114,21 +120,28 @@ function rows(kind: LinkKind, map: Map<string, Acc>, skip: ReadonlySet<string>):
 export function mintershipLinks(input: LinksInput): MintershipLink[] {
   const self = new Set([input.address]);
 
-  // Who nominated or supported them (validated records of their nominations).
+  // Who nominated or supported them, in every round (validated records of their nominations),
+  // each with the round its invite answered.
   const nominatedThem = new Map<string, Acc>();
   const supportedThem = new Map<string, Acc>();
+  const roundOf = (at: number) => roundAt(at, input.rounds, input.windowMs);
   for (const n of input.nominations) {
-    const round = roundOf(n, input.rounds);
-    if (n.nomination)
+    for (const r of n.records)
       add(
         nominatedThem,
-        n.nomination.publisher.address,
-        n.nomination.publisher.name,
-        n.nomination.publishedAt,
-        round
+        r.publisher.address,
+        r.publisher.name,
+        r.publishedAt,
+        roundOf(r.publishedAt)
       );
-    for (const s of n.supporters)
-      add(supportedThem, s.publisher.address, s.publisher.name, s.publishedAt, round);
+    for (const s of n.supportRecords)
+      add(
+        supportedThem,
+        s.publisher.address,
+        s.publisher.name,
+        s.publishedAt,
+        roundOf(s.publishedAt)
+      );
   }
   // A nominator's other names' supports count as the nomination, under more names.
   for (const [other, acc] of supportedThem) {

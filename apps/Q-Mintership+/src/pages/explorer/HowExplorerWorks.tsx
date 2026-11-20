@@ -62,6 +62,14 @@ function tabLines(full: boolean): Array<[string, string]> {
       'Transactions',
       'Everything it sent or took part in, in plain words: by kind, type, name, time or blocks, newest or oldest first. An asset order says how it was filled and with whom. Each one opens to its fields and its raw API response.',
     ],
+    ...(full
+      ? ([
+          [
+            'Trades',
+            'What it traded: QORT sold and bought on Q-Trade, each trade with its coin, price, the other account and its AT, every chain read; the trade offers it made and how each ended (completed, ended without a trade, open); its Q-Asset trades. Then a breakdown: by coin, over time as a chart or a table, the offers by coin, by Q-Asset, and its biggest trades and whom it traded with most.',
+          ],
+        ] as Array<[string, string]>)
+      : []),
     [
       'Assets',
       'The Q-Assets it holds, as cards or a list: each with its avatar (the one its owner published, as the Q-Assets app does), how much it holds and its share of all there is, its last trade price in QORT and what the holding is worth at it, beside what buyers would pay for it now (sold into the open buy orders, the best price first); how that worth splits; and the assets it owns. An asset in whole units only says Indivisible. Each opens its own window, on the Overview too: its description, its open orders, its biggest holders and who bought it from whom.',
@@ -160,9 +168,9 @@ export function HowExplorerWorks({
         {full ? (
           <GuidePart title="Who sees what">
             <Typography variant="body2">
-              You see all of the Explorer. Connections, Compare, the activity chart, QORT minted,
-              purchased / sold and received / sent, and exchanges named as such are shown only to
-              Minter Admins, Dev Admins and MINTER members at level 5 or above.
+              You see all of the Explorer. Connections, Trades, Compare, the activity chart, QORT
+              minted, purchased / sold and received / sent, and exchanges named as such are shown
+              only to Minter Admins, Dev Admins and MINTER members at level 5 or above.
             </Typography>
           </GuidePart>
         ) : null}
