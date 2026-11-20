@@ -97,6 +97,12 @@ export interface Nomination {
    * one an invite answered (nominationBehind).
    */
   records: NominationEntry[];
+  /**
+   * When an earlier round's records stopped counting (ms): its newest record a
+   * window on, never after this round's first record; null with none earlier.
+   * Comments and notes under the nominee's address count only from then.
+   */
+  earlierRoundEnd: number | null;
   hasJoinRequest: boolean;
   hasStoredInvite: boolean;
 }
@@ -196,6 +202,24 @@ interface AssembleInput {
   nameOf: (nominee: string) => string | null;
   /** Only these nominees (a Minter Profile); all when omitted. */
   only?: string;
+}
+
+/**
+ * When the round before `first` stopped counting: its newest record a window on,
+ * never after `first` itself (a record still waiting when the next came shares
+ * that time); null when no record came before `first`.
+ */
+function earlierEnd(
+  records: readonly NominationEntry[],
+  first: NominationEntry | null,
+  windowMs: number
+): number | null {
+  if (!first) return null;
+  let last: number | null = null;
+  for (const record of records)
+    if (record.publishedAt < first.publishedAt && (last === null || record.publishedAt > last))
+      last = record.publishedAt;
+  return last === null ? null : Math.min(last + windowMs, first.publishedAt);
 }
 
 async function assemble(
@@ -318,6 +342,7 @@ async function assemble(
       records: [...(nominationsBy.get(nominee) ?? [])].sort(
         (a, b) => a.publishedAt - b.publishedAt
       ),
+      earlierRoundEnd: earlierEnd(nominationsBy.get(nominee) ?? [], first, windowMs),
       hasJoinRequest: facts.hasJoinRequest,
       hasStoredInvite: facts.hasStoredInvite,
     });

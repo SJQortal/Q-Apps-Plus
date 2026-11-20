@@ -88,6 +88,7 @@ function nomination(over: Partial<Nomination> = {}): Nomination {
     decision: null,
     latestInvite: null,
     records: [],
+    earlierRoundEnd: null,
     hasJoinRequest: false,
     hasStoredInvite: false,
     ...over,
