@@ -40,9 +40,9 @@
  */
 import type { TxRow } from '../types';
 import { getJson, query } from '../core';
-import { peekQuery, fetchQuery } from '../query';
+import { peekQuery, fetchQuery, setQueryData } from '../query';
 import { getUnconfirmedBy } from '../txs';
-import { heavyQuery } from './heavy';
+import { heavy, heavyQuery } from './heavy';
 import { inWindow, windowKeyPart, type TxWindow } from './txWindow';
 import { noteAllList } from './fullHistory';
 
@@ -172,14 +172,11 @@ export function mergeOlder(
   page: TxRow[],
   limit = ACCOUNT_TX_PAGE
 ): AccountTxList {
-  // A read of one row is probeAccountTxEnd's: where it asked is kept.
-  const probedAt = limit === 1 ? previous.rows.length : previous.probedAt;
   return {
     rows: unique([...previous.rows, ...page]),
     nextOffset: previous.nextOffset + page.length,
     done: page.length < limit,
     checkedAt: previous.checkedAt,
-    ...(probedAt !== undefined ? { probedAt } : {}),
   };
 }
 
@@ -345,17 +342,23 @@ export function getAccountTx(
  * holds (a page of 1), which marks it done when there is none. For a view
  * about to say older ones exist ("1,000+", "older ones aren't read yet")
  * when the list stopped at a full page: an account with exactly that many
- * has none (Hub's Explorer port, 2026-11-22). Once per stop (until a read
- * grows the list); null when there is nothing to probe. A row found joins
- * the list.
+ * has none (Hub's Explorer port, 2026-11-22). Once per stop; null when
+ * there is nothing to probe. The row isn't kept: the list is only marked
+ * done, or as probed where it stands.
  */
 export function probeAccountTxEnd(address: string): Promise<AccountTxList> | null {
   const key = accountTxKey(address, []);
   const list = peekQuery<AccountTxList>(key);
-  if (!list || list.done) return null;
-  // Once per stop: a probe that found a row grew the list by that one.
-  if (list.probedAt !== undefined && list.rows.length - list.probedAt <= 1) return null;
-  return getAccountTx(address, [], { older: true, pageSize: 1 });
+  if (!list || list.done || list.probedAt === list.rows.length) return null;
+  return heavy(address, async () => {
+    const next = await readPage(address, [], list.nextOffset, {}, 1);
+    const now = peekQuery<AccountTxList>(key);
+    // Read on (or again) meanwhile: what it holds now is the answer.
+    if (!now || now.nextOffset !== list.nextOffset) return now ?? list;
+    const marked = { ...now, probedAt: now.rows.length, ...(next.length ? {} : { done: true }) };
+    setQueryData<AccountTxList>(key, marked);
+    return marked;
+  });
 }
 
 /** `xunconf:<publicKey>`: the store key of what an account sent that waits for a block. */
