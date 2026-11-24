@@ -21,6 +21,7 @@ import {
   OLD_MINTER,
   SPONSEES,
   SPONSOR,
+  answerCore,
   fakeKey,
   type World,
 } from '../../../../e2e/world.mjs';
@@ -606,6 +607,46 @@ describe('QORT summaries', () => {
     });
     const dl = await summaries();
     await waitFor(() => expect(value(dl, 'QORT purchased / sold')).toBe('10 / 0'), SLOW);
+  });
+
+  // Hub's Explorer port (2026-11-22): QORT minted is its balance less what its transactions
+  // moved; a payment confirmed between the list's read and the balance's counted as minted.
+  it('ties its balance to its transactions: a payment that came between them isn’t minted', async () => {
+    let first = true;
+    const late = fakeKey('summaries-late-payment', 64);
+    await visit(ADDR.admin, (world) => {
+      const from = fakeKey('summaries-late-payer', 25);
+      const row = {
+        type: 'PAYMENT',
+        timestamp: NOW - 1_000,
+        reference: fakeKey('summaries-late-ref', 64),
+        fee: '0.01000000',
+        signature: late,
+        txGroupId: 0,
+        blockHeight: TIP,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: from,
+        recipient: ADDR.admin,
+        amount: '5.00000000',
+      };
+      world.explorer.rows.push(row);
+      world.explorer.bySig.set(late, row);
+      world.explorer.parties.set(late, [from, ADDR.admin]);
+      // Its balance has the 5 QORT: by the whole book, it minted 1,234.
+      mintedComesTo(ADDR.admin, 1_234n)(world);
+      // The list's first read was before the payment: the node's answer without it.
+      mockFetchRoute('/transactions/search', (url) => {
+        const p = url.searchParams;
+        const body = answerCore(world, url.pathname, p)?.body as Array<{ signature: string }>;
+        const list = p.get('address') === ADDR.admin && !p.get('txType') && p.get('limit') !== '1';
+        if (!list || !first) return body;
+        first = false;
+        return body.filter((tx) => tx.signature !== late);
+      });
+    });
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('1,234 QORT'), SLOW);
+    expect(first).toBe(false);
   });
 
   it('says an account that never minted never minted, with nothing to work out', async () => {
