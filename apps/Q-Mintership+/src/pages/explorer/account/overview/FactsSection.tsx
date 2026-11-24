@@ -34,7 +34,7 @@ import {
 } from './overviewWords';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
-import { useQortSummaries } from './qortSummaries';
+import { useNeverMinted, useQortSummaries } from './qortSummaries';
 import { FactLabel } from '../../../../components/explorer/FactLabel';
 
 const VALUE_SX = {
@@ -268,11 +268,12 @@ interface FactsProps {
 
 export function FactsSection({ address, account, firstSeen, full }: FactsProps) {
   // QORT minted, purchased / sold, received / sent (Simon, 2026-10-17: moved here from the Minter Profile).
-  const qort = useQortSummaries(
+  const neverMinted = useNeverMinted(
     address,
-    account.blocksMinted === 0 && !account.blocksMintedAdjustment,
-    { enabled: full }
+    account.blocksMinted + (account.blocksMintedAdjustment || 0),
+    full
   );
+  const qort = useQortSummaries(address, neverMinted, { enabled: full });
   return (
     <Section title="At a glance" id="overview-facts">
       <Card>

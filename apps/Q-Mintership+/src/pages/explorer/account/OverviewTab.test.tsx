@@ -18,6 +18,7 @@ import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
 import {
   COLLECTOR,
   FUNDER,
+  OLD_MINTER,
   SPONSEES,
   SPONSOR,
   fakeKey,
@@ -567,6 +568,14 @@ describe('QORT summaries', () => {
       .map((url) => new URL(url, 'http://x').searchParams)
       .filter((p) => p.get('address') === ADDR.admin && !p.get('txType'));
     expect(pages.some((p) => p.get('limit') === '1000')).toBe(true);
+  });
+
+  // Hub's Explorer port (2026-11-22): moving a minting level away (TRANSFER_PRIVS) sets the
+  // sender's blocks minted to 0, and it read as "Never minted" though it minted.
+  it('works out QORT minted for an account whose minting level moved away, not "Never minted"', async () => {
+    await visit(OLD_MINTER.address, mintedComesTo(OLD_MINTER.address, 143n));
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('143 QORT'), SLOW);
   });
 
   // Hub's Explorer port (2026-11-22): a Q-Trade buyer that never made a transaction has no

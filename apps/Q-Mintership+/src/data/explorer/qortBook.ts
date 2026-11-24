@@ -4,7 +4,9 @@
  * - each of its asset orders with QORT on one side: `/assets/order/{id}` and
  *   its trades (`xorderq:<id>`; a closed order never changes, so kept for
  *   the session);
- * - what it bought and sold on the Trade Portal: its completed trades.
+ * - what it bought and sold on the Trade Portal: its completed trades;
+ * - whether a reward share ever involved it, for an account without blocks
+ *   minted (did it ever mint?).
  * Orders a few at a time, so a trader with many doesn't flood the node.
  */
 import { getAccount } from '../accounts';
@@ -147,6 +149,34 @@ export function getTradesQort(address: string): Promise<TradesQort> {
       return { bought, sold };
     },
     { ttlMs: 10 * 60_000 }
+  );
+}
+
+/**
+ * Whether any reward share ever involved it (`xevershare:<a>`): one row is
+ * enough. An account with no blocks minted may still have minted: moving
+ * its minting level to another account (TRANSFER_PRIVS) sets its blocks
+ * minted to 0, but its reward shares stay in its history.
+ */
+export function getEverRewardShare(
+  address: string,
+  options: { force?: boolean } = {}
+): Promise<boolean> {
+  return fetchQuery(
+    `xevershare:${address}`,
+    async () => {
+      const rows = await getJson<unknown[]>(
+        `/transactions/search?${query({
+          txType: 'REWARD_SHARE',
+          address,
+          confirmationStatus: 'CONFIRMED',
+          limit: 1,
+        })}`
+      );
+      if (!Array.isArray(rows)) throw new Error('Unexpected answer for its reward shares');
+      return rows.length > 0;
+    },
+    { ttlMs: 10 * 60_000, force: options.force }
   );
 }
 

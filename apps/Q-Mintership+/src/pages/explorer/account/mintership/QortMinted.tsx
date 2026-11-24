@@ -25,7 +25,8 @@ export function QortMintedFact({
   onMinted,
 }: {
   address: string;
-  neverMinted: boolean;
+  /** useNeverMinted's answer (null while it is read). */
+  neverMinted: boolean | null;
   /** "QORT minted there" for an account a minting level moved from. */
   label?: string;
   /** Told the QORT minted, atomic, once worked out (null until then). */

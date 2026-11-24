@@ -22,6 +22,7 @@ import type { MinterStory } from './useMinterStory';
 import { nominationLine, roundsLine } from './mintershipWords';
 import { Fact, Note } from './parts';
 import { QortMintedFact } from './QortMinted';
+import { useNeverMinted } from '../overview/qortSummaries';
 import { LevelSources } from './LevelSources';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
 import { useNodeOnline } from '../../../../components/explorer/useNodeOnline';
@@ -60,6 +61,8 @@ export function StandingSection({
   const full = useFullExplorer() === true;
   // Its own QORT minted, for the total with the accounts its level came from (LevelSources).
   const [ownMinted, setOwnMinted] = useState<bigint | null>(null);
+  // Blocks minted, its adjustment and penalty included (data/me.ts).
+  const neverMinted = useNeverMinted(address, person ? person.blocksMinted : null, full);
   let body;
   if (!person && status.isError) {
     body = (
@@ -90,11 +93,7 @@ export function StandingSection({
           <Fact label="Level" value={String(person.level)} />
           <Fact label="Blocks minted" value={formatCount(person.blocksMinted)} />
           {full ? (
-            <QortMintedFact
-              address={address}
-              neverMinted={person.blocksMinted === 0}
-              onMinted={setOwnMinted}
-            />
+            <QortMintedFact address={address} neverMinted={neverMinted} onMinted={setOwnMinted} />
           ) : null}
           <NodeOnlineFact address={address} blocksMinted={person.blocksMinted} />
           {next.nextLevelAt !== null && next.blocksToNextLevel !== null ? (

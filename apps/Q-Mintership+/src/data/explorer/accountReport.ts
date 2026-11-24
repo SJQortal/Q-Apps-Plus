@@ -27,7 +27,7 @@ import {
 import { accountTxKey, type AccountTxList } from './accountTx';
 import { getLinks, LINK_PAGE, LINK_PAGES } from './links';
 import { getAssetTransfers, getExchangePayments, getPayments } from './money';
-import { getBalanceAtomic, getOrdersQort, getTradesQort } from './qortBook';
+import { getBalanceAtomic, getEverRewardShare, getOrdersQort, getTradesQort } from './qortBook';
 import { runPool } from './sets';
 import { getSponsorshipReport } from './sponsorship';
 import { getAccountTrades } from './trades';
@@ -104,9 +104,12 @@ export async function gatherAccountReport(
     stage('Reading its balance');
     balance = await part('its balance', failed, () => getBalanceAtomic(address));
     const account = explored?.kind === 'account' ? explored.account : null;
-    const neverMinted = account
-      ? account.blocksMinted + account.blocksMintedAdjustment <= 0
-      : false;
+    // No blocks minted and no reward share ever: one whose minting level moved away minted.
+    const noBlocks = account ? account.blocksMinted + account.blocksMintedAdjustment <= 0 : false;
+    const everShared = noBlocks
+      ? await part('its reward shares', failed, () => getEverRewardShare(address))
+      : true;
+    const neverMinted = noBlocks && everShared === false;
     const portal = await part('its Trade Portal trades', failed, () => getTradesQort(address));
     qort = { neverMinted, ...(portal ? { bought: portal.bought, sold: portal.sold } : {}) };
     if (history?.done) {
