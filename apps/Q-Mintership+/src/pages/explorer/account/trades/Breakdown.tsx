@@ -343,8 +343,10 @@ export function AssetBreakdown({ summary }: { summary: AssetTradesSummary }) {
       }}
     >
       {summary.assets.map((asset) => {
-        const boughtPrice = qortPerUnit(asset.qortPaid, asset.bought);
-        const soldPrice = qortPerUnit(asset.qortGot, asset.sold);
+        // Per unit traded for QORT: units got for another asset paid no QORT (Hub's Explorer
+        // port, 2026-11-22).
+        const boughtPrice = qortPerUnit(asset.qortPaid, asset.boughtForQort);
+        const soldPrice = qortPerUnit(asset.qortGot, asset.soldForQort);
         return (
           <Box component="li" key={`${asset.assetId}:${asset.asset}`} sx={FIELD_BLOCK_SX}>
             <Typography

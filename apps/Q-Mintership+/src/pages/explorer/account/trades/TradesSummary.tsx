@@ -130,10 +130,15 @@ export function TradesSummary({
             )
           }
           detail={
-            assetSummary && (assetSummary.qortPaid > 0n || assetSummary.qortGot > 0n)
+            assetSummary &&
+            (assetSummary.qortPaid > 0n || assetSummary.qortGot > 0n || assetSummary.ownTrades)
               ? [
                   assetSummary.qortPaid > 0n ? `paid ${qortText(assetSummary.qortPaid)}` : '',
                   assetSummary.qortGot > 0n ? `got ${qortText(assetSummary.qortGot)}` : '',
+                  // Its own orders filling each other: left out, and said (Hub's Explorer port).
+                  assetSummary.ownTrades
+                    ? `${plural(assetSummary.ownTrades, 'trade')} between its own orders left out`
+                    : '',
                 ]
                   .filter(Boolean)
                   .join(' · ')
@@ -160,6 +165,14 @@ export function TradesSummary({
         <ErrorState
           compact
           title="The trade offers it made couldn’t be read."
+          error={offersRead.error}
+          onRetry={() => void offersRead.refetch()}
+        />
+      ) : offersRead.error ? (
+        // Read again (Refresh) and failed: what shows is from before (Hub's Explorer port).
+        <ErrorState
+          compact
+          title="The trade offers it made couldn’t be read again: how they ended is from before."
           error={offersRead.error}
           onRetry={() => void offersRead.refetch()}
         />

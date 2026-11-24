@@ -155,12 +155,23 @@ export function circleNodes(
   // Each node's transactions, each once (Hub's Explorer port, 2026-11-22: a reward share behind
   // two findings, or a trade drawn both ways, counted twice): its count is what its dialog lists.
   const sigs = new Map<string, Set<string>>();
-  const note = (key: string, finding: Finding) => {
+  // What moved each way, for a node drawn both ways: payments by their transactions (once
+  // each), trades by their count (a trade moved something each way).
+  const ways = new Map<string, { sigs: Set<string>; trades: number }>();
+  const note = (key: string, finding: Finding, trades = 0) => {
     const set = sigs.get(key) ?? new Set<string>();
+    const way = ways.get(key) ?? { sigs: new Set<string>(), trades: 0 };
     for (const tx of finding.evidence) set.add(tx.signature);
     // A finding with no transaction of its own still counts once.
     if (!finding.evidence.length) set.add(`finding:${finding.key}`);
+    if (trades) way.trades += trades;
+    else for (const sig of set) way.sigs.add(sig);
     sigs.set(key, set);
+    ways.set(key, way);
+  };
+  const wayCount = (key: string) => {
+    const way = ways.get(key);
+    return way ? way.sigs.size + way.trades : 0;
   };
   for (const finding of findings) {
     if (!finding.other) continue;
@@ -181,7 +192,7 @@ export function circleNodes(
           qort: 0n,
           assets: [],
         };
-        note(key, finding);
+        note(key, finding, way.count);
         node.qort += way.qort;
         node.assets = addAssets(node.assets, way.assets);
         if (side === 'in') node.findings.push(finding);
@@ -224,8 +235,8 @@ export function circleNodes(
       qort: received.qort + sent.qort,
       assets: addAssets(received.assets, sent.assets),
       split: {
-        in: { count: received.count, qort: received.qort, assets: received.assets },
-        out: { count: sent.count, qort: sent.qort, assets: sent.assets },
+        in: { count: wayCount(key), qort: received.qort, assets: received.assets },
+        out: { count: wayCount(sent.key), qort: sent.qort, assets: sent.assets },
       },
     });
   }

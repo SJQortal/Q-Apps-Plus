@@ -170,6 +170,9 @@ export interface AssetTradeTotals {
   /** Units it bought and sold, atomic. */
   bought: bigint;
   sold: bigint;
+  /** Of those, the units it bought or sold for QORT: what a price in QORT is per. */
+  boughtForQort: bigint;
+  soldForQort: bigint;
   /** QORT it paid for those it bought, and got for those it sold. */
   qortPaid: bigint;
   qortGot: bigint;
@@ -185,6 +188,8 @@ export interface AssetTradesSummary {
   qortGot: bigint;
   /** Accounts it traded with. */
   partners: number;
+  /** Trades between two of its own orders: left out of all the rest. */
+  ownTrades: number;
 }
 
 /**
@@ -203,6 +208,8 @@ export function summariseAssetTrades(trades: readonly AssetTrade[]): AssetTrades
       asset: side.asset,
       bought: 0n,
       sold: 0n,
+      boughtForQort: 0n,
+      soldForQort: 0n,
       qortPaid: 0n,
       qortGot: 0n,
       count: 0,
@@ -213,7 +220,13 @@ export function summariseAssetTrades(trades: readonly AssetTrade[]): AssetTrades
     by.set(key, totals);
     return totals;
   };
+  let ownTrades = 0;
   for (const trade of trades) {
+    // Its own orders filling each other: no trade with anyone (Connections leaves them out too).
+    if (trade.other && trade.other === trade.self) {
+      ownTrades += 1;
+      continue;
+    }
     if (trade.other) partners.add(trade.other);
     const gave = parseAtomic(trade.gave.amount) ?? 0n;
     const got = parseAtomic(trade.got.amount) ?? 0n;
@@ -221,6 +234,7 @@ export function summariseAssetTrades(trades: readonly AssetTrade[]): AssetTrades
       const totals = totalsOf(trade.got, trade.timestamp);
       totals.bought += got;
       if (trade.gave.assetId === QORT) {
+        totals.boughtForQort += got;
         totals.qortPaid += gave;
         qortPaid += gave;
       }
@@ -229,13 +243,15 @@ export function summariseAssetTrades(trades: readonly AssetTrade[]): AssetTrades
       const totals = totalsOf(trade.gave, trade.timestamp);
       totals.sold += gave;
       if (trade.got.assetId === QORT) {
+        totals.soldForQort += gave;
         totals.qortGot += got;
         qortGot += got;
       }
     }
   }
   return {
-    count: trades.length,
+    count: trades.length - ownTrades,
+    ownTrades,
     assets: [...by.values()].sort((a, b) => b.count - a.count || b.last - a.last),
     qortPaid,
     qortGot,

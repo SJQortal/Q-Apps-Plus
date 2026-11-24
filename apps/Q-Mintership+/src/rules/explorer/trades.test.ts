@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { TxRow } from '../../data/types';
 import { circleNodes } from './circle';
 import { recordedFindings } from './findings';
 import { partsText } from './findings';
@@ -98,14 +99,17 @@ describe('a trade in words (Simon, 2026-10-21)', () => {
 
 describe('trades among the findings and on the circle', () => {
   it('one finding per account, after names and before payments; drawn both ways', () => {
+    // Each trade with its own order transaction: the circle counts transactions (as its dialog).
+    const tx = (signature: string) => ({ signature, timestamp: 1, blockHeight: 1 }) as TxRow;
     const findings = recordedFindings({
       trades: [
-        trade({}),
+        trade({ txs: [tx('order-1')] }),
         trade({
           gave: QORT('100'),
           got: IGOR('4'),
           height: 2_668_000,
           timestamp: Date.UTC(2026, 7, 2),
+          txs: [tx('order-2')],
         }),
       ],
     });
@@ -158,5 +162,24 @@ describe('an account’s asset trades added up (the Trades tab)', () => {
   it('the QORT per unit, to 4 significant digits', () => {
     expect(qortPerUnit(62_900_000_000n, 2_700_000_000n)).toBe('23.3');
     expect(qortPerUnit(0n, 100n)).toBeNull();
+  });
+});
+
+// Hub's Explorer port (2026-11-22): a price divided the QORT by every unit, those got for another
+// asset too; and trades between two of its own orders were counted.
+describe('prices in QORT, and its own orders', () => {
+  it('a price is per unit traded for QORT; its own orders’ trades are left out and counted', () => {
+    const OTHER = (amount: string) => ({ assetId: 9, asset: 'other', amount });
+    const summary = summariseAssetTrades([
+      trade({ gave: QORT('10.00000000'), got: IGOR('10.00000000') }),
+      trade({ gave: OTHER('5.00000000'), got: IGOR('10.00000000') }),
+      trade({ other: A, gave: QORT('1.00000000'), got: IGOR('1.00000000') }),
+    ]);
+    const igor = summary.assets.find((a) => a.asset === 'igorcoin');
+    expect(igor?.bought).toBe(2_000_000_000n);
+    expect(igor?.boughtForQort).toBe(1_000_000_000n);
+    expect(qortPerUnit(igor?.qortPaid ?? 0n, igor?.boughtForQort ?? 0n)).toBe(qortPerUnit(1n, 1n));
+    expect(summary.ownTrades).toBe(1);
+    expect(summary.count).toBe(2);
   });
 });
