@@ -1527,6 +1527,10 @@ Simon chose (2026-11-24) to publish 1.0.7 (items 152–154) as it stood, from th
       - Show fewer keeps its button in focus and in view.
     - **The account report (14, 42):** names from the chain are escaped for Markdown (`mdText`), and the QORT totals say whether to retry, read the rest, or wait.
     - **Tests:** about 60 new ones, each confirmed to fail on the code before its fix where it tests the fix itself. 2,696 tests pass, with lint, build and the theme check.
+    - **Screenshot check** of the 19 Explorer screens these fixes touch, Hub 3.0 at every size:
+      - the screens: an account, Activity with older history, Join, Connections (its list, a search, and the circle three ways), Trades and its table, Assets (an asset and the sale window open), an account's trading transactions, Compare, Sponsees, Funded, Transactions on Qortal and the Mintership tab;
+      - 95 captures: 0 console errors, 0 sideways overflow, 0 unlabelled buttons, 0 axe violations;
+      - one small target, on the Assets screens: an asset named only "🐉" had a name button 21 px wide. Its card took the tap anyway; the button is now at least 44 px wide, and the four Assets screens again have none.
 
 ### The upstream PR, prepared (2026-10-20)
 
