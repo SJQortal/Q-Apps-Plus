@@ -42,6 +42,15 @@ export function seg(value: string | number): string {
   return encodeURIComponent(String(value));
 }
 
+/**
+ * A list Core answered with something else (an error page, an object): a
+ * failed read, never "none" (Hub's Explorer port, 2026-11-22).
+ */
+export function listOf<T>(body: unknown, what = 'a list'): T[] {
+  if (!Array.isArray(body)) throw new Error(`Unexpected answer for ${what}`);
+  return body as T[];
+}
+
 export async function getJson<T>(path: string): Promise<T> {
   return coreJson<T>(path);
 }

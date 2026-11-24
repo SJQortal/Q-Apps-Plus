@@ -355,4 +355,14 @@ describe('Assets: last trades not read', () => {
     );
     expect(screen.queryByText(/Never traded for QORT/)).toBeNull();
   });
+
+  // Hub's Explorer port (2026-11-22): a non-list answer read as "none".
+  it('a holdings answer that isn’t a list is a failed read, never "holds none"', async () => {
+    await assets(ADDR.banTarget, '', () =>
+      mockFetchRoute('/assets/balances', (url: URL) => (url.searchParams.get('address') ? {} : []))
+    );
+    expect(
+      await screen.findByText('Couldn’t load its Q-Assets.', {}, { timeout: 8000 })
+    ).toBeVisible();
+  });
 });

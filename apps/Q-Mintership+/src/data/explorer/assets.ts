@@ -24,7 +24,7 @@
  *
  * Nothing here writes.
  */
-import { getJson, getPaged, query, seg } from '../core';
+import { getJson, listOf, getPaged, query, seg } from '../core';
 import { fetchQuery } from '../query';
 import { parseAtomic } from '../../rules/explorer/money';
 import {
@@ -94,7 +94,12 @@ export function getHoldings(address: string, options: { force?: boolean } = {}):
       const read = await getPaged<unknown>(
         (offset, limit) =>
           `/assets/balances?${query({ address, excludeZero: true, limit, offset })}`,
-        { pageSize: PAGE, maxPages: HOLDINGS_PAGES }
+        // A non-list answer is a failed read, never "holds no Q-Assets".
+        {
+          pageSize: PAGE,
+          maxPages: HOLDINGS_PAGES,
+          pick: (body: unknown) => listOf<unknown>(body, 'its holdings'),
+        }
       );
       return {
         rows: read.rows.map(holdingOf).filter((h): h is Holding => h !== null),
@@ -178,7 +183,7 @@ export function getAssetPrices(
       const answers = await Promise.all(reads);
       return pricesFrom(
         answers
-          .flatMap((body) => (Array.isArray(body) ? body : []))
+          .flatMap((body) => listOf<unknown>(body, 'their trades'))
           .map(recentTradeOf)
           .filter((trade) => trade !== null)
       );
@@ -251,7 +256,7 @@ export function getTopHolders(
           limit: HOLDERS_READ + 1,
         })}`
       );
-      const all = Array.isArray(body) ? body : [];
+      const all = listOf<unknown>(body, 'its holders');
       const rows = all
         .slice(0, HOLDERS_READ)
         .map((row) => {
@@ -280,7 +285,7 @@ export function getAssetDeals(
         getJson<unknown>(`/assets/trades/${QORT_ASSET_ID}/${seg(assetId)}?${params}`),
       ]);
       return [sold, bought]
-        .flatMap((body) => (Array.isArray(body) ? body : []))
+        .flatMap((body) => listOf<unknown>(body, 'its trades'))
         .map(dealOf)
         .filter((deal): deal is AssetDeal => deal !== null)
         .sort((a, b) => b.at - a.at)
@@ -311,7 +316,7 @@ export function getBuyOrders(
           reverse: true,
         })}`
       );
-      const rows = Array.isArray(body) ? body : [];
+      const rows = listOf<unknown>(body, 'its buy orders');
       return {
         orders: rows.map(buyOrderOf).filter((order): order is BuyOrder => order !== null),
         truncated: rows.length >= BIDS_READ,
@@ -373,7 +378,7 @@ export function getSellOffers(
       const body = await getJson<unknown>(
         `/assets/orderbook/${seg(assetId)}/${QORT_ASSET_ID}?${query({ limit: ASKS_READ })}`
       );
-      return (Array.isArray(body) ? body : [])
+      return listOf<unknown>(body, 'its sell offers')
         .map(orderLevelOf)
         .filter((level): level is OrderLevel => level !== null);
     },

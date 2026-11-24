@@ -22,7 +22,7 @@
  * Nothing here writes.
  */
 import type { TxRow } from '../types';
-import { getJson, query, seg } from '../core';
+import { getJson, listOf, query, seg } from '../core';
 import { fetchQuery } from '../query';
 import { getTransaction } from '../txs';
 import { parseAtomic } from '../../rules/explorer/money';
@@ -167,7 +167,7 @@ export function getOrderFills(orderId: string, self: string): Promise<AssetTrade
         const chunk = await getJson<TradeRow[]>(
           `/assets/order/${seg(orderId)}/trades?${query({ limit: TRADES_PAGE, offset: page * TRADES_PAGE })}`
         );
-        const list = Array.isArray(chunk) ? chunk : [];
+        const list = listOf<TradeRow>(chunk, 'its trades');
         rows.push(...list);
         if (list.length < TRADES_PAGE) break;
       }
@@ -246,7 +246,7 @@ async function readOrdersIn(
         reverse: true,
       })}`
     );
-    const list = Array.isArray(chunk) ? chunk : [];
+    const list = listOf<OrderRow>(chunk, 'its orders');
     orders.push(...list);
     if (list.length < ORDERS_PAGE) return { orders, more: false };
   }
