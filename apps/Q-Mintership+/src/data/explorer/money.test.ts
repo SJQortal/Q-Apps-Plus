@@ -5,7 +5,14 @@ import { FUNDER } from '../../../e2e/world.mjs';
 import { getQueryState, peekQuery, resetQueries, setQueryData } from '../query';
 import { noteAllList, resetFullHistory } from './fullHistory';
 import { dropHeavy, heavy, HeavyCancelled } from './heavy';
-import { getAssetTransfers, getPaymentCaps, getPayments, loadOlderPayments, payKey } from './money';
+import {
+  getAssetTransfers,
+  getExchangePayments,
+  getPaymentCaps,
+  getPayments,
+  loadOlderPayments,
+  payKey,
+} from './money';
 
 const A = `Q${'a'.repeat(33)}`;
 const B = `Q${'b'.repeat(33)}`;
@@ -83,6 +90,23 @@ describe('payments between accounts', () => {
     const before = fetchCallsFor('/transactions/payments/between').length;
     await loadOlderPayments(A, 'sent');
     expect(fetchCallsFor('/transactions/payments/between')).toHaveLength(before);
+  });
+
+  // Hub's Explorer port (2026-11-22): exactly 10 full reads to an exchange said "(there are older
+  // ones)" without an 11th.
+  it('an exchange: 10,000 payments and none older is not "more"', async () => {
+    const TRADEOGRE = 'QcZPChiGmwLu3Lrp2mfLSjZ3yHKmtrogRe';
+    mockFetchRoute('/transactions/payments/between', (url: URL) => {
+      const p = url.searchParams;
+      const offset = Number(p.get('offset') ?? 0);
+      if (p.get('senderAddress') !== A || p.get('recipientAddress') !== TRADEOGRE) return [];
+      if (p.get('limit') === '1') return offset >= 10_000 ? [] : payments(offset, 1);
+      return offset < 10_000 ? payments(offset, 1000) : [];
+    });
+    const flows = await getExchangePayments(A);
+    const sent = flows?.find((flow) => flow.exchange === 'TradeOgre' && flow.direction === 'sent');
+    expect(sent?.rows).toHaveLength(10_000);
+    expect(sent?.more).toBe(false);
   });
 
   it('falls back to a heavy PAYMENT search when the node has no payments/between', async () => {

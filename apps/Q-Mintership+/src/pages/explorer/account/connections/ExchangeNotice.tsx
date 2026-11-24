@@ -24,12 +24,23 @@ import {
 import type { Finding } from '../../../../rules/explorer/findings';
 import { readable } from '../../../../utils/readable';
 
-/** The flows the Connections lists found, when the exact read isn't there. */
-function fromFindings(recorded: readonly Finding[]): ExchangeFlow[] {
+/** Which of the Connections lists stopped short: older payments may be missing from them. */
+export interface ListsShort {
+  sent: boolean;
+  received: boolean;
+}
+
+/**
+ * The flows the Connections lists found, when the exact read isn't there;
+ * from a list that stopped short, said as such (Hub's Explorer port,
+ * 2026-11-22: they read as full counts).
+ */
+function fromFindings(recorded: readonly Finding[], short: ListsShort): ExchangeFlow[] {
   return recorded.flatMap((finding) => {
     if ((finding.kind !== 'paidTo' && finding.kind !== 'paidBy') || !finding.other) return [];
     const rows = finding.evidence.filter((tx) => tx.type === 'PAYMENT');
-    const flow = exchangeFlow(finding.other, finding.kind === 'paidTo' ? 'sent' : 'received', rows);
+    const direction = finding.kind === 'paidTo' ? 'sent' : 'received';
+    const flow = exchangeFlow(finding.other, direction, rows, false, short[direction]);
     return flow ? [flow] : [];
   });
 }
@@ -60,10 +71,13 @@ function Frame({ titleId, children }: { titleId: string; children: React.ReactNo
 export function ExchangeNotice({
   address,
   recorded,
+  short = { sent: false, received: false },
 }: {
   address: string;
   /** What the Connections lists recorded (the fallback). */
   recorded: readonly Finding[];
+  /** Which of those lists stopped short. */
+  short?: ListsShort;
 }) {
   const own = exchangeName(address);
   const read = useQuery(own ? null : `xexch:${address}`, () => getExchangePayments(address));
@@ -80,7 +94,8 @@ export function ExchangeNotice({
     );
   // The exact read, or the lists' payments when this node can't answer it (or it failed).
   const flows =
-    read.data ?? (read.data === null || (read.isError && !read.data) ? fromFindings(recorded) : []);
+    read.data ??
+    (read.data === null || (read.isError && !read.data) ? fromFindings(recorded, short) : []);
   if (!flows.length) return null;
   const sent = flows.some((flow) => flow.direction === 'sent');
   return (

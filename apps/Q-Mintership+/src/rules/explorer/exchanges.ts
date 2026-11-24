@@ -28,8 +28,10 @@ export interface ExchangeFlow {
   /** The payments, newest first. */
   rows: TxRow[];
   qort: bigint;
-  /** Only the newest were read: there may be older ones. */
+  /** Only the newest were read, and one more row showed there are older ones. */
   more: boolean;
+  /** From lists that stopped short: there may be older ones, not known. */
+  mayBeMore?: boolean;
 }
 
 /** One flow from its payment rows; null when there are none. */
@@ -37,7 +39,8 @@ export function exchangeFlow(
   address: string,
   direction: ExchangeFlow['direction'],
   rows: readonly TxRow[],
-  more = false
+  more = false,
+  mayBeMore = false
 ): ExchangeFlow | null {
   const exchange = exchangeName(address);
   if (!exchange || !rows.length) return null;
@@ -45,7 +48,15 @@ export function exchangeFlow(
     (a, b) => (b.blockHeight ?? 0) - (a.blockHeight ?? 0) || b.timestamp - a.timestamp
   );
   const qort = sorted.reduce((sum, row) => sum + (parseAtomic(row.amount) ?? 0n), 0n);
-  return { exchange, address, direction, rows: sorted, qort, more };
+  return {
+    exchange,
+    address,
+    direction,
+    rows: sorted,
+    qort,
+    more,
+    ...(mayBeMore && !more ? { mayBeMore: true } : {}),
+  };
 }
 
 /**
@@ -59,7 +70,9 @@ export function exchangeLine(flow: ExchangeFlow): string {
   const when = flow.rows.length === 1 ? formatDate(newest) : monthRange(oldest, newest);
   const count = flow.more
     ? `its newest ${plural(flow.rows.length, 'payment')} (there are older ones)`
-    : plural(flow.rows.length, 'payment');
+    : flow.mayBeMore
+      ? `its newest ${plural(flow.rows.length, 'payment')} read (there may be older ones)`
+      : plural(flow.rows.length, 'payment');
   return flow.direction === 'sent'
     ? `Sent ${formatAtomic(flow.qort)} QORT to ${flow.exchange}, an exchange, in ${count} (${when}).`
     : `Received ${formatAtomic(flow.qort)} QORT from ${flow.exchange}, an exchange, in ${count} (${when}).`;
