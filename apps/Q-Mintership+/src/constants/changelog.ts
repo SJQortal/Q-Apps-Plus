@@ -18,6 +18,42 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.8',
+    date: '2026-11-24',
+    title: 'The Explorer, checked again',
+    summary:
+      'Fixes from the Explorer’s port into Qortal Hub: figures that read wrong for some accounts, counts that said there were more than there are, reads that failed without a word, and a few keyboard and layout fixes.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A count says “+” or “older ones aren’t read yet” only when one more row shows there are: an account with exactly 100 transactions, 500 names or 1,000 in Activity read as having more.',
+          'Activity: the period that holds the oldest transaction read is hatched and says its older ones aren’t read yet, and a period picked on the chart keeps its mark when the chart is drawn again.',
+          'Transactions on Qortal reads the chain’s newest block before saying a start block is past it, shows a transaction once when Core gives it on two pages, and says when what waits for a block, or a Refresh, couldn’t be read.',
+          'An open asset order says it is partly filled so far, and its fills are read again while it is open.',
+          'Q-Assets: what buyers would pay now stands on its own for each asset; a price or holdings not read yet no longer read as “Never traded” or “None”; an opened asset reads its own last trade; the holders list says “the 100 biggest” when there are more; and trades at the same moment give the same price whatever order Core lists them in.',
+          'A Q-Asset or asset-order read Core answers with something other than a list is a failed read, with Retry, never “none”.',
+          'Group cards: when your groups couldn’t be checked, Join gives way to Retry; after a join is sent its button stays, so the keyboard focus does too; and Show fewer keeps the focus on its button, in view.',
+          'An avatar’s letter is the name’s first visible letter, past invisible characters.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'QORT minted: an account whose minting level moved away shows what it minted, not “Never minted”; its balance is tied to its newest transaction, so a payment that arrived between two reads no longer counts as minted; and Refresh reads the balance, asset orders and trades again.',
+          'QORT purchased counts what trade contracts paid a buyer that never made a transaction of its own (no public key).',
+          'Trades: every chain’s trades are listed, one on a coin it doesn’t name as another coin; a buyer without a public key has its trades; a trade with no time says so; the chart’s picked period stays for Back and its table names the coins; offers older than the payouts read are “not known”, not open; each Q-Asset trade’s sides come from the account’s own order; prices are per unit traded for QORT; and trades between its own orders are left out and counted.',
+          'Connections: a node on the circle counts each transaction once; neighbours and the names under the bottom avatars keep apart; with a search typed it says only matches are drawn; links with several accounts are listed under it; other links show 20 at a time. Exchange lines say when older payments may be missing, and only claim older ones that exist.',
+          'A first QORT payment is a payment everywhere, as Funded reads them: a multi-payment is told as another first transaction. Funded counts the AT addresses it leaves out, not the payments to them.',
+          'Checks across a set: Stop stops the account being read, the words count only the accounts checked (“the only account” for one), and the results stay for Back. A sponsee row says there may be more reward shares while the sponsor’s list stopped short.',
+          'Compare reads each seller’s whole Trade Portal list, dates a pair’s sales only from those with a time, and credits a name registration once “first seen” is known.',
+          'The account report writes names from the chain as plain text, never as links or headings, and its QORT totals say what to do when the history wasn’t read.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.7',
     date: '2026-11-24',
     title: 'Nominated again: each nomination kept apart',
