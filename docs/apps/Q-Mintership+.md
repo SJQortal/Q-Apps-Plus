@@ -4,7 +4,7 @@ Who joins the MINTER group (694), and therefore who mints QORT: propose a nomina
 
 **Published:** **1.0.6** on 2026-11-17 (22:29 UTC; Simon), built from `9ab49c62`: its `index.html` loads `index-C8eaKcD2.js`, the one in `release/Q-Mintership+.zip` from that commit. Before it, **1.0.5** on 2026-11-14 (18:41 UTC) from `129c30b3` (`index-Byi_9r3k.js`), **1.0.4** on 2026-10-27 (00:12 UTC), from `86920434` (`index-D_DrHTU6.js`), and **1.0.3** on 2026-10-23 (21:26 UTC; Simon), built before item 146 (the Q-Minter links on Home, the removal of Q-Mintership 3's alert rules) and the final check's page description, so its `index-*.js` matches no zip built since. Before it, **1.0.2** on 2026-10-21 (23:16 UTC) as `Q-Mintership+` on QDN, built from commit `f5cf9b74` (the files its `index.html` loads match `release/Q-Mintership+.zip`, built from that commit; the Assets tab's own chunk is on the node). Earlier, **1.0.1** on 2026-10-21 (15:43 UTC) from `2c5f6ed2`, **1.0.0** on 2026-10-20 (18:29 UTC) from `8952279e`; earlier testground publishes from 2026-10-14 on, the one before 1.0.0 from `d4b5cf83`.
 
-**Version on the branch:** `1.0.7` (item 152, a decided round shows its own nominator; item 153, each round kept to itself, checked across the app; item 154, earlier nominations' comments kept, folded and tagged), after `1.0.6`, published (item 150, lapsed nominations in History; item 151, an old round reads as its invite ended it), after `1.0.5`, published (item 149, a re-nomination doesn't show the earlier round's votes), after `1.0.4`, published (item 147, a nominee's decided invite credits the nominator; item 148, the Explorer's Trades tab), on `q-mintership-plus/1.0.3` ([#33](https://github.com/SJQortal/Q-Apps-Plus/pull/33)) with 1.0.3 (item 143, Page width: Full window on big screens; item 144, closed Minter Admin polls in History; item 145, menus no longer move the page; item 146, in step with Q-Mintership 3.0.7), after `1.0.2` (published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23) holds nights 1 to 3 (the new process, every write proven on a private testnet, a read-only Hub check with real data), the Explorer, and feedback round 1 (items 1 to 137, from Simon and the Minter Admins using the published app), merged into `main` on 2026-10-20. **1.0.1** (published): the original Admin Board in History for Minter Admins ([#27](https://github.com/SJQortal/Q-Apps-Plus/pull/27)), and items 139 to 141 ([#29](https://github.com/SJQortal/Q-Apps-Plus/pull/29)): every payment and the whole history once read in Connections, Q-Asset trades, and the Account report. **1.0.2** (published): Q-Assets in the Explorer, the Assets tab with what buyers would pay now, and the Overview's tiles (item 142, [#31](https://github.com/SJQortal/Q-Apps-Plus/pull/31)). The next changes are 1.0.3 (docs/RELEASE.md, stage 3).
+**Version on the branch:** `1.0.8` (item 155, the Explorer bugs from Hub's port), after `1.0.7` (item 152, a decided round shows its own nominator; item 153, each round kept to itself, checked across the app; item 154, earlier nominations' comments kept, folded and tagged; its zip kept as `release/Q-Mintership+-1.0.7.zip` for Simon to publish), after `1.0.6`, published (item 150, lapsed nominations in History; item 151, an old round reads as its invite ended it), after `1.0.5`, published (item 149, a re-nomination doesn't show the earlier round's votes), after `1.0.4`, published (item 147, a nominee's decided invite credits the nominator; item 148, the Explorer's Trades tab), on `q-mintership-plus/1.0.3` ([#33](https://github.com/SJQortal/Q-Apps-Plus/pull/33)) with 1.0.3 (item 143, Page width: Full window on big screens; item 144, closed Minter Admin polls in History; item 145, menus no longer move the page; item 146, in step with Q-Mintership 3.0.7), after `1.0.2` (published), Q-Mintership+ 2.0, a rewrite on React 19.3 + MUI 9.4: [SJQortal/Q-Apps-Plus#23](https://github.com/SJQortal/Q-Apps-Plus/pull/23) holds nights 1 to 3 (the new process, every write proven on a private testnet, a read-only Hub check with real data), the Explorer, and feedback round 1 (items 1 to 137, from Simon and the Minter Admins using the published app), merged into `main` on 2026-10-20. **1.0.1** (published): the original Admin Board in History for Minter Admins ([#27](https://github.com/SJQortal/Q-Apps-Plus/pull/27)), and items 139 to 141 ([#29](https://github.com/SJQortal/Q-Apps-Plus/pull/29)): every payment and the whole history once read in Connections, Q-Asset trades, and the Account report. **1.0.2** (published): Q-Assets in the Explorer, the Assets tab with what buyers would pay now, and the Overview's tiles (item 142, [#31](https://github.com/SJQortal/Q-Apps-Plus/pull/31)). The next changes are 1.0.3 (docs/RELEASE.md, stage 3).
 
 ## Baseline at import
 
@@ -1460,6 +1460,73 @@ One test (TargetShift's "Approve several with an admin change") failed once unde
 
       2,654 tests pass, with lint, build and the theme check.
     - **Screenshot check:** two new screens in a world of their own (`?world=again`: the lapsed person nominated again by Nora Nominator, whose first publish lapsed), the fold open and a tag's details open. With the nomination page, a comment thread and Lapsed nominations, at the five sizes in Hub 3.0: 25 captures, all clean.
+
+### 1.0.8 (from 2026-11-24)
+
+Simon chose (2026-11-24) to publish 1.0.7 (items 152–154) as it stood, from the zip kept as `release/Q-Mintership+-1.0.7.zip` (index-DckTPEtU.js), and to put these fixes in 1.0.8.
+
+155. **The Explorer bugs found while porting it into Qortal Hub** (Simon, 2026-11-24: "there were also other bugs found while making Explorer for the Hub", with the report `Qortal GO/reports/q-mintership-plus-bugs-from-hub-explorer-port-2026-11-22.md`, 55 bugs checked against 1.0.7).
+    - **How:** each one read against the code first, then fixed with a test that fails without it, one commit for each fix or for a few in the same file.
+    - **The Overview's figures:**
+      - **"Never minted" (1):** an account whose minting level moved away (TRANSFER_PRIVS sets its blocks minted to 0) read as never minted. Now that needs no blocks and no reward share ever, from a one-row read (`xevershare:`).
+      - **A buyer without a public key (2):** its QORT purchased is what other accounts' trade contracts paid it (`xatpaid:`), and the Trades tab lists those payments as trades of another coin.
+      - **QORT minted tied to the list (4):** the balance is read between two one-row reads of the newest transaction, and used only when that is the list's newest row too; otherwise the list's newest page or the balance is read again, three times at most, then it says so with Retry. Refresh now reads the balance, asset orders, trades and reward shares again. An open asset order's QORT is read again after 30 s; a closed one's is kept.
+    - **Counts at a read's limit (9, 10, 12):** a "+", "its latest N" or "older ones aren't read yet" only when one more row shows it. Covered: names, links, a name's QDN, payments between two accounts, payments, asset transfers, exchanges and the account's own list. The list's probe only marks the list (`probedAt`), so its counts stay as read. Exchange lines from Connections lists that stopped short say older payments may be missing.
+    - **Activity (3, 5):**
+      - the period holding the oldest transaction read is `partly` read: hatched, and its count, hover card and list say so;
+      - the chart's end is kept with the view, and a pick is marked in whichever period holds its start.
+    - **Transactions on Qortal (6, 7, 8, 51):**
+      - a start past the pinned tip reads the chain's newest block before saying no;
+      - a row Core gives on two pages shows once, and the line says "All" only without a repeat;
+      - a failed read of what waits, or a failed Refresh, says so with Retry;
+      - an open order is "Partly filled so far by N trades".
+    - **Connections and the circle (15, 16, 21, 22, 23, 43, 44, 54):**
+      - a node counts each transaction once, and its two ways count movements;
+      - neighbours keep apart, from their rings' sizes (`sideMinHeight`);
+      - the room under the bottom avatars counts wrapped lines, emoji as wide as they are drawn;
+      - with a search typed, it says only the matches are drawn;
+      - links with several accounts are listed under it;
+      - other links show 20 at a time;
+      - with nothing drawn, the legend says only how to open them.
+    - **A first QORT payment (36):** a PAYMENT everywhere, as Funded reads them. A multi-payment is told as another first transaction (In common, Compare, the set check, the quiz). Funded counts AT addresses, not payments (11).
+    - **Sets and sponsees (17, 18, 19, 20, 35):**
+      - Stop reaches the account in progress (between its pages);
+      - the words count the accounts checked ("the only account" for one);
+      - the results are kept with the page visit;
+      - sponsee rows say there may be more while the sponsor's list stopped short.
+    - **Compare (12, 13, 34, 55):**
+      - each seller's whole Trade Portal list is read in one read;
+      - a sale with no time is dated from the sales that have one, and counted;
+      - a name registration is credited once "first seen" is known.
+    - **Trades and Q-Assets:**
+      - **Q-Trade trades (45, 49, 50, 26):**
+        - every chain's trades come from the all-chain reads, shared with QORT purchased / sold (`xportalall:`), and each chain's read only names a trade's coin;
+        - a trade no chain names is another coin;
+        - a trade with no time is in no period, and counted;
+        - the chart's pick is kept for Back, and its table names the coins;
+        - an offer older than the payouts read is "not known".
+      - **Q-Asset trades (24, 25, 29, 30, 41, 46, 47, 48):**
+        - each side's asset comes from the account's own order. Checked on Simon's node: Core labels an initiating sell order's 3,500 of asset 6 as QORT.
+        - a failed read of the other order is read again;
+        - fills of an open order are read again after 30 s;
+        - a failed offers read is said over the kept offers;
+        - a trade of two assets has no in or out mark;
+        - trades between its own orders are left out and counted;
+        - a price is per unit traded for QORT, and trades at the same moment give the lowest price, then the most units.
+      - **The Assets tab and the Overview (27, 28, 37, 38, 39, 40, 52):**
+        - each asset's sale estimate stands on its own;
+        - a non-list answer is a failed read (`listOf`);
+        - no "Never traded" or "holds None" from a read not in, and an opened asset reads its own last trade (`xassetprice:`);
+        - a quantity of 0 isn't shown;
+        - the holders say "the 100 biggest" when there are more;
+        - the Overview's Q-Assets are by name until their prices are in.
+    - **Groups, Join and avatars (31, 32, 33, 53):**
+      - Retry when the viewer's groups couldn't be read;
+      - the Join button stays once sent, so the focus does;
+      - an avatar's letter is the first visible grapheme;
+      - Show fewer keeps its button in focus and in view.
+    - **The account report (14, 42):** names from the chain are escaped for Markdown (`mdText`), and the QORT totals say whether to retry, read the rest, or wait.
+    - **Tests:** about 60 new ones, each confirmed to fail on the code before its fix where it tests the fix itself. 2,696 tests pass, with lint, build and the theme check.
 
 ### The upstream PR, prepared (2026-10-20)
 
