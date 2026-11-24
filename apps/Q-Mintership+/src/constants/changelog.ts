@@ -19,16 +19,18 @@ export interface Release {
 export const CHANGELOG: Release[] = [
   {
     version: '1.0.7',
-    date: '2026-11-20',
-    title: 'A decided nomination shows its own nominator',
+    date: '2026-11-24',
+    title: 'Nominated again: each nomination kept apart',
     summary:
-      'Once a re-nomination is decided, its page shows who nominated in that round and their text, not an earlier nomination’s. Comments and dates keep each round apart too.',
+      'When someone is nominated again, the new nomination shows its own nominator and text, and the comments on the earlier ones stay with it, folded and marked. Dates and History keep each nomination apart too.',
     sections: [
       {
         title: 'For everyone',
         notes: [
           'A nomination that was decided shows the nominator and text of the round its invite answered. After a re-nomination was approved or rejected, its page could show the earlier nomination’s nominator and text instead.',
-          'When someone is nominated again after an earlier nomination lapsed, the new one’s comments, and Minter Admins’ notes, start after the earlier one stopped counting.',
+          'When someone is nominated again, the comments on their earlier nominations stay with the new one, folded under Comments from previous nominations. Each has a Previous nomination tag: pointing at it says when the comment was written and how that nomination ended, and pressing it links to how it ended. They can be read there, not answered.',
+          'The count is the new nomination’s comments, with the earlier ones beside it: Comments (2) · 9 earlier. Before, the earlier ones counted as the new one’s, and showed among them.',
+          'When a nominator nominated the same person again, their earlier nomination dropped out of History if it had lapsed, and lost its nominator if an invite had decided it. Both stay now.',
           'A re-nomination that lapsed says when its own wait ended, not when an earlier round was decided.',
         ],
       },
