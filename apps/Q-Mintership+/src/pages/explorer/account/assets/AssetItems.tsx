@@ -275,7 +275,9 @@ function Values({ view, saleState }: { view: AssetView; saleState: SaleState }) 
     <Box sx={{ display: 'grid', gap: 0.75, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
       <MiniPanel
         label={LAST_TRADE_LABEL}
-        value={view.worth !== undefined ? worthWords(view.worth) : NEVER_TRADED}
+        value={
+          view.worth !== undefined ? worthWords(view.worth) : view.priceUnknown ? '–' : NEVER_TRADED
+        }
         detail={view.price ? `${priceWords(view.price)} · ${formatDate(view.price.at)}` : undefined}
         quiet={view.worth === undefined}
       />
@@ -435,7 +437,7 @@ export function AssetRow({
           </>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            {NEVER_TRADED}
+            {view.priceUnknown ? '–' : NEVER_TRADED}
           </Typography>
         )}
       </Box>

@@ -121,7 +121,8 @@ describe('an asset opened', () => {
     expect([read.get('assetid'), read.get('reverse'), read.get('limit')]).toEqual([
       '78',
       'true',
-      String(HOLDERS_READ),
+      // One more than it keeps: "the biggest 100" only with a 101st (Hub's Explorer port).
+      String(HOLDERS_READ + 1),
     ]);
   });
 

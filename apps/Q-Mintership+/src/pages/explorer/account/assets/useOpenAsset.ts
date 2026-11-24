@@ -35,7 +35,11 @@ export function useOpenAsset(
     const held = views?.find((v) => v.assetId === openId);
     if (held) return held;
     const meta = list?.get(openId);
-    return meta ? notHeldView(meta, address) : null;
+    if (!meta) return null;
+    // Its holdings not read (Back after they expired, a failed Refresh): never "holds none".
+    return views
+      ? notHeldView(meta, address)
+      : { ...notHeldView(meta, address), holdingUnknown: true as const };
   }, [openId, views, list, address]);
   const setOpen = (assetId: number | null) =>
     setParams(

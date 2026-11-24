@@ -89,6 +89,10 @@ export interface AssetView {
   sale?: SaleNow;
   /** The account owns (controls) this asset. */
   owned: boolean;
+  /** Its last trades weren't read (yet, or the read failed): no price is no "never traded". */
+  priceUnknown?: true;
+  /** The account's holdings weren't read: its balance isn't known, never "none". */
+  holdingUnknown?: true;
 }
 
 /** An open order to buy an asset with QORT (`/assets/openorders/0/<id>`). */
@@ -348,6 +352,7 @@ export function assetViews(
         ...(share !== undefined ? { share } : {}),
         ...(sale ? { sale } : {}),
         owned: meta?.owner === address,
+        ...(prices ? {} : { priceUnknown: true as const }),
       };
     });
 }

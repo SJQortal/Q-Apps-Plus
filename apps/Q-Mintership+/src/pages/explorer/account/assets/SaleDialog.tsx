@@ -92,7 +92,12 @@ function Row({
             color="text.secondary"
             sx={{ display: 'block' }}
           >
-            {LAST_TRADE_LABEL}: {view.worth !== undefined ? worthWords(view.worth) : NEVER_TRADED}
+            {LAST_TRADE_LABEL}:{' '}
+            {view.worth !== undefined
+              ? worthWords(view.worth)
+              : view.priceUnknown
+                ? '–'
+                : NEVER_TRADED}
           </Typography>
         </Box>
         <Typography

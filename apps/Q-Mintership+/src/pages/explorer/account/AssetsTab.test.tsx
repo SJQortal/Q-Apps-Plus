@@ -31,7 +31,7 @@ function Search() {
   return <span data-testid="search">{useLocation().search}</span>;
 }
 
-async function assets(address: string, search = '') {
+async function assets(address: string, search = '', setup?: () => void) {
   const result = await renderPage(
     <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
       <AssetsTab address={address} />
@@ -41,7 +41,8 @@ async function assets(address: string, search = '') {
       persona: 'learner',
       path: `${explorerAccountPath(address, 'assets')}${search}`,
       route: '/explorer/account/:who/:tab?',
-      strict: true,
+      strict: !setup,
+      setup,
     }
   );
   return { ...result, user: userEvent.setup() };
@@ -333,5 +334,25 @@ describe('the Overview’s Q-Assets, under At a glance', () => {
     });
     const section = await screen.findByRole('region', { name: 'Q-Assets' }, T);
     expect(await within(section).findByText('Holds no Q-Assets.', {}, T)).toBeInTheDocument();
+  });
+});
+
+// Hub's Explorer port (2026-11-22): while the last trades were read, or after that read failed,
+// every card said "Never traded for QORT".
+describe('Assets: last trades not read', () => {
+  it('never says "Never traded" when the last trades couldn’t be read', async () => {
+    await assets(ADDR.banTarget, '', () =>
+      mockFetchRoute('/assets/trades/recent', () => new Response('down', { status: 500 }))
+    );
+    await waitFor(
+      () =>
+        expect(
+          screen
+            .getAllByRole('alert')
+            .some((el) => el.textContent?.includes('Couldn’t read their last trades.'))
+        ).toBe(true),
+      { timeout: 8000 }
+    );
+    expect(screen.queryByText(/Never traded for QORT/)).toBeNull();
   });
 });

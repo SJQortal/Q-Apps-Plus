@@ -125,6 +125,36 @@ export function getAssetList(options: { force?: boolean } = {}): Promise<Map<num
   );
 }
 
+/**
+ * One asset's last trade with QORT (`xassetprice:<id>`), null when it never
+ * traded: for a window opened on an asset whose price wasn't read, or one
+ * the account owns and holds none of (Hub's Explorer port, 2026-11-22: it
+ * said "Never traded for QORT" without reading).
+ */
+export function getAssetPrice(
+  assetId: number,
+  options: { force?: boolean } = {}
+): Promise<AssetPrice | null> {
+  return fetchQuery(
+    `xassetprice:${assetId}`,
+    async () => {
+      const answers = await Promise.all([
+        getJson(`/assets/trades/recent?${query({ assetid: assetId, otherassetid: 0, limit: 2 })}`),
+        getJson(`/assets/trades/recent?${query({ assetid: 0, otherassetid: assetId, limit: 2 })}`),
+      ]);
+      if (!answers.every(Array.isArray)) throw new Error('Unexpected answer for its trades');
+      const prices = pricesFrom(
+        answers
+          .flatMap((body) => body as unknown[])
+          .map(recentTradeOf)
+          .filter((trade) => trade !== null)
+      );
+      return prices.get(assetId) ?? null;
+    },
+    { ttlMs: FIVE_MINUTES, force: options.force }
+  );
+}
+
 /** The last trade with QORT of each of these assets (the account's holdings), by asset id. */
 export function getAssetPrices(
   address: string,
@@ -217,17 +247,20 @@ export function getTopHolders(
           assetid: assetId,
           ordering: 'ASSET_BALANCE_ACCOUNT',
           reverse: true,
-          limit: HOLDERS_READ,
+          // One more than it keeps: "the biggest 100" only when there is a 101st.
+          limit: HOLDERS_READ + 1,
         })}`
       );
-      const rows = (Array.isArray(body) ? body : [])
+      const all = Array.isArray(body) ? body : [];
+      const rows = all
+        .slice(0, HOLDERS_READ)
         .map((row) => {
           const r = (row ?? {}) as Record<string, unknown>;
           const balance = parseAtomic(r.balance);
           return typeof r.address === 'string' && balance ? { address: r.address, balance } : null;
         })
         .filter((row): row is Holder => row !== null);
-      return { rows, truncated: rows.length >= HOLDERS_READ };
+      return { rows, truncated: all.length > HOLDERS_READ };
     },
     { ttlMs: FIVE_MINUTES, force: options.force }
   );
