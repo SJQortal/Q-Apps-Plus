@@ -239,11 +239,15 @@ export function AssetsSummary({
           />
         </Box>
       ) : null}
-      {salesFailed ? (
+      {salesFailed || totals.saleFailed ? (
         <Box sx={{ mt: 1 }}>
           <ErrorState
             compact
-            title="Couldn’t read their buy orders."
+            title={
+              salesFailed
+                ? 'Couldn’t read their buy orders.'
+                : `Couldn’t read the buy orders of ${totals.saleFailed === 1 ? '1 asset' : `${formatCount(totals.saleFailed)} assets`}: the rest are added up without ${totals.saleFailed === 1 ? 'it' : 'them'}.`
+            }
             error={sales.error}
             onRetry={() => void sales.refetch()}
           />

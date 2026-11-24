@@ -42,7 +42,8 @@ function Row({
 }) {
   const theme = useTheme();
   const accent = assetAccent(theme, view.assetId);
-  const sale = view.sale;
+  // A book that couldn't be read: nothing known (said as such, not as no buyers).
+  const sale = view.sale?.failed ? undefined : view.sale;
   const fraction = sale && total > 0n ? Number((sale.qort * 10_000n) / total) / 10_000 : 0;
   const detail = sale ? [saleDetail(sale, view.balance), bestOfferWords(sale)].filter(Boolean) : [];
   return (
@@ -103,7 +104,7 @@ function Row({
             textAlign: 'right',
           }}
         >
-          {sale ? saleWords(sale) : '–'}
+          {view.sale?.failed ? 'Its buy orders couldn’t be read' : sale ? saleWords(sale) : '–'}
         </Typography>
         <Box
           component="span"

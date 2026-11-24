@@ -256,6 +256,7 @@ function MiniPanel({
 
 /** What buyers would pay now, as words, or a placeholder while the books are read. */
 export function SaleValue({ view, state }: { view: AssetView; state: SaleState }) {
+  if (view.sale?.failed) return <>Its buy orders couldn&rsquo;t be read</>;
   if (view.sale) return <>{saleWords(view.sale)}</>;
   if (state === 'failed') return <>–</>;
   return (
@@ -281,8 +282,12 @@ function Values({ view, saleState }: { view: AssetView; saleState: SaleState }) 
       <MiniPanel
         label={SALE_LABEL}
         value={<SaleValue view={view} state={saleState} />}
-        detail={view.sale ? saleDetail(view.sale, view.balance) : undefined}
-        quiet={view.sale?.sold === 0n || (view.sale === undefined && saleState === 'failed')}
+        detail={view.sale && !view.sale.failed ? saleDetail(view.sale, view.balance) : undefined}
+        quiet={
+          view.sale?.sold === 0n ||
+          Boolean(view.sale?.failed) ||
+          (view.sale === undefined && saleState === 'failed')
+        }
       />
     </Box>
   );

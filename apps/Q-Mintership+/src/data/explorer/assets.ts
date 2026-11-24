@@ -288,7 +288,12 @@ export function getBuyOrders(
   );
 }
 
-/** What buyers would pay now for each holding, by asset id; one book failing fails them all. */
+/**
+ * What buyers would pay now for each holding, by asset id. Each asset stands
+ * on its own: a book that couldn't be read is marked `failed` (Hub's
+ * Explorer port, 2026-11-22: one failing failed them all); only when every
+ * one fails does the read fail.
+ */
 export function getAssetSales(
   address: string,
   holdings: readonly Holding[],
@@ -299,10 +304,25 @@ export function getAssetSales(
     async () => {
       const sales = new Map<number, SaleNow>();
       const held = holdings.filter((h) => h.assetId !== QORT_ASSET_ID);
+      let failed = 0;
+      let firstError: unknown = null;
       await runPool(held, BOOKS_AT_ONCE, async (holding) => {
-        const book = await getBuyOrders(holding.assetId, { force: options.force });
-        sales.set(holding.assetId, saleNow(holding.balance, book.orders, address, book.truncated));
+        try {
+          const book = await getBuyOrders(holding.assetId, { force: options.force });
+          sales.set(
+            holding.assetId,
+            saleNow(holding.balance, book.orders, address, book.truncated)
+          );
+        } catch (error) {
+          failed += 1;
+          firstError ??= error;
+          sales.set(holding.assetId, {
+            ...saleNow(holding.balance, [], address, false),
+            failed: true,
+          });
+        }
       });
+      if (held.length && failed === held.length) throw firstError;
       return sales;
     },
     { ttlMs: TWO_MINUTES, force: options.force }

@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
+import { answerCore } from '../../../e2e/world.mjs';
 import {
   getAssetAvatars,
   getAssetDeals,
@@ -158,6 +159,21 @@ describe('what buyers would pay now', () => {
     expect(sales.get(79)).toMatchObject({ qort: 0n, sold: 0n, unsold: 2n * U });
     // The fund: buyers for 5,000 of 12,345.678.
     expect(sales.get(81)).toMatchObject({ qort: 50_000_000n, unsold: 734_567_800_000n });
+  });
+
+  // Hub's Explorer port (2026-11-22): one book failing failed every asset's estimate.
+  it('one book failing marks that asset only', async () => {
+    const { world } = installWorld('learner');
+    const ben = await getHoldings(ADDR.banTarget);
+    mockFetchRoute('/assets/openorders/0/', (url: URL) =>
+      url.pathname.endsWith('/78')
+        ? new Response('down', { status: 500 })
+        : answerCore(world, url.pathname, url.searchParams)?.body
+    );
+    const sales = await getAssetSales(ADDR.banTarget, ben.rows, { force: true });
+    expect(sales.get(78)?.failed).toBe(true);
+    expect(sales.get(77)).toMatchObject({ qort: 102n * U, bestBid: 18n * U });
+    expect(sales.get(77)?.failed).toBeUndefined();
   });
 
   it('an asset’s cheapest sell offers, by price', async () => {

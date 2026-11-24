@@ -111,6 +111,8 @@ export interface SaleNow {
   bestBid?: bigint;
   /** More buy orders than were read, so it could fetch more: "at least". */
   atLeast: boolean;
+  /** Its buy orders couldn't be read: nothing is known (each asset stands on its own). */
+  failed?: true;
 }
 
 /** A row of `/assets/openorders/0/<id>` as a buy order, or null (nothing left to fill). */
@@ -437,6 +439,8 @@ export interface AssetsTotals {
   saleNone: number;
   /** Some book had more orders than were read: the sale could fetch more. */
   saleAtLeast: boolean;
+  /** Assets whose buy orders couldn't be read: left out of the sale. */
+  saleFailed: number;
 }
 
 export function assetsTotals(views: readonly AssetView[]): AssetsTotals {
@@ -450,6 +454,7 @@ export function assetsTotals(views: readonly AssetView[]): AssetsTotals {
     salePart: 0,
     saleNone: 0,
     saleAtLeast: false,
+    saleFailed: 0,
   };
   for (const view of views) {
     if (view.worth !== undefined) {
@@ -458,6 +463,10 @@ export function assetsTotals(views: readonly AssetView[]): AssetsTotals {
     }
     const sale = view.sale;
     if (!sale) continue;
+    if (sale.failed) {
+      totals.saleFailed += 1;
+      continue;
+    }
     totals.saleRead += 1;
     totals.sale += sale.qort;
     if (!sale.sold) totals.saleNone += 1;
