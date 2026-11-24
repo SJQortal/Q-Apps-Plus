@@ -13,6 +13,7 @@ import { getAccount } from '../accounts';
 import { getJson, getText, query, seg } from '../core';
 import { fetchQuery } from '../query';
 import { heavy } from './heavy';
+import { getContractPayments, getPortalRowsAll } from './portalTrades';
 import { parseAtomic } from '../../rules/explorer/money';
 import { orderQort, type OrderState, type OrderTrade } from '../../rules/explorer/qortBook';
 
@@ -83,41 +84,6 @@ export interface TradesQort {
   keyless?: true;
 }
 
-/** Rows a page of its trade contracts' payments to it. */
-const AT_PAGE = 100;
-
-/**
- * What other accounts' trade contracts (ATs) paid an account, in QORT: a
- * Q-Trade buyer's QORT comes from the seller's contract to the buyer's
- * receiving address. For an account without a public key, which Core's
- * trade list can't be asked about.
- */
-async function paidByContracts(address: string): Promise<bigint> {
-  let total = 0n;
-  const seen = new Set<string>();
-  for (let page = 0; page < MAX_PAGES; page++) {
-    const rows = await getJson<Array<Record<string, unknown>>>(
-      `/transactions/search?${query({
-        txType: 'AT',
-        address,
-        confirmationStatus: 'CONFIRMED',
-        limit: AT_PAGE,
-        offset: page * AT_PAGE,
-      })}`
-    );
-    if (!Array.isArray(rows)) throw new Error('Unexpected answer for its contract payments');
-    for (const tx of rows) {
-      const signature = String(tx?.signature ?? '');
-      if (!signature || seen.has(signature)) continue;
-      seen.add(signature);
-      const assetId = tx.assetId === undefined || tx.assetId === null ? 0 : Number(tx.assetId);
-      if (tx.recipient === address && assetId === 0) total += parseAtomic(tx.amount) ?? 0n;
-    }
-    if (rows.length < AT_PAGE) break;
-  }
-  return total;
-}
-
 /**
  * QORT it bought and sold on the Trade Portal (`xtrades:<a>`): its
  * completed trades as the buyer and as the seller, every chain, from
@@ -138,15 +104,19 @@ export function getTradesQort(address: string): Promise<TradesQort> {
     async () => {
       // Its public key from its account (`account:<a>`, read for the profile anyway).
       const publicKey = (await getAccount(address)).publicKey;
-      if (!publicKey)
-        return { bought: await paidByContracts(address), sold: 0n, keyless: true as const };
-      const sum = async (side: 'buyerPublicKey' | 'sellerPublicKey') => {
-        const list = await getJson<Array<{ qortAmount?: unknown; atAddress?: unknown }>>(
-          `/crosschain/trades?${query({ [side]: publicKey })}`
-        );
+      if (!publicKey) {
+        const paid = await getContractPayments(address);
+        return {
+          bought: paid.reduce((total, payment) => total + payment.qort, 0n),
+          sold: 0n,
+          keyless: true as const,
+        };
+      }
+      // The Trades tab's reads too (getPortalRowsAll): the totals and its list agree.
+      const sum = async (side: 'bought' | 'sold') => {
         let total = 0n;
         const seen = new Set<string>();
-        for (const trade of Array.isArray(list) ? list : []) {
+        for (const trade of await getPortalRowsAll(publicKey, side)) {
           const at = String(trade?.atAddress ?? '');
           if (at && seen.has(at)) continue;
           seen.add(at);
@@ -154,7 +124,7 @@ export function getTradesQort(address: string): Promise<TradesQort> {
         }
         return total;
       };
-      const [bought, sold] = await Promise.all([sum('buyerPublicKey'), sum('sellerPublicKey')]);
+      const [bought, sold] = await Promise.all([sum('bought'), sum('sold')]);
       return { bought, sold };
     },
     { ttlMs: 10 * 60_000 }

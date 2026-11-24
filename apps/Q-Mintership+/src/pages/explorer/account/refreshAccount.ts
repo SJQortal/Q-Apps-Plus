@@ -41,6 +41,7 @@ export const ACCOUNT_KEY_PREFIXES = [
   'xordersq:',
   'xtrades:',
   'xevershare:',
+  'xatpaid:',
   // The app's reads it shares.
   'account:',
   'name:',

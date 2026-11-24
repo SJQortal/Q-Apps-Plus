@@ -141,7 +141,26 @@ describe('over time', () => {
     });
     expect(periods[1].soldCount + periods[1].boughtCount).toBe(0);
     expect(periods[3]).toMatchObject({ boughtQort: 7n * QORT, boughtCount: 1 });
-    expect(volumeByPeriod([])).toEqual({ unit: 'month', periods: [] });
+    expect(volumeByPeriod([])).toEqual({ unit: 'month', periods: [], untimed: 0 });
+  });
+
+  // Hub's Explorer port (2026-11-22): a trade Core gives no time for was dated and charted in 1970.
+  it('leaves a trade with no time out of every period, and counts it', () => {
+    const at = (timestamp: number) => ({
+      chain: 'LITECOIN' as const,
+      side: 'sold' as const,
+      qort: QORT,
+      coin: 1n,
+      at: `A${timestamp}`,
+      other: '',
+      timestamp,
+    });
+    const { periods, untimed } = volumeByPeriod([at(day('2026-03-10')), at(0)]);
+    expect(periods).toHaveLength(1);
+    expect(untimed).toBe(1);
+    const summary = summarisePortal([at(day('2026-03-10')), at(0)]);
+    expect(summary.first).toBe(day('2026-03-10'));
+    expect(summary.coins[0].first).toBe(day('2026-03-10'));
   });
 
   it('names quarters and years', () => {

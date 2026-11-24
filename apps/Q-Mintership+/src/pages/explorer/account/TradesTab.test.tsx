@@ -10,9 +10,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../../test/render';
-import { fetchCallsFor, qortalCalls } from '../../../test/setup';
+import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR } from '../../../test/world';
-import { TRADER } from '../../../../e2e/world.mjs';
+import { SPONSEES, TRADER } from '../../../../e2e/world.mjs';
 import { EXPLORER_PERSON_LINKS, PersonLinkContext } from '../../../components/common/personLinks';
 import { explorerAccountPath } from '../../../routes/paths';
 import { resetExplorerState } from '../../../state/explorer';
@@ -66,7 +66,7 @@ describe('the Trades tab', () => {
     expect(posts).toEqual([]);
   });
 
-  it('reads each chain on each side once, and her offers by type', async () => {
+  it('reads every chain and each chain on each side once, and her offers by type', async () => {
     await trades(TRADER.address);
     await screen.findByText('18,820.5 QORT', {}, T);
     await waitFor(
@@ -74,7 +74,13 @@ describe('the Trades tab', () => {
       T
     );
     const reads = fetchCallsFor('/crosschain/trades');
-    expect(reads).toHaveLength(12);
+    // Every chain at once on each side (the trades, and the totals), then each chain to name
+    // each trade's coin (Hub's Explorer port, 2026-11-22: a chain not listed was left out).
+    expect(reads).toHaveLength(14);
+    for (const side of ['sellerPublicKey', 'buyerPublicKey'])
+      expect(
+        reads.filter((url) => !url.includes('foreignBlockchain=') && url.includes(side))
+      ).toHaveLength(1);
     for (const chain of ['LITECOIN', 'BITCOIN', 'DIGIBYTE', 'DOGECOIN', 'RAVENCOIN', 'PIRATECHAIN'])
       for (const side of ['sellerPublicKey', 'buyerPublicKey'])
         expect(
@@ -232,6 +238,81 @@ describe('the Trades tab', () => {
       expect(
         order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
+  });
+
+  // Hub's Explorer port (2026-11-22): a trade on a chain not in the app's list counted in the
+  // totals but wasn't listed.
+  it('lists a trade on a coin it doesn’t name as another coin', async () => {
+    await renderPage(
+      <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
+        <TradesTab address={TRADER.address} />
+      </PersonLinkContext>,
+      {
+        persona: 'admin',
+        path: explorerAccountPath(TRADER.address, 'trades'),
+        route: '/explorer/account/:who/:tab?',
+        setup: () => {
+          mockFetchRoute('/crosschain/trades', (url: URL) => {
+            const p = url.searchParams;
+            if (p.get('foreignBlockchain') || !p.get('sellerPublicKey')) return [];
+            return [
+              {
+                tradeTimestamp: Date.UTC(2026, 9, 1),
+                qortAmount: '12.00000000',
+                foreignAmount: '3.00000000',
+                atAddress: `A${'n'.repeat(33)}`,
+                sellerAddress: TRADER.address,
+                buyerReceivingAddress: ADDR.admin,
+              },
+            ];
+          });
+        },
+      }
+    );
+    const list = await screen.findByRole('list', { name: 'Its Q-Trade trades, newest first' }, T);
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1);
+    expect(list).toHaveTextContent(/Sold 12 QORT for 3 of another coin/);
+    expect(list).toHaveTextContent('Another coin');
+  });
+
+  // Hub's Explorer port (2026-11-22): a buyer without a public key had "No trades yet".
+  it('a buyer without a public key: what trade contracts paid it, as trades', async () => {
+    const buyer = SPONSEES[2].address;
+    await renderPage(
+      <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
+        <TradesTab address={buyer} />
+      </PersonLinkContext>,
+      {
+        persona: 'admin',
+        path: explorerAccountPath(buyer, 'trades'),
+        route: '/explorer/account/:who/:tab?',
+        setup: (world) => {
+          const at = `A${'k'.repeat(33)}`;
+          const signature = `keylessbuy${'1'.repeat(78)}`;
+          const row = {
+            type: 'AT',
+            timestamp: Date.UTC(2026, 9, 2),
+            reference: `ref${'1'.repeat(85)}`,
+            fee: '0.00000000',
+            signature,
+            txGroupId: 0,
+            blockHeight: 2_700_000,
+            approvalStatus: 'NOT_REQUIRED',
+            creatorAddress: at,
+            atAddress: at,
+            recipient: buyer,
+            amount: '10.00000000',
+            assetId: 0,
+          };
+          world.explorer.rows.push(row);
+          world.explorer.bySig.set(signature, row);
+          world.explorer.parties.set(signature, [at, buyer]);
+        },
+      }
+    );
+    const list = await screen.findByRole('list', { name: 'Its Q-Trade trades, newest first' }, T);
+    expect(list).toHaveTextContent(/Bought 10 QORT for another coin/);
+    expect(screen.queryByText('No trades yet.')).toBeNull();
   });
 
   it('says so when an account has never traded', async () => {

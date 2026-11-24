@@ -34,22 +34,22 @@ import {
   COINS,
   coinPerQort,
   coinWords,
-  TRADE_CHAINS,
+  TRADE_COINS,
   type PortalTrade,
-  type TradeChain,
+  type TradeCoin,
 } from '../../../../rules/explorer/portalTrades';
 import { tradeParts, tradesCoverage } from '../../../../rules/explorer/trades';
 import { formatBlock, formatCount, formatDateTime } from '../../../../utils/format';
 import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../names/useShowMore';
 import { ROW_LIST_SX } from '../connections/ConnectionRow';
-import { SIDE_LABEL } from './tradesWords';
+import { coinText, SIDE_LABEL } from './tradesWords';
 
 const PAGE_ROWS = 10;
 
 type SideFilter = 'all' | 'sold' | 'bought';
 
 /** A coin's colour as a dot, beside its code. */
-export function CoinDot({ chain, size = 10 }: { chain: TradeChain; size?: number }) {
+export function CoinDot({ chain, size = 10 }: { chain: TradeCoin; size?: number }) {
   const theme = useTheme();
   return (
     <Box
@@ -78,7 +78,8 @@ const ROW_SX = {
 
 function PortalTradeRow({ trade }: { trade: PortalTrade }) {
   const { code } = COINS[trade.chain];
-  const price = coinPerQort(trade.coin, trade.qort);
+  const other = trade.chain === 'OTHER';
+  const price = other ? null : coinPerQort(trade.coin, trade.qort);
   return (
     <Box component="li" tabIndex={-1} sx={ROW_SX}>
       <Box sx={{ pt: 0.25 }}>
@@ -87,9 +88,7 @@ function PortalTradeRow({ trade }: { trade: PortalTrade }) {
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography component="div" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
           {SIDE_LABEL[trade.side]} <strong>{formatAtomic(trade.qort)} QORT</strong> for{' '}
-          <strong>
-            {coinWords(trade.coin)} {code}
-          </strong>
+          <strong>{other ? coinText(trade.coin, trade.chain) : `${coinWords(trade.coin)} ${code}`}</strong>
           {trade.other ? (
             <>
               {trade.side === 'sold' ? ' to ' : ' from '}
@@ -111,7 +110,7 @@ function PortalTradeRow({ trade }: { trade: PortalTrade }) {
               · {price} {code} per QORT
             </span>
           ) : null}
-          <span>· {formatDateTime(trade.timestamp)}</span>
+          <span>· {trade.timestamp ? formatDateTime(trade.timestamp) : 'Time not known'}</span>
           <span>
             ·{' '}
             <Link component={RouterLink} to={explorerAccountPath(trade.at)}>
@@ -125,9 +124,9 @@ function PortalTradeRow({ trade }: { trade: PortalTrade }) {
 }
 
 export function PortalTradeList({ trades }: { trades: readonly PortalTrade[] }) {
-  const coins = TRADE_CHAINS.filter((chain) => trades.some((trade) => trade.chain === chain));
+  const coins = TRADE_COINS.filter((chain) => trades.some((trade) => trade.chain === chain));
   const [side, setSide] = useViewState<SideFilter>('trades:side', 'all');
-  const [picked, setCoin] = useViewState<TradeChain | 'all'>('trades:coin', 'all');
+  const [picked, setCoin] = useViewState<TradeCoin | 'all'>('trades:coin', 'all');
   const [limit, setLimit] = useViewState('trades:limit', PAGE_ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
   const coin = picked !== 'all' && coins.includes(picked) ? picked : 'all';
@@ -160,7 +159,7 @@ export function PortalTradeList({ trades }: { trades: readonly PortalTrade[] }) 
             size="small"
             label="Coin"
             value={coin}
-            onChange={(event) => setCoin(event.target.value as TradeChain | 'all')}
+            onChange={(event) => setCoin(event.target.value as TradeCoin | 'all')}
             sx={{ minWidth: 160 }}
           >
             <MenuItem value="all">Every coin</MenuItem>

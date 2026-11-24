@@ -3,13 +3,19 @@
  * Explorer's Trades tab; rules/explorer/portalTrades.ts adds them up.
  *
  * - Its completed trades, every chain, as the seller and as the buyer:
- *   `/crosschain/trades?foreignBlockchain=<chain>&sellerPublicKey=<pk>` and
- *   `…&buyerPublicKey=<pk>` (`xportal:<a>`, 10 minutes). Core's answer
- *   doesn't name the coin, so one read per chain does. Each is one read
- *   without a limit, as Core pages this list badly (qortBook.ts). The
- *   seller's take milliseconds; the buyer's search every contract's payouts
- *   (yopilax, 2026-10-26: 2.2 s for the six). Three at a time. None without
- *   a public key (it never made a transaction).
+ *   `/crosschain/trades?sellerPublicKey=<pk>` and `…?buyerPublicKey=<pk>`
+ *   (`xportalall:<side>:<pk>`, shared with QORT purchased / sold), the
+ *   trades it lists (`xportal:<a>`, 10 minutes). Core's answer doesn't name
+ *   the coin, so one read per chain of TRADE_CHAINS names each trade's
+ *   (`foreignBlockchain=<chain>`); a trade none names is "another coin", a
+ *   chain Core added since (Hub's Explorer port, 2026-11-22: it was in the
+ *   totals but not listed). Each is one read without a limit, as Core pages
+ *   this list badly (qortBook.ts). The seller's take milliseconds; the
+ *   buyer's search every contract's payouts (yopilax, 2026-10-26: 2.2 s for
+ *   the six). Three at a time.
+ * - An account without a public key (it never made a transaction) can't be
+ *   asked by key: its purchases are what other accounts' trade contracts
+ *   paid it (`xatpaid:<a>`), each a trade of another coin.
  * - The trade offers it made: its DEPLOY_AT transactions (each one AT; the
  *   tags name the coin, "ACCT QORT LTC") and the AT payouts it received (a
  *   finished AT pays what it holds back to its creator). From its whole
@@ -38,6 +44,7 @@ import {
   type PortalSide,
   type PortalTrade,
   type TradeChain,
+  type TradeCoin,
 } from '../../rules/explorer/portalTrades';
 
 const TTL_MS = 10 * 60_000;
@@ -47,10 +54,116 @@ const OFFER_PAGES = 5;
 const PAYOUT_PAGES = 10;
 
 export const portalKey = (address: string) => `xportal:${address}`;
+
+/** A list Core answered with something else: a failed read, never "none" (Hub's Explorer port). */
+function asList<T>(body: unknown, what: string): T[] {
+  if (!Array.isArray(body)) throw new Error(`Unexpected answer for ${what}`);
+  return body as T[];
+}
+
+/**
+ * Every chain's completed trades on one side, as Core lists them
+ * (`xportalall:<side>:<pk>`): what QORT purchased / sold adds up, and the
+ * trades the Trades tab lists.
+ */
+export function getPortalRowsAll(
+  publicKey: string,
+  side: PortalSide,
+  options: { force?: boolean } = {}
+): Promise<TradeSummaryRow[]> {
+  return fetchQuery(
+    `xportalall:${side}:${publicKey}`,
+    async () =>
+      asList<TradeSummaryRow>(
+        await getJson<unknown>(`/crosschain/trades?${query({ [SIDE_KEY[side]]: publicKey })}`),
+        'its trades'
+      ),
+    { ttlMs: TTL_MS, force: options.force }
+  );
+}
+
+/** One payment of another account's trade contract (an AT) to it. */
+export interface ContractPayment {
+  at: string;
+  /** Atomic QORT. */
+  qort: bigint;
+  timestamp: number;
+  signature: string;
+}
+
+/** Rows a page of its contract payments. */
+const AT_PAGE = 100;
+const AT_PAGES = 10;
+
+/**
+ * What other accounts' trade contracts paid an account (`xatpaid:<a>`): a
+ * Q-Trade buyer's QORT comes from the seller's contract to its receiving
+ * address. For an account without a public key, which Core's trade list
+ * can't be asked about (Hub's Explorer port, 2026-11-22).
+ */
+export function getContractPayments(
+  address: string,
+  options: { force?: boolean } = {}
+): Promise<ContractPayment[]> {
+  return fetchQuery(
+    `xatpaid:${address}`,
+    async () => {
+      const out: ContractPayment[] = [];
+      const seen = new Set<string>();
+      for (let page = 0; page < AT_PAGES; page++) {
+        const rows = asList<Record<string, unknown>>(
+          await getJson<unknown>(
+            `/transactions/search?${query({
+              txType: 'AT',
+              address,
+              confirmationStatus: 'CONFIRMED',
+              limit: AT_PAGE,
+              offset: page * AT_PAGE,
+            })}`
+          ),
+          'its contract payments'
+        );
+        for (const tx of rows) {
+          const signature = String(tx?.signature ?? '');
+          if (!signature || seen.has(signature)) continue;
+          seen.add(signature);
+          const assetId = tx.assetId === undefined || tx.assetId === null ? 0 : Number(tx.assetId);
+          if (tx.recipient !== address || assetId !== 0) continue;
+          out.push({
+            at: String(tx.atAddress ?? tx.creatorAddress ?? ''),
+            qort: parseAtomic(tx.amount) ?? 0n,
+            timestamp: Number(tx.timestamp) > 0 ? Number(tx.timestamp) : 0,
+            signature,
+          });
+        }
+        if (rows.length < AT_PAGE) break;
+      }
+      return out;
+    },
+    { ttlMs: TTL_MS, force: options.force }
+  );
+}
+
+/** A trade from Core's row, its coin as named; null without its AT. */
+function toTrade(row: TradeSummaryRow, side: PortalSide, chain: TradeCoin): PortalTrade | null {
+  const at = typeof row?.atAddress === 'string' ? row.atAddress : '';
+  if (!at) return null;
+  const other = side === 'sold' ? row.buyerReceivingAddress : row.sellerAddress;
+  return {
+    chain,
+    side,
+    qort: parseAtomic(row.qortAmount) ?? 0n,
+    coin: parseAtomic(row.foreignAmount ?? row.btcAmount) ?? 0n,
+    at,
+    other: typeof other === 'string' ? other : '',
+    // No time from Core: 0, never 1 January 1970 (Hub's Explorer port).
+    timestamp: Number(row.tradeTimestamp) > 0 ? Number(row.tradeTimestamp) : 0,
+  };
+}
 export const atRowsKey = (address: string) => `xatrows:${address}`;
 
 /** A completed trade, as `/crosschain/trades` answers. */
-interface TradeSummaryRow {
+export interface TradeSummaryRow {
   tradeTimestamp?: unknown;
   qortAmount?: unknown;
   foreignAmount?: unknown;
@@ -79,36 +192,18 @@ const SIDE_KEY: Record<PortalSide, 'sellerPublicKey' | 'buyerPublicKey'> = {
   bought: 'buyerPublicKey',
 };
 
-/** One chain's trades on one side; each AT once (a buyer paid twice by one AT is listed twice). */
-async function readSide(
-  publicKey: string,
-  chain: TradeChain,
-  side: PortalSide
-): Promise<PortalTrade[]> {
-  const body = await getJson<unknown>(
-    `/crosschain/trades?${query({ foreignBlockchain: chain, [SIDE_KEY[side]]: publicKey })}`
+/** Which of its trades on one side one chain has: their ATs. */
+async function atsOn(publicKey: string, chain: TradeChain, side: PortalSide): Promise<string[]> {
+  const rows = asList<TradeSummaryRow>(
+    await getJson<unknown>(
+      `/crosschain/trades?${query({ foreignBlockchain: chain, [SIDE_KEY[side]]: publicKey })}`
+    ),
+    'its trades'
   );
-  const seen = new Set<string>();
-  const out: PortalTrade[] = [];
-  for (const row of Array.isArray(body) ? (body as TradeSummaryRow[]) : []) {
-    const at = typeof row?.atAddress === 'string' ? row.atAddress : '';
-    if (!at || seen.has(at)) continue;
-    seen.add(at);
-    const other = side === 'sold' ? row.buyerReceivingAddress : row.sellerAddress;
-    out.push({
-      chain,
-      side,
-      qort: parseAtomic(row.qortAmount) ?? 0n,
-      coin: parseAtomic(row.foreignAmount ?? row.btcAmount) ?? 0n,
-      at,
-      other: typeof other === 'string' ? other : '',
-      timestamp: Number(row.tradeTimestamp ?? 0),
-    });
-  }
-  return out;
+  return rows.flatMap((row) => (typeof row?.atAddress === 'string' ? [row.atAddress] : []));
 }
 
-/** Its completed trades on every chain, both sides, newest first. */
+/** Its completed trades on every chain, both sides, newest first (those with no time last). */
 export function getPortalTrades(
   address: string,
   options: { force?: boolean } = {}
@@ -116,14 +211,52 @@ export function getPortalTrades(
   return fetchQuery(
     portalKey(address),
     async () => {
+      const force = options.force;
       // Its public key from its account (`account:<a>`, read for the page anyway).
       const publicKey = (await getAccount(address)).publicKey;
-      if (!publicKey) return [];
-      const reads = TRADE_CHAINS.flatMap((chain) =>
-        (['sold', 'bought'] as const).map((side) => ({ chain, side }))
-      );
-      const lists = await inTurn(reads, ({ chain, side }) => readSide(publicKey, chain, side));
-      return lists.flat().sort((a, b) => b.timestamp - a.timestamp);
+      const trades: PortalTrade[] = [];
+      if (!publicKey) {
+        // A buyer without a key: each payment of another account's contract, one trade.
+        for (const paid of await getContractPayments(address, { force }))
+          trades.push({
+            chain: 'OTHER',
+            side: 'bought',
+            qort: paid.qort,
+            coin: 0n,
+            at: paid.at,
+            other: '',
+            timestamp: paid.timestamp,
+          });
+      } else {
+        const [sold, bought] = await Promise.all([
+          getPortalRowsAll(publicKey, 'sold', { force }),
+          getPortalRowsAll(publicKey, 'bought', { force }),
+        ]);
+        // Each trade's coin: the chain whose read lists its AT on that side.
+        const reads = TRADE_CHAINS.flatMap((chain) =>
+          (['sold', 'bought'] as const).map((side) => ({ chain, side }))
+        );
+        const lists = await inTurn(reads, ({ chain, side }) => atsOn(publicKey, chain, side));
+        const chainOf = new Map<string, TradeChain>();
+        reads.forEach(({ chain, side }, i) => {
+          for (const at of lists[i]) chainOf.set(`${side}:${at}`, chain);
+        });
+        for (const [side, rows] of [
+          ['sold', sold],
+          ['bought', bought],
+        ] as const) {
+          // Each AT once on a side (a buyer paid twice by one AT is listed twice).
+          const seen = new Set<string>();
+          for (const row of rows) {
+            const at = typeof row?.atAddress === 'string' ? row.atAddress : '';
+            if (!at || seen.has(at)) continue;
+            seen.add(at);
+            const trade = toTrade(row, side, chainOf.get(`${side}:${at}`) ?? 'OTHER');
+            if (trade) trades.push(trade);
+          }
+        }
+      }
+      return trades.sort((a, b) => (b.timestamp || -1) - (a.timestamp || -1));
     },
     { ttlMs: TTL_MS, force: options.force }
   );

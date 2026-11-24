@@ -8,7 +8,7 @@
  * change; the latest period's show first. A key names the coins, and "Show
  * as a table" lists every period that had a trade.
  */
-import { useId, useState, type KeyboardEvent } from 'react';
+import { useId, type KeyboardEvent } from 'react';
 import {
   Box,
   Button,
@@ -28,11 +28,11 @@ import { useViewState } from '../../../../hooks/useViewState';
 import {
   COINS,
   periodLabel,
-  TRADE_CHAINS,
+  TRADE_COINS,
   type PeriodUnit,
   type VolumePeriod,
 } from '../../../../rules/explorer/portalTrades';
-import { formatCount } from '../../../../utils/format';
+import { formatCount, plural } from '../../../../utils/format';
 import { CoinDot } from './TradeLists';
 import { qortText, tradeCount, UNIT_WORDS } from './tradesWords';
 
@@ -41,24 +41,27 @@ const PLOT = 168;
 /** A bar part never thinner than this, so a small trade still shows (px). */
 const MIN_PART = 2;
 
+/** "(LTC 1,200 QORT, DOGE 300 QORT)", or " for LTC" with one coin. */
+function coinSplit(byCoin: VolumePeriod['sold']): string {
+  const coins = TRADE_COINS.filter((chain) => byCoin[chain]);
+  return coins.length > 1
+    ? ` (${coins.map((chain) => `${COINS[chain].code} ${qortText(byCoin[chain] ?? 0n)}`).join(', ')})`
+    : coins.length
+      ? ` for ${COINS[coins[0]].code}`
+      : '';
+}
+
 /** One side of a period, by coin, in words. */
 function sideWords(byCoin: VolumePeriod['sold'], qort: bigint, count: number): string {
   if (!count) return 'none';
-  const coins = TRADE_CHAINS.filter((chain) => byCoin[chain]);
-  const split =
-    coins.length > 1
-      ? ` (${coins.map((chain) => `${COINS[chain].code} ${qortText(byCoin[chain] ?? 0n)}`).join(', ')})`
-      : coins.length
-        ? ` for ${COINS[coins[0]].code}`
-        : '';
-  return `${qortText(qort)} in ${tradeCount(count)}${split}`;
+  return `${qortText(qort)} in ${tradeCount(count)}${coinSplit(byCoin)}`;
 }
 
 function periodWords(period: VolumePeriod, unit: PeriodUnit): string {
   return `${periodLabel(period.start, unit)}: sold ${sideWords(period.sold, period.soldQort, period.soldCount)}; bought ${sideWords(period.bought, period.boughtQort, period.boughtCount)}.`;
 }
 
-/** One side's stack: its coins in TRADE_CHAINS order from the line outward. */
+/** One side's stack: its coins in TRADE_COINS order from the line outward. */
 function BarStack({
   byCoin,
   scale,
@@ -72,7 +75,7 @@ function BarStack({
   up: boolean;
 }) {
   const theme = useTheme();
-  const parts = TRADE_CHAINS.flatMap((chain) => {
+  const parts = TRADE_COINS.flatMap((chain) => {
     const value = byCoin[chain];
     return value ? [{ chain, px: Math.max(MIN_PART, Number(value) * scale) }] : [];
   });
@@ -101,14 +104,28 @@ function BarStack({
   );
 }
 
-export function VolumeChart({ periods, unit }: { periods: VolumePeriod[]; unit: PeriodUnit }) {
+export function VolumeChart({
+  periods,
+  unit,
+  untimed = 0,
+}: {
+  periods: VolumePeriod[];
+  unit: PeriodUnit;
+  /** Trades Core gave no time for: in no period, said under the chart. */
+  untimed?: number;
+}) {
   const theme = useTheme();
   const id = useId();
   const [table, setTable] = useViewState('trades:chart-table', false);
-  const [picked, setPicked] = useState(periods.length - 1);
-  const at = Math.min(Math.max(picked, 0), periods.length - 1);
+  // The period picked, by its start, kept for Back (Hub's Explorer port, 2026-11-22); the
+  // latest until one is picked.
+  const [pickedStart, setPickedStart] = useViewState<number | null>('trades:chart-pick', null);
+  const pickedIndex =
+    pickedStart === null ? -1 : periods.findIndex((period) => period.start === pickedStart);
+  const at = pickedIndex >= 0 ? pickedIndex : periods.length - 1;
+  const setPicked = (i: number) => setPickedStart(periods[i]?.start ?? null);
   if (!periods.length) return null;
-  const coins = TRADE_CHAINS.filter((chain) =>
+  const coins = TRADE_COINS.filter((chain) =>
     periods.some((period) => period.sold[chain] || period.bought[chain])
   );
   const maxSold = periods.reduce((max, p) => (p.soldQort > max ? p.soldQort : max), 0n);
@@ -204,11 +221,13 @@ export function VolumeChart({ periods, unit }: { periods: VolumePeriod[]; unit: 
                     {periodLabel(period.start, unit)}
                   </TableCell>
                   <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {period.soldCount ? qortText(period.soldQort) : '–'}
+                    {period.soldCount ? `${qortText(period.soldQort)}${coinSplit(period.sold)}` : '–'}
                   </TableCell>
                   <TableCell align="right">{formatCount(period.soldCount)}</TableCell>
                   <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {period.boughtCount ? qortText(period.boughtQort) : '–'}
+                    {period.boughtCount
+                      ? `${qortText(period.boughtQort)}${coinSplit(period.bought)}`
+                      : '–'}
                   </TableCell>
                   <TableCell align="right">{formatCount(period.boughtCount)}</TableCell>
                 </TableRow>
@@ -295,6 +314,12 @@ export function VolumeChart({ periods, unit }: { periods: VolumePeriod[]; unit: 
           </Typography>
         </>
       )}
+      {untimed ? (
+        <Typography variant="body2" color="text.secondary">
+          {plural(untimed, 'trade')} Core gave no time for {untimed === 1 ? 'is' : 'are'} in no{' '}
+          {UNIT_WORDS[unit]}.
+        </Typography>
+      ) : null}
     </Box>
   );
 }

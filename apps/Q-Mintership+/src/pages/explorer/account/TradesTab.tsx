@@ -101,7 +101,7 @@ export default function TradesTab({ address }: { address: string }) {
           ) : null}
           {volume?.periods.length ? (
             <BreakdownCard title="Over time" id="trades-over-time">
-              <VolumeChart periods={volume.periods} unit={volume.unit} />
+              <VolumeChart periods={volume.periods} unit={volume.unit} untimed={volume.untimed} />
             </BreakdownCard>
           ) : null}
           {offers?.total.made ? (

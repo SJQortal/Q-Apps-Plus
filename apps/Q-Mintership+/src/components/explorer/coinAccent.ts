@@ -10,7 +10,7 @@
  * names each coin.
  */
 import type { Theme } from '@mui/material/styles';
-import type { TradeChain } from '../../rules/explorer/portalTrades';
+import type { TradeChain, TradeCoin } from '../../rules/explorer/portalTrades';
 
 type Oklch = readonly [lightness: number, chroma: number, hue: number];
 
@@ -57,7 +57,9 @@ function rgbOf([l, c, h]: Oklch): string {
 
 const cache = new Map<string, string>();
 
-export function coinAccent(theme: Theme, chain: TradeChain): string {
+export function coinAccent(theme: Theme, chain: TradeCoin): string {
+  // Another coin: no colour of its own.
+  if (chain === 'OTHER') return theme.palette.text.secondary;
   const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
   const key = `${mode}:${chain}`;
   let colour = cache.get(key);

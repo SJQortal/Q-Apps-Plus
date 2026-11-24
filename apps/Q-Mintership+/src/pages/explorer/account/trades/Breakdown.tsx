@@ -42,6 +42,7 @@ import {
   type PortalTrade,
   type SideTotals,
   type TradeChain,
+  type TradeCoin,
 } from '../../../../rules/explorer/portalTrades';
 import { qortPerUnit, type AssetTradesSummary } from '../../../../rules/explorer/trades';
 import { formatCount, formatDate, plural } from '../../../../utils/format';
@@ -150,7 +151,7 @@ function ShareBar({
   );
 }
 
-function SideLine({ totals, chain }: { totals: SideTotals; chain: TradeChain }) {
+function SideLine({ totals, chain }: { totals: SideTotals; chain: TradeCoin }) {
   if (!totals.count) return <>none</>;
   const price = coinPerQort(totals.coin, totals.qort);
   return (
@@ -158,7 +159,7 @@ function SideLine({ totals, chain }: { totals: SideTotals; chain: TradeChain }) 
       {qortText(totals.qort)} for {coinText(totals.coin, chain)}
       <Box component="span" sx={{ display: 'block', color: 'text.secondary' }}>
         {tradeCount(totals.count)}
-        {price ? ` · on average ${price} ${COINS[chain].code} per QORT` : ''}
+        {price && chain !== 'OTHER' ? ` · on average ${price} ${COINS[chain].code} per QORT` : ''}
       </Box>
     </>
   );
@@ -216,9 +217,11 @@ export function CoinBreakdown({ summary }: { summary: PortalSummary }) {
               </dd>
               <dt>When</dt>
               <dd>
-                {coin.first === coin.last
-                  ? formatDate(coin.first)
-                  : `${formatDate(coin.first)} to ${formatDate(coin.last)}`}
+                {!coin.first
+                  ? 'Time not known'
+                  : coin.first === coin.last
+                    ? formatDate(coin.first)
+                    : `${formatDate(coin.first)} to ${formatDate(coin.last)}`}
               </dd>
             </Typography>
           </Box>

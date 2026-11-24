@@ -7,19 +7,24 @@ import {
   type OfferTotals,
   type PeriodUnit,
   type PortalSide,
-  type TradeChain,
+  type TradeCoin,
 } from '../../../../rules/explorer/portalTrades';
 import { formatCount, plural } from '../../../../utils/format';
 
 /** "1,234.57 QORT", rounded to the hundredth. */
 export const qortText = (atomic: bigint) => `${qortWords(atomic)} QORT`;
 
-/** "43.2109 LTC". */
-export const coinText = (atomic: bigint, chain: TradeChain) =>
-  `${coinWords(atomic)} ${COINS[chain].code}`;
+/** "43.2109 LTC"; "another coin" for one not named (its amount not known when 0). */
+export const coinText = (atomic: bigint, chain: TradeCoin) =>
+  chain === 'OTHER'
+    ? atomic > 0n
+      ? `${coinWords(atomic)} of another coin`
+      : 'another coin'
+    : `${coinWords(atomic)} ${COINS[chain].code}`;
 
-/** "Litecoin (LTC)". */
-export const coinName = (chain: TradeChain) => `${COINS[chain].name} (${COINS[chain].code})`;
+/** "Litecoin (LTC)"; "Another coin". */
+export const coinName = (chain: TradeCoin) =>
+  chain === 'OTHER' ? COINS.OTHER.name : `${COINS[chain].name} (${COINS[chain].code})`;
 
 export const SIDE_LABEL: Record<PortalSide, string> = { sold: 'Sold', bought: 'Bought' };
 

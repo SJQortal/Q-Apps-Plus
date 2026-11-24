@@ -23,13 +23,25 @@ export const TRADE_CHAINS = [
 ] as const;
 export type TradeChain = (typeof TRADE_CHAINS)[number];
 
-export const COINS: Record<TradeChain, { code: string; name: string }> = {
+/**
+ * A trade on no chain of TRADE_CHAINS (a coin Core added since), or whose
+ * coin isn't known (a buyer without a public key: its trades come from the
+ * contracts' payments to it). Hub's Explorer port, 2026-11-22: such a trade
+ * was in the totals but not on the Trades tab.
+ */
+export const OTHER_COIN = 'OTHER' as const;
+export type TradeCoin = TradeChain | typeof OTHER_COIN;
+/** The coins in the order the tab shows them: TRADE_CHAINS, then another coin. */
+export const TRADE_COINS: readonly TradeCoin[] = [...TRADE_CHAINS, OTHER_COIN];
+
+export const COINS: Record<TradeCoin, { code: string; name: string }> = {
   LITECOIN: { code: 'LTC', name: 'Litecoin' },
   BITCOIN: { code: 'BTC', name: 'Bitcoin' },
   DIGIBYTE: { code: 'DGB', name: 'DigiByte' },
   DOGECOIN: { code: 'DOGE', name: 'Dogecoin' },
   RAVENCOIN: { code: 'RVN', name: 'Ravencoin' },
   PIRATECHAIN: { code: 'ARRR', name: 'Pirate Chain' },
+  OTHER: { code: 'other', name: 'Another coin' },
 };
 
 const CHAIN_OF_CODE = new Map<string, TradeChain>(
@@ -50,15 +62,16 @@ export function chainOfOffer(tags: unknown, name?: unknown): TradeChain | null {
 export type PortalSide = 'sold' | 'bought';
 
 export interface PortalTrade {
-  chain: TradeChain;
+  chain: TradeCoin;
   side: PortalSide;
   qort: bigint;
-  /** The coin paid for the QORT. */
+  /** The coin paid for the QORT; 0 when not known (another coin, as a contract's payment). */
   coin: bigint;
   /** The trade's AT. */
   at: string;
   /** Who bought (where the QORT went) or who sold; '' when Core didn't say. */
   other: string;
+  /** When it completed (ms); 0 when Core gave no time (Hub's Explorer port: never 1970). */
   timestamp: number;
 }
 
@@ -69,7 +82,7 @@ export interface SideTotals {
 }
 
 export interface CoinTotals {
-  chain: TradeChain;
+  chain: TradeCoin;
   sold: SideTotals;
   bought: SideTotals;
   first: number;
@@ -85,7 +98,7 @@ export interface Partner {
 }
 
 export interface PortalSummary {
-  /** The coins it traded, in TRADE_CHAINS order. */
+  /** The coins it traded, in TRADE_COINS order. */
   coins: CoinTotals[];
   sold: SideTotals;
   bought: SideTotals;
@@ -111,7 +124,7 @@ const bigger = (a: PortalTrade | null, b: PortalTrade): PortalTrade =>
   !a || b.qort > a.qort || (b.qort === a.qort && b.timestamp < a.timestamp) ? b : a;
 
 export function summarisePortal(trades: readonly PortalTrade[]): PortalSummary {
-  const byChain = new Map<TradeChain, CoinTotals>();
+  const byChain = new Map<TradeCoin, CoinTotals>();
   const partners = new Map<string, Partner>();
   const sold = noSide();
   const bought = noSide();
@@ -133,10 +146,13 @@ export function summarisePortal(trades: readonly PortalTrade[]): PortalSummary {
     }
     addTo(coin[trade.side], trade);
     addTo(trade.side === 'sold' ? sold : bought, trade);
-    coin.first = Math.min(coin.first, trade.timestamp);
-    coin.last = Math.max(coin.last, trade.timestamp);
-    first = first === null ? trade.timestamp : Math.min(first, trade.timestamp);
-    last = last === null ? trade.timestamp : Math.max(last, trade.timestamp);
+    // Dates only from trades with a time.
+    if (trade.timestamp > 0) {
+      coin.first = coin.first > 0 ? Math.min(coin.first, trade.timestamp) : trade.timestamp;
+      coin.last = Math.max(coin.last, trade.timestamp);
+      first = first === null ? trade.timestamp : Math.min(first, trade.timestamp);
+      last = last === null ? trade.timestamp : Math.max(last, trade.timestamp);
+    }
     if (trade.side === 'sold') biggestSale = bigger(biggestSale, trade);
     else biggestBuy = bigger(biggestBuy, trade);
     if (trade.other) {
@@ -152,7 +168,7 @@ export function summarisePortal(trades: readonly PortalTrade[]): PortalSummary {
     }
   }
   return {
-    coins: TRADE_CHAINS.flatMap((chain) => byChain.get(chain) ?? []),
+    coins: TRADE_COINS.flatMap((chain) => byChain.get(chain) ?? []),
     sold,
     bought,
     first,
@@ -272,8 +288,8 @@ export interface VolumePeriod {
   /** Its first moment (local time). */
   start: number;
   /** QORT sold and bought in it, by coin. */
-  sold: Partial<Record<TradeChain, bigint>>;
-  bought: Partial<Record<TradeChain, bigint>>;
+  sold: Partial<Record<TradeCoin, bigint>>;
+  bought: Partial<Record<TradeCoin, bigint>>;
   soldQort: bigint;
   boughtQort: bigint;
   soldCount: number;
@@ -306,12 +322,19 @@ const nextPeriod = (start: number, unit: PeriodUnit): number => {
   return new Date(date.getFullYear(), date.getMonth() + MONTHS_IN[unit], 1).getTime();
 };
 
-/** Every period from its first trade's to its latest's, empty ones too, oldest first. */
-export function volumeByPeriod(trades: readonly PortalTrade[]): {
+/**
+ * Every period from its first trade's to its latest's, empty ones too,
+ * oldest first; trades with no time aren't in any, and are counted apart
+ * (`untimed`).
+ */
+export function volumeByPeriod(all: readonly PortalTrade[]): {
   unit: PeriodUnit;
   periods: VolumePeriod[];
+  untimed: number;
 } {
-  if (!trades.length) return { unit: 'month', periods: [] };
+  const trades = all.filter((trade) => trade.timestamp > 0);
+  const untimed = all.length - trades.length;
+  if (!trades.length) return { unit: 'month', periods: [], untimed };
   const first = Math.min(...trades.map((trade) => trade.timestamp));
   const last = Math.max(...trades.map((trade) => trade.timestamp));
   const unit = periodUnit(first, last);
@@ -343,7 +366,7 @@ export function volumeByPeriod(trades: readonly PortalTrade[]): {
       period.boughtCount += 1;
     }
   }
-  return { unit, periods };
+  return { unit, periods, untimed };
 }
 
 const MONTH = new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' });
