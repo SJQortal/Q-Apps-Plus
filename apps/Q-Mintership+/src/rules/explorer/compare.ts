@@ -518,12 +518,15 @@ function tradeFindings(input: PairInput): PairFinding[] {
       (t) => t.seller === seller.address && t.buyer === buyer.address
     );
     if (!sold.length) continue;
-    const newest = sold[0];
-    const oldest = sold[sold.length - 1];
-    const when = whenWords(oldest.timestamp, newest.timestamp);
-    const capped = seller.trades?.capped
-      ? `, in its newest ${formatCount(seller.trades.rows.length)} sales`
-      : '';
+    // Its dates from the sales with a time; how many have none, said (Hub's Explorer port,
+    // 2026-11-22: a sale with no time read as 1 January 1970).
+    const dated = sold.filter((t): t is Trade & { timestamp: number } => t.timestamp !== null);
+    const undated = sold.length - dated.length;
+    const newest = dated[0] ?? null;
+    const oldest = dated[dated.length - 1] ?? null;
+    const when =
+      newest && oldest ? whenWords(oldest.timestamp, newest.timestamp) : 'time not known';
+    const capped = undated && dated.length ? `; ${plural(undated, 'sale')} with no time` : '';
     out.push({
       key: `trade:${seller.address}>${buyer.address}`,
       kind: 'trade',
@@ -537,8 +540,9 @@ function tradeFindings(input: PairInput): PairFinding[] {
         account(buyer.address),
         text(` on the trade portal in ${plural(sold.length, 'trade')} (${when}${capped})`),
       ],
-      timestamp: newest.timestamp,
-      firstTimestamp: oldest.timestamp,
+      // 0: no time known (findingWhen says so).
+      timestamp: newest?.timestamp ?? 0,
+      ...(oldest ? { firstTimestamp: oldest.timestamp } : {}),
       count: sold.length > 1 ? sold.length : undefined,
       evidence: [],
       evidenceWords: plural(sold.length, 'trade'),
@@ -1159,7 +1163,9 @@ function primaryNameEvent(side: TimelineSide): Omit<TimelineEvent, 'address' | '
     };
   const registered = primary.registered;
   const firstSeen = side.first?.firstSeen?.timestamp;
-  if (side.links.truncated || !registered || (firstSeen !== undefined && registered < firstSeen))
+  // Only once "first seen" is known: until then a registration older than its first
+  // transaction can't be told apart (Hub's Explorer port, 2026-11-22).
+  if (side.links.truncated || !registered || firstSeen === undefined || registered < firstSeen)
     return null;
   return {
     key: `${side.address}:primaryName`,

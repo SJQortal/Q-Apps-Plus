@@ -90,7 +90,7 @@ describe('payments between two accounts', () => {
 });
 
 describe('trades sold on the trade portal', () => {
-  it('reads by the seller’s public key only (never the buyer’s), the newest 100', async () => {
+  it('reads by the seller’s public key only (never the buyer’s), all of them in one read', async () => {
     mockFetchRoute('/crosschain/trades', [
       {
         tradeTimestamp: 1_000,
@@ -134,10 +134,27 @@ describe('trades sold on the trade portal', () => {
     ]);
     const [read] = fetchCallsFor('/crosschain/trades').map(params);
     expect(read.get('sellerPublicKey')).toBe(PK);
-    expect(read.get('limit')).toBe('100');
+    // No limit (Hub's Explorer port, 2026-11-22): a pair's sale older than the newest 100 was missed.
+    expect(read.has('limit')).toBe(false);
     expect(read.get('reverse')).toBe('true');
     expect(read.has('buyerPublicKey')).toBe(false);
     expect(tradesKey(PK)).toBe(`xtrades:${PK}`);
     expect(peekQuery(tradesKey(PK))).toBe(trades);
+  });
+
+  // Hub's Explorer port (2026-11-22): a sale Core gives no time for was dated 1 January 1970.
+  it('a sale with no time has none, after the dated ones', async () => {
+    mockFetchRoute('/crosschain/trades', [
+      { qortAmount: '1', atAddress: AT, sellerAddress: A, buyerReceivingAddress: B },
+      {
+        tradeTimestamp: 5_000,
+        qortAmount: '2',
+        atAddress: AT,
+        sellerAddress: A,
+        buyerReceivingAddress: B,
+      },
+    ]);
+    const trades = await getTradesAsSeller(PK);
+    expect(trades.rows.map((t) => t.timestamp)).toEqual([5_000, null]);
   });
 });

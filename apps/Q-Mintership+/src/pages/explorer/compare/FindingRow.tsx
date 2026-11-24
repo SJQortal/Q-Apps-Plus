@@ -33,7 +33,7 @@ function TradeList({ trades }: { trades: readonly Trade[] }) {
             <Box component="strong" sx={{ whiteSpace: 'nowrap' }}>
               {formatAmount(trade.qortAmount)} QORT
             </Box>{' '}
-            · {formatDate(trade.timestamp)}
+            · {trade.timestamp !== null ? formatDate(trade.timestamp) : 'time not known'}
           </Typography>
           {trade.atAddress ? <AtLink address={trade.atAddress} /> : null}
         </Box>
