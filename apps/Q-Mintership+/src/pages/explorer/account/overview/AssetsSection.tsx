@@ -106,8 +106,9 @@ function Tile({ view, onOpen }: { view: AssetView; onOpen: () => void }) {
 }
 
 export function AssetsSection({ address }: { address: string }) {
-  const { holdings, list, views } = useAssets(address, { sales: false });
+  const { holdings, list, prices, views } = useAssets(address, { sales: false });
   const { open, setOpen } = useOpenAsset(address, views, list.data);
+  const priced = Boolean(prices.data);
   let body: React.ReactNode;
   if (holdings.isError && !holdings.data)
     body = (
@@ -138,13 +139,28 @@ export function AssetsSection({ address }: { address: string }) {
   else
     body = (
       <>
-        <Box component="ul" aria-label="Its Q-Assets, worth most first" sx={GRID_SX}>
-          {sortAssets(views, 'worth')
+        {/* By name until the prices are in, and said so (Hub's Explorer port, 2026-11-22). */}
+        <Box
+          component="ul"
+          aria-label={priced ? 'Its Q-Assets, worth most first' : 'Its Q-Assets, by name'}
+          sx={GRID_SX}
+        >
+          {sortAssets(views, priced ? 'worth' : 'name')
             .slice(0, QUICK_ASSETS)
             .map((view) => (
               <Tile key={view.assetId} view={view} onOpen={() => setOpen(view.assetId)} />
             ))}
         </Box>
+        {prices.isError && !prices.data ? (
+          <Box sx={{ mt: 1 }}>
+            <ErrorState
+              compact
+              title="Couldn’t read their last trades, so they are by name."
+              error={prices.error}
+              onRetry={() => void prices.refetch()}
+            />
+          </Box>
+        ) : null}
         <Box sx={{ mt: 1 }}>
           <TabButton address={address} tab="assets">
             {views.length > QUICK_ASSETS ? `All ${views.length} in Assets` : 'Open Assets'}
