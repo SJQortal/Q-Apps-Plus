@@ -18,9 +18,15 @@ describe('a coin’s share', () => {
 
 describe('the offers in a line', () => {
   it('names the states it has, in order', () => {
-    expect(offersLine({ made: 4, completed: 3, ended: 0, open: 1, openQort: 0n })).toBe(
+    expect(offersLine({ made: 4, completed: 3, ended: 0, open: 1, unknown: 0, openQort: 0n })).toBe(
       '3 completed · 1 open'
     );
-    expect(offersLine({ made: 0, completed: 0, ended: 0, open: 0, openQort: 0n })).toBe('none yet');
+    expect(offersLine({ made: 0, completed: 0, ended: 0, open: 0, unknown: 0, openQort: 0n })).toBe(
+      'none yet'
+    );
+    // Older than the payouts read: not called open (Hub's Explorer port, 2026-11-22).
+    expect(offersLine({ made: 3, completed: 1, ended: 0, open: 1, unknown: 1, openQort: 0n })).toBe(
+      '1 completed · 1 open · 1 not known'
+    );
   });
 });

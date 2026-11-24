@@ -98,7 +98,14 @@ describe('its trade offers', () => {
     );
     expect(offers.map((offer) => offer.outcome)).toEqual(['completed', 'ended', 'open', 'open']);
     const { total, byCoin } = summariseOffers(offers);
-    expect(total).toEqual({ made: 4, completed: 1, ended: 1, open: 2, openQort: 20n * QORT });
+    expect(total).toEqual({
+      made: 4,
+      completed: 1,
+      ended: 1,
+      open: 2,
+      unknown: 0,
+      openQort: 20n * QORT,
+    });
     expect(byCoin.map((coin) => [coin.chain, coin.made, coin.open])).toEqual([
       ['LITECOIN', 3, 1],
       ['DOGECOIN', 1, 1],
@@ -179,5 +186,20 @@ describe('prices and amounts', () => {
   it('coins to 4 decimals from 1 up, exact below', () => {
     expect(coinWords(962_012_345_678n)).toBe('9,620.1235');
     expect(coinWords(351_234n)).toBe('0.00351234');
+  });
+});
+
+// Hub's Explorer port (2026-11-22): an offer older than the payouts read was called open.
+describe('an offer older than the payouts read', () => {
+  it('is not known, not open', () => {
+    const offer = (at: string, timestamp: number) => ({
+      at,
+      chain: 'LITECOIN' as const,
+      qort: 1n,
+      timestamp,
+    });
+    const made = offerOutcomes([offer('A1', 100), offer('A2', 500)], new Set(), new Set(), 300);
+    expect(made.map((o) => o.outcome)).toEqual(['unknown', 'open']);
+    expect(offerOutcomes([offer('A1', 100)], new Set(), new Set())[0].outcome).toBe('open');
   });
 });

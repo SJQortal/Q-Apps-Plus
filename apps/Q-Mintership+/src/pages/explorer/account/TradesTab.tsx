@@ -60,7 +60,12 @@ export default function TradesTab({ address }: { address: string }) {
     () =>
       portal.data && atRows.data
         ? summariseOffers(
-            offerOutcomes(atRows.data.deployed, soldAts(portal.data), new Set(atRows.data.paidBack))
+            offerOutcomes(
+              atRows.data.deployed,
+              soldAts(portal.data),
+              new Set(atRows.data.paidBack),
+              atRows.data.payoutsFrom ?? null
+            )
           )
         : null,
     [portal.data, atRows.data]

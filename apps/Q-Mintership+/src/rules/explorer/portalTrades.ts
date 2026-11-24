@@ -223,7 +223,7 @@ export interface OfferDeployed {
  * - ended: it paid back without one (cancelled, or refunded when a buyer didn't finish);
  * - open: still offered, or a trade under way.
  */
-export type OfferOutcome = 'completed' | 'ended' | 'open';
+export type OfferOutcome = 'completed' | 'ended' | 'open' | 'unknown';
 
 export interface OfferMade extends OfferDeployed {
   outcome: OfferOutcome;
@@ -231,16 +231,26 @@ export interface OfferMade extends OfferDeployed {
 
 /**
  * How each offer ended: `sold` are its sales' ATs, `paidBack` the ATs that
- * paid it (a finished AT pays what it holds back to its creator).
+ * paid it (a finished AT pays what it holds back to its creator). When the
+ * payouts read stopped short, `payoutsFrom` is the oldest one read: an
+ * offer older than that with no payout in what was read may have ended, so
+ * it is `unknown`, not open (Hub's Explorer port, 2026-11-22).
  */
 export function offerOutcomes(
   deployed: readonly OfferDeployed[],
   sold: ReadonlySet<string>,
-  paidBack: ReadonlySet<string>
+  paidBack: ReadonlySet<string>,
+  payoutsFrom: number | null = null
 ): OfferMade[] {
   return deployed.map((offer) => ({
     ...offer,
-    outcome: sold.has(offer.at) ? 'completed' : paidBack.has(offer.at) ? 'ended' : 'open',
+    outcome: sold.has(offer.at)
+      ? 'completed'
+      : paidBack.has(offer.at)
+        ? 'ended'
+        : payoutsFrom !== null && offer.timestamp < payoutsFrom
+          ? 'unknown'
+          : 'open',
   }));
 }
 
@@ -249,11 +259,20 @@ export interface OfferTotals {
   completed: number;
   ended: number;
   open: number;
+  /** Older than the payouts read: how they ended isn't known. */
+  unknown: number;
   /** The QORT the open ones hold. */
   openQort: bigint;
 }
 
-const noOffers = (): OfferTotals => ({ made: 0, completed: 0, ended: 0, open: 0, openQort: 0n });
+const noOffers = (): OfferTotals => ({
+  made: 0,
+  completed: 0,
+  ended: 0,
+  open: 0,
+  unknown: 0,
+  openQort: 0n,
+});
 
 export function summariseOffers(offers: readonly OfferMade[]): {
   total: OfferTotals;

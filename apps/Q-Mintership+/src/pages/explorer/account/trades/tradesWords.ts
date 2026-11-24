@@ -35,6 +35,7 @@ export const OUTCOME_LABEL: Record<OfferOutcome, string> = {
   completed: 'Completed',
   ended: 'Ended without a trade',
   open: 'Open',
+  unknown: 'Not known (older than the payouts read)',
 };
 
 /** "678 completed · 475 ended without a trade · 1 open", leaving out the ones at 0. */
@@ -43,6 +44,7 @@ export function offersLine(totals: OfferTotals): string {
   if (totals.completed) parts.push(`${formatCount(totals.completed)} completed`);
   if (totals.ended) parts.push(`${formatCount(totals.ended)} ended without a trade`);
   if (totals.open) parts.push(`${formatCount(totals.open)} open`);
+  if (totals.unknown) parts.push(`${formatCount(totals.unknown)} not known`);
   return parts.join(' · ') || 'none yet';
 }
 

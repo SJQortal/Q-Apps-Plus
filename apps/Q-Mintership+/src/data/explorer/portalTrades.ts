@@ -269,6 +269,8 @@ export interface AtRows {
   paidBack: string[];
   /** It made more offers, or had more payouts, than were read. */
   truncated: boolean;
+  /** The payouts read stopped short: the oldest one read (ms); null when all were read. */
+  payoutsFrom?: number | null;
 }
 
 /** A trade offer: an ACCT contract (Core's cross-chain trade). */
@@ -317,7 +319,7 @@ async function readType(
         reverse: true,
       })}`
     );
-    const list = Array.isArray(chunk) ? chunk : [];
+    const list = asList<TxRow>(chunk, 'its transactions');
     rows.push(...list);
     if (list.length < PAGE) return { rows, more: false };
   }
@@ -335,7 +337,13 @@ export function getAtRows(address: string, options: { force?: boolean } = {}): P
       const offers = await readType(address, 'DEPLOY_AT', OFFER_PAGES);
       if (!offers.rows.length) return { deployed: [], paidBack: [], truncated: false };
       const payouts = await readType(address, 'AT', PAYOUT_PAGES);
-      return atRowsOf([...offers.rows, ...payouts.rows], address, offers.more || payouts.more);
+      return {
+        ...atRowsOf([...offers.rows, ...payouts.rows], address, offers.more || payouts.more),
+        payoutsFrom:
+          payouts.more && payouts.rows.length
+            ? Math.min(...payouts.rows.map((row) => row.timestamp))
+            : null,
+      };
     },
     { ttlMs: TTL_MS, force: options.force }
   );

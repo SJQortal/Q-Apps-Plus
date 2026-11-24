@@ -26,6 +26,7 @@ import { alpha, useTheme, type Theme } from '@mui/material/styles';
 import CheckCircleOutlinedIcon from '@mui/icons-material/CheckCircleOutlined';
 import HighlightOffOutlinedIcon from '@mui/icons-material/HighlightOffOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
+import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import { Card } from '../../../../components/common/Section';
 import { PersonInline } from '../../../../components/common/Person';
 import { coinAccent } from '../../../../components/explorer/coinAccent';
@@ -231,12 +232,13 @@ export function CoinBreakdown({ summary }: { summary: PortalSummary }) {
   );
 }
 
-const OUTCOMES: readonly OfferOutcome[] = ['completed', 'ended', 'open'];
+const OUTCOMES: readonly OfferOutcome[] = ['completed', 'ended', 'open', 'unknown'];
 
 const OUTCOME_ICON: Record<OfferOutcome, typeof CheckCircleOutlinedIcon> = {
   completed: CheckCircleOutlinedIcon,
   ended: HighlightOffOutlinedIcon,
   open: ScheduleOutlinedIcon,
+  unknown: HelpOutlineOutlinedIcon,
 };
 
 function outcomeColour(theme: Theme, outcome: OfferOutcome): string {

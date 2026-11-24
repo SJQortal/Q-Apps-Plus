@@ -221,7 +221,9 @@ export function VolumeChart({
                     {periodLabel(period.start, unit)}
                   </TableCell>
                   <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {period.soldCount ? `${qortText(period.soldQort)}${coinSplit(period.sold)}` : '–'}
+                    {period.soldCount
+                      ? `${qortText(period.soldQort)}${coinSplit(period.sold)}`
+                      : '–'}
                   </TableCell>
                   <TableCell align="right">{formatCount(period.soldCount)}</TableCell>
                   <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
