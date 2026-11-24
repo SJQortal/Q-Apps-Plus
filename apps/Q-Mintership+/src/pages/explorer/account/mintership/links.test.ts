@@ -40,6 +40,7 @@ const nomination = (over: Partial<Nomination>): Nomination =>
     records: [],
     supportRecords: [],
     earlierRoundEnd: null,
+    earlierRounds: [],
     hasJoinRequest: false,
     hasStoredInvite: false,
     ...over,

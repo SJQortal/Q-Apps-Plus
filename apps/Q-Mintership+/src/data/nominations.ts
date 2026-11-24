@@ -14,12 +14,16 @@
 import { decisionSubject, type Decision } from '../rules/decision';
 import {
   decidedAt,
+  earlierRounds,
   isEligibleNominator,
   isOpenState,
   nominationState,
   pickRound,
   RECORD_CLOCK_SLACK_MS,
   waitingEndsAt,
+  type DecidedInvite,
+  type EarlierRound,
+  type InviteSpan,
   type NominationState,
   nominationAnswered,
 } from '../rules/nomination';
@@ -66,6 +70,12 @@ export interface NominationEntry {
   /** The QDN row's newest timestamp (trusted over the body). */
   publishedAt: number;
   identifier: string;
+  /**
+   * The first publish of a record its nominator published again for a new
+   * nomination (`publishedAt` is the row's `created`): only its time is
+   * known, its text is the newer one's.
+   */
+  replaced?: true;
 }
 
 export interface SupportEntry {
@@ -107,6 +117,12 @@ export interface Nomination {
    * from then.
    */
   earlierRoundEnd: number | null;
+  /**
+   * Their rounds before this one, oldest first: lapsed, or decided by an
+   * invite (rules/nomination.ts earlierRounds). Their comments show folded
+   * under this one's (Simon, 2026-11-24).
+   */
+  earlierRounds: EarlierRound[];
   hasJoinRequest: boolean;
   hasStoredInvite: boolean;
 }
@@ -231,6 +247,37 @@ function earlierEnd(
   return null;
 }
 
+/** How a decided MINTER invite ended, by Core's approval status. */
+const INVITE_OUTCOME: Record<string, DecidedInvite['outcome'] | undefined> = {
+  APPROVED: 'approved',
+  NOT_REQUIRED: 'approved',
+  REJECTED: 'rejected',
+  EXPIRED: 'expired',
+};
+
+/**
+ * Whether a record's first publish (`created`) was a nomination of its own,
+ * which its nominator published again for a new one (Simon, 2026-11-24:
+ * igorcoin nominated Stone Golem again, and the earlier nomination's
+ * comments came with it). The app refuses a second nomination while one is
+ * open, so a record published again after the first one's wait ran out, or
+ * after an invite decided it, is a new nomination. One identifier per
+ * nominee means the new one replaced the first, whose time stays in the
+ * row's `created`.
+ */
+function publishedAgain(
+  created: number,
+  latest: number,
+  windowMs: number,
+  decided: readonly DecidedInvite[]
+): boolean {
+  if (!(created < latest - RECORD_CLOCK_SLACK_MS)) return false;
+  if (latest - created > windowMs) return true;
+  return decided.some(
+    (invite) => invite.at >= created - RECORD_CLOCK_SLACK_MS && invite.at < latest
+  );
+}
+
 async function assemble(
   input: AssembleInput
 ): Promise<{ all: Nomination[]; ignored: IgnoredRecord[] }> {
@@ -242,6 +289,33 @@ async function assemble(
     readBodies(input.nominationRows),
     readBodies(input.supportRows),
   ]);
+
+  const windowMs = windowBlocks * now.msPerBlock;
+  const decidedBy = new Map<string, DecidedInvite[]>();
+  const pendingBy = new Map<string, InviteSpan[]>();
+  for (const tx of input.invites) {
+    if (tx.type !== 'GROUP_INVITE') continue;
+    const subject = decisionSubject(tx);
+    if (!subject) continue;
+    if (tx.approvalStatus === 'PENDING') {
+      pendingBy.set(subject, [
+        ...(pendingBy.get(subject) ?? []),
+        { at: tx.timestamp, decidedAt: null },
+      ]);
+      continue;
+    }
+    const outcome = INVITE_OUTCOME[tx.approvalStatus ?? ''];
+    if (!outcome) continue;
+    decidedBy.set(subject, [
+      ...(decidedBy.get(subject) ?? []),
+      {
+        signature: tx.signature,
+        at: tx.timestamp,
+        decidedAt: decidedAt(tx, now.msPerBlock, decisions.group.maximumBlockDelay),
+        outcome,
+      },
+    ]);
+  }
 
   const nominationsBy = new Map<string, NominationEntry[]>();
   for (const item of nominationBodies) {
@@ -265,7 +339,18 @@ async function assemble(
       continue;
     }
     const list = nominationsBy.get(record.nomineeAddress) ?? [];
-    list.push({ publisher, record, publishedAt: rowTime(row), identifier: row.identifier });
+    const publishedAt = rowTime(row);
+    list.push({ publisher, record, publishedAt, identifier: row.identifier });
+    if (
+      publishedAgain(row.created, publishedAt, windowMs, decidedBy.get(record.nomineeAddress) ?? [])
+    )
+      list.push({
+        publisher,
+        record,
+        publishedAt: row.created,
+        identifier: row.identifier,
+        replaced: true,
+      });
     nominationsBy.set(record.nomineeAddress, list);
   }
 
@@ -295,7 +380,6 @@ async function assemble(
 
   let nominees = [...new Set<string>([...nominationsBy.keys(), ...pendingInvites.keys()])];
   if (input.only) nominees = nominees.filter((n) => n === input.only);
-  const windowMs = windowBlocks * now.msPerBlock;
   const all: Nomination[] = [];
   for (const nominee of nominees) {
     const facts = input.nomineeFacts(nominee);
@@ -355,6 +439,22 @@ async function assemble(
         (a, b) => a.publishedAt - b.publishedAt
       ),
       earlierRoundEnd: earlierEnd(nominationsBy.get(nominee) ?? [], first, windowMs),
+      earlierRounds: earlierRounds(
+        nominationsBy.get(nominee) ?? [],
+        decidedBy.get(nominee) ?? [],
+        [
+          ...(pendingBy.get(nominee) ?? []),
+          ...(decision ? [{ at: decision.createdAt, decidedAt: null }] : []),
+        ],
+        {
+          current: {
+            start: publishedAt,
+            invite: first && !round.fresh ? (decided?.signature ?? null) : null,
+          },
+          windowMs,
+          nowMs: now.timestamp,
+        }
+      ),
       hasJoinRequest: facts.hasJoinRequest,
       hasStoredInvite: facts.hasStoredInvite,
     });
@@ -395,7 +495,7 @@ export function loadNominations(options: { force?: boolean } = {}): Promise<Nomi
       // knows where the earlier round ended (Simon, 2026-11-17: QQQ Test's October round read
       // as lapsed). One typed search of MINTER's invites: a year is about 85, in 23 ms.
       const oldest = nominationRows.rows.reduce(
-        (min, row) => Math.min(min, rowTime(row)),
+        (min, row) => Math.min(min, row.created ?? rowTime(row)),
         now.timestamp
       );
       const recordBlocks = Math.ceil((now.timestamp - oldest) / now.msPerBlock);

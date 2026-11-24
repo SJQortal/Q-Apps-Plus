@@ -128,3 +128,82 @@ describe('the nominations read: where an earlier round ended', () => {
     expect(n?.earlierRoundEnd).toBeNull();
   });
 });
+
+// Simon, 2026-11-24: igorcoin nominated Stone Golem again under the same record, and the
+// comments of the nomination that lapsed came along as if they were the new one's.
+describe('the nominations read: a nominator who nominates someone again', () => {
+  const WINDOW = 10_080 * MS_PER_BLOCK;
+
+  /** The lapsed person's record, first published `createdDaysAgo` and again `updatedDaysAgo`. */
+  function publishedTwice(createdDaysAgo: number, updatedDaysAgo: number) {
+    const { world } = installWorld('learner');
+    const nominee = ADDR.lapsed;
+    const record = world.records.find(
+      (r: { identifier: string }) => r.identifier === `qmp-nomination-${nominee}`
+    );
+    if (!record) throw new Error('no record');
+    record.created = NOW - createdDaysAgo * DAY;
+    record.updated = NOW - updatedDaysAgo * DAY;
+    (record.body as { created: number }).created = NOW - updatedDaysAgo * DAY;
+    return { world, nominee };
+  }
+
+  it('after its wait ran out: the first publish is an earlier round, which lapsed', async () => {
+    const { nominee } = publishedTwice(20, 2);
+    const n = (await loadNominations()).all.find((x) => x.nominee === nominee);
+    expect(n?.state).toBe('waiting');
+    expect(n?.publishedAt).toBe(NOW - 2 * DAY);
+    expect(n?.earlierRounds).toEqual([
+      {
+        startedAt: NOW - 20 * DAY,
+        endedAt: NOW - 20 * DAY + WINDOW,
+        outcome: 'lapsed',
+        invite: null,
+      },
+    ]);
+    // Comments under their address count for this one from when that round stopped counting.
+    expect(n?.earlierRoundEnd).toBe(NOW - 20 * DAY + WINDOW);
+    expect(n?.records.map((r) => [r.publishedAt, Boolean(r.replaced)])).toEqual([
+      [NOW - 20 * DAY, true],
+      [NOW - 2 * DAY, false],
+    ]);
+  });
+
+  it('after an invite rejected it: the first publish is that invite’s round, credited to them', async () => {
+    const { world, nominee } = publishedTwice(8, 2);
+    const h = TIP - 7 * DAY_BLOCKS;
+    world.decided.push({
+      type: 'GROUP_INVITE',
+      timestamp: NOW - 7 * DAY,
+      reference: 'quick-reject-reference',
+      fee: '0.01000000',
+      signature: `quickRejectInviteSignature${'1'.repeat(70)}`.slice(0, 88),
+      txGroupId: 694,
+      blockHeight: h,
+      approvalStatus: 'REJECTED',
+      approvalHeight: h + DAY_BLOCKS,
+      creatorAddress: ADDR.admin,
+      adminPublicKey: world.accounts.get(ADDR.admin)?.publicKey,
+      groupId: 694,
+      invitee: nominee,
+      timeToLive: 864_000,
+    });
+    for (const data of [await loadNominations(), { all: await loadNominationsFor(nominee) }]) {
+      const n = data.all.find((x) => x.nominee === nominee);
+      expect(n?.state).toBe('waiting');
+      expect(n?.earlierRounds.map((r) => [r.outcome, r.startedAt, r.invite?.at])).toEqual([
+        ['rejected', NOW - 8 * DAY, NOW - 7 * DAY],
+      ]);
+      expect(n?.records.filter((r) => r.replaced).map((r) => r.publishedAt)).toEqual([
+        NOW - 8 * DAY,
+      ]);
+    }
+  });
+
+  it('not for a record published once, nor again within minutes', async () => {
+    const { nominee } = publishedTwice(3, 3 - 5 / (24 * 60));
+    const n = (await loadNominations()).all.find((x) => x.nominee === nominee);
+    expect(n?.earlierRounds).toEqual([]);
+    expect(n?.records.some((r) => r.replaced)).toBe(false);
+  });
+});

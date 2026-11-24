@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lapsedRounds, nominationAnswered, pickRound } from './nomination';
+import { earlierRounds, lapsedRounds, nominationAnswered, pickRound } from './nomination';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -163,5 +163,70 @@ describe('lapsedRounds: nominations no Minter Admin signed in time', () => {
 
   it('only rounds that began after the invites read begin', () => {
     expect(lapsedRounds([entry('igorcoin', 90 * DAY)], [], ctx)).toEqual([]);
+  });
+});
+
+// Simon, 2026-11-24: igorcoin nominated Stone Golem again, and the comments of the nomination
+// that lapsed came along. They stay, marked as from the previous nomination, with how it ended.
+describe('earlierRounds: a nominee’s rounds before the one shown', () => {
+  const NOW = 200 * DAY;
+  const ctx = (start: number, invite: string | null = null) => ({
+    current: { start, invite },
+    windowMs: WINDOW,
+    nowMs: NOW,
+  });
+
+  it('one that lapsed: its first record, until its wait ran out', () => {
+    const first = entry('igorcoin', NOW - 15 * DAY);
+    const again = entry('igorcoin', NOW - 1 * DAY);
+    expect(earlierRounds([first, again], [], [], ctx(again.publishedAt))).toEqual([
+      {
+        startedAt: first.publishedAt,
+        endedAt: first.publishedAt + WINDOW,
+        outcome: 'lapsed',
+        invite: null,
+      },
+    ]);
+  });
+
+  it('each invite decided before it, with how it ended and from the record it answered', () => {
+    const october = entry('Simon James', NOW - 40 * DAY);
+    const november = entry('igorcoin', NOW - 12 * DAY);
+    const decided = [
+      {
+        signature: 'oct',
+        at: NOW - 38 * DAY,
+        decidedAt: NOW - 35 * DAY,
+        outcome: 'rejected' as const,
+      },
+      {
+        signature: 'nov',
+        at: NOW - 10 * DAY,
+        decidedAt: NOW - 4 * DAY,
+        outcome: 'rejected' as const,
+      },
+    ];
+    // The November round is the one shown (rejected): only October's is earlier.
+    expect(
+      earlierRounds([october, november], decided, [], ctx(november.publishedAt, 'nov'))
+    ).toEqual([
+      {
+        startedAt: october.publishedAt,
+        endedAt: NOW - 35 * DAY,
+        outcome: 'rejected',
+        invite: { signature: 'oct', at: NOW - 38 * DAY },
+      },
+    ]);
+  });
+
+  it('a record still waiting when the shown round began is part of it, not earlier', () => {
+    const waiting = entry('Avery Admin', NOW - 9 * DAY);
+    const shown = entry('Nora Nominator', NOW - 3 * DAY);
+    expect(earlierRounds([waiting, shown], [], [], ctx(shown.publishedAt))).toEqual([]);
+  });
+
+  it('none for a first nomination', () => {
+    const only = entry('igorcoin', NOW - 2 * DAY);
+    expect(earlierRounds([only], [], [], ctx(only.publishedAt))).toEqual([]);
   });
 });

@@ -610,6 +610,7 @@ function NominateForm({ me, status }: { me: string; status: MyStatus }) {
               records: [],
               supportRecords: [],
               earlierRoundEnd: null,
+              earlierRounds: [],
               hasJoinRequest: Boolean(info?.hasJoinRequest),
               hasStoredInvite: false,
             },

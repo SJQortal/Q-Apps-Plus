@@ -31,6 +31,7 @@ function nom(partial: Partial<Nomination> & Pick<Nomination, 'nominee' | 'state'
     records: [],
     supportRecords: [],
     earlierRoundEnd: null,
+    earlierRounds: [],
     hasJoinRequest: false,
     hasStoredInvite: false,
     ...partial,

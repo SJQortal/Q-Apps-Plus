@@ -304,6 +304,81 @@ export function lapsedRounds<T extends { publishedAt: number }>(
   return lapsed;
 }
 
+/** How a nominee's earlier round ended. */
+export type EarlierOutcome = 'approved' | 'rejected' | 'expired' | 'lapsed';
+
+/**
+ * A nominee's round before the one shown (Simon, 2026-11-24: comments from
+ * a previous nomination stay with the new one, marked, with how it ended).
+ */
+export interface EarlierRound {
+  /** Its first record, or its invite without one (ms). */
+  startedAt: number;
+  /** Its invite's decision, or the end of its wait (ms). */
+  endedAt: number;
+  outcome: EarlierOutcome;
+  /** The invite that decided it (its comments' key); null for one that lapsed. */
+  invite: { signature: string; at: number } | null;
+}
+
+/** A decided MINTER invite of the nominee: when it was made and decided, and how. */
+export interface DecidedInvite {
+  signature: string;
+  at: number;
+  decidedAt: number;
+  outcome: Exclude<EarlierOutcome, 'lapsed'>;
+}
+
+/**
+ * The nominee's rounds before the shown one, oldest first: each invite
+ * decided before it (all but the shown round's own, `current.invite`), and
+ * the rounds of records before it that lapsed (lapsedRounds). A record less
+ * than a window before the shown round's first (`current.start`) still
+ * belongs to the shown round, as in lapsedRounds. `pending` are the
+ * nominee's invites still waiting, which no lapsed round may contain.
+ */
+export function earlierRounds<T extends { publishedAt: number }>(
+  records: readonly T[],
+  decided: readonly DecidedInvite[],
+  pending: readonly InviteSpan[],
+  ctx: { current: { start: number; invite: string | null }; windowMs: number; nowMs: number }
+): EarlierRound[] {
+  const rounds: EarlierRound[] = [];
+  for (const invite of decided) {
+    if (invite.signature === ctx.current.invite) continue;
+    const answered = nominationAnswered(records, invite.at, ctx.windowMs);
+    rounds.push({
+      startedAt: Math.min(answered?.publishedAt ?? invite.at, invite.at),
+      endedAt: invite.decidedAt,
+      outcome: invite.outcome,
+      invite: { signature: invite.signature, at: invite.at },
+    });
+  }
+  // Back from the shown round's first record, the records still waiting when the next came.
+  let start = ctx.current.start;
+  for (const record of [...records].sort((a, b) => b.publishedAt - a.publishedAt)) {
+    if (record.publishedAt >= start) continue;
+    if (start - record.publishedAt > ctx.windowMs) break;
+    start = record.publishedAt;
+  }
+  const spans: InviteSpan[] = [
+    ...decided.map((invite) => ({ at: invite.at, decidedAt: invite.decidedAt })),
+    ...pending,
+  ];
+  for (const round of lapsedRounds(
+    records.filter((record) => record.publishedAt < start),
+    spans,
+    { windowMs: ctx.windowMs, nowMs: ctx.nowMs, from: Number.NEGATIVE_INFINITY }
+  ))
+    rounds.push({
+      startedAt: round.records[0].publishedAt,
+      endedAt: round.endedAt,
+      outcome: 'lapsed',
+      invite: null,
+    });
+  return rounds.sort((a, b) => a.startedAt - b.startedAt || a.endedAt - b.endedAt);
+}
+
 /** When a waiting nomination drops off the open list (ms). */
 export function waitingEndsAt(
   publishedAt: number,
