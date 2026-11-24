@@ -19,6 +19,7 @@ import { Box, IconButton, Tooltip, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import GroupAddOutlinedIcon from '@mui/icons-material/GroupAddOutlined';
 import CheckCircleOutlineOutlinedIcon from '@mui/icons-material/CheckCircleOutlineOutlined';
+import RefreshOutlinedIcon from '@mui/icons-material/RefreshOutlined';
 import { MINTER_GROUP_ID } from '../../data/constants';
 import { getGroupsOf, type GroupOf } from '../../data/explorer/account';
 import { useQuery } from '../../hooks/useQuery';
@@ -40,6 +41,22 @@ export function JoinGroupButton({ group }: { group: GroupOf }) {
   );
   const [open, setOpen] = useState(false);
   if (!signer || group.groupId === MINTER_GROUP_ID) return null;
+  // Its groups couldn't be read: no Join while that isn't known, and a Retry (Hub's Explorer
+  // port, 2026-11-22: Join was simply missing).
+  if (!open && !mine.data && mine.isError) {
+    const words = 'Couldn’t check which groups you’re in: try again';
+    return (
+      <Tooltip title={words}>
+        <IconButton
+          aria-label={words}
+          onClick={() => void mine.refetch()}
+          sx={{ width: 44, height: 44, flexShrink: 0 }}
+        >
+          <RefreshOutlinedIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    );
+  }
   // The dialog stays while open, whatever the write and the reads after it change.
   const inGroup = Boolean(mine.data?.some((g) => g.groupId === group.groupId));
   if (!open && (!mine.data || inGroup)) return null;
@@ -49,46 +66,44 @@ export function JoinGroupButton({ group }: { group: GroupOf }) {
   const closed = group.isOpen === false;
   const label = closed ? `Ask to join ${name}` : `Join ${name}`;
 
-  let icon: React.ReactNode;
-  if (pending && pending.status !== 'failed') {
-    const sent = closed ? 'Join request sent' : 'Joined';
-    const words = pending.status === 'sending' ? 'Sending…' : `${sent} ✓ (confirming…): ${name}`;
-    icon = (
-      <Tooltip title={words}>
-        <Box
-          component="span"
-          role="status"
-          sx={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 44,
-            height: 44,
-            flexShrink: 0,
-            color: readable('success'),
-          }}
-        >
-          <CheckCircleOutlineOutlinedIcon aria-hidden fontSize="small" />
-          <Box component="span" sx={visuallyHidden}>
-            {words}
-          </Box>
+  // One button for Join and, once sent, sent: the same element, so focus comes back to it as
+  // the dialog closes (Hub's Explorer port, 2026-11-22: a status box in its place left the
+  // focus nowhere).
+  const sending = Boolean(pending && pending.status !== 'failed');
+  const sentWords = !pending
+    ? ''
+    : pending.status === 'sending'
+      ? 'Sending…'
+      : `${closed ? 'Join request sent' : 'Joined'} ✓ (confirming…): ${name}`;
+  const icon =
+    sending || !inGroup ? (
+      <>
+        <Tooltip title={sending ? sentWords : label}>
+          <IconButton
+            aria-label={sending ? sentWords : label}
+            aria-haspopup={sending ? undefined : 'dialog'}
+            aria-disabled={sending || undefined}
+            onClick={sending ? () => undefined : () => setOpen(true)}
+            sx={{
+              width: 44,
+              height: 44,
+              flexShrink: 0,
+              ...(sending ? { color: readable('success') } : {}),
+            }}
+          >
+            {sending ? (
+              <CheckCircleOutlineOutlinedIcon fontSize="small" />
+            ) : (
+              <GroupAddOutlinedIcon fontSize="small" />
+            )}
+          </IconButton>
+        </Tooltip>
+        {/* Read out as it changes: sending, then sent. */}
+        <Box component="span" role="status" sx={visuallyHidden}>
+          {sending ? sentWords : ''}
         </Box>
-      </Tooltip>
-    );
-  } else if (!inGroup) {
-    icon = (
-      <Tooltip title={label}>
-        <IconButton
-          aria-label={label}
-          aria-haspopup="dialog"
-          onClick={() => setOpen(true)}
-          sx={{ width: 44, height: 44, flexShrink: 0 }}
-        >
-          <GroupAddOutlinedIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
-    );
-  }
+      </>
+    ) : null;
 
   return (
     <>
