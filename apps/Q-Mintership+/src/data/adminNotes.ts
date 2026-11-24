@@ -40,6 +40,7 @@ import { decisionCommentKey } from './commentRecords';
 import { readCommentBody } from './comments';
 import {
   commentRowsFor,
+  searchKeys,
   decisionCommentTarget,
   nominationCommentTarget,
   targetId,
@@ -340,11 +341,11 @@ export function loadAdminCommentRows(
     `macomments:rows:${targetId(target)}`,
     async () => {
       const results = await Promise.all(
-        target.keys.map((span) =>
+        searchKeys(target).map((key) =>
           searchQdn(
             {
               service: ADMIN_NOTE_SERVICE,
-              identifier: adminCommentSearchPrefix(span.key),
+              identifier: adminCommentSearchPrefix(key),
               maxPages: KEY_PAGES,
             },
             { force: options.force }
@@ -371,11 +372,18 @@ export interface AdminThreadData {
   bodies: Map<string, CommentBody>;
   /** Comments here that weren't encrypted to the viewer (left out, and said). */
   locked: number;
+  /** Which ones, by ref. */
+  lockedRefs: ReadonlySet<string>;
   truncated: boolean;
 }
 
-export function adminThreadKey(viewer: string, target: CommentTarget, limit: number): string {
-  return `macomments:thread:${viewer}:${targetId(target)}:${limit}`;
+export function adminThreadKey(
+  viewer: string,
+  target: CommentTarget,
+  limit: number,
+  earlierLimit = 0
+): string {
+  return `macomments:thread:${viewer}:${targetId(target)}:${limit}${earlierLimit ? `:${earlierLimit}` : ''}`;
 }
 
 /** A decrypted Minter Admins' comment as the thread takes it. */
@@ -406,10 +414,11 @@ export function loadAdminThread(
   target: CommentTarget,
   publicRows: readonly CommentRow[],
   limit: number,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; earlierLimit?: number } = {}
 ): Promise<AdminThreadData> {
+  const earlierLimit = options.earlierLimit ?? 0;
   return fetchQuery(
-    adminThreadKey(viewer, target, limit),
+    adminThreadKey(viewer, target, limit, earlierLimit),
     async () => {
       const { rows, truncated } = await loadAdminCommentRows(target, { force: options.force });
       const bodies = new Map<string, CommentBody>();
@@ -426,7 +435,11 @@ export function loadAdminThread(
           const result = await quick(readCommentBody(row));
           bodies.set(row.ref, result.value ?? { status: 'unavailable', fetching: true });
         });
-      await readAdmin(rows.slice(0, limit));
+      // This round's newest, and the earlier rounds' once their fold is open.
+      await readAdmin([
+        ...rows.filter((row) => !row.earlier).slice(0, limit),
+        ...rows.filter((row) => row.earlier).slice(0, earlierLimit),
+      ]);
       for (let round = 0; round < 3; round++) {
         const wanted = new Set<string>();
         for (const body of bodies.values())
@@ -446,7 +459,7 @@ export function loadAdminThread(
         if (!admin.length && !open.length) break;
         await Promise.all([readAdmin(admin), readPublic(open)]);
       }
-      return { rows, bodies, locked: lockedRefs.size, truncated };
+      return { rows, bodies, locked: lockedRefs.size, lockedRefs, truncated };
     },
     { ttlMs: 60_000, force: options.force }
   );

@@ -63,7 +63,14 @@ export function CommentsSection({
   const count = useCommentCount(target, { nearScreen, open });
   const panelId = useId();
   const toggleRef = useRef<HTMLButtonElement>(null);
-  const text = count === null ? 'Comments' : `Comments (${formatCount(count)})`;
+  const text = count === null ? 'Comments' : `Comments (${formatCount(count.count)})`;
+  // Beside it, the ones from the nominee's earlier nominations (Simon, 2026-11-24: "just count
+  // the new comments, and next to the new count add another count of old comments too").
+  const earlier = count?.earlier ?? 0;
+  // What it shows, then what "earlier" means.
+  const spoken = earlier
+    ? `${text} · ${formatCount(earlier)} earlier, from ${earlier === 1 ? 'a previous nomination' : 'previous nominations'}`
+    : text;
   // From the thread's foot: the section's bottom (and all below it) stays put on
   // screen while the thread folds, by scrolling up as much as it shrinks, each
   // frame, until the fold is done; a frame the browser already kept it is left alone.
@@ -93,12 +100,17 @@ export function CommentsSection({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
-        aria-label={`${text}: ${label}`}
+        aria-label={`${spoken}: ${label}`}
         startIcon={<ChatBubbleOutlineOutlinedIcon />}
         endIcon={<ExpandChevron open={open} />}
         sx={{ minHeight: 44, ml: -1 }}
       >
         {text}
+        {earlier ? (
+          <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400, ml: 0.75 }}>
+            · {formatCount(earlier)} earlier
+          </Box>
+        ) : null}
       </Button>
       <SmoothReveal open={open}>
         <Suspense fallback={<ListSkeleton count={1} label="Loading comments" />}>

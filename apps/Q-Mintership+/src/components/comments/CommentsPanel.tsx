@@ -11,6 +11,13 @@
  * each new comment who can read it: everyone, or the Minter Admins only
  * (encrypted to them). A reply to one for the Minter Admins is one too; an
  * edit keeps its comment's kind. Nobody else reads or sees them.
+ *
+ * A nomination's comments from the nominee's earlier nominations stay, under
+ * "Comments from previous nominations" below this one's, folded until opened
+ * (only then are they read), each marked with its nomination (EarlierTag);
+ * they can be read there, not answered (Simon, 2026-11-24: "I want the old
+ * comments to stay … maybe the old comments can be expendable then for
+ * preview").
  */
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -25,6 +32,7 @@ import {
 } from '@mui/material';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { COMMENT_MAX, commentTextProblems, type CommentRecord } from '../../data/commentRecords';
 import { adminThreadKey, loadAdminThread, type AdminThreadData } from '../../data/adminNotes';
 import {
@@ -33,7 +41,12 @@ import {
   loadCommentThread,
   type CommentThreadData,
 } from '../../data/comments';
-import { buildThreads, type CommentTarget, type CommentView } from '../../data/commentThread';
+import {
+  buildThreads,
+  searchKeys,
+  type CommentTarget,
+  type CommentView,
+} from '../../data/commentThread';
 import { invalidate } from '../../data/query';
 import { useAdmins } from '../../hooks/useData';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -47,6 +60,7 @@ import { deleteAdminComment, editAdminComment, postAdminComment } from '../../wr
 import type { WriteStage } from '../../writes/runner';
 import { focusElement } from '../../utils/focus';
 import { ErrorState, ListSkeleton, TruncatedNote } from '../common/states';
+import { ExpandChevron } from '../common/ExpandChevron';
 import { NAMES_APP_LINK } from '../../constants/links';
 import {
   DeleteCommentDialog,
@@ -119,9 +133,12 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   const adminWriter = isAdmin && signer ? { ...signer, name: session.name } : null;
 
   const [limit, setLimit] = useState(COMMENTS_PAGE);
+  // The earlier nominations' comments read so far: none while their fold is closed.
+  const [earlierLimit, setEarlierLimit] = useState(0);
+  const earlierId = useId();
   const query = useQuery(
-    commentThreadKey(target, limit),
-    (force) => loadCommentThread(target, limit, { force }),
+    commentThreadKey(target, limit, earlierLimit),
+    (force) => loadCommentThread(target, limit, { force, earlierLimit }),
     { refreshMs: REFRESH_MS }
   );
   // "Show more" reads under a new key: keep the comments on screen meanwhile.
@@ -133,8 +150,9 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   // (a reply among them may answer one of those).
   const viewerAddress = signer?.address ?? '';
   const adminQuery = useQuery(
-    isAdmin && data ? adminThreadKey(viewerAddress, target, limit) : null,
-    (force) => loadAdminThread(viewerAddress, target, data?.rows ?? [], limit, { force }),
+    isAdmin && data ? adminThreadKey(viewerAddress, target, limit, earlierLimit) : null,
+    (force) =>
+      loadAdminThread(viewerAddress, target, data?.rows ?? [], limit, { force, earlierLimit }),
     { refreshMs: REFRESH_MS }
   );
   const [keptAdmin, setKeptAdmin] = useState<AdminThreadData | null>(null);
@@ -142,7 +160,7 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   const adminData = isAdmin ? (adminQuery.data ?? keptAdmin) : null;
 
   const { muted, setMuted } = useMutedNames();
-  const keys = useMemo(() => target.keys.map((k) => k.key), [target]);
+  const keys = useMemo(() => searchKeys(target), [target]);
   const optimistic = useOptimisticComments(keys);
   // Both kinds in one thread: the public bodies win for public comments.
   const merged = useMemo(() => {
@@ -153,22 +171,24 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
       bodies: new Map([...adminData.bodies, ...data.bodies]),
     };
   }, [data, adminData]);
-  const threads = useMemo(
-    () =>
-      merged && data
-        ? buildThreads({
-            rows: merged.rows,
-            bodies: merged.bodies,
-            hides: data.hides,
-            muted,
-            optimistic: isAdmin
-              ? optimistic.comments
-              : optimistic.comments.filter((o) => !o.adminOnly),
-            optimisticHides: optimistic.hides,
-          })
-        : null,
-    [merged, data, muted, optimistic, isAdmin]
-  );
+  // This round's threads, and the earlier nominations' apart (what this device just did to
+  // one of those stays with it; anything new is this round's).
+  const [threads, earlierThreads] = useMemo(() => {
+    if (!merged || !data) return [null, null];
+    const earlierRefs = new Set(merged.rows.filter((r) => r.earlier).map((r) => r.ref));
+    const mine = isAdmin ? optimistic.comments : optimistic.comments.filter((o) => !o.adminOnly);
+    const build = (earlier: boolean) =>
+      buildThreads({
+        rows: merged.rows.filter((r) => Boolean(r.earlier) === earlier),
+        bodies: merged.bodies,
+        hides: data.hides,
+        muted,
+        optimistic: mine.filter((o) => earlierRefs.has(o.ref) === earlier),
+        optimisticHides: optimistic.hides,
+      });
+    return [build(false), build(true)];
+  }, [merged, data, muted, optimistic, isAdmin]);
+  const earlierCount = merged ? merged.rows.filter((r) => r.earlier).length : 0;
   // Show more: once the next comments are in, focus goes to the first of them
   // (the button may have gone with the last page).
   // Opened from a comment's link (a reply alert, Home's replies): go to that comment once it shows.
@@ -176,6 +196,12 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   const reduced = useReducedMotion();
   const linked = commentOfState(location.state);
   const wentTo = useRef<string | null>(null);
+  // A link to an earlier nomination's comment opens their fold.
+  const linkedEarlier = Boolean(
+    linked && merged?.rows.some((r) => r.earlier && r.identifier === linked)
+  );
+  if (linkedEarlier && earlierLimit === 0 && wentTo.current !== linked)
+    setEarlierLimit(COMMENTS_PAGE);
   useEffect(() => {
     if (!linked || wentTo.current === linked || !threads) return;
     const target = [...document.querySelectorAll<HTMLElement>('[data-comment]')].find(
@@ -184,7 +210,7 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
     if (!target) return;
     wentTo.current = linked;
     goToComment(target, reduced);
-  }, [linked, threads, reduced]);
+  }, [linked, threads, earlierThreads, reduced]);
 
   const shownBefore = useRef<Set<string> | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
@@ -291,7 +317,9 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
       // A reply keeps its marker (data/replyMarkers.ts): one for the Minter Admins only when
       // it answers another one of theirs, as when it was posted.
       const parent = c.replyToRef
-        ? threads?.flatMap((t) => [t.comment, ...t.replies]).find((v) => v.ref === c.replyToRef)
+        ? [...(threads ?? []), ...(earlierThreads ?? [])]
+            .flatMap((t) => [t.comment, ...t.replies])
+            .find((v) => v.ref === c.replyToRef)
         : null;
       const ref = {
         name: c.name,
@@ -394,6 +422,21 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
       />
     ) : undefined;
 
+  // Listed, not read yet: this round's (`earlier` false) or the earlier nominations'.
+  const unreadOf = (earlier: boolean) => {
+    if (!data) return 0;
+    const locked = adminData?.lockedRefs;
+    const pick = (r: { earlier?: unknown }) => Boolean(r.earlier) === earlier;
+    return (
+      data.rows.filter((r) => pick(r) && !data.bodies.has(r.ref)).length +
+      (adminData
+        ? adminData.rows.filter(
+            (r) => pick(r) && !adminData.bodies.has(r.ref) && !locked?.has(r.ref)
+          ).length
+        : 0)
+    );
+  };
+
   let list;
   if (!data && query.isError) {
     list = (
@@ -409,20 +452,13 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
   } else if (!threads.length) {
     list = (
       <Typography variant="body2" color="text.secondary">
-        No comments yet.
+        {earlierCount ? 'No comments on this nomination yet.' : 'No comments yet.'}
       </Typography>
     );
   } else {
     const now = Date.now();
     const lockedCount = adminData?.locked ?? 0;
-    const unread =
-      data.rows.filter((r) => !data.bodies.has(r.ref)).length +
-      (adminData
-        ? Math.max(
-            0,
-            adminData.rows.filter((r) => !adminData.bodies.has(r.ref)).length - lockedCount
-          )
-        : 0);
+    const unread = unreadOf(false);
     list = (
       <>
         <Box
@@ -535,6 +571,89 @@ export default function CommentsPanel({ id, target, label, answers }: CommentsPa
         }
       />
       {list}
+      {data && threads && earlierCount ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+          <Box>
+            <Button
+              onClick={() => setEarlierLimit((n) => (n ? 0 : COMMENTS_PAGE))}
+              aria-expanded={earlierLimit > 0}
+              aria-controls={earlierLimit > 0 ? earlierId : undefined}
+              startIcon={<HistoryOutlinedIcon />}
+              endIcon={<ExpandChevron open={earlierLimit > 0} />}
+              sx={{ minHeight: 44, ml: -1, textAlign: 'left' }}
+            >
+              Comments from previous nominations ({formatCount(earlierCount)})
+            </Button>
+          </Box>
+          {earlierLimit > 0 ? (
+            <Box
+              id={earlierId}
+              role="region"
+              aria-label={`Comments from previous nominations: ${label}`}
+              sx={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                Written on earlier nominations of the same person, each marked with which one. They
+                can be read here, not answered.
+              </Typography>
+              {data.earlierLimit < earlierLimit && !earlierThreads?.length ? (
+                <ListSkeleton count={2} label="Loading the earlier comments" />
+              ) : (
+                <Box
+                  component="ul"
+                  aria-label={`Comments from previous nominations, newest first`}
+                  sx={{
+                    listStyle: 'none',
+                    m: 0,
+                    p: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1,
+                  }}
+                >
+                  {(earlierThreads ?? []).map((t) => (
+                    <CommentItem
+                      key={t.comment.ref}
+                      comment={t.comment}
+                      viewer={viewer}
+                      now={Date.now()}
+                      editor={editorFor(t.comment)}
+                      {...itemHandlers}
+                    >
+                      {t.replies.length ? (
+                        <CommentReplies name={t.comment.name}>
+                          {t.replies.map((r) => (
+                            <CommentItem
+                              key={r.ref}
+                              comment={r}
+                              viewer={viewer}
+                              now={Date.now()}
+                              isReply
+                              editor={editorFor(r)}
+                              {...itemHandlers}
+                            />
+                          ))}
+                        </CommentReplies>
+                      ) : null}
+                    </CommentItem>
+                  ))}
+                </Box>
+              )}
+              {unreadOf(true) > 0 && data.earlierLimit >= earlierLimit ? (
+                <Box>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setEarlierLimit((n) => n + COMMENTS_PAGE)}
+                    sx={{ minHeight: 44 }}
+                  >
+                    Show more earlier comments ({formatCount(unreadOf(true))})
+                  </Button>
+                </Box>
+              ) : null}
+            </Box>
+          ) : null}
+        </Box>
+      ) : null}
       <Box role="status" aria-live="polite" className="qmp-visually-hidden">
         {said}
       </Box>

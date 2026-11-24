@@ -11,12 +11,14 @@ import {
   missingParents,
   nominationCommentTarget,
   resolveHides,
+  searchKeys,
   targetId,
   targetSince,
   type CommentBody,
   type CommentRow,
   type NominationForComments,
 } from './commentThread';
+import type { EarlierRound } from '../rules/nomination';
 import type { QdnRow } from './types';
 
 const DAY = 86_400_000;
@@ -193,6 +195,70 @@ describe('commentRowsFor', () => {
       qdnRow('Bob', ident(DKEY, 'same11'), NOW - 5),
     ]);
     expect(rows).toHaveLength(2);
+  });
+});
+
+// Simon, 2026-11-24: igorcoin nominated Stone Golem again, and the comments of the nomination
+// that lapsed showed as the new one's. They stay, each marked with the round it was written in.
+describe('comments from the nominee’s earlier nominations', () => {
+  const lapsed: EarlierRound = {
+    startedAt: NOW - 40 * DAY,
+    endedAt: NOW - 33 * DAY,
+    outcome: 'lapsed',
+    invite: null,
+  };
+  const rejected: EarlierRound = {
+    startedAt: NOW - 20 * DAY,
+    endedAt: NOW - 15 * DAY,
+    outcome: 'rejected',
+    invite: { signature: OLD_SIG, at: NOW - 19 * DAY },
+  };
+  const OLD_KEY = decisionCommentKey(OLD_SIG);
+  const target = nominationCommentTarget(
+    nomination({
+      latestInvite: { signature: OLD_SIG, timestamp: NOW - 19 * DAY },
+      earlierRoundEnd: NOW - 33 * DAY,
+      earlierRounds: [lapsed, rejected],
+    })
+  );
+
+  it('the target reads their keys too, each once, and from the first round’s start', () => {
+    expect(target.keys).toEqual([{ key: NOMINEE, since: NOW - 19 * DAY }]);
+    expect(searchKeys(target)).toEqual([NOMINEE, OLD_KEY]);
+    expect(targetSince(target)).toBe(NOW - 40 * DAY - ROUND_SLACK_MS);
+    // Its store keys change with its earlier rounds.
+    const without = nominationCommentTarget(
+      nomination({ latestInvite: { signature: OLD_SIG, timestamp: NOW - 19 * DAY } })
+    );
+    expect(targetId(target)).not.toBe(targetId(without));
+  });
+
+  it('marks each earlier comment with its round: under the address by time, under an invite by key', () => {
+    const rows = commentRowsFor(target, [
+      qdnRow('Now', ident(NOMINEE, 'nnnnnn'), NOW - DAY),
+      qdnRow('Signing', ident(OLD_KEY, 'ssssss'), NOW - 18 * DAY),
+      qdnRow('Before', ident(NOMINEE, 'bbbbbb'), NOW - 19.5 * DAY),
+      qdnRow('Lapsed', ident(NOMINEE, 'llllll'), NOW - 38 * DAY),
+      // Before any round they know of: none of theirs.
+      qdnRow('Older', ident(NOMINEE, 'oooooo'), NOW - 50 * DAY),
+    ]);
+    expect(rows.map((r) => [r.name, r.earlier?.outcome ?? null])).toEqual([
+      ['Now', null],
+      ['Signing', 'rejected'],
+      ['Before', 'rejected'],
+      ['Lapsed', 'lapsed'],
+    ]);
+  });
+
+  it('a decision’s target for an invite takes its nomination’s earlier rounds', () => {
+    const d = { signature: SIG, kind: 'invite' as const, subject: NOMINEE, createdAt: NOW - DAY };
+    const withRounds = decisionCommentTarget(d, nomination({ earlierRounds: [lapsed] }));
+    expect(withRounds.earlier).toEqual({ nominee: NOMINEE, rounds: [lapsed] });
+    expect(decisionCommentTarget(d, nomination()).earlier).toBeUndefined();
+  });
+
+  it('none for a first nomination', () => {
+    expect(nominationCommentTarget(nomination({ earlierRounds: [] })).earlier).toBeUndefined();
   });
 });
 

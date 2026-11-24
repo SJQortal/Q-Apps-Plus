@@ -7,10 +7,14 @@
  * - which Minter Admin hides count (the newest valid one per comment);
  * - the threads a viewer sees: newest first, replies one level deep (oldest
  *   first), deleted comments as "Deleted" in their place, hidden and muted
- *   ones collapsed, and the viewer's own just-published ones straight away.
+ *   ones collapsed, and the viewer's own just-published ones straight away;
+ * - a nomination's comments from the nominee's earlier nominations, each
+ *   with the round it was written in (Simon, 2026-11-24: "I want the old
+ *   comments to stay … with the note next to the old comments, that the
+ *   comment is from previous nomination").
  */
 import type { Decision } from '../rules/decision';
-import type { NominationState } from '../rules/nomination';
+import type { EarlierRound, NominationState } from '../rules/nomination';
 import {
   commentRef,
   decisionCommentKey,
@@ -40,11 +44,51 @@ export interface CommentKeySpan {
   since: number | null;
 }
 
+/** A nominee's earlier nominations, whose comments a nomination keeps (folded, marked). */
+export interface EarlierComments {
+  /** Their address: its comments from before this nomination's span are from those. */
+  nominee: string;
+  /** Oldest first (data/nominations.ts → Nomination.earlierRounds). */
+  rounds: EarlierRound[];
+}
+
 export interface CommentTarget {
   /** Where new comments go. */
   postKey: string;
   /** Every key whose comments belong here. */
   keys: CommentKeySpan[];
+  /** A nomination's earlier rounds: their comments are listed too, each marked with its round. */
+  earlier?: EarlierComments;
+}
+
+/**
+ * Where an earlier round's comments are: under the nominee's address from
+ * the first round's start, and under each decided round's invite.
+ */
+export function earlierSpans(target: CommentTarget): CommentKeySpan[] {
+  const earlier = target.earlier;
+  if (!earlier?.rounds.length) return [];
+  return [
+    {
+      key: nominationCommentKey(earlier.nominee),
+      since: earlier.rounds[0].startedAt - ROUND_SLACK_MS,
+    },
+    ...earlier.rounds.flatMap((round) =>
+      round.invite
+        ? [
+            {
+              key: decisionCommentKey(round.invite.signature),
+              since: round.invite.at - ROUND_SLACK_MS,
+            },
+          ]
+        : []
+    ),
+  ];
+}
+
+/** Every key to search for the target's comments, this round's and earlier ones', each once. */
+export function searchKeys(target: CommentTarget): string[] {
+  return [...new Set([...target.keys, ...earlierSpans(target)].map((span) => span.key))];
 }
 
 /** A target from a key kind and a decision's signature or a nominee's address. */
@@ -59,7 +103,11 @@ export function commentTarget(
 
 /** One stable string per target (store keys). */
 export function targetId(target: CommentTarget): string {
-  return target.keys.map((k) => `${k.key}@${k.since ?? ''}`).join('+');
+  const own = target.keys.map((k) => `${k.key}@${k.since ?? ''}`).join('+');
+  const earlier = target.earlier?.rounds.length
+    ? `~${target.earlier.rounds.map((r) => `${r.startedAt}/${r.endedAt}/${r.outcome}`).join(',')}`
+    : '';
+  return own + earlier;
 }
 
 /** What a nomination needs here (data/nominations.ts → Nomination). */
@@ -72,6 +120,15 @@ export interface NominationForComments {
   latestInvite: Pick<TxRow, 'signature' | 'timestamp'> | null;
   /** When an earlier round's records stopped counting (data/nominations.ts). */
   earlierRoundEnd?: number | null;
+  /** The nominee's rounds before this one (data/nominations.ts): their comments stay, marked. */
+  earlierRounds?: EarlierRound[];
+}
+
+/** The nomination's earlier rounds as a target's `earlier`, when it has any. */
+function earlierOf(n: NominationForComments): Pick<CommentTarget, 'earlier'> {
+  return n.earlierRounds?.length
+    ? { earlier: { nominee: n.nominee, rounds: n.earlierRounds } }
+    : {};
 }
 
 const DECIDED: ReadonlySet<NominationState> = new Set([
@@ -115,12 +172,12 @@ export function nominationCommentTarget(n: NominationForComments): CommentTarget
       : null;
   if (!invite) {
     const span = addressSpan(n, null);
-    return { postKey: span.key, keys: [span] };
+    return { postKey: span.key, keys: [span], ...earlierOf(n) };
   }
   const key = decisionCommentKey(invite.signature);
   const keys: CommentKeySpan[] = [{ key, since: invite.timestamp - ROUND_SLACK_MS }];
   if (hasRecord) keys.push(addressSpan(n, invite));
-  return { postKey: key, keys };
+  return { postKey: key, keys, ...earlierOf(n) };
 }
 
 /** A decision's comments; an invite's include its nomination's from before the first signature. */
@@ -133,13 +190,14 @@ export function decisionCommentTarget(
   if (d.kind === 'invite' && nomination?.nomination && nomination.nominee === d.subject) {
     keys.push(addressSpan(nomination, { timestamp: d.createdAt }));
   }
-  return { postKey: key, keys };
+  const mine = d.kind === 'invite' && nomination && nomination.nominee === d.subject;
+  return { postKey: key, keys, ...(mine ? earlierOf(nomination) : {}) };
 }
 
-/** The earliest time any of the target's comments can have (null: any time). */
+/** The earliest time any of the target's comments can have, earlier rounds' too (null: any time). */
 export function targetSince(target: CommentTarget): number | null {
   let earliest = Number.POSITIVE_INFINITY;
-  for (const span of target.keys) {
+  for (const span of [...target.keys, ...earlierSpans(target)]) {
     if (span.since === null) return null;
     earliest = Math.min(earliest, span.since);
   }
@@ -159,11 +217,34 @@ export interface CommentRow {
   version: string | number;
   /** A comment for the Minter Admins only, encrypted to them (data/adminNoteRecords.ts). */
   adminOnly?: true;
+  /** From the nominee's earlier nomination: the round it was written in. */
+  earlier?: EarlierRound;
+}
+
+/**
+ * Which earlier round a comment under `key` posted at `postedAt` belongs to,
+ * or null when it is none of them: under a decided round's invite, that
+ * round; under the nominee's address, the last round begun before it.
+ */
+function earlierRoundOf(target: CommentTarget, key: string, postedAt: number): EarlierRound | null {
+  const earlier = target.earlier;
+  if (!earlier?.rounds.length) return null;
+  const rounds = earlier.rounds;
+  for (const round of rounds)
+    if (round.invite && decisionCommentKey(round.invite.signature) === key)
+      return postedAt >= round.invite.at - ROUND_SLACK_MS ? round : null;
+  if (key !== nominationCommentKey(earlier.nominee)) return null;
+  if (postedAt < rounds[0].startedAt - ROUND_SLACK_MS) return null;
+  let found = rounds[0];
+  for (const round of rounds) if (round.startedAt - ROUND_SLACK_MS <= postedAt) found = round;
+  return found;
 }
 
 /**
  * The search rows that are this target's comments, each once, newest first:
  * public ones, or with `adminOnly` the Minter Admins' own (`qmp-macomment-`).
+ * Those from the nominee's earlier nominations (`target.earlier`) carry
+ * their round in `earlier`.
  */
 export function commentRowsFor(
   target: CommentTarget,
@@ -175,9 +256,11 @@ export function commentRowsFor(
   const parse = options.adminOnly ? parseAdminCommentIdentifier : parseCommentIdentifier;
   for (const row of rows) {
     const parsed = parse(row.identifier);
-    const span = parsed ? spans.get(parsed.key) : undefined;
-    if (!parsed || !span || typeof row.name !== 'string' || !row.name) continue;
-    if (span.since !== null && row.created < span.since) continue;
+    if (!parsed || typeof row.name !== 'string' || !row.name) continue;
+    const span = spans.get(parsed.key);
+    const current = Boolean(span && (span.since === null || row.created >= span.since));
+    const earlier = current ? null : earlierRoundOf(target, parsed.key, row.created);
+    if (!current && !earlier) continue;
     const updatedAt = row.updated ?? row.created;
     const ref = commentRef(row.name, row.identifier);
     const existing = byRef.get(ref);
@@ -191,6 +274,7 @@ export function commentRowsFor(
       updatedAt,
       version: row.latestSignature ?? updatedAt,
       ...(options.adminOnly ? { adminOnly: true as const } : {}),
+      ...(earlier ? { earlier } : {}),
     });
   }
   return [...byRef.values()].sort(
@@ -300,6 +384,8 @@ export interface CommentView {
   from?: string;
   /** For the Minter Admins only, encrypted to them: marked as such, never hidden for everyone. */
   adminOnly?: true;
+  /** From the nominee's earlier nomination: the round it was written in. */
+  earlier?: EarlierRound;
 }
 
 export interface CommentThread {
@@ -345,7 +431,10 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
   const pending = new Map((input.optimistic ?? []).map((o) => [o.ref, o]));
   const views: CommentView[] = [];
   const view = (
-    base: Pick<CommentView, 'ref' | 'name' | 'identifier' | 'key' | 'postedAt' | 'adminOnly'>,
+    base: Pick<
+      CommentView,
+      'ref' | 'name' | 'identifier' | 'key' | 'postedAt' | 'adminOnly' | 'earlier'
+    >,
     record: CommentRecord | null,
     extra: { editedAt: number | null; pending: boolean; fetching?: boolean; from?: string }
   ): CommentView => ({
@@ -365,6 +454,7 @@ export function buildThreads(input: BuildThreadsInput): CommentThread[] {
     pending: extra.pending,
     ...(extra.from && !extra.pending ? { from: extra.from } : {}),
     ...(base.adminOnly ? { adminOnly: true as const } : {}),
+    ...(base.earlier ? { earlier: base.earlier } : {}),
   });
 
   const listed = new Set<string>();
