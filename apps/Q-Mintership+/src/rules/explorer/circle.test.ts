@@ -37,6 +37,31 @@ const finding = (kind: Finding['kind'], other: string | null, txs: TxRow[]): Fin
   }) as Finding;
 
 describe('circleNodes', () => {
+  // Hub's Explorer port (2026-11-22): a running reward share is both "its sponsor" and "minting
+  // with it now", and was counted twice; a trade was counted once each way.
+  it('counts each transaction once on a node, as its dialog lists them', () => {
+    const share = tx(1, 50);
+    const shared = circleNodes([
+      finding('sponsor', 'QS', share),
+      finding('mintingWith', 'QS', share),
+    ]);
+    expect(shared.other.map((n) => [n.key, n.count])).toEqual([['other:QS', 1]]);
+    const trade = {
+      ...finding('traded', 'QT', tx(1, 70)),
+      trade: {
+        got: { count: 1, qort: 0n, assets: [] },
+        gave: { count: 1, qort: 0n, assets: [] },
+      },
+    } as Finding;
+    const groups = circleNodes([
+      finding('paidBy', 'QT', tx(2, 60)),
+      finding('paidTo', 'QT', tx(2, 65)),
+      trade,
+    ]);
+    expect(groups.both.map((n) => n.count)).toEqual([5]);
+    expect(nodeTransactions(groups.both[0])).toHaveLength(5);
+  });
+
   it('puts payments in on one side, payments out on the other, and every other link apart', () => {
     const groups = circleNodes([
       finding('paidBy', 'QA', tx(3)),

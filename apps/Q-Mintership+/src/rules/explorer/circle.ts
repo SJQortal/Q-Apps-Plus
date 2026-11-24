@@ -152,6 +152,16 @@ export function circleNodes(
   order: CircleOrder = 'count'
 ): CircleGroups {
   const nodes = new Map<string, CircleNode>();
+  // Each node's transactions, each once (Hub's Explorer port, 2026-11-22: a reward share behind
+  // two findings, or a trade drawn both ways, counted twice): its count is what its dialog lists.
+  const sigs = new Map<string, Set<string>>();
+  const note = (key: string, finding: Finding) => {
+    const set = sigs.get(key) ?? new Set<string>();
+    for (const tx of finding.evidence) set.add(tx.signature);
+    // A finding with no transaction of its own still counts once.
+    if (!finding.evidence.length) set.add(`finding:${finding.key}`);
+    sigs.set(key, set);
+  };
   for (const finding of findings) {
     if (!finding.other) continue;
     if (finding.trade) {
@@ -171,7 +181,7 @@ export function circleNodes(
           qort: 0n,
           assets: [],
         };
-        node.count += way.count;
+        note(key, finding);
         node.qort += way.qort;
         node.assets = addAssets(node.assets, way.assets);
         if (side === 'in') node.findings.push(finding);
@@ -190,12 +200,13 @@ export function circleNodes(
       qort: 0n,
       assets: [],
     };
-    node.count += Math.max(1, finding.evidence.length);
+    note(key, finding);
     node.qort += finding.qort ?? 0n;
     node.assets = addAssets(node.assets, finding.assets ?? []);
     node.findings.push(finding);
     nodes.set(key, node);
   }
+  for (const [key, node] of nodes) node.count = sigs.get(key)?.size ?? 1;
   // Paid both ways: one node, with each way's part.
   for (const [key, received] of nodes) {
     if (received.side !== 'in') continue;
@@ -207,7 +218,8 @@ export function circleNodes(
       key: `both:${received.address}`,
       address: received.address,
       side: 'both',
-      count: received.count + sent.count,
+      // A trade is on both ways: once here.
+      count: new Set([...(sigs.get(key) ?? []), ...(sigs.get(sent.key) ?? [])]).size,
       findings: [...received.findings, ...sent.findings],
       qort: received.qort + sent.qort,
       assets: addAssets(received.assets, sent.assets),
