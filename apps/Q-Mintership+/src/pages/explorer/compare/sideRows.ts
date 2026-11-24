@@ -120,8 +120,11 @@ function firstQortCell(f: SideFacts): SideCell | undefined {
   const from = funding.from;
   switch (funding.kind) {
     case 'payment':
-    case 'multiPayment':
       return from ? { key: from, account: from } : plain('A payment');
+    case 'multiPayment':
+      return from
+        ? { key: `multi:${from}`, account: from, before: 'A multi-payment from ' }
+        : plain('A multi-payment');
     case 'transferAsset':
       return from
         ? { key: `asset:${from}`, account: from, before: 'An asset transfer from ' }

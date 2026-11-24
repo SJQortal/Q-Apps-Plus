@@ -114,8 +114,7 @@ const paymentInBlock: QuizTemplate = {
 /** The account its first QORT payment came from, as Connections → In common says. */
 async function firstPayer(address: string): Promise<string | null> {
   const funding = (await getFirstSeen(address)).funding;
-  if (!funding?.from || (funding.kind !== 'payment' && funding.kind !== 'multiPayment'))
-    return null;
+  if (!funding?.from || funding.kind !== 'payment') return null;
   return isPersonal(funding.from) ? funding.from : null;
 }
 

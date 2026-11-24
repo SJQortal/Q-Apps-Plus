@@ -89,10 +89,10 @@ export function cappedNothingLine(line: string | null): string | null {
 export function fundingTag(funding: Pick<Funding, 'kind'>): string | null {
   switch (funding.kind) {
     case 'payment':
-    case 'multiPayment':
       return 'its first QORT came from them';
     case 'transferPrivs':
       return 'its minting level came from them';
+    case 'multiPayment':
     case 'rewardShare':
     case 'transferAsset':
       return 'its first incoming transaction came from them';

@@ -685,7 +685,7 @@ export function sameFirstPayers(sides: readonly CompareSide[]): SameFirstPayer[]
   const byPayer = new Map<string, SameFirstPayer['accounts']>();
   for (const side of sides) {
     const funding = side.first?.funding;
-    if (!funding?.from || (funding.kind !== 'payment' && funding.kind !== 'multiPayment')) continue;
+    if (!funding?.from || funding.kind !== 'payment') continue;
     byPayer.set(funding.from, [
       ...(byPayer.get(funding.from) ?? []),
       {
@@ -1087,8 +1087,11 @@ export interface TimelineSide {
 function fundingEventParts(funding: NonNullable<FirstSeen['funding']>): TxPart[] {
   const from = funding.from;
   switch (funding.kind) {
-    case 'payment':
     case 'multiPayment':
+      return from
+        ? [text('first incoming transaction: a multi-payment from '), account(from)]
+        : [text('first incoming transaction: a multi-payment')];
+    case 'payment':
       return from
         ? [
             text('first QORT payment from '),
