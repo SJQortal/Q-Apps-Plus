@@ -67,6 +67,8 @@ export interface AccountTxList {
   done: boolean;
   /** When the newest page was last read (ms). */
   checkedAt: number;
+  /** How many rows it held when one row more was asked for (probeAccountTxEnd). */
+  probedAt?: number;
 }
 
 /** The types part of a key: sorted and joined, or `all` for no type filter. */
@@ -160,6 +162,7 @@ export function mergeNewest(previous: AccountTxList, page: TxRow[]): AccountTxLi
     nextOffset: previous.nextOffset + fresh.length,
     done: previous.done,
     checkedAt: Date.now(),
+    ...(previous.probedAt !== undefined ? { probedAt: previous.probedAt } : {}),
   };
 }
 
@@ -169,11 +172,14 @@ export function mergeOlder(
   page: TxRow[],
   limit = ACCOUNT_TX_PAGE
 ): AccountTxList {
+  // A read of one row is probeAccountTxEnd's: where it asked is kept.
+  const probedAt = limit === 1 ? previous.rows.length : previous.probedAt;
   return {
     rows: unique([...previous.rows, ...page]),
     nextOffset: previous.nextOffset + page.length,
     done: page.length < limit,
     checkedAt: previous.checkedAt,
+    ...(probedAt !== undefined ? { probedAt } : {}),
   };
 }
 
@@ -332,6 +338,24 @@ export function getAccountTx(
       () => undefined
     );
   return read;
+}
+
+/**
+ * Whether the All list ends where it stopped: one more row past what it
+ * holds (a page of 1), which marks it done when there is none. For a view
+ * about to say older ones exist ("1,000+", "older ones aren't read yet")
+ * when the list stopped at a full page: an account with exactly that many
+ * has none (Hub's Explorer port, 2026-11-22). Once per stop (until a read
+ * grows the list); null when there is nothing to probe. A row found joins
+ * the list.
+ */
+export function probeAccountTxEnd(address: string): Promise<AccountTxList> | null {
+  const key = accountTxKey(address, []);
+  const list = peekQuery<AccountTxList>(key);
+  if (!list || list.done) return null;
+  // Once per stop: a probe that found a row grew the list by that one.
+  if (list.probedAt !== undefined && list.rows.length - list.probedAt <= 1) return null;
+  return getAccountTx(address, [], { older: true, pageSize: 1 });
 }
 
 /** `xunconf:<publicKey>`: the store key of what an account sent that waits for a block. */

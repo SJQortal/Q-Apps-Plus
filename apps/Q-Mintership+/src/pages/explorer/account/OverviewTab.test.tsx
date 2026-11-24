@@ -571,6 +571,39 @@ describe('QORT summaries', () => {
     expect(pages.some((p) => p.get('limit') === '1000')).toBe(true);
   });
 
+  // Hub's Explorer port (2026-11-22): a list that stopped at a full page said older ones exist
+  // ("Read the rest", "1,000+", the hatched part) for an account with exactly that many.
+  it('an account with exactly as many as the first read has nothing older to read', async () => {
+    getDefaultStore().set(activityFirstReadAtom, 100);
+    await visit(ADDR.admin, (world) => {
+      const rows = answerCore(
+        world,
+        '/transactions/search',
+        new URLSearchParams({
+          address: ADDR.admin,
+          confirmationStatus: 'CONFIRMED',
+          limit: '20000',
+        })
+      )?.body as unknown[];
+      expect(rows.length).toBeLessThan(100);
+      addPaymentsTo(world, ADDR.admin, 100 - rows.length);
+      mintedComesTo(ADDR.admin, 50n)(world);
+    });
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('50 QORT'), SLOW);
+    expect(screen.queryByRole('button', { name: 'Read the rest' })).toBeNull();
+    expect(
+      await screen.findByText(/^All 100 transactions, back to its first on /, {}, SLOW)
+    ).toBeInTheDocument();
+    // One row past the first read proved it, once.
+    const probes = fetchCallsFor('/transactions/search')
+      .map((url) => new URL(url, 'http://x').searchParams)
+      .filter(
+        (p) => p.get('address') === ADDR.admin && !p.get('txType') && p.get('offset') === '100'
+      );
+    expect(probes.map((p) => p.get('limit'))).toEqual(['1']);
+  });
+
   // Hub's Explorer port (2026-11-22): moving a minting level away (TRANSFER_PRIVS) sets the
   // sender's blocks minted to 0, and it read as "Never minted" though it minted.
   it('works out QORT minted for an account whose minting level moved away, not "Never minted"', async () => {

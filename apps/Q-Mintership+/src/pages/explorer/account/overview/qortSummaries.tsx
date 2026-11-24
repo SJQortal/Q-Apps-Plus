@@ -29,7 +29,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useAtomValue } from 'jotai';
 import { InOut } from './qortParts';
 import { ErrorState } from '../../../../components/common/states';
-import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
+import { accountTxKey, getAccountTx, probeAccountTxEnd } from '../../../../data/explorer/accountTx';
 import { HeavyCancelled } from '../../../../data/explorer/heavy';
 import {
   getEverRewardShare,
@@ -149,11 +149,16 @@ export function useQortSummaries(
   // Reads on by itself up to Activity's first read; all of it once asked.
   useEffect(() => {
     if (!enabled || !data || done || busy.current || reading || failed) return;
-    if (!wantAll && held >= firstRead) return;
+    const pageSize = wantAll ? REST_PAGE : Math.max(100, Math.min(REST_PAGE, firstRead - held));
+    // At the first read: one row more says whether "Read the rest" has anything to read.
+    const next =
+      !wantAll && held >= firstRead
+        ? probeAccountTxEnd(address)
+        : getAccountTx(address, [], { older: true, pageSize });
+    if (!next) return;
     busy.current = true;
     setReading(true);
-    const pageSize = wantAll ? REST_PAGE : Math.max(100, Math.min(REST_PAGE, firstRead - held));
-    getAccountTx(address, [], { older: true, pageSize })
+    next
       .catch((error: unknown) => {
         if (!(error instanceof HeavyCancelled)) setFailed(error);
       })

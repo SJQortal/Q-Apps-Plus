@@ -10,7 +10,7 @@
  * them is read for anyone else). Each fact loads, fails and retries on its
  * own; none polls.
  */
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Box, Skeleton, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import { ProgressBar } from '../../../../components/common/ProgressRing';
@@ -18,7 +18,7 @@ import { Card, Section } from '../../../../components/common/Section';
 import { ErrorState } from '../../../../components/common/states';
 import { getBalance } from '../../../../data/accounts';
 import { getGroupsOf, type FirstSeen } from '../../../../data/explorer/account';
-import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
+import { accountTxKey, getAccountTx, probeAccountTxEnd } from '../../../../data/explorer/accountTx';
 import { familyOf } from '../../../../rules/explorer/txFamilies';
 import type { AccountInfo } from '../../../../data/types';
 import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
@@ -247,6 +247,11 @@ function GroupsFact({ address }: { address: string }) {
  */
 function QdnFact({ address, full }: { address: string; full: boolean }) {
   const list = useQuery(accountTxKey(address, []), (force) => getAccountTx(address, [], { force }));
+  // Without Activity (which does it for the rest), one row more says whether "100+" is so.
+  const stopped = Boolean(list.data && !list.data.done);
+  useEffect(() => {
+    if (!full && stopped) void probeAccountTxEnd(address)?.catch(() => undefined);
+  }, [full, stopped, address]);
   // Simon, 2026-10-17: it "should just say "Transactions"".
   const label = 'Transactions';
   if (list.isError && !list.data)
