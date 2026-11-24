@@ -74,7 +74,7 @@ export function exploreAccount(
 export interface NamesOf {
   /** Every name the account owns, in Core's order (when each was first registered). */
   names: string[];
-  /** True when 5 pages (500 names) were read and Core had more. */
+  /** True when 5 pages (500 names) were read and Core has more (one more row read proves it). */
   truncated: boolean;
 }
 
@@ -96,7 +96,11 @@ export function getNamesOf(address: string, options: { force?: boolean } = {}): 
         names.push(...chunk);
         if (chunk.length < 100) return { names, truncated: false };
       }
-      return { names, truncated: true };
+      // Exactly 500 has none past it: one more row says whether "500+" is so.
+      const more = await getJson<unknown[]>(
+        `/names/address/${seg(address)}?${query({ limit: 1, offset: NAME_PAGES * 100 })}`
+      );
+      return { names, truncated: Array.isArray(more) && more.length > 0 };
     },
     { ttlMs: 10 * 60_000, force: options.force }
   );

@@ -56,12 +56,13 @@ export function getPairPayments(
           senderAddress: sender,
           recipientAddress: recipient,
           confirmationStatus: 'CONFIRMED',
-          limit: PAIR_LIMIT,
+          // One more than it keeps: "older ones not read" only when there is one.
+          limit: PAIR_LIMIT + 1,
           reverse: true,
         })}`
       );
       const list = Array.isArray(rows) ? rows : [];
-      return { rows: list, capped: list.length >= PAIR_LIMIT };
+      return { rows: list.slice(0, PAIR_LIMIT), capped: list.length > PAIR_LIMIT };
     },
     { ttlMs: 10 * 60_000, force: options.force }
   );

@@ -91,7 +91,8 @@ const EXCHANGE_PAGES = 10;
  * What an account paid each known exchange, and got from it
  * (`xexch:<a>`): `/transactions/payments/between` with the sender and the
  * recipient both given, a few ms each, so it is exact however busy the
- * account is (up to 10,000 payments a way, then `more`). Null on a node
+ * account is (up to 10,000 payments a way; `more` when one more row shows
+ * there are older ones). Null on a node
  * without that endpoint: the Connections lists' payments say it then.
  */
 export function getExchangePayments(address: string): Promise<ExchangeFlow[] | null> {
@@ -117,7 +118,18 @@ export function getExchangePayments(address: string): Promise<ExchangeFlow[] | n
           rows.push(...list);
           if (list.length < PAY_PAGE) return { rows, more: false };
         }
-        return { rows, more: true };
+        // Every read full: one more row says whether there are older ones.
+        const next = await getJson<TxRow[]>(
+          `/transactions/payments/between?${query({
+            senderAddress: from,
+            recipientAddress: to,
+            confirmationStatus: 'CONFIRMED',
+            limit: 1,
+            offset: EXCHANGE_PAGES * PAY_PAGE,
+            reverse: true,
+          })}`
+        );
+        return { rows, more: Array.isArray(next) && next.length > 0 };
       };
       const flows = await Promise.all(
         Object.keys(KNOWN_EXCHANGES)
@@ -137,11 +149,16 @@ export function getExchangePayments(address: string): Promise<ExchangeFlow[] | n
   );
 }
 
-function between(address: string, direction: PayDirection, offset: number): string {
+function between(
+  address: string,
+  direction: PayDirection,
+  offset: number,
+  limit = PAY_PAGE
+): string {
   return `/transactions/payments/between?${query({
     [direction === 'sent' ? 'senderAddress' : 'recipientAddress']: address,
     confirmationStatus: 'CONFIRMED',
-    limit: PAY_PAGE,
+    limit,
     offset,
     reverse: true,
   })}`;
@@ -204,6 +221,23 @@ async function readFirstPages(
         seen.add(row.signature);
         rows.push(row);
       }
+  }
+  if (!page.done) {
+    // Every page full: one more row says whether "its latest 10,000" has older ones.
+    const next = await getJson<TxRow[]>(
+      caps.paymentsBetween
+        ? between(address, direction, page.nextOffset, 1)
+        : `/transactions/search?${query({
+            address,
+            txType: 'PAYMENT',
+            confirmationStatus: 'CONFIRMED',
+            limit: 1,
+            offset: page.nextOffset,
+            reverse: true,
+          })}`
+    );
+    if (Array.isArray(next) && next.length === 0)
+      return { rows, nextOffset: page.nextOffset, done: true };
   }
   return { rows, nextOffset: page.nextOffset, done: page.done };
 }
@@ -296,7 +330,18 @@ export function getAssetTransfers(
         rows.push(...list);
         if (list.length < ASSETS_PAGE) return { rows, truncated: false };
       }
-      return { rows, truncated: true };
+      // Every page full: one more row says whether "its latest 5,000" has older ones.
+      const next = await getJson<TxRow[]>(
+        `/transactions/search?${query({
+          address,
+          txType: ['TRANSFER_ASSET', 'MULTI_PAYMENT'],
+          confirmationStatus: 'CONFIRMED',
+          limit: 1,
+          offset: ASSETS_PAGES * ASSETS_PAGE,
+          reverse: true,
+        })}`
+      );
+      return { rows, truncated: Array.isArray(next) && next.length > 0 };
     },
     { ttlMs: 10 * 60_000, force: options.force }
   );

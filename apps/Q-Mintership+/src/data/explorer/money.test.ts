@@ -66,7 +66,8 @@ describe('payments between accounts', () => {
   it('stops at 10,000 each way, and “Check older” appends the next 1,000, once each', async () => {
     mockFetchRoute('/transactions/payments/between', (url: URL) => {
       const offset = Number(url.searchParams.get('offset') ?? 0);
-      if (url.searchParams.get('limit') === '1') return [];
+      // One row past 10,000 says there are older ones.
+      if (url.searchParams.get('limit') === '1') return offset >= 10_000 ? payments(offset, 1) : [];
       // Past 10,000: one more short page, overlapping by one (a new payment arrived meanwhile).
       return offset < 10_000 ? payments(offset, 1000) : payments(9_999, 30);
     });
@@ -146,7 +147,23 @@ describe('asset transfers', () => {
     const result = await getAssetTransfers(A);
     expect(result.rows).toHaveLength(5000);
     expect(result.truncated).toBe(true);
-    expect(fetchCallsFor('/transactions/search')).toHaveLength(5);
+    // 5 pages, and one row more that shows there are older ones.
+    expect(fetchCallsFor('/transactions/search')).toHaveLength(6);
+  });
+
+  // Hub's Explorer port (2026-11-22): "its latest 5,000" for an account with exactly 5,000.
+  it('exactly 5,000: not cut', async () => {
+    mockFetchRoute('/transactions/search', (url: URL) =>
+      Number(url.searchParams.get('offset')) >= 5000
+        ? []
+        : payments(Number(url.searchParams.get('offset')), 1000).map((row) => ({
+            ...row,
+            type: 'TRANSFER_ASSET',
+          }))
+    );
+    const result = await getAssetTransfers(A);
+    expect(result.rows).toHaveLength(5000);
+    expect(result.truncated).toBe(false);
   });
 });
 

@@ -42,12 +42,17 @@ export interface AccountLinks {
 
 export const linksKey = (address: string) => `xlinks:${address}`;
 
-function searchPath(address: string, types: readonly string[], offset: number): string {
+function searchPath(
+  address: string,
+  types: readonly string[],
+  offset: number,
+  limit = LINK_PAGE
+): string {
   return `/transactions/search?${query({
     address,
     txType: types,
     confirmationStatus: 'CONFIRMED',
-    limit: LINK_PAGE,
+    limit,
     offset,
     reverse: true,
   })}`;
@@ -65,6 +70,13 @@ async function readLinks(address: string): Promise<AccountLinks> {
       truncated = false;
       break;
     }
+  }
+  if (truncated) {
+    // Every page full: one more row says whether there are more ("500+").
+    const more = await getJson<TxRow[]>(
+      searchPath(address, LINK_TX_TYPES, LINK_PAGES * LINK_PAGE, 1)
+    );
+    truncated = Array.isArray(more) && more.length > 0;
   }
   if (truncated) {
     // Reward shares filled the pages: read the level moves on their own.
