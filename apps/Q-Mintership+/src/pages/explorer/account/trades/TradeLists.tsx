@@ -88,7 +88,9 @@ function PortalTradeRow({ trade }: { trade: PortalTrade }) {
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography component="div" variant="body2" sx={{ overflowWrap: 'anywhere' }}>
           {SIDE_LABEL[trade.side]} <strong>{formatAtomic(trade.qort)} QORT</strong> for{' '}
-          <strong>{other ? coinText(trade.coin, trade.chain) : `${coinWords(trade.coin)} ${code}`}</strong>
+          <strong>
+            {other ? coinText(trade.coin, trade.chain) : `${coinWords(trade.coin)} ${code}`}
+          </strong>
           {trade.other ? (
             <>
               {trade.side === 'sold' ? ' to ' : ' from '}
@@ -225,7 +227,12 @@ export function AssetTradeList({ data }: { data: AccountTrades }) {
             sx={ROW_SX}
           >
             <Box sx={{ pt: 0.25 }}>
-              <DirectionMark flow={trade.got.assetId === 0 ? 'in' : 'out'} />
+              {/* QORT in or out; a trade of two assets has neither (Hub's Explorer port). */}
+              {trade.got.assetId === 0 || trade.gave.assetId === 0 ? (
+                <DirectionMark flow={trade.got.assetId === 0 ? 'in' : 'out'} />
+              ) : (
+                <Box aria-hidden sx={{ width: 20 }} />
+              )}
             </Box>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography component="div" variant="body2">
