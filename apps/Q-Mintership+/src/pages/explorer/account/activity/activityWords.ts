@@ -32,6 +32,9 @@ export function periodWords(bucket: Pick<ActivityBucket, 'start' | 'end'>): stri
   return from === to ? from : `${from} – ${to}`;
 }
 
+/** A period read in part: what its count leaves out. */
+export const PARTLY_WORDS = 'Its older transactions aren’t read yet.';
+
 /** "12 transactions: 8 payments, 4 QDN data". */
 export function bucketWords(bucket: ActivityBucket): string {
   if (bucket.unread) return `${periodWords(bucket)}: not read yet`;
@@ -40,7 +43,7 @@ export function bucketWords(bucket: ActivityBucket): string {
   );
   return `${periodWords(bucket)}: ${plural(bucket.total, 'transaction')}${
     parts.length ? `, ${parts.join(', ')}` : ''
-  }`;
+  }${bucket.partly ? `. ${PARTLY_WORDS}` : ''}`;
 }
 
 /** Each kind of milestone, as Activity's settings name it, in this order. */
