@@ -122,19 +122,21 @@ async function inTurn<T, R>(items: readonly T[], work: (item: T) => Promise<R>):
   return out;
 }
 
-/** One order (`xorder:<id>`): who placed it never changes. */
+/**
+ * One order (`xorder:<id>`): who placed it, and its assets, never change.
+ * A read that failed isn't kept: the next read tries again (Hub's Explorer
+ * port, 2026-11-22: it stayed "an account that couldn't be read").
+ */
 function getOrder(orderId: string): Promise<OrderRow | null> {
   return fetchQuery(
     `xorder:${orderId}`,
     async () => {
-      try {
-        return await getJson<OrderRow>(`/assets/order/${seg(orderId)}`);
-      } catch {
-        return null;
-      }
+      const order = await getJson<OrderRow>(`/assets/order/${seg(orderId)}`);
+      if (!order || typeof order !== 'object') throw new Error('Unexpected answer for an order');
+      return order;
     },
     { ttlMs: Number.POSITIVE_INFINITY }
-  );
+  ).catch(() => null);
 }
 
 /** "QORT", or the asset's name, or "asset #6". */
@@ -169,8 +171,12 @@ export function getOrderFills(orderId: string, self: string): Promise<AssetTrade
         rows.push(...list);
         if (list.length < TRADES_PAGE) break;
       }
-      const mine = await getTransaction(orderId).catch(() => null);
+      const [mine, own] = await Promise.all([
+        getTransaction(orderId).catch(() => null),
+        getOrder(orderId),
+      ]);
       const out: AssetTrade[] = [];
+      let unread = false;
       for (const trade of rows) {
         const initiated = trade.initiatingOrderId === orderId;
         const otherOrderId = initiated ? trade.targetOrderId : trade.initiatingOrderId;
@@ -178,16 +184,22 @@ export function getOrderFills(orderId: string, self: string): Promise<AssetTrade
           getOrder(otherOrderId),
           getTransaction(otherOrderId).catch(() => null),
         ]);
-        const initiator = side(
-          trade.initiatorAmountAssetId,
-          trade.initiatorAmountAssetName,
-          trade.initiatorAmount
-        );
-        const target = side(
-          trade.targetAmountAssetId,
-          trade.targetAmountAssetName,
-          trade.targetAmount
-        );
+        if (!other) unread = true;
+        // Each amount is in its own order's have asset. Core's asset labels for them swap when
+        // the initiating order sells an asset for QORT (checked on a node, 2026-11-24: 3,500 of
+        // asset 6 labelled QORT), so the assets come from the account's own order.
+        const initiatorAsset = own
+          ? initiated
+            ? { id: own.haveAssetId, name: own.haveAssetName }
+            : { id: own.wantAssetId, name: own.wantAssetName }
+          : { id: trade.initiatorAmountAssetId, name: trade.initiatorAmountAssetName };
+        const targetAsset = own
+          ? initiated
+            ? { id: own.wantAssetId, name: own.wantAssetName }
+            : { id: own.haveAssetId, name: own.haveAssetName }
+          : { id: trade.targetAmountAssetId, name: trade.targetAmountAssetName };
+        const initiator = side(initiatorAsset.id, initiatorAsset.name, trade.initiatorAmount);
+        const target = side(targetAsset.id, targetAsset.name, trade.targetAmount);
         // The trade happened when the later order came in: the initiating one.
         const initiating = initiated ? mine : theirs;
         out.push({
@@ -204,7 +216,8 @@ export function getOrderFills(orderId: string, self: string): Promise<AssetTrade
           txs: [mine, theirs].filter((tx): tx is TxRow => tx !== null),
         });
       }
-      if (standing !== 'open') settledFills.set(orderId, out);
+      // Settled only with every side read: a side that couldn't be read is tried again.
+      if (standing !== 'open' && own && !unread) settledFills.set(orderId, out);
       return out;
     },
     { ttlMs: 30_000 }
