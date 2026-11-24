@@ -134,7 +134,8 @@ function OpenButton({
         justifyContent: 'flex-start',
         textAlign: 'left',
         minHeight: 44,
-        minWidth: 0,
+        // A one-letter or one-emoji name ("🐉") still gives a target a finger finds.
+        minWidth: 44,
         maxWidth: '100%',
         font: 'inherit',
         color: 'inherit',
