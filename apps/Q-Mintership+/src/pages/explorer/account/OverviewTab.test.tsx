@@ -499,6 +499,29 @@ describe('Overview: Activity’s settings', () => {
   });
 });
 
+// Hub's Explorer port (2026-11-22): "Show fewer" folded the groups and left the page far below.
+describe('Groups: Show fewer', () => {
+  it('keeps the focus on the button, in view', async () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({
+      groupId: 100 + i,
+      groupName: `Made-up group ${String(i).padStart(2, '0')}`,
+      owner: ADDR.learner,
+      isOpen: true,
+      memberCount: 3,
+      description: '',
+    }));
+    const { user } = await open(ADDR.admin, () => mockFetchRoute('/groups/member/', () => many));
+    const section = await region('Groups (14)');
+    await user.click(await within(section).findByRole('button', { name: /^Show all 14/ }, T));
+    const fewer = within(section).getByRole('button', { name: 'Show fewer' });
+    const scrolled = vi.fn();
+    fewer.scrollIntoView = scrolled;
+    await user.click(fewer);
+    await waitFor(() => expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' }), T);
+    expect(within(section).getByRole('button', { name: /^Show all 14/ })).toHaveFocus();
+  });
+});
+
 describe('QORT summaries', () => {
   const mintedComesTo = (address: string, minted: bigint) => (world: World) =>
     setMintedTo(world, address, minted);

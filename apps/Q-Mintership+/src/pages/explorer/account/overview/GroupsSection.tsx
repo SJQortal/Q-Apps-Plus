@@ -10,7 +10,7 @@
  * 2026-10-17). A group the signed-in account isn't in has a small Join icon
  * (components/groups/JoinGroupButton.tsx; a join request for a closed one).
  */
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 import { Box, Button, TextField, Tooltip, Typography } from '@mui/material';
 import PublicOutlinedIcon from '@mui/icons-material/PublicOutlined';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -190,6 +190,7 @@ export function GroupsSection({ address }: { address: string }) {
   const [sort, setSort] = useViewState<GroupSort>('groups:sort', 'minter');
   const [view, setView] = useListView('groups');
   const [all, setAll] = useViewState('groups:all', false);
+  const moreRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
 
   let body: React.ReactNode;
@@ -245,7 +246,18 @@ export function GroupsSection({ address }: { address: string }) {
         {view === 'list' ? <Card>{list}</Card> : list}
         {ordered.length > GROUPS_SHOWN ? (
           <Button
-            onClick={() => setAll((open) => !open)}
+            ref={moreRef}
+            onClick={() => {
+              const folding = all;
+              setAll((open) => !open);
+              // Folded: the button keeps the focus and comes into view, not the empty page
+              // below it (Hub's Explorer port, 2026-11-22).
+              if (folding)
+                requestAnimationFrame(() => {
+                  moreRef.current?.focus({ preventScroll: true });
+                  moreRef.current?.scrollIntoView({ block: 'nearest' });
+                });
+            }}
             aria-expanded={all}
             aria-controls={listId}
             sx={{ alignSelf: 'flex-start', minHeight: 44 }}
