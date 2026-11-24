@@ -72,6 +72,41 @@ export interface AccountTrades {
 
 export const tradesKey = (address: string) => `xassettrades:${address}`;
 export const fillsKey = (orderId: string) => `xfills:${orderId}`;
+export const orderStateKey = (orderId: string) => `xorderstate:${orderId}`;
+
+/** Where an asset order stands: still open, filled in full, or closed before that. */
+export type OrderStanding = 'open' | 'fulfilled' | 'closed';
+
+/** Orders known to be closed or fulfilled: they never change again. */
+const settledOrders = new Map<string, OrderStanding>();
+/** Closed orders' fills, kept for the session. */
+const settledFills = new Map<string, AssetTrade[]>();
+
+/**
+ * Where an order stands now (`xorderstate:<id>`, 30 s; for the session once
+ * it is closed): an open order can still fill (Hub's Explorer port,
+ * 2026-11-22: "Filled by 2 trades" for one still open).
+ */
+export function getOrderStanding(orderId: string): Promise<OrderStanding> {
+  const settled = settledOrders.get(orderId);
+  if (settled) return Promise.resolve(settled);
+  return fetchQuery(
+    orderStateKey(orderId),
+    async () => {
+      const order = await getJson<{ isClosed?: boolean; isFulfilled?: boolean }>(
+        `/assets/order/${seg(orderId)}`
+      );
+      const standing: OrderStanding = order?.isFulfilled
+        ? 'fulfilled'
+        : order?.isClosed
+          ? 'closed'
+          : 'open';
+      if (standing !== 'open') settledOrders.set(orderId, standing);
+      return standing;
+    },
+    { ttlMs: 30_000 }
+  );
+}
 
 /** Runs `work` on each item, `AT_ONCE` at a time; the answers in order. */
 async function inTurn<T, R>(items: readonly T[], work: (item: T) => Promise<R>): Promise<R[]> {
@@ -114,12 +149,17 @@ function side(id: number | undefined, name: string | undefined, amount: string):
 
 /**
  * One order's trades, each with the other account and the two order
- * transactions (`xfills:<id>`, for the session). `self` is who placed it.
+ * transactions (`xfills:<id>`). Kept for the session once the order is
+ * closed; while it is open, 30 s, so a fill since shows (Hub's Explorer
+ * port, 2026-11-22). `self` is who placed it.
  */
 export function getOrderFills(orderId: string, self: string): Promise<AssetTrade[]> {
+  const settled = settledFills.get(orderId);
+  if (settled) return Promise.resolve(settled);
   return fetchQuery(
     fillsKey(orderId),
     async () => {
+      const standing = await getOrderStanding(orderId).catch(() => 'open' as const);
       const rows: TradeRow[] = [];
       for (let page = 0; page < TRADES_PAGES; page++) {
         const chunk = await getJson<TradeRow[]>(
@@ -164,9 +204,10 @@ export function getOrderFills(orderId: string, self: string): Promise<AssetTrade
           txs: [mine, theirs].filter((tx): tx is TxRow => tx !== null),
         });
       }
+      if (standing !== 'open') settledFills.set(orderId, out);
       return out;
     },
-    { ttlMs: Number.POSITIVE_INFINITY }
+    { ttlMs: 30_000 }
   );
 }
 

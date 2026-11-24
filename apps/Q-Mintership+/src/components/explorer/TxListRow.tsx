@@ -56,6 +56,8 @@ import { TxSentence } from './TxSentence';
 import { QdnFileButtons } from './file/QdnFileButtons';
 import { useTxWords } from './useTxWords';
 import { useOrderFills } from './useOrderFills';
+import { getOrderStanding, orderStateKey, type OrderStanding } from '../../data/explorer/trades';
+import { useQuery } from '../../hooks/useQuery';
 import { fillParts, tradesWords, type AssetTrade } from '../../rules/explorer/trades';
 import { useViewState } from '../../hooks/useViewState';
 
@@ -219,6 +221,11 @@ export function TxListRow({
   // Which way it went from the list's account: incoming green, outgoing red.
   const flow = words.direction === 'in' || words.direction === 'out' ? words.direction : null;
   const fills = useOrderFills(tx, open);
+  // Opened: whether the order is still open, so its fills aren't read as all of them.
+  const standing = useQuery(
+    open && tx.type === 'CREATE_ASSET_ORDER' ? orderStateKey(tx.signature) : null,
+    () => getOrderStanding(tx.signature)
+  );
 
   return (
     <Row ref={setNode}>
@@ -274,7 +281,7 @@ export function TxListRow({
             {words.title}
           </Typography>
           <TxFields fields={words.fields} label={`${words.title} details`} viewId={tx.signature} />
-          {fills ? <OrderFills fills={fills} /> : null}
+          {fills ? <OrderFills fills={fills} standing={standing.data ?? null} /> : null}
           <TxPeople addresses={words.participants} maker={maker} viewId={tx.signature} />
           <RawResponse
             tx={tx}
@@ -301,12 +308,38 @@ export function TxListRow({
   );
 }
 
-/** An open order row's trades, each with the other account. */
-function OrderFills({ fills }: { fills: readonly AssetTrade[] }) {
+/**
+ * An opened order row's trades, each with the other account, worded by
+ * where the order stands: an open one is "partly filled so far", never
+ * "filled" (Hub's Explorer port, 2026-11-22).
+ */
+function OrderFills({
+  fills,
+  standing,
+}: {
+  fills: readonly AssetTrade[];
+  /** Null while it is read. */
+  standing: OrderStanding | null;
+}) {
+  const n = fills.length;
+  const head =
+    standing === 'open'
+      ? n
+        ? `Partly filled so far by ${tradesWords(n)}`
+        : 'Not filled yet'
+      : standing === 'fulfilled'
+        ? `Filled by ${tradesWords(n)}`
+        : standing === 'closed'
+          ? n
+            ? `Filled in part by ${tradesWords(n)}, then closed`
+            : 'Closed without a fill'
+          : n
+            ? `Trades so far: ${formatCount(n)}`
+            : 'No fills read';
   return (
     <Box>
       <Typography variant="body2" sx={{ fontWeight: 700 }}>
-        {fills.length ? `Filled by ${tradesWords(fills.length)}` : 'Not filled'}
+        {head}
       </Typography>
       {fills.length ? (
         <Box component="ul" sx={{ m: 0, pl: 2.5 }}>

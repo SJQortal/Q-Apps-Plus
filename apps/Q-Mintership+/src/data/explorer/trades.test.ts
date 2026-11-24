@@ -4,9 +4,9 @@
  * waited, and Ben Target's buy order for 120 QORT came in and matched it.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchCallsFor } from '../../test/setup';
+import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
-import { getAccountTrades, getOrderFills, tradesKey } from './trades';
+import { getAccountTrades, getOrderFills, getOrderStanding, tradesKey } from './trades';
 import { peekQuery } from '../query';
 
 afterEach(() => vi.useRealTimers());
@@ -78,5 +78,40 @@ describe('an account’s asset trades', () => {
     const fills = await getOrderFills(ben.trades[0].orderId, ADDR.banTarget);
     expect(fills).toEqual(ben.trades);
     expect(fetchCallsFor('/assets/')).toHaveLength(reads);
+  });
+
+  // Hub's Explorer port (2026-11-22): an order still open kept its first fills for the session,
+  // and read as "Filled by 2 trades".
+  it('an open order’s fills are read again after 30 s; a closed one’s are kept', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    installWorld('learner');
+    let openFills = 1;
+    mockFetchRoute('/assets/order/', (url: URL) => {
+      const [, , , id, rest] = url.pathname.split('/');
+      const open = id === 'open1';
+      if (rest === 'trades')
+        return Array.from({ length: open ? openFills : 1 }, (_, i) => ({
+          initiatingOrderId: id,
+          targetOrderId: `other${i}`,
+          initiatorAmount: '1',
+          targetAmount: '2',
+          initiatorAmountAssetId: 0,
+          targetAmountAssetId: 5,
+          timestamp: 1_000 + i,
+        }));
+      return { orderId: id, isClosed: !open, isFulfilled: !open, fulfilled: '0', timestamp: 1 };
+    });
+    expect(await getOrderStanding('open1')).toBe('open');
+    expect(await getOrderFills('open1', ADDR.learner)).toHaveLength(1);
+    openFills = 2;
+    vi.setSystemTime(Date.now() + 31_000);
+    expect(await getOrderFills('open1', ADDR.learner)).toHaveLength(2);
+    expect(await getOrderStanding('done1')).toBe('fulfilled');
+    await getOrderFills('done1', ADDR.learner);
+    const reads = fetchCallsFor('/assets/order/done1').length;
+    vi.setSystemTime(Date.now() + 3_600_000);
+    await getOrderFills('done1', ADDR.learner);
+    expect(await getOrderStanding('done1')).toBe('fulfilled');
+    expect(fetchCallsFor('/assets/order/done1')).toHaveLength(reads);
   });
 });
