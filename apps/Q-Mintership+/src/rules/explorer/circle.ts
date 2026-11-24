@@ -261,6 +261,29 @@ export function nodeTransactions(node: Pick<CircleNode, 'findings'>): TxRow[] {
   );
 }
 
+/** The ring around an avatar and the gap inside it, both sides (px): 3 + 2 each side. */
+export const RING_PX = 10;
+
+/**
+ * How tall the drawing's inside must be (px) so neighbours on a side keep
+ * apart: the closest two need their rings' half sizes, and `leastGap` (room
+ * for a name), between centres (Hub's Explorer port, 2026-11-22: neighbours
+ * could overlap by a few px). Their y is in % of that height.
+ */
+export function sideMinHeight(placed: readonly PlacedNode[], leastGap: number): number {
+  let height = 0;
+  for (const side of ['in', 'out'] as const) {
+    const list = placed.filter((node) => node.side === side).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < list.length; i++) {
+      const gap = list[i].y - list[i - 1].y;
+      if (gap <= 0) continue;
+      const need = Math.max(leastGap, (list[i].size + list[i - 1].size) / 2 + RING_PX + 2);
+      height = Math.max(height, (need * 100) / gap);
+    }
+  }
+  return height;
+}
+
 /** The biggest avatar a side of `n` nodes leaves room for. */
 export function sideMaxSize(n: number, options: LayoutOptions): number {
   const room = options.maxSize - Math.max(0, n - 4) * ((options.maxSize - options.minSize) / 10);

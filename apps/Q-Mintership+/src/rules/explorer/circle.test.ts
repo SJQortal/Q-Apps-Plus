@@ -7,6 +7,8 @@ import {
   badgeText,
   circleLayout,
   circleNodes,
+  sideMinHeight,
+  RING_PX,
   nodeSize,
   nodeTransactions,
   qortSize,
@@ -388,5 +390,27 @@ describe('circleQort', () => {
     expect(circleQort(7_650_000_000n)).toBe('76.5');
     expect(circleQort(25_000_000n)).toBe('0.25');
     expect(circleQort(0n)).toBeNull();
+  });
+});
+
+// Hub's Explorer port (2026-11-22): two neighbouring avatars of a side could overlap a little:
+// the least gap was less than two rings.
+describe('sideMinHeight', () => {
+  it('keeps every two neighbours of the fullest sides apart, rings and all', () => {
+    for (const options of [WIDE_LAYOUT, PHONE_LAYOUT]) {
+      const nodes = Array.from({ length: 24 }, (_, i) => ({
+        ...finding(i % 2 ? 'paidTo' : 'paidBy', `Q${i}`, tx(1 + (i % 5), i * 10)),
+      }));
+      const { placed } = circleLayout(circleNodes(nodes), options);
+      const height = sideMinHeight(placed, 34);
+      for (const side of ['in', 'out'] as const) {
+        const list = placed.filter((n) => n.side === side).sort((a, b) => a.y - b.y);
+        expect(list.length).toBeGreaterThan(5);
+        for (let i = 1; i < list.length; i++) {
+          const apart = ((list[i].y - list[i - 1].y) * height) / 100;
+          expect(apart).toBeGreaterThanOrEqual((list[i].size + list[i - 1].size) / 2 + RING_PX);
+        }
+      }
+    }
   });
 });

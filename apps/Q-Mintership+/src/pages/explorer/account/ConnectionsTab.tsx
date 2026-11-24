@@ -524,6 +524,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
               }
               order={circleOrder}
               onOrder={setCircleOrder}
+              searching={searching}
             />
           ) : (
             <ListSkeleton count={2} label="Reading its links" />

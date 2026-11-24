@@ -48,6 +48,7 @@ import { useDisplayName } from '../../../../hooks/useDisplayName';
 import { usePhoneLayout } from '../../../../hooks/usePhoneLayout';
 import {
   circleLayout,
+  sideMinHeight,
   addAssets,
   badgeText,
   circleQort,
@@ -66,6 +67,7 @@ import { formatCount, plural } from '../../../../utils/format';
 import { ExpandChevron } from '../../../../components/common/ExpandChevron';
 import { SmoothReveal } from '../../../../components/common/SmoothReveal';
 import { CircleList } from './CircleList';
+import { TxSentence } from '../../../../components/explorer/TxSentence';
 import { CircleNodeDialog } from './CircleNodeDialog';
 import { amountList, countWords, ringBackground, useSideColours } from './circleParts';
 import { sideWords } from './words';
@@ -130,9 +132,31 @@ const SIDE_GAP = [38, 34] as const;
 /** The widest a name under a bottom avatar is. */
 const BOTTOM_NAME_MAX = 124;
 
-/** How tall the name under a bottom avatar is, with a line for each asset that moved (px). */
-function bottomNameHeight(node: CircleNode): number {
-  return 20 + 15 * Math.max(1, bothLines(node).length);
+/**
+ * About how wide a line of the amounts under a bottom avatar is, at 12 px
+ * (px): emoji and wide letters about as wide as they are drawn (1.25 em),
+ * so the estimate errs wide (Q-Asset names hold emoji: 💦, ⭐, 🐉).
+ */
+function lineWidth(text: string): number {
+  let em = 0;
+  for (const ch of Array.from(text)) {
+    const code = ch.codePointAt(0) ?? 0;
+    em += ch === ' ' ? 0.3 : code > 0x2000 ? 1.25 : 0.62;
+  }
+  return em * 12;
+}
+
+/**
+ * How tall the name under a bottom avatar is (px): its name, and each
+ * asset line as many rows as it takes once wrapped in `room` px (Hub's
+ * Explorer port, 2026-11-22: a wrapped line ran into the heading below).
+ */
+function bottomNameHeight(node: CircleNode, room = BOTTOM_NAME_MAX): number {
+  const lines = bothLines(node);
+  const rows = lines.length
+    ? lines.reduce((sum, line) => sum + Math.max(1, Math.ceil(lineWidth(line) / room)), 0)
+    : 1;
+  return 20 + 15 * rows;
 }
 
 /**
@@ -548,11 +572,15 @@ function SideHeading({
   );
 }
 
+/** The other links shown at first; Show all shows the rest (each reads a name and an avatar). */
+const OTHER_FIRST = 20;
+
 export function ConnectionsCircle({
   address,
   recorded,
   order,
   onOrder,
+  searching = false,
 }: {
   address: string;
   /** What was recorded between them (useRecorded). */
@@ -560,6 +588,8 @@ export function ConnectionsCircle({
   /** The most transactions first, or the most QORT (useCircleOrder). */
   order: CircleOrder;
   onOrder: (order: CircleOrder) => void;
+  /** Only the links a search found are given: said so, never "no account is linked". */
+  searching?: boolean;
 }) {
   const me = useDisplayName(address);
   const phone = usePhoneLayout();
@@ -574,6 +604,9 @@ export function ConnectionsCircle({
       ) ?? null)
     : null;
   const setPicked = (node: CircleNode | null) => setPickedKey(node ? node.key : null);
+  // Links with no one other account (the accounts it sponsored, as a set): listed under it.
+  const unplaced = recorded.filter((finding) => !finding.other);
+  const [otherAll, setOtherAll] = useViewState('circle:other-all', false);
   const { placed, rest } = circleLayout(groups, options, order);
   const notDrawn = rest.in + rest.out + rest.both;
   // The list under the circle (Simon, 2026-10-19): kept for Back.
@@ -604,13 +637,11 @@ export function ConnectionsCircle({
   // under the next (Simon, 2026-10-17: "make sure the names and QORT
   // amounts are not covered"): the closest two of a side, in % of the
   // drawing's height, need SIDE_GAP px between their centres.
-  const sideGap = Math.min(
-    ...[left, right].flatMap((list) => list.slice(1).map((node, i) => node.y - list[i].y))
-  );
-  const minInner =
-    Number.isFinite(sideGap) && sideGap > 0 ? (SIDE_GAP[phone ? 1 : 0] * 100) / sideGap : 0;
-  // Under the bottom avatars, room for their names and a line for each asset.
-  const bottomPad = 16 + Math.max(36, ...bottom.map(bottomNameHeight));
+  // Neighbours' rings, as big as they are drawn, keep apart too (sideMinHeight).
+  const minInner = sideMinHeight(placed, SIDE_GAP[phone ? 1 : 0]);
+  // Under the bottom avatars, room for their names and each asset line's rows once wrapped.
+  const bottomPad =
+    16 + Math.max(36, ...bottom.map((node) => bottomNameHeight(node, bottomRoom(node))));
   // As tall as the fuller half of the ring needs: a few accounts leave no empty space.
   const fullest =
     Math.max(left.length, right.length) + Math.ceil((options.bothSpacing * bottom.length) / 2);
@@ -628,14 +659,40 @@ export function ConnectionsCircle({
   const accounts = new Set(
     [...groups.in, ...groups.out, ...groups.both, ...groups.other].map((node) => node.address)
   ).size;
+  const unplacedList = unplaced.length ? (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+      <Typography component="h3" sx={{ fontWeight: 700, fontSize: 15 }}>
+        Also recorded, with more than one account
+      </Typography>
+      <Box component="ul" aria-label="Also recorded" sx={{ m: 0, pl: 2.5 }}>
+        {unplaced.map((finding) => (
+          <Typography component="li" key={finding.key} sx={{ overflowWrap: 'anywhere' }}>
+            <TxSentence parts={finding.parts} />
+          </Typography>
+        ))}
+      </Box>
+    </Box>
+  ) : null;
   if (!placed.length && !groups.other.length)
     return (
-      <Typography color="text.secondary">
-        No accounts linked to it in what was checked, so there is nothing to draw.
-      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+        <Typography color="text.secondary">
+          {searching
+            ? 'None of its linked accounts matches the search.'
+            : 'No accounts linked to it in what was checked, so there is nothing to draw.'}
+        </Typography>
+        {unplacedList}
+      </Box>
     );
+  const shownOther = otherAll ? groups.other : groups.other.slice(0, OTHER_FIRST);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      {searching ? (
+        <Typography variant="body2" color="text.secondary">
+          Only the {plural(accounts, 'linked account')} that {accounts === 1 ? 'matches' : 'match'}{' '}
+          the search.
+        </Typography>
+      ) : null}
       {placed.length ? (
         <Box sx={{ width: '100%', maxWidth: 880, mx: 'auto' }}>
           <Box
@@ -775,19 +832,34 @@ export function ConnectionsCircle({
             aria-label="Other links"
             sx={{ m: 0, p: 0, display: 'flex', flexWrap: 'wrap', gap: 1 }}
           >
-            {groups.other.map((node) => (
+            {shownOther.map((node) => (
               <OtherChip key={node.key} node={node} onPick={setPicked} />
             ))}
           </Box>
+          {groups.other.length > shownOther.length ? (
+            <Button
+              onClick={() => setOtherAll(true)}
+              sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+            >
+              Show all {formatCount(groups.other.length)}
+            </Button>
+          ) : null}
         </Box>
       ) : null}
+      {unplacedList}
       <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-        {order === 'qort'
-          ? 'The bigger the avatar and its line, the more QORT went that way; the number on it is that QORT.'
-          : 'The bigger the avatar and its line, the more transactions went that way.'}
-        {groups.both.length
-          ? ' At the bottom, accounts paid both ways: green for what came in, red for what went out.'
-          : ''}{' '}
+        {/* With nothing drawn, only how to open them (Hub's Explorer port, 2026-11-22). */}
+        {placed.length
+          ? `${
+              order === 'qort'
+                ? 'The bigger the avatar and its line, the more QORT went that way; the number on it is that QORT.'
+                : 'The bigger the avatar and its line, the more transactions went that way.'
+            }${
+              groups.both.length
+                ? ' At the bottom, accounts paid both ways: green for what came in, red for what went out.'
+                : ''
+            } `
+          : ''}
         Press one for its transactions.
       </Typography>
       {placed.length ? (
