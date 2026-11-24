@@ -36,6 +36,7 @@ import {
   TIP,
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
+import { addRenomination } from './world.mjs';
 import { nominatorLastVisit } from './world.mjs';
 import { AT_ADDRESS, FUNDER, SPONSOR, TRADER, UNUSED_ADDRESS } from './world-explorer.mjs';
 import { ADMIN_BOARD_IDS } from './world-legacy.mjs';
@@ -57,7 +58,13 @@ addDecisionVotes(world);
 const shiftWorld = createWorld();
 addOtherPending(shiftWorld);
 const shift = addTargetShift(shiftWorld);
-/** The world a request's page reads: `?world=shift` picks the moving-target one. */
+// A nomination again after one that lapsed, with that one's comments: `?world=again`.
+const againWorld = createWorld();
+addRenomination(againWorld);
+/**
+ * The world a request's page reads: `?world=shift` picks the moving-target one,
+ * `?world=again` the one with a nomination again.
+ */
 function worldFor(route) {
   let page = '';
   try {
@@ -65,6 +72,7 @@ function worldFor(route) {
   } catch {
     // Not from a page frame: the default world.
   }
+  if (/[?&]world=again\b/.test(page)) return againWorld;
   return /[?&]world=shift\b/.test(page) ? shiftWorld : world;
 }
 // Shareable links: a decision still waiting, one decided (with its signatures), a nomination.
@@ -895,6 +903,38 @@ export default {
       key: 'nomination',
       path: `/nominations/${ADDR.nominatedSigning}?as=nominator`,
       after: wait('main ol[aria-label="Rounds, newest first"]'),
+    },
+    // Nominated again after a nomination that lapsed (Simon, 2026-11-24): that one's comments
+    // folded under the new one's, opened, each marked as from the previous nomination.
+    {
+      key: 'nomination-earlier-comments',
+      path: `/nominations/${ADDR.lapsed}?world=again&as=admin`,
+      after: async (page) => {
+        await page
+          .getByRole('button', { name: /^Comments from previous nominations/ })
+          .click({ timeout: 8000 });
+        await page
+          .getByRole('list', { name: 'Comments from previous nominations, newest first' })
+          .getByText('It is back online now', { exact: false })
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
+    // Its tag pressed: when it was written, how that nomination ended, and a link to it.
+    {
+      key: 'nomination-earlier-tag',
+      path: `/nominations/${ADDR.lapsed}?world=again&as=admin`,
+      after: async (page) => {
+        await page
+          .getByRole('button', { name: /^Comments from previous nominations/ })
+          .click({ timeout: 8000 });
+        const tag = page.getByRole('button', { name: 'Previous nomination', exact: true }).first();
+        await tag.waitFor({ timeout: 8000 });
+        await tag.scrollIntoViewIfNeeded();
+        await tag.click();
+        await page.getByRole('dialog', { name: 'Previous nomination' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
     },
     // Public comments: a thread with replies, a deleted one and a hidden one (folded).
     {

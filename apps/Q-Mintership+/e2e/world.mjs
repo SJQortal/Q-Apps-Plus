@@ -1358,6 +1358,41 @@ export const FORMER_READY = {
 };
 
 /**
+ * The lapsed person nominated again (Simon, 2026-11-24: igorcoin nominated
+ * Stone Golem again, and the comments of the nomination that lapsed came
+ * along): Nora Nominator published her record again a day ago, so its first
+ * publish, ten days ago, is a nomination of its own, which lapsed. Its
+ * comments (a question and the nominee's reply) stay with the new one,
+ * marked as from the previous nomination; the new one has one of its own.
+ */
+export function addRenomination(world) {
+  const DAY = 86_400_000;
+  const record = world.records.find(
+    (r) => r.name === PEOPLE.nominator.name && r.identifier === `qmp-nomination-${ADDR.lapsed}`
+  );
+  record.updated = NOW - DAY;
+  const key = ADDR.lapsed;
+  const comment = (name, suffix, ageMs, body) =>
+    world.records.push({
+      name,
+      identifier: `qmp-comment-${key}-${suffix}`,
+      created: NOW - ageMs,
+      body: { v: 1, key, ...body },
+    });
+  comment(PEOPLE.admin.name, 'again1', 9.5 * DAY, {
+    text: 'Is this node still online? I couldn’t find it in the minting list this week.',
+  });
+  comment(PEOPLE.lapsed.name, 'again2', 9 * DAY, {
+    text: 'It is back online now: the router had dropped its port forward.',
+    replyTo: `qmp-comment-${key}-again1`,
+  });
+  comment(PEOPLE.nominator.name, 'again3', 12 * 3_600_000, {
+    text: 'Nominating again: the node has been online all week.',
+  });
+  return { ids: { question: `qmp-comment-${key}-again1` } };
+}
+
+/**
  * Add FORMER_READY to the world: their accounts, their MINTER history (an
  * approved invite, then an approved kick or their own LEAVE_GROUP, all
  * older than Activity's longest range) and their join requests, so Ready to
