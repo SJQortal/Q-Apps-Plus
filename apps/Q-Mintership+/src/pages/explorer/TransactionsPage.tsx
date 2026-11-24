@@ -143,14 +143,18 @@ export default function TransactionsPage() {
   const checkingTip = past && tipFor !== pastStart;
 
   const [refreshing, setRefreshing] = useState(false);
+  // A Refresh that couldn't read the newest block says so (Hub's Explorer port, 2026-11-22).
+  const [refreshError, setRefreshError] = useState<unknown>(null);
   const refresh = async () => {
     setRefreshing(true);
+    setRefreshError(null);
     try {
       const fresh = await getTip({ force: true });
       setPinned(fresh.height);
       invalidate('xglobal:waiting:');
-    } catch {
-      // The tip on screen stays; the lists keep what they show.
+    } catch (error) {
+      // The tip on screen stays; the lists keep what they show, and it says so.
+      setRefreshError(error);
     } finally {
       setRefreshing(false);
     }
@@ -228,6 +232,14 @@ export default function TransactionsPage() {
           share={share}
           onShare={setShare}
         />
+        {refreshError ? (
+          <ErrorState
+            compact
+            title="Couldn't read the chain's newest block: what shows is from before."
+            error={refreshError}
+            onRetry={() => void refresh()}
+          />
+        ) : null}
         {body}
       </PageBody>
     </PersonLinkContext>

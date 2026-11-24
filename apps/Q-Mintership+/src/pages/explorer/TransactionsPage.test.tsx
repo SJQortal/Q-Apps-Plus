@@ -319,6 +319,57 @@ describe('Transactions on Qortal', () => {
     noWrites(posts);
   });
 
+  // Hub's Explorer port (2026-11-22): two transactions with the same time can swap between the
+  // reads of two pages, so one showed twice and the line said "All".
+  it('shows a transaction on two pages once, and never says "All" after a repeat', async () => {
+    const { user } = await open('?type=payments', (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) => {
+        const p = url.searchParams;
+        if (p.has('address')) return worldAnswer(world, url);
+        const rows = (world.explorer.rows as Array<{ creatorAddress?: string }>)
+          .filter((r) => r.creatorAddress === FUNDER.address)
+          .slice(0, 25)
+          .reverse();
+        const offset = Number(p.get('offset'));
+        // The second page starts with the first page's last row again.
+        return offset === 0 ? rows.slice(0, 20) : rows.slice(19, 24);
+      })
+    );
+    const found = await results();
+    const list = await within(found).findByRole('list', { name: 'Confirmed transactions' }, T);
+    await user.click(within(found).getByText('Show older', { selector: 'button' }));
+    await waitFor(() => expect(items(list)).toHaveLength(24), T);
+    expect(within(found).getByText(/^The newest 24 payments in blocks/)).toBeVisible();
+    expect(within(found).queryByText(/^All /)).toBeNull();
+  });
+
+  // Hub's Explorer port (2026-11-22): failed reads looked like nothing waiting, or nothing at all.
+  it('says when what waits couldn’t be read, and when Refresh couldn’t read the newest block', async () => {
+    const { user } = await open('?type=payments', () =>
+      mockFetchRoute('/transactions/unconfirmed', () => new Response('down', { status: 500 }))
+    );
+    const waiting = await screen.findByRole('region', { name: /Waiting to be confirmed/ }, T);
+    expect(await within(waiting).findByRole('alert', {}, T)).toHaveTextContent(
+      "Couldn't read what waits for a block."
+    );
+    expect(within(waiting).getByRole('button', { name: /Retry/ })).toBeVisible();
+    mockFetchRoute('/blocks/last', () => new Response('down', { status: 500 }));
+    await user.click(screen.getByRole('button', { name: /Refresh/ }));
+    await waitFor(
+      () =>
+        expect(
+          screen
+            .getAllByRole('alert')
+            .some((el) =>
+              el.textContent?.includes(
+                "Couldn't read the chain's newest block: what shows is from before."
+              )
+            )
+        ).toBe(true),
+      T
+    );
+  });
+
   it('reads oldest first, and from a block for as many blocks as picked', async () => {
     const { user } = await open('?type=payments&blocks=from-2640000&order=oldest');
     const found = await results();
