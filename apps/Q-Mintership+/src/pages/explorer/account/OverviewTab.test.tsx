@@ -15,7 +15,14 @@ import { activityFirstReadAtom } from '../../../state/settings';
 import { expectNoAxeViolations } from '../../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
-import { COLLECTOR, FUNDER, SPONSEES, SPONSOR, type World } from '../../../../e2e/world.mjs';
+import {
+  COLLECTOR,
+  FUNDER,
+  SPONSEES,
+  SPONSOR,
+  fakeKey,
+  type World,
+} from '../../../../e2e/world.mjs';
 import { explorerAccountPath } from '../../../routes/paths';
 import { peekQuery } from '../../../data/query';
 import { accountTxKey, type AccountTxList } from '../../../data/explorer/accountTx';
@@ -560,6 +567,36 @@ describe('QORT summaries', () => {
       .map((url) => new URL(url, 'http://x').searchParams)
       .filter((p) => p.get('address') === ADDR.admin && !p.get('txType'));
     expect(pages.some((p) => p.get('limit') === '1000')).toBe(true);
+  });
+
+  // Hub's Explorer port (2026-11-22): a Q-Trade buyer that never made a transaction has no
+  // public key to ask Core's trade list with; the seller's contract paid it all the same.
+  it('counts what trade contracts paid a buyer without a public key as purchased', async () => {
+    const buyer = SPONSEES[2].address;
+    await visit(buyer, (world) => {
+      const at = `A${fakeKey('keyless-buyer-at', 25).slice(1, 34)}`;
+      const signature = fakeKey('keyless-buyer-at-payment', 64);
+      const row = {
+        type: 'AT',
+        timestamp: Date.now() - 86_400_000,
+        reference: fakeKey('keyless-buyer-at-ref', 64),
+        fee: '0.00000000',
+        signature,
+        txGroupId: 0,
+        blockHeight: 2_700_000,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: at,
+        atAddress: at,
+        recipient: buyer,
+        amount: '10.00000000',
+        assetId: 0,
+      };
+      world.explorer.rows.push(row);
+      world.explorer.bySig.set(signature, row);
+      world.explorer.parties.set(signature, [at, buyer]);
+    });
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT purchased / sold')).toBe('10 / 0'), SLOW);
   });
 
   it('says an account that never minted never minted, with nothing to work out', async () => {
