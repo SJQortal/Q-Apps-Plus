@@ -280,7 +280,10 @@ describe('Transactions on Qortal', () => {
     expect(within(found).queryByText(/^The chain is at block/)).toBeNull();
     expect(screen.queryByText(/^The chain is at block/)).toBeNull();
     expect(fetchCallsFor('/blocks/last').length).toBeGreaterThan(0);
-    expect(searches().some((p) => p.get('startBlock') === String(start))).toBe(true);
+    await waitFor(
+      () => expect(searches().some((p) => p.get('startBlock') === String(start))).toBe(true),
+      T
+    );
   });
 
   it('shows older pages of 20, says what came, and keeps focus until none are left', async () => {
