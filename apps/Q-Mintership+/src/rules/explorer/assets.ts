@@ -292,8 +292,17 @@ export function pricesFrom(trades: readonly RecentTrade[]): Map<number, AssetPri
     } else continue;
     if (units <= 0n) continue;
     const known = prices.get(assetId);
-    if (known && known.at >= trade.timestamp) continue;
-    prices.set(assetId, { perUnit: (qort * ATOMIC) / units, units, qort, at: trade.timestamp });
+    const perUnit = (qort * ATOMIC) / units;
+    // Two at the same time: the lowest price, then the most units, whatever order Core lists
+    // them in (Hub's Explorer port, 2026-11-22: the price changed between reads).
+    if (
+      known &&
+      (known.at > trade.timestamp ||
+        (known.at === trade.timestamp &&
+          (known.perUnit < perUnit || (known.perUnit === perUnit && known.units >= units))))
+    )
+      continue;
+    prices.set(assetId, { perUnit, units, qort, at: trade.timestamp });
   }
   return prices;
 }
