@@ -119,6 +119,29 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (pinned === null && tip.data) setPinned(tip.data.height);
   }, [pinned, tip.data, setPinned]);
+  // A start past the pinned tip (a link from a newer transaction, or a block typed): the chain's
+  // newest block is read first, and pinned when it reaches it; refused only against that
+  // (Hub's Explorer port, 2026-11-22: "The chain is at block N" with an old N).
+  const past = blocks.kind === 'from' && pinned !== null && blocks.start > pinned;
+  const pastStart = blocks.kind === 'from' ? blocks.start : null;
+  const [tipFor, setTipFor] = useState<number | null>(null);
+  useEffect(() => {
+    if (!past || pastStart === null || tipFor === pastStart) return;
+    let live = true;
+    getTip({ force: true })
+      .then((fresh) => {
+        if (live && pinned !== null && fresh.height > pinned) setPinned(fresh.height);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (live) setTipFor(pastStart);
+      });
+    return () => {
+      live = false;
+    };
+  }, [past, pastStart, tipFor, pinned, setPinned]);
+  const checkingTip = past && tipFor !== pastStart;
+
   const [refreshing, setRefreshing] = useState(false);
   const refresh = async () => {
     setRefreshing(true);
@@ -142,7 +165,7 @@ export default function TransactionsPage() {
         onRetry={() => void tip.refetch()}
       />
     );
-  } else if (pinned === null) {
+  } else if (pinned === null || checkingTip) {
     body = <ListSkeleton count={4} label="Searching the chain" />;
   } else if (blocks.kind === 'from' && blocks.start > pinned) {
     body = (
@@ -204,7 +227,6 @@ export default function TransactionsPage() {
           onFind={typeFind}
           share={share}
           onShare={setShare}
-          tip={pinned}
         />
         {body}
       </PageBody>

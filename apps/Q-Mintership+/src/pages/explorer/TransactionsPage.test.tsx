@@ -15,6 +15,7 @@ import { FUNDER, TIP, answerCore, type World } from '../../../e2e/world.mjs';
 import { renderPage } from '../../test/render';
 import { expectNoAxeViolations } from '../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
+import { setQueryData } from '../../data/query';
 import { typesOfChoice } from './tx/globalFilters';
 import TransactionsPage from './TransactionsPage';
 
@@ -238,7 +239,7 @@ describe('Transactions on Qortal', () => {
     const { user } = await open('?type=payments');
     await results();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Blocks' }), 'from');
-    const field = screen.getByRole('textbox', { name: 'From block' });
+    let field = screen.getByRole('textbox', { name: 'From block' });
     expect(field).toHaveAttribute('inputmode', 'numeric');
     await user.type(field, 'abc');
     await user.click(screen.getByRole('button', { name: 'Show' }));
@@ -246,7 +247,10 @@ describe('Transactions on Qortal', () => {
     await user.clear(field);
     await user.type(field, '9999999');
     await user.click(screen.getByRole('button', { name: 'Show' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('The chain is at block 2,757,500.');
+    // Past the tip: the chain's newest block is read before it says no.
+    expect(await screen.findByText('The chain is at block 2,757,500.', {}, T)).toBeVisible();
+    // The bar is drawn again for the new range: its field anew.
+    field = screen.getByRole('textbox', { name: 'From block' });
     await user.clear(field);
     // As the app shows block numbers, with commas (Simon, 2026-10-17).
     await user.type(field, '2,640,000');
@@ -263,6 +267,20 @@ describe('Transactions on Qortal', () => {
     // An older range has no mempool list.
     expect(screen.queryByRole('region', { name: /Waiting to be confirmed/ })).toBeNull();
     everySearchBounded();
+  });
+
+  // Hub's Explorer port (2026-11-22): a tip read earlier in the session said "The chain is at
+  // block N" for a link to a newer block.
+  it('reads the chain’s newest block before saying a start is past it', async () => {
+    const start = TIP - 5;
+    await open(`?type=payments&blocks=from-${start}&span=1`, () => {
+      setQueryData('chain:tip', { height: TIP - 10, timestamp: 0 });
+    });
+    const found = await results();
+    expect(within(found).queryByText(/^The chain is at block/)).toBeNull();
+    expect(screen.queryByText(/^The chain is at block/)).toBeNull();
+    expect(fetchCallsFor('/blocks/last').length).toBeGreaterThan(0);
+    expect(searches().some((p) => p.get('startBlock') === String(start))).toBe(true);
   });
 
   it('shows older pages of 20, says what came, and keeps focus until none are left', async () => {
