@@ -15,7 +15,7 @@ import { APP_VERSION } from '../../constants/app';
 import { APP_NAME } from '../../constants/plus';
 import { getAccount, getPrimaryName } from '../accounts';
 import { getTip } from '../chain';
-import { peekQuery } from '../query';
+import { getQueryState, peekQuery } from '../query';
 import {
   exploreAccount,
   getFirstSeen,
@@ -249,6 +249,8 @@ export async function gatherAccountReport(
     minting,
     firstSeen,
     history,
+    // No list held: still unread, unless its read failed.
+    historyUnread: !history && getQueryState(accountTxKey(address, [])).status !== 'error',
     findings,
     nothingFound: [nothingFoundLine(empty), cappedLine].filter(Boolean).join('\n\n') || null,
     sponsorReport,

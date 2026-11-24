@@ -65,25 +65,31 @@ export interface FindingsInput {
   nameOf?: (address: string) => string | null | undefined;
 }
 
-/** "Bob (QaBcDe…WxYz)", or the short address when it has no name loaded. */
-function who(address: string, nameOf?: FindingsInput['nameOf']): string {
-  const name = nameOf?.(address);
-  return name ? `${visibleName(name)} (${shortAddress(address)})` : shortAddress(address);
-}
-
-/** A sentence's parts as one line, accounts with their names when known. */
-export function partsText(parts: readonly TxPart[], nameOf?: FindingsInput['nameOf']): string {
+/**
+ * A sentence's parts as one line, accounts with their names when known.
+ * `escape` is applied to what came from the chain (names, asset names), as
+ * the account report escapes it for Markdown.
+ */
+export function partsText(
+  parts: readonly TxPart[],
+  nameOf?: FindingsInput['nameOf'],
+  escape: (text: string) => string = (text) => text
+): string {
   return parts
     .map((part) => {
       switch (part.kind) {
         case 'text':
           return part.text;
-        case 'account':
-          return who(part.address, nameOf);
+        case 'account': {
+          const name = nameOf?.(part.address);
+          return name
+            ? `${escape(visibleName(name))} (${shortAddress(part.address)})`
+            : shortAddress(part.address);
+        }
         case 'amount':
-          return `${part.amount} ${part.asset}`;
+          return `${part.amount} ${escape(part.asset)}`;
         case 'name':
-          return `“${visibleName(part.name)}”`;
+          return `“${escape(visibleName(part.name))}”`;
         case 'group':
           return groupWords(part.groupId);
         case 'tx':

@@ -60,6 +60,8 @@ export interface AccountReportData {
   firstSeen: FirstSeen | null;
   /** What of its history was read: every transaction, or its newest `rows.length`. */
   history: { rows: TxRow[]; done: boolean } | null;
+  /** Without `history`: it wasn't read yet (rather than its read failed). */
+  historyUnread?: boolean;
   findings: Finding[];
   /** "Also checked, nothing found: …", or null. */
   nothingFound: string | null;
@@ -86,9 +88,47 @@ export function utc(ms: number): string {
 /** "2026-10-21". */
 const day = (ms: number) => utc(ms).slice(0, 10);
 
-/** A table cell: no line breaks, pipes escaped. */
+/**
+ * Text from the chain (a name, a group's or an asset's name) as Markdown
+ * shows it: every character Markdown or HTML would read, escaped, so a name
+ * like `[x](http://…)` stays text, never a link, emphasis, a heading or a
+ * tag (Hub's Explorer port, 2026-11-22). A backslash before punctuation
+ * shows as the character itself.
+ */
+export function mdText(text: string): string {
+  return text.replace(/\r?\n/g, ' ').replace(/[\\`*_{}[\]()<>#+!|~&]/g, '\\$&');
+}
+
+/**
+ * The report's data with the chain's text escaped (mdText). Names of other
+ * accounts (`nameOf`) are escaped where they are written.
+ */
+function escaped(data: AccountReportData): AccountReportData {
+  return {
+    ...data,
+    primaryName: data.primaryName ? mdText(data.primaryName) : null,
+    names: data.names ? { ...data.names, names: data.names.names.map(mdText) } : null,
+    groups: data.groups
+      ? data.groups.map((group) => ({ ...group, groupName: mdText(group.groupName) }))
+      : null,
+    firstSeen:
+      data.firstSeen?.funding?.assetName !== undefined && data.firstSeen.funding.assetName
+        ? {
+            ...data.firstSeen,
+            funding: {
+              ...data.firstSeen.funding,
+              assetName: mdText(data.firstSeen.funding.assetName),
+            },
+          }
+        : data.firstSeen,
+  };
+}
+
+/** A table cell: no line breaks, pipes escaped (once: mdText's already are). */
 function cell(value: string | number): string {
-  return String(value).replace(/\r?\n/g, ' ').replace(/\|/g, '\\|');
+  return String(value)
+    .replace(/\r?\n/g, ' ')
+    .replace(/(?<!\\)\|/g, '\\|');
 }
 
 function table(
@@ -107,7 +147,7 @@ const code = (text: string) => `\`${text}\``;
 /** "igorcoin (`QZwf…`)": an account with its name when known, the address always whole. */
 function accountWords(address: string, nameOf: AccountReportData['nameOf']): string {
   const name = nameOf(address);
-  return name ? `${name} (${code(address)})` : code(address);
+  return name ? `${mdText(name)} (${code(address)})` : code(address);
 }
 
 function qort(atomic: bigint): string {
@@ -115,7 +155,7 @@ function qort(atomic: bigint): string {
 }
 
 function assetsWords(assets: readonly AssetSum[] | undefined): string {
-  return (assets ?? []).map((sum) => `${formatAtomic(sum.atomic)} ${sum.asset}`).join(', ');
+  return (assets ?? []).map((sum) => `${formatAtomic(sum.atomic)} ${mdText(sum.asset)}`).join(', ');
 }
 
 /** The account's display title. */
@@ -138,8 +178,9 @@ export function reportFilename(
 }
 
 /** How much of its history was read, in words. */
-export function historyWords(history: AccountReportData['history']): string {
-  if (!history) return 'its history couldn’t be read';
+export function historyWords(history: AccountReportData['history'], unread = false): string {
+  if (!history)
+    return unread ? 'none of its history (not read yet)' : 'its history couldn’t be read';
   return history.done
     ? `its whole on-chain history (${plural(history.rows.length, 'transaction')})`
     : `only its newest ${formatCount(history.rows.length)} transactions (not its whole history)`;
@@ -158,7 +199,7 @@ function headerLines(data: AccountReportData): string[] {
           'Made',
           `${utc(data.madeAt)}${data.tip ? `, at block ${formatCount(data.tip.height)}` : ''}`,
         ],
-        ['Read from', historyWords(data.history)],
+        ['Read from', historyWords(data.history, data.historyUnread)],
         ['Made with', `${data.app.name} ${data.app.version}`],
         ['Open it', data.app.link],
       ]
@@ -251,8 +292,13 @@ function qortLines(data: AccountReportData): string[] {
   const out = ['', '## QORT totals', ''];
   const q = data.qort;
   if (!q || !data.history?.done) {
+    // What to do differs: try again, read the rest, or wait for the first read.
     out.push(
-      'These add up its whole history, which wasn’t read for this report: read all of it first to have them.'
+      !data.history
+        ? data.historyUnread
+          ? 'These add up its whole history, which wasn’t read yet: make the report again once its Overview shows the QORT amounts.'
+          : 'These add up its whole history, which couldn’t be read: press Retry on its Overview, then make the report again.'
+        : `These add up its whole history, of which its newest ${plural(data.history.rows.length, 'transaction')} ${data.history.rows.length === 1 ? 'was' : 'were'} read: press Read the rest on its Overview, then make the report again.`
     );
     return out;
   }
@@ -296,7 +342,7 @@ function activityLines(data: AccountReportData): string[] {
     by.set(type, entry);
   }
   out.push(
-    `From ${historyWords(data.history)}.`,
+    `From ${historyWords(data.history, data.historyUnread)}.`,
     '',
     ...table(
       ['Type', 'Transactions', 'First', 'Last'],
@@ -336,7 +382,7 @@ function whereWords(finding: Finding): string {
 }
 
 function sentence(finding: Finding, nameOf: AccountReportData['nameOf']): string {
-  return partsText(finding.parts, nameOf).replace(/\.$/, '');
+  return partsText(finding.parts, nameOf, mdText).replace(/\.$/, '');
 }
 
 function flowRows(
@@ -345,7 +391,7 @@ function flowRows(
 ): Array<Array<string | number>> {
   return findings.map((finding) => [
     finding.other ? code(finding.other) : '',
-    (finding.other && nameOf(finding.other)) || '',
+    mdText((finding.other && nameOf(finding.other)) || ''),
     formatCount(finding.count ?? finding.evidence.length),
     finding.qort ? formatAtomic(finding.qort) : '0',
     assetsWords(finding.assets),
@@ -425,7 +471,7 @@ function sponsorLines(data: AccountReportData): string[] {
 
 function readLines(data: AccountReportData): string[] {
   const out = ['', '## What was read', ''];
-  out.push(`- Its transactions: ${historyWords(data.history)}.`);
+  out.push(`- Its transactions: ${historyWords(data.history, data.historyUnread)}.`);
   for (const line of data.coverage) out.push(`- ${line}`);
   if (data.failed.length) out.push(`- Couldn’t be read: ${data.failed.join(', ')}.`);
   out.push(
@@ -471,7 +517,8 @@ function evidenceLines(data: AccountReportData): string[] {
 }
 
 /** The whole report, as Markdown. */
-export function accountReportMarkdown(data: AccountReportData): string {
+export function accountReportMarkdown(given: AccountReportData): string {
+  const data = escaped(given);
   return [
     ...headerLines(data),
     ...accountLines(data),
