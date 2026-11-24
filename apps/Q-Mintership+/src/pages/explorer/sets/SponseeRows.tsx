@@ -39,6 +39,8 @@ function Fact({ label, explain }: { label: string; explain?: string }) {
 }
 
 export interface SponseeRowProps {
+  /** Its sponsor's list stopped short: its first share and count may be more. */
+  partial?: boolean;
   row: SponseeRow;
   /** The member list is loaded, so "Not in MINTER" can be said. */
   membersKnown: boolean;
@@ -48,7 +50,14 @@ export interface SponseeRowProps {
   onPick: (address: string, picked: boolean) => void;
 }
 
-export function SponseeRowItem({ row, membersKnown, picked, full, onPick }: SponseeRowProps) {
+export function SponseeRowItem({
+  row,
+  membersKnown,
+  partial = false,
+  picked,
+  full,
+  onPick,
+}: SponseeRowProps) {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const near = useInView(node);
   const account = useQuery(near ? `account:${row.address}` : null, (force) =>
@@ -87,12 +96,17 @@ export function SponseeRowItem({ row, membersKnown, picked, full, onPick }: Spon
       <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         <PersonChip address={row.address} size={32} />
         <Typography sx={{ overflowWrap: 'anywhere' }}>
-          Sponsored {formatDate(row.start.timestamp)} at {row.percent} % (block{' '}
-          {formatCount(row.start.height)})
+          Sponsored {formatDate(row.start.timestamp)}
+          {/* Its sponsor's list stopped short: an older reward share may come before it. */}
+          {partial ? ' or before' : ''} at {row.percent} % (block {formatCount(row.start.height)})
           {row.removal
             ? `, removed ${plural(row.blocks ?? 0, 'block')} later (block ${formatCount(row.removal.height)})`
             : ', not removed'}
-          {row.shares > 1 ? `; ${formatCount(row.shares)} reward shares in all` : ''}
+          {partial
+            ? `; ${plural(row.shares, 'reward share')} read, and there may be more`
+            : row.shares > 1
+              ? `; ${formatCount(row.shares)} reward shares in all`
+              : ''}
           {row.removal && row.active ? ', sponsored again since' : ''}
         </Typography>
         {facts.length ? (

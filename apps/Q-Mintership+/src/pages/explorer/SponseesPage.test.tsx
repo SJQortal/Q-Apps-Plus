@@ -5,7 +5,7 @@
  * progress and Stop. Read-only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, Outlet, RouterProvider, useNavigate } from 'react-router-dom';
 import { render } from '@testing-library/react';
@@ -20,7 +20,8 @@ import { expectNoAxeViolations } from '../../test/axe';
 import { mockFetchRoute, qortalCalls } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
 import { SPONSEES, SPONSOR, answerCore } from '../../../e2e/world.mjs';
-import { queryLoadCounts } from '../../data/query';
+import { peekQuery, queryLoadCounts, setQueryData } from '../../data/query';
+import { linksKey, type AccountLinks } from '../../data/explorer/links';
 import { explorerSponseesPath } from '../../routes/paths';
 import { resetExplorerState } from '../../state/explorer';
 import SponseesPage from './SponseesPage';
@@ -81,6 +82,19 @@ describe('the accounts a sponsor sponsored', () => {
     expect(
       qortalCalls.filter((c) => /INVITE|KICK|BAN|JOIN|SIGN|PUBLISH/.test(String(c.action)))
     ).toEqual([]);
+  });
+
+  // Hub's Explorer port (2026-11-22): "3 reward shares in all" from a sponsor's list cut short.
+  it('a sponsor’s list cut short: its rows say there may be more, never "in all"', async () => {
+    await open();
+    const rows = await list();
+    const key = linksKey(SPONSOR.address);
+    const links = peekQuery<AccountLinks>(key);
+    expect(links).toBeDefined();
+    act(() => setQueryData<AccountLinks>(key, { ...(links as AccountLinks), truncated: true }));
+    await waitFor(() => expect(rows).toHaveTextContent('there may be more'), T);
+    expect(rows).not.toHaveTextContent('in all');
+    expect(rows).toHaveTextContent(/Sponsored .+ or before at/);
   });
 
   it('picks up to 4 accounts, then Compare opens them', async () => {
