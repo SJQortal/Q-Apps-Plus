@@ -209,12 +209,15 @@ async function readPage(
 async function readFirstPages(
   address: string,
   direction: PayDirection,
-  caps: PaymentCaps
+  caps: PaymentCaps,
+  signal?: AbortSignal
 ): Promise<PaymentPage> {
   const rows: TxRow[] = [];
   const seen = new Set<string>();
   let page: PaymentPage = { rows: [], nextOffset: 0, done: false };
   for (let i = 0; i < PAY_FIRST_PAGES && !page.done; i++) {
+    // Stopped (a set's check): no next page (Hub's Explorer port, 2026-11-22).
+    if (signal?.aborted) throw new DOMException('Stopped', 'AbortError');
     page = await readPage(address, direction, page.nextOffset, caps);
     for (const row of page.rows)
       if (!seen.has(row.signature)) {
@@ -245,12 +248,13 @@ async function readFirstPages(
 /**
  * Every QORT payment an account sent (`sent`) or received (`recv`), up to
  * 10,000 each way; from its whole history when that is read. `scope` is
- * the page's account, for the heavy fallback.
+ * the page's account, for the heavy fallback; `signal` stops it between
+ * pages.
  */
 export async function getPayments(
   address: string,
   direction: PayDirection,
-  options: { force?: boolean; scope?: string } = {}
+  options: { force?: boolean; scope?: string; signal?: AbortSignal } = {}
 ): Promise<PaymentPage> {
   const full = fullHistory(address);
   if (full)
@@ -266,7 +270,9 @@ export async function getPayments(
   const load = async () => {
     // The whole history may have finished reading while this waited.
     const now = fullHistory(address);
-    return now ? paymentsFrom(now, address, direction) : readFirstPages(address, direction, caps);
+    return now
+      ? paymentsFrom(now, address, direction)
+      : readFirstPages(address, direction, caps, options.signal);
   };
   const fetchOptions = { ttlMs: 10 * 60_000, force: options.force };
   return caps.paymentsBetween

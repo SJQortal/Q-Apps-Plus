@@ -13,6 +13,7 @@ import {
   splitAt,
   wentTo,
   wentToParts,
+  ofTheseWords,
 } from './money';
 import { partsToPlain, type TxPart } from './txWords';
 
@@ -241,5 +242,17 @@ describe('across a set', () => {
     expect(plain(wentToParts(recipients[0], 48))).toBe(
       'B received QORT from 2 of these 48 accounts: 3 payments, 3.5 QORT'
     );
+    // A stopped check speaks for the accounts it checked (Hub's Explorer port, 2026-11-22).
+    expect(plain(wentToParts(recipients[0], 3, true))).toBe(
+      'B received QORT from 2 of the 3 accounts checked: 3 payments, 3.5 QORT'
+    );
+  });
+
+  // Hub's Explorer port (2026-11-22): "1 of these 1 accounts".
+  it('words a set of one as the only account', () => {
+    expect(ofTheseWords(9, 48)).toBe('9 of these 48 accounts');
+    expect(ofTheseWords(1, 1)).toBe('the only account here');
+    expect(ofTheseWords(1, 1, true)).toBe('the only account checked');
+    expect(ofTheseWords(2, 2, true)).toBe('2 of the 2 accounts checked');
   });
 });

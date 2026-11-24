@@ -106,6 +106,8 @@ async function across<T>(
       try {
         results.set(address, { ok: true, value: await read(address) });
       } catch {
+        // Stopped while it was read: not checked, rather than unreadable.
+        if (options.signal?.aborted) return;
         results.set(address, { ok: false });
       }
       done += 1;
@@ -131,7 +133,7 @@ export function checkPaymentsSent(
 ): Promise<Map<string, Checked<PaymentPage>>> {
   return across(
     accounts,
-    (address) => getPayments(address, 'sent', { scope: options.scope }),
+    (address) => getPayments(address, 'sent', { scope: options.scope, signal: options.signal }),
     options
   );
 }
