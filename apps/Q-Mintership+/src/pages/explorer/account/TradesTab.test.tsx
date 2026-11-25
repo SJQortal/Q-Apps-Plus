@@ -315,6 +315,57 @@ describe('the Trades tab', () => {
     expect(screen.queryByText('No trades yet.')).toBeNull();
   });
 
+  // In Hub (2026-11-25): such a buyer's trades were all "another coin", "with 0 accounts",
+  // though each contract says its coin and seller.
+  it('a buyer without a public key: each contract names its coin, amount and seller', async () => {
+    const buyer = SPONSEES[2].address;
+    const at = `A${'n'.repeat(33)}`;
+    await renderPage(
+      <PersonLinkContext value={EXPLORER_PERSON_LINKS}>
+        <TradesTab address={buyer} />
+      </PersonLinkContext>,
+      {
+        persona: 'admin',
+        path: explorerAccountPath(buyer, 'trades'),
+        route: '/explorer/account/:who/:tab?',
+        setup: (world) => {
+          const signature = `keylessbuy${'2'.repeat(78)}`;
+          const row = {
+            type: 'AT',
+            timestamp: Date.UTC(2026, 9, 2),
+            reference: `ref${'2'.repeat(85)}`,
+            fee: '0.00000000',
+            signature,
+            txGroupId: 0,
+            blockHeight: 2_700_000,
+            approvalStatus: 'NOT_REQUIRED',
+            creatorAddress: at,
+            atAddress: at,
+            recipient: buyer,
+            amount: '10.00000000',
+            assetId: 0,
+          };
+          world.explorer.rows.push(row);
+          world.explorer.bySig.set(signature, row);
+          world.explorer.parties.set(signature, [at, buyer]);
+          mockFetchRoute(`/crosschain/trade/${at}`, {
+            qortalAtAddress: at,
+            qortalCreator: ADDR.left,
+            qortAmount: '10.00000000',
+            expectedForeignAmount: '0.03000000',
+            qortalPartnerReceivingAddress: buyer,
+            mode: 'REDEEMED',
+            foreignBlockchain: 'LITECOIN',
+          });
+        },
+      }
+    );
+    const list = await screen.findByRole('list', { name: 'Its Q-Trade trades, newest first' }, T);
+    await waitFor(() => expect(list).toHaveTextContent(/Bought 10 QORT for 0\.03 LTC/), T);
+    expect(list).toHaveTextContent('Lou Left');
+    expect(list).not.toHaveTextContent('another coin');
+  });
+
   it('says so when an account has never traded', async () => {
     await trades(ADDR.learner);
     expect(await screen.findByText('No trades yet.', {}, T)).toBeInTheDocument();

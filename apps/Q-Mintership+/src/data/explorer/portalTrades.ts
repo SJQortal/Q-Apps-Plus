@@ -32,13 +32,14 @@
  */
 import type { TxRow } from '../types';
 import { getAccount } from '../accounts';
-import { getJson, query } from '../core';
+import { getJson, query, seg } from '../core';
 import { fetchQuery } from '../query';
 import { heavyQuery } from './heavy';
 import { fullHistory } from './fullHistory';
 import { parseAtomic } from '../../rules/explorer/money';
 import {
   chainOfOffer,
+  OTHER_COIN,
   TRADE_CHAINS,
   type OfferDeployed,
   type PortalSide,
@@ -144,6 +145,34 @@ export function getContractPayments(
   );
 }
 
+/** A trade contract's own record (`/crosschain/trade/{at}`), the parts read here. */
+interface ContractRow {
+  foreignBlockchain?: unknown;
+  qortalCreator?: unknown;
+  expectedForeignAmount?: unknown;
+}
+
+/** How many of a keyless buyer's contracts are asked for their coin and seller. */
+const CONTRACTS_READ = 100;
+
+/**
+ * A contract's coin, seller and coin amount; null when it can't be read or
+ * trades no coin of TRADE_CHAINS (the trade stays another coin, its seller not
+ * known). A few milliseconds each on Core.
+ */
+async function contractTrade(
+  at: string
+): Promise<{ chain: TradeChain; seller: string; coin: bigint } | null> {
+  const row = await getJson<ContractRow>(`/crosschain/trade/${seg(at)}`).catch(() => null);
+  const chain = TRADE_CHAINS.find((name) => name === row?.foreignBlockchain);
+  if (!row || !chain) return null;
+  return {
+    chain,
+    seller: typeof row.qortalCreator === 'string' ? row.qortalCreator : '',
+    coin: parseAtomic(row.expectedForeignAmount) ?? 0n,
+  };
+}
+
 /** A trade from Core's row, its coin as named; null without its AT. */
 function toTrade(row: TradeSummaryRow, side: PortalSide, chain: TradeCoin): PortalTrade | null {
   const at = typeof row?.atAddress === 'string' ? row.atAddress : '';
@@ -216,17 +245,24 @@ export function getPortalTrades(
       const publicKey = (await getAccount(address)).publicKey;
       const trades: PortalTrade[] = [];
       if (!publicKey) {
-        // A buyer without a key: each payment of another account's contract, one trade.
-        for (const paid of await getContractPayments(address, { force }))
+        // A buyer without a key: each payment of another account's contract, one
+        // trade, its coin, amount and seller from the contract (the first 100).
+        const paid = await getContractPayments(address, { force });
+        const ats = [...new Set(paid.map((payment) => payment.at))].slice(0, CONTRACTS_READ);
+        const contracts = await inTurn(ats, contractTrade);
+        const byAt = new Map(ats.map((at, i) => [at, contracts[i]]));
+        for (const payment of paid) {
+          const contract = byAt.get(payment.at) ?? null;
           trades.push({
-            chain: 'OTHER',
+            chain: contract?.chain ?? OTHER_COIN,
             side: 'bought',
-            qort: paid.qort,
-            coin: 0n,
-            at: paid.at,
-            other: '',
-            timestamp: paid.timestamp,
+            qort: payment.qort,
+            coin: contract?.coin ?? 0n,
+            at: payment.at,
+            other: contract?.seller ?? '',
+            timestamp: payment.timestamp,
           });
+        }
       } else {
         const [sold, bought] = await Promise.all([
           getPortalRowsAll(publicKey, 'sold', { force }),
