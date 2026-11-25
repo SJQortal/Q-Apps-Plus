@@ -20,13 +20,15 @@ export const CHANGELOG: Release[] = [
   {
     version: '1.0.9',
     date: '2026-11-25',
-    title: 'The Explorer, checked in Hub',
-    summary: 'Fixes from a check of 1.0.8’s Explorer in Qortal Hub with real accounts.',
+    title: 'Every nomination shows',
+    summary:
+      'A nomination your node won’t fetch still shows, with a note saying why, and fixes from a check of 1.0.8’s Explorer in Qortal Hub.',
     sections: [
       {
         title: 'For everyone',
         notes: [
-          'This version only changes the Explorer’s detailed parts, for Minter Admins, Dev Admins and level 5+ minters.',
+          'A nomination whose text your node doesn’t give still shows who nominated whom and when, with a note in place of the reason: its nominator is blocked on your node (Hub’s Blocked users), or the text hasn’t reached your node yet. Until now it didn’t show at all before a Minter Admin put it on chain, and an earlier nomination of the same person dropped out of History.',
+          'A support your node doesn’t give still counts; only its note is missing.',
         ],
       },
       {
