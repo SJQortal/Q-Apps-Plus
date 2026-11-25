@@ -228,7 +228,7 @@ function FirstPayers({
         <Typography variant="body2" color="text.secondary">
           {[
             grouped.other
-              ? `${plural(grouped.other, 'account')} had another first transaction (a reward share, a level move, an asset transfer, an AT or the genesis block)`
+              ? `${plural(grouped.other, 'account')} had another first transaction (a reward share, a level move, an asset transfer, a multi-payment, an AT or the genesis block)`
               : null,
             grouped.none ? `none found for ${plural(grouped.none, 'account')}` : null,
             failed ? `${plural(failed, 'account')} couldn’t be read` : null,
