@@ -40,7 +40,14 @@ import {
   getStoredInviteFor,
   getStoredInvites,
 } from './group';
-import { fetchQdnJson, mapLimit, rowTime, searchQdn } from './qdn';
+import {
+  QdnUnavailableError,
+  fetchQdnJson,
+  mapLimit,
+  qdnStatus,
+  rowTime,
+  searchQdn,
+} from './qdn';
 import { fetchQuery, peekQuery } from './query';
 import {
   NOMINATION_PREFIX,
@@ -64,6 +71,12 @@ export interface Publisher {
   level: number;
 }
 
+/**
+ * Why a record's text couldn't be read: its publisher is on this node's block
+ * list (Core never fetches a blocked name's data), or the node hasn't got it yet.
+ */
+export type UnreadText = 'blocked' | 'missing';
+
 export interface NominationEntry {
   publisher: Publisher;
   record: NominationRecord;
@@ -76,6 +89,14 @@ export interface NominationEntry {
    * known, its text is the newer one's.
    */
   replaced?: true;
+  /**
+   * Its text couldn't be read on this node, so `record` has only the nominee,
+   * from the identifier, and an empty reason. The nomination still counts:
+   * who nominated whom and when come from the search row and the chain
+   * (Simon, 2026-11-25: Minter Admins who block a nominator never saw that
+   * nominator's nomination until another Minter Admin put it on chain).
+   */
+  unread?: UnreadText;
 }
 
 export interface SupportEntry {
@@ -147,22 +168,34 @@ interface RawRecord {
   body: unknown;
 }
 
-async function readBodies(
-  rows: QdnRow[]
-): Promise<Array<RawRecord | { row: QdnRow; error: true }>> {
-  return mapLimit(rows, 6, async (row) => {
+/** A body read: the body, one the node didn't give (`unread`), or one deleted or broken. */
+type BodyRead = RawRecord | { row: QdnRow; unread: UnreadText } | { row: QdnRow; error: true };
+
+/**
+ * Each row's body. One the node didn't give after its retries is `unread`;
+ * with `why`, one status read tells a publisher blocked on this node from
+ * data still to come. A deleted body (the publisher took it back) or one
+ * that isn't JSON is an error.
+ */
+async function readBodies(rows: QdnRow[], options: { why?: boolean } = {}): Promise<BodyRead[]> {
+  return mapLimit(rows, 6, async (row): Promise<BodyRead> => {
+    const version = row.latestSignature ?? rowTime(row);
     try {
-      const body = await fetchQdnJson(
-        RECORD_SERVICE,
-        row.name,
-        row.identifier,
-        row.latestSignature ?? rowTime(row)
-      );
+      const body = await fetchQdnJson(RECORD_SERVICE, row.name, row.identifier, version);
       return { row, body };
-    } catch {
-      return { row, error: true as const };
+    } catch (error) {
+      if (!(error instanceof QdnUnavailableError)) return { row, error: true };
+      if (!options.why) return { row, unread: 'missing' };
+      const status = await qdnStatus(RECORD_SERVICE, row.name, row.identifier, version);
+      return { row, unread: status === 'BLOCKED' ? 'blocked' : 'missing' };
     }
   });
+}
+
+/** What is known of a record whose text wasn't read: its nominee, from the identifier. */
+function unreadRecord(identifier: string, prefix: string): { v: 1; nomineeAddress: string } | null {
+  const nominee = identifier.startsWith(prefix) ? nomineeFromIdentifier(identifier) : null;
+  return nominee ? { v: 1, nomineeAddress: nominee } : null;
 }
 
 type MembershipOf = (address: string) => Promise<{ isMember: boolean; isAdmin: boolean }>;
@@ -286,7 +319,8 @@ async function assemble(
   const windowBlocks = waitingWindowBlocks(decisions.group);
   const ignored: IgnoredRecord[] = [];
   const [nominationBodies, supportBodies] = await Promise.all([
-    readBodies(input.nominationRows),
+    // A nomination whose text is missing says why; a support's note just doesn't show.
+    readBodies(input.nominationRows, { why: true }),
     readBodies(input.supportRows),
   ]);
 
@@ -324,7 +358,16 @@ async function assemble(
       ignored.push({ name: row.name, identifier: row.identifier, why: 'unreadable' });
       continue;
     }
-    const record = parseNomination(item.body, row.identifier);
+    // A record the node didn't give still counts, without its text: one
+    // re-published longer goes off chain, and a node that blocks its
+    // nominator never fetches it (seen 2026-11-25).
+    const unread = 'unread' in item ? item.unread : undefined;
+    const known = unread ? unreadRecord(row.identifier, NOMINATION_PREFIX) : null;
+    const record: NominationRecord | null = known
+      ? { ...known, reason: '', links: [] }
+      : 'body' in item
+        ? parseNomination(item.body, row.identifier)
+        : null;
     if (!record) {
       ignored.push({ name: row.name, identifier: row.identifier, why: 'invalid' });
       continue;
@@ -340,7 +383,8 @@ async function assemble(
     }
     const list = nominationsBy.get(record.nomineeAddress) ?? [];
     const publishedAt = rowTime(row);
-    list.push({ publisher, record, publishedAt, identifier: row.identifier });
+    const text = unread ? { unread } : {};
+    list.push({ publisher, record, publishedAt, identifier: row.identifier, ...text });
     if (
       publishedAgain(row.created, publishedAt, windowMs, decidedBy.get(record.nomineeAddress) ?? [])
     )
@@ -350,6 +394,7 @@ async function assemble(
         publishedAt: row.created,
         identifier: row.identifier,
         replaced: true,
+        ...text,
       });
     nominationsBy.set(record.nomineeAddress, list);
   }
@@ -357,7 +402,11 @@ async function assemble(
   const supportsBy = new Map<string, SupportEntry[]>();
   for (const item of supportBodies) {
     if ('error' in item) continue;
-    const record = parseSupport(item.body, item.row.identifier);
+    // A support the node didn't give still counts; only its note is missing.
+    const record =
+      'body' in item
+        ? parseSupport(item.body, item.row.identifier)
+        : unreadRecord(item.row.identifier, SUPPORT_PREFIX);
     const publisher = input.publishers.get(item.row.name);
     if (!record || !publisher || publisher.address === record.nomineeAddress) continue;
     const list = supportsBy.get(record.nomineeAddress) ?? [];

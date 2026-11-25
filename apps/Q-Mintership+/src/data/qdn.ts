@@ -7,7 +7,7 @@
  * is retried at 2, 4, 8 and 16 s, then reported as unavailable.
  */
 import { coreGet } from '../qortal/client';
-import { getPaged, query, seg, type PagedResult } from './core';
+import { getJson, getPaged, query, seg, type PagedResult } from './core';
 import { fetchQuery } from './query';
 import type { QdnRow } from './types';
 
@@ -161,6 +161,31 @@ export function fetchQdnJson<T = unknown>(
       }
     },
     { ttlMs: Number.POSITIVE_INFINITY }
+  );
+}
+
+/**
+ * Core's status for one resource, without starting a build: READY,
+ * MISSING_DATA, BLOCKED and so on; null when it couldn't be read. Asked only
+ * about a body that wasn't there, to tell a publisher on this node's block
+ * list (Core never fetches a blocked name's data) from data that hasn't
+ * arrived yet. Kept per version for 2 minutes.
+ */
+export function qdnStatus(
+  service: string,
+  name: string,
+  identifier: string,
+  version: string | number
+): Promise<string | null> {
+  return fetchQuery(
+    `qdnstatus:${service}:${name}:${identifier}:${version}`,
+    async () => {
+      const body = await getJson<{ status?: unknown }>(
+        `/arbitrary/resource/status/${seg(service)}/${seg(name)}/${seg(identifier)}?${query({ build: false })}`
+      ).catch(() => null);
+      return typeof body?.status === 'string' ? body.status : null;
+    },
+    { ttlMs: 2 * 60_000 }
   );
 }
 

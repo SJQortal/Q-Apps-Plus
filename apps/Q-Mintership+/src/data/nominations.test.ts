@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ADDR, MS_PER_BLOCK, NOW, TIP, installWorld } from '../test/world';
+import { fetchCallsFor, mockFetchRoute } from '../test/setup';
+import { ADDR, MS_PER_BLOCK, NOW, PEOPLE, TIP, installWorld } from '../test/world';
 import { loadNominations, loadNominationsFor } from './nominations';
 
 const DAY = 86_400_000;
@@ -205,5 +206,124 @@ describe('the nominations read: a nominator who nominates someone again', () => 
     const n = (await loadNominations()).all.find((x) => x.nominee === nominee);
     expect(n?.earlierRounds).toEqual([]);
     expect(n?.records.some((r) => r.replaced)).toBe(false);
+  });
+});
+
+describe('the nominations read: a record the node doesn’t give', () => {
+  // Simon, 2026-11-25: Minter Admins who block a nominator never saw that nominator's
+  // re-nomination: published again longer, it went off chain, and Core never fetches a
+  // blocked name's data. It showed for them only once another Minter Admin put it on chain.
+  const name = (who: 'nominator' | 'learner' | 'adminL4'): string => PEOPLE[who].name ?? who;
+  const nominator = name('nominator');
+  const bodyPath = (name: string, kind: string, nominee: string) =>
+    `/arbitrary/JSON/${encodeURIComponent(name)}/qmp-${kind}-${nominee}`;
+
+  /** The node has the row but answers no body for it, and this status. */
+  function notGiven(name: string, kind: string, nominee: string, status?: string) {
+    mockFetchRoute(
+      bodyPath(name, kind, nominee),
+      () => new Response('{"error":1,"message":"data unavailable"}', { status: 404 })
+    );
+    if (status)
+      mockFetchRoute(`/arbitrary/resource/status/JSON/${encodeURIComponent(name)}/qmp-${kind}-${nominee}`, {
+        status,
+        id: status,
+        localChunkCount: 0,
+        totalChunkCount: 1,
+      });
+  }
+
+  it('one not on the node yet still shows, who nominated whom and when, without its text', async () => {
+    installWorld('admin');
+    notGiven(nominator, 'nomination', ADDR.nominatedWaiting, 'MISSING_DATA');
+    const data = await loadNominations();
+    const n = data.all.find((x) => x.nominee === ADDR.nominatedWaiting);
+    expect(n?.state).toBe('waiting');
+    expect(n?.publishedAt).toBe(NOW - 2 * DAY);
+    expect(n?.nomination?.publisher.name).toBe(nominator);
+    expect(n?.nomination?.unread).toBe('missing');
+    expect(n?.nomination?.record).toEqual({
+      v: 1,
+      nomineeAddress: ADDR.nominatedWaiting,
+      reason: '',
+      links: [],
+    });
+    expect(data.open.some((x) => x.nominee === ADDR.nominatedWaiting)).toBe(true);
+    expect(data.ignored.some((r) => r.identifier.endsWith(ADDR.nominatedWaiting))).toBe(false);
+  });
+
+  it('a nominator blocked on the node: it shows, and says the node blocks them', async () => {
+    installWorld('admin');
+    notGiven(nominator, 'nomination', ADDR.nominatedWaiting, 'BLOCKED');
+    for (const all of [
+      (await loadNominations()).all,
+      await loadNominationsFor(ADDR.nominatedWaiting),
+    ]) {
+      const n = all.find((x) => x.nominee === ADDR.nominatedWaiting);
+      expect(n?.nomination?.unread).toBe('blocked');
+      expect(n?.nomination?.publisher.name).toBe(nominator);
+    }
+  });
+
+  it('a nominee and publisher are still checked: an ineligible publisher’s stays out', async () => {
+    installWorld('admin');
+    // The learner (level 0) published one for the newcomer: ignored, read or not.
+    notGiven(name('learner'), 'nomination', ADDR.newcomerName, 'BLOCKED');
+    const data = await loadNominations();
+    expect(data.all.some((x) => x.nominee === ADDR.newcomerName)).toBe(false);
+    expect(data.ignored).toContainEqual({
+      name: name('learner'),
+      identifier: `qmp-nomination-${ADDR.newcomerName}`,
+      why: 'publisher',
+    });
+  });
+
+  it('one its nominator deleted stays out', async () => {
+    installWorld('admin');
+    mockFetchRoute(bodyPath(nominator, 'nomination', ADDR.nominatedWaiting), 'D');
+    const data = await loadNominations();
+    expect(data.all.some((x) => x.nominee === ADDR.nominatedWaiting)).toBe(false);
+    expect(data.ignored).toContainEqual({
+      name: nominator,
+      identifier: `qmp-nomination-${ADDR.nominatedWaiting}`,
+      why: 'unreadable',
+    });
+  });
+
+  it('re-published and not given: both rounds show, the lapsed one in History too', async () => {
+    const { world } = installWorld('learner');
+    const nominee = ADDR.lapsed;
+    const record = world.records.find(
+      (r: { identifier: string }) => r.identifier === `qmp-nomination-${nominee}`
+    );
+    if (!record) throw new Error('no record');
+    record.created = NOW - 20 * DAY;
+    record.updated = NOW - 2 * DAY;
+    notGiven(record.name, 'nomination', nominee, 'BLOCKED');
+    const n = (await loadNominations()).all.find((x) => x.nominee === nominee);
+    expect(n?.state).toBe('waiting');
+    expect(n?.earlierRounds.map((r) => r.outcome)).toEqual(['lapsed']);
+    expect(n?.records.map((r) => [r.publishedAt, Boolean(r.replaced), r.unread])).toEqual([
+      [NOW - 20 * DAY, true, 'blocked'],
+      [NOW - 2 * DAY, false, 'blocked'],
+    ]);
+  });
+
+  it('a support the node didn’t give still counts, without its note', async () => {
+    installWorld('admin');
+    notGiven(name('adminL4'), 'support', ADDR.nominatedWaiting);
+    const n = (await loadNominations()).all.find((x) => x.nominee === ADDR.nominatedWaiting);
+    const support = n?.supporters.find((s) => s.publisher.name === name('adminL4'));
+    expect(support?.record).toEqual({ v: 1, nomineeAddress: ADDR.nominatedWaiting });
+  });
+
+  it('asks why only when a body is missing, once per version', async () => {
+    installWorld('admin');
+    notGiven(nominator, 'nomination', ADDR.nominatedWaiting, 'BLOCKED');
+    await loadNominations();
+    await loadNominations({ force: true });
+    const asked = fetchCallsFor('/arbitrary/resource/status/');
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toContain(`qmp-nomination-${ADDR.nominatedWaiting}?build=false`);
   });
 });
