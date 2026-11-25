@@ -854,7 +854,16 @@ export function answerCore(world, pathname, sp) {
     const name = decodeURIComponent(m[1]);
     const identifier = decodeURIComponent(m[2]);
     const r = world.records.find((x) => x.name === name && x.identifier === identifier);
+    // A record the node lists but doesn't give (`unavailable`: its status, e.g. BLOCKED).
+    if (r?.unavailable) return json({ error: 1, message: 'data unavailable' }, 404);
     return r ? json(r.body) : json({ error: 1401, message: 'not found' }, 404);
+  }
+  if ((m = p.match(/^\/arbitrary\/resource\/status\/JSON\/([^/]+)\/([^/]+)$/))) {
+    const name = decodeURIComponent(m[1]);
+    const identifier = decodeURIComponent(m[2]);
+    const r = world.records.find((x) => x.name === name && x.identifier === identifier);
+    const status = r ? (r.unavailable ?? 'READY') : 'NOT_PUBLISHED';
+    return json({ id: status, status, localChunkCount: status === 'READY' ? 1 : 0, totalChunkCount: 1 });
   }
   return undefined;
 }
@@ -1390,6 +1399,19 @@ export function addRenomination(world) {
     text: 'Nominating again: the node has been online all week.',
   });
   return { ids: { question: `qmp-comment-${key}-again1` } };
+}
+
+/**
+ * A node that blocks Nora Nominator (Simon, 2026-11-25: Minter Admins who block a
+ * nominator never saw that nominator's nomination): on top of addRenomination, it
+ * lists her nomination records but never gives their text, as Core does for a
+ * blocked name's off-chain data.
+ */
+export function addBlockedNominator(world) {
+  addRenomination(world);
+  for (const record of world.records)
+    if (record.name === PEOPLE.nominator.name && record.identifier.startsWith('qmp-nomination-'))
+      record.unavailable = 'BLOCKED';
 }
 
 /**

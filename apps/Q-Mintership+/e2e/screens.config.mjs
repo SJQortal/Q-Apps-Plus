@@ -36,7 +36,7 @@ import {
   TIP,
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
-import { addRenomination } from './world.mjs';
+import { addBlockedNominator, addRenomination } from './world.mjs';
 import { nominatorLastVisit } from './world.mjs';
 import { AT_ADDRESS, FUNDER, SPONSOR, TRADER, UNUSED_ADDRESS } from './world-explorer.mjs';
 import { ADMIN_BOARD_IDS } from './world-legacy.mjs';
@@ -61,9 +61,13 @@ const shift = addTargetShift(shiftWorld);
 // A nomination again after one that lapsed, with that one's comments: `?world=again`.
 const againWorld = createWorld();
 addRenomination(againWorld);
+// The same, on a node that blocks its nominator: her records' text never comes. `?world=blocked`.
+const blockedWorld = createWorld();
+addBlockedNominator(blockedWorld);
 /**
  * The world a request's page reads: `?world=shift` picks the moving-target one,
- * `?world=again` the one with a nomination again.
+ * `?world=again` the one with a nomination again, `?world=blocked` that one on
+ * a node that blocks its nominator.
  */
 function worldFor(route) {
   let page = '';
@@ -73,6 +77,7 @@ function worldFor(route) {
     // Not from a page frame: the default world.
   }
   if (/[?&]world=again\b/.test(page)) return againWorld;
+  if (/[?&]world=blocked\b/.test(page)) return blockedWorld;
   return /[?&]world=shift\b/.test(page) ? shiftWorld : world;
 }
 // Shareable links: a decision still waiting, one decided (with its signatures), a nomination.
@@ -126,6 +131,13 @@ const json = (route, status, body) =>
 const wait = (selector) => async (page) =>
   page.waitForSelector(selector, { timeout: 8000 }).catch(() => {});
 const settle = wait('main h1');
+/** A nomination's note that its nominator is blocked on the node (?world=blocked). */
+const blockedNote = async (page) => {
+  await page.getByText('is blocked on your node', { exact: false }).first().waitFor({
+    timeout: 8000,
+  });
+  await page.waitForTimeout(300);
+};
 /** An Explorer page: its title, then its reads (skeletons gone, network quiet). */
 /** Three questions asked before, as the quiz's history keeps them. */
 const QUIZ_HISTORY = [
@@ -934,6 +946,29 @@ export default {
         await tag.click();
         await page.getByRole('dialog', { name: 'Previous nomination' }).waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
+      },
+    },
+    // A node that blocks the nominator (Simon, 2026-11-25): her nominations still show who
+    // nominated whom and when, with a note in place of the reason; the lapsed round stays.
+    {
+      key: 'nomination-blocked',
+      path: `/nominations/${ADDR.lapsed}?world=blocked&as=admin`,
+      after: blockedNote,
+    },
+    {
+      key: 'nominations-blocked',
+      path: '/decisions?show=nominations&world=blocked&as=admin',
+      after: blockedNote,
+    },
+    { key: 'decisions-blocked', path: '/decisions?world=blocked&as=admin', after: blockedNote },
+    {
+      key: 'history-blocked',
+      path: '/history?world=blocked&as=admin',
+      after: async (page) => {
+        await page.getByText('No Minter Admin signed it', { exact: false }).first().waitFor({
+          timeout: 8000,
+        });
+        await page.waitForTimeout(300);
       },
     },
     // Public comments: a thread with replies, a deleted one and a hidden one (folded).
