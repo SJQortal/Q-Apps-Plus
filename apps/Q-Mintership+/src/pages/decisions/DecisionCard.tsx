@@ -49,7 +49,7 @@ import { useCommunityVoter, useCommunityVotes } from '../../hooks/useCommunityVo
 import { VOTING_PHASES, decisionVoteKind, type VoteTopic } from '../../rules/communityVotes';
 import { useConsideringFor } from '../../hooks/useConsidering';
 import { CopyLinkButton } from '../../components/common/CopyLinkButton';
-import { FramedText } from '../../components/common/FramedText';
+import { NominationText } from '../../components/nomination/NominationText';
 import { decisionPath } from '../../routes/paths';
 import { ProgressRing } from '../../components/common/ProgressRing';
 import { Card, DecisionPhaseChip } from '../../components/common/Section';
@@ -699,11 +699,7 @@ function InviteDetails({
             ) : null}
             .
           </Typography>
-          <FramedText
-            text={record.record.reason}
-            links={record.record.links}
-            moreLabel="Show the whole reason"
-          />
+          <NominationText entry={record} />
         </>
       ) : nominationsState === 'loading' ? (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
