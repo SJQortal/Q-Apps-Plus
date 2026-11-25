@@ -71,6 +71,21 @@ describe('an account’s asset trades', () => {
     expect(fetchCallsFor('/assets/')).toHaveLength(3);
   });
 
+  it('an account that never signed a transaction has no orders, not a failed read', async () => {
+    installWorld('learner');
+    // Core finds orders by the account's public key; without one it answers that it
+    // doesn't know the address (seen in Hub, 2026-11-25: a buyer only trade contracts paid).
+    mockFetchRoute(
+      '/assets/orders/',
+      () => new Response('{"error":124,"message":"account address unknown"}', { status: 404 })
+    );
+    await expect(getAccountTrades(ADDR.left)).resolves.toEqual({
+      trades: [],
+      orders: 0,
+      truncated: false,
+    });
+  });
+
   it('one order’s fills are kept for the session', async () => {
     installWorld('learner', { strict: true });
     const ben = await getAccountTrades(ADDR.banTarget);

@@ -24,6 +24,7 @@
 import type { TxRow } from '../types';
 import { getJson, listOf, query, seg } from '../core';
 import { fetchQuery } from '../query';
+import { isUnknownAccount } from './account';
 import { getTransaction } from '../txs';
 import { parseAtomic } from '../../rules/explorer/money';
 import type { AssetTrade, TradeSide } from '../../rules/explorer/trades';
@@ -238,14 +239,22 @@ async function readOrdersIn(
 ): Promise<{ orders: OrderRow[]; more: boolean }> {
   const orders: OrderRow[] = [];
   for (let page = 0; page < ORDERS_PAGES; page++) {
-    const chunk = await getJson<OrderRow[]>(
-      `/assets/orders/${seg(address)}?${query({
-        ...state,
-        limit: ORDERS_PAGE,
-        offset: page * ORDERS_PAGE,
-        reverse: true,
-      })}`
-    );
+    let chunk: unknown;
+    try {
+      chunk = await getJson<OrderRow[]>(
+        `/assets/orders/${seg(address)}?${query({
+          ...state,
+          limit: ORDERS_PAGE,
+          offset: page * ORDERS_PAGE,
+          reverse: true,
+        })}`
+      );
+    } catch (error) {
+      // Core finds orders by the account's public key, and says it doesn't know
+      // an account that never signed a transaction: one that has none.
+      if (isUnknownAccount(error)) return { orders, more: false };
+      throw error;
+    }
     const list = listOf<OrderRow>(chunk, 'its orders');
     orders.push(...list);
     if (list.length < ORDERS_PAGE) return { orders, more: false };
