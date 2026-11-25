@@ -18,6 +18,29 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.9',
+    date: '2026-11-25',
+    title: 'The Explorer, checked in Hub',
+    summary: 'Fixes from a check of 1.0.8’s Explorer in Qortal Hub with real accounts.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'This version only changes the Explorer’s detailed parts, for Minter Admins, Dev Admins and level 5+ minters.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'Connections: on the circle, an amount goes under its name when both don’t fit on one line, so a long amount, with several assets, no longer leaves the name no room.',
+          'An account that never made a transaction of its own (no public key): its Q-Asset trades read as none, not as a failed read, and each Q-Trade purchase names its coin, amount and seller from the contract that paid it.',
+          'The first-payment check across a set counts a multi-payment among the other first transactions in its words too.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.8',
     date: '2026-11-24',
     title: 'The Explorer, checked again',
