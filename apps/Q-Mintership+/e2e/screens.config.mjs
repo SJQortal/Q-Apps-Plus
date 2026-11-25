@@ -950,20 +950,29 @@ export default {
     },
     // A node that blocks the nominator (Simon, 2026-11-25): her nominations still show who
     // nominated whom and when, with a note in place of the reason; the lapsed round stays.
+    // The node refuses her records' text: the browser logs each refused read (404).
     {
       key: 'nomination-blocked',
       path: `/nominations/${ADDR.lapsed}?world=blocked&as=admin`,
+      expectErrors: /status of 404/,
       after: blockedNote,
     },
     {
       key: 'nominations-blocked',
       path: '/decisions?show=nominations&world=blocked&as=admin',
+      expectErrors: /status of 404/,
       after: blockedNote,
     },
-    { key: 'decisions-blocked', path: '/decisions?world=blocked&as=admin', after: blockedNote },
+    {
+      key: 'decisions-blocked',
+      path: '/decisions?world=blocked&as=admin',
+      expectErrors: /status of 404/,
+      after: blockedNote,
+    },
     {
       key: 'history-blocked',
       path: '/history?world=blocked&as=admin',
+      expectErrors: /status of 404/,
       after: async (page) => {
         await page.getByText('No Minter Admin signed it', { exact: false }).first().waitFor({
           timeout: 8000,
