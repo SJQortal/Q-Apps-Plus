@@ -371,8 +371,13 @@ function Node({
               ...outer,
               display: 'flex',
               alignItems: below ? 'center' : 'baseline',
-              gap: below ? 0 : 0.5,
-              flexDirection: below ? 'column' : node.side === 'in' ? 'row-reverse' : 'row',
+              columnGap: below ? 0 : 0.5,
+              flexDirection: below ? 'column' : 'row',
+              // On a side, the amount goes under the name when both don't fit on
+              // one line (seen in Hub, 2026-11-25: a long amount had left the
+              // name no room at all), each line against the avatar.
+              flexWrap: below ? 'nowrap' : 'wrap',
+              justifyContent: below ? undefined : node.side === 'in' ? 'flex-end' : 'flex-start',
               fontSize: 14,
               fontWeight: 600,
               lineHeight: 1.2,
@@ -387,7 +392,7 @@ function Node({
                 : `calc(${node.side === 'in' ? node.x : 100 - node.x}cqw + 32px - ${Math.max(22, node.size / 2 + 5)}px)`,
             }}
           >
-            {/* The amount after the name, always whole; the name cut short when long. */}
+            {/* The amount after the name, or under it; either is cut short only when a line can't hold it. */}
             {lines.length ? (
               <Box
                 component="span"
@@ -413,8 +418,11 @@ function Node({
               <Box
                 component="span"
                 sx={{
-                  order: node.side === 'in' ? 0 : 1,
-                  flexShrink: 0,
+                  order: 1,
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
                   fontWeight: 500,
                   color: 'text.secondary',
                 }}
