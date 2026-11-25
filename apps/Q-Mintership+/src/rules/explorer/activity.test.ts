@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { TimelineEvent } from '../../data/timeline';
 import type { TxRow } from '../../data/types';
+import { bucketWords } from '../../pages/explorer/account/activity/activityWords';
 import {
   activityBuckets,
   axisTicks,
+  bucketAt,
   chainMarks,
   firstShareMark,
   familyCounts,
@@ -45,6 +47,30 @@ describe('activityBuckets', () => {
     const b = activityBuckets(rows, { from: 0, to: 100, count: 10, readFrom: 30 });
     expect(b.slice(0, 3).map((x) => x.unread)).toEqual([true, true, true]);
     expect(b[3].unread).toBe(false);
+  });
+
+  // Hub's Explorer port (2026-11-22): the period holding the oldest transaction read counted as
+  // fully read.
+  it('marks the period that holds the oldest read as partly read', () => {
+    const b = activityBuckets(rows, { from: 0, to: 100, count: 10, readFrom: 35 });
+    expect(b[3]).toMatchObject({ start: 30, end: 40, unread: false, partly: true });
+    expect(b[2]).toMatchObject({ unread: true, partly: false });
+    expect(b[4].partly).toBe(false);
+    expect(bucketWords(b[3])).toMatch(
+      /: 0 transactions\. Its older transactions aren’t read yet\.$/
+    );
+  });
+
+  // Hub's Explorer port (2026-11-22): a picked period lost its mark once the chart was drawn
+  // anew (a minute on, Read older, zoom).
+  it('finds the period that holds a picked start, after the periods were drawn anew', () => {
+    const before = activityBuckets(rows, { from: 0, to: 100, count: 10 });
+    const picked = before[3].start;
+    const after = activityBuckets(rows, { from: 0, to: 160, count: 7 });
+    const i = bucketAt(after, picked);
+    expect(after[i].start).toBeLessThanOrEqual(picked);
+    expect(after[i].end).toBeGreaterThan(picked);
+    expect(bucketAt(after, null)).toBe(-1);
   });
 
   it('leaves hidden families out', () => {

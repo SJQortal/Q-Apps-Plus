@@ -22,6 +22,8 @@ export const ACCOUNT_KEY_PREFIXES = [
   'xpay:',
   'xassets:',
   'xassettrades:',
+  'xportal:',
+  'xatrows:',
   'xholdings:',
   'xassetprices:',
   'xassetsales:',
@@ -34,6 +36,12 @@ export const ACCOUNT_KEY_PREFIXES = [
   'xlastsent:',
   'xlegacyby:',
   'xpollvotes:',
+  // QORT minted, purchased / sold: its balance, asset orders, trades and reward shares.
+  'xbalance:',
+  'xordersq:',
+  'xtrades:',
+  'xevershare:',
+  'xatpaid:',
   // The app's reads it shares.
   'account:',
   'name:',

@@ -19,7 +19,11 @@ import type { TxRow } from '../types';
 
 const A = 'QSeDMkseNfi9b5K5no8aX8jqc3y78vuxr7';
 const B = 'QPmsozoP6w3WAgvMyHnUhqauz1JR9FVHeF';
-const SIG = (n: number) => `${'4Kw5V2Zmh7mfV6KjPuX2ZXCK3HE2fsR6w5CWD75CdMa8Rfat1mXcf5rCiLpm8tm96FMPhCUBpMUaLpvUmitbq'}${'Jbm'.slice(0, 1)}${n}`.slice(0, 88);
+const SIG = (n: number) =>
+  `${'4Kw5V2Zmh7mfV6KjPuX2ZXCK3HE2fsR6w5CWD75CdMa8Rfat1mXcf5rCiLpm8tm96FMPhCUBpMUaLpvUmitbq'}${'Jbm'.slice(0, 1)}${n}`.slice(
+    0,
+    88
+  );
 
 function account(extra: Record<string, unknown> = {}) {
   return { address: A, level: 3, blocksMinted: 1000, flags: 0, ...extra };
@@ -77,9 +81,9 @@ describe('getNamesOf', () => {
     expect(fetchCallsFor('/names/address/')).toHaveLength(2);
   });
 
-  it('stops at 5 pages and says so', async () => {
+  it('stops at 5 pages and says so, once one more row shows there are more', async () => {
     mockFetchRoute('/names/address/', (url: URL) =>
-      Array.from({ length: 100 }, (_, i) => ({
+      Array.from({ length: Number(url.searchParams.get('limit')) }, (_, i) => ({
         name: `n${Number(url.searchParams.get('offset')) + i}`,
         owner: A,
       }))
@@ -87,7 +91,24 @@ describe('getNamesOf', () => {
     const result = await getNamesOf(A);
     expect(result.names).toHaveLength(500);
     expect(result.truncated).toBe(true);
-    expect(fetchCallsFor('/names/address/')).toHaveLength(5);
+    const calls = fetchCallsFor('/names/address/').map((u) => new URL(u, 'http://x').searchParams);
+    expect(calls).toHaveLength(6);
+    expect([calls[5].get('offset'), calls[5].get('limit')]).toEqual(['500', '1']);
+  });
+
+  // Hub's Explorer port (2026-11-22): "500+ names" for an account with exactly 500.
+  it('exactly 500 names: not cut', async () => {
+    mockFetchRoute('/names/address/', (url: URL) =>
+      Number(url.searchParams.get('offset')) >= 500
+        ? []
+        : Array.from({ length: 100 }, (_, i) => ({
+            name: `n${Number(url.searchParams.get('offset')) + i}`,
+            owner: A,
+          }))
+    );
+    const result = await getNamesOf(A);
+    expect(result.names).toHaveLength(500);
+    expect(result.truncated).toBe(false);
   });
 });
 
@@ -111,7 +132,13 @@ describe('getNameData', () => {
 describe('getGroupsOf', () => {
   it('lists every group and primes the MINTER membership', async () => {
     mockFetchRoute('/groups/member/', [
-      { groupId: 31, groupName: 'alt coin investor', isOpen: true, memberCount: 72, isAdmin: false },
+      {
+        groupId: 31,
+        groupName: 'alt coin investor',
+        isOpen: true,
+        memberCount: 72,
+        isAdmin: false,
+      },
       { groupId: 694, groupName: 'MINTER', isOpen: false, memberCount: 629, isAdmin: true },
     ]);
     const groups = await getGroupsOf(A);
@@ -174,7 +201,10 @@ describe('fundingFrom', () => {
           ...base,
           type: 'MULTI_PAYMENT',
           creatorAddress: B,
-          payments: [{ recipient: 'Qother', amount: '1' }, { recipient: A, amount: '2' }],
+          payments: [
+            { recipient: 'Qother', amount: '1' },
+            { recipient: A, amount: '2' },
+          ],
         },
         A
       )
@@ -205,10 +235,15 @@ describe('fundingFrom', () => {
   });
 
   it('ignores transactions that send nothing to the account', () => {
-    expect(fundingFrom({ ...base, type: 'PAYMENT', recipient: B, creatorAddress: A }, A)).toBeNull();
+    expect(
+      fundingFrom({ ...base, type: 'PAYMENT', recipient: B, creatorAddress: A }, A)
+    ).toBeNull();
     expect(fundingFrom({ ...base, type: 'REGISTER_NAME', creatorAddress: A }, A)).toBeNull();
     expect(
-      fundingFrom({ ...base, type: 'PAYMENT', recipient: A, creatorAddress: B, blockHeight: undefined }, A)
+      fundingFrom(
+        { ...base, type: 'PAYMENT', recipient: A, creatorAddress: B, blockHeight: undefined },
+        A
+      )
     ).toBeNull();
   });
 });
@@ -263,7 +298,14 @@ describe('getFirstSeen', () => {
   it('falls back when the reference names someone else', async () => {
     mockFetchRoute('/addresses/', account({ publicKey: 'PK' }));
     mockFetchRoute('/transactions/creator/', [
-      { type: 'PAYMENT', timestamp: 3000, signature: 'own', reference: 'x', txGroupId: 0, blockHeight: 500 },
+      {
+        type: 'PAYMENT',
+        timestamp: 3000,
+        signature: 'own',
+        reference: 'x',
+        txGroupId: 0,
+        blockHeight: 500,
+      },
     ]);
     mockFetchRoute('/transactions/signature/', { ...payment, recipient: 'Qsomeoneelse' });
     mockFetchRoute('/transactions/payments/between', []);

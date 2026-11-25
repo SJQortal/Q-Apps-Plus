@@ -46,19 +46,37 @@ export const LOOK_PAGES = 10;
 export const RESULTS_TITLE = 'Confirmed transactions';
 export const WAITING_TITLE = 'Waiting to be confirmed';
 
-/** Up to 20 waiting for a block, of the picked type. Nothing when there are none. */
+/**
+ * Up to 20 waiting for a block, of the picked type. Nothing when there are
+ * none; a read that failed says so, with Retry, never "none waiting", and
+ * over rows from before it says they may be out of date (Hub's Explorer
+ * port, 2026-11-22).
+ */
 export function GlobalWaiting({ type }: { type: GlobalType }) {
   const types = typesOfChoice(type);
   const waiting = useQuery(globalWaitingKey(types), (force) => getGlobalWaiting(types, { force }));
   const rows = waiting.data ?? [];
-  if (!rows.length) return null;
+  const failed = waiting.isError || Boolean(waiting.error);
+  if (!rows.length && !failed) return null;
   return (
-    <Section title={WAITING_TITLE} id="explorer-global-waiting" count={rows.length}>
+    <Section title={WAITING_TITLE} id="explorer-global-waiting" count={rows.length || undefined}>
+      {failed ? (
+        <ErrorState
+          compact
+          title={
+            rows.length
+              ? "Couldn't read what waits for a block again: these are from before."
+              : "Couldn't read what waits for a block."
+          }
+          error={waiting.error}
+          onRetry={() => void waiting.refetch()}
+        />
+      ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
         Your node holds these until a block takes them.
         {rows.length >= GLOBAL_PAGE ? ` The newest ${GLOBAL_PAGE} are shown.` : ''}
       </Typography>
-      <TxList rows={rows} label={WAITING_TITLE} />
+      {rows.length ? <TxList rows={rows} label={WAITING_TITLE} /> : null}
     </Section>
   );
 }
@@ -103,12 +121,29 @@ export function GlobalResults({
   const narrowed = filter !== undefined && filterOn(filter);
   const matches = (tx: TxRow) => !narrowed || rowMatches(tx, filter as RowFilter);
   const last = older.length ? older[older.length - 1] : null;
-  const count =
+  // What was read, for the next page's offset.
+  const read =
     (first.data?.rows.length ?? 0) + older.reduce((sum, page) => sum + page.rows.length, 0);
+  // Each transaction once: Core orders this search by time alone, so two with the same time
+  // can swap between two reads, one showing on both pages (Hub's Explorer port, 2026-11-22).
+  const seen = new Set<string>();
+  let repeats = 0;
+  const once = (rows: readonly TxRow[]) =>
+    rows.filter((tx) => {
+      if (seen.has(tx.signature)) {
+        repeats += 1;
+        return false;
+      }
+      seen.add(tx.signature);
+      return true;
+    });
+  const firstRows = once(first.data?.rows ?? []);
+  const olderRows = older.map((page) => ({ offset: page.offset, rows: once(page.rows) }));
+  const count = firstRows.length + olderRows.reduce((sum, page) => sum + page.rows.length, 0);
   const done = last ? last.done : Boolean(first.data?.done);
   const more = Boolean(first.data) && !done;
-  const firstShown = (first.data?.rows ?? []).filter(matches);
-  const olderShown = older.map((page) => ({
+  const firstShown = firstRows.filter(matches);
+  const olderShown = olderRows.map((page) => ({
     offset: page.offset,
     rows: page.rows.filter(matches),
   }));
@@ -125,8 +160,8 @@ export function GlobalResults({
     if (loading || !more) return;
     setLoading(true);
     setOlderError(null);
-    let offset = count;
-    let read = 0;
+    let offset = read;
+    let brought = 0;
     let matched = 0;
     const pages: typeof older = [];
     try {
@@ -134,7 +169,7 @@ export function GlobalResults({
       for (let i = 0; i < LOOK_PAGES; i += 1) {
         const page = await getGlobalTx(types, range, offset, { endsAtTip, order });
         pages.push({ offset, rows: page.rows, done: page.done });
-        read += page.rows.length;
+        brought += page.rows.length;
         matched += page.rows.filter(matches).length;
         offset += page.rows.length;
         if (page.done || !narrowed || matched > 0) break;
@@ -151,8 +186,8 @@ export function GlobalResults({
         requestAnimationFrame(() =>
           setSaid(
             narrowed
-              ? lookedFurtherWords(read, matched, order)
-              : globalOlderLoaded(type, read, order)
+              ? lookedFurtherWords(brought, matched, order)
+              : globalOlderLoaded(type, brought, order)
           )
         );
       }
@@ -180,7 +215,8 @@ export function GlobalResults({
       />
     );
   } else {
-    const coverage = globalCoverage(type, count, done, range, order);
+    // After a repeat, a row may have been skipped too: never "All".
+    const coverage = globalCoverage(type, count, done && !repeats, range, order);
     body = (
       <>
         {shown ? (

@@ -15,6 +15,7 @@ import { FUNDER, TIP, answerCore, type World } from '../../../e2e/world.mjs';
 import { renderPage } from '../../test/render';
 import { expectNoAxeViolations } from '../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../test/setup';
+import { setQueryData } from '../../data/query';
 import { typesOfChoice } from './tx/globalFilters';
 import TransactionsPage from './TransactionsPage';
 
@@ -238,7 +239,7 @@ describe('Transactions on Qortal', () => {
     const { user } = await open('?type=payments');
     await results();
     await user.selectOptions(screen.getByRole('combobox', { name: 'Blocks' }), 'from');
-    const field = screen.getByRole('textbox', { name: 'From block' });
+    let field = screen.getByRole('textbox', { name: 'From block' });
     expect(field).toHaveAttribute('inputmode', 'numeric');
     await user.type(field, 'abc');
     await user.click(screen.getByRole('button', { name: 'Show' }));
@@ -246,7 +247,10 @@ describe('Transactions on Qortal', () => {
     await user.clear(field);
     await user.type(field, '9999999');
     await user.click(screen.getByRole('button', { name: 'Show' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('The chain is at block 2,757,500.');
+    // Past the tip: the chain's newest block is read before it says no.
+    expect(await screen.findByText('The chain is at block 2,757,500.', {}, T)).toBeVisible();
+    // The bar is drawn again for the new range: its field anew.
+    field = screen.getByRole('textbox', { name: 'From block' });
     await user.clear(field);
     // As the app shows block numbers, with commas (Simon, 2026-10-17).
     await user.type(field, '2,640,000');
@@ -263,6 +267,23 @@ describe('Transactions on Qortal', () => {
     // An older range has no mempool list.
     expect(screen.queryByRole('region', { name: /Waiting to be confirmed/ })).toBeNull();
     everySearchBounded();
+  });
+
+  // Hub's Explorer port (2026-11-22): a tip read earlier in the session said "The chain is at
+  // block N" for a link to a newer block.
+  it('reads the chain’s newest block before saying a start is past it', async () => {
+    const start = TIP - 5;
+    await open(`?type=payments&blocks=from-${start}&span=1`, () => {
+      setQueryData('chain:tip', { height: TIP - 10, timestamp: 0 });
+    });
+    const found = await results();
+    expect(within(found).queryByText(/^The chain is at block/)).toBeNull();
+    expect(screen.queryByText(/^The chain is at block/)).toBeNull();
+    expect(fetchCallsFor('/blocks/last').length).toBeGreaterThan(0);
+    await waitFor(
+      () => expect(searches().some((p) => p.get('startBlock') === String(start))).toBe(true),
+      T
+    );
   });
 
   it('shows older pages of 20, says what came, and keeps focus until none are left', async () => {
@@ -299,6 +320,57 @@ describe('Transactions on Qortal', () => {
     expect(searches().map((p) => p.get('offset'))).toEqual(['0', '20', '40']);
     everySearchBounded();
     noWrites(posts);
+  });
+
+  // Hub's Explorer port (2026-11-22): two transactions with the same time can swap between the
+  // reads of two pages, so one showed twice and the line said "All".
+  it('shows a transaction on two pages once, and never says "All" after a repeat', async () => {
+    const { user } = await open('?type=payments', (world) =>
+      mockFetchRoute('/transactions/search', (url: URL) => {
+        const p = url.searchParams;
+        if (p.has('address')) return worldAnswer(world, url);
+        const rows = (world.explorer.rows as Array<{ creatorAddress?: string }>)
+          .filter((r) => r.creatorAddress === FUNDER.address)
+          .slice(0, 25)
+          .reverse();
+        const offset = Number(p.get('offset'));
+        // The second page starts with the first page's last row again.
+        return offset === 0 ? rows.slice(0, 20) : rows.slice(19, 24);
+      })
+    );
+    const found = await results();
+    const list = await within(found).findByRole('list', { name: 'Confirmed transactions' }, T);
+    await user.click(within(found).getByText('Show older', { selector: 'button' }));
+    await waitFor(() => expect(items(list)).toHaveLength(24), T);
+    expect(within(found).getByText(/^The newest 24 payments in blocks/)).toBeVisible();
+    expect(within(found).queryByText(/^All /)).toBeNull();
+  });
+
+  // Hub's Explorer port (2026-11-22): failed reads looked like nothing waiting, or nothing at all.
+  it('says when what waits couldn’t be read, and when Refresh couldn’t read the newest block', async () => {
+    const { user } = await open('?type=payments', () =>
+      mockFetchRoute('/transactions/unconfirmed', () => new Response('down', { status: 500 }))
+    );
+    const waiting = await screen.findByRole('region', { name: /Waiting to be confirmed/ }, T);
+    expect(await within(waiting).findByRole('alert', {}, T)).toHaveTextContent(
+      "Couldn't read what waits for a block."
+    );
+    expect(within(waiting).getByRole('button', { name: /Retry/ })).toBeVisible();
+    mockFetchRoute('/blocks/last', () => new Response('down', { status: 500 }));
+    await user.click(screen.getByRole('button', { name: /Refresh/ }));
+    await waitFor(
+      () =>
+        expect(
+          screen
+            .getAllByRole('alert')
+            .some((el) =>
+              el.textContent?.includes(
+                "Couldn't read the chain's newest block: what shows is from before."
+              )
+            )
+        ).toBe(true),
+      T
+    );
   });
 
   it('reads oldest first, and from a block for as many blocks as picked', async () => {

@@ -4,7 +4,13 @@ import { exchangeFlow, exchangeLine, exchangeName } from './exchanges';
 
 const TRADEOGRE = 'QcZPChiGmwLu3Lrp2mfLSjZ3yHKmtrogRe';
 const row = (amount: string, height: number, timestamp: number) =>
-  ({ signature: `s${height}`, type: 'PAYMENT', amount, blockHeight: height, timestamp }) as unknown as TxRow;
+  ({
+    signature: `s${height}`,
+    type: 'PAYMENT',
+    amount,
+    blockHeight: height,
+    timestamp,
+  }) as unknown as TxRow;
 
 describe('exchanges', () => {
   it('knows the exchanges Simon listed, by their deposit accounts', () => {
@@ -30,5 +36,15 @@ describe('exchanges', () => {
       /^Received 12 QORT from TradeOgre, an exchange, in its newest 1 payment \(there are older ones\) \(\d+ May 2026\)\.$/
     );
     expect(exchangeFlow(TRADEOGRE, 'sent', [])).toBeNull();
+  });
+
+  // Hub's Explorer port (2026-11-22): from Connections lists that stopped short, a line read as a
+  // full count.
+  it('from lists that stopped short: there may be older ones', () => {
+    const may = Date.UTC(2026, 4, 5);
+    const flow = exchangeFlow(TRADEOGRE, 'sent', [row('12', 5, may)], false, true);
+    expect(exchangeLine(flow!)).toMatch(
+      /^Sent 12 QORT to TradeOgre, an exchange, in its newest 1 payment read \(there may be older ones\) \(\d+ May 2026\)\.$/
+    );
   });
 });

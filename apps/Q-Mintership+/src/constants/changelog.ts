@@ -18,6 +18,174 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '1.0.9',
+    date: '2026-11-25',
+    title: 'Every nomination shows',
+    summary:
+      'A nomination your node won’t fetch still shows, with a note saying why, and fixes from a check of 1.0.8’s Explorer in Qortal Hub.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A nomination whose text your node doesn’t give still shows who nominated whom and when, with a note in place of the reason: its nominator is blocked on your node (Hub’s Blocked users), or the text hasn’t reached your node yet. Until now it didn’t show at all before a Minter Admin put it on chain, and an earlier nomination of the same person dropped out of History.',
+          'A support your node doesn’t give still counts; only its note is missing.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'Connections: on the circle, an amount goes under its name when both don’t fit on one line, so a long amount, with several assets, no longer leaves the name no room.',
+          'An account that never made a transaction of its own (no public key): its Q-Asset trades read as none, not as a failed read, and each Q-Trade purchase names its coin, amount and seller from the contract that paid it.',
+          'The first-payment check across a set counts a multi-payment among the other first transactions in its words too.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.0.8',
+    date: '2026-11-24',
+    title: 'The Explorer, checked again',
+    summary:
+      'Fixes from the Explorer’s port into Qortal Hub: figures that read wrong for some accounts, counts that said there were more than there are, reads that failed without a word, and a few keyboard and layout fixes.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A count says “+” or “older ones aren’t read yet” only when one more row shows there are: an account with exactly 100 transactions, 500 names or 1,000 in Activity read as having more.',
+          'Activity: the period that holds the oldest transaction read is hatched and says its older ones aren’t read yet, and a period picked on the chart keeps its mark when the chart is drawn again.',
+          'Transactions on Qortal reads the chain’s newest block before saying a start block is past it, shows a transaction once when Core gives it on two pages, and says when what waits for a block, or a Refresh, couldn’t be read.',
+          'An open asset order says it is partly filled so far, and its fills are read again while it is open.',
+          'Q-Assets: what buyers would pay now stands on its own for each asset; a price or holdings not read yet no longer read as “Never traded” or “None”; an opened asset reads its own last trade; the holders list says “the 100 biggest” when there are more; and trades at the same moment give the same price whatever order Core lists them in.',
+          'A Q-Asset or asset-order read Core answers with something other than a list is a failed read, with Retry, never “none”.',
+          'Group cards: when your groups couldn’t be checked, Join gives way to Retry; after a join is sent its button stays, so the keyboard focus does too; and Show fewer keeps the focus on its button, in view.',
+          'An avatar’s letter is the name’s first visible letter, past invisible characters.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'QORT minted: an account whose minting level moved away shows what it minted, not “Never minted”; its balance is tied to its newest transaction, so a payment that arrived between two reads no longer counts as minted; and Refresh reads the balance, asset orders and trades again.',
+          'QORT purchased counts what trade contracts paid a buyer that never made a transaction of its own (no public key).',
+          'Trades: every chain’s trades are listed, one on a coin it doesn’t name as another coin; a buyer without a public key has its trades; a trade with no time says so; the chart’s picked period stays for Back and its table names the coins; offers older than the payouts read are “not known”, not open; each Q-Asset trade’s sides come from the account’s own order; prices are per unit traded for QORT; and trades between its own orders are left out and counted.',
+          'Connections: a node on the circle counts each transaction once; neighbours and the names under the bottom avatars keep apart; with a search typed it says only matches are drawn; links with several accounts are listed under it; other links show 20 at a time. Exchange lines say when older payments may be missing, and only claim older ones that exist.',
+          'A first QORT payment is a payment everywhere, as Funded reads them: a multi-payment is told as another first transaction. Funded counts the AT addresses it leaves out, not the payments to them.',
+          'Checks across a set: Stop stops the account being read, the words count only the accounts checked (“the only account” for one), and the results stay for Back. A sponsee row says there may be more reward shares while the sponsor’s list stopped short.',
+          'Compare reads each seller’s whole Trade Portal list, dates a pair’s sales only from those with a time, and credits a name registration once “first seen” is known.',
+          'The account report writes names from the chain as plain text, never as links or headings, and its QORT totals say what to do when the history wasn’t read.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.0.7',
+    date: '2026-11-24',
+    title: 'Nominated again: each nomination kept apart',
+    summary:
+      'When someone is nominated again, the new nomination shows its own nominator and text, and the comments on the earlier ones stay with it, folded and marked. Dates and History keep each nomination apart too.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A nomination that was decided shows the nominator and text of the round its invite answered. After a re-nomination was approved or rejected, its page could show the earlier nomination’s nominator and text instead.',
+          'When someone is nominated again, the comments on their earlier nominations stay with the new one, folded under Comments from previous nominations. Each has a Previous nomination tag: pointing at it says when the comment was written and how that nomination ended, and pressing it links to how it ended. They can be read there, not answered.',
+          'The count is the new nomination’s comments, with the earlier ones beside it: Comments (2) · 9 earlier. Before, the earlier ones counted as the new one’s, and showed among them.',
+          'When a nominator nominated the same person again, their earlier nomination dropped out of History if it had lapsed, and lost its nominator if an invite had decided it. Both stay now.',
+          'A re-nomination that lapsed says when its own wait ended, not when an earlier round was decided.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'Connections, under In Q-Mintership, lists who nominated and supported someone in every round they were nominated in, each with its round. It showed only the latest round’s.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.0.6',
+    date: '2026-11-17',
+    title: 'Lapsed nominations in History',
+    summary:
+      'A nomination no Minter Admin signed within the waiting window now stays in History, as Lapsed.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'History lists the nominations that lapsed: no Minter Admin signed them within the waiting window. Each says who was nominated, by whom and when it lapsed, and opens the nomination. They are among All, and Lapsed nominations shows them alone.',
+          'A nomination a Minter Admin’s invite answered weeks ago now shows how that invite ended (approved, rejected or expired), not Lapsed.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.0.5',
+    date: '2026-11-13',
+    title: 'A new nomination starts fresh',
+    summary:
+      'When someone is nominated again, the new nomination shows its own nominator, text and votes, not those of their earlier nomination.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A re-nomination shows only its own nominator, reason, community votes and supports. Once a Minter Admin’s invite was waiting, an earlier nomination of the same person could show instead (its nominator, its text and its votes); each now stays with its own round.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.0.4',
+    date: '2026-10-26',
+    title: 'Nominations credit their nominator',
+    summary:
+      'A nominee’s decided invite now says who proposed the nomination, with the Minter Admin who gave the first approval.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'A decided invite that answered a nomination says “Proposed by” its nominator, then “First approval by” the Minter Admin whose invite started the round, on the decision’s own page. History and the Minter Profile’s timeline say “proposed by” the nominator too. An invite a Minter Admin made without a nomination still names them.',
+        ],
+      },
+      {
+        title: 'Explorer, for Minter Admins, Dev Admins and level 5+ minters',
+        full: true,
+        notes: [
+          'A Trades tab, between Transactions and Assets: the QORT an account sold and bought on Q-Trade, every chain, the trade offers it made and how each ended (completed, ended without a trade, open), and its Q-Asset trades, summed up at the top.',
+          'Under the summary, a breakdown: the QORT it sold and bought by coin, over time as a chart or a table, its offers by coin, by Q-Asset, and highlights: its biggest trades and averages, and the accounts it traded with most. Its trades are listed under it, each with its coin, its price, the other account and its AT.',
+          'A decided invite’s page offers Compare nominee and nominator, as it does while the decision waits.',
+        ],
+      },
+    ],
+  },
+  {
+    version: '1.0.3',
+    date: '2026-10-23',
+    title: 'Full window on big screens',
+    summary:
+      'A new Page width setting: Full window spreads the pages across the whole window, with cards side by side on big screens. Closed Minter Admin polls are kept in History.',
+    sections: [
+      {
+        title: 'For everyone',
+        notes: [
+          'Settings → Appearance → Page width: Comfortable keeps each page in a centred column, as before; Full window uses the whole width of the window.',
+          'In Full window, decisions, nominations and Minter Admin polls sit side by side, as many as fit; so do Home’s and Settings’ sections and History’s months. The Explorer, Activity and their tables, charts and grids use the whole width. Forms keep their width, so fields stay easy to fill in.',
+          'Phones look as they did, upright or held sideways.',
+          'Opening a menu, such as a choice in Settings, no longer moves the page sideways, and the side rail and the page’s title bar stay where they are.',
+          'Home has the Q-Minter Guide’s minting overview and the history of minting for everyone, members and Minter Admins included.',
+        ],
+      },
+      {
+        title: 'For Minter Admins',
+        notes: [
+          'Closed Minter Admin polls are in History, among the decisions, by when voting ended: the question, who asked, the result and your vote, and a link to the poll. Minter Admin polls, a type of its own in History, shows them alone. Decisions lists the open ones, with a link to the closed ones.',
+          'A poll’s own page opens however long ago it closed; before, polls closed more than 31 days ago could no longer be found.',
+        ],
+      },
+    ],
+  },
+  {
     version: '1.0.2',
     date: '2026-10-21',
     title: 'Q-Assets in the Explorer',

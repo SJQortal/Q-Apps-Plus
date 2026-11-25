@@ -112,7 +112,8 @@ describe('Minter Profile', () => {
     );
     const searches = fetchCallsFor('/transactions/search')
       .map((url) => new URL(url, 'http://x').searchParams)
-      .filter((p) => p.get('address') === ADDR.admin && p.get('limit') === '1');
+      // Typed: QORT minted's balance reads its newest transaction too (getTiedBalance).
+      .filter((p) => p.get('address') === ADDR.admin && p.get('limit') === '1' && p.get('txType'));
     expect(searches.map((p) => [p.get('txType'), p.get('reverse')]).sort()).toEqual([
       ['REWARD_SHARE', 'false'],
       ['TRANSFER_PRIVS', 'true'],

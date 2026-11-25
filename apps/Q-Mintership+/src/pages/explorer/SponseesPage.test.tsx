@@ -5,14 +5,23 @@
  * progress and Stop. Read-only.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { createMemoryRouter, Outlet, RouterProvider, useNavigate } from 'react-router-dom';
+import { render } from '@testing-library/react';
+import { HubThemeProvider } from '../../hub-theme';
+import { themeConfig, THEME_STORAGE_KEY } from '../../theme/qplus-theme';
+import { signIn } from '../../state/session';
+import { useSafeBack, useTrackInAppHistory } from '../../hooks/useSafeBack';
+import { useScrollTopOnNewPage } from '../../hooks/useScrollTopOnNewPage';
+import { useHubMessages } from '../../hooks/useHubMessages';
 import { renderPage, type RenderPageOptions } from '../../test/render';
 import { expectNoAxeViolations } from '../../test/axe';
 import { mockFetchRoute, qortalCalls } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { ADDR, installWorld } from '../../test/world';
 import { SPONSEES, SPONSOR, answerCore } from '../../../e2e/world.mjs';
-import { queryLoadCounts } from '../../data/query';
+import { peekQuery, queryLoadCounts, setQueryData } from '../../data/query';
+import { linksKey, type AccountLinks } from '../../data/explorer/links';
 import { explorerSponseesPath } from '../../routes/paths';
 import { resetExplorerState } from '../../state/explorer';
 import SponseesPage from './SponseesPage';
@@ -75,6 +84,19 @@ describe('the accounts a sponsor sponsored', () => {
     ).toEqual([]);
   });
 
+  // Hub's Explorer port (2026-11-22): "3 reward shares in all" from a sponsor's list cut short.
+  it('a sponsor’s list cut short: its rows say there may be more, never "in all"', async () => {
+    await open();
+    const rows = await list();
+    const key = linksKey(SPONSOR.address);
+    const links = peekQuery<AccountLinks>(key);
+    expect(links).toBeDefined();
+    act(() => setQueryData<AccountLinks>(key, { ...(links as AccountLinks), truncated: true }));
+    await waitFor(() => expect(rows).toHaveTextContent('there may be more'), T);
+    expect(rows).not.toHaveTextContent('in all');
+    expect(rows).toHaveTextContent(/Sponsored .+ or before at/);
+  });
+
   it('picks up to 4 accounts, then Compare opens them', async () => {
     const { user } = await open();
     await list();
@@ -134,6 +156,75 @@ describe('the accounts a sponsor sponsored', () => {
     expect(
       await within(card).findByText(/^Stopped after [0-4] of 5 accounts\.$/, {}, T)
     ).toBeInTheDocument();
+    // Hub's Explorer port (2026-11-22): what it found speaks for the accounts checked only.
+    expect(card).not.toHaveTextContent('of these 5 accounts');
+  });
+
+  // Hub's Explorer port (2026-11-22): a check's results were gone after going to an account and
+  // coming Back.
+  it('keeps a check’s results for Back', async () => {
+    installWorld('learner');
+    await signIn();
+    // The app shell's page visits, which keep each view for Back.
+    function Shell() {
+      useTrackInAppHistory();
+      useScrollTopOnNewPage();
+      useHubMessages();
+      return <Outlet />;
+    }
+    function Away() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => navigate('/elsewhere')}>
+          leave
+        </button>
+      );
+    }
+    function Elsewhere() {
+      const back = useSafeBack('/');
+      return (
+        <button type="button" onClick={back}>
+          go back
+        </button>
+      );
+    }
+    const router = createMemoryRouter(
+      [
+        {
+          element: <Shell />,
+          children: [
+            {
+              path: ROUTE,
+              element: (
+                <>
+                  <SponseesPage />
+                  <Away />
+                </>
+              ),
+            },
+            { path: '/elsewhere', element: <Elsewhere /> },
+          ],
+        },
+      ],
+      { initialEntries: [explorerSponseesPath(SPONSOR.address)] }
+    );
+    render(
+      <HubThemeProvider storageKey={THEME_STORAGE_KEY} config={themeConfig}>
+        <RouterProvider router={router} />
+      </HubThemeProvider>
+    );
+    const user = userEvent.setup();
+    await list();
+    const card = () => screen.getByRole('region', { name: 'Who made their first QORT payment' });
+    await user.click(within(card()).getByRole('button', { name: 'Check 5 accounts' }));
+    expect(await within(card()).findByText('Checked all 5 accounts.', {}, T)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'leave' }));
+    await user.click(await screen.findByRole('button', { name: 'go back' }, T));
+    await list();
+    expect(await within(card()).findByText('Checked all 5 accounts.', {}, T)).toBeInTheDocument();
+    expect(
+      within(card()).getByRole('list', { name: 'First QORT payments by payer' })
+    ).toBeVisible();
   });
 
   it('leaving the page stops a check: no new account starts', async () => {

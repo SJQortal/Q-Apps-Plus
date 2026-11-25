@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { Box } from '@mui/material';
 import { primarySoft } from '../../hub-theme';
+import { avatarLetter } from './avatarLetter';
 import {
   avatarFailed,
   avatarKey,
@@ -61,7 +62,7 @@ export function NameAvatar({
   }, [node, visible, name, avatar.src]);
 
   const letterSource = letterFrom ?? name;
-  const letter = letterSource ? ([...letterSource.trim()][0]?.toUpperCase() ?? '?') : '';
+  const letter = letterSource ? avatarLetter(letterSource) : '';
   const sized = (px: (s: number) => number) =>
     phoneSize === undefined ? px(size) : { xs: px(phoneSize), sm: px(size) };
   const src = name && (visible || avatar.loaded) ? avatar.src : null;

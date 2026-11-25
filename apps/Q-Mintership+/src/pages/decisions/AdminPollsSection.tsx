@@ -1,15 +1,18 @@
 /**
  * Decisions → "Minter Admin polls", for Minter Admins only (loaded on demand,
- * so nobody else downloads or reads any of it): open polls first, the
- * soonest end first, then those that ended in the last 31 days. Each card
- * votes, shares and comments through its own Hub step. Advisory only.
- * "Hide already voted on" (the Decisions switch) leaves out the polls the
- * viewer voted on, with a note to show them.
+ * so nobody else downloads or reads any of it): the open polls, the soonest
+ * end first. Once closed, a poll is in History's timeline (pages/history/parts/ClosedPolls.tsx).
+ * Each card votes, shares and comments through its own Hub step. Advisory
+ * only. "Hide already voted on" (the Decisions switch) leaves out the polls
+ * the viewer voted on, with a note to show them.
  */
 import { useState } from 'react';
+import { Link as RouterLink } from 'react-router-dom';
 import { Box, Button, Typography } from '@mui/material';
+import HistoryOutlinedIcon from '@mui/icons-material/HistoryOutlined';
 import { useTheme } from '@mui/material/styles';
 import { Section } from '../../components/common/Section';
+import { CARD_COLUMN } from '../../components/layout/flowColumns';
 import {
   CardSkeleton,
   EmptyState,
@@ -31,6 +34,7 @@ import {
   type ShownPoll,
 } from './adminPollUi';
 import { useAdminPolls } from './useAdminPolls';
+import { PATHS } from '../../routes/paths';
 
 export const ADMIN_POLLS_SECTION_ID = 'admin-polls';
 
@@ -54,10 +58,10 @@ export default function AdminPollsSection({
   const theme = useTheme();
   const [dialog, setDialog] = useState<PollDialog | null>(null);
   const votedOn = (v: ShownPoll) => Boolean(myVoteView(v, pending.votes[v.id]).vote || v.myLate);
-  const shown = (views ?? []).filter((v) => !(hideVoted && votedOn(v)));
-  const hidden = (views?.length ?? 0) - shown.length;
-  const open = shown.filter((v) => v.open);
-  const closed = shown.filter((v) => !v.open);
+  // Closed polls are in History.
+  const open = views?.filter((v) => v.open) ?? null;
+  const shown = (open ?? []).filter((v) => !(hideVoted && votedOn(v)));
+  const hidden = (open?.length ?? 0) - shown.length;
 
   const card = (view: ShownPoll) => (
     <AdminPollCard
@@ -83,10 +87,11 @@ export default function AdminPollsSection({
   return (
     <Section
       title="Minter Admin polls"
-      count={views?.length}
+      count={open?.length}
       accent={sectionAccent(theme, 'polls')}
       icon={<SECTION_ICON.polls />}
       id={ADMIN_POLLS_SECTION_ID}
+      flow={CARD_COLUMN}
     >
       <Typography variant="body2" color="text.secondary">
         Questions for the Minter Admins. Questions, votes and comments here are encrypted to the
@@ -99,9 +104,9 @@ export default function AdminPollsSection({
           error={query.error}
           onRetry={() => void query.refetch()}
         />
-      ) : !views ? (
+      ) : !open ? (
         <CardSkeleton lines={3} />
-      ) : !views.length && undecrypted ? (
+      ) : !open.length && undecrypted ? (
         // Not "no polls": Hub didn't decrypt them this time.
         <ErrorState
           compact
@@ -109,24 +114,16 @@ export default function AdminPollsSection({
           error={HUB_DID_NOT_DECRYPT}
           onRetry={retry}
         />
-      ) : !views.length ? (
+      ) : !open.length ? (
         <EmptyState
-          title="No Minter Admin polls in the last 31 days"
+          title="No open Minter Admin polls"
           description="Ask the Minter Admins a question: they vote Yes, No or Neutral."
           actionLabel="Ask the Minter Admins"
           onAction={() => onAsk()}
         />
       ) : (
         <>
-          {open.map(card)}
-          {closed.length ? (
-            <Box sx={{ pt: 0.5 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 700 }}>
-                {plural(closed.length, 'poll')} closed in the last 31 days
-              </Typography>
-            </Box>
-          ) : null}
-          {closed.map(card)}
+          {shown.map(card)}
           {hidden ? (
             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
               <Typography variant="body2" color="text.secondary">
@@ -154,6 +151,21 @@ export default function AdminPollsSection({
         </>
       )}
       {query.data?.truncated ? <TruncatedNote what="the Minter Admin polls" /> : null}
+      {open ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1 }}>
+          <Typography variant="body2" color="text.secondary">
+            Closed polls, with their results and comments, are in History.
+          </Typography>
+          <Button
+            component={RouterLink}
+            to={`${PATHS.history}?type=polls&period=all`}
+            startIcon={<HistoryOutlinedIcon />}
+            sx={{ minHeight: 44 }}
+          >
+            Closed polls
+          </Button>
+        </Box>
+      ) : null}
       <PollWriteDialogs
         dialog={dialog}
         author={author}

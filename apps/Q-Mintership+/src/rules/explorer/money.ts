@@ -348,13 +348,26 @@ export function wentTo(paymentsSent: ReadonlyMap<string, readonly TxRow[]>): {
   };
 }
 
+/**
+ * "9 of these 48 accounts", or by what a stopped check reached, "9 of the
+ * 20 accounts checked"; "the only account here" for a set of one (Hub's
+ * Explorer port, 2026-11-22: "1 of these 1 accounts", and a stopped check
+ * spoke for the whole set).
+ */
+export function ofTheseWords(n: number, total: number, stopped = false): string {
+  if (total === 1 && n === 1) return stopped ? 'the only account checked' : 'the only account here';
+  return stopped
+    ? `${formatCount(n)} of the ${plural(total, 'account')} checked`
+    : `${formatCount(n)} of these ${plural(total, 'account')}`;
+}
+
 /** "K received QORT from 9 of these 48 accounts: 23 payments, 1,200 QORT". */
-export function wentToParts(entry: WentTo, total: number): TxPart[] {
+export function wentToParts(entry: WentTo, total: number, stopped = false): TxPart[] {
   return [
     { kind: 'account', address: entry.address },
     {
       kind: 'text',
-      text: ` received QORT from ${formatCount(entry.from.length)} of these ${formatCount(total)} accounts: ${plural(entry.count, 'payment')}, `,
+      text: ` received QORT from ${ofTheseWords(entry.from.length, total, stopped)}: ${plural(entry.count, 'payment')}, `,
     },
     { kind: 'amount', amount: formatAtomic(entry.qort), asset: 'QORT' },
   ];

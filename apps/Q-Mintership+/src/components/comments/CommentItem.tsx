@@ -5,7 +5,9 @@
  * comment reads "Deleted" in its place; one a Minter Admin hid, or from a
  * name you muted, is folded away with "Show anyway". One for the Minter
  * Admins only says so beside its writer ("Minter Admins only", with a lock),
- * and is never hidden for everyone (only Minter Admins read it).
+ * and is never hidden for everyone (only Minter Admins read it). One from
+ * the nominee's earlier nomination is marked so (EarlierTag), in the place
+ * of its writer's answer on this one.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { alpha, Box, Button, ButtonBase, Typography, type ChipProps } from '@mui/material';
@@ -35,6 +37,7 @@ import {
   type AnswerBadges,
 } from './answerBadges';
 import { goToComment } from './commentLinkState';
+import { EarlierTag } from './EarlierTag';
 import { MarkedName } from '../common/MarkedName';
 import { withMarkedName } from '../common/markedText';
 
@@ -299,7 +302,12 @@ export function CommentItem(props: CommentItemProps) {
       <>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1 }}>
           <PersonByName name={c.name} size={isReply ? 24 : 28} secondary={when} />
-          {badge ? <AnswerBadgeChip badge={badge} /> : null}
+          {/* From an earlier nomination: that, in the place of their answer on this one. */}
+          {c.earlier ? (
+            <EarlierTag round={c.earlier} postedAt={c.postedAt} />
+          ) : badge ? (
+            <AnswerBadgeChip badge={badge} />
+          ) : null}
           {c.adminOnly ? <AdminsOnlyMark /> : null}
         </Box>
         {isReply && c.replyToName ? <ReplyQuote comment={c} /> : null}

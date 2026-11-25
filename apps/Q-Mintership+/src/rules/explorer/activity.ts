@@ -6,7 +6,9 @@
  *
  * - Periods (`activityBuckets`): `count` of them between `from` and `to`;
  *   a period wholly before the oldest transaction read is `unread` (the
- *   account's older history hasn't been read yet), never "no activity".
+ *   account's older history hasn't been read yet), never "no activity";
+ *   the one that holds it is `partly` read (Hub's Explorer port,
+ *   2026-11-22: its count read as complete).
  * - Milestones (`chainMarks`, `minterMarks`, `firstShareMark`): what the
  *   transactions read say (a name registered, bought, sold or renamed; a
  *   minting level moved), its first reward share (read on its own: the
@@ -41,6 +43,8 @@ export interface ActivityBucket {
   byFamily: Partial<Record<ActivityFamily, number>>;
   /** Wholly before the oldest transaction read: not read yet, not empty. */
   unread: boolean;
+  /** Holds the oldest transaction read: its older part isn't read yet, so its count is a floor. */
+  partly: boolean;
 }
 
 /**
@@ -70,6 +74,7 @@ export function activityBuckets(
       total: 0,
       byFamily: {},
       unread: options.readFrom != null && end <= options.readFrom,
+      partly: options.readFrom != null && start < options.readFrom && options.readFrom < end,
     };
   });
   for (const tx of rows) {
@@ -92,6 +97,14 @@ export function familyCounts(rows: readonly TxRow[]): Record<ActivityFamily, num
   >;
   for (const tx of rows) counts[familyOf(tx.type)] += 1;
   return counts;
+}
+
+/** The period of `buckets` that holds `at` (a picked period's start, after they were drawn anew). */
+export function bucketAt(buckets: readonly ActivityBucket[], at: number | null): number {
+  if (at === null) return -1;
+  return buckets.findIndex(
+    (b, i) => at >= b.start && (at < b.end || (i === buckets.length - 1 && at <= b.end))
+  );
 }
 
 /** The rows in [start, end), newest first. */

@@ -161,26 +161,222 @@ export function decidedAt(
   return invite.timestamp + Math.max(0, end - start) * msPerBlock;
 }
 
+/** A record's time is its publisher's clock: a few minutes either way of the chain's. */
+export const RECORD_CLOCK_SLACK_MS = 10 * 60_000;
+
 /**
  * Which records belong to the nominee's current round. Records published
  * after the last decided invite start a new round (a re-nomination); among
  * those, records that waited a full window without an admin signature have
- * lapsed and give way to newer ones. With no newer records, the round is the
- * one the last invite decided.
+ * lapsed and give way to newer ones.
+ *
+ * A pending invite (`pendingAt`, when it was made) answers the records
+ * published from a window before it on: older ones had lapsed by then and
+ * belong to an earlier round, even when the invite that decided that round
+ * is older than what was read (Simon, 2026-11-13: an October vote on Jonny
+ * showed on his November re-nomination). It answers the same records a
+ * decided invite credits (nominationAnswered). With none in that window, the
+ * newest record after the last decided invite stands for its round, as a
+ * waiting round's does; with none after it either, a re-invite carries the
+ * decided round over. With no pending invite and no newer records, the round
+ * is the one the last invite decided.
+ *
+ * The decided round is the records the last decided invite (`decidedAt`, when
+ * it was made) answered, by the same window, up to its decision: not every
+ * record before it (Simon, 2026-11-20: once Jonny's November invite was
+ * rejected, his nomination showed October's nominator and text again). With
+ * none in that window it is the newest record before the decision.
  */
 export function pickRound<T extends { publishedAt: number }>(
   entries: T[],
-  ctx: { decidedEnd: number | null; hasPendingInvite: boolean; nowMs: number; windowMs: number }
+  ctx: {
+    decidedEnd: number | null;
+    decidedAt?: number | null;
+    pendingAt: number | null;
+    nowMs: number;
+    windowMs: number;
+  }
 ): { entries: T[]; fresh: boolean } {
   const sorted = [...entries].sort((a, b) => a.publishedAt - b.publishedAt);
   const end = ctx.decidedEnd ?? Number.NEGATIVE_INFINITY;
   const fresh = sorted.filter((e) => e.publishedAt > end);
-  if (ctx.hasPendingInvite) return { entries: fresh.length ? fresh : sorted, fresh: true };
+  const decidedRound = (): T[] => {
+    const before = sorted.filter((e) => e.publishedAt <= end);
+    if (ctx.decidedAt === null || ctx.decidedAt === undefined) return before;
+    const from = ctx.decidedAt - ctx.windowMs - RECORD_CLOCK_SLACK_MS;
+    const answered = before.filter((e) => e.publishedAt >= from);
+    return answered.length ? answered : before.slice(-1);
+  };
+  if (ctx.pendingAt !== null) {
+    const from = ctx.pendingAt - ctx.windowMs - RECORD_CLOCK_SLACK_MS;
+    const answered = fresh.filter((e) => e.publishedAt >= from);
+    if (answered.length) return { entries: answered, fresh: true };
+    return { entries: fresh.length ? [fresh[fresh.length - 1]] : decidedRound(), fresh: true };
+  }
   if (fresh.length) {
     const active = fresh.filter((e) => ctx.nowMs - e.publishedAt <= ctx.windowMs);
     return { entries: active.length ? active : [fresh[fresh.length - 1]], fresh: true };
   }
-  return { entries: sorted.filter((e) => e.publishedAt <= end), fresh: false };
+  return { entries: decidedRound(), fresh: false };
+}
+
+/**
+ * The nomination a MINTER invite answered: the first record about its invitee
+ * published in the waiting window before the invite, since a Minter Admin's
+ * first approval answers a waiting nomination. Null when it answered none: a
+ * Minter Admin invited them directly, or Q-Mintership 3's process did. So a
+ * decided invite says who proposed the nomination, not the first approver
+ * (Simon, 2026-10-26: "it should say proposed by iffi").
+ */
+export function nominationAnswered<T extends { publishedAt: number }>(
+  entries: readonly T[],
+  invitedAt: number,
+  windowMs: number
+): T | null {
+  let first: T | null = null;
+  for (const entry of entries) {
+    if (entry.publishedAt > invitedAt + RECORD_CLOCK_SLACK_MS) continue;
+    if (entry.publishedAt < invitedAt - windowMs) continue;
+    if (!first || entry.publishedAt < first.publishedAt) first = entry;
+  }
+  return first;
+}
+
+/** A MINTER invite of the nominee, as History read it: when it was made, and decided (null while pending). */
+export interface InviteSpan {
+  at: number;
+  decidedAt: number | null;
+}
+
+/** A round of a nominee's records that no invite answered, and when its wait ran out. */
+export interface LapsedRound<T> {
+  /** Oldest first: the first is its nominator. */
+  records: T[];
+  /** When the newest record's window ran out (ms). */
+  endedAt: number;
+}
+
+/**
+ * The rounds of one nominee's records that lapsed: nominated, and no Minter
+ * Admin signed in time (Simon, 2026-11-17: an expired nomination "should move
+ * to the regular app history"). Records a window or less apart wait together,
+ * until a window after the newest; a record published while an invite was
+ * pending belongs to that invite's round, and a record after an invite starts
+ * a new one. A round lapsed when no invite came from its first record (less
+ * the clock slack) until its wait ran out, before `nowMs`. Only rounds that
+ * began at or after `from`, when the invites read begin, are judged: an
+ * earlier one may have had an invite before that.
+ */
+export function lapsedRounds<T extends { publishedAt: number }>(
+  records: readonly T[],
+  invites: readonly InviteSpan[],
+  ctx: { windowMs: number; nowMs: number; from: number }
+): LapsedRound<T>[] {
+  const sorted = [...records].sort((a, b) => a.publishedAt - b.publishedAt);
+  const pendingAt = (t: number) =>
+    invites.some(
+      (i) => t >= i.at - RECORD_CLOCK_SLACK_MS && (i.decidedAt === null || t <= i.decidedAt)
+    );
+  const inviteBetween = (from: number, to: number) =>
+    invites.some((i) => i.at > from && i.at <= to);
+  const rounds: T[][] = [];
+  for (const record of sorted) {
+    if (pendingAt(record.publishedAt)) continue;
+    const current = rounds[rounds.length - 1];
+    const last = current?.[current.length - 1].publishedAt;
+    if (
+      current &&
+      last !== undefined &&
+      record.publishedAt <= last + ctx.windowMs &&
+      !inviteBetween(last, record.publishedAt)
+    )
+      current.push(record);
+    else rounds.push([record]);
+  }
+  const lapsed: LapsedRound<T>[] = [];
+  for (const round of rounds) {
+    const first = round[0].publishedAt;
+    const endedAt = round[round.length - 1].publishedAt + ctx.windowMs;
+    if (first - RECORD_CLOCK_SLACK_MS < ctx.from || endedAt > ctx.nowMs) continue;
+    if (inviteBetween(first - RECORD_CLOCK_SLACK_MS, endedAt)) continue;
+    lapsed.push({ records: round, endedAt });
+  }
+  return lapsed;
+}
+
+/** How a nominee's earlier round ended. */
+export type EarlierOutcome = 'approved' | 'rejected' | 'expired' | 'lapsed';
+
+/**
+ * A nominee's round before the one shown (Simon, 2026-11-24: comments from
+ * a previous nomination stay with the new one, marked, with how it ended).
+ */
+export interface EarlierRound {
+  /** Its first record, or its invite without one (ms). */
+  startedAt: number;
+  /** Its invite's decision, or the end of its wait (ms). */
+  endedAt: number;
+  outcome: EarlierOutcome;
+  /** The invite that decided it (its comments' key); null for one that lapsed. */
+  invite: { signature: string; at: number } | null;
+}
+
+/** A decided MINTER invite of the nominee: when it was made and decided, and how. */
+export interface DecidedInvite {
+  signature: string;
+  at: number;
+  decidedAt: number;
+  outcome: Exclude<EarlierOutcome, 'lapsed'>;
+}
+
+/**
+ * The nominee's rounds before the shown one, oldest first: each invite
+ * decided before it (all but the shown round's own, `current.invite`), and
+ * the rounds of records before it that lapsed (lapsedRounds). A record less
+ * than a window before the shown round's first (`current.start`) still
+ * belongs to the shown round, as in lapsedRounds. `pending` are the
+ * nominee's invites still waiting, which no lapsed round may contain.
+ */
+export function earlierRounds<T extends { publishedAt: number }>(
+  records: readonly T[],
+  decided: readonly DecidedInvite[],
+  pending: readonly InviteSpan[],
+  ctx: { current: { start: number; invite: string | null }; windowMs: number; nowMs: number }
+): EarlierRound[] {
+  const rounds: EarlierRound[] = [];
+  for (const invite of decided) {
+    if (invite.signature === ctx.current.invite) continue;
+    const answered = nominationAnswered(records, invite.at, ctx.windowMs);
+    rounds.push({
+      startedAt: Math.min(answered?.publishedAt ?? invite.at, invite.at),
+      endedAt: invite.decidedAt,
+      outcome: invite.outcome,
+      invite: { signature: invite.signature, at: invite.at },
+    });
+  }
+  // Back from the shown round's first record, the records still waiting when the next came.
+  let start = ctx.current.start;
+  for (const record of [...records].sort((a, b) => b.publishedAt - a.publishedAt)) {
+    if (record.publishedAt >= start) continue;
+    if (start - record.publishedAt > ctx.windowMs) break;
+    start = record.publishedAt;
+  }
+  const spans: InviteSpan[] = [
+    ...decided.map((invite) => ({ at: invite.at, decidedAt: invite.decidedAt })),
+    ...pending,
+  ];
+  for (const round of lapsedRounds(
+    records.filter((record) => record.publishedAt < start),
+    spans,
+    { windowMs: ctx.windowMs, nowMs: ctx.nowMs, from: Number.NEGATIVE_INFINITY }
+  ))
+    rounds.push({
+      startedAt: round.records[0].publishedAt,
+      endedAt: round.endedAt,
+      outcome: 'lapsed',
+      invite: null,
+    });
+  return rounds.sort((a, b) => a.startedAt - b.startedAt || a.endedAt - b.endedAt);
 }
 
 /** When a waiting nomination drops off the open list (ms). */

@@ -329,6 +329,35 @@ describe('recorded between two accounts', () => {
     expect(result.empty).toEqual([]);
   });
 
+  // Hub's Explorer port (2026-11-22): a sale with no time dated the pair from 1 January 1970.
+  it('dates a pair’s sales only from the ones with a time, and counts the rest', () => {
+    const trade = (at: number | null) => ({
+      timestamp: at,
+      qortAmount: '1',
+      foreignAmount: '0.1',
+      atAddress: AT,
+      seller: A,
+      buyer: B,
+    });
+    const some = pairFindings({
+      x: side(A, 'A', { trades: { rows: [trade(T0), trade(null)], capped: false } }),
+      y: side(B, 'B', { trades: null }),
+    });
+    expect(plain(some.findings[0].parts)).toBe(
+      'A sold 2 QORT to B on the trade portal in 2 trades (15 May 2023; 1 sale with no time)'
+    );
+    expect(some.findings[0].timestamp).toBe(T0);
+    const none = pairFindings({
+      x: side(A, 'A', { trades: { rows: [trade(null)], capped: false } }),
+      y: side(B, 'B', { trades: null }),
+    });
+    expect(plain(none.findings[0].parts)).toBe(
+      'A sold 1 QORT to B on the trade portal in 1 trade (time not known)'
+    );
+    expect(none.findings[0].timestamp).toBe(0);
+    expect(none.findings[0].firstTimestamp).toBeUndefined();
+  });
+
   it('lists what was checked and found nothing', () => {
     const result = pairFindings({
       x: side(A, 'A', { links: links([]), assets: noAssets, made: made(), trades: null }),
@@ -745,6 +774,16 @@ describe('the timeline together', () => {
       },
     ]);
     expect(plain(own[1].parts)).toBe('registered the name “Q-Mail” (its primary name now)');
+    // Hub's Explorer port (2026-11-22): before "first seen" is known, not credited.
+    const unknown = timelineEvents([
+      {
+        address: A,
+        letter: 'A',
+        links: links([]),
+        primary: { name: 'Q-Mail', registered: T0 + 1_100 * DAY },
+      },
+    ]);
+    expect(unknown.some((e) => e.kind === 'primaryName')).toBe(false);
   });
 
   it('a self-share from capped links says it is only the earliest of those read', () => {

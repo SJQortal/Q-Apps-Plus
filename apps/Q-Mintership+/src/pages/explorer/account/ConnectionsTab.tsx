@@ -503,7 +503,16 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
       </Typography>
 
       {/* QORT sent to exchanges, or got from them (Simon, 2026-10-17). */}
-      {!searching ? <ExchangeNotice address={address} recorded={recorded} /> : null}
+      {!searching ? (
+        <ExchangeNotice
+          address={address}
+          recorded={recorded}
+          short={{
+            sent: Boolean(data.sent.data && !data.sent.data.done),
+            received: Boolean(data.recv.data && !data.recv.data.done),
+          }}
+        />
+      ) : null}
 
       {view === 'circle' && showRecorded ? (
         <Section title="Connections circle" id="connections-circle">
@@ -515,6 +524,7 @@ export default function ConnectionsTab({ address }: ConnectionsTabProps) {
               }
               order={circleOrder}
               onOrder={setCircleOrder}
+              searching={searching}
             />
           ) : (
             <ListSkeleton count={2} label="Reading its links" />

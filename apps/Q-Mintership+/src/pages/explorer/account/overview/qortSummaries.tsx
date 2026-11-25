@@ -12,10 +12,15 @@
  * flight are shared, so Activity and this never read a page twice). It
  * reads on by itself up to the amount Activity reads first (Settings,
  * 1,000 by default); a longer history waits for "Read the rest", which
- * reads 1,000 at a time, and a notice says so. Then its exact balance and
- * its asset orders with QORT on one side. Purchased / sold are its
+ * reads 1,000 at a time, and a notice says so. Then its exact balance, tied
+ * to its newest transaction (getTiedBalance): when that isn't the list's
+ * newest, a transaction came between them, so the list's newest page or
+ * the balance is read again (3 times at most, then it says so, with
+ * Retry). And its asset orders with QORT on one side. Purchased / sold are its
  * completed trades on the Trade Portal, read straight away. An account
- * that never minted (no blocks minted) says so, with nothing to work out.
+ * that never minted says so, with nothing to work out: no blocks minted,
+ * and no reward share ever (useNeverMinted; one whose minting level moved
+ * away has no blocks minted left, but minted).
  * In green what came in, in red what went out.
  */
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -24,9 +29,14 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useAtomValue } from 'jotai';
 import { InOut } from './qortParts';
 import { ErrorState } from '../../../../components/common/states';
-import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
+import { accountTxKey, getAccountTx, probeAccountTxEnd } from '../../../../data/explorer/accountTx';
 import { HeavyCancelled } from '../../../../data/explorer/heavy';
-import { getBalanceAtomic, getOrdersQort, getTradesQort } from '../../../../data/explorer/qortBook';
+import {
+  getEverRewardShare,
+  getOrdersQort,
+  getTiedBalance,
+  getTradesQort,
+} from '../../../../data/explorer/qortBook';
 import { useQuery } from '../../../../hooks/useQuery';
 import { formatAtomic } from '../../../../rules/explorer/money';
 import { qortBook, qortMinted, type QortBook } from '../../../../rules/explorer/qortBook';
@@ -36,6 +46,8 @@ import { readable } from '../../../../utils/readable';
 
 /** Rows a "Read the rest" read asks for at a time. */
 const REST_PAGE = 1000;
+/** Reads again when its balance and its list end at different transactions. */
+const RETIE_TRIES = 3;
 
 /** "19,306", "4.75", "0": whole QORT from 100 up, two decimals below. */
 function short(value: bigint): string {
@@ -91,9 +103,33 @@ export interface QortSummaryParts {
   readRest: () => void;
 }
 
+/**
+ * Whether an account never minted: no blocks minted (`blocks`, its
+ * adjustment included) and no reward share ever (getEverRewardShare). Moving
+ * a minting level away (TRANSFER_PRIVS) sets the sender's blocks minted to
+ * 0, so blocks alone would call an account that minted "never minted".
+ * Null while unknown; false when that read fails (the figure is then worked
+ * out, which comes to 0 for one that never minted).
+ */
+export function useNeverMinted(
+  address: string,
+  blocks: number | null,
+  enabled = true
+): boolean | null {
+  const none = blocks !== null && blocks <= 0;
+  const ever = useQuery(enabled && none ? `xevershare:${address}` : null, (force) =>
+    getEverRewardShare(address, { force })
+  );
+  if (blocks === null) return null;
+  if (!none) return false;
+  if (ever.isError) return false;
+  return ever.data === undefined ? null : !ever.data;
+}
+
 export function useQortSummaries(
   address: string,
-  neverMinted: boolean,
+  /** useNeverMinted's answer: null while it is read. */
+  neverMinted: boolean | null,
   /** `enabled` false reads nothing (a viewer who doesn't see these: rules/explorer/access.ts). */
   options: { trades?: boolean; enabled?: boolean } = {}
 ): QortSummaryParts {
@@ -113,11 +149,16 @@ export function useQortSummaries(
   // Reads on by itself up to Activity's first read; all of it once asked.
   useEffect(() => {
     if (!enabled || !data || done || busy.current || reading || failed) return;
-    if (!wantAll && held >= firstRead) return;
+    const pageSize = wantAll ? REST_PAGE : Math.max(100, Math.min(REST_PAGE, firstRead - held));
+    // At the first read: one row more says whether "Read the rest" has anything to read.
+    const next =
+      !wantAll && held >= firstRead
+        ? probeAccountTxEnd(address)
+        : getAccountTx(address, [], { older: true, pageSize });
+    if (!next) return;
     busy.current = true;
     setReading(true);
-    const pageSize = wantAll ? REST_PAGE : Math.max(100, Math.min(REST_PAGE, firstRead - held));
-    getAccountTx(address, [], { older: true, pageSize })
+    next
       .catch((error: unknown) => {
         if (!(error instanceof HeavyCancelled)) setFailed(error);
       })
@@ -129,12 +170,31 @@ export function useQortSummaries(
 
   const rows = done ? data?.rows : undefined;
   const book = rows ? qortBook(rows, address) : null;
-  const balance = useQuery(book && !neverMinted ? `xbalance:${address}` : null, (force) =>
-    getBalanceAtomic(address, { force })
+  const tie = useQuery(book && neverMinted === false ? `xbalance:${address}` : null, (force) =>
+    getTiedBalance(address, { force })
   );
+  // The balance goes with the list only when both end at the same transaction.
+  const newestHeld = data?.rows[0]?.signature ?? null;
+  const tieNewest = tie.data ? tie.data.newest : undefined;
+  const tied = tieNewest !== undefined && tieNewest === newestHeld;
+  const [retied, setRetied] = useState(0);
+  const untied = Boolean(book) && tieNewest !== undefined && !tied;
+  useEffect(() => {
+    if (!untied || retied >= RETIE_TRIES) return;
+    setRetied((n) => n + 1);
+    // The list lacks the balance's newest transaction: its newest page again; else the balance.
+    if (tieNewest && !data?.rows.some((row) => row.signature === tieNewest)) void list.refetch();
+    else void tie.refetch();
+    // Once per pair of answers that don't tie.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [untied, tieNewest, newestHeld]);
+  const tieFailed = untied && retied >= RETIE_TRIES;
+  const balance = { data: tied ? tie.data?.balance : undefined, isError: tie.isError || tieFailed };
   const orderIds = book?.orders ?? [];
   const orders = useQuery(
-    book && !neverMinted && orderIds.length ? `xordersq:${address}:${orderIds.length}` : null,
+    book && neverMinted === false && orderIds.length
+      ? `xordersq:${address}:${orderIds.length}`
+      : null,
     () => getOrdersQort(address, orderIds)
   );
   const trades = useQuery(!enabled || options.trades === false ? null : `xtrades:${address}`, () =>
@@ -152,7 +212,8 @@ export function useQortSummaries(
   if (neverMinted) {
     mintedAtomic = 0n;
     minted = 'Never minted';
-    mintedInfo = 'This account has never minted QORT: Qortal counts no blocks minted for it.';
+    mintedInfo =
+      'This account has never minted QORT: Qortal counts no blocks minted for it, and no reward share ever involved it.';
   } else if (book && balance.data !== undefined && ordersNet !== undefined) {
     const value = qortMinted(balance.data, book, ordersNet);
     const how = `Its balance now, ${formatAtomic(balance.data)} QORT, less what its transactions moved (${movedWords(book, ordersNet)}). The rest reached it without a transaction of its own: minting rewards, which include the transaction fees paid to minters, the extra share for online Minter Admins and Dev Admins, and the legacy QORA holders' share.`;
@@ -184,13 +245,23 @@ export function useQortSummaries(
             if (list.isError) void list.refetch();
           }}
         />
-      ) : balance.isError || orders.isError || trades.isError ? (
+      ) : tieFailed ? (
+        <ErrorState
+          compact
+          title="Its balance and its transactions kept changing while they were read, so QORT minted can't be worked out yet."
+          onRetry={() => {
+            setRetied(0);
+            void list.refetch();
+            void tie.refetch();
+          }}
+        />
+      ) : tie.isError || orders.isError || trades.isError ? (
         <ErrorState
           compact
           title="Couldn't read its balance, asset orders or contracts to add these up."
-          error={balance.error ?? orders.error ?? trades.error}
+          error={tie.error ?? orders.error ?? trades.error}
           onRetry={() => {
-            if (balance.isError) void balance.refetch();
+            if (tie.isError) void tie.refetch();
             if (orders.isError) void orders.refetch();
             if (trades.isError) void trades.refetch();
           }}
@@ -230,11 +301,13 @@ export function useQortSummaries(
     </>
   );
   const needsRest = !done && Boolean(data) && !wantAll && held >= firstRead;
-  const mintedFailed = !neverMinted && (Boolean(error) || balance.isError || orders.isError);
+  const mintedFailed =
+    neverMinted === false && (Boolean(error) || balance.isError || orders.isError);
   const retryMinted = () => {
     setFailed(null);
+    setRetied(0);
     if (list.isError) void list.refetch();
-    if (balance.isError) void balance.refetch();
+    if (tie.isError || tieFailed) void tie.refetch();
     if (orders.isError) void orders.refetch();
   };
   return {

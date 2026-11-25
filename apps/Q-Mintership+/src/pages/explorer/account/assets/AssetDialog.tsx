@@ -30,6 +30,7 @@ import {
   bidsKey,
   dealsKey,
   getAssetDeals,
+  getAssetPrice,
   getBuyOrders,
   getSellOffers,
   getTopHolders,
@@ -180,7 +181,11 @@ function Holders({ address, asset }: { address: string; asset: AssetView }) {
         {rows.length > HOLDERS_SHOWN ? (
           <Box>
             <Button onClick={() => setAll(!all)} sx={{ minHeight: 44 }}>
-              {all ? 'Show the first 10' : `Show all ${rows.length}`}
+              {all
+                ? 'Show the first 10'
+                : truncated
+                  ? `Show the ${rows.length} biggest`
+                  : `Show all ${rows.length}`}
             </Button>
           </Box>
         ) : null}
@@ -391,6 +396,12 @@ export function AssetDialog({
   const location = useLocation();
   const accent = assetAccent(theme, asset.assetId);
   const meta = asset.meta;
+  // A price not read with the holdings (not held, or that read not in): its own read, once open.
+  const readPrice = !asset.price && (asset.priceUnknown || asset.balance === 0n);
+  const ownPrice = useQuery(readPrice ? `xassetprice:${asset.assetId}` : null, (force) =>
+    getAssetPrice(asset.assetId, { force })
+  );
+  const price = asset.price ?? ownPrice.data ?? undefined;
   const transactions = `${explorerAccountPath(address, 'transactions')}?q=${encodeURIComponent(asset.name)}`;
   return (
     <ResponsiveDialog
@@ -447,7 +458,11 @@ export function AssetDialog({
           }}
         >
           <Fact label="This account holds">
-            {asset.balance > 0n ? amountWords(asset.balance) : 'None'}
+            {asset.holdingUnknown
+              ? 'Not known: its holdings weren’t read'
+              : asset.balance > 0n
+                ? amountWords(asset.balance)
+                : 'None'}
           </Fact>
           <Fact label="Its share of all">
             {asset.share !== undefined ? (
@@ -459,19 +474,26 @@ export function AssetDialog({
               '–'
             )}
           </Fact>
-          <Fact label="All there is">{meta ? quantityWords(meta.quantity) : '–'}</Fact>
+          {/* Core lists some assets of the QORA era with a quantity of 0: not known, not none. */}
+          <Fact label="All there is">
+            {meta && meta.quantity > 0n ? quantityWords(meta.quantity) : '–'}
+          </Fact>
           {meta && !meta.isDivisible ? (
             <Fact label={INDIVISIBLE_WORDS}>{INDIVISIBLE_EXPLANATION}</Fact>
           ) : null}
           <Fact label="Last trade">
-            {asset.price ? (
+            {price ? (
               <>
-                {priceWords(asset.price)}
+                {priceWords(price)}
                 <Box component="span" sx={{ color: 'text.secondary', fontWeight: 400 }}>
                   {' '}
-                  ({lastTradeSize(asset.price, asset.name)})
+                  ({lastTradeSize(price, asset.name)})
                 </Box>
               </>
+            ) : ownPrice.isError ? (
+              'Couldn’t read its last trade'
+            ) : readPrice && ownPrice.data === undefined ? (
+              'Reading…'
             ) : (
               NEVER_TRADED
             )}

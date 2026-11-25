@@ -152,6 +152,27 @@ export function circleNodes(
   order: CircleOrder = 'count'
 ): CircleGroups {
   const nodes = new Map<string, CircleNode>();
+  // Each node's transactions, each once (Hub's Explorer port, 2026-11-22: a reward share behind
+  // two findings, or a trade drawn both ways, counted twice): its count is what its dialog lists.
+  const sigs = new Map<string, Set<string>>();
+  // What moved each way, for a node drawn both ways: payments by their transactions (once
+  // each), trades by their count (a trade moved something each way).
+  const ways = new Map<string, { sigs: Set<string>; trades: number }>();
+  const note = (key: string, finding: Finding, trades = 0) => {
+    const set = sigs.get(key) ?? new Set<string>();
+    const way = ways.get(key) ?? { sigs: new Set<string>(), trades: 0 };
+    for (const tx of finding.evidence) set.add(tx.signature);
+    // A finding with no transaction of its own still counts once.
+    if (!finding.evidence.length) set.add(`finding:${finding.key}`);
+    if (trades) way.trades += trades;
+    else for (const sig of set) way.sigs.add(sig);
+    sigs.set(key, set);
+    ways.set(key, way);
+  };
+  const wayCount = (key: string) => {
+    const way = ways.get(key);
+    return way ? way.sigs.size + way.trades : 0;
+  };
   for (const finding of findings) {
     if (!finding.other) continue;
     if (finding.trade) {
@@ -171,7 +192,7 @@ export function circleNodes(
           qort: 0n,
           assets: [],
         };
-        node.count += way.count;
+        note(key, finding, way.count);
         node.qort += way.qort;
         node.assets = addAssets(node.assets, way.assets);
         if (side === 'in') node.findings.push(finding);
@@ -190,12 +211,13 @@ export function circleNodes(
       qort: 0n,
       assets: [],
     };
-    node.count += Math.max(1, finding.evidence.length);
+    note(key, finding);
     node.qort += finding.qort ?? 0n;
     node.assets = addAssets(node.assets, finding.assets ?? []);
     node.findings.push(finding);
     nodes.set(key, node);
   }
+  for (const [key, node] of nodes) node.count = sigs.get(key)?.size ?? 1;
   // Paid both ways: one node, with each way's part.
   for (const [key, received] of nodes) {
     if (received.side !== 'in') continue;
@@ -207,13 +229,14 @@ export function circleNodes(
       key: `both:${received.address}`,
       address: received.address,
       side: 'both',
-      count: received.count + sent.count,
+      // A trade is on both ways: once here.
+      count: new Set([...(sigs.get(key) ?? []), ...(sigs.get(sent.key) ?? [])]).size,
       findings: [...received.findings, ...sent.findings],
       qort: received.qort + sent.qort,
       assets: addAssets(received.assets, sent.assets),
       split: {
-        in: { count: received.count, qort: received.qort, assets: received.assets },
-        out: { count: sent.count, qort: sent.qort, assets: sent.assets },
+        in: { count: wayCount(key), qort: received.qort, assets: received.assets },
+        out: { count: wayCount(sent.key), qort: sent.qort, assets: sent.assets },
       },
     });
   }
@@ -247,6 +270,29 @@ export function nodeTransactions(node: Pick<CircleNode, 'findings'>): TxRow[] {
       (b.blockHeight ?? Number.MAX_SAFE_INTEGER) - (a.blockHeight ?? Number.MAX_SAFE_INTEGER) ||
       b.timestamp - a.timestamp
   );
+}
+
+/** The ring around an avatar and the gap inside it, both sides (px): 3 + 2 each side. */
+export const RING_PX = 10;
+
+/**
+ * How tall the drawing's inside must be (px) so neighbours on a side keep
+ * apart: the closest two need their rings' half sizes, and `leastGap` (room
+ * for a name), between centres (Hub's Explorer port, 2026-11-22: neighbours
+ * could overlap by a few px). Their y is in % of that height.
+ */
+export function sideMinHeight(placed: readonly PlacedNode[], leastGap: number): number {
+  let height = 0;
+  for (const side of ['in', 'out'] as const) {
+    const list = placed.filter((node) => node.side === side).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < list.length; i++) {
+      const gap = list[i].y - list[i - 1].y;
+      if (gap <= 0) continue;
+      const need = Math.max(leastGap, (list[i].size + list[i - 1].size) / 2 + RING_PX + 2);
+      height = Math.max(height, (need * 100) / gap);
+    }
+  }
+  return height;
 }
 
 /** The biggest avatar a side of `n` nodes leaves room for. */

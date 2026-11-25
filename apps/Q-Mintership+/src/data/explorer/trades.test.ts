@@ -4,9 +4,9 @@
  * waited, and Ben Target's buy order for 120 QORT came in and matched it.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchCallsFor } from '../../test/setup';
+import { fetchCallsFor, mockFetchRoute } from '../../test/setup';
 import { ADDR, installWorld } from '../../test/world';
-import { getAccountTrades, getOrderFills, tradesKey } from './trades';
+import { getAccountTrades, getOrderFills, getOrderStanding, tradesKey } from './trades';
 import { peekQuery } from '../query';
 
 afterEach(() => vi.useRealTimers());
@@ -71,6 +71,21 @@ describe('an account’s asset trades', () => {
     expect(fetchCallsFor('/assets/')).toHaveLength(3);
   });
 
+  it('an account that never signed a transaction has no orders, not a failed read', async () => {
+    installWorld('learner');
+    // Core finds orders by the account's public key; without one it answers that it
+    // doesn't know the address (seen in Hub, 2026-11-25: a buyer only trade contracts paid).
+    mockFetchRoute(
+      '/assets/orders/',
+      () => new Response('{"error":124,"message":"account address unknown"}', { status: 404 })
+    );
+    await expect(getAccountTrades(ADDR.left)).resolves.toEqual({
+      trades: [],
+      orders: 0,
+      truncated: false,
+    });
+  });
+
   it('one order’s fills are kept for the session', async () => {
     installWorld('learner', { strict: true });
     const ben = await getAccountTrades(ADDR.banTarget);
@@ -78,5 +93,129 @@ describe('an account’s asset trades', () => {
     const fills = await getOrderFills(ben.trades[0].orderId, ADDR.banTarget);
     expect(fills).toEqual(ben.trades);
     expect(fetchCallsFor('/assets/')).toHaveLength(reads);
+  });
+
+  // Hub's Explorer port (2026-11-22): an order still open kept its first fills for the session,
+  // and read as "Filled by 2 trades".
+  it('an open order’s fills are read again after 30 s; a closed one’s are kept', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    installWorld('learner');
+    let openFills = 1;
+    mockFetchRoute('/assets/order/', (url: URL) => {
+      const [, , , id, rest] = url.pathname.split('/');
+      const open = id === 'open1';
+      if (rest === 'trades')
+        return Array.from({ length: open ? openFills : 1 }, (_, i) => ({
+          initiatingOrderId: id,
+          targetOrderId: `other${i}`,
+          initiatorAmount: '1',
+          targetAmount: '2',
+          initiatorAmountAssetId: 0,
+          targetAmountAssetId: 5,
+          timestamp: 1_000 + i,
+        }));
+      return { orderId: id, isClosed: !open, isFulfilled: !open, fulfilled: '0', timestamp: 1 };
+    });
+    expect(await getOrderStanding('open1')).toBe('open');
+    expect(await getOrderFills('open1', ADDR.learner)).toHaveLength(1);
+    openFills = 2;
+    vi.setSystemTime(Date.now() + 31_000);
+    expect(await getOrderFills('open1', ADDR.learner)).toHaveLength(2);
+    expect(await getOrderStanding('done1')).toBe('fulfilled');
+    await getOrderFills('done1', ADDR.learner);
+    const reads = fetchCallsFor('/assets/order/done1').length;
+    vi.setSystemTime(Date.now() + 3_600_000);
+    await getOrderFills('done1', ADDR.learner);
+    expect(await getOrderStanding('done1')).toBe('fulfilled');
+    expect(fetchCallsFor('/assets/order/done1')).toHaveLength(reads);
+  });
+
+  // Checked on a node (2026-11-24): an order selling asset 6 for QORT that initiated the trade
+  // has its 3,500 of asset 6 labelled QORT by Core. The sides come from the account's own order.
+  it('takes each side’s asset from the account’s own order, not Core’s labels', async () => {
+    installWorld('learner');
+    mockFetchRoute('/assets/order/', (url: URL) => {
+      const [, , , id, rest] = url.pathname.split('/');
+      if (rest === 'trades')
+        return [
+          {
+            initiatingOrderId: 'sell6',
+            targetOrderId: 'buy6',
+            initiatorAmount: '3500.00000000',
+            initiatorAmountAssetId: 0,
+            initiatorAmountAssetName: 'QORT',
+            targetAmount: '621.25000000',
+            targetAmountAssetId: 6,
+            targetAmountAssetName: 'Asset Six',
+            timestamp: 1_000,
+          },
+        ];
+      return id === 'sell6'
+        ? {
+            orderId: id,
+            creator: ADDR.learner,
+            haveAssetId: 6,
+            wantAssetId: 0,
+            haveAssetName: 'Asset Six',
+            wantAssetName: 'QORT',
+            isClosed: true,
+            isFulfilled: true,
+            fulfilled: '3500',
+            timestamp: 1,
+          }
+        : {
+            orderId: id,
+            creator: ADDR.admin,
+            haveAssetId: 0,
+            wantAssetId: 6,
+            haveAssetName: 'QORT',
+            wantAssetName: 'Asset Six',
+            isClosed: true,
+            isFulfilled: true,
+            fulfilled: '3500',
+            timestamp: 1,
+          };
+    });
+    const [sold] = await getOrderFills('sell6', ADDR.learner);
+    expect(sold.gave).toEqual({ assetId: 6, asset: 'Asset Six', amount: '3500.00000000' });
+    expect(sold.got).toEqual({ assetId: 0, asset: 'QORT', amount: '621.25000000' });
+    expect(sold.other).toBe(ADDR.admin);
+  });
+
+  // Hub's Explorer port (2026-11-22): a failed read of the other order stayed unnamed.
+  it('reads the other order again after a read that failed', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    installWorld('learner');
+    let failing = true;
+    mockFetchRoute('/assets/order/', (url: URL) => {
+      const [, , , id, rest] = url.pathname.split('/');
+      if (rest === 'trades')
+        return [
+          {
+            initiatingOrderId: 'mine1',
+            targetOrderId: 'other1',
+            initiatorAmount: '1',
+            targetAmount: '2',
+            initiatorAmountAssetId: 0,
+            targetAmountAssetId: 5,
+            timestamp: 1_000,
+          },
+        ];
+      if (id === 'other1' && failing) return new Response('down', { status: 500 });
+      return {
+        orderId: id,
+        creator: id === 'mine1' ? ADDR.learner : ADDR.admin,
+        haveAssetId: id === 'mine1' ? 0 : 5,
+        wantAssetId: id === 'mine1' ? 5 : 0,
+        isClosed: true,
+        isFulfilled: true,
+        fulfilled: '1',
+        timestamp: 1,
+      };
+    });
+    expect((await getOrderFills('mine1', ADDR.learner))[0].other).toBeNull();
+    failing = false;
+    vi.setSystemTime(Date.now() + 31_000);
+    expect((await getOrderFills('mine1', ADDR.learner))[0].other).toBe(ADDR.admin);
   });
 });

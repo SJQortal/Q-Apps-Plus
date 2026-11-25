@@ -13,7 +13,7 @@
  *
  * Facts with their denominators; what wasn't read says so.
  */
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Box, Button, LinearProgress, Typography } from '@mui/material';
 import { Card, Section } from '../../../components/common/Section';
 import { TxSentence } from '../../../components/explorer/TxSentence';
@@ -27,7 +27,7 @@ import {
 import type { PaymentPage } from '../../../data/explorer/money';
 import type { TxRow } from '../../../data/types';
 import { bandWords, groupFirstPayers } from '../../../rules/explorer/connections';
-import { wentTo, wentToParts } from '../../../rules/explorer/money';
+import { ofTheseWords, wentTo, wentToParts } from '../../../rules/explorer/money';
 import { formatCount, plural } from '../../../utils/format';
 import { usePayerBands } from '../account/connections/hooks';
 import { FOCUSABLE_ROW_SX, useFocusNewRows } from '../account/names/useShowMore';
@@ -43,14 +43,19 @@ type Run<T> =
   | { state: 'done'; stopped: boolean; progress: SetProgress; results: Map<string, Checked<T>> };
 
 function useRun<T>(
+  /** Names the run on its page: kept with the page visit, so Back shows its results again. */
+  id: string,
   accounts: readonly string[],
   check: (
     accounts: readonly string[],
     options: { signal: AbortSignal; onProgress: (p: SetProgress) => void }
   ) => Promise<Map<string, Checked<T>>>
 ) {
-  const [run, setRun] = useState<Run<T>>({ state: 'idle' });
+  // Kept with the visit (Hub's Explorer port, 2026-11-22: gone after Back).
+  const [kept, setRun] = useViewState<Run<T>>(`setcheck:${id}`, { state: 'idle' });
   const stopper = useRef<AbortController | null>(null);
+  // A run left mid-way (the page was left, which stops it) starts over.
+  const run: Run<T> = kept.state === 'running' && !stopper.current ? { state: 'idle' } : kept;
   // Leaving the page: no new account starts (one being read finishes, and is kept).
   useEffect(() => () => stopper.current?.abort(), []);
   const start = async () => {
@@ -149,11 +154,13 @@ function CheckCard({
 
 function FirstPayers({
   results,
-  total,
+  stopped,
 }: {
   results: Map<string, Checked<Funding | null>>;
-  total: number;
+  /** Stopped before every account: the words count the ones checked. */
+  stopped: boolean;
 }) {
+  const total = results.size;
   const [limit, setLimit] = useViewState('funded-by:limit', ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
   const funding = new Map<string, Funding | null>();
@@ -188,7 +195,7 @@ function FirstPayers({
                     { kind: 'account', address: payer.from },
                     {
                       kind: 'text',
-                      text: ` made the first QORT payment to ${formatCount(payer.accounts.length)} of these ${plural(total, 'account')}.`,
+                      text: ` made the first QORT payment to ${ofTheseWords(payer.accounts.length, total, stopped)}.`,
                     },
                     ...(words
                       ? [
@@ -221,7 +228,7 @@ function FirstPayers({
         <Typography variant="body2" color="text.secondary">
           {[
             grouped.other
-              ? `${plural(grouped.other, 'account')} had another first transaction (a reward share, a level move, an asset transfer, an AT or the genesis block)`
+              ? `${plural(grouped.other, 'account')} had another first transaction (a reward share, a level move, an asset transfer, a multi-payment, an AT or the genesis block)`
               : null,
             grouped.none ? `none found for ${plural(grouped.none, 'account')}` : null,
             failed ? `${plural(failed, 'account')} couldn’t be read` : null,
@@ -235,7 +242,14 @@ function FirstPayers({
   );
 }
 
-function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>; total: number }) {
+function WentTo({
+  results,
+  stopped,
+}: {
+  results: Map<string, Checked<PaymentPage>>;
+  stopped: boolean;
+}) {
+  const total = results.size;
   const [limit, setLimit] = useViewState('went-to:limit', ROWS);
   const { listRef, focusFrom } = useFocusNewRows();
   const sent = new Map<string, TxRow[]>();
@@ -259,7 +273,7 @@ function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>
             >
               <TxSentence
                 parts={[
-                  ...wentToParts(entry, total),
+                  ...wentToParts(entry, total, stopped),
                   { kind: 'text', text: ', in each one’s payments (up to the newest 10,000)' },
                 ]}
               />
@@ -298,10 +312,10 @@ function WentTo({ results, total }: { results: Map<string, Checked<PaymentPage>>
 }
 
 export function SetChecks({ accounts, scope }: { accounts: readonly string[]; scope: string }) {
-  const first = useRun<Funding | null>(accounts, (list, options) =>
+  const first = useRun<Funding | null>('first-payers', accounts, (list, options) =>
     checkFirstFunding(list, options)
   );
-  const went = useRun<PaymentPage>(accounts, (list, options) =>
+  const went = useRun<PaymentPage>('went-to', accounts, (list, options) =>
     checkPaymentsSent(list, { ...options, scope })
   );
   const total = accounts.length;
@@ -317,7 +331,7 @@ export function SetChecks({ accounts, scope }: { accounts: readonly string[]; sc
         onStop={first.stop}
       >
         {first.run.state === 'done' ? (
-          <FirstPayers results={first.run.results} total={total} />
+          <FirstPayers results={first.run.results} stopped={first.run.stopped} />
         ) : null}
       </CheckCard>
       <CheckCard
@@ -329,7 +343,9 @@ export function SetChecks({ accounts, scope }: { accounts: readonly string[]; sc
         onStart={() => void went.start()}
         onStop={went.stop}
       >
-        {went.run.state === 'done' ? <WentTo results={went.run.results} total={total} /> : null}
+        {went.run.state === 'done' ? (
+          <WentTo results={went.run.results} stopped={went.run.stopped} />
+        ) : null}
       </CheckCard>
     </Section>
   );

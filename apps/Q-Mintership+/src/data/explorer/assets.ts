@@ -24,7 +24,7 @@
  *
  * Nothing here writes.
  */
-import { getJson, getPaged, query, seg } from '../core';
+import { getJson, listOf, getPaged, query, seg } from '../core';
 import { fetchQuery } from '../query';
 import { parseAtomic } from '../../rules/explorer/money';
 import {
@@ -94,7 +94,12 @@ export function getHoldings(address: string, options: { force?: boolean } = {}):
       const read = await getPaged<unknown>(
         (offset, limit) =>
           `/assets/balances?${query({ address, excludeZero: true, limit, offset })}`,
-        { pageSize: PAGE, maxPages: HOLDINGS_PAGES }
+        // A non-list answer is a failed read, never "holds no Q-Assets".
+        {
+          pageSize: PAGE,
+          maxPages: HOLDINGS_PAGES,
+          pick: (body: unknown) => listOf<unknown>(body, 'its holdings'),
+        }
       );
       return {
         rows: read.rows.map(holdingOf).filter((h): h is Holding => h !== null),
@@ -125,6 +130,36 @@ export function getAssetList(options: { force?: boolean } = {}): Promise<Map<num
   );
 }
 
+/**
+ * One asset's last trade with QORT (`xassetprice:<id>`), null when it never
+ * traded: for a window opened on an asset whose price wasn't read, or one
+ * the account owns and holds none of (Hub's Explorer port, 2026-11-22: it
+ * said "Never traded for QORT" without reading).
+ */
+export function getAssetPrice(
+  assetId: number,
+  options: { force?: boolean } = {}
+): Promise<AssetPrice | null> {
+  return fetchQuery(
+    `xassetprice:${assetId}`,
+    async () => {
+      const answers = await Promise.all([
+        getJson(`/assets/trades/recent?${query({ assetid: assetId, otherassetid: 0, limit: 2 })}`),
+        getJson(`/assets/trades/recent?${query({ assetid: 0, otherassetid: assetId, limit: 2 })}`),
+      ]);
+      if (!answers.every(Array.isArray)) throw new Error('Unexpected answer for its trades');
+      const prices = pricesFrom(
+        answers
+          .flatMap((body) => body as unknown[])
+          .map(recentTradeOf)
+          .filter((trade) => trade !== null)
+      );
+      return prices.get(assetId) ?? null;
+    },
+    { ttlMs: FIVE_MINUTES, force: options.force }
+  );
+}
+
 /** The last trade with QORT of each of these assets (the account's holdings), by asset id. */
 export function getAssetPrices(
   address: string,
@@ -148,7 +183,7 @@ export function getAssetPrices(
       const answers = await Promise.all(reads);
       return pricesFrom(
         answers
-          .flatMap((body) => (Array.isArray(body) ? body : []))
+          .flatMap((body) => listOf<unknown>(body, 'their trades'))
           .map(recentTradeOf)
           .filter((trade) => trade !== null)
       );
@@ -217,17 +252,20 @@ export function getTopHolders(
           assetid: assetId,
           ordering: 'ASSET_BALANCE_ACCOUNT',
           reverse: true,
-          limit: HOLDERS_READ,
+          // One more than it keeps: "the biggest 100" only when there is a 101st.
+          limit: HOLDERS_READ + 1,
         })}`
       );
-      const rows = (Array.isArray(body) ? body : [])
+      const all = listOf<unknown>(body, 'its holders');
+      const rows = all
+        .slice(0, HOLDERS_READ)
         .map((row) => {
           const r = (row ?? {}) as Record<string, unknown>;
           const balance = parseAtomic(r.balance);
           return typeof r.address === 'string' && balance ? { address: r.address, balance } : null;
         })
         .filter((row): row is Holder => row !== null);
-      return { rows, truncated: rows.length >= HOLDERS_READ };
+      return { rows, truncated: all.length > HOLDERS_READ };
     },
     { ttlMs: FIVE_MINUTES, force: options.force }
   );
@@ -247,7 +285,7 @@ export function getAssetDeals(
         getJson<unknown>(`/assets/trades/${QORT_ASSET_ID}/${seg(assetId)}?${params}`),
       ]);
       return [sold, bought]
-        .flatMap((body) => (Array.isArray(body) ? body : []))
+        .flatMap((body) => listOf<unknown>(body, 'its trades'))
         .map(dealOf)
         .filter((deal): deal is AssetDeal => deal !== null)
         .sort((a, b) => b.at - a.at)
@@ -278,7 +316,7 @@ export function getBuyOrders(
           reverse: true,
         })}`
       );
-      const rows = Array.isArray(body) ? body : [];
+      const rows = listOf<unknown>(body, 'its buy orders');
       return {
         orders: rows.map(buyOrderOf).filter((order): order is BuyOrder => order !== null),
         truncated: rows.length >= BIDS_READ,
@@ -288,7 +326,12 @@ export function getBuyOrders(
   );
 }
 
-/** What buyers would pay now for each holding, by asset id; one book failing fails them all. */
+/**
+ * What buyers would pay now for each holding, by asset id. Each asset stands
+ * on its own: a book that couldn't be read is marked `failed` (Hub's
+ * Explorer port, 2026-11-22: one failing failed them all); only when every
+ * one fails does the read fail.
+ */
 export function getAssetSales(
   address: string,
   holdings: readonly Holding[],
@@ -299,10 +342,25 @@ export function getAssetSales(
     async () => {
       const sales = new Map<number, SaleNow>();
       const held = holdings.filter((h) => h.assetId !== QORT_ASSET_ID);
+      let failed = 0;
+      let firstError: unknown = null;
       await runPool(held, BOOKS_AT_ONCE, async (holding) => {
-        const book = await getBuyOrders(holding.assetId, { force: options.force });
-        sales.set(holding.assetId, saleNow(holding.balance, book.orders, address, book.truncated));
+        try {
+          const book = await getBuyOrders(holding.assetId, { force: options.force });
+          sales.set(
+            holding.assetId,
+            saleNow(holding.balance, book.orders, address, book.truncated)
+          );
+        } catch (error) {
+          failed += 1;
+          firstError ??= error;
+          sales.set(holding.assetId, {
+            ...saleNow(holding.balance, [], address, false),
+            failed: true,
+          });
+        }
       });
+      if (held.length && failed === held.length) throw firstError;
       return sales;
     },
     { ttlMs: TWO_MINUTES, force: options.force }
@@ -320,7 +378,7 @@ export function getSellOffers(
       const body = await getJson<unknown>(
         `/assets/orderbook/${seg(assetId)}/${QORT_ASSET_ID}?${query({ limit: ASKS_READ })}`
       );
-      return (Array.isArray(body) ? body : [])
+      return listOf<unknown>(body, 'its sell offers')
         .map(orderLevelOf)
         .filter((level): level is OrderLevel => level !== null);
     },

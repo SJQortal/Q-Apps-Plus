@@ -10,7 +10,7 @@
  * queued (useHeavyScope on the account page).
  */
 import { useEffect, useRef, useState } from 'react';
-import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
+import { accountTxKey, getAccountTx, probeAccountTxEnd } from '../../../../data/explorer/accountTx';
 import { HeavyCancelled } from '../../../../data/explorer/heavy';
 import type { TxRow } from '../../../../data/types';
 import { useQuery } from '../../../../hooks/useQuery';
@@ -56,10 +56,14 @@ export function useActivityRows(
 
   // Runs again when a page lands and when its read ends (`reading`), so the next one starts.
   useEffect(() => {
-    if (!enabled || !data || done || busy.current || reading || failed || held >= target) return;
+    if (!enabled || !data || done || busy.current || reading || failed) return;
+    // At its target: one row more says whether older ones exist at all (probeAccountTxEnd).
+    const next =
+      held >= target ? probeAccountTxEnd(address) : getAccountTx(address, [], { older: true });
+    if (!next) return;
     busy.current = true;
     setReading(true);
-    getAccountTx(address, [], { older: true })
+    next
       .catch((error: unknown) => {
         if (!(error instanceof HeavyCancelled)) setFailed(error);
       })

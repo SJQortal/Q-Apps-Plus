@@ -817,7 +817,7 @@ describe('Home: an admin with no open decisions', () => {
   }, 15_000);
 });
 
-describe('Home: Q-Minter for everyone outside MINTER', () => {
+describe('Home: Q-Minter for everyone', () => {
   it('offers the Q-Minter Guide first to someone not in MINTER, in a new Hub tab', async () => {
     await renderPage(<HomePage />, { persona: 'signedOut' });
     const guide = await screen.findByRole(
@@ -847,6 +847,30 @@ describe('Home: Q-Minter for everyone outside MINTER', () => {
     await renderPage(<HomePage />, { persona: 'learner' });
     await headline("You're minting, Leo Learner");
     expect(screen.queryByRole('region', { name: 'How minting works' })).toBeNull();
+  });
+
+  it('has its minting overview and the history of minting for every status (3.0.7’s Q-Minter links)', async () => {
+    const { unmount } = await renderPage(<HomePage />, { persona: 'learner' });
+    await headline("You're minting, Leo Learner");
+    const links = await screen.findByRole('region', { name: 'Minting on Qortal' });
+    mockQortalRequest('OPEN_NEW_TAB', () => true);
+    await userEvent.click(within(links).getByRole('button', { name: 'Minting overview' }));
+    await userEvent.click(within(links).getByRole('button', { name: 'The history of minting' }));
+    expect(qortalCallsFor('OPEN_NEW_TAB').map((c) => c.qortalLink)).toEqual([
+      'qortal://WEBSITE/Q-Minter/#/minting-overview',
+      'qortal://WEBSITE/Q-Minter/#/history',
+    ]);
+    unmount();
+    // Someone outside MINTER finds them in How minting works, not twice.
+    await renderPage(<HomePage />, { persona: 'signedOut' });
+    const guide = await screen.findByRole(
+      'region',
+      { name: 'How minting works' },
+      { timeout: 4000 }
+    );
+    expect(within(guide).getByRole('button', { name: 'Minting overview' })).toBeVisible();
+    expect(within(guide).getByRole('button', { name: 'The history of minting' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Minting on Qortal' })).toBeNull();
   });
 
   it('is in a newcomer’s hero only, once', async () => {

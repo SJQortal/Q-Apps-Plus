@@ -10,7 +10,7 @@
  * them is read for anyone else). Each fact loads, fails and retries on its
  * own; none polls.
  */
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { Box, Skeleton, Typography } from '@mui/material';
 import { visuallyHidden } from '@mui/utils';
 import { ProgressBar } from '../../../../components/common/ProgressRing';
@@ -18,7 +18,7 @@ import { Card, Section } from '../../../../components/common/Section';
 import { ErrorState } from '../../../../components/common/states';
 import { getBalance } from '../../../../data/accounts';
 import { getGroupsOf, type FirstSeen } from '../../../../data/explorer/account';
-import { accountTxKey, getAccountTx } from '../../../../data/explorer/accountTx';
+import { accountTxKey, getAccountTx, probeAccountTxEnd } from '../../../../data/explorer/accountTx';
 import { familyOf } from '../../../../rules/explorer/txFamilies';
 import type { AccountInfo } from '../../../../data/types';
 import { useQuery, type UseQueryResult } from '../../../../hooks/useQuery';
@@ -34,7 +34,7 @@ import {
 } from './overviewWords';
 import { FIELD_BLOCK_SX } from '../../../../components/explorer/fieldBlock';
 import { NodeOnlineValue } from '../../../../components/explorer/NodeOnline';
-import { useQortSummaries } from './qortSummaries';
+import { useNeverMinted, useQortSummaries } from './qortSummaries';
 import { FactLabel } from '../../../../components/explorer/FactLabel';
 
 const VALUE_SX = {
@@ -247,6 +247,11 @@ function GroupsFact({ address }: { address: string }) {
  */
 function QdnFact({ address, full }: { address: string; full: boolean }) {
   const list = useQuery(accountTxKey(address, []), (force) => getAccountTx(address, [], { force }));
+  // Without Activity (which does it for the rest), one row more says whether "100+" is so.
+  const stopped = Boolean(list.data && !list.data.done);
+  useEffect(() => {
+    if (!full && stopped) void probeAccountTxEnd(address)?.catch(() => undefined);
+  }, [full, stopped, address]);
   // Simon, 2026-10-17: it "should just say "Transactions"".
   const label = 'Transactions';
   if (list.isError && !list.data)
@@ -268,11 +273,12 @@ interface FactsProps {
 
 export function FactsSection({ address, account, firstSeen, full }: FactsProps) {
   // QORT minted, purchased / sold, received / sent (Simon, 2026-10-17: moved here from the Minter Profile).
-  const qort = useQortSummaries(
+  const neverMinted = useNeverMinted(
     address,
-    account.blocksMinted === 0 && !account.blocksMintedAdjustment,
-    { enabled: full }
+    account.blocksMinted + (account.blocksMintedAdjustment || 0),
+    full
   );
+  const qort = useQortSummaries(address, neverMinted, { enabled: full });
   return (
     <Section title="At a glance" id="overview-facts">
       <Card>

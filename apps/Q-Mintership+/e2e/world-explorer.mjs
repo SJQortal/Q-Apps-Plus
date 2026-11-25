@@ -789,6 +789,7 @@ export function extendExplorer(world) {
   };
   // The Overview and Names tabs' name collector (its own section at the end of this file).
   extendCollector(world);
+  extendTrader(world);
 }
 
 // ---- answering Core --------------------------------------------------------------------
@@ -867,6 +868,9 @@ export function answerExplorer(world, p, sp) {
   // Reads about the name collector only (its own section at the end of this file).
   const collector = answerCollector(world, p, sp);
   if (collector) return collector;
+  // Reads about the trader only (her own section at the end of this file).
+  const trader = answerTrader(world, p, sp);
+  if (trader) return trader;
   let m;
 
   // ---- names ---------------------------------------------------------------------------
@@ -1306,6 +1310,9 @@ export function answerExplorer(world, p, sp) {
       key ? ([...world.accounts.values()].find((a) => a.publicKey === key)?.address ?? '') : null;
     const seller = ownerOf(sp.get('sellerPublicKey'));
     const buyer = ownerOf(sp.get('buyerPublicKey'));
+    // The world's one trade was on Litecoin.
+    const chain = sp.get('foreignBlockchain');
+    if (chain && chain !== 'LITECOIN') return json([]);
     const rows = x.trades.filter(
       (t) =>
         (seller === null || t.sellerAddress === seller) &&
@@ -1518,6 +1525,318 @@ function answerCollector(world, p, sp) {
         created: r.created,
       }));
     return json(page(rows, sp));
+  }
+  return undefined;
+}
+
+// =========================================================================================
+// ---- The Trades tab: a trader ------------------------------------------------------------
+// =========================================================================================
+/*
+ * Tara Trader trades on Q-Trade and in Q-Assets (Simon, 2026-10-26: the
+ * Explorer's Trades tab). Over about twenty months she sold QORT 35 times,
+ * for Litecoin most, then Dogecoin, Bitcoin and Ravencoin, mostly to Lou
+ * Left; she bought QORT 7 times, with Litecoin and once DigiByte. Of the 47
+ * trade offers she made, 35 sold, 10 ended without a trade (the AT paid her
+ * back) and 2 are open. In Q-Assets she bought GEMCOIN in two trades and
+ * sold some again, bought Bean Token in an order she then cancelled, and
+ * has a 🐉 order open.
+ *
+ * Kept apart like the collector: answerTrader() only answers reads about
+ * her address, her public key, her name, her orders and their trades, so
+ * nothing above changes.
+ */
+export const TRADER = { address: address('explorer-trader'), name: 'Tara Trader' };
+
+const traderAt = (seed) => `A${address(`trader-at:${seed}`).slice(1)}`;
+/** Coin per QORT, as each chain traded in 2025–26. */
+const PRICE = {
+  LITECOIN: 0.0034,
+  DOGECOIN: 2.15,
+  BITCOIN: 0.0000052,
+  RAVENCOIN: 14.2,
+  DIGIBYTE: 31,
+};
+const CODE = {
+  LITECOIN: 'LTC',
+  DOGECOIN: 'DOGE',
+  BITCOIN: 'BTC',
+  RAVENCOIN: 'RVN',
+  DIGIBYTE: 'DGB',
+};
+const eight = (n) => n.toFixed(8);
+
+function extendTrader(world) {
+  // Blocks in a day, at the world's block time (read here: world.mjs loads this file first).
+  const DAY_BLOCKS = Math.round(86_400_000 / MS_PER_BLOCK);
+  const who = TRADER.address;
+  const publicKey = fakeKey(`pk:${who}`, 32);
+  world.accounts.set(who, {
+    address: who,
+    name: TRADER.name,
+    level: 4,
+    blocks: 420_000,
+    publicKey,
+    reference: fakeKey(`sig:ref:${who}`, 64),
+    balance: 8421.5,
+  });
+  const rows = [];
+  /** Every order transaction by signature: hers and the other side's. */
+  const orderTxs = new Map();
+  const row = (type, h, creator, extra) => ({
+    type,
+    timestamp: blockTime(h) - 20_000,
+    reference: sig(`trader:ref:${type}:${h}:${creator}`),
+    fee: type === 'AT' ? '0.00000000' : '0.01000000',
+    signature: sig(`trader:${type}:${h}:${JSON.stringify(extra)}`),
+    txGroupId: 0,
+    blockHeight: h,
+    approvalStatus: 'NOT_REQUIRED',
+    creatorAddress: creator,
+    ...extra,
+  });
+  const mine = (type, h, extra) => {
+    const r = row(type, h, who, extra);
+    rows.push(r);
+    return r;
+  };
+  const payout = (h, at, amount) =>
+    rows.push(row('AT', h, NULL_OWNER, { atAddress: at, recipient: who, amount, assetId: 0 }));
+  const offer = (h, at, chain, qort) =>
+    mine('DEPLOY_AT', h, {
+      creatorPublicKey: publicKey,
+      name: `QORT/${CODE[chain]} ACCT`,
+      description: `QORT/${CODE[chain]} cross-chain trade`,
+      aTType: 'ACCT',
+      tags: `ACCT QORT ${CODE[chain]}`,
+      amount: eight(qort + 0.001),
+      assetId: 0,
+      aTAddress: at,
+    });
+
+  // ---- Q-Trade ---------------------------------------------------------------------------
+  const trades = [];
+  const buyers = [ADDR.left, ADDR.kicked, ADDR.left, SPONSOR.address, ADDR.left, ADDR.promote];
+  const sizes = [120, 450, 75, 1000, 260, 333.5, 50, 800, 150, 2400];
+  for (let i = 0; i < 35; i++) {
+    const chain =
+      i === 10 || i === 25
+        ? 'BITCOIN'
+        : i === 18
+          ? 'RAVENCOIN'
+          : i % 8 === 3
+            ? 'DOGECOIN'
+            : 'LITECOIN';
+    const h = TIP - (600 - i * 17 + (i % 3) * 2) * DAY_BLOCKS;
+    const qort = sizes[i % sizes.length];
+    const at = traderAt(`sold:${i}`);
+    offer(h - DAY_BLOCKS, at, chain, qort);
+    // Some sold ATs pay back what was left for their fees.
+    if (i % 4 === 0) payout(h + 2, at, '0.00099463');
+    trades.push({
+      chain,
+      row: {
+        tradeTimestamp: blockTime(h),
+        qortAmount: eight(qort),
+        btcAmount: eight(qort * PRICE[chain] * (1 + (i % 5) * 0.02)),
+        foreignAmount: eight(qort * PRICE[chain] * (1 + (i % 5) * 0.02)),
+        atAddress: at,
+        sellerAddress: who,
+        buyerReceivingAddress: buyers[i % buyers.length],
+      },
+    });
+  }
+  const sellers = [ADDR.promote, SPONSOR.address, ADDR.left];
+  [580, 450, 300, 210, 120, 45, 9].forEach((days, i) => {
+    const chain = i === 3 ? 'DIGIBYTE' : 'LITECOIN';
+    const h = TIP - days * DAY_BLOCKS;
+    const qort = [200, 90, 640, 1500, 60, 310, 45][i];
+    const at = traderAt(`bought:${i}`);
+    payout(h, at, eight(qort));
+    trades.push({
+      chain,
+      row: {
+        tradeTimestamp: blockTime(h),
+        qortAmount: eight(qort),
+        btcAmount: eight(qort * PRICE[chain]),
+        foreignAmount: eight(qort * PRICE[chain]),
+        atAddress: at,
+        sellerAddress: sellers[i % sellers.length],
+        buyerReceivingAddress: who,
+      },
+    });
+  });
+  // Offers that ended without a trade: the AT paid her back.
+  for (let i = 0; i < 10; i++) {
+    const chain = i === 4 ? 'DOGECOIN' : 'LITECOIN';
+    const h = TIP - (590 - i * 55) * DAY_BLOCKS;
+    const at = traderAt(`ended:${i}`);
+    offer(h, at, chain, 500);
+    payout(h + 3 * DAY_BLOCKS, at, '500.00099463');
+  }
+  // Two still open.
+  offer(TIP - 2 * DAY_BLOCKS, traderAt('open:0'), 'LITECOIN', 300);
+  offer(TIP - DAY_BLOCKS, traderAt('open:1'), 'DOGECOIN', 120);
+
+  // ---- Q-Assets --------------------------------------------------------------------------
+  const order = (creator, h, have, want, amount, price) => {
+    const tx = row('CREATE_ASSET_ORDER', h, creator, {
+      creatorPublicKey: fakeKey(`pk:${creator}`, 32),
+      haveAssetId: have,
+      wantAssetId: want,
+      amount: eight(amount),
+      price: eight(price),
+    });
+    orderTxs.set(tx.signature, tx);
+    if (creator === who) rows.push(tx);
+    return tx;
+  };
+  const NAMES = { 0: 'QORT', 77: 'GEMCOIN', 78: 'Bean Token', 79: '🐉' };
+  const orders = [];
+  const orderRow = (tx, fulfilled, isClosed, isFulfilled) => {
+    orders.push({
+      orderId: tx.signature,
+      creatorPublicKey: tx.creatorPublicKey,
+      creator: tx.creatorAddress,
+      haveAssetId: tx.haveAssetId,
+      wantAssetId: tx.wantAssetId,
+      haveAssetName: NAMES[tx.haveAssetId],
+      wantAssetName: NAMES[tx.wantAssetId],
+      amount: tx.amount,
+      price: tx.price,
+      fulfilled: eight(fulfilled),
+      timestamp: tx.timestamp,
+      isClosed,
+      isFulfilled,
+    });
+  };
+  const assetTrades = [];
+  // initiator gave `gave` of asset `gaveId`; the target gave `got` of `gotId`.
+  const fill = (initiator, target, gaveId, gave, gotId, got) =>
+    assetTrades.push({
+      initiatingOrderId: initiator.signature,
+      targetOrderId: target.signature,
+      initiatorAmount: eight(gave),
+      targetAmount: eight(got),
+      initiatorSaving: '0.00000000',
+      timestamp: initiator.timestamp,
+      initiatorAmountAssetId: gaveId,
+      initiatorAmountAssetName: NAMES[gaveId],
+      targetAmountAssetId: gotId,
+      targetAmountAssetName: NAMES[gotId],
+    });
+  // She bought 10 GEMCOIN: Pia's two sell orders waited, hers matched both.
+  const pia1 = order(ADDR.promote, TIP - 400 * DAY_BLOCKS, 77, 0, 6, 20);
+  const pia2 = order(ADDR.promote, TIP - 380 * DAY_BLOCKS, 77, 0, 4, 20);
+  const buyGem = order(who, TIP - 360 * DAY_BLOCKS, 0, 77, 10, 20);
+  fill(buyGem, pia1, 0, 120, 77, 6);
+  fill(buyGem, pia2, 0, 80, 77, 4);
+  orderRow(pia1, 6, true, true);
+  orderRow(pia2, 4, true, true);
+  orderRow(buyGem, 10, true, true);
+  // She sold 4 again: hers waited, Ben's buy order matched it.
+  const sellGem = order(who, TIP - 150 * DAY_BLOCKS, 77, 0, 4, 23);
+  const ben = order(ADDR.banTarget, TIP - 140 * DAY_BLOCKS, 0, 77, 4, 23);
+  fill(ben, sellGem, 0, 92, 77, 4);
+  orderRow(sellGem, 4, true, true);
+  orderRow(ben, 4, true, true);
+  // 400 of 1,000 Bean Token, then she cancelled the rest.
+  const nora = order(ADDR.nominator, TIP - 90 * DAY_BLOCKS, 78, 0, 400, 0.05);
+  const buyBean = order(who, TIP - 80 * DAY_BLOCKS, 0, 78, 1000, 0.05);
+  fill(buyBean, nora, 0, 20, 78, 400);
+  orderRow(nora, 400, true, true);
+  orderRow(buyBean, 400, true, false);
+  mine('CANCEL_ASSET_ORDER', TIP - 70 * DAY_BLOCKS, {
+    creatorPublicKey: publicKey,
+    orderId: buyBean.signature,
+  });
+  // A 🐉 for sale, nobody has bought it yet.
+  orderRow(order(who, TIP - 20 * DAY_BLOCKS, 79, 0, 2, 50), 0, false, false);
+
+  rows.sort((a, b) => a.blockHeight - b.blockHeight);
+  world.explorer.trader = { address: who, publicKey, rows, trades, orders, orderTxs, assetTrades };
+}
+
+/** Core's answers about the trader (her address, key, name, orders, trades), or undefined. */
+function answerTrader(world, p, sp) {
+  const t = world.explorer.trader;
+  if (!t) return undefined;
+  let m;
+  if (p === `/addresses/${t.address}`) {
+    const a = world.accounts.get(t.address);
+    return json({
+      address: t.address,
+      reference: a.reference,
+      publicKey: t.publicKey,
+      defaultGroupId: 0,
+      flags: 0,
+      level: a.level,
+      blocksMinted: a.blocks,
+      blocksMintedAdjustment: 0,
+      blocksMintedPenalty: 0,
+    });
+  }
+  if (p === `/names/address/${t.address}`)
+    return json(page([{ name: TRADER.name, owner: t.address }], sp));
+  if (p === `/names/${encodeURIComponent(TRADER.name)}` || p === `/names/${TRADER.name}`)
+    return json({
+      name: TRADER.name,
+      reducedName: TRADER.name.toLowerCase(),
+      owner: t.address,
+      data: '',
+      registered: blockTime(2_000_000),
+      isForSale: false,
+    });
+  if (p === `/transactions/creator/${t.publicKey}`)
+    return json(
+      page(
+        t.rows.filter((r) => r.creatorAddress === t.address),
+        sp
+      )
+    );
+  if ((m = p.match(/^\/transactions\/signature\/(\w+)$/))) {
+    const r = t.rows.find((x) => x.signature === m[1]) ?? t.orderTxs.get(m[1]);
+    return r ? json(r) : undefined;
+  }
+  if (p === '/transactions/search' && sp.get('address') === t.address) {
+    const types = sp.getAll('txType');
+    const newestFirst = sp.get('reverse') === 'true';
+    const list = t.rows.filter((r) => !types.length || types.includes(r.type));
+    return json(page(newestFirst ? [...list].reverse() : list, sp));
+  }
+  if (p === '/crosschain/trades') {
+    const seller = sp.get('sellerPublicKey') === t.publicKey;
+    const buyer = sp.get('buyerPublicKey') === t.publicKey;
+    if (!seller && !buyer) return undefined;
+    const chain = sp.get('foreignBlockchain');
+    const list = t.trades
+      .filter((x) => !chain || x.chain === chain)
+      .map((x) => x.row)
+      .filter((r) => (seller ? r.sellerAddress : r.buyerReceivingAddress) === t.address);
+    // Without a limit Core answers every one.
+    return json(sp.get('limit') ? page(list, sp) : list);
+  }
+  if ((m = p.match(/^\/assets\/orders\/(Q\w+)$/)) && m[1] === t.address) {
+    const closed = sp.get('includeClosed') === 'true';
+    const fulfilled = sp.get('includeFulfilled') === 'true';
+    const list = t.orders
+      .filter((o) => o.creator === t.address)
+      .filter((o) => o.isClosed === closed && o.isFulfilled === fulfilled)
+      .sort((a, b) => a.timestamp - b.timestamp);
+    return json(page(sp.get('reverse') === 'true' ? list.reverse() : list, sp));
+  }
+  if ((m = p.match(/^\/assets\/order\/(\w+)\/trades$/))) {
+    if (!t.orders.some((o) => o.orderId === m[1])) return undefined;
+    return json(
+      page(
+        t.assetTrades.filter((x) => x.initiatingOrderId === m[1] || x.targetOrderId === m[1]),
+        sp
+      )
+    );
+  }
+  if ((m = p.match(/^\/assets\/order\/(\w+)$/))) {
+    const o = t.orders.find((x) => x.orderId === m[1]);
+    return o ? json(o) : undefined;
   }
   return undefined;
 }

@@ -164,3 +164,34 @@ describe('Core’s sponsorship report', () => {
     expect(fetchCallsFor('/addresses/sponsorship/')).toHaveLength(1);
   });
 });
+
+// Hub's Explorer port (2026-11-22): Stop kept reading the account in progress, page after page.
+describe('a check stopped mid-way', () => {
+  it('reads no next page of the account in progress, and leaves it out', async () => {
+    installWorld('learner');
+    const one = SPONSEES[0].address;
+    const stop = new AbortController();
+    mockFetchRoute('/transactions/payments/between', async (url: URL) => {
+      const p = url.searchParams;
+      if (p.get('limit') === '1') return [];
+      if (p.get('senderAddress') !== one) return [];
+      // A full page of 1,000, then Stop is pressed while it is read.
+      stop.abort();
+      return Array.from({ length: 1000 }, (_, i) => ({
+        type: 'PAYMENT',
+        signature: `stop${p.get('offset')}-${i}`.padEnd(88, 'x'),
+        creatorAddress: one,
+        recipient: ADDR.admin,
+        amount: '1',
+        timestamp: 1_000 + i,
+        blockHeight: 2_000_000,
+      }));
+    });
+    const results = await checkPaymentsSent([one], { signal: stop.signal });
+    const reads = fetchCallsFor('/transactions/payments/between')
+      .map((u) => new URL(u, 'http://x').searchParams)
+      .filter((p) => p.get('senderAddress') === one && p.get('limit') !== '1');
+    expect(reads.map((p) => p.get('offset'))).toEqual(['0']);
+    expect(results.has(one)).toBe(false);
+  });
+});

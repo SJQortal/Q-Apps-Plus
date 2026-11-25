@@ -308,12 +308,14 @@ describe('where the first QORT came from', () => {
       [addr('4'), f(C, 'rewardShare')],
       [addr('5'), null],
     ]);
+    // A multi-payment is another first transaction, as Funded counts them (Hub's Explorer port,
+    // 2026-11-22: "Who got their first QORT payment from this account" left it out).
     expect(groupFirstPayers(funding)).toEqual({
       payers: [
-        { from: B, accounts: [addr('1'), addr('3')] },
         { from: A, accounts: [addr('2')] },
+        { from: B, accounts: [addr('1')] },
       ],
-      other: 1,
+      other: 2,
       none: 1,
     });
   });

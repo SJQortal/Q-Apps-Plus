@@ -69,7 +69,7 @@ describe('the account report (Simon, 2026-10-21)', () => {
     const text = accountReportMarkdown(data());
     const headings = text.split('\n').filter((line) => /^#{1,2} /.test(line));
     expect(headings).toEqual([
-      '# Account report: Ada | Approved',
+      '# Account report: Ada \\| Approved',
       '## Account',
       '## QORT totals',
       '## Activity by type',
@@ -95,9 +95,53 @@ describe('the account report (Simon, 2026-10-21)', () => {
   it('says plainly when its whole history wasn’t read, and leaves the totals out', () => {
     const text = accountReportMarkdown(data({ history: { rows: [tx(1)], done: false } }));
     expect(text).toContain('only its newest 1 transactions (not its whole history)');
-    expect(text).toContain('read all of it first to have them');
+    expect(text).toContain(
+      'of which its newest 1 transaction was read: press Read the rest on its Overview'
+    );
     expect(text).not.toContain('| Minted |');
     expect(historyWords(null)).toBe('its history couldn’t be read');
+  });
+
+  // Hub's Explorer port (2026-11-22): a history whose read failed was told to be read first.
+  it('says what to do when its history couldn’t be read, or wasn’t read yet', () => {
+    expect(accountReportMarkdown(data({ history: null }))).toContain(
+      'which couldn’t be read: press Retry on its Overview, then make the report again.'
+    );
+    const unread = accountReportMarkdown(data({ history: null, historyUnread: true }));
+    expect(unread).toContain('which wasn’t read yet: make the report again once its Overview');
+    expect(unread).toContain('none of its history (not read yet)');
+  });
+
+  // Hub's Explorer port (2026-11-22): names are the chain's, and Markdown read them as links.
+  it('writes names from the chain as text, never as Markdown', () => {
+    const name = '[x](http://example.invalid) _a_ <b>#1</b> | c';
+    const paid: Finding = {
+      key: `paidBy:${B}`,
+      kind: 'paidBy',
+      other: B,
+      parts: [
+        { kind: 'text', text: 'Received 5 QORT from ' },
+        { kind: 'account', address: B },
+      ],
+      evidence: [tx(1)],
+      timestamp: Date.UTC(2026, 0, 1),
+      count: 1,
+      qort: 500_000_000n,
+    } as Finding;
+    const text = accountReportMarkdown(
+      data({
+        primaryName: name,
+        findings: [paid],
+        nameOf: (address) => (address === B ? name : null),
+      })
+    );
+    const escapedName = '\\[x\\]\\(http://example.invalid\\) \\_a\\_ \\<b\\>\\#1\\</b\\> \\| c';
+    expect(text).toContain(`# Account report: ${escapedName}`);
+    // In its own heading, and as the other account in the payments table.
+    expect(text).toContain(`| ${escapedName} |`);
+    expect(text).not.toContain('[x](http');
+    // Table rows keep their columns: the pipe in a name is escaped once.
+    expect(text).not.toContain('\\\\|');
   });
 
   it('lists each connection with its block, date and whole signature, and payments as tables', () => {

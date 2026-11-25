@@ -17,6 +17,7 @@ import {
   orderLevelOf,
   ownedNotHeld,
   pricesFrom,
+  type RecentTrade,
   qortWords,
   quantityWords,
   recentTradeOf,
@@ -375,5 +376,30 @@ describe('avatars', () => {
   it('neighbouring assets get colours far apart', () => {
     expect(assetHue(1)).toBe(138);
     expect(Math.abs(assetHue(2) - assetHue(1))).toBeGreaterThan(90);
+  });
+});
+
+// Hub's Explorer port (2026-11-22): two trades at the same time took whichever Core listed first.
+describe('a price from two trades at the same time', () => {
+  it('is the lowest, then the most units, in either order', () => {
+    const at = 1_000;
+    const a = {
+      assetId: 7,
+      otherAssetId: 0,
+      amount: 10n * 100_000_000n,
+      otherAmount: 50n * 100_000_000n,
+      timestamp: at,
+    };
+    const b = {
+      assetId: 7,
+      otherAssetId: 0,
+      amount: 10n * 100_000_000n,
+      otherAmount: 40n * 100_000_000n,
+      timestamp: at,
+    };
+    const one = pricesFrom([a, b] as RecentTrade[]).get(7);
+    const two = pricesFrom([b, a] as RecentTrade[]).get(7);
+    expect(one).toEqual(two);
+    expect(one?.qort).toBe(40n * 100_000_000n);
   });
 });

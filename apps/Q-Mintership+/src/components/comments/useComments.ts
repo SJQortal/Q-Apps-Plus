@@ -2,6 +2,8 @@
  * Hooks for the comments section: whether it is near the screen, and its
  * count ("Comments (3)") from the shared count search, or from its own
  * keys' search when that list can't tell (only once it is near the screen).
+ * A nomination's comments from the nominee's earlier nominations are
+ * counted apart ("· 9 earlier"; Simon, 2026-11-24).
  * A Minter Admin's count adds the comments for the Minter Admins only, the
  * same way (their own shared list, data/adminNotes.ts); nobody else reads it.
  */
@@ -20,6 +22,7 @@ import {
 } from '../../data/comments';
 import {
   commentRowsFor,
+  searchKeys,
   targetId,
   targetSince,
   type CommentRow,
@@ -103,6 +106,13 @@ function useAdminCommentRows(
   }, [enabled, useOwn, own.data, own.isError, covered, index.data, index.isError, target]);
 }
 
+export interface CommentCount {
+  /** This round's. */
+  count: number;
+  /** From the nominee's earlier nominations (target.earlier). */
+  earlier: number;
+}
+
 /**
  * The number of comments on `target`, or null while unknown. `nearScreen`
  * allows the target's own search; `open` prefers it (the thread reads it anyway).
@@ -111,7 +121,7 @@ function useAdminCommentRows(
 export function useCommentCount(
   target: CommentTarget,
   { nearScreen, open }: { nearScreen: boolean; open: boolean }
-): number | null {
+): CommentCount | null {
   const index = useCommentIndex();
   const covered = index.data ? indexCovers(index.data, target) : false;
   const indexSettled = Boolean(index.data) || index.isError;
@@ -121,7 +131,7 @@ export function useCommentCount(
   );
   const isAdmin = useViewerIsAdmin();
   const adminRows = useAdminCommentRows(target, { nearScreen, open, enabled: isAdmin });
-  const keys = useMemo(() => target.keys.map((k) => k.key), [target]);
+  const keys = useMemo(() => searchKeys(target), [target]);
   const optimistic = useOptimisticComments(keys);
   return useMemo(() => {
     const rows =
@@ -134,9 +144,14 @@ export function useCommentCount(
     if (!rows || adminRows === null) return null;
     const all = adminRows ? [...rows, ...adminRows] : rows;
     const listed = new Set(all.map((r) => r.ref));
-    return (
-      all.length +
-      optimistic.comments.filter((o) => !listed.has(o.ref) && (isAdmin || !o.adminOnly)).length
-    );
+    const earlier = all.filter((r) => r.earlier).length;
+    // What this device just posted goes under this round.
+    return {
+      count:
+        all.length -
+        earlier +
+        optimistic.comments.filter((o) => !listed.has(o.ref) && (isAdmin || !o.adminOnly)).length,
+      earlier,
+    };
   }, [useOwn, own.data, covered, index.data, target, adminRows, isAdmin, optimistic.comments]);
 }

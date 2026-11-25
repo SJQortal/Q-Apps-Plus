@@ -202,7 +202,8 @@ describe('Names: every name', () => {
   });
 
   it('says when Core’s list was cut at 500', async () => {
-    const bulk = Array.from({ length: 500 }, (_, i) => `Bulk ${String(i).padStart(3, '0')}`);
+    // 501: one row past the 500 read says there are more.
+    const bulk = Array.from({ length: 501 }, (_, i) => `Bulk ${String(i).padStart(3, '0')}`);
     await open(ADDR.learner, () => {
       mockFetchRoute(`/names/address/${ADDR.learner}`, (url: URL) => {
         const offset = Number(url.searchParams.get('offset') ?? 0);

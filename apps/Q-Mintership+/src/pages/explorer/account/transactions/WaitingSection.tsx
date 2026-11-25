@@ -10,6 +10,7 @@
 import { useMemo } from 'react';
 import { Typography } from '@mui/material';
 import { Section } from '../../../../components/common/Section';
+import { ErrorState } from '../../../../components/common/states';
 import { TxList } from '../../../../components/explorer/TxListRow';
 import { useTxSearch } from '../../../../components/explorer/search/useTxSearch';
 import { getUnconfirmedOf, unconfirmedKey } from '../../../../data/explorer/accountTx';
@@ -53,14 +54,28 @@ export function WaitingSection({
   );
   const { tiers } = useTxSearch(kept, address, search);
   const rows = tiers ? [...tiers.match, ...tiers.similar] : kept;
-  if (!rows.length) return null;
+  // A read that failed says so, never "none waiting" (Hub's Explorer port, 2026-11-22).
+  const failed = waiting.isError || Boolean(waiting.error);
+  if (!rows.length && !failed) return null;
   return (
-    <Section title={WAITING_TITLE} id="explorer-account-waiting" count={rows.length}>
+    <Section title={WAITING_TITLE} id="explorer-account-waiting" count={rows.length || undefined}>
+      {failed ? (
+        <ErrorState
+          compact
+          title={
+            rows.length
+              ? "Couldn't read what it sent that waits for a block again: these are from before."
+              : "Couldn't read what it sent that waits for a block."
+          }
+          error={waiting.error}
+          onRetry={() => void waiting.refetch()}
+        />
+      ) : null}
       <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
         Your node holds these until a block takes them. Transactions sent to this account show only
         once they are in a block.
       </Typography>
-      <TxList rows={rows} viewpoint={address} label={WAITING_TITLE} />
+      {rows.length ? <TxList rows={rows} viewpoint={address} label={WAITING_TITLE} /> : null}
     </Section>
   );
 }

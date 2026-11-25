@@ -7,8 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderPage } from '../../test/render';
-import { mockQortalRequest, qortalCallsFor } from '../../test/setup';
+import { mockFetchRoute, mockQortalRequest, qortalCallsFor } from '../../test/setup';
 import { ADDR } from '../../test/world';
+import { answerCore } from '../../../e2e/world.mjs';
 import { explorerAccountPath } from '../../routes/paths';
 import { resetExplorerState } from '../../state/explorer';
 import AccountPage from '../../pages/explorer/AccountPage';
@@ -53,6 +54,37 @@ describe('Join on a group card', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Continue to Hub' }));
     expect(await within(dialog).findByText('Joined', {}, T)).toBeInTheDocument();
     expect(qortalCallsFor('JOIN_GROUP')).toEqual([{ action: 'JOIN_GROUP', groupId: 1 }]);
+    // Hub's Explorer port (2026-11-22): the button stays, marked as sent, and the focus with it.
+    await user.keyboard('{Escape}');
+    const sent = await within(list).findByRole('button', { name: /^Joined ✓/ }, T);
+    expect(sent).toHaveAttribute('aria-disabled', 'true');
+    await vi.waitFor(() => expect(sent).toHaveFocus(), T);
+  });
+
+  // Hub's Explorer port (2026-11-22): Join was simply missing when the viewer's groups failed.
+  it('says when it couldn’t check the viewer’s groups, with a way to try again', async () => {
+    await renderPage(<AccountPage />, {
+      persona: 'learner',
+      path: explorerAccountPath(ADDR.admin),
+      route: '/explorer/account/:who/:tab?',
+      setup: (world) =>
+        mockFetchRoute('/groups/member/', (url: URL) =>
+          url.pathname.endsWith(ADDR.learner)
+            ? new Response('down', { status: 500 })
+            : answerCore(world, url.pathname, url.searchParams)?.body
+        ),
+    });
+    const list = await screen.findByRole('list', { name: 'Its groups' }, T);
+    expect(
+      (
+        await within(list).findAllByRole(
+          'button',
+          { name: /^Couldn’t check which groups you’re in/ },
+          T
+        )
+      ).length
+    ).toBeGreaterThan(0);
+    expect(within(list).queryByRole('button', { name: /^Join / })).toBeNull();
   });
 
   it('asks to join a closed group, and stops before Hub when a request is already in', async () => {

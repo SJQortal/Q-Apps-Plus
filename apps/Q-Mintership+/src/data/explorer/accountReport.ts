@@ -15,7 +15,7 @@ import { APP_VERSION } from '../../constants/app';
 import { APP_NAME } from '../../constants/plus';
 import { getAccount, getPrimaryName } from '../accounts';
 import { getTip } from '../chain';
-import { peekQuery } from '../query';
+import { getQueryState, peekQuery } from '../query';
 import {
   exploreAccount,
   getFirstSeen,
@@ -24,10 +24,10 @@ import {
   getOnline,
   onlineSharesOf,
 } from './account';
-import { accountTxKey, type AccountTxList } from './accountTx';
+import { accountTxKey, getAccountTx, type AccountTxList } from './accountTx';
 import { getLinks, LINK_PAGE, LINK_PAGES } from './links';
 import { getAssetTransfers, getExchangePayments, getPayments } from './money';
-import { getBalanceAtomic, getOrdersQort, getTradesQort } from './qortBook';
+import { getEverRewardShare, getOrdersQort, getTiedBalance, getTradesQort } from './qortBook';
 import { runPool } from './sets';
 import { getSponsorshipReport } from './sponsorship';
 import { getAccountTrades } from './trades';
@@ -95,25 +95,46 @@ export async function gatherAccountReport(
     ? null
     : await part('Core’s sponsorship report', failed, () => getSponsorshipReport(address));
 
-  const list = peekQuery<AccountTxList>(accountTxKey(address, []));
-  const history = list ? { rows: list.rows, done: list.done } : null;
+  const held = () => {
+    const list = peekQuery<AccountTxList>(accountTxKey(address, []));
+    return list ? { rows: list.rows, done: list.done } : null;
+  };
+  let history = held();
 
   let qort: QortTotals | null = null;
   let balance: bigint | null = null;
+  // Its balance ties to the history only when both end at the same transaction (getTiedBalance).
+  let tied = false;
   if (!unused) {
     stage('Reading its balance');
-    balance = await part('its balance', failed, () => getBalanceAtomic(address));
+    let tie = await part('its balance', failed, () => getTiedBalance(address, { force: true }));
+    const newestHeld = () => history?.rows[0]?.signature ?? null;
+    for (let i = 0; tie && history?.done && tie.newest !== newestHeld() && i < 3; i++) {
+      const newest = tie.newest;
+      if (newest && !history.rows.some((row) => row.signature === newest)) {
+        // The history as held lacks it: its newest page again.
+        await getAccountTx(address, [], { force: true }).catch(() => undefined);
+        history = held() ?? history;
+      } else {
+        tie = await part('its balance', failed, () => getTiedBalance(address, { force: true }));
+      }
+    }
+    balance = tie?.balance ?? null;
+    tied = tie !== null && tie.newest === newestHeld();
     const account = explored?.kind === 'account' ? explored.account : null;
-    const neverMinted = account
-      ? account.blocksMinted + account.blocksMintedAdjustment <= 0
-      : false;
+    // No blocks minted and no reward share ever: one whose minting level moved away minted.
+    const noBlocks = account ? account.blocksMinted + account.blocksMintedAdjustment <= 0 : false;
+    const everShared = noBlocks
+      ? await part('its reward shares', failed, () => getEverRewardShare(address))
+      : true;
+    const neverMinted = noBlocks && everShared === false;
     const portal = await part('its Trade Portal trades', failed, () => getTradesQort(address));
     qort = { neverMinted, ...(portal ? { bought: portal.bought, sold: portal.sold } : {}) };
     if (history?.done) {
       const book = qortBook(history.rows, address);
       qort.received = book.received;
       qort.sent = book.sent;
-      if (!neverMinted && balance !== null) {
+      if (!neverMinted && balance !== null && tied) {
         const ordersNet = book.orders.length
           ? await part('its asset orders', failed, () => getOrdersQort(address, book.orders))
           : 0n;
@@ -228,6 +249,8 @@ export async function gatherAccountReport(
     minting,
     firstSeen,
     history,
+    // No list held: still unread, unless its read failed.
+    historyUnread: !history && getQueryState(accountTxKey(address, [])).status !== 'error',
     findings,
     nothingFound: [nothingFoundLine(empty), cappedLine].filter(Boolean).join('\n\n') || null,
     sponsorReport,

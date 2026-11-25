@@ -89,6 +89,10 @@ export interface AssetView {
   sale?: SaleNow;
   /** The account owns (controls) this asset. */
   owned: boolean;
+  /** Its last trades weren't read (yet, or the read failed): no price is no "never traded". */
+  priceUnknown?: true;
+  /** The account's holdings weren't read: its balance isn't known, never "none". */
+  holdingUnknown?: true;
 }
 
 /** An open order to buy an asset with QORT (`/assets/openorders/0/<id>`). */
@@ -111,6 +115,8 @@ export interface SaleNow {
   bestBid?: bigint;
   /** More buy orders than were read, so it could fetch more: "at least". */
   atLeast: boolean;
+  /** Its buy orders couldn't be read: nothing is known (each asset stands on its own). */
+  failed?: true;
 }
 
 /** A row of `/assets/openorders/0/<id>` as a buy order, or null (nothing left to fill). */
@@ -292,8 +298,17 @@ export function pricesFrom(trades: readonly RecentTrade[]): Map<number, AssetPri
     } else continue;
     if (units <= 0n) continue;
     const known = prices.get(assetId);
-    if (known && known.at >= trade.timestamp) continue;
-    prices.set(assetId, { perUnit: (qort * ATOMIC) / units, units, qort, at: trade.timestamp });
+    const perUnit = (qort * ATOMIC) / units;
+    // Two at the same time: the lowest price, then the most units, whatever order Core lists
+    // them in (Hub's Explorer port, 2026-11-22: the price changed between reads).
+    if (
+      known &&
+      (known.at > trade.timestamp ||
+        (known.at === trade.timestamp &&
+          (known.perUnit < perUnit || (known.perUnit === perUnit && known.units >= units))))
+    )
+      continue;
+    prices.set(assetId, { perUnit, units, qort, at: trade.timestamp });
   }
   return prices;
 }
@@ -337,6 +352,7 @@ export function assetViews(
         ...(share !== undefined ? { share } : {}),
         ...(sale ? { sale } : {}),
         owned: meta?.owner === address,
+        ...(prices ? {} : { priceUnknown: true as const }),
       };
     });
 }
@@ -428,6 +444,8 @@ export interface AssetsTotals {
   saleNone: number;
   /** Some book had more orders than were read: the sale could fetch more. */
   saleAtLeast: boolean;
+  /** Assets whose buy orders couldn't be read: left out of the sale. */
+  saleFailed: number;
 }
 
 export function assetsTotals(views: readonly AssetView[]): AssetsTotals {
@@ -441,6 +459,7 @@ export function assetsTotals(views: readonly AssetView[]): AssetsTotals {
     salePart: 0,
     saleNone: 0,
     saleAtLeast: false,
+    saleFailed: 0,
   };
   for (const view of views) {
     if (view.worth !== undefined) {
@@ -449,6 +468,10 @@ export function assetsTotals(views: readonly AssetView[]): AssetsTotals {
     }
     const sale = view.sale;
     if (!sale) continue;
+    if (sale.failed) {
+      totals.saleFailed += 1;
+      continue;
+    }
     totals.saleRead += 1;
     totals.sale += sale.qort;
     if (!sale.sold) totals.saleNone += 1;

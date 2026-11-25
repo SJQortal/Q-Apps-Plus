@@ -16,6 +16,7 @@ import { CardSkeleton, EmptyState, ErrorState } from '../../components/common/st
 import { PageBody, WIDE_PAGE } from '../../components/layout/PageBody';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { isPollId } from '../../data/adminPollRecords';
+import type { PollScope } from '../../data/adminPolls';
 import { useAdmins } from '../../hooks/useData';
 import { useNow } from '../../hooks/useNow';
 import { PATHS, adminPollPath } from '../../routes/paths';
@@ -39,10 +40,13 @@ export default function AdminPollPage() {
       ready ? { address: session.address, publicKey: session.publicKey, name: session.name } : null,
     [ready, session.address, session.publicKey, session.name]
   );
-  const { query, views, pending, signers, undecrypted, retry } = useAdminPolls(
-    author?.address ?? null,
-    isAdmin && isPollId(id)
-  );
+  const listed = useAdminPolls(author?.address ?? null, isAdmin && isPollId(id));
+  const { pending, signers } = listed;
+  // Not on Decisions (closed over 31 days ago, opened from History): that poll, of all time.
+  const lookOlder = listed.views !== null && !listed.views.some((v) => v.id === id);
+  const olderScope = useMemo<PollScope>(() => ({ kind: 'poll', id }), [id]);
+  const older = useAdminPolls(author?.address ?? null, isAdmin && lookOlder, olderScope);
+  const { query, views, undecrypted, retry } = lookOlder ? older : listed;
   const now = useNow(60_000);
   const [dialog, setDialog] = useState<PollDialog | null>(null);
   const view = views?.find((v) => v.id === id) ?? null;
@@ -105,7 +109,7 @@ export default function AdminPollPage() {
     content = (
       <EmptyState
         title="This poll isn’t here"
-        description="It isn’t among the Minter Admin polls of the last two months that you can read. If it wasn’t encrypted to you, a Minter Admin who can read it can share it with you."
+        description="It isn’t among the Minter Admin polls you can read. If it wasn’t encrypted to you, a Minter Admin who can read it can share it with you."
         actionLabel="All decisions"
         onAction={toDecisions}
       />

@@ -58,7 +58,7 @@ import { loadNominationsFor } from '../../../../data/nominations';
 import { buildTimeline, withOwnSubject } from '../../../../data/timeline';
 import { getAddressHistory } from '../../../../data/txs';
 import { ActivityChart } from './ActivityChart';
-import { FAMILY_LABEL, periodWords, type PlacedMark } from './activityWords';
+import { FAMILY_LABEL, PARTLY_WORDS, periodWords, type PlacedMark } from './activityWords';
 import { ACTIVITY_MAX, useActivityRows, type ActivityRows } from './useActivityRows';
 import { useViewState } from '../../../../hooks/useViewState';
 import {
@@ -296,6 +296,9 @@ function PeriodList({ state }: { state: ActivityState }) {
   );
   if (!picked) return null;
   const period = periodWords(picked);
+  // The period that holds the oldest transaction read: its older ones aren't in the list.
+  const partly =
+    state.readFrom !== null && picked.start < state.readFrom && state.readFrom < picked.end;
   const shown = all ? rows : rows.slice(0, PERIOD_ROWS);
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -304,6 +307,11 @@ function PeriodList({ state }: { state: ActivityState }) {
           <Typography component="h3" sx={{ fontWeight: 700, fontSize: 16 }}>
             {plural(rows.length, 'transaction')} · {period}
           </Typography>
+          {partly ? (
+            <Typography variant="body2" color="text.secondary">
+              {PARTLY_WORDS} Read older to have them here.
+            </Typography>
+          ) : null}
         </Box>
         <Button onClick={() => state.select(null)} sx={{ minHeight: 44 }}>
           Close the list
@@ -394,8 +402,11 @@ function ActivityBody({
     null
   );
   const [full, setFull] = useViewState('activity:full', false);
-  // "Now", to the minute, so the chart doesn't redraw on every render.
-  const to = Math.ceil(Date.now() / 60_000) * 60_000;
+  // "Now", to the minute, kept with the view: the periods stay as drawn, so a pick keeps its
+  // mark a minute later (Hub's Explorer port, 2026-11-22). A transaction newer than it moves it.
+  const [shownTo] = useViewState('activity:to', Math.ceil(Date.now() / 60_000) * 60_000);
+  const newestAt = rows.rows?.[0]?.timestamp ?? 0;
+  const to = Math.max(shownTo, Math.ceil(newestAt / 60_000) * 60_000);
 
   const list = useMemo(() => rows.rows ?? [], [rows.rows]);
   const oldest = list.length ? list[list.length - 1].timestamp : null;

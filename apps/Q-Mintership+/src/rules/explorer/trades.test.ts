@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import type { TxRow } from '../../data/types';
 import { circleNodes } from './circle';
 import { recordedFindings } from './findings';
 import { partsText } from './findings';
 import {
   fillParts,
+  qortPerUnit,
+  summariseAssetTrades,
   tradeParts,
   tradesByAccount,
   tradesCoverage,
@@ -96,14 +99,17 @@ describe('a trade in words (Simon, 2026-10-21)', () => {
 
 describe('trades among the findings and on the circle', () => {
   it('one finding per account, after names and before payments; drawn both ways', () => {
+    // Each trade with its own order transaction: the circle counts transactions (as its dialog).
+    const tx = (signature: string) => ({ signature, timestamp: 1, blockHeight: 1 }) as TxRow;
     const findings = recordedFindings({
       trades: [
-        trade({}),
+        trade({ txs: [tx('order-1')] }),
         trade({
           gave: QORT('100'),
           got: IGOR('4'),
           height: 2_668_000,
           timestamp: Date.UTC(2026, 7, 2),
+          txs: [tx('order-2')],
         }),
       ],
     });
@@ -119,5 +125,61 @@ describe('trades among the findings and on the circle', () => {
       assets: [{ asset: 'igorcoin', atomic: 2_700_000_000n }],
     });
     expect(node.split?.out).toMatchObject({ count: 2, qort: 62_900_000_000n, assets: [] });
+  });
+});
+
+describe('an account’s asset trades added up (the Trades tab)', () => {
+  it('by asset: units each way, the QORT for them, most trades first', () => {
+    const summary = summariseAssetTrades([
+      trade({}),
+      trade({
+        gave: QORT('100.00000000'),
+        got: IGOR('4.00000000'),
+        timestamp: Date.UTC(2026, 7, 1),
+      }),
+      trade({ gave: IGOR('2.00000000'), got: QORT('50.00000000'), other: C }),
+      // Two assets: one bought, one sold, no QORT.
+      trade({ gave: GBC('5.00000000'), got: IGOR('1.00000000') }),
+    ]);
+    expect(summary.count).toBe(4);
+    expect(summary.partners).toBe(2);
+    expect(summary.qortPaid).toBe(62_900_000_000n);
+    expect(summary.qortGot).toBe(5_000_000_000n);
+    expect(summary.assets.map((asset) => [asset.asset, asset.count])).toEqual([
+      ['igorcoin', 4],
+      ['GBC', 1],
+    ]);
+    expect(summary.assets[0]).toMatchObject({
+      bought: 2_800_000_000n,
+      sold: 200_000_000n,
+      qortPaid: 62_900_000_000n,
+      qortGot: 5_000_000_000n,
+      last: Date.UTC(2026, 7, 1),
+    });
+    expect(summary.assets[1]).toMatchObject({ sold: 500_000_000n, qortGot: 0n });
+  });
+
+  it('the QORT per unit, to 4 significant digits', () => {
+    expect(qortPerUnit(62_900_000_000n, 2_700_000_000n)).toBe('23.3');
+    expect(qortPerUnit(0n, 100n)).toBeNull();
+  });
+});
+
+// Hub's Explorer port (2026-11-22): a price divided the QORT by every unit, those got for another
+// asset too; and trades between two of its own orders were counted.
+describe('prices in QORT, and its own orders', () => {
+  it('a price is per unit traded for QORT; its own orders’ trades are left out and counted', () => {
+    const OTHER = (amount: string) => ({ assetId: 9, asset: 'other', amount });
+    const summary = summariseAssetTrades([
+      trade({ gave: QORT('10.00000000'), got: IGOR('10.00000000') }),
+      trade({ gave: OTHER('5.00000000'), got: IGOR('10.00000000') }),
+      trade({ other: A, gave: QORT('1.00000000'), got: IGOR('1.00000000') }),
+    ]);
+    const igor = summary.assets.find((a) => a.asset === 'igorcoin');
+    expect(igor?.bought).toBe(2_000_000_000n);
+    expect(igor?.boughtForQort).toBe(1_000_000_000n);
+    expect(qortPerUnit(igor?.qortPaid ?? 0n, igor?.boughtForQort ?? 0n)).toBe(qortPerUnit(1n, 1n));
+    expect(summary.ownTrades).toBe(1);
+    expect(summary.count).toBe(2);
   });
 });

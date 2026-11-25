@@ -427,8 +427,19 @@ export function fundingParts(funding: Funding, band?: PayerBand): TxPart[] {
     return words ? [text('. '), account(who), text(` ${words}.`)] : [];
   };
   switch (funding.kind) {
-    case 'payment':
+    // Only a PAYMENT is its first QORT payment, as Funded reads them (Hub's Explorer port,
+    // 2026-11-22); a multi-payment is another first transaction.
     case 'multiPayment':
+      return from
+        ? [
+            text('Its first incoming transaction: a multi-payment of '),
+            { kind: 'amount', amount: formatAmount(funding.amount ?? '0'), asset: 'QORT' },
+            text(' from '),
+            account(from),
+            ...busy(from),
+          ]
+        : [text('Its first incoming transaction: a multi-payment')];
+    case 'payment':
       return from
         ? [
             text('First QORT payment received: '),
@@ -531,8 +542,8 @@ export interface FirstPayer {
 }
 
 /**
- * Who made the first QORT payment to the accounts of a set (payments and
- * multi-payments only), most accounts first; and how many had a different
+ * Who made the first QORT payment to the accounts of a set (a PAYMENT, as
+ * Funded counts them), most accounts first; and how many had a different
  * first transaction or none found.
  */
 export function groupFirstPayers(funding: ReadonlyMap<string, Funding | null>): {
@@ -545,7 +556,8 @@ export function groupFirstPayers(funding: ReadonlyMap<string, Funding | null>): 
   let none = 0;
   for (const [address, first] of funding) {
     if (!first) none += 1;
-    else if ((first.kind === 'payment' || first.kind === 'multiPayment') && first.from) {
+    // A PAYMENT only, as Funded counts them: a multi-payment is another first transaction.
+    else if (first.kind === 'payment' && first.from) {
       const list = payers.get(first.from);
       if (list) list.push(address);
       else payers.set(first.from, [address]);

@@ -29,12 +29,19 @@ import type { TxRow } from '../../../../data/types';
 import {
   ACTIVITY_FAMILIES,
   activityBuckets,
+  bucketAt,
   axisTicks,
   type ActivityBucket,
   type ActivityFamily,
 } from '../../../../rules/explorer/activity';
 import { formatCount, formatDate, formatDateTime, plural } from '../../../../utils/format';
-import { FAMILY_LABEL, periodWords, bucketWords, type PlacedMark } from './activityWords';
+import {
+  FAMILY_LABEL,
+  PARTLY_WORDS,
+  periodWords,
+  bucketWords,
+  type PlacedMark,
+} from './activityWords';
 
 const DAY = 86_400_000;
 /** About one bar every this many px. */
@@ -171,8 +178,7 @@ export function ActivityChart({
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const last = count - 1;
-    const current =
-      focusIndex ?? (selected !== null ? buckets.findIndex((b) => b.start === selected) : last);
+    const current = focusIndex ?? (selected !== null ? bucketAt(buckets, selected) : last);
     let next: number | null = null;
     if (event.key === 'ArrowLeft') next = Math.max(0, current - 1);
     else if (event.key === 'ArrowRight') next = Math.min(last, current + 1);
@@ -188,6 +194,7 @@ export function ActivityChart({
     reveal(next);
   };
 
+  const selectedIndex = bucketAt(buckets, selected);
   const hovered = hover ? buckets[hover.i] : null;
   const focused = focusIndex !== null ? buckets[focusIndex] : null;
   const hatch = `repeating-linear-gradient(135deg, ${alpha(theme.palette.text.primary, 0.1)} 0 4px, transparent 4px 9px)`;
@@ -295,7 +302,8 @@ export function ActivityChart({
             }}
           >
             {buckets.map((bucket, i) => {
-              const isSelected = selected !== null && bucket.start === selected;
+              // The period that holds the pick: periods are drawn anew as more is read or zoomed.
+              const isSelected = i === selectedIndex;
               const isFocused = focusIndex === i;
               return (
                 <Box
@@ -306,7 +314,8 @@ export function ActivityChart({
                     display: 'flex',
                     flexDirection: 'column-reverse',
                     borderRadius: '2px 2px 0 0',
-                    ...(bucket.unread ? { background: hatch } : {}),
+                    // Hatched: not read yet, or behind the bar of a period read in part.
+                    ...(bucket.unread || bucket.partly ? { background: hatch } : {}),
                     ...(isSelected || isFocused
                       ? { bgcolor: alpha(theme.palette.primary.main, isSelected ? 0.18 : 0.1) }
                       : hover?.i === i
@@ -444,6 +453,7 @@ export function ActivityChart({
             <>
               <Typography variant="body2" sx={{ mb: 0.5 }}>
                 {plural(hovered.total, 'transaction')}
+                {hovered.partly ? ` so far. ${PARTLY_WORDS}` : ''}
               </Typography>
               {ACTIVITY_FAMILIES.filter((f) => hovered.byFamily[f]).map((family) => (
                 <Box key={family} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>

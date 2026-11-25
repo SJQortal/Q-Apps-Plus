@@ -39,6 +39,8 @@ export function findingWhen(
       firstHeight: finding.firstHeight,
       firstTimestamp: finding.firstTimestamp,
     });
+  // No time known (a sale Core gave none for): never 1 January 1970.
+  if (!finding.timestamp) return 'Time not known';
   return finding.firstTimestamp !== undefined && finding.firstTimestamp !== finding.timestamp
     ? monthRange(finding.firstTimestamp, finding.timestamp)
     : formatDate(finding.timestamp);

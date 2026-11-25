@@ -25,6 +25,8 @@ export const DERIVED_PREFIXES = (address: string) => [
   `xpay:${address}:`,
   `xassets:${address}`,
   `xlinks:${address}`,
+  // The trade offers it made (portalTrades.ts).
+  `xatrows:${address}`,
 ];
 
 interface ListShape {

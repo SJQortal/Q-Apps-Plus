@@ -33,7 +33,10 @@ describe('whose first QORT payment came from an account', () => {
     const sent = [
       ...Array.from({ length: 60 }, (_, i) => pay(H, to(i), 1_000 + i)),
       pay(H, to(0), 2_000),
+      // One AT paid three times: one AT address left out (Hub's Explorer port, 2026-11-22).
       pay(H, AT, 2_001),
+      pay(H, AT, 2_003),
+      pay(H, AT, 2_004),
       pay(H, H, 2_002),
     ];
     mockFetchRoute('/transactions/payments/between', (url: URL) => {
@@ -44,13 +47,14 @@ describe('whose first QORT payment came from an account', () => {
       return [i % 2 === 0 ? pay(H, r, 1_000 + i) : pay(OTHER, r, 500)];
     });
     const read = await getFunded(H);
-    expect(read).toMatchObject({ payments: 63, truncated: false, atLeftOut: 1, checked: 0 });
+    expect(read).toMatchObject({ payments: 65, truncated: false, atLeftOut: 1, checked: 0 });
     expect(read.paid).toHaveLength(60);
     expect(read.paid[0]).toMatchObject({ address: to(0), height: 1_000, amount: '1.50000000' });
     expect(fetchCallsFor('/transactions/payments/between')).toHaveLength(1);
     const first = params(fetchCallsFor('/transactions/payments/between')[0]);
     expect(first.get('senderAddress')).toBe(H);
-    expect(first.get('limit')).toBe('100');
+    // One more than it keeps: "the newest 100" only when there is a 101st.
+    expect(first.get('limit')).toBe('101');
     expect(first.get('reverse')).toBeNull();
     expect(first.get('confirmationStatus')).toBe('CONFIRMED');
 

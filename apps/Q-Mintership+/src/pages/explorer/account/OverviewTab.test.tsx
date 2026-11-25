@@ -15,7 +15,16 @@ import { activityFirstReadAtom } from '../../../state/settings';
 import { expectNoAxeViolations } from '../../../test/axe';
 import { fetchCallsFor, mockFetchRoute, qortalCalls } from '../../../test/setup';
 import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../../test/world';
-import { COLLECTOR, FUNDER, SPONSEES, SPONSOR, type World } from '../../../../e2e/world.mjs';
+import {
+  COLLECTOR,
+  FUNDER,
+  OLD_MINTER,
+  SPONSEES,
+  SPONSOR,
+  answerCore,
+  fakeKey,
+  type World,
+} from '../../../../e2e/world.mjs';
 import { explorerAccountPath } from '../../../routes/paths';
 import { peekQuery } from '../../../data/query';
 import { accountTxKey, type AccountTxList } from '../../../data/explorer/accountTx';
@@ -490,6 +499,29 @@ describe('Overview: Activity’s settings', () => {
   });
 });
 
+// Hub's Explorer port (2026-11-22): "Show fewer" folded the groups and left the page far below.
+describe('Groups: Show fewer', () => {
+  it('keeps the focus on the button, in view', async () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({
+      groupId: 100 + i,
+      groupName: `Made-up group ${String(i).padStart(2, '0')}`,
+      owner: ADDR.learner,
+      isOpen: true,
+      memberCount: 3,
+      description: '',
+    }));
+    const { user } = await open(ADDR.admin, () => mockFetchRoute('/groups/member/', () => many));
+    const section = await region('Groups (14)');
+    await user.click(await within(section).findByRole('button', { name: /^Show all 14/ }, T));
+    const fewer = within(section).getByRole('button', { name: 'Show fewer' });
+    const scrolled = vi.fn();
+    fewer.scrollIntoView = scrolled;
+    await user.click(fewer);
+    await waitFor(() => expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' }), T);
+    expect(within(section).getByRole('button', { name: /^Show all 14/ })).toHaveFocus();
+  });
+});
+
 describe('QORT summaries', () => {
   const mintedComesTo = (address: string, minted: bigint) => (world: World) =>
     setMintedTo(world, address, minted);
@@ -560,6 +592,117 @@ describe('QORT summaries', () => {
       .map((url) => new URL(url, 'http://x').searchParams)
       .filter((p) => p.get('address') === ADDR.admin && !p.get('txType'));
     expect(pages.some((p) => p.get('limit') === '1000')).toBe(true);
+  });
+
+  // Hub's Explorer port (2026-11-22): a list that stopped at a full page said older ones exist
+  // ("Read the rest", "1,000+", the hatched part) for an account with exactly that many.
+  it('an account with exactly as many as the first read has nothing older to read', async () => {
+    getDefaultStore().set(activityFirstReadAtom, 100);
+    await visit(ADDR.admin, (world) => {
+      const rows = answerCore(
+        world,
+        '/transactions/search',
+        new URLSearchParams({
+          address: ADDR.admin,
+          confirmationStatus: 'CONFIRMED',
+          limit: '20000',
+        })
+      )?.body as unknown[];
+      expect(rows.length).toBeLessThan(100);
+      addPaymentsTo(world, ADDR.admin, 100 - rows.length);
+      mintedComesTo(ADDR.admin, 50n)(world);
+    });
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('50 QORT'), SLOW);
+    expect(screen.queryByRole('button', { name: 'Read the rest' })).toBeNull();
+    expect(
+      await screen.findByText(/^All 100 transactions, back to its first on /, {}, SLOW)
+    ).toBeInTheDocument();
+    // One row past the first read proved it, once.
+    const probes = fetchCallsFor('/transactions/search')
+      .map((url) => new URL(url, 'http://x').searchParams)
+      .filter(
+        (p) => p.get('address') === ADDR.admin && !p.get('txType') && p.get('offset') === '100'
+      );
+    expect(probes.map((p) => p.get('limit'))).toEqual(['1']);
+  });
+
+  // Hub's Explorer port (2026-11-22): moving a minting level away (TRANSFER_PRIVS) sets the
+  // sender's blocks minted to 0, and it read as "Never minted" though it minted.
+  it('works out QORT minted for an account whose minting level moved away, not "Never minted"', async () => {
+    await visit(OLD_MINTER.address, mintedComesTo(OLD_MINTER.address, 143n));
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('143 QORT'), SLOW);
+  });
+
+  // Hub's Explorer port (2026-11-22): a Q-Trade buyer that never made a transaction has no
+  // public key to ask Core's trade list with; the seller's contract paid it all the same.
+  it('counts what trade contracts paid a buyer without a public key as purchased', async () => {
+    const buyer = SPONSEES[2].address;
+    await visit(buyer, (world) => {
+      const at = `A${fakeKey('keyless-buyer-at', 25).slice(1, 34)}`;
+      const signature = fakeKey('keyless-buyer-at-payment', 64);
+      const row = {
+        type: 'AT',
+        timestamp: Date.now() - 86_400_000,
+        reference: fakeKey('keyless-buyer-at-ref', 64),
+        fee: '0.00000000',
+        signature,
+        txGroupId: 0,
+        blockHeight: 2_700_000,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: at,
+        atAddress: at,
+        recipient: buyer,
+        amount: '10.00000000',
+        assetId: 0,
+      };
+      world.explorer.rows.push(row);
+      world.explorer.bySig.set(signature, row);
+      world.explorer.parties.set(signature, [at, buyer]);
+    });
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT purchased / sold')).toBe('10 / 0'), SLOW);
+  });
+
+  // Hub's Explorer port (2026-11-22): QORT minted is its balance less what its transactions
+  // moved; a payment confirmed between the list's read and the balance's counted as minted.
+  it('ties its balance to its transactions: a payment that came between them isn’t minted', async () => {
+    let first = true;
+    const late = fakeKey('summaries-late-payment', 64);
+    await visit(ADDR.admin, (world) => {
+      const from = fakeKey('summaries-late-payer', 25);
+      const row = {
+        type: 'PAYMENT',
+        timestamp: NOW - 1_000,
+        reference: fakeKey('summaries-late-ref', 64),
+        fee: '0.01000000',
+        signature: late,
+        txGroupId: 0,
+        blockHeight: TIP,
+        approvalStatus: 'NOT_REQUIRED',
+        creatorAddress: from,
+        recipient: ADDR.admin,
+        amount: '5.00000000',
+      };
+      world.explorer.rows.push(row);
+      world.explorer.bySig.set(late, row);
+      world.explorer.parties.set(late, [from, ADDR.admin]);
+      // Its balance has the 5 QORT: by the whole book, it minted 1,234.
+      mintedComesTo(ADDR.admin, 1_234n)(world);
+      // The list's first read was before the payment: the node's answer without it.
+      mockFetchRoute('/transactions/search', (url) => {
+        const p = url.searchParams;
+        const body = answerCore(world, url.pathname, p)?.body as Array<{ signature: string }>;
+        const list = p.get('address') === ADDR.admin && !p.get('txType') && p.get('limit') !== '1';
+        if (!list || !first) return body;
+        first = false;
+        return body.filter((tx) => tx.signature !== late);
+      });
+    });
+    const dl = await summaries();
+    await waitFor(() => expect(value(dl, 'QORT minted')).toBe('1,234 QORT'), SLOW);
+    expect(first).toBe(false);
   });
 
   it('says an account that never minted never minted, with nothing to work out', async () => {

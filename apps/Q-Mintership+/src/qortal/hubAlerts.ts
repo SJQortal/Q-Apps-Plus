@@ -70,6 +70,19 @@ export const REPLIED_PREFIX = 'qmp-replied-';
 export const REPLIED_ADMINS_PREFIX = 'qmp-replied-ma-';
 const REPLY_ALERT_RE = /^qmp-replied-(?:ma-)?[0-9a-f]{16}$/;
 
+/**
+ * Q-Mintership 3's own alert rules (3.0.7: `qmintership-hub-<kind>-<name>`). Hub keeps rules by
+ * app name, so once this version is Q-Mintership itself, they are under the same app. They
+ * watch records this version doesn't publish (its boards' cards, forum and events): turning
+ * alerts on or off here removes them as well, so none keeps firing unseen. They never count
+ * as this app's alerts being on.
+ */
+export const LEGACY_ALERT_PREFIX = 'qmintership-hub-';
+
+function isLegacyAlertId(id: unknown): id is string {
+  return typeof id === 'string' && id.startsWith(LEGACY_ALERT_PREFIX) && id.length <= 200;
+}
+
 export type RoleAlertId = (typeof ALERT_IDS)[keyof typeof ALERT_IDS];
 export type ReplyAlertId = `${typeof REPLIED_PREFIX}${string}`;
 export type AlertId = RoleAlertId | ReplyAlertId | `${typeof SUPPORTED_YOURS_PREFIX}${string}`;
@@ -312,16 +325,21 @@ export function getHubActions(): Promise<string[]> {
   );
 }
 
-/** The ids of this app's alert rules Hub has for the account (NOTIFICATION_GET). */
+/**
+ * The ids of this app's alert rules Hub has for the account (NOTIFICATION_GET). Q-Mintership
+ * 3's are noted apart (LEGACY_ALERT_PREFIX), to be removed with the next change.
+ */
 export function getHubAlertIds(): Promise<AlertId[]> {
   return fetchQuery(
     'hub:alerts',
     async () => {
       const rules = await qortal<unknown>({ action: 'NOTIFICATION_GET' });
       if (!Array.isArray(rules)) return [];
-      return rules
-        .map((rule) => (rule as { notificationId?: unknown } | null)?.notificationId)
-        .filter(isAlertId);
+      const ids = rules.map(
+        (rule) => (rule as { notificationId?: unknown } | null)?.notificationId
+      );
+      setQueryData<string[]>('hub:alerts:legacy', ids.filter(isLegacyAlertId));
+      return ids.filter(isAlertId);
     },
     { ttlMs: Number.POSITIVE_INFINITY }
   );
@@ -330,6 +348,11 @@ export function getHubAlertIds(): Promise<AlertId[]> {
 /** The rules Hub was last known to have (read on Settings). */
 function knownAlertIds(): AlertId[] {
   return peekQuery<AlertId[]>('hub:alerts') ?? [];
+}
+
+/** Q-Mintership 3's rules Hub was last known to have. */
+function legacyAlertIds(): string[] {
+  return peekQuery<string[]>('hub:alerts:legacy') ?? [];
 }
 
 let changing: Promise<unknown> | null = null;
@@ -342,7 +365,7 @@ function serial<T>(work: () => Promise<T>): Promise<T> {
 }
 
 /** Drop rules by id; never an empty list (Hub reads that as "every rule of this app"). */
-async function removeRules(ids: readonly AlertId[]): Promise<void> {
+async function removeRules(ids: readonly string[]): Promise<void> {
   if (ids.length) await qortal({ action: 'NOTIFICATION_REMOVE', notificationIds: [...ids] });
 }
 
@@ -368,8 +391,9 @@ export function turnOnHubAlerts(
     const others = [...new Set<AlertId>([...ALL_ALERT_IDS, ...knownAlertIds()])].filter(
       (id) => !ids.includes(id)
     );
-    await removeRules(others);
+    await removeRules([...others, ...legacyAlertIds()]);
     setQueryData<AlertId[]>('hub:alerts', ids);
+    setQueryData<string[]>('hub:alerts:legacy', []);
     return ids;
   });
 }
@@ -377,8 +401,12 @@ export function turnOnHubAlerts(
 /** Turn every alert of this app off (no permission needed). */
 export function turnOffHubAlerts(): Promise<void> {
   return serial(async () => {
-    await removeRules([...new Set<AlertId>([...ALL_ALERT_IDS, ...knownAlertIds()])]);
+    await removeRules([
+      ...new Set<AlertId>([...ALL_ALERT_IDS, ...knownAlertIds()]),
+      ...legacyAlertIds(),
+    ]);
     setQueryData<AlertId[]>('hub:alerts', []);
+    setQueryData<string[]>('hub:alerts:legacy', []);
   });
 }
 

@@ -204,6 +204,8 @@ export default function SponseesPage() {
                 row={row}
                 // "Not in MINTER" only from the whole member list.
                 membersKnown={members.data !== undefined && !members.data.truncated}
+                // The sponsor's list stopped short (Hub's Explorer port, 2026-11-22: "in all").
+                partial={Boolean(links.data?.truncated)}
                 picked={picks.includes(row.address)}
                 full={picks.length >= COMPARE_MAX}
                 onPick={pick}

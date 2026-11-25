@@ -74,11 +74,13 @@ export function getQdnOfName(name: string, options: { force?: boolean } = {}): P
       const body = await getJson<unknown>(
         `/arbitrary/resources/searchsimple?${query({
           name,
-          limit: QDN_NAME_LIMIT,
+          // One more than it keeps: "100+" only when there is a 101st.
+          limit: QDN_NAME_LIMIT + 1,
           reverse: true,
         })}`
       );
-      const raw = Array.isArray(body) ? body : [];
+      const all = Array.isArray(body) ? body : [];
+      const raw = all.slice(0, QDN_NAME_LIMIT);
       const resources = raw
         .filter(
           (row): row is Record<string, unknown> =>
@@ -87,7 +89,7 @@ export function getQdnOfName(name: string, options: { force?: boolean } = {}): P
         .map((row) => toResource(row, name))
         .filter((row): row is QdnResource => row !== null)
         .sort((a, b) => b.created - a.created);
-      return { name, resources, capped: raw.length >= QDN_NAME_LIMIT };
+      return { name, resources, capped: all.length > QDN_NAME_LIMIT };
     },
     { ttlMs: 10 * 60_000, force: options.force }
   );

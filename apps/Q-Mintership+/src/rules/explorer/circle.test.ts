@@ -7,6 +7,8 @@ import {
   badgeText,
   circleLayout,
   circleNodes,
+  sideMinHeight,
+  RING_PX,
   nodeSize,
   nodeTransactions,
   qortSize,
@@ -37,6 +39,31 @@ const finding = (kind: Finding['kind'], other: string | null, txs: TxRow[]): Fin
   }) as Finding;
 
 describe('circleNodes', () => {
+  // Hub's Explorer port (2026-11-22): a running reward share is both "its sponsor" and "minting
+  // with it now", and was counted twice; a trade was counted once each way.
+  it('counts each transaction once on a node, as its dialog lists them', () => {
+    const share = tx(1, 50);
+    const shared = circleNodes([
+      finding('sponsor', 'QS', share),
+      finding('mintingWith', 'QS', share),
+    ]);
+    expect(shared.other.map((n) => [n.key, n.count])).toEqual([['other:QS', 1]]);
+    const trade = {
+      ...finding('traded', 'QT', tx(1, 70)),
+      trade: {
+        got: { count: 1, qort: 0n, assets: [] },
+        gave: { count: 1, qort: 0n, assets: [] },
+      },
+    } as Finding;
+    const groups = circleNodes([
+      finding('paidBy', 'QT', tx(2, 60)),
+      finding('paidTo', 'QT', tx(2, 65)),
+      trade,
+    ]);
+    expect(groups.both.map((n) => n.count)).toEqual([5]);
+    expect(nodeTransactions(groups.both[0])).toHaveLength(5);
+  });
+
   it('puts payments in on one side, payments out on the other, and every other link apart', () => {
     const groups = circleNodes([
       finding('paidBy', 'QA', tx(3)),
@@ -363,5 +390,27 @@ describe('circleQort', () => {
     expect(circleQort(7_650_000_000n)).toBe('76.5');
     expect(circleQort(25_000_000n)).toBe('0.25');
     expect(circleQort(0n)).toBeNull();
+  });
+});
+
+// Hub's Explorer port (2026-11-22): two neighbouring avatars of a side could overlap a little:
+// the least gap was less than two rings.
+describe('sideMinHeight', () => {
+  it('keeps every two neighbours of the fullest sides apart, rings and all', () => {
+    for (const options of [WIDE_LAYOUT, PHONE_LAYOUT]) {
+      const nodes = Array.from({ length: 24 }, (_, i) => ({
+        ...finding(i % 2 ? 'paidTo' : 'paidBy', `Q${i}`, tx(1 + (i % 5), i * 10)),
+      }));
+      const { placed } = circleLayout(circleNodes(nodes), options);
+      const height = sideMinHeight(placed, 34);
+      for (const side of ['in', 'out'] as const) {
+        const list = placed.filter((n) => n.side === side).sort((a, b) => a.y - b.y);
+        expect(list.length).toBeGreaterThan(5);
+        for (let i = 1; i < list.length; i++) {
+          const apart = ((list[i].y - list[i - 1].y) * height) / 100;
+          expect(apart).toBeGreaterThanOrEqual((list[i].size + list[i - 1].size) / 2 + RING_PX);
+        }
+      }
+    }
   });
 });

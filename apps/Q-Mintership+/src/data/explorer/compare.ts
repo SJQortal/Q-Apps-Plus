@@ -8,10 +8,12 @@
  *   both ways for every pair. A node without `payments/between` (xcaps)
  *   gets them from the sender's own payment page instead.
  * - Trades an account sold on the trade portal:
- *   `/crosschain/trades?sellerPublicKey=<pk>`, the newest 100 (Core filters
- *   the AT's creator: about 6 ms), `xtrades:<pk>`. Never by the buyer's
- *   key: Core answers that one in seconds. A trade between two compared
- *   accounts is one whose buyer receives at the other's address.
+ *   `/crosschain/trades?sellerPublicKey=<pk>`, all of them in one read
+ *   (Core filters the AT's creator: about 6 ms; its limit and offset skip
+ *   rows, so none is given: Hub's Explorer port, 2026-11-22, found a pair's
+ *   older sale missed past the newest 100), `xtrades:<pk>`. Never by the
+ *   buyer's key: Core answers that one in seconds. A trade between two
+ *   compared accounts is one whose buyer receives at the other's address.
  *
  * All GET, cached, none polled.
  */
@@ -56,12 +58,13 @@ export function getPairPayments(
           senderAddress: sender,
           recipientAddress: recipient,
           confirmationStatus: 'CONFIRMED',
-          limit: PAIR_LIMIT,
+          // One more than it keeps: "older ones not read" only when there is one.
+          limit: PAIR_LIMIT + 1,
           reverse: true,
         })}`
       );
       const list = Array.isArray(rows) ? rows : [];
-      return { rows: list, capped: list.length >= PAIR_LIMIT };
+      return { rows: list.slice(0, PAIR_LIMIT), capped: list.length > PAIR_LIMIT };
     },
     { ttlMs: 10 * 60_000, force: options.force }
   );
@@ -69,8 +72,8 @@ export function getPairPayments(
 
 /** One completed trade on the trade portal (Core's trade summary). */
 export interface Trade {
-  /** When it completed (ms). */
-  timestamp: number;
+  /** When it completed (ms); null when Core gives no time (a pruned node). */
+  timestamp: number | null;
   /** QORT sold, as Core writes it ("12.00000000"). */
   qortAmount: string;
   /** What the buyer paid, in the other coin (Core doesn't name the coin here). */
@@ -85,11 +88,11 @@ export interface Trade {
 export interface TradesOf {
   /** Newest first. */
   rows: Trade[];
-  /** Core had a full page: there may be older ones. */
+  /** Always false now: every sale is read. */
   capped: boolean;
 }
 
-/** The newest 100 trades sold by the account with `publicKey` (Core filters by the AT's creator). */
+/** Every trade sold by the account with `publicKey` (Core filters by the AT's creator), newest first. */
 export function getTradesAsSeller(
   publicKey: string,
   options: { force?: boolean } = {}
@@ -98,11 +101,7 @@ export function getTradesAsSeller(
     tradesKey(publicKey),
     async () => {
       const body = await getJson<unknown>(
-        `/crosschain/trades?${query({
-          sellerPublicKey: publicKey,
-          limit: TRADES_LIMIT,
-          reverse: true,
-        })}`
+        `/crosschain/trades?${query({ sellerPublicKey: publicKey, reverse: true })}`
       );
       const raw = Array.isArray(body) ? body : [];
       const rows = raw
@@ -112,15 +111,17 @@ export function getTradesAsSeller(
             typeof row.sellerAddress === 'string' && typeof row.buyerReceivingAddress === 'string'
         )
         .map((row) => ({
-          timestamp: Number(row.tradeTimestamp ?? 0),
+          // No time from Core: none, never 1 January 1970.
+          timestamp: Number(row.tradeTimestamp) > 0 ? Number(row.tradeTimestamp) : null,
           qortAmount: String(row.qortAmount ?? '0'),
           foreignAmount: String(row.foreignAmount ?? row.btcAmount ?? '0'),
           atAddress: String(row.atAddress ?? ''),
           seller: row.sellerAddress as string,
           buyer: row.buyerReceivingAddress as string,
         }))
-        .sort((a, b) => b.timestamp - a.timestamp);
-      return { rows, capped: raw.length >= TRADES_LIMIT };
+        // Dated ones newest first, then the ones with no time.
+        .sort((a, b) => (b.timestamp ?? -1) - (a.timestamp ?? -1));
+      return { rows, capped: false };
     },
     { ttlMs: 10 * 60_000, force: options.force }
   );

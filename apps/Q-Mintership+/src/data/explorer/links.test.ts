@@ -71,7 +71,8 @@ describe('getLinks', () => {
       return rows(Number(url.searchParams.get('offset')), 100);
     });
     const links = await getLinks(A);
-    expect(fetchCallsFor('/transactions/search')).toHaveLength(6);
+    // 5 pages, one row more (there is one: cut), then the level moves.
+    expect(fetchCallsFor('/transactions/search')).toHaveLength(7);
     expect(links.truncated).toBe(true);
     expect(links.rows).toHaveLength(501);
     expect(links.rows[links.rows.length - 1].signature).toBe(rows(900, 1)[0].signature);

@@ -102,19 +102,20 @@ async function readFunded(address: string): Promise<Funded> {
     `/transactions/payments/between?${query({
       senderAddress: address,
       confirmationStatus: 'CONFIRMED',
-      limit: PAYMENTS,
+      // One more than it reads: "the newest N" only when there is an older one.
+      limit: PAYMENTS + 1,
     })}`
   );
-  const list = (Array.isArray(rows) ? rows : []).filter(
-    (row) => typeof row.blockHeight === 'number'
-  );
+  const all = Array.isArray(rows) ? rows : [];
+  const list = all.slice(0, PAYMENTS).filter((row) => typeof row.blockHeight === 'number');
   const paid = new Map<string, Paid>();
-  let atLeftOut = 0;
+  // AT addresses left out, each once (Hub's Explorer port, 2026-11-22: it counted payments).
+  const ats = new Set<string>();
   for (const row of list) {
     const to = typeof row.recipient === 'string' ? row.recipient : null;
     if (!to || to === address || paid.has(to)) continue;
     if (isAtAddress(to)) {
-      atLeftOut += 1;
+      ats.add(to);
       continue;
     }
     paid.set(to, {
@@ -127,9 +128,9 @@ async function readFunded(address: string): Promise<Funded> {
   }
   return {
     payments: list.length,
-    truncated: list.length >= PAYMENTS,
+    truncated: all.length > PAYMENTS,
     paid: [...paid.values()],
-    atLeftOut,
+    atLeftOut: ats.size,
     checks: {},
     checked: 0,
   };

@@ -10,6 +10,9 @@
  *   20 comments (20 more per "Show more"), the comments their replies answer,
  *   and the Minter Admins' hide records for those keys. A body that isn't on
  *   the node yet shows as "fetching" and fills in when it arrives.
+ * - **A nomination's earlier nominations:** their keys are searched with its
+ *   own (the nominee's address is one search for both), so their count
+ *   shows beside its own; their bodies are read only once that fold opens.
  *
  * Searches are cached for 3 minutes and shared; bodies for the session, per
  * version (data/qdn.ts). The count list is read again every 3 minutes while
@@ -29,6 +32,7 @@ import {
   commentRowsFor,
   missingParents,
   resolveHides,
+  searchKeys,
   targetId,
   targetSince,
   type CommentBody,
@@ -135,11 +139,11 @@ export function loadCommentRows(
     `comments:rows:${targetId(target)}`,
     async () => {
       const results = await Promise.all(
-        target.keys.map((span) =>
+        searchKeys(target).map((key) =>
           searchQdn(
             {
               service: COMMENT_SERVICE,
-              identifier: commentSearchPrefix(span.key),
+              identifier: commentSearchPrefix(key),
               maxPages: KEY_PAGES,
             },
             { force: options.force }
@@ -174,17 +178,18 @@ async function loadHides(
   target: CommentTarget,
   force: boolean | undefined
 ): Promise<Map<string, boolean>> {
+  const keys = searchKeys(target);
   const results = await Promise.all(
-    target.keys.map((span) =>
+    keys.map((key) =>
       searchQdn(
-        { service: COMMENT_SERVICE, identifier: hideSearchPrefix(span.key), maxPages: HIDE_PAGES },
+        { service: COMMENT_SERVICE, identifier: hideSearchPrefix(key), maxPages: HIDE_PAGES },
         { force }
       )
     )
   );
   const rows = results.flatMap((r) => r.rows);
   if (!rows.length) return new Map();
-  const keys = new Set(target.keys.map((span) => span.key));
+  const searched = new Set(keys);
   const parsed = await mapLimit(rows, 6, async (row): Promise<HideRow | null> => {
     const read = await quick(
       fetchQdnJson(COMMENT_SERVICE, row.name, row.identifier, row.latestSignature ?? rowTime(row))
@@ -192,7 +197,7 @@ async function loadHides(
     // A slow one counts on the next read (it is cached by then).
     if (!read || read.value === null) return null;
     const record = parseHide(read.value, row.identifier);
-    return record && keys.has(record.key)
+    return record && searched.has(record.key)
       ? { name: row.name, updatedAt: rowTime(row), record }
       : null;
   });
@@ -209,30 +214,34 @@ async function loadHides(
 }
 
 export interface CommentThreadData {
-  /** Every comment row of the target, newest first (the count). */
+  /** Every comment row of the target, newest first (the count); earlier rounds' carry `earlier`. */
   rows: CommentRow[];
-  /** Bodies read so far: the newest `limit` rows and the comments their replies answer. */
+  /** Bodies read so far: the newest `limit` rows, the newest `earlierLimit` earlier ones, and the comments their replies answer. */
   bodies: Map<string, CommentBody>;
   /** Comments a Minter Admin hid (true) or showed again (false). */
   hides: Map<string, boolean>;
   limit: number;
+  /** How many of the earlier rounds' comments were read (0 while that fold is closed). */
+  earlierLimit: number;
   truncated: boolean;
 }
 
-export function commentThreadKey(target: CommentTarget, limit: number): string {
-  return `comments:thread:${targetId(target)}:${limit}`;
+export function commentThreadKey(target: CommentTarget, limit: number, earlierLimit = 0): string {
+  return `comments:thread:${targetId(target)}:${limit}${earlierLimit ? `:${earlierLimit}` : ''}`;
 }
 
 /**
- * A thread's newest `limit` comments, with what they answer and the hides.
- * Key `comments:thread:<target>:<limit>`.
+ * The newest `limit` comments of this round and the newest `earlierLimit` of
+ * the earlier ones, with what they answer and the hides. Key
+ * `comments:thread:<target>:<limit>[:<earlierLimit>]`.
  */
 export function loadCommentThread(
   target: CommentTarget,
   limit: number,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; earlierLimit?: number } = {}
 ): Promise<CommentThreadData> {
-  const key = commentThreadKey(target, limit);
+  const earlierLimit = options.earlierLimit ?? 0;
+  const key = commentThreadKey(target, limit, earlierLimit);
   return fetchQuery(
     key,
     async () => {
@@ -269,7 +278,10 @@ export function loadCommentThread(
             bodies.set(row.ref, result.value);
           }
         });
-      await read(rows.slice(0, limit));
+      await read([
+        ...rows.filter((row) => !row.earlier).slice(0, limit),
+        ...rows.filter((row) => row.earlier).slice(0, earlierLimit),
+      ]);
       // The comments that replies answer, and theirs (threads are one level deep).
       for (let round = 0; round < 3; round++) {
         const parents = missingParents(rows, bodies);
@@ -277,7 +289,7 @@ export function loadCommentThread(
         await read(parents);
       }
       shown = true;
-      return { rows, bodies, hides, limit, truncated };
+      return { rows, bodies, hides, limit, earlierLimit, truncated };
     },
     { ttlMs: 60_000, force: options.force }
   );

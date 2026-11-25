@@ -31,7 +31,7 @@ import { tallyPeople } from '../decision/answerPeople';
 import { nominationPath } from '../../routes/paths';
 import { Countdown } from '../common/Countdown';
 import { CopyLinkButton } from '../common/CopyLinkButton';
-import { FramedText } from '../common/FramedText';
+import { NominationText } from './NominationText';
 import { PersonChip, PersonInline } from '../common/Person';
 import { ProgressRing } from '../common/ProgressRing';
 import { Card, NominationStateChip } from '../common/Section';
@@ -183,14 +183,7 @@ export function NominationCard({
         </Typography>
       ) : null}
 
-      {n.nomination ? (
-        <FramedText
-          text={n.nomination.record.reason}
-          links={n.nomination.record.links}
-          moreLabel="Show the whole reason"
-          compact={compact}
-        />
-      ) : null}
+      {n.nomination ? <NominationText entry={n.nomination} compact={compact} /> : null}
 
       {n.nomination ? (
         <AdminNote

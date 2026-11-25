@@ -4,6 +4,9 @@
  *   QPLUS_CHROMIUM=~/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome \
  *     scripts/screens.mjs Q-Mintership+ [--only home-admin,decisions] [--themes hub30] [--mode light]
  *
+ * QMP_PAGE_WIDTH=full runs every screen with Page width set to Full window (Settings →
+ * Appearance), e.g. with `--sizes 1920x1080,2560x1440,3840x2160` for big screens.
+ *
  * The mock node is the shared world (e2e/world.mjs): a MINTER group with a
  * person in every status and a decision in every state. `?as=<persona>` in a
  * screen's path picks who is signed in; `outside` has no Hub at all and
@@ -33,8 +36,9 @@ import {
   TIP,
 } from './world.mjs';
 import { addTargetShift } from './world.mjs';
+import { addBlockedNominator, addRenomination } from './world.mjs';
 import { nominatorLastVisit } from './world.mjs';
-import { AT_ADDRESS, FUNDER, SPONSOR, UNUSED_ADDRESS } from './world-explorer.mjs';
+import { AT_ADDRESS, FUNDER, SPONSOR, TRADER, UNUSED_ADDRESS } from './world-explorer.mjs';
 import { ADMIN_BOARD_IDS } from './world-legacy.mjs';
 
 const world = createWorld();
@@ -54,7 +58,17 @@ addDecisionVotes(world);
 const shiftWorld = createWorld();
 addOtherPending(shiftWorld);
 const shift = addTargetShift(shiftWorld);
-/** The world a request's page reads: `?world=shift` picks the moving-target one. */
+// A nomination again after one that lapsed, with that one's comments: `?world=again`.
+const againWorld = createWorld();
+addRenomination(againWorld);
+// The same, on a node that blocks its nominator: her records' text never comes. `?world=blocked`.
+const blockedWorld = createWorld();
+addBlockedNominator(blockedWorld);
+/**
+ * The world a request's page reads: `?world=shift` picks the moving-target one,
+ * `?world=again` the one with a nomination again, `?world=blocked` that one on
+ * a node that blocks its nominator.
+ */
 function worldFor(route) {
   let page = '';
   try {
@@ -62,11 +76,17 @@ function worldFor(route) {
   } catch {
     // Not from a page frame: the default world.
   }
+  if (/[?&]world=again\b/.test(page)) return againWorld;
+  if (/[?&]world=blocked\b/.test(page)) return blockedWorld;
   return /[?&]world=shift\b/.test(page) ? shiftWorld : world;
 }
 // Shareable links: a decision still waiting, one decided (with its signatures), a nomination.
 const DECIDED_SIG = addDecidedSignatures(world);
 const PENDING_SIG = world.pending.find((t) => t.type === 'GROUP_KICK').signature;
+// Ünïcode Ñame's expired invite answered Nora Nominator's nomination: credited to her.
+const NOMINATED_SIG = world.decided.find(
+  (t) => t.type === 'GROUP_INVITE' && t.invitee === ADDR.expired
+).signature;
 // Public comments on Wren Waiting's nomination and bob+builder's invite, and a hidden one.
 addComments(world);
 // Two former members have asked to join again: Requested to join MINTER Group marks them.
@@ -111,6 +131,13 @@ const json = (route, status, body) =>
 const wait = (selector) => async (page) =>
   page.waitForSelector(selector, { timeout: 8000 }).catch(() => {});
 const settle = wait('main h1');
+/** A nomination's note that its nominator is blocked on the node (?world=blocked). */
+const blockedNote = async (page) => {
+  await page.getByText('is blocked on your node', { exact: false }).first().waitFor({
+    timeout: 8000,
+  });
+  await page.waitForTimeout(300);
+};
 /** An Explorer page: its title, then its reads (skeletons gone, network quiet). */
 /** Three questions asked before, as the quiz's history keeps them. */
 const QUIZ_HISTORY = [
@@ -426,6 +453,12 @@ export default {
         localStorage.removeItem('qmintershipplus-connections-circle-order');
         // And the list an Assets screen picked.
         localStorage.removeItem('qmintershipplus-assets-view');
+        // Page width as the run asks (QMP_PAGE_WIDTH), not as a *-full screen left it.
+        ${
+          process.env.QMP_PAGE_WIDTH === 'full'
+            ? `localStorage.setItem('qmintershipplus-page-width', '"full"');`
+            : `localStorage.removeItem('qmintershipplus-page-width');`
+        }
       } catch (e) {}
     })();`,
   ],
@@ -798,6 +831,32 @@ export default {
     },
     { key: 'activity-member', path: '/explorer/activity?as=learner', after: settle },
     { key: 'settings', path: '/settings?as=admin', after: settle },
+    // Page width: Full window (crowetic, 2026-10-23). Settings with it picked, and Decisions,
+    // whose cards sit side by side once two fit (only past the five sizes; --sizes 1920x1080).
+    {
+      key: 'settings-full',
+      path: '/settings?as=admin',
+      after: async (page) => {
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-page-width', '"full"')
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+        // Page width isn't offered on phones (it changes nothing there): Motion is on every size.
+        await page.getByRole('combobox', { name: 'Motion' }).waitFor({ timeout: 8000 });
+      },
+    },
+    {
+      key: 'decisions-full',
+      path: '/decisions?as=admin',
+      after: async (page) => {
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-page-width', '"full"')
+        );
+        await page.reload({ waitUntil: 'load' });
+        await settle(page);
+      },
+    },
     // A moving target (e2e/world.mjs addTargetShift): the "target changed" note
     // (this device last saw 23 admin seats), the chips, and an admin change's impact.
     {
@@ -844,10 +903,82 @@ export default {
       path: `/decisions/${DECIDED_SIG}?as=learner`,
       after: wait('main [aria-label^="Approved by"]'),
     },
+    // A decided invite that answered a nomination: proposed by the nominator, first approval by a Minter Admin.
+    {
+      key: 'decision-nominated',
+      path: `/decisions/${NOMINATED_SIG}?as=learner`,
+      after: async (page) => {
+        await page.getByText(/First approval by/).waitFor({ timeout: 8000 });
+      },
+    },
     {
       key: 'nomination',
       path: `/nominations/${ADDR.nominatedSigning}?as=nominator`,
       after: wait('main ol[aria-label="Rounds, newest first"]'),
+    },
+    // Nominated again after a nomination that lapsed (Simon, 2026-11-24): that one's comments
+    // folded under the new one's, opened, each marked as from the previous nomination.
+    {
+      key: 'nomination-earlier-comments',
+      path: `/nominations/${ADDR.lapsed}?world=again&as=admin`,
+      after: async (page) => {
+        await page
+          .getByRole('button', { name: /^Comments from previous nominations/ })
+          .click({ timeout: 8000 });
+        await page
+          .getByRole('list', { name: 'Comments from previous nominations, newest first' })
+          .getByText('It is back online now', { exact: false })
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
+    // Its tag pressed: when it was written, how that nomination ended, and a link to it.
+    {
+      key: 'nomination-earlier-tag',
+      path: `/nominations/${ADDR.lapsed}?world=again&as=admin`,
+      after: async (page) => {
+        await page
+          .getByRole('button', { name: /^Comments from previous nominations/ })
+          .click({ timeout: 8000 });
+        const tag = page.getByRole('button', { name: 'Previous nomination', exact: true }).first();
+        await tag.waitFor({ timeout: 8000 });
+        await tag.scrollIntoViewIfNeeded();
+        await tag.click();
+        await page.getByRole('dialog', { name: 'Previous nomination' }).waitFor({ timeout: 8000 });
+        await page.waitForTimeout(400);
+      },
+    },
+    // A node that blocks the nominator (Simon, 2026-11-25): her nominations still show who
+    // nominated whom and when, with a note in place of the reason; the lapsed round stays.
+    // The node refuses her records' text: the browser logs each refused read (404).
+    {
+      key: 'nomination-blocked',
+      path: `/nominations/${ADDR.lapsed}?world=blocked&as=admin`,
+      expectErrors: /status of 404/,
+      after: blockedNote,
+    },
+    {
+      key: 'nominations-blocked',
+      path: '/decisions?show=nominations&world=blocked&as=admin',
+      expectErrors: /status of 404/,
+      after: blockedNote,
+    },
+    {
+      key: 'decisions-blocked',
+      path: '/decisions?world=blocked&as=admin',
+      expectErrors: /status of 404/,
+      after: blockedNote,
+    },
+    {
+      key: 'history-blocked',
+      path: '/history?world=blocked&as=admin',
+      expectErrors: /status of 404/,
+      after: async (page) => {
+        await page.getByText('No Minter Admin signed it', { exact: false }).first().waitFor({
+          timeout: 8000,
+        });
+        await page.waitForTimeout(300);
+      },
     },
     // Public comments: a thread with replies, a deleted one and a hidden one (folded).
     {
@@ -1097,8 +1228,8 @@ export default {
       }),
     },
     // Minter Admin polls (e2e/world.mjs addAdminPolls), encrypted to the Minter Admins: the
-    // section on Decisions (one poll read from a share, one closed), and one poll's own page
-    // with its comments open.
+    // open ones on Decisions (one read from a share), the closed ones in History's timeline
+    // (one closed two months ago), and one poll's own page with its comments open.
     // Ask the Minter Admins, a page as every + Propose choice is (Simon, 2026-10-18), with
     // answers of its own: one renamed, one recoloured, one added.
     {
@@ -1129,6 +1260,45 @@ export default {
         await section.getByRole('article').first().waitFor({ timeout: 8000 });
         // Landscape phones take the viewport: the section from its top.
         await section.evaluate((s) => s.scrollIntoView({ block: 'start' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    // History: the poll that closed in the last 30 days among the events (the viewport, at
+    // its row), and Minter Admin polls alone over all of it, as Decisions' Closed polls opens it.
+    {
+      key: 'history-polls',
+      path: '/history?as=admin',
+      overlay: true,
+      after: withPolls(async (page) => {
+        await settle(page);
+        const link = page.getByRole('link', { name: /^Open the poll: / }).first();
+        await link.waitFor({ timeout: 8000 });
+        await link.evaluate((a) => a.closest('li').scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(300);
+      }),
+    },
+    // Nominations no Minter Admin signed in time, a type of their own (Simon, 2026-11-17).
+    {
+      key: 'history-lapsed',
+      path: '/history?as=learner&type=lapsed',
+      after: async (page) => {
+        await settle(page);
+        await page
+          .getByRole('link', { name: 'Open the nomination' })
+          .first()
+          .waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
+    {
+      key: 'history-polls-only',
+      path: '/history?as=admin&type=polls&period=all',
+      after: withPolls(async (page) => {
+        await settle(page);
+        await page
+          .getByRole('link', { name: /^Open the poll: / })
+          .nth(1)
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(300);
       }),
     },
@@ -1329,6 +1499,42 @@ export default {
     },
     // The Assets tab (Simon, 2026-10-21): Ben Target's five Q-Assets as cards, worth most first,
     // GEMCOIN's and 🐉's avatars from their owners, the rest as coins; then the list.
+    // The Trades tab (Simon, 2026-10-26): Tara Trader's Q-Trade and Q-Asset trades, summary to breakdown.
+    {
+      key: 'explorer-trades',
+      path: `/explorer/account/${TRADER.address}/trades?as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByText('18,820.5 QORT').waitFor({ timeout: 8000 });
+        await page
+          .getByText('35 completed · 10 ended without a trade · 2 open')
+          .waitFor({ timeout: 8000 });
+        await page.getByRole('region', { name: 'Highlights' }).waitFor({ timeout: 8000 });
+      },
+    },
+    // Its chart as a table, and the Q-Trade list filtered to one coin.
+    {
+      key: 'explorer-trades-table',
+      path: `/explorer/account/${TRADER.address}/trades?as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByRole('region', { name: 'Over time' }).waitFor({ timeout: 8000 });
+        await page.getByRole('button', { name: 'Show as a table' }).click();
+        await page.getByRole('combobox', { name: 'Coin' }).click();
+        await page.getByRole('option', { name: 'Dogecoin' }).click();
+        await page.getByRole('table').waitFor({ timeout: 8000 });
+        await page.waitForTimeout(300);
+      },
+    },
+    // An account that has never traded.
+    {
+      key: 'explorer-trades-none',
+      path: `/explorer/account/${ADDR.learner}/trades?as=admin`,
+      after: async (page) => {
+        await explorerSettle(page);
+        await page.getByText('No trades yet.').waitFor({ timeout: 8000 });
+      },
+    },
     {
       key: 'explorer-assets',
       path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
@@ -1342,7 +1548,9 @@ export default {
       key: 'explorer-assets-list',
       path: `/explorer/account/${ADDR.banTarget}/assets?as=learner`,
       after: async (page) => {
-        await page.addInitScript(() => window.localStorage.setItem('qmintershipplus-assets-view', 'list'));
+        await page.addInitScript(() =>
+          window.localStorage.setItem('qmintershipplus-assets-view', 'list')
+        );
         await page.reload({ waitUntil: 'load' });
         await explorerSettle(page);
         await page.getByRole('list', { name: 'Its Q-Assets' }).waitFor({ timeout: 8000 });
@@ -1357,7 +1565,9 @@ export default {
         await explorerSettle(page);
         const dialog = page.getByRole('dialog');
         await dialog.getByText('This account: #2 of 3 holders.').waitFor({ timeout: 8000 });
-        await dialog.getByRole('list', { name: 'Latest trades with QORT' }).waitFor({ timeout: 8000 });
+        await dialog
+          .getByRole('list', { name: 'Latest trades with QORT' })
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
     },
@@ -1369,7 +1579,9 @@ export default {
       after: async (page) => {
         await explorerSettle(page);
         await page.getByRole('button', { name: 'How it adds up' }).click({ timeout: 8000 });
-        await page.getByRole('dialog', { name: 'What buyers would pay now' }).waitFor({ timeout: 8000 });
+        await page
+          .getByRole('dialog', { name: 'What buyers would pay now' })
+          .waitFor({ timeout: 8000 });
         await page.waitForTimeout(400);
       },
     },
@@ -1399,8 +1611,14 @@ export default {
       path: `/explorer/account/${ADDR.kicked}/connections?as=admin`,
       after: async (page) => {
         await asList(page);
-        await page.getByRole('button', { name: /^Show the 1 transaction with / }).first().click();
-        await page.getByRole('link', { name: 'Open transaction' }).first().waitFor({ timeout: 8000 });
+        await page
+          .getByRole('button', { name: /^Show the 1 transaction with / })
+          .first()
+          .click();
+        await page
+          .getByRole('link', { name: 'Open transaction' })
+          .first()
+          .waitFor({ timeout: 8000 });
         // The pointer off the page, so no hover tooltip (a row's Compare) stays open in the capture.
         await page.mouse.move(0, 0);
         await page.waitForTimeout(400);
@@ -1519,7 +1737,10 @@ export default {
       path: `/explorer/account/${ADDR.banTarget}/transactions?kind=trading&as=admin`,
       after: async (page) => {
         await explorerSettle(page);
-        await page.getByText(/^Filled:/).first().waitFor({ timeout: 8000 });
+        await page
+          .getByText(/^Filled:/)
+          .first()
+          .waitFor({ timeout: 8000 });
       },
     },
     {

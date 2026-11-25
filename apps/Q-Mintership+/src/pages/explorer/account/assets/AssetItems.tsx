@@ -134,7 +134,8 @@ function OpenButton({
         justifyContent: 'flex-start',
         textAlign: 'left',
         minHeight: 44,
-        minWidth: 0,
+        // A one-letter or one-emoji name ("🐉") still gives a target a finger finds.
+        minWidth: 44,
         maxWidth: '100%',
         font: 'inherit',
         color: 'inherit',
@@ -256,6 +257,7 @@ function MiniPanel({
 
 /** What buyers would pay now, as words, or a placeholder while the books are read. */
 export function SaleValue({ view, state }: { view: AssetView; state: SaleState }) {
+  if (view.sale?.failed) return <>Its buy orders couldn&rsquo;t be read</>;
   if (view.sale) return <>{saleWords(view.sale)}</>;
   if (state === 'failed') return <>–</>;
   return (
@@ -274,15 +276,21 @@ function Values({ view, saleState }: { view: AssetView; saleState: SaleState }) 
     <Box sx={{ display: 'grid', gap: 0.75, gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
       <MiniPanel
         label={LAST_TRADE_LABEL}
-        value={view.worth !== undefined ? worthWords(view.worth) : NEVER_TRADED}
+        value={
+          view.worth !== undefined ? worthWords(view.worth) : view.priceUnknown ? '–' : NEVER_TRADED
+        }
         detail={view.price ? `${priceWords(view.price)} · ${formatDate(view.price.at)}` : undefined}
         quiet={view.worth === undefined}
       />
       <MiniPanel
         label={SALE_LABEL}
         value={<SaleValue view={view} state={saleState} />}
-        detail={view.sale ? saleDetail(view.sale, view.balance) : undefined}
-        quiet={view.sale?.sold === 0n || (view.sale === undefined && saleState === 'failed')}
+        detail={view.sale && !view.sale.failed ? saleDetail(view.sale, view.balance) : undefined}
+        quiet={
+          view.sale?.sold === 0n ||
+          Boolean(view.sale?.failed) ||
+          (view.sale === undefined && saleState === 'failed')
+        }
       />
     </Box>
   );
@@ -430,7 +438,7 @@ export function AssetRow({
           </>
         ) : (
           <Typography variant="body2" color="text.secondary">
-            {NEVER_TRADED}
+            {view.priceUnknown ? '–' : NEVER_TRADED}
           </Typography>
         )}
       </Box>

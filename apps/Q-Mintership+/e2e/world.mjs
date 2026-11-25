@@ -28,6 +28,7 @@ export {
   MESSAGE_CONTENT,
   COLLECTOR,
   COLLECTOR_NAMES,
+  TRADER,
 } from './world-explorer.mjs';
 
 export const NOW = 1_791_830_000_000; // 2026-10-12 ~14:33 UTC
@@ -853,7 +854,16 @@ export function answerCore(world, pathname, sp) {
     const name = decodeURIComponent(m[1]);
     const identifier = decodeURIComponent(m[2]);
     const r = world.records.find((x) => x.name === name && x.identifier === identifier);
+    // A record the node lists but doesn't give (`unavailable`: its status, e.g. BLOCKED).
+    if (r?.unavailable) return json({ error: 1, message: 'data unavailable' }, 404);
     return r ? json(r.body) : json({ error: 1401, message: 'not found' }, 404);
+  }
+  if ((m = p.match(/^\/arbitrary\/resource\/status\/JSON\/([^/]+)\/([^/]+)$/))) {
+    const name = decodeURIComponent(m[1]);
+    const identifier = decodeURIComponent(m[2]);
+    const r = world.records.find((x) => x.name === name && x.identifier === identifier);
+    const status = r ? (r.unavailable ?? 'READY') : 'NOT_PUBLISHED';
+    return json({ id: status, status, localChunkCount: status === 'READY' ? 1 : 0, totalChunkCount: 1 });
   }
   return undefined;
 }
@@ -1357,6 +1367,54 @@ export const FORMER_READY = {
 };
 
 /**
+ * The lapsed person nominated again (Simon, 2026-11-24: igorcoin nominated
+ * Stone Golem again, and the comments of the nomination that lapsed came
+ * along): Nora Nominator published her record again a day ago, so its first
+ * publish, ten days ago, is a nomination of its own, which lapsed. Its
+ * comments (a question and the nominee's reply) stay with the new one,
+ * marked as from the previous nomination; the new one has one of its own.
+ */
+export function addRenomination(world) {
+  const DAY = 86_400_000;
+  const record = world.records.find(
+    (r) => r.name === PEOPLE.nominator.name && r.identifier === `qmp-nomination-${ADDR.lapsed}`
+  );
+  record.updated = NOW - DAY;
+  const key = ADDR.lapsed;
+  const comment = (name, suffix, ageMs, body) =>
+    world.records.push({
+      name,
+      identifier: `qmp-comment-${key}-${suffix}`,
+      created: NOW - ageMs,
+      body: { v: 1, key, ...body },
+    });
+  comment(PEOPLE.admin.name, 'again1', 9.5 * DAY, {
+    text: 'Is this node still online? I couldn’t find it in the minting list this week.',
+  });
+  comment(PEOPLE.lapsed.name, 'again2', 9 * DAY, {
+    text: 'It is back online now: the router had dropped its port forward.',
+    replyTo: `qmp-comment-${key}-again1`,
+  });
+  comment(PEOPLE.nominator.name, 'again3', 12 * 3_600_000, {
+    text: 'Nominating again: the node has been online all week.',
+  });
+  return { ids: { question: `qmp-comment-${key}-again1` } };
+}
+
+/**
+ * A node that blocks Nora Nominator (Simon, 2026-11-25: Minter Admins who block a
+ * nominator never saw that nominator's nomination): on top of addRenomination, it
+ * lists her nomination records but never gives their text, as Core does for a
+ * blocked name's off-chain data.
+ */
+export function addBlockedNominator(world) {
+  addRenomination(world);
+  for (const record of world.records)
+    if (record.name === PEOPLE.nominator.name && record.identifier.startsWith('qmp-nomination-'))
+      record.unavailable = 'BLOCKED';
+}
+
+/**
  * Add FORMER_READY to the world: their accounts, their MINTER history (an
  * approved invite, then an approved kick or their own LEAVE_GROUP, all
  * older than Activity's longest range) and their join requests, so Ready to
@@ -1849,6 +1907,7 @@ export const ADMIN_POLL_IDS = {
   shared: 'shared04',
   locked: 'locked05',
   notAdmin: 'notadm06',
+  archived: 'archiv07',
 };
 
 /**
@@ -1864,7 +1923,9 @@ export const ADMIN_POLL_IDS = {
  * - open, not encrypted to Avery, but shared with every Minter Admin by
  *   Admin D ΑΩ, with the votes Avery can't read;
  * - one encrypted to the others only, never shared (Avery can't see it);
- * - one published by Nora Nominator, who isn't a Minter Admin (ignored).
+ * - one published by Nora Nominator, who isn't a Minter Admin (ignored);
+ * - closed about two months ago, before the 62 days Decisions reads: only
+ *   History (and its own page) show it.
  *
  * Returns the ids and two comment identifiers.
  */
@@ -2060,6 +2121,31 @@ export function addAdminPolls(world) {
     NOW - DAY,
     7,
     'A poll from someone who is not a Minter Admin?',
+    signers
+  );
+
+  // 7. Asked 75 days ago for 10 days: older than Decisions reads.
+  const P7 = ADMIN_POLL_IDS.archived;
+  const t7 = NOW - 75 * DAY;
+  ask(
+    P7,
+    extra(4),
+    t7,
+    10,
+    'Should the Minter Admins meet in Q-Chat once a quarter?',
+    signers,
+    'A fixed time to talk through what is waiting, instead of only comments.'
+  );
+  vote(P7, extra(4), 'yes', t7 + 3_600_000, signers);
+  vote(P7, ADDR.admin, 'yes', t7 + DAY, signers);
+  vote(P7, extra(6), 'no', t7 + 2 * DAY, signers);
+  vote(P7, extra(9), 'yes', t7 + 3 * DAY, signers);
+  comment(
+    P7,
+    'm1n2o3',
+    extra(6),
+    t7 + 2 * DAY + 600_000,
+    'Comments work fine for me; a fixed time is hard across time zones.',
     signers
   );
 

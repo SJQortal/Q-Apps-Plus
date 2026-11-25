@@ -20,7 +20,7 @@ import {
   type GlobalOrder,
 } from '../../../data/explorer/globalTx';
 import { SHARE_KINDS, isShareKind, type ShareKind } from '../../../rules/explorer/rowFilter';
-import { blockNumber, formatCount } from '../../../utils/format';
+import { blockNumber } from '../../../utils/format';
 import { spanWords, TYPE_GROUPS, type GlobalType } from './globalFilters';
 
 const FIELD_SX = {
@@ -40,7 +40,6 @@ export function GlobalFilterBar({
   onFind,
   share,
   onShare,
-  tip,
 }: {
   type: GlobalType;
   onType: (type: GlobalType) => void;
@@ -54,8 +53,6 @@ export function GlobalFilterBar({
   /** The reward shares' kind; offered only for reward shares. */
   share: ShareKind;
   onShare: (share: ShareKind) => void;
-  /** The tip the page pinned, the last block a range can start at. */
-  tip: number | null;
 }) {
   const [editing, setEditing] = useState(false);
   const fromOn = editing || blocks.kind === 'from';
@@ -81,8 +78,8 @@ export function GlobalFilterBar({
     // "1,519,621" too, as the app shows block numbers.
     const n = blockNumber(start);
     let why: string | null = null;
+    // One past the tip shown goes on: the page reads the chain's newest block before saying no.
     if (n === null) why = 'Enter a block number, like 2700000 or 2,700,000.';
-    else if (tip !== null && n > tip) why = `The chain is at block ${formatCount(tip)}.`;
     setProblem(why);
     if (why || n === null) return;
     setEditing(false);

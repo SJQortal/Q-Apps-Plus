@@ -42,7 +42,8 @@ describe('getQdnOfName', () => {
       ],
     });
     expect(fetchCallsFor('/arbitrary/')).toEqual([
-      '/arbitrary/resources/searchsimple?name=Maps&limit=100&reverse=true',
+      // One more than it keeps: a 101st says there are more.
+      '/arbitrary/resources/searchsimple?name=Maps&limit=101&reverse=true',
     ]);
     expect(qdnNameKey('Maps')).toBe('xqdnname:Maps');
   });
@@ -57,12 +58,16 @@ describe('getQdnOfName', () => {
     expect(JSON.stringify(result)).not.toMatch(/qortal_qmail/);
   });
 
-  it('says when a name filled the page', async () => {
-    mockFetchRoute(
-      '/arbitrary/resources/searchsimple',
-      Array.from({ length: QDN_NAME_LIMIT }, (_, i) => resource('Maps', 'DOCUMENT', `d${i}`, i))
-    );
-    expect((await getQdnOfName('Maps')).capped).toBe(true);
+  it('says there are more only when there is one past the page', async () => {
+    const page = (count: number) =>
+      Array.from({ length: count }, (_, i) => resource('Maps', 'DOCUMENT', `d${i}`, i));
+    mockFetchRoute('/arbitrary/resources/searchsimple', page(QDN_NAME_LIMIT + 1));
+    const more = await getQdnOfName('Maps');
+    expect(more.capped).toBe(true);
+    expect(more.resources).toHaveLength(QDN_NAME_LIMIT);
+    // Hub's Explorer port (2026-11-22): exactly 100 was "100+".
+    mockFetchRoute('/arbitrary/resources/searchsimple', page(QDN_NAME_LIMIT));
+    expect((await getQdnOfName('Maps', { force: true })).capped).toBe(false);
   });
 });
 

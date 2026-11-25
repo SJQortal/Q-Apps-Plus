@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { addComments, addCommunityVotes } from '../../../e2e/world.mjs';
 import { renderPage } from '../../test/render';
 import { fetchCallsFor, mockQortalRequest, qortalCallsFor } from '../../test/setup';
-import { ADDR } from '../../test/world';
+import { ADDR, MS_PER_BLOCK, NOW, TIP } from '../../test/world';
 import { resetOptimisticComments } from '../../state/comments';
 import DecisionPage from '../../pages/decisions/DecisionPage';
 import DecisionsPage from '../../pages/decisions/DecisionsPage';
@@ -219,5 +219,50 @@ describe('community votes on the cards', () => {
     expect(within(comment(ids.thanks)).getByText('Voted Yes')).toBeVisible();
     expect(within(comment(ids.online)).getAllByText('Voted No')[0]).toBeVisible();
     expect(within(comment(ids.sameHere)).queryByText(/^Voted/)).toBeNull();
+  });
+
+  // Simon, 2026-11-13: a vote from Jonny's October round showed on his November
+  // re-nomination once a Minter Admin's invite was pending.
+  it('leaves out a vote from an earlier round of the same nominee', async () => {
+    const DAY = 86_400_000;
+    const bob = ADDR.nominatedSigning;
+    await renderPage(<DecisionsPage />, {
+      persona: 'nominator',
+      path: '/decisions?show=nominations',
+      route: '/decisions',
+      setup: (world) => {
+        addCommunityVotes(world);
+        // bob+builder's earlier round, 40 days ago (older than the invites the list reads),
+        // and a No cast in it.
+        world.records.push(
+          {
+            name: 'Avery Admin',
+            identifier: `qmp-nomination-${bob}`,
+            created: NOW - 40 * DAY,
+            body: {
+              v: 1,
+              nomineeAddress: bob,
+              nomineeName: 'bob+builder',
+              reason: 'Runs a steady node and helps in the minting chat.',
+              links: [],
+              createdHeight: TIP - Math.round((40 * DAY) / MS_PER_BLOCK),
+              created: NOW - 40 * DAY,
+            },
+          },
+          {
+            name: 'Member 3',
+            identifier: `qmp-vote-${bob}-no-old001`,
+            created: NOW - 39 * DAY,
+            body: { v: 1, nomineeAddress: bob, vote: 'no' },
+          }
+        );
+      },
+    });
+    const card = await screen.findByRole('article', { name: 'Nomination of bob+builder' }, T);
+    expect(
+      await within(card).findByRole('button', { name: /^Community votes: 5 Yes, 1 No/ }, T)
+    ).toBeInTheDocument();
+    // The round is this one: its nominator, not the earlier round's.
+    expect(card).not.toHaveTextContent('Avery Admin');
   });
 });

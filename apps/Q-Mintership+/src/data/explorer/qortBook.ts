@@ -2,14 +2,18 @@
  * The extra reads the QORT summaries need beyond the account's own
  * transactions (rules/explorer/qortBook.ts):
  * - each of its asset orders with QORT on one side: `/assets/order/{id}` and
- *   its trades (`xorderq:<id>`; a closed order never changes, so kept for
- *   the session);
- * - what it bought and sold on the Trade Portal: its completed trades.
+ *   its trades (`xorderq:<id>`, 30 s; a closed order never changes, so its
+ *   answer is kept for the session, while an open one can still fill);
+ * - what it bought and sold on the Trade Portal: its completed trades;
+ * - whether a reward share ever involved it, for an account without blocks
+ *   minted (did it ever mint?).
  * Orders a few at a time, so a trader with many doesn't flood the node.
  */
 import { getAccount } from '../accounts';
 import { getJson, getText, query, seg } from '../core';
 import { fetchQuery } from '../query';
+import { heavy } from './heavy';
+import { getContractPayments, getPortalRowsAll } from './portalTrades';
 import { parseAtomic } from '../../rules/explorer/money';
 import { orderQort, type OrderState, type OrderTrade } from '../../rules/explorer/qortBook';
 
@@ -31,8 +35,13 @@ async function inTurn<T, R>(items: readonly T[], work: (item: T) => Promise<R>):
   return out;
 }
 
+/** Closed orders' QORT, kept for the session: a closed order never changes. */
+const closedOrders = new Map<string, bigint>();
+
 /** What one asset order moved in QORT for its maker. */
 export function getOrderQort(id: string): Promise<bigint> {
+  const closed = closedOrders.get(id);
+  if (closed !== undefined) return Promise.resolve(closed);
   return fetchQuery(
     `xorderq:${id}`,
     async () => {
@@ -46,9 +55,11 @@ export function getOrderQort(id: string): Promise<bigint> {
         trades.push(...list);
         if (list.length < PAGE) break;
       }
-      return orderQort(id, order, trades);
+      const value = orderQort(id, order, trades);
+      if (order.isClosed || order.isFulfilled) closedOrders.set(id, value);
+      return value;
     },
-    { ttlMs: Number.POSITIVE_INFINITY }
+    { ttlMs: 30_000 }
   );
 }
 
@@ -57,7 +68,8 @@ export function getOrdersQort(address: string, ids: readonly string[]): Promise<
   return fetchQuery(
     `xordersq:${address}:${ids.length}`,
     async () => (await inTurn(ids, getOrderQort)).reduce((sum, value) => sum + value, 0n),
-    { ttlMs: 10 * 60_000 }
+    // As short as the balance's: an open order that filled since moved QORT.
+    { ttlMs: 30_000 }
   );
 }
 
@@ -65,13 +77,20 @@ export function getOrdersQort(address: string, ids: readonly string[]): Promise<
 export interface TradesQort {
   bought: bigint;
   sold: bigint;
+  /**
+   * It has no public key (it never made a transaction): what it bought is
+   * what other accounts' trade contracts paid it, from its own history.
+   */
+  keyless?: true;
 }
 
 /**
  * QORT it bought and sold on the Trade Portal (`xtrades:<a>`): its
  * completed trades as the buyer and as the seller, every chain, from
- * `/crosschain/trades?buyerPublicKey=` and `?sellerPublicKey=`. None
- * without a public key (it never made a transaction).
+ * `/crosschain/trades?buyerPublicKey=` and `?sellerPublicKey=`. Without a
+ * public key (it never made a transaction) Core's list can't be asked: what
+ * other accounts' trade contracts paid it is what it bought, and it sold
+ * nothing (selling deploys a contract, a transaction of its own).
  *
  * Each is one read without a limit, on purpose: Core pages this list badly
  * (limit and offset apply to each contract version, at most 100, and its
@@ -85,14 +104,19 @@ export function getTradesQort(address: string): Promise<TradesQort> {
     async () => {
       // Its public key from its account (`account:<a>`, read for the profile anyway).
       const publicKey = (await getAccount(address)).publicKey;
-      if (!publicKey) return { bought: 0n, sold: 0n };
-      const sum = async (side: 'buyerPublicKey' | 'sellerPublicKey') => {
-        const list = await getJson<Array<{ qortAmount?: unknown; atAddress?: unknown }>>(
-          `/crosschain/trades?${query({ [side]: publicKey })}`
-        );
+      if (!publicKey) {
+        const paid = await getContractPayments(address);
+        return {
+          bought: paid.reduce((total, payment) => total + payment.qort, 0n),
+          sold: 0n,
+          keyless: true as const,
+        };
+      }
+      // The Trades tab's reads too (getPortalRowsAll): the totals and its list agree.
+      const sum = async (side: 'bought' | 'sold') => {
         let total = 0n;
         const seen = new Set<string>();
-        for (const trade of Array.isArray(list) ? list : []) {
+        for (const trade of await getPortalRowsAll(publicKey, side)) {
           const at = String(trade?.atAddress ?? '');
           if (at && seen.has(at)) continue;
           seen.add(at);
@@ -100,25 +124,100 @@ export function getTradesQort(address: string): Promise<TradesQort> {
         }
         return total;
       };
-      const [bought, sold] = await Promise.all([sum('buyerPublicKey'), sum('sellerPublicKey')]);
+      const [bought, sold] = await Promise.all([sum('bought'), sum('sold')]);
       return { bought, sold };
     },
     { ttlMs: 10 * 60_000 }
   );
 }
 
-/** Its QORT balance, exactly, in atomic units (`xbalance:<a>`, 30 s). */
-export function getBalanceAtomic(
+/**
+ * Whether any reward share ever involved it (`xevershare:<a>`): one row is
+ * enough. An account with no blocks minted may still have minted: moving
+ * its minting level to another account (TRANSFER_PRIVS) sets its blocks
+ * minted to 0, but its reward shares stay in its history.
+ */
+export function getEverRewardShare(
   address: string,
   options: { force?: boolean } = {}
-): Promise<bigint> {
+): Promise<boolean> {
+  return fetchQuery(
+    `xevershare:${address}`,
+    async () => {
+      const rows = await getJson<unknown[]>(
+        `/transactions/search?${query({
+          txType: 'REWARD_SHARE',
+          address,
+          confirmationStatus: 'CONFIRMED',
+          limit: 1,
+        })}`
+      );
+      if (!Array.isArray(rows)) throw new Error('Unexpected answer for its reward shares');
+      return rows.length > 0;
+    },
+    { ttlMs: 10 * 60_000, force: options.force }
+  );
+}
+
+/** Its balance, and the newest of its confirmed transactions when it was read. */
+export interface TiedBalance {
+  /** Atomic QORT. */
+  balance: bigint;
+  /** That transaction's signature; null with none. */
+  newest: string | null;
+}
+
+/** How often the balance is read again when a transaction came between. */
+const TIE_TRIES = 3;
+
+/** The signature of its newest confirmed transaction (null: none), a one-row heavy read. */
+function newestSignature(address: string): Promise<string | null> {
+  return heavy(address, async () => {
+    const rows = await getJson<Array<{ signature?: unknown }>>(
+      `/transactions/search?${query({
+        address,
+        confirmationStatus: 'CONFIRMED',
+        limit: 1,
+        reverse: true,
+      })}`
+    );
+    if (!Array.isArray(rows)) throw new Error('Unexpected answer for its newest transaction');
+    return rows[0]?.signature ? String(rows[0].signature) : null;
+  });
+}
+
+/** Its QORT balance, exactly, in atomic units. */
+async function balanceNow(address: string): Promise<bigint> {
+  const text = (await getText(`/addresses/balance/${seg(address)}`)).trim();
+  const value = parseAtomic(text);
+  if (value === null) throw new Error(`Unexpected balance "${text}"`);
+  return value;
+}
+
+/**
+ * Its QORT balance, tied to its transactions (`xbalance:<a>`, 30 s): read
+ * between two reads of its newest confirmed transaction, and kept only when
+ * both are the same one, so QORT minted (its balance less what its
+ * transactions moved) takes no transaction that came between the balance
+ * and the list (Hub's Explorer port, 2026-11-22). The caller checks
+ * `newest` against the list it adds up. Tried 3 times; a reward for a
+ * block it minted changes the balance without a transaction, which is
+ * what QORT minted counts anyway.
+ */
+export function getTiedBalance(
+  address: string,
+  options: { force?: boolean } = {}
+): Promise<TiedBalance> {
   return fetchQuery(
     `xbalance:${address}`,
     async () => {
-      const text = (await getText(`/addresses/balance/${seg(address)}`)).trim();
-      const value = parseAtomic(text);
-      if (value === null) throw new Error(`Unexpected balance "${text}"`);
-      return value;
+      for (let attempt = 0; attempt < TIE_TRIES; attempt++) {
+        const before = await newestSignature(address);
+        const balance = await balanceNow(address);
+        const after = await newestSignature(address);
+        if (before === after) return { balance, newest: after };
+      }
+      throw new Error('Its transactions kept changing while its balance was read.');
     },
     { ttlMs: 30_000, force: options.force }
   );
