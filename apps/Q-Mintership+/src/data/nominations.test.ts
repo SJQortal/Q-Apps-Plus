@@ -317,13 +317,14 @@ describe('the nominations read: a record the node doesn’t give', () => {
     expect(support?.record).toEqual({ v: 1, nomineeAddress: ADDR.nominatedWaiting });
   });
 
-  it('asks why only when a body is missing, once per version', async () => {
+  it('a blocked nominator’s record isn’t waited for: one read, one status read', async () => {
     installWorld('admin');
     notGiven(nominator, 'nomination', ADDR.nominatedWaiting, 'BLOCKED');
     await loadNominations();
     await loadNominations({ force: true });
-    const asked = fetchCallsFor('/arbitrary/resource/status/');
-    expect(asked).toHaveLength(1);
-    expect(asked[0]).toContain(`qmp-nomination-${ADDR.nominatedWaiting}?build=false`);
+    expect(fetchCallsFor(bodyPath(nominator, 'nomination', ADDR.nominatedWaiting))).toHaveLength(1);
+    expect(fetchCallsFor('/arbitrary/resource/status/')).toEqual([
+      `/arbitrary/resource/status/JSON/${encodeURIComponent(nominator)}/qmp-nomination-${ADDR.nominatedWaiting}?build=false`,
+    ]);
   });
 });

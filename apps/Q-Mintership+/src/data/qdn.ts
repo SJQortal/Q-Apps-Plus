@@ -65,6 +65,19 @@ export class QdnUnavailableError extends Error {
   }
 }
 
+/**
+ * A body whose publisher is on this node's block list: Core never fetches a
+ * blocked name's data, so it isn't waited for. Unavailable, as far as every
+ * other reader is concerned.
+ */
+export class QdnBlockedError extends QdnUnavailableError {
+  constructor(ref: string) {
+    super(ref);
+    this.name = 'QdnBlockedError';
+    this.message = 'Its publisher is blocked on your node';
+  }
+}
+
 export class QdnDeletedError extends Error {
   constructor(public readonly ref: string) {
     super('This item was deleted by its publisher');
@@ -86,6 +99,9 @@ function wait(ms: number): Promise<void> {
 
 /**
  * The raw text of a resource, retrying while the node fetches it from peers.
+ * After the first miss, one status read: a publisher blocked on this node
+ * fails at once (QdnBlockedError) instead of after the whole ladder, as Core
+ * will never fetch it (seen 2026-11-25: 30 s before a nomination showed).
  * `encoding: 'base64'` asks Core for the bytes as base64 (encrypted data).
  */
 export async function fetchQdnText(
@@ -109,6 +125,8 @@ export async function fetchQdnText(
       if (text.trim() === 'D') throw new QdnDeletedError(path);
       return text;
     }
+    if (attempt === 0 && (await qdnStatus(service, name, identifier)) === 'BLOCKED')
+      throw new QdnBlockedError(path);
     if (attempt >= retryDelays.length) throw new QdnUnavailableError(path);
     await wait(retryDelays[attempt]);
   }
@@ -167,18 +185,12 @@ export function fetchQdnJson<T = unknown>(
 /**
  * Core's status for one resource, without starting a build: READY,
  * MISSING_DATA, BLOCKED and so on; null when it couldn't be read. Asked only
- * about a body that wasn't there, to tell a publisher on this node's block
- * list (Core never fetches a blocked name's data) from data that hasn't
- * arrived yet. Kept per version for 2 minutes.
+ * about a body that wasn't there (fetchQdnText), to tell a publisher on this
+ * node's block list from data that hasn't arrived yet. Kept 2 minutes.
  */
-export function qdnStatus(
-  service: string,
-  name: string,
-  identifier: string,
-  version: string | number
-): Promise<string | null> {
+export function qdnStatus(service: string, name: string, identifier: string): Promise<string | null> {
   return fetchQuery(
-    `qdnstatus:${service}:${name}:${identifier}:${version}`,
+    `qdnstatus:${service}:${name}:${identifier}`,
     async () => {
       const body = await getJson<{ status?: unknown }>(
         `/arbitrary/resource/status/${seg(service)}/${seg(name)}/${seg(identifier)}?${query({ build: false })}`

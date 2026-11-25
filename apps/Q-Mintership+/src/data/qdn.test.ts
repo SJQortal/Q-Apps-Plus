@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchCallsFor, mockFetchRoute } from '../test/setup';
 import { installWorld } from '../test/world';
-import { QdnDeletedError, QdnUnavailableError, fetchQdnJson } from './qdn';
+import { QdnBlockedError, QdnDeletedError, QdnUnavailableError, fetchQdnJson } from './qdn';
 
 afterEach(() => vi.useRealTimers());
 
@@ -36,6 +36,23 @@ describe('fetchQdnJson: a body that isn’t on the node', () => {
     await expect(read()).resolves.toEqual({ ok: true });
     await expect(read()).resolves.toEqual({ ok: true });
     expect(tries()).toBe(2 * ladder + 1);
+  });
+
+  it('one whose publisher is blocked on the node fails at once, and is remembered', async () => {
+    installWorld('learner');
+    mockFetchRoute(PATH, () => new Response('not here', { status: 404 }));
+    mockFetchRoute('/arbitrary/resource/status/JSON/Someone/qmp-note', { status: 'BLOCKED' });
+    const read = () => fetchQdnJson('JSON', 'Someone', 'qmp-note', 'v1');
+    // Core never fetches a blocked name's data: one read and one status read, no ladder.
+    await expect(read()).rejects.toBeInstanceOf(QdnBlockedError);
+    expect(tries()).toBe(1);
+    expect(fetchCallsFor('/arbitrary/resource/status/')).toEqual([
+      '/arbitrary/resource/status/JSON/Someone/qmp-note?build=false',
+    ]);
+    // Unavailable to every other reader, and not asked for again on a refresh.
+    later(60_000);
+    await expect(read()).rejects.toBeInstanceOf(QdnUnavailableError);
+    expect(tries()).toBe(1);
   });
 
   it('a deleted body is final for its version; a republish is read', async () => {

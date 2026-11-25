@@ -41,10 +41,10 @@ import {
   getStoredInvites,
 } from './group';
 import {
+  QdnBlockedError,
   QdnUnavailableError,
   fetchQdnJson,
   mapLimit,
-  qdnStatus,
   rowTime,
   searchQdn,
 } from './qdn';
@@ -172,22 +172,24 @@ interface RawRecord {
 type BodyRead = RawRecord | { row: QdnRow; unread: UnreadText } | { row: QdnRow; error: true };
 
 /**
- * Each row's body. One the node didn't give after its retries is `unread`;
- * with `why`, one status read tells a publisher blocked on this node from
- * data still to come. A deleted body (the publisher took it back) or one
- * that isn't JSON is an error.
+ * Each row's body. One the node didn't give is `unread`: at once when its
+ * publisher is blocked on this node, else after the retries. A deleted body
+ * (the publisher took it back) or one that isn't JSON is an error.
  */
-async function readBodies(rows: QdnRow[], options: { why?: boolean } = {}): Promise<BodyRead[]> {
+async function readBodies(rows: QdnRow[]): Promise<BodyRead[]> {
   return mapLimit(rows, 6, async (row): Promise<BodyRead> => {
-    const version = row.latestSignature ?? rowTime(row);
     try {
-      const body = await fetchQdnJson(RECORD_SERVICE, row.name, row.identifier, version);
+      const body = await fetchQdnJson(
+        RECORD_SERVICE,
+        row.name,
+        row.identifier,
+        row.latestSignature ?? rowTime(row)
+      );
       return { row, body };
     } catch (error) {
-      if (!(error instanceof QdnUnavailableError)) return { row, error: true };
-      if (!options.why) return { row, unread: 'missing' };
-      const status = await qdnStatus(RECORD_SERVICE, row.name, row.identifier, version);
-      return { row, unread: status === 'BLOCKED' ? 'blocked' : 'missing' };
+      if (error instanceof QdnBlockedError) return { row, unread: 'blocked' };
+      if (error instanceof QdnUnavailableError) return { row, unread: 'missing' };
+      return { row, error: true };
     }
   });
 }
@@ -319,8 +321,7 @@ async function assemble(
   const windowBlocks = waitingWindowBlocks(decisions.group);
   const ignored: IgnoredRecord[] = [];
   const [nominationBodies, supportBodies] = await Promise.all([
-    // A nomination whose text is missing says why; a support's note just doesn't show.
-    readBodies(input.nominationRows, { why: true }),
+    readBodies(input.nominationRows),
     readBodies(input.supportRows),
   ]);
 
